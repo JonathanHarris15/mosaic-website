@@ -1,7 +1,8 @@
 document.addEventListener('alpine:init', () => {
+    const db = firebase.firestore();
+    const storage = firebase.storage();
+
     Alpine.data('hymnManager', () => ({
-        db: firebase.firestore(),
-        storage: firebase.storage(),
         hymns: [],
         allTags: [],
         
@@ -38,13 +39,13 @@ document.addEventListener('alpine:init', () => {
         },
 
         loadHymns() {
-            this.db.collection('hymns').orderBy('hymn_name').get().then(snapshot => {
+            db.collection('hymns').orderBy('hymn_name').get().then(snapshot => {
                 this.hymns = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             });
         },
 
         loadTags() {
-            this.db.collection('tags').get().then(snapshot => {
+            db.collection('tags').get().then(snapshot => {
                 this.allTags = snapshot.docs.map(doc => doc.id).sort();
             });
         },
@@ -102,7 +103,7 @@ document.addEventListener('alpine:init', () => {
                     if (v.pages) {
                         v.pages.forEach(url => {
                             deletePromises.push(
-                                this.storage.refFromURL(url).delete().catch(e => console.warn(e))
+                                storage.refFromURL(url).delete().catch(e => console.warn(e))
                             );
                         });
                     }
@@ -110,7 +111,7 @@ document.addEventListener('alpine:init', () => {
             }
 
             Promise.all(deletePromises).then(() => {
-                this.db.collection('hymns').doc(hymn.id).delete().then(() => {
+                db.collection('hymns').doc(hymn.id).delete().then(() => {
                     this.loadHymns();
                     this.showToast('Hymn deleted successfully.');
                 }).catch(e => {
@@ -190,7 +191,7 @@ document.addEventListener('alpine:init', () => {
 
         async handleSubmit() {
             if (!this.isEditing) {
-                const check = await this.db.collection('hymns').where('hymn_name', '==', this.formData.hymn_name).get();
+                const check = await db.collection('hymns').where('hymn_name', '==', this.formData.hymn_name).get();
                 if (!check.empty) {
                     this.showToast('A hymn with this name already exists!', 'error');
                     return;
@@ -204,7 +205,7 @@ document.addEventListener('alpine:init', () => {
                 const tagPromises = [];
                 this.formData.tags.forEach(tag => {
                     if (!this.allTags.includes(tag)) {
-                        tagPromises.push(this.db.collection('tags').doc(tag).set({
+                        tagPromises.push(db.collection('tags').doc(tag).set({
                             createdAt: firebase.firestore.FieldValue.serverTimestamp()
                         }));
                     }
@@ -214,7 +215,7 @@ document.addEventListener('alpine:init', () => {
                     this.loadTags();
                 }
 
-                const hymnFolderRef = this.storage.ref().child(this.formData.hymn_name);
+                const hymnFolderRef = storage.ref().child(this.formData.hymn_name);
                 const processedVersions = [];
                 const newPageUrls = [];
 
@@ -252,16 +253,16 @@ document.addEventListener('alpine:init', () => {
                 }
 
                 if (this.isEditing) {
-                    await this.db.collection('hymns').doc(this.editingHymnId).update(payload);
+                    await db.collection('hymns').doc(this.editingHymnId).update(payload);
                     const urlsToDelete = this.originalPageUrls.filter(u => !newPageUrls.includes(u));
                     for (const url of urlsToDelete) {
                         try {
-                            await this.storage.refFromURL(url).delete();
+                            await storage.refFromURL(url).delete();
                         } catch(e) {}
                     }
                     this.showToast('Hymn updated successfully!');
                 } else {
-                    await this.db.collection('hymns').add(payload);
+                    await db.collection('hymns').add(payload);
                     this.showToast('Hymn added successfully!');
                 }
 
