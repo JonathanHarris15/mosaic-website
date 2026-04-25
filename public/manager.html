@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hymn Manager</title>
+    <link rel="stylesheet" href="manager.css">
+</head>
+<body>
+    <div class="nav-header">
+        <a href="index.html" class="back-link">&larr; Back to Search</a>
+    </div>
+    <div class="manager-container">
+        <div class="column" id="hymn-list-container">
+            <h1>All Hymns</h1>
+            <div id="hymn-list"></div>
+        </div>
+        <div class="column" id="add-hymn-container">
+            <h1>Add New Hymn</h1>
+            <form id="add-hymn-form"></form>
+        </div>
+    </div>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage-compat.js"></script>
+    <script>
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCJLgZP27CWayqFoqYoqg9mVdkhgCWqgbg",
+            authDomain: "mosaic-hymn-database.firebaseapp.com",
+            projectId: "mosaic-hymn-database",
+            storageBucket: "mosaic-hymn-database.firebasestorage.app",
+            messagingSenderId: "55153890298",
+            appId: "1:55153890298:web:4ca1f526f0169fb7920a43",
+            measurementId: "G-64N3W268V9"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+    </script>
+    <script src="manager.js"></script>
+</body>
+</html>

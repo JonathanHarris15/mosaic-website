@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hymn Lookup</title>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="index.css">
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+
+</head>
+<body>
+    <div class="container">
+        <div x-data="hymnLookup()">
+            <h1>Hymn Lookup</h1>
+            
+            <div class="search-container">
+                <input type="text" x-model="searchQuery" @keydown.enter="performSearch()" placeholder="Search by title or author...">
+                <button @click="performSearch()">Search</button>
+            </div>
+            
+            <div class="content-wrapper">
+                <!-- Tag Filters -->
+                <div class="tag-filters" x-show="allTags.length > 0" style="display: none;"> <!-- Hidden until tags loaded -->
+                    <h3>Filter by Tags</h3>
+                    <div class="tags-grid">
+                        <template x-for="tag in allTags" :key="tag">
+                            <label class="tag-checkbox" :class="{ 'active': selectedTags.includes(tag) }">
+                                <input type="checkbox" :value="tag" @click="toggleTag(tag)" :checked="selectedTags.includes(tag)">
+                                <span x-text="tag"></span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+        
+                <div class="hymn-list">
+                    <template x-for="hymn in filteredHymns" :key="hymn.id">
+                        <div class="hymn-item" @click="selectHymn(hymn.id)">
+                            <strong x-text="hymn.hymn_name"></strong>
+                            <template x-if="hymn.tags && hymn.tags.length > 0">
+                                 <div style="margin-top: 5px;">
+                                    <template x-for="tag in hymn.tags" :key="tag">
+                                        <span class="tag-display" x-text="tag"></span>
+                                    </template>
+                                 </div>
+                            </template>
+                            <p>Music: <span x-text="hymn.music_writer"></span> | Lyrics: <span x-text="hymn.lyrics_writer"></span></p>
+                            <p>Variations: <span x-text="hymn.variations"></span> | Last Played: <span x-text="hymn.last_played_date"></span></p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="manager-login">
+        <input type="password" id="manager-password" placeholder="Manager Password">
+        <button id="manager-login-button">Login</button>
+    </footer>
+
+    <script>
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCJLgZP27CWayqFoqYoqg9mVdkhgCWqgbg",
+            authDomain: "mosaic-hymn-database.firebaseapp.com",
+            projectId: "mosaic-hymn-database",
+            storageBucket: "mosaic-hymn-database.firebasestorage.app",
+            messagingSenderId: "55153890298",
+            appId: "1:55153890298:web:4ca1f526f0169fb7920a43",
+            measurementId: "G-64N3W268V9"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+    </script>
+    <script src="main.js"></script>
+</body>
+</html>

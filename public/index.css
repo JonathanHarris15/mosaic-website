@@ -1,0 +1,254 @@
+:root {
+    --background-color: #1a1a1a;
+    --surface-color: #2a2a2a;
+    --primary-text-color: #e0e0e0;
+    --secondary-text-color: #a0a0a0;
+    --accent-color: #3b82f6;
+    --border-color: #444;
+}
+
+/* --- Global Reset & Base --- */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%; /* Force full viewport height */
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* No scroll on the window itself */
+}
+
+body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    background-color: var(--background-color);
+    color: var(--primary-text-color);
+    display: flex;       /* Body is the master Flex container */
+    flex-direction: column; 
+}
+
+/* --- Main Layout Container --- */
+/* This wraps the main content and sits above the footer */
+.container {
+    flex: 1 1 auto;      /* Grow to fill space above footer */
+    width: 100%;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px;
+    min-height: 0;       /* Critical for nested flex scrolling */
+    display: flex;
+    flex-direction: column;
+}
+
+/* --- Alpine Component Wrapper --- */
+/* This div exists in HTML between .container and the content. 
+   It MUST be a flex column to pass height down. */
+.container > div[x-data] {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+/* --- Header & Search (Fixed Height) --- */
+h1 {
+    font-weight: 600;
+    margin: 0 0 15px 0;
+    flex: 0 0 auto; /* Do not grow or shrink */
+}
+
+.search-container {
+    display: flex;
+    margin-bottom: 20px;
+    flex: 0 0 auto; /* Do not grow or shrink */
+}
+
+.search-container input[type="text"] {
+    flex-grow: 1;
+    padding: 12px 15px;
+    font-size: 16px;
+    background-color: var(--surface-color);
+    color: var(--primary-text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px 0 0 6px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.search-container input[type="text"]:focus {
+    border-color: var(--accent-color);
+}
+
+.search-container button {
+    padding: 12px 20px;
+    font-size: 16px;
+    font-weight: 500;
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 0 6px 6px 0;
+    transition: background-color 0.2s;
+}
+
+.search-container button:hover {
+    background-color: #2563eb;
+}
+
+/* --- Content Area (Scrollable) --- */
+/* Wraps Tags and List side-by-side */
+.content-wrapper {
+    flex: 1 1 auto;      /* Grow to fill remaining vertical space */
+    display: flex;       /* Row layout */
+    gap: 20px;
+    min-height: 0;       /* Critical: allows children to overflow */
+    overflow: hidden;    /* Contain children */
+}
+
+/* Left Sidebar: Tags */
+.tag-filters {
+    flex: 0 0 250px;     /* Fixed width */
+    background-color: var(--surface-color);
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    overflow-y: auto;    /* Independent Scroll */
+    display: flex;
+    flex-direction: column;
+}
+
+.tag-filters h3 {
+    margin: 0 0 10px 0;
+    font-size: 1em;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.tags-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Right Main: Hymn List */
+.hymn-list {
+    flex: 1 1 auto;      /* Take remaining width */
+    background-color: var(--surface-color);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    overflow-y: auto;    /* Independent Scroll */
+}
+
+/* --- List Items --- */
+.hymn-item {
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.hymn-item:last-child {
+    border-bottom: none;
+}
+
+.hymn-item:hover {
+    background-color: #333333;
+}
+
+.hymn-item strong {
+    font-size: 1.1em;
+    font-weight: 500;
+    color: var(--primary-text-color);
+}
+
+.hymn-item p {
+    margin: 5px 0 0 0;
+    font-size: 0.9em;
+    color: var(--secondary-text-color);
+}
+
+/* --- Tag UI Elements --- */
+.tag-checkbox {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    background-color: var(--background-color);
+    padding: 4px 8px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+    font-size: 0.85em;
+}
+
+.tag-checkbox input {
+    margin-right: 6px;
+    display: none;
+}
+
+.tag-checkbox.active {
+    background-color: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+}
+
+.tag-display {
+    display: inline-block;
+    background-color: #3b82f6;
+    color: white;
+    font-size: 0.75em;
+    padding: 2px 8px;
+    border-radius: 12px;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+/* --- Footer (Fixed) --- */
+.manager-login {
+    flex: 0 0 auto;      /* Do not shrink */
+    background-color: var(--surface-color);
+    padding: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-top: 1px solid var(--border-color);
+    z-index: 100;
+}
+
+#manager-password {
+    padding: 4px 8px;
+    font-size: 13px;
+    background-color: var(--background-color);
+    color: var(--primary-text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px 0 0 4px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+#manager-login-button {
+    padding: 4px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 0 4px 4px 0;
+    transition: background-color 0.2s;
+}
+
+/* --- Mobile Responsiveness --- */
+@media (max-width: 768px) {
+    .content-wrapper {
+        flex-direction: column;
+    }
+    .tag-filters {
+        flex: 0 0 150px; /* Fixed height on mobile */
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    .hymn-list {
+        flex: 1 1 auto;
+    }
+}
