@@ -5,19 +5,90 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Hymn Manager</title>
     <link rel="stylesheet" href="manager.css">
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
     <div class="nav-header">
         <a href="index.html" class="back-link">&larr; Back to Search</a>
     </div>
-    <div class="manager-container">
+    <div class="manager-container" x-data="hymnManager()">
         <div class="column" id="hymn-list-container">
             <h1>All Hymns</h1>
-            <div id="hymn-list"></div>
+            <div id="hymn-list">
+                <template x-for="hymn in hymns" :key="hymn.id">
+                    <div class="hymn-item-manager">
+                        <strong x-text="hymn.hymn_name"></strong>
+                        <div>
+                            <button type="button" class="edit-hymn" @click="startEditHymn(hymn)">Edit</button>
+                            <button type="button" class="delete-hymn" @click="deleteHymn(hymn)">Delete</button>
+                        </div>
+                    </div>
+                </template>
+            </div>
         </div>
         <div class="column" id="add-hymn-container">
-            <h1>Add New Hymn</h1>
-            <form id="add-hymn-form"></form>
+            <h1 x-text="isEditing ? 'Edit Hymn' : 'Add New Hymn'"></h1>
+            <form id="add-hymn-form" @submit.prevent="handleSubmit">
+                <input type="text" x-model="formData.hymn_name" placeholder="Hymn Name" required><br>
+                <input type="text" x-model="formData.music_writer" placeholder="Music Writer" required><br>
+                <input type="text" x-model="formData.lyrics_writer" placeholder="Lyrics Writer" required><br>
+                <textarea x-model="formData.attribution" placeholder="Attribution" required></textarea><br>
+                
+                <label>Tags:</label>
+                <div class="tag-wrapper">
+                    <div class="tag-container" id="tag-container" @click="$refs.tagInput.focus()">
+                        <template x-for="tag in formData.tags" :key="tag">
+                            <span class="tag-pill">
+                                <span x-text="tag"></span> <span class="remove-tag" @click="removeTag(tag)">&times;</span>
+                            </span>
+                        </template>
+                        <input type="text" id="tag-input" x-ref="tagInput" x-model="tagInput" @input="updateSuggestions" @keydown.enter.prevent="addTag" @keydown.backspace="handleBackspace" placeholder="Add tags..." @click.away="suggestions = []">
+                    </div>
+                    <div class="suggestions-list" x-show="suggestions.length > 0" style="display: none;">
+                        <template x-for="suggestion in suggestions" :key="suggestion">
+                            <div class="suggestion-item" x-text="suggestion" @click="addTagFromSuggestion(suggestion)"></div>
+                        </template>
+                    </div>
+                </div>
+                
+                <div id="versions-container">
+                    <template x-for="(version, vIndex) in formData.versions" :key="version.id">
+                        <div class="version-manager">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <h3 x-text="'Version ' + (vIndex + 1)"></h3>
+                                <button type="button" class="remove-version" @click="removeVersion(vIndex)">Remove Version</button>
+                            </div>
+                            <input type="text" class="version-name" x-model="version.name" placeholder="Version Name" required><br>
+                            <div class="pages-container">
+                                <template x-for="(page, pIndex) in version.pages" :key="page.id">
+                                    <div class="page-manager">
+                                        <div style="display:flex; justify-content:space-between;">
+                                            <span>Page <span x-text="pIndex + 1"></span></span> 
+                                            <button type="button" class="remove-page" @click="removePage(vIndex, pIndex)">X</button>
+                                        </div>
+                                        <template x-if="page.url">
+                                            <div class="existing-image-preview">
+                                                <a :href="page.url" target="_blank">View Current Image</a>
+                                            </div>
+                                        </template>
+                                        <template x-if="page.url">
+                                            <label>Replace Image (optional):</label>
+                                        </template>
+                                        <input type="file" class="page-file" accept="image/*" @change="handleFileChange($event, vIndex, pIndex)" :required="!page.url">
+                                    </div>
+                                </template>
+                            </div>
+                            <button type="button" class="add-page" @click="addPage(vIndex)">Add Page</button>
+                        </div>
+                    </template>
+                </div>
+                <button type="button" id="add-version" @click="addVersion">Add Version</button><br>
+                
+                <div class="form-actions">
+                    <button type="submit" id="submit-btn" :disabled="isSubmitting" x-text="isSubmitting ? (isEditing ? 'Updating...' : 'Adding...') : (isEditing ? 'Update Hymn' : 'Add Hymn')"></button>
+                    <button type="button" id="cancel-edit" x-show="isEditing" @click="resetForm">Cancel Edit</button>
+                </div>
+            </form>
         </div>
     </div>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
@@ -25,7 +96,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage-compat.js"></script>
     <script>
-        // Your web app's Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyCJLgZP27CWayqFoqYoqg9mVdkhgCWqgbg",
             authDomain: "mosaic-hymn-database.firebaseapp.com",
@@ -35,8 +105,6 @@
             appId: "1:55153890298:web:4ca1f526f0169fb7920a43",
             measurementId: "G-64N3W268V9"
         };
-
-        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
     </script>
     <script src="manager.js"></script>
