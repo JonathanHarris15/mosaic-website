@@ -1,0 +1,53 @@
+name: Build and Deploy Docs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -r docs/requirements.txt
+
+      - name: Build Sphinx Documentation
+        run: |
+          cd docs
+          sphinx-build -M html . _build
+
+      - name: Copy LLM files to root
+        run: |
+          cp docs/_build/html/llms.txt .
+          cp docs/_build/html/llms-full.txt .
+
+      - name: Commit LLM files if changed
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add llms.txt llms-full.txt
+          git diff --quiet && git diff --staged --quiet || (git commit -m "docs: update llms.txt and llms-full.txt" && git push)
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs/_build/html
