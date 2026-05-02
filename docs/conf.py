@@ -9,6 +9,7 @@ author = 'Jonathan Harris'
 extensions = [
     'sphinx_llms_txt',
     'sphinx_js',
+    'sphinx_markdown_builder',
 ]
 
 # Path to the JavaScript source files
@@ -26,3 +27,12 @@ html_static_path = ['_static']
 
 # -- Options for sphinx-llms-txt ---------------------------------------------
 llms_txt_summary = 'A documentation site for the Mosaic Website project, including Firebase functions and frontend assets.'
+
+# Include source code in llms-full.txt for better LLM context
+llms_txt_include_code = [
+    "+:functions/**/*.js",
+    "+:public/**/*.js",
+    "+:scripts/**/*.js",
+    "-:node_modules/**",
+    "-:docs/_build/**"
+]
