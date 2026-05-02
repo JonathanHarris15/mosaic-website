@@ -55,7 +55,11 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add llms.txt llms-full.txt
-          git diff --quiet && git diff --staged --quiet || (git commit -m "docs: update llms.txt and llms-full.txt" && git push)
+          if ! git diff --quiet || ! git diff --staged --quiet; then
+            git commit -m "docs: update llms.txt and llms-full.txt"
+            git pull --rebase origin main
+            git push origin main
+          fi
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
