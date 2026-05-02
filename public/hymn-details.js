@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Frontend logic for displaying detailed information about a specific hymn.
+ * Handles fetching hymn data, rendering details, and managing clipboard actions.
+ */
+
 document.addEventListener('DOMContentLoaded', () => {
   const hymnDetailsContainer = document.getElementById('hymn-details-container');
   const urlParams = new URLSearchParams(window.location.search);
@@ -28,6 +33,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 
+  /**
+   * Renders the hymn's details into the DOM.
+   * @param {Object} hymn - The hymn data object from Firestore.
+   */
   function renderHymnDetails(hymn) {
     let html = `<h1 class="hymn-title">${hymn.hymn_name}</h1>`;
     html += `
@@ -77,6 +86,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /**
+   * Updates the 'last_played_date' field for the current hymn in Firestore.
+   * Sets the date to the upcoming Sunday.
+   * @param {HTMLElement} button - The button element that triggered the update.
+   */
   function updateLastTimePlayed(button) {
     const today = new Date();
     const dayOfWeek = today.getDay(); // 0 (Sun) to 6 (Sat)
@@ -104,6 +118,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /**
+   * Copies the provided text to the system clipboard.
+   * @param {string} text - The text to copy.
+   * @param {HTMLElement} button - The button element to provide visual feedback.
+   */
   function copyToClipboard(text, button) {
     navigator.clipboard.writeText(text).then(() => {
       button.textContent = 'Copied!';
@@ -121,6 +140,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /**
+   * Fetches an image from a URL and copies it to the clipboard as a PNG.
+   * @param {string} imageUrl - The URL of the image to copy.
+   * @param {HTMLElement} button - The button element to provide visual feedback.
+   */
   async function copyImageToClipboard(imageUrl, button) {
     try {
       const url = new URL(imageUrl);

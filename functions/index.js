@@ -2,17 +2,51 @@ const {onCall} = require("firebase-functions/v2/https");
 const {log} = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 
+/**
+ * @fileoverview Firebase Cloud Functions for the Mosaic Website.
+ * This file contains the callable HTTPS functions used by the frontend.
+ */
+
 // Initialize admin at the top level
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 
+/**
+ * Cache for the hymn index to reduce Firestore read costs.
+ * @type {Array<Object>|null}
+ */
 let cachedIndex = null;
+
+/**
+ * Timestamp of the last cache update in milliseconds.
+ * @type {number}
+ */
 let lastCacheTime = 0;
+
+/**
+ * Cache Time-To-Live (TTL) in milliseconds.
+ * @type {number}
+ */
 const CACHE_TTL_MS = 1000 * 60 * 5; // 5 minutes
 
 /**
  * A Callable Cloud Function that fetches the entire hymn index from Firestore.
+ * 
+ * This function returns a simplified list of hymns with basic metadata,
+ * optimized for search and display in the frontend lookup tool.
+ * Results are cached in memory for 5 minutes.
+ * 
+ * @param {Object} request - The request object.
+ * @returns {Promise<Array<Object>>} A promise that resolves to an array of hymn objects.
+ * @property {string} id - The Firestore document ID.
+ * @property {string} hymn_name - The title of the hymn.
+ * @property {number} variations - The number of available versions/arrangements.
+ * @property {string} music_writer - The composer of the music.
+ * @property {string} lyrics_writer - The author of the lyrics.
+ * @property {string|null} last_played_date - The last date the hymn was played.
+ * @property {Array<string>} tags - Descriptive tags for the hymn.
+ * @property {string} database_url - Relative URL to the hymn details page.
  */
 exports.getHymnIndex = onCall({cors: true, region: "us-central1"}, async (request) => {
   if (cachedIndex && (Date.now() - lastCacheTime < CACHE_TTL_MS)) {

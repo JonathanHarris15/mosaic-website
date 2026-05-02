@@ -1,4 +1,18 @@
+/**
+ * @fileoverview Main frontend logic for the Mosaic Website hymn lookup.
+ * Utilizes Alpine.js for reactive data binding and Firestore for data fetching.
+ */
+
 document.addEventListener('alpine:init', () => {
+    /**
+     * Alpine.js component for the hymn lookup and search functionality.
+     * @typedef {Object} HymnLookup
+     * @property {Array<Object>} hymns - All hymns fetched from the server.
+     * @property {Array<Object>} filteredHymns - Hymns filtered by search query and tags.
+     * @property {string} searchQuery - The current text search input.
+     * @property {Array<string>} allTags - All available tags from Firestore.
+     * @property {Array<string>} selectedTags - Tags currently selected for filtering.
+     */
     Alpine.data('hymnLookup', () => ({
         hymns: [],
         filteredHymns: [],
@@ -6,6 +20,9 @@ document.addEventListener('alpine:init', () => {
         allTags: [],
         selectedTags: [],
         
+        /**
+         * Initializes the component, fetches tags and the hymn index.
+         */
         init() {
             const db = firebase.firestore();
             
@@ -42,6 +59,10 @@ document.addEventListener('alpine:init', () => {
             });
         },
 
+        /**
+         * Toggles a tag in the selectedTags filter list.
+         * @param {string} tag - The tag to toggle.
+         */
         toggleTag(tag) {
             if (this.selectedTags.includes(tag)) {
                 this.selectedTags = this.selectedTags.filter(t => t !== tag);
@@ -51,6 +72,9 @@ document.addEventListener('alpine:init', () => {
             this.performSearch();
         },
 
+        /**
+         * Filters the hymns based on the current searchQuery and selectedTags.
+         */
         performSearch() {
             let result = this.hymns;
 
@@ -78,6 +102,10 @@ document.addEventListener('alpine:init', () => {
             this.filteredHymns = result;
         },
         
+        /**
+         * Redirects the user to the details page for a specific hymn.
+         * @param {string} id - The Firestore ID of the hymn.
+         */
         selectHymn(id) {
             window.location.href = `hymn-details.html?id=${id}`;
         }

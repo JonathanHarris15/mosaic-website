@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Utility script to identify duplicate hymn entries in Firestore.
+ * Duplicates are identified based on the 'hymn_name' field.
+ */
+
 const admin = require('firebase-admin');
 
 const FIREBASE_PROJECT_ID = 'mosaic-hymn-database';
@@ -15,6 +20,11 @@ try {
 
 const db = admin.firestore();
 
+/**
+ * Fetches all hymns from Firestore and logs any duplicates found by name.
+ * @async
+ * @function checkDuplicates
+ */
 async function checkDuplicates() {
     console.log('Checking for duplicate hymns...');
 

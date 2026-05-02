@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - 'docs/**'
+      - 'functions/**'
+      - 'public/**'
+      - 'scripts/**'
       - '.github/workflows/docs.yml'
 
 permissions:
@@ -20,12 +23,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node.js dependencies
+        run: npm install
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
           pip install -r docs/requirements.txt
 

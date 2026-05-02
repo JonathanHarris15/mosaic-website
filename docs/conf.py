@@ -8,10 +8,15 @@ author = 'Jonathan Harris'
 
 extensions = [
     'sphinx_llms_txt',
+    'sphinx_js',
 ]
 
+# Path to the JavaScript source files
+js_source_path = ['../functions', '../public', '../scripts']
+primary_domain = 'js'
+
 templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '.venv']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '.venv', 'node_modules']
 
 # -- Options for HTML output -------------------------------------------------
 

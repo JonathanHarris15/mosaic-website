@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Migration script to import hymn data from a JSON file into Firestore.
+ * Expects a 'hymn_index.json' file in the 'public' directory.
+ */
+
 const admin = require('firebase-admin');
 const fs = require('fs');
 const path = require('path');
@@ -24,6 +29,12 @@ try {
 const db = admin.firestore();
 const hymnsJsonPath = path.join(__dirname, 'public', 'hymn_index.json');
 
+/**
+ * Reads the 'hymn_index.json' file and performs a batch write to Firestore.
+ * Each hymn is assigned a default "Default" version.
+ * @async
+ * @function migrateHymns
+ */
 async function migrateHymns() {
     console.log('Starting migration...');
 

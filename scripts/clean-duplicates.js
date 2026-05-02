@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Utility script to clean up duplicate hymn entries in Firestore.
+ * Keeps the first entry found for a given name and deletes the rest.
+ */
+
 const admin = require('firebase-admin');
 const readline = require('readline');
 
@@ -21,6 +26,12 @@ const rl = readline.createInterface({
     output: process.stdout
 });
 
+/**
+ * Identifies and deletes duplicate hymns.
+ * Can be run with --force to skip confirmation.
+ * @async
+ * @function cleanDuplicates
+ */
 async function cleanDuplicates() {
     console.log('Fetching hymns for cleanup...');
 

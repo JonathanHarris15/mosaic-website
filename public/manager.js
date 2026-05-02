@@ -1,7 +1,15 @@
+/**
+ * @fileoverview Administrative dashboard logic for managing the hymn database.
+ * Provides functionality for adding, editing, and deleting hymns and their associated files.
+ */
+
 document.addEventListener('alpine:init', () => {
     const db = firebase.firestore();
     const storage = firebase.storage();
 
+    /**
+     * Alpine.js component for managing hymns.
+     */
     Alpine.data('hymnManager', () => ({
         hymns: [],
         allTags: [],
@@ -23,6 +31,9 @@ document.addEventListener('alpine:init', () => {
             versions: []
         },
 
+        /**
+         * Initializes the manager, signing in anonymously and loading initial data.
+         */
         init() {
             firebase.auth().signInAnonymously().then(() => {
                 this.loadHymns();
@@ -30,6 +41,11 @@ document.addEventListener('alpine:init', () => {
             }).catch(err => console.error("Error signing in", err));
         },
 
+        /**
+         * Displays a temporary toast message to the user.
+         * @param {string} message - The message to display.
+         * @param {string} [type='success'] - The type of toast ('success' or 'error').
+         */
         showToast(message, type = 'success') {
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
@@ -38,18 +54,27 @@ document.addEventListener('alpine:init', () => {
             setTimeout(() => toast.remove(), 3000);
         },
 
+        /**
+         * Loads the list of all hymns from Firestore, ordered by name.
+         */
         loadHymns() {
             db.collection('hymns').orderBy('hymn_name').get().then(snapshot => {
                 this.hymns = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             });
         },
 
+        /**
+         * Loads all available tags from the 'tags' collection.
+         */
         loadTags() {
             db.collection('tags').get().then(snapshot => {
                 this.allTags = snapshot.docs.map(doc => doc.id).sort();
             });
         },
 
+        /**
+         * Resets the form to its default empty state.
+         */
         resetForm() {
             this.isEditing = false;
             this.editingHymnId = null;
@@ -66,6 +91,10 @@ document.addEventListener('alpine:init', () => {
             };
         },
 
+        /**
+         * Populates the form with data from an existing hymn to begin editing.
+         * @param {Object} hymn - The hymn object to edit.
+         */
         startEditHymn(hymn) {
             this.isEditing = true;
             this.editingHymnId = hymn.id;
@@ -94,6 +123,10 @@ document.addEventListener('alpine:init', () => {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         },
 
+        /**
+         * Deletes a hymn from Firestore and its associated images from Firebase Storage.
+         * @param {Object} hymn - The hymn object to delete.
+         */
         deleteHymn(hymn) {
             if (!confirm('Are you sure you want to delete this hymn?')) return;
 
@@ -121,6 +154,9 @@ document.addEventListener('alpine:init', () => {
             });
         },
 
+        /**
+         * Updates tag suggestions based on current user input.
+         */
         updateSuggestions() {
             const val = this.tagInput.trim().toLowerCase();
             if (val.length > 0) {
@@ -132,6 +168,9 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        /**
+         * Adds a tag to the current hymn's tag list.
+         */
         addTag() {
             let val = this.tagInput.trim();
             if (val) {
@@ -145,21 +184,35 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        /**
+         * Adds a tag from a suggestion.
+         * @param {string} tag - The tag to add.
+         */
         addTagFromSuggestion(tag) {
             this.tagInput = tag;
             this.addTag();
         },
 
+        /**
+         * Handles backspace in the tag input to remove the last tag.
+         */
         handleBackspace() {
             if (this.tagInput === '' && this.formData.tags.length > 0) {
                 this.formData.tags.pop();
             }
         },
 
+        /**
+         * Removes a specific tag from the current hymn's tag list.
+         * @param {string} tag - The tag to remove.
+         */
         removeTag(tag) {
             this.formData.tags = this.formData.tags.filter(t => t !== tag);
         },
 
+        /**
+         * Adds a new empty version to the form.
+         */
         addVersion() {
             this.formData.versions.push({
                 id: 'version-' + Date.now() + Math.random(),
@@ -168,10 +221,18 @@ document.addEventListener('alpine:init', () => {
             });
         },
 
+        /**
+         * Removes a version from the form by index.
+         * @param {number} index - The index of the version to remove.
+         */
         removeVersion(index) {
             this.formData.versions.splice(index, 1);
         },
 
+        /**
+         * Adds a new empty page placeholder to a specific version.
+         * @param {number} vIndex - The index of the version to add the page to.
+         */
         addPage(vIndex) {
             this.formData.versions[vIndex].pages.push({
                 id: 'page-' + Date.now() + Math.random(),
@@ -180,15 +241,30 @@ document.addEventListener('alpine:init', () => {
             });
         },
 
+        /**
+         * Removes a page from a specific version by index.
+         * @param {number} vIndex - The index of the version.
+         * @param {number} pIndex - The index of the page to remove.
+         */
         removePage(vIndex, pIndex) {
             this.formData.versions[vIndex].pages.splice(pIndex, 1);
         },
 
+        /**
+         * Handles file selection for a specific page.
+         * @param {Event} event - The file input change event.
+         * @param {number} vIndex - The index of the version.
+         * @param {number} pIndex - The index of the page.
+         */
         handleFileChange(event, vIndex, pIndex) {
             const file = event.target.files[0];
             this.formData.versions[vIndex].pages[pIndex].file = file;
         },
 
+        /**
+         * Validates and submits the hymn form to Firestore and Firebase Storage.
+         * Handles both creation of new hymns and updates to existing ones.
+         */
         async handleSubmit() {
             if (!this.isEditing) {
                 const check = await db.collection('hymns').where('hymn_name', '==', this.formData.hymn_name).get();
