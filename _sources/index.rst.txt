@@ -17,6 +17,46 @@ Project Structure
 * ``public/``: Static frontend assets (HTML, CSS, JS).
 * ``scripts/``: Maintenance and migration scripts.
 
+Firebase Functions
+==================
+
+.. js:autofunction:: getHymnIndex
+
+Frontend Components
+===================
+
+Main Lookup (main.js)
+---------------------
+
+.. js:autofunction:: toggleTag
+.. js:autofunction:: performSearch
+.. js:autofunction:: selectHymn
+
+Hymn Details (hymn-details.js)
+------------------------------
+
+.. js:autofunction:: renderHymnDetails
+.. js:autofunction:: updateLastTimePlayed
+.. js:autofunction:: copyToClipboard
+.. js:autofunction:: copyImageToClipboard
+
+Hymn Manager (manager.js)
+-------------------------
+
+.. js:autofunction:: showToast
+.. js:autofunction:: loadHymns
+.. js:autofunction:: loadTags
+.. js:autofunction:: startEditHymn
+.. js:autofunction:: deleteHymn
+.. js:autofunction:: handleSubmit
+
+Maintenance Scripts
+===================
+
+.. js:autofunction:: checkDuplicates
+.. js:autofunction:: cleanDuplicates
+.. js:autofunction:: migrateHymns
+
 Indices and tables
 ==================
 
