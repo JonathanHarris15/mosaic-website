@@ -13,6 +13,7 @@ extensions = [
 
 # Path to the JavaScript source files
 js_source_path = ['../functions', '../public', '../scripts']
+root_for_relative_js_paths = '..'
 primary_domain = 'js'
 
 templates_path = ['_templates']
