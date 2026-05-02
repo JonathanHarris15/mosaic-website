@@ -1,0 +1,7 @@
+# Mosaic Website
+
+> A documentation site for the Mosaic Website project, including Firebase functions and frontend assets.
+
+## Docs
+
+- [Welcome to Mosaic Website’s documentation!](/_sources/index.rst.txt)
