@@ -43,6 +43,9 @@ jobs:
       - name: Build Sphinx Documentation
         run: |
           cd docs
+          # Build markdown first to ensure directives are expanded for llms-full.txt
+          sphinx-build -M markdown . _build
+          # Then build HTML which will include the rendered content and source code in llms-full.txt
           sphinx-build -M html . _build
 
       - name: Copy LLM files to root
