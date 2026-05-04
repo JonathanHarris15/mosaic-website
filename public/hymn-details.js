@@ -38,83 +38,58 @@ document.addEventListener('DOMContentLoaded', () => {
    * @param {Object} hymn - The hymn data object from Firestore.
    */
   function renderHymnDetails(hymn) {
-    let html = `<h1 class="hymn-title">${hymn.hymn_name}</h1>`;
-    html += `
-      <div class="top-buttons">
-        <button id="copy-attribution">Copy Attribution</button>
-        <button id="update-ltp">Update LTP</button>
+    let html = `
+      <div class="mb-md text-center">
+          <h1 class="font-display-lg text-display-lg text-primary mb-sm">${hymn.hymn_name}</h1>
+      </div>
+      <div class="flex justify-center gap-4 mb-lg">
+        <button id="copy-attribution" class="bg-surface-container-lowest border border-outline-variant text-on-surface font-label-md text-label-md px-6 py-3 rounded-DEFAULT hover:bg-surface-container-low transition-colors flex items-center gap-2">
+            <span class="material-symbols-outlined text-[20px]">content_copy</span>
+            <span>Copy Attribution</span>
+        </button>
       </div>
     `;
 
-    hymn.versions.forEach(version => {
-      html += `<div class="version">`;
-      html += `<h2>${version.name}</h2>`;
-      html += `<div class="pages">`;
-      const pages = version.pages;
-      if (pages) {
-        pages.forEach((pageUrl, index) => {
-          html += `
-            <div class="page">
-              <p>Page ${index + 1}</p>
-              <img src="${pageUrl}" alt="Page ${index + 1}">
-              <button class="copy-image" data-url="${pageUrl}">Copy Image</button>
-            </div>
-          `;
+    if (hymn.versions && hymn.versions.length > 0) {
+        hymn.versions.forEach(version => {
+            html += `
+            <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-md mb-lg">
+                <h2 class="font-headline-md text-headline-md text-primary mb-md pb-xs border-b border-surface-variant">${version.name}</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+            `;
+            const pages = version.pages;
+            if (pages) {
+                pages.forEach((pageUrl, index) => {
+                    html += `
+                    <div class="flex flex-col items-center bg-surface-container-lowest border border-outline-variant rounded-lg p-sm">
+                        <p class="font-label-md text-label-md text-on-surface-variant mb-sm">Page ${index + 1}</p>
+                        <img src="${pageUrl}" alt="Page ${index + 1}" class="w-full object-contain bg-white border border-surface-variant rounded-sm mb-sm" style="max-height: 60vh;">
+                        <button class="download-image bg-secondary text-on-secondary font-label-md text-label-md px-4 py-2 rounded-DEFAULT hover:bg-primary transition-colors flex items-center gap-2 w-full justify-center" data-url="${pageUrl}" data-hymn="${hymn.hymn_name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}" data-version="${version.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}" data-page="${index + 1}">
+                            <span class="material-symbols-outlined text-[18px]">download</span>
+                            <span>Download Image</span>
+                        </button>
+                    </div>
+                    `;
+                });
+            }
+            html += `</div></div>`;
         });
-      }
-      html += `</div></div>`;
-    });
+    }
 
     hymnDetailsContainer.innerHTML = html;
 
     document.getElementById('copy-attribution').addEventListener('click', (e) => {
-      const button = e.target;
+      const button = e.currentTarget;
       copyToClipboard(hymn.attribution, button);
     });
 
-    document.getElementById('update-ltp').addEventListener('click', (e) => {
-      const button = e.target;
-      updateLastTimePlayed(button);
-    });
-
-    document.querySelectorAll('.copy-image').forEach(button => {
+    document.querySelectorAll('.download-image').forEach(button => {
       button.addEventListener('click', (e) => {
-        const imageUrl = e.target.dataset.url;
-        const button = e.target;
-        copyImageToClipboard(imageUrl, button);
+        const imageUrl = e.currentTarget.dataset.url;
+        const buttonElem = e.currentTarget;
+        const filename = `${buttonElem.dataset.hymn}_${buttonElem.dataset.version}_page_${buttonElem.dataset.page}.png`;
+        downloadImage(imageUrl, buttonElem, filename);
       });
-    });
-  }
-
-  /**
-   * Updates the 'last_played_date' field for the current hymn in Firestore.
-   * Sets the date to the upcoming Sunday.
-   * @param {HTMLElement} button - The button element that triggered the update.
-   */
-  function updateLastTimePlayed(button) {
-    const today = new Date();
-    const dayOfWeek = today.getDay(); // 0 (Sun) to 6 (Sat)
-    const daysUntilSunday = 7 - dayOfWeek;
-    const nextSunday = new Date(today);
-    nextSunday.setDate(today.getDate() + daysUntilSunday);
-    const formattedDate = nextSunday.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
-
-    const db = firebase.firestore();
-    db.collection('hymns').doc(hymnId).update({
-      last_played_date: formattedDate
-    }).then(() => {
-      button.textContent = 'Updated!';
-      button.classList.add('copied-feedback');
-      setTimeout(() => {
-        button.textContent = 'Update LTP';
-        button.classList.remove('copied-feedback');
-      }, 2000);
-    }).catch((error) => {
-      console.error("Error updating document: ", error);
-      button.textContent = 'Error';
-      setTimeout(() => {
-        button.textContent = 'Update LTP';
-      }, 2000);
     });
   }
 
@@ -124,68 +99,69 @@ document.addEventListener('DOMContentLoaded', () => {
    * @param {HTMLElement} button - The button element to provide visual feedback.
    */
   function copyToClipboard(text, button) {
+    if (!text) {
+        const originalHtml = button.innerHTML;
+        button.innerHTML = '<span class="material-symbols-outlined text-[20px]">error</span><span>No Attribution</span>';
+        setTimeout(() => {
+            button.innerHTML = originalHtml;
+        }, 2000);
+        return;
+    }
+
     navigator.clipboard.writeText(text).then(() => {
-      button.textContent = 'Copied!';
-      button.classList.add('copied-feedback');
+      const originalHtml = button.innerHTML;
+      button.innerHTML = '<span class="material-symbols-outlined text-[20px]">check</span><span>Copied!</span>';
+      button.classList.add('bg-surface-container-high');
       setTimeout(() => {
-        button.textContent = 'Copy Attribution';
-        button.classList.remove('copied-feedback');
+        button.innerHTML = originalHtml;
+        button.classList.remove('bg-surface-container-high');
       }, 2000);
     }, (err) => {
       console.error('Could not copy text: ', err);
-      button.textContent = 'Error';
+      const originalHtml = button.innerHTML;
+      button.innerHTML = '<span class="material-symbols-outlined text-[20px]">error</span><span>Error</span>';
       setTimeout(() => {
-        button.textContent = 'Copy Attribution';
+        button.innerHTML = originalHtml;
       }, 2000);
     });
   }
 
   /**
-   * Fetches an image from a URL and copies it to the clipboard as a PNG.
-   * @param {string} imageUrl - The URL of the image to copy.
+   * Fetches an image from a URL and triggers a download.
+   * @param {string} imageUrl - The URL of the image to download.
    * @param {HTMLElement} button - The button element to provide visual feedback.
+   * @param {string} filename - The suggested filename for the download.
    */
-  async function copyImageToClipboard(imageUrl, button) {
+  async function downloadImage(imageUrl, button, filename) {
     try {
       const url = new URL(imageUrl);
+      // Append time to bypass cache if needed
       url.searchParams.append('time', new Date().getTime());
       const response = await fetch(url);
       const blob = await response.blob();
+      
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
 
-      const image = await new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = (err) => reject(err);
-        img.src = URL.createObjectURL(blob);
-      });
-
-      const canvas = document.createElement('canvas');
-      canvas.width = image.width;
-      canvas.height = image.height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(image, 0, 0);
-
-      const pngBlob = await new Promise((resolve) => {
-        canvas.toBlob(resolve, 'image/png');
-      });
-
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          'image/png': pngBlob
-        })
-      ]);
-
-      button.textContent = 'Copied!';
-      button.classList.add('copied-feedback');
+      const originalHtml = button.innerHTML;
+      button.innerHTML = '<span class="material-symbols-outlined text-[18px]">check</span><span>Downloaded!</span>';
+      button.classList.add('bg-primary-container');
       setTimeout(() => {
-        button.textContent = 'Copy Image';
-        button.classList.remove('copied-feedback');
+        button.innerHTML = originalHtml;
+        button.classList.remove('bg-primary-container');
       }, 2000);
     } catch (err) {
-      console.error('Could not copy image: ', err);
-      button.textContent = 'Error';
+      console.error('Could not download image: ', err);
+      const originalHtml = button.innerHTML;
+      button.innerHTML = '<span class="material-symbols-outlined text-[18px]">error</span><span>Error</span>';
       setTimeout(() => {
-        button.textContent = 'Copy Image';
+        button.innerHTML = originalHtml;
       }, 2000);
     }
   }

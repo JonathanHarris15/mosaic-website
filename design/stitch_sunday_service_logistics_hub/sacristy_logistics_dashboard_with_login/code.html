@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sacristy Logistics - Sunday Morning Portal</title>
+<!-- Google Fonts: Noto Serif & Work Sans -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&amp;family=Work+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config -->
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "inverse-primary": "#b2c6f8",
+                "surface-variant": "#e5e2dc",
+                "on-primary": "#ffffff",
+                "primary": "#001a43",
+                "on-primary-fixed-variant": "#314670",
+                "on-tertiary-container": "#67a1b5",
+                "on-secondary-fixed-variant": "#2b4969",
+                "surface-container-low": "#f6f3ed",
+                "tertiary": "#001f28",
+                "on-tertiary-fixed": "#001f28",
+                "secondary-container": "#b9d7fe",
+                "secondary-fixed-dim": "#abc9ef",
+                "surface": "#fcf9f3",
+                "outline-variant": "#c5c6d0",
+                "primary-container": "#1a3059",
+                "secondary": "#436082",
+                "on-secondary": "#ffffff",
+                "on-surface": "#1c1c18",
+                "primary-fixed": "#d8e2ff",
+                "surface-container-highest": "#e5e2dc",
+                "on-primary-container": "#8499c8",
+                "on-secondary-fixed": "#001d36",
+                "surface-dim": "#dcdad4",
+                "on-secondary-container": "#415e7f",
+                "on-surface-variant": "#44474e",
+                "tertiary-container": "#003643",
+                "primary-fixed-dim": "#b2c6f8",
+                "tertiary-fixed-dim": "#95cfe4",
+                "tertiary-fixed": "#b5ebff",
+                "on-primary-fixed": "#001a42",
+                "error": "#ba1a1a",
+                "surface-bright": "#fcf9f3",
+                "on-background": "#1c1c18",
+                "on-tertiary-fixed-variant": "#004e60",
+                "secondary-fixed": "#d1e4ff",
+                "on-tertiary": "#ffffff",
+                "on-error": "#ffffff",
+                "inverse-surface": "#31312d",
+                "on-error-container": "#93000a",
+                "outline": "#75777f",
+                "surface-container": "#f0eee8",
+                "surface-container-high": "#ebe8e2",
+                "inverse-on-surface": "#f3f0ea",
+                "surface-tint": "#4a5e8a",
+                "surface-container-lowest": "#ffffff",
+                "background": "#fcf9f3",
+                "error-container": "#ffdad6"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.125rem",
+                "lg": "0.25rem",
+                "xl": "0.5rem",
+                "full": "0.75rem"
+        },
+        "spacing": {
+                "gutter": "24px",
+                "base": "8px",
+                "md": "24px",
+                "xs": "4px",
+                "xl": "80px",
+                "margin": "32px",
+                "sm": "12px",
+                "lg": "48px"
+        },
+        "fontFamily": {
+                "headline-md": [
+                        "Noto Serif"
+                ],
+                "display-lg": [
+                        "Noto Serif"
+                ],
+                "label-md": [
+                        "Work Sans"
+                ],
+                "headline-lg": [
+                        "Noto Serif"
+                ],
+                "body-lg": [
+                        "Work Sans"
+                ],
+                "body-md": [
+                        "Work Sans"
+                ]
+        },
+        "fontSize": {
+                "headline-md": [
+                        "24px",
+                        {
+                                "lineHeight": "1.3",
+                                "fontWeight": "600"
+                        }
+                ],
+                "display-lg": [
+                        "48px",
+                        {
+                                "lineHeight": "1.1",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "700"
+                        }
+                ],
+                "label-md": [
+                        "14px",
+                        {
+                                "lineHeight": "1.2",
+                                "letterSpacing": "0.05em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "headline-lg": [
+                        "32px",
+                        {
+                                "lineHeight": "1.2",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-lg": [
+                        "18px",
+                        {
+                                "lineHeight": "1.6",
+                                "fontWeight": "400"
+                        }
+                ],
+                "body-md": [
+                        "16px",
+                        {
+                                "lineHeight": "1.5",
+                                "fontWeight": "400"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+</head>
+<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed dark"><header class="w-full max-w-7xl mx-auto px-margin pt-md flex justify-end">
+<button class="px-md py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200">
+        Log In
+    </button>
+</header>
+<!-- Shared Component: TopAppBar -->
+<!-- Main Content Canvas -->
+<main class="flex-grow max-w-7xl w-full mx-auto px-margin pb-xl flex flex-col gap-margin pt-base">
+<!-- Logo Prominently Center Above Main Content -->
+<div class="w-full flex justify-center py-sm">
+<img alt="Mosaic Liturgy Logo" class="h-24 w-24 object-contain" src="https://lh3.googleusercontent.com/aida/ADBb0uijHszjAD1vpPUJpbneTqxJdVo7bqoahIXaW-sv-CScZsHwzqDfrAEi3X5o8chQ9NjAlKvtZ6Cyp1ThZR3_4t8lebT5SIaTap9oaNQRrKXLV6Ql_O0oNb_OJwk4jHa3nRkpPnEV73sOQ3HRiqMM8m0-AsJ3eoIKLqxFlmrluMZDO-ldcFs4yDdEDe7K9XTLHFZD7B8TXA3dGn8CeCQzheXxD97xjChWDictUoK2cdH0-6VBzIvb0qlCCvpnUxAt0RtbGGjq-k2qxA"/>
+</div>
+<!-- Asymmetric Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-margin">
+<!-- Left Column (Primary Tools & Hero) -->
+<div class="md:col-span-8 flex flex-col gap-margin">
+<!-- Hero Section -->
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg flex flex-col justify-center relative overflow-hidden">
+<div class="relative z-10">
+<h1 class="font-display-lg text-display-lg text-primary mb-xs">Good Morning, </h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-[20px]">schedule</span>
+                            Upcoming: 9:00 AM Traditional Service
+                        </p>
+</div>
+<!-- Architectural accent lines (Modern Minimalism, no religious motifs) -->
+<div class="absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-surface-container to-transparent opacity-50 pointer-events-none"></div>
+<div class="absolute -right-12 -top-12 w-48 h-48 border-[1px] border-outline-variant rounded-full opacity-20 pointer-events-none"></div>
+</div>
+<!-- Three Pillars Navigation Cards -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-md">
+<!-- Hymn Directory -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
+<div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
+<span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>menu_book</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface mb-base">Hymn Directory</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Browse &amp; assign musical selections.</p>
+</div>
+<!-- Service History -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
+<div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
+<span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>history</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface mb-base">Service History</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Review past services and attendance logs.</p>
+</div>
+<!-- Service Guides -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
+<div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
+<span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>auto_stories</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface mb-base">Service Guides</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Step-by-step structural flows.</p>
+</div>
+</div>
+</div>
+<!-- Right Column (Sunday at a Glance) -->
+<div class="md:col-span-4 flex flex-col">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex-grow flex flex-col">
+<h2 class="font-headline-md text-headline-md text-primary pb-xs border-b border-surface-variant">Sunday at a Glance</h2>
+</div>
+</div>
+</div>
+</main>
+<!-- Contextual Quick Action FAB (Allowed on Home/Dashboard) -->
+<button class="fixed bottom-margin right-margin w-14 h-14 bg-primary text-on-primary rounded-xl shadow-[0_8px_16px_rgba(4,22,46,0.15)] flex items-center justify-center hover:bg-primary-container hover:text-on-primary-container transition-all hover:-translate-y-1 z-40 group" title="Add Service Note">
+<span class="material-symbols-outlined text-[24px]">edit_note</span>
+</button>
+<!-- Shared Component: Footer -->
+</body></html>
