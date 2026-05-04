@@ -12,9 +12,11 @@
 
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
 
+    <script src="auth.js"></script>
     <script id="tailwind-config">
         tailwind.config = {
           darkMode: "class",
@@ -215,11 +217,6 @@
             </section>
         </div>
     </main>
-
-    <footer class="manager-login" style="margin-top: auto; padding: 20px; text-align: center; background: transparent; border-top: 1px solid rgba(0,0,0,0.1);">
-        <input type="password" id="manager-password" placeholder="Manager Password" class="border border-outline-variant rounded-DEFAULT font-body-md text-body-md px-3 py-1">
-        <button id="manager-login-button" class="bg-secondary text-on-secondary font-label-md px-4 py-1 rounded-DEFAULT hover:bg-primary transition-colors">Login</button>
-    </footer>
 
     <script>
         const firebaseConfig = {

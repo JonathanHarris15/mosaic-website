@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Log In - Mosaic Church</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&amp;family=Work+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet" />
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="auth.js"></script>
+
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary": "#001a43",
+                        "on-primary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "outline": "#75777f",
+                        "error": "#ba1a1a",
+                        "background": "#fcf9f3"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Noto Serif"],
+                        "body-md": ["Work Sans"],
+                        "label-md": ["Work Sans"]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md antialiased min-h-screen flex flex-col justify-center items-center p-gutter relative overflow-hidden">
+    <!-- Architectural accent lines (Modern Minimalism) -->
+    <div class="absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-surface-container-high to-transparent opacity-50 pointer-events-none"></div>
+    <div class="absolute -right-12 -top-12 w-64 h-64 border-[1px] border-outline-variant rounded-full opacity-20 pointer-events-none"></div>
+    <div class="absolute -left-12 -bottom-12 w-48 h-48 border-[1px] border-outline-variant rounded-full opacity-10 pointer-events-none"></div>
+
+    <div class="w-full max-w-md bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-lg shadow-sm relative z-10">
+        <div class="w-full flex justify-center mb-md">
+            <img alt="Mosaic Liturgy Logo" class="h-16 w-16 object-contain" src="https://lh3.googleusercontent.com/aida/ADBb0uijHszjAD1vpPUJpbneTqxJdVo7bqoahIXaW-sv-CScZsHwzqDfrAEi3X5o8chQ9NjAlKvtZ6Cyp1ThZR3_4t8lebT5SIaTap9oaNQRrKXLV6Ql_O0oNb_OJwk4jHa3nRkpPnEV73sOQ3HRiqMM8m0-AsJ3eoIKLqxFlmrluMZDO-ldcFs4yDdEDe7K9XTLHFZD7B8TXA3dGn8CeCQzheXxD97xjChWDictUoK2cdH0-6VBzIvb0qlCCvpnUxAt0RtbGGjq-k2qxA" />
+        </div>
+        <h1 class="font-display-lg text-4xl text-primary text-center mb-md tracking-tight">Log In</h1>
+        
+        <form id="login-form" class="flex flex-col gap-md">
+            <div class="flex flex-col gap-xs">
+                <label for="email" class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest text-[11px]">Email Address</label>
+                <input type="email" id="email" required class="w-full py-3 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:border-tertiary-container focus:ring-1 focus:ring-tertiary-container transition-all outline-none font-body-md text-on-surface" placeholder="email@example.com" />
+            </div>
+            <div class="flex flex-col gap-xs">
+                <label for="password" class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest text-[11px]">Password</label>
+                <input type="password" id="password" required class="w-full py-3 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:border-tertiary-container focus:ring-1 focus:ring-tertiary-container transition-all outline-none font-body-md text-on-surface" placeholder="••••••••" />
+            </div>
+            <div id="error-message" class="text-error font-body-md text-sm hidden flex items-center gap-1 bg-error-container/30 p-3 rounded-lg border border-error/20">
+                <span class="material-symbols-outlined text-sm">error</span>
+                <span id="error-text"></span>
+            </div>
+            <button type="submit" class="bg-primary text-on-primary font-label-md text-label-md py-3 rounded-lg hover:bg-primary-container transition-all duration-200 mt-md shadow-sm active:scale-[0.98]">
+                Access Portal
+            </button>
+        </form>
+        
+        <div class="mt-lg text-center">
+            <a href="index.html" class="text-secondary hover:text-primary font-label-md text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-colors">
+                <span class="material-symbols-outlined text-sm">arrow_back</span>
+                Back to Public Directory
+            </a>
+        </div>
+    </div>
+
+    <script>
+        const loginForm = document.getElementById('login-form');
+        const errorMessage = document.getElementById('error-message');
+        const errorText = document.getElementById('error-text');
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            errorMessage.classList.add('hidden');
+
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+                window.location.href = 'profile.html';
+            } catch (error) {
+                errorText.textContent = error.message;
+                errorMessage.classList.remove('hidden');
+            }
+        });
+
+        // Redirect if already logged in
+        auth.onAuthStateChanged(user => {
+            if (user) window.location.href = 'profile.html';
+        });
+    </script>
+</body>
+</html>

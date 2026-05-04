@@ -78,10 +78,48 @@ exports.getHymnIndex = onCall({cors: true, region: "us-central1"}, async (reques
 
   log(`Returning index with ${hymnIndexData.length} hymns.`);
 
-  // Cache the result
-  cachedIndex = hymnIndexData;
-  lastCacheTime = Date.now();
+/**
+ * A Callable Cloud Function that allows admins to create new users.
+ */
+exports.createUser = onCall({cors: true, region: "us-central1"}, async (request) => {
+  // 1. Check if the caller is an admin
+  if (!request.auth) {
+    throw new Error("The function must be called while authenticated.");
+  }
 
-  // 3. Return the data directly to the client
-  return hymnIndexData;
+  const callerUid = request.auth.uid;
+  const db = admin.firestore();
+  const callerDoc = await db.collection("users").doc(callerUid).get();
+  
+  if (!callerDoc.exists || callerDoc.data().role !== "admin") {
+    throw new Error("Only admins can create new users.");
+  }
+
+  const {email, password, role} = request.data;
+
+  if (!email || !password || !role) {
+    throw new Error("Missing required fields: email, password, or role.");
+  }
+
+  try {
+    // 2. Create the user in Firebase Auth
+    const userRecord = await admin.auth().createUser({
+      email: email,
+      password: password,
+    });
+
+    // 3. Store the user's role in Firestore
+    await db.collection("users").doc(userRecord.uid).set({
+      email: email,
+      role: role,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    log(`Successfully created new user: ${userRecord.uid}`);
+    return {uid: userRecord.uid};
+  } catch (error) {
+    log(`Error creating user: ${error.message}`);
+    throw new Error(error.message);
+  }
 });
+

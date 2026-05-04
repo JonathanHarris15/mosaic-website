@@ -48,15 +48,6 @@ document.addEventListener('alpine:init', () => {
             }).catch(error => {
                 console.error("Error fetching hymn index:", error);
             });
-
-            document.getElementById('manager-login-button').addEventListener('click', () => {
-                const password = document.getElementById('manager-password').value;
-                if (password === '1689') {
-                    window.location.href = 'manager.html';
-                } else {
-                    alert('Incorrect password');
-                }
-            });
         },
 
         /**

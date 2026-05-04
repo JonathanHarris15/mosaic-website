@@ -32,13 +32,28 @@ document.addEventListener('alpine:init', () => {
         },
 
         /**
-         * Initializes the manager, signing in anonymously and loading initial data.
+         * Initializes the manager, checking for authentication and user role.
          */
         init() {
-            firebase.auth().signInAnonymously().then(() => {
+            auth.onAuthStateChanged(async (user) => {
+                if (!user) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+
+                // Check role
+                const userData = await getUserData(user.uid);
+                const role = (userData && userData.role) || 'viewer';
+
+                if (role !== 'editor' && role !== 'admin') {
+                    alert('You do not have permission to access the Hymn Manager.');
+                    window.location.href = 'profile.html';
+                    return;
+                }
+
                 this.loadHymns();
                 this.loadTags();
-            }).catch(err => console.error("Error signing in", err));
+            });
         },
 
         /**

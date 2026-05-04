@@ -1,17 +1,32 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // Helper to check if user is admin
+    function isAdmin() {
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper to check if user is editor
+    function isEditor() {
+      return request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'editor' || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    match /users/{userId} {
+      // Allow users to read their own document
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Allow admins to read and write any user document
+      allow read, write: if isAdmin();
+    }
+
     match /hymns/{hymnId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow create, update, delete: if isEditor();
     }
+    
     match /tags/{tagId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow create, update, delete: if isEditor();
     }
   }
 }

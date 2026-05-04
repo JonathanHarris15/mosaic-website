@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>User Profile - Mosaic Church</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&amp;family=Work+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet" />
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="auth.js"></script>
+
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary": "#001a43",
+                        "on-primary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container": "#f0eee8",
+                        "outline-variant": "#c5c6d0",
+                        "on-surface-variant": "#44474e",
+                        "background": "#fcf9f3",
+                        "error": "#ba1a1a"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Noto Serif"],
+                        "headline-md": ["Noto Serif"],
+                        "body-md": ["Work Sans"],
+                        "label-md": ["Work Sans"]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md antialiased min-h-screen flex flex-col relative overflow-x-hidden">
+    <!-- Architectural accent lines (Modern Minimalism) -->
+    <div class="absolute right-0 top-0 h-[600px] w-1/2 bg-gradient-to-l from-surface-container-high/40 to-transparent opacity-30 pointer-events-none"></div>
+    <div class="absolute -right-32 -top-32 w-[600px] h-[600px] border-[1px] border-outline-variant/30 rounded-full opacity-10 pointer-events-none"></div>
+    <div class="absolute -left-48 bottom-0 w-[800px] h-[800px] border-[1px] border-outline-variant/20 rounded-full opacity-5 pointer-events-none"></div>
+
+    <header class="w-full max-w-7xl mx-auto px-margin pt-lg flex justify-between items-center relative z-10">
+        <a href="index.html" class="font-label-md text-label-md text-secondary hover:text-primary transition-all flex items-center gap-3 uppercase tracking-[0.2em] text-[10px] group">
+            <span class="material-symbols-outlined text-sm group-hover:-translate-x-1 transition-transform">arrow_back</span>
+            Portal Home
+        </a>
+        <div id="auth-container"></div>
+    </header>
+
+    <main class="flex-grow max-w-7xl w-full mx-auto px-margin py-xl flex flex-col gap-xl relative z-10">
+        <!-- Profile Hero Section -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-lg items-center">
+            <div class="lg:col-span-8">
+                <div class="flex flex-col gap-sm">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-1px bg-outline-variant/50"></div>
+                        <span class="font-label-md text-[11px] uppercase tracking-[0.3em] text-on-surface-variant">Liturgy Portal Access</span>
+                    </div>
+                    <h1 class="font-display-lg text-5xl lg:text-6xl text-primary tracking-tight">Staff Member</h1>
+                </div>
+            </div>
+            <div class="lg:col-span-4 flex justify-end">
+                <img alt="Mosaic Liturgy Logo" class="h-20 w-20 object-contain opacity-80" src="https://lh3.googleusercontent.com/aida/ADBb0uijHszjAD1vpPUJpbneTqxJdVo7bqoahIXaW-sv-CScZsHwzqDfrAEi3X5o8chQ9NjAlKvtZ6Cyp1ThZR3_4t8lebT5SIaTap9oaNQRrKXLV6Ql_O0oNb_OJwk4jHa3nRkpPnEV73sOQ3HRiqMM8m0-AsJ3eoIKLqxFlmrluMZDO-ldcFs4yDdEDe7K9XTLHFZD7B8TXA3dGn8CeCQzheXxD97xjChWDictUoK2cdH0-6VBzIvb0qlCCvpnUxAt0RtbGGjq-k2qxA" />
+            </div>
+        </section>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-xl">
+            <!-- Left Side: User Details & Main Actions -->
+            <div class="lg:col-span-4 flex flex-col gap-lg">
+                <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-lg shadow-sm flex flex-col gap-md">
+                    <div class="flex flex-col gap-1">
+                        <span class="font-label-md text-on-surface-variant uppercase tracking-widest text-[10px]">Active Identity</span>
+                        <span id="user-email" class="font-body-lg text-on-surface text-lg">Loading...</span>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <span class="font-label-md text-on-surface-variant uppercase tracking-widest text-[10px]">Permission Tier</span>
+                        <div id="user-role" class="px-3 py-1 bg-secondary-container text-on-secondary-container rounded-sm w-fit font-label-md text-xs uppercase tracking-[0.15em]">Loading...</div>
+                    </div>
+                    
+                    <div class="pt-md mt-md border-t border-surface-container flex flex-col gap-3">
+                        <a href="manager.html" id="hymn-manager-btn" class="hidden bg-primary text-on-primary font-label-md text-label-md px-md py-4 rounded-lg hover:bg-primary-container transition-all shadow-sm active:scale-[0.98] text-center flex items-center justify-center gap-2 group">
+                            Launch Hymn Manager
+                            <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                        </a>
+                        <button onclick="auth.signOut()" class="w-full py-3 font-label-md text-xs uppercase tracking-widest text-error hover:bg-error-container/20 rounded-lg transition-all border border-transparent hover:border-error/10">
+                            Terminate Session
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-lg border border-outline-variant/20 rounded-xl bg-surface-container-low/30 italic font-serif text-on-surface-variant">
+                    "Let all things be done decently and in order."
+                </div>
+            </div>
+
+            <!-- Right Side: Administration -->
+            <div class="lg:col-span-8">
+                <section id="admin-panel" class="hidden flex flex-col gap-lg">
+                    <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-sm overflow-hidden">
+                        <div class="p-lg bg-surface-container-low/50 border-b border-outline-variant/20">
+                            <h2 class="font-headline-md text-2xl text-primary tracking-tight flex items-center gap-3">
+                                <span class="material-symbols-outlined">shield_person</span>
+                                Staff Access Management
+                            </h2>
+                            <p class="text-on-surface-variant font-body-md mt-2">Provision and audit internal staff accounts for the Mosaic Liturgy Portal.</p>
+                        </div>
+                        
+                        <div class="p-lg">
+                            <h3 class="font-label-md text-on-surface uppercase tracking-[0.2em] text-[11px] mb-lg flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-secondary"></span>
+                                Provision New Account
+                            </h3>
+                            <form id="create-user-form" class="grid grid-cols-1 md:grid-cols-12 gap-lg items-end">
+                                <div class="md:col-span-4 flex flex-col gap-xs">
+                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email Address</label>
+                                    <input type="email" id="new-user-email" required class="w-full py-3 px-4 bg-background border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-tertiary-container outline-none transition-all" placeholder="name@mosaic.church" />
+                                </div>
+                                <div class="md:col-span-3 flex flex-col gap-xs">
+                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Temp Password</label>
+                                    <input type="password" id="new-user-password" required class="w-full py-3 px-4 bg-background border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-tertiary-container outline-none transition-all" />
+                                </div>
+                                <div class="md:col-span-2 flex flex-col gap-xs relative">
+                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Portal Role</label>
+                                    <select id="new-user-role" class="w-full py-3 px-4 bg-background border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-tertiary-container outline-none appearance-none cursor-pointer">
+                                        <option value="viewer">Viewer</option>
+                                        <option value="editor">Editor</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                    <span class="material-symbols-outlined absolute right-3 bottom-3 text-sm pointer-events-none text-outline">expand_more</span>
+                                </div>
+                                <div class="md:col-span-3">
+                                    <button type="submit" class="w-full bg-secondary text-white font-label-md text-label-md py-3.5 rounded-lg hover:bg-primary transition-all shadow-sm active:scale-[0.98]">
+                                        Authorize User
+                                    </button>
+                                </div>
+                            </form>
+                            <div id="create-user-status" class="mt-md text-sm font-body-md min-h-[1.5rem]"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-sm overflow-hidden">
+                        <div class="p-lg bg-surface-container-low/30 border-b border-outline-variant/10">
+                            <h3 class="font-label-md text-on-surface uppercase tracking-[0.2em] text-[11px] flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-outline-variant"></span>
+                                Authorized Staff Directory
+                            </h3>
+                        </div>
+                        <div id="users-list" class="divide-y divide-surface-container">
+                            <!-- Users will be listed here with more spacing -->
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <script src="profile.js"></script>
+</body>
+</html>

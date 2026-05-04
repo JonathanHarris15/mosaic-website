@@ -108,15 +108,20 @@
             }
         }
     </script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    
+    <script src="auth.js"></script>
 </head>
 
 <body
     class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed dark">
-    <header class="w-full max-w-7xl mx-auto px-margin pt-md flex justify-end">
-        <button
-            class="px-md py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200">
-            Log In
-        </button>
+    <header class="w-full max-w-7xl mx-auto px-margin pt-md flex justify-end" id="auth-container">
+        <!-- Auth UI will be injected here by auth.js -->
+        <div class="h-10"></div> <!-- Placeholder to prevent layout shift -->
     </header>
     <main class="flex-grow max-w-7xl w-full mx-auto px-margin pb-xl flex flex-col gap-margin pt-base">
         <!-- Logo -->
