@@ -77,6 +77,12 @@ exports.getHymnIndex = onCall({cors: true, region: "us-central1"}, async (reques
   });
 
   log(`Returning index with ${hymnIndexData.length} hymns.`);
+  
+  cachedIndex = hymnIndexData;
+  lastCacheTime = Date.now();
+
+  return hymnIndexData;
+});
 
 /**
  * A Callable Cloud Function that allows admins to create new users.
