@@ -25,7 +25,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     renderCalendar(grouped);
     renderSidebar(grouped);
+    scrollToClosestSunday(sundays);
 });
+
+function scrollToClosestSunday(sundays) {
+    const today = new Date();
+    let closestDate = sundays[0];
+    let minDiff = Math.abs(today - closestDate);
+
+    sundays.forEach(date => {
+        const diff = Math.abs(today - date);
+        if (diff < minDiff) {
+            minDiff = diff;
+            closestDate = date;
+        }
+    });
+
+    const dateId = `date-${closestDate.getFullYear()}-${closestDate.getMonth()}-${closestDate.getDate()}`;
+    const targetElement = document.getElementById(dateId);
+    
+    if (targetElement) {
+        // Delay slightly to ensure layout is complete and sticky headers don't interfere
+        setTimeout(() => {
+            targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            targetElement.classList.add('ring-2', 'ring-primary', 'ring-offset-4');
+            // Remove highlight after a few seconds
+            setTimeout(() => {
+                targetElement.classList.remove('ring-2', 'ring-primary', 'ring-offset-4');
+            }, 3000);
+        }, 500);
+    }
+}
 
 function renderSidebar(grouped) {
     const nav = document.getElementById('sidebar-nav');
@@ -72,7 +102,7 @@ function renderCalendar(grouped) {
     years.forEach(year => {
         const yearSection = document.createElement('section');
         yearSection.id = `year-${year}`;
-        yearSection.className = 'mb-xl scroll-mt-24'; // Added scroll-mt for sticky header
+        yearSection.className = 'mb-xl scroll-mt-24';
         yearSection.innerHTML = `<h2 class="font-display-lg text-headline-lg text-primary border-b border-outline-variant pb-xs mb-md">${year}</h2>`;
 
         const monthsOrder = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -89,7 +119,8 @@ function renderCalendar(grouped) {
 
                 grouped[year][month].forEach(date => {
                     const dateRow = document.createElement('div');
-                    dateRow.className = 'bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col sm:flex-row justify-between items-center group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-all duration-300';
+                    dateRow.id = `date-${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+                    dateRow.className = 'bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col sm:flex-row justify-between items-center group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-all duration-300 scroll-mt-32';
                     
                     const dateInfo = document.createElement('div');
                     dateInfo.className = 'flex items-center gap-md mb-md sm:mb-0 w-full sm:w-auto';
