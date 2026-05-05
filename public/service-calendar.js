@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const calendarContainer = document.getElementById('calendar-container');
+    const sidebarNav = document.getElementById('sidebar-nav');
     const startDate = new Date(2023, 6, 9); // July 9, 2023 (Month is 0-indexed)
     const endDate = new Date();
     endDate.setFullYear(endDate.getFullYear() + 2);
@@ -7,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sundays = [];
     let current = new Date(startDate);
     
-    // Ensure we start on a Sunday (July 9, 2023 is a Sunday)
+    // Ensure we start on a Sunday
     while (current <= endDate) {
         sundays.push(new Date(current));
         current.setDate(current.getDate() + 7);
@@ -23,7 +24,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }, {});
 
     renderCalendar(grouped);
+    renderSidebar(grouped);
 });
+
+function renderSidebar(grouped) {
+    const nav = document.getElementById('sidebar-nav');
+    nav.innerHTML = '';
+
+    const years = Object.keys(grouped).sort((a, b) => a - b);
+
+    years.forEach(year => {
+        const yearDiv = document.createElement('div');
+        yearDiv.className = 'mb-sm';
+        
+        const yearLink = document.createElement('a');
+        yearLink.href = `#year-${year}`;
+        yearLink.className = 'block font-headline-md text-secondary hover:text-primary py-1 transition-colors';
+        yearLink.textContent = year;
+        yearDiv.appendChild(yearLink);
+
+        const monthsDiv = document.createElement('div');
+        monthsDiv.className = 'ml-md space-y-1';
+        
+        const monthsOrder = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        
+        monthsOrder.forEach(month => {
+            if (grouped[year][month]) {
+                const monthLink = document.createElement('a');
+                monthLink.href = `#month-${year}-${month}`;
+                monthLink.className = 'block font-body-md text-on-surface-variant hover:text-primary text-sm py-0.5 transition-colors';
+                monthLink.textContent = month;
+                monthsDiv.appendChild(monthLink);
+            }
+        });
+
+        yearDiv.appendChild(monthsDiv);
+        nav.appendChild(yearDiv);
+    });
+}
 
 function renderCalendar(grouped) {
     const container = document.getElementById('calendar-container');
@@ -33,7 +71,8 @@ function renderCalendar(grouped) {
 
     years.forEach(year => {
         const yearSection = document.createElement('section');
-        yearSection.className = 'mb-xl';
+        yearSection.id = `year-${year}`;
+        yearSection.className = 'mb-xl scroll-mt-24'; // Added scroll-mt for sticky header
         yearSection.innerHTML = `<h2 class="font-display-lg text-headline-lg text-primary border-b border-outline-variant pb-xs mb-md">${year}</h2>`;
 
         const monthsOrder = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -41,7 +80,8 @@ function renderCalendar(grouped) {
         monthsOrder.forEach(month => {
             if (grouped[year][month]) {
                 const monthSection = document.createElement('div');
-                monthSection.className = 'mb-lg ml-0 sm:ml-md';
+                monthSection.id = `month-${year}-${month}`;
+                monthSection.className = 'mb-lg ml-0 sm:ml-md scroll-mt-24';
                 monthSection.innerHTML = `<h3 class="font-headline-md text-headline-md text-secondary mb-sm">${month}</h3>`;
                 
                 const grid = document.createElement('div');

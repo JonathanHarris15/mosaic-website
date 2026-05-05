@@ -147,18 +147,33 @@
         </div>
     </header>
 
-    <main class="flex-grow max-w-4xl w-full mx-auto px-margin pb-xl flex flex-col gap-margin pt-base">
-        <!-- Header Section -->
-        <div class="text-center py-sm">
-            <h1 class="font-display-lg text-display-lg text-primary mb-xs">Service Calendar</h1>
-            <p class="font-body-lg text-body-lg text-on-surface-variant">Every Sunday from July 9, 2023 to two years from today.</p>
-        </div>
+    <main class="flex-grow max-w-7xl w-full mx-auto px-margin pb-xl flex flex-col md:flex-row gap-margin pt-base">
+        <!-- Sidebar Navigation -->
+        <aside class="w-full md:w-64 flex-shrink-0">
+            <div class="sticky top-md bg-surface-container-lowest border border-outline-variant rounded-xl p-md">
+                <h2 class="font-headline-md text-primary mb-sm flex items-center gap-2">
+                    <span class="material-symbols-outlined">explore</span>
+                    Directory
+                </h2>
+                <nav id="sidebar-nav" class="space-y-xs max-h-[70vh] overflow-y-auto pr-2">
+                    <!-- Nav links will be injected here -->
+                </nav>
+            </div>
+        </aside>
 
         <!-- Calendar Container -->
-        <div id="calendar-container" class="space-y-lg">
-            <!-- Years and Months will be injected here -->
-            <div class="flex justify-center items-center py-xl">
-                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div class="flex-grow">
+            <!-- Header Section -->
+            <div class="mb-lg">
+                <h1 class="font-display-lg text-display-lg text-primary mb-xs">Service Calendar</h1>
+                <p class="font-body-lg text-body-lg text-on-surface-variant">Every Sunday from July 9, 2023 to two years from today.</p>
+            </div>
+
+            <div id="calendar-container" class="space-y-lg">
+                <!-- Years and Months will be injected here -->
+                <div class="flex justify-center items-center py-xl">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                </div>
             </div>
         </div>
     </main>
