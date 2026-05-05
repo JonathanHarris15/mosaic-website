@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const calendarContainer = document.getElementById('calendar-container');
-    const startDate = new Date('2023-07-09T00:00:00'); // Ensure local time
+    const startDate = new Date(2023, 6, 9); // July 9, 2023 (Month is 0-indexed)
     const endDate = new Date();
     endDate.setFullYear(endDate.getFullYear() + 2);
 
