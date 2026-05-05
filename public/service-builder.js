@@ -5,6 +5,12 @@ function serviceForm() {
         canEdit: false,
         user: null,
         originalService: '',
+        activeNoteKey: null,
+        noteEditorTop: 100,
+        noteEditorLeft: 0,
+        noteEditorWidth: 200,
+        _quill: null,
+        _scrollHandler: null,
         service: {
             theme: '',
             keyVerse: '',
@@ -12,6 +18,7 @@ function serviceForm() {
             musicLeader: '',
             preacher: '',
             hasBaptism: false,
+            notes: {},
             liturgy: {
                 preparatoryHymn: { id: null, name: '' },
                 callToWorship: '',
@@ -35,7 +42,6 @@ function serviceForm() {
         },
 
         async init() {
-            // Check auth and roles
             auth.onAuthStateChanged(async (user) => {
                 this.user = user;
                 if (user) {
@@ -72,7 +78,6 @@ function serviceForm() {
             const doc = await db.collection('services').doc(this.date).get();
             if (doc.exists) {
                 const data = doc.data();
-                // Deep merge or specific assignment to handle schema changes
                 this.service = {
                     theme: data.theme || '',
                     keyVerse: data.keyVerse || '',
@@ -80,6 +85,7 @@ function serviceForm() {
                     musicLeader: data.musicLeader || '',
                     preacher: data.preacher || '',
                     hasBaptism: data.hasBaptism || false,
+                    notes: data.notes || {},
                     liturgy: {
                         preparatoryHymn: data.liturgy?.preparatoryHymn || { id: null, name: '' },
                         callToWorship: data.liturgy?.callToWorship || '',
@@ -109,10 +115,9 @@ function serviceForm() {
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 this.originalService = JSON.stringify(this.service);
-                // alert('Service saved!');
             } catch (e) {
                 if (e.code === 'permission-denied') {
-                    alert('Permission denied. Your account does not have permission to save services. Please contact an administrator.');
+                    alert('Permission denied. Your account does not have permission to save services.');
                 } else {
                     alert('Error saving. Check console for details.');
                 }
@@ -122,15 +127,82 @@ function serviceForm() {
             }
         },
 
+        // ── Note panel ─────────────────────────────────────────────────────────
+        openNote(key) {
+            this.activeNoteKey = key;
+            this._positionEditor(key);
+            this.$nextTick(() => {
+                if (!this.canEdit) return; // viewers get read-only HTML panel; no Quill needed
+                const el = document.getElementById('note-quill-inline');
+                if (!this._quill) {
+                    this._quill = new Quill(el, {
+                        theme: 'snow',
+                        modules: { toolbar: [['bold', 'italic'], [{ list: 'bullet' }]] },
+                        placeholder: 'Add a note explaining your reasoning…'
+                    });
+                }
+                const existing = (this.service.notes && this.service.notes[key]) || '';
+                this._quill.root.innerHTML = existing;
+                this.$nextTick(() => this._quill.focus());
+            });
+            if (!this._scrollHandler) {
+                this._scrollHandler = () => {
+                    if (this.activeNoteKey) this._positionEditor(this.activeNoteKey);
+                };
+                window.addEventListener('scroll', this._scrollHandler, { passive: true });
+                window.addEventListener('resize', this._scrollHandler, { passive: true });
+            }
+        },
+
+        _positionEditor(key) {
+            const btn = document.querySelector(`[data-note-key="${key}"]`);
+            if (!btn) return;
+            const section = btn.closest('.form-section');
+            if (!section) return;
+            const rect = section.getBoundingClientRect();
+            const mainEl = document.querySelector('main');
+            const mainRect = mainEl ? mainEl.getBoundingClientRect() : { right: window.innerWidth - 16 };
+            // Anchor to the right of the form-section card, fill to viewport right edge
+            const editorLeft  = rect.right + 28;
+            const editorRight = window.innerWidth - 40; // 40px clears the scrollbar
+            this.noteEditorLeft  = Math.round(editorLeft);
+            this.noteEditorWidth = Math.max(160, Math.round(editorRight - editorLeft));
+            this.noteEditorTop   = Math.max(70, Math.round(rect.top));
+        },
+
+        saveNote() {
+            if (!this._quill) return;
+            const html  = this._quill.root.innerHTML;
+            const empty = this._quill.getText().trim() === '';
+            if (!this.service.notes) this.service.notes = {};
+            if (empty) {
+                delete this.service.notes[this.activeNoteKey];
+            } else {
+                this.service.notes[this.activeNoteKey] = html;
+            }
+            this.activeNoteKey = null;
+        },
+
+        deleteNote() {
+            if (!confirm('Delete this note?')) return;
+            if (this.service.notes) delete this.service.notes[this.activeNoteKey];
+            this.activeNoteKey = null;
+        },
+
+        closeNote() {
+            this.activeNoteKey = null;
+        },
+
+        // ── Utility ────────────────────────────────────────────────────────────
         clearService() {
             if (!confirm('Are you sure you want to clear the current service? This will reset all liturgy fields.')) return;
-            
             this.service.theme = '';
             this.service.keyVerse = '';
             this.service.serviceLeader = '';
             this.service.musicLeader = '';
             this.service.preacher = '';
             this.service.hasBaptism = false;
+            this.service.notes = {};
             this.service.liturgy = {
                 preparatoryHymn: { id: null, name: '' },
                 callToWorship: '',
@@ -177,17 +249,17 @@ function hymnPicker(hymnRef) {
             hymnRef.name = h.hymn_name;
             this.query = '';
             this.results = [];
-            this.$el.dispatchEvent(new CustomEvent('input', { 
-                detail: { id: h.id, name: h.hymn_name }, 
-                bubbles: true 
+            this.$el.dispatchEvent(new CustomEvent('input', {
+                detail: { id: h.id, name: h.hymn_name },
+                bubbles: true
             }));
         },
         clear() {
             hymnRef.id = null;
             hymnRef.name = '';
-            this.$el.dispatchEvent(new CustomEvent('input', { 
-                detail: { id: null, name: '' }, 
-                bubbles: true 
+            this.$el.dispatchEvent(new CustomEvent('input', {
+                detail: { id: null, name: '' },
+                bubbles: true
             }));
         }
     };
