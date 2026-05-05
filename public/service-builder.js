@@ -10,15 +10,19 @@ function serviceForm() {
             preacher: '',
             hasBaptism: false,
             liturgy: {
+                preparatoryHymn: { id: null, name: '' },
                 callToWorship: '',
                 hymn1: { id: null, name: '' },
-                confession: '',
                 hymn2: { id: null, name: '' },
+                callToConfession: '',
+                assuranceOfPardon: '',
+                hymnMid1: { id: null, name: '' },
+                hymnMid2: { id: null, name: '' },
                 scriptureReading: '',
-                sermonPassage: '',
-                baptismNames: '',
-                baptismNotes: '',
-                hymn3: { id: null, name: '' },
+                sermon: '',
+                baptism: '',
+                hymnEnd1: { id: null, name: '' },
+                hymnEnd2: { id: null, name: '' },
                 benediction: ''
             }
         },
@@ -37,17 +41,31 @@ function serviceForm() {
             const doc = await db.collection('services').doc(this.date).get();
             if (doc.exists) {
                 const data = doc.data();
-                // Merge to handle potential missing fields in old schema
-                this.service = { ...this.service, ...data };
-                if (!this.service.liturgy) {
-                    this.service.liturgy = {
-                        callToWorship: '', hymn1: { id: null, name: '' },
-                        confession: '', hymn2: { id: null, name: '' },
-                        scriptureReading: '', sermonPassage: '',
-                        baptismNames: '', baptismNotes: '',
-                        hymn3: { id: null, name: '' }, benediction: ''
-                    };
-                }
+                // Deep merge or specific assignment to handle schema changes
+                this.service = {
+                    theme: data.theme || '',
+                    keyVerse: data.keyVerse || '',
+                    serviceLeader: data.serviceLeader || '',
+                    musicLeader: data.musicLeader || '',
+                    preacher: data.preacher || '',
+                    hasBaptism: data.hasBaptism || false,
+                    liturgy: {
+                        preparatoryHymn: data.liturgy?.preparatoryHymn || { id: null, name: '' },
+                        callToWorship: data.liturgy?.callToWorship || '',
+                        hymn1: data.liturgy?.hymn1 || { id: null, name: '' },
+                        hymn2: data.liturgy?.hymn2 || { id: null, name: '' },
+                        callToConfession: data.liturgy?.callToConfession || '',
+                        assuranceOfPardon: data.liturgy?.assuranceOfPardon || '',
+                        hymnMid1: data.liturgy?.hymnMid1 || { id: null, name: '' },
+                        hymnMid2: data.liturgy?.hymnMid2 || { id: null, name: '' },
+                        scriptureReading: data.liturgy?.scriptureReading || '',
+                        sermon: data.liturgy?.sermon || '',
+                        baptism: data.liturgy?.baptism || '',
+                        hymnEnd1: data.liturgy?.hymnEnd1 || { id: null, name: '' },
+                        hymnEnd2: data.liturgy?.hymnEnd2 || { id: null, name: '' },
+                        benediction: data.liturgy?.benediction || ''
+                    }
+                };
             }
         },
 
