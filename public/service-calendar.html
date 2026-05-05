@@ -114,15 +114,20 @@
             width: 6px;
             height: 6px;
         }
+
         ::-webkit-scrollbar-track {
             background: transparent;
         }
+
         ::-webkit-scrollbar-thumb {
-            background: #e5e2dc; /* surface-variant */
+            background: #e5e2dc;
+            /* surface-variant */
             border-radius: 4px;
         }
+
         ::-webkit-scrollbar-thumb:hover {
-            background: #c5c6d0; /* outline-variant */
+            background: #c5c6d0;
+            /* outline-variant */
         }
     </style>
     <!-- Firebase SDKs -->
@@ -130,20 +135,22 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
-    
+
     <script src="auth.js"></script>
 </head>
 
 <body
     class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed dark">
-    <header class="w-full max-w-7xl mx-auto px-margin pt-md flex justify-between items-center">
-        <a href="index.html" class="font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-1">
-            <span class="material-symbols-outlined text-sm">arrow_back</span>
-            Back to Portal
-        </a>
-        <div id="auth-container">
-            <!-- Auth UI will be injected here by auth.js -->
-            <div class="h-10"></div>
+    <header class="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-surface-variant/30">
+        <div class="w-full max-w-7xl mx-auto px-margin py-md flex justify-between items-center">
+            <a href="index.html" class="font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm">arrow_back</span>
+                Back to Portal
+            </a>
+            <div id="auth-container">
+                <!-- Auth UI will be injected here by auth.js -->
+                <div class="h-10"></div>
+            </div>
         </div>
     </header>
 
@@ -166,7 +173,6 @@
             <!-- Header Section -->
             <div class="mb-lg">
                 <h1 class="font-display-lg text-display-lg text-primary mb-xs">Service Calendar</h1>
-                <p class="font-body-lg text-body-lg text-on-surface-variant">Every Sunday from July 9, 2023 to two years from today.</p>
             </div>
 
             <div id="calendar-container" class="space-y-lg">
