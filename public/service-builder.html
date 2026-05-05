@@ -912,6 +912,17 @@
                 </div>
             </div>
         </div>
+
+        <!-- 15. Destructive Actions -->
+        <div class="mt-12 pt-8 border-t border-outline-variant/30" x-show="canEdit">
+            <div class="flex justify-center">
+                <button @click="clearService()" 
+                    class="text-secondary/40 hover:text-red-600 transition-colors duration-200 flex items-center gap-1.5 px-4 py-2 rounded-lg hover:bg-red-50 text-[10px] font-label-md uppercase tracking-widest">
+                    <span class="material-symbols-outlined text-[16px]">delete_forever</span>
+                    Clear current service
+                </button>
+            </div>
+        </div>
     </main>
 
     <script src="service-builder.js"></script>

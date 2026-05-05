@@ -122,6 +122,33 @@ function serviceForm() {
             }
         },
 
+        clearService() {
+            if (!confirm('Are you sure you want to clear the current service? This will reset all liturgy fields.')) return;
+            
+            this.service.theme = '';
+            this.service.keyVerse = '';
+            this.service.serviceLeader = '';
+            this.service.musicLeader = '';
+            this.service.preacher = '';
+            this.service.hasBaptism = false;
+            this.service.liturgy = {
+                preparatoryHymn: { id: null, name: '' },
+                callToWorship: '',
+                hymn1: { id: null, name: '' },
+                hymn2: { id: null, name: '' },
+                callToConfession: '',
+                assuranceOfPardon: '',
+                hymnMid1: { id: null, name: '' },
+                hymnMid2: { id: null, name: '' },
+                scriptureReading: '',
+                sermon: '',
+                baptism: '',
+                hymnEnd1: { id: null, name: '' },
+                hymnEnd2: { id: null, name: '' },
+                benediction: ''
+            };
+        },
+
         formatDate(dateStr) {
             if (!dateStr) return '';
             const [y, m, d] = dateStr.split('-');
