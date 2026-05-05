@@ -128,7 +128,7 @@
             <div class="form-section">
                 <div class="field-group">
                     <label class="field-label">Preparatory Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.$1)" class="input-container relative">
+                    <div x-data="hymnPicker(service.liturgy.preparatoryHymn)" class="input-container relative">
                         <div class="flex flex-row-reverse items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <span class="material-symbols-outlined text-[18px] text-outline ml-2">music_note</span>
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
@@ -161,7 +161,7 @@
             <div class="form-section">
                 <div class="field-group">
                     <label class="field-label" x-text="service.hasBaptism ? 'Hymn' : 'Hymn 1'"></label>
-                    <div x-data="hymnPicker(service.liturgy.$1)" class="input-container relative">
+                    <div x-data="hymnPicker(service.liturgy.hymn1)" class="input-container relative">
                         <div class="flex flex-row-reverse items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <span class="material-symbols-outlined text-[18px] text-outline ml-2">music_note</span>
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
@@ -186,7 +186,7 @@
             <div class="form-section" x-show="!service.hasBaptism">
                 <div class="field-group">
                     <label class="field-label">Hymn 2</label>
-                    <div x-data="hymnPicker(service.liturgy.$1)" class="input-container relative">
+                    <div x-data="hymnPicker(service.liturgy.hymn2)" class="input-container relative">
                         <div class="flex flex-row-reverse items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <span class="material-symbols-outlined text-[18px] text-outline ml-2">music_note</span>
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
@@ -227,7 +227,7 @@
             <div class="form-section">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.$1)" class="input-container relative">
+                    <div x-data="hymnPicker(service.liturgy.hymnMid1)" class="input-container relative">
                         <div class="flex flex-row-reverse items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <span class="material-symbols-outlined text-[18px] text-outline ml-2">music_note</span>
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
@@ -252,7 +252,7 @@
             <div class="form-section">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.$1)" class="input-container relative">
+                    <div x-data="hymnPicker(service.liturgy.hymnMid2)" class="input-container relative">
                         <div class="flex flex-row-reverse items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <span class="material-symbols-outlined text-[18px] text-outline ml-2">music_note</span>
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
@@ -304,7 +304,7 @@
             <div class="form-section">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.$1)" class="input-container relative">
+                    <div x-data="hymnPicker(service.liturgy.hymnEnd1)" class="input-container relative">
                         <div class="flex flex-row-reverse items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <span class="material-symbols-outlined text-[18px] text-outline ml-2">music_note</span>
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
@@ -329,7 +329,7 @@
             <div class="form-section">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.$1)" class="input-container relative">
+                    <div x-data="hymnPicker(service.liturgy.hymnEnd2)" class="input-container relative">
                         <div class="flex flex-row-reverse items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <span class="material-symbols-outlined text-[18px] text-outline ml-2">music_note</span>
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
