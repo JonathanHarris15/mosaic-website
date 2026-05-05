@@ -28,5 +28,10 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if isEditor();
     }
+
+    match /services/{dateId} {
+      allow read: if true;
+      allow create, update, delete: if isEditor();
+    }
   }
 }

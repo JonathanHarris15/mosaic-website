@@ -139,6 +139,8 @@ function renderCalendar(grouped) {
                         </div>
                     `;
 
+                    const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                    
                     const actions = document.createElement('div');
                     actions.className = 'flex gap-sm w-full sm:w-auto justify-end';
                     actions.innerHTML = `
@@ -146,10 +148,10 @@ function renderCalendar(grouped) {
                             <span class="material-symbols-outlined text-[18px]">auto_stories</span>
                             <span>Service Guide</span>
                         </button>
-                        <button class="flex-1 sm:flex-none border border-outline text-secondary px-4 py-2 rounded-full font-label-md text-label-md hover:bg-secondary hover:text-on-secondary hover:border-secondary transition-colors flex items-center justify-center gap-2 group/btn">
+                        <a href="service-builder.html?date=${formattedDate}" class="flex-1 sm:flex-none border border-outline text-secondary px-4 py-2 rounded-full font-label-md text-label-md hover:bg-secondary hover:text-on-secondary hover:border-secondary transition-colors flex items-center justify-center gap-2 group/btn">
                             <span class="material-symbols-outlined text-[18px]">list_alt</span>
                             <span>Order of Service</span>
-                        </button>
+                        </a>
                     `;
 
                     dateRow.appendChild(dateInfo);
