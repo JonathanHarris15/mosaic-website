@@ -2,6 +2,8 @@ function serviceForm() {
     return {
         date: '',
         saving: false,
+        canEdit: false,
+        user: null,
         originalService: '',
         service: {
             theme: '',
@@ -33,6 +35,23 @@ function serviceForm() {
         },
 
         async init() {
+            // Check auth and roles
+            auth.onAuthStateChanged(async (user) => {
+                this.user = user;
+                if (user) {
+                    try {
+                        const userData = await getUserData(user.uid);
+                        const role = (userData && userData.role) || 'viewer';
+                        this.canEdit = (role === 'editor' || role === 'admin');
+                    } catch (error) {
+                        console.error("Error checking user permissions:", error);
+                        this.canEdit = false;
+                    }
+                } else {
+                    this.canEdit = false;
+                }
+            });
+
             const urlParams = new URLSearchParams(window.location.search);
             this.date = urlParams.get('date');
             if (!this.date) {
@@ -42,7 +61,7 @@ function serviceForm() {
             await this.load();
 
             window.addEventListener('beforeunload', (e) => {
-                if (this.isDirty) {
+                if (this.canEdit && this.isDirty) {
                     e.preventDefault();
                     e.returnValue = '';
                 }
@@ -92,7 +111,11 @@ function serviceForm() {
                 this.originalService = JSON.stringify(this.service);
                 // alert('Service saved!');
             } catch (e) {
-                alert('Error saving. Check console.');
+                if (e.code === 'permission-denied') {
+                    alert('Permission denied. Your account does not have permission to save services. Please contact an administrator.');
+                } else {
+                    alert('Error saving. Check console for details.');
+                }
                 console.error(e);
             } finally {
                 this.saving = false;

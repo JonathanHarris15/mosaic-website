@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderCalendar(grouped);
     renderSidebar(grouped);
     scrollToClosestSunday(sundays);
+    loadServiceData(sundays);
 });
 
 function scrollToClosestSunday(sundays) {
@@ -118,12 +119,15 @@ function renderCalendar(grouped) {
                 grid.className = 'grid grid-cols-1 gap-sm';
 
                 grouped[year][month].forEach(date => {
+                    const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
                     const dateRow = document.createElement('div');
                     dateRow.id = `date-${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-                    dateRow.className = 'bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col sm:flex-row justify-between items-center group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-all duration-300 scroll-mt-32';
+                    dateRow.dataset.serviceDate = formattedDate;
+                    dateRow.className = 'bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col sm:flex-row justify-between items-start group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-all duration-300 scroll-mt-32';
                     
                     const dateInfo = document.createElement('div');
-                    dateInfo.className = 'flex items-center gap-md mb-md sm:mb-0 w-full sm:w-auto';
+                    dateInfo.className = 'flex items-start gap-md mb-md sm:mb-0 w-full sm:w-auto';
                     
                     const dayNum = date.getDate();
                     const dayName = date.toLocaleString('default', { weekday: 'short' });
@@ -133,16 +137,15 @@ function renderCalendar(grouped) {
                             <span class="text-[10px] uppercase font-bold tracking-wider">${dayName}</span>
                             <span class="text-xl font-bold">${dayNum}</span>
                         </div>
-                        <div>
+                        <div class="min-w-0">
                             <p class="font-headline-md text-body-lg text-on-surface mb-0">${date.toLocaleDateString('default', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
                             <p class="font-body-md text-on-surface-variant text-sm">Sunday Service</p>
+                            <div class="service-summary hidden mt-2 space-y-0.5"></div>
                         </div>
                     `;
 
-                    const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-                    
                     const actions = document.createElement('div');
-                    actions.className = 'flex gap-sm w-full sm:w-auto justify-end';
+                    actions.className = 'flex gap-sm w-full sm:w-auto justify-end flex-shrink-0';
                     actions.innerHTML = `
                         <button class="flex-1 sm:flex-none bg-secondary text-on-secondary px-4 py-2 rounded-full font-label-md text-label-md hover:bg-primary transition-colors flex items-center justify-center gap-2 group/btn">
                             <span class="material-symbols-outlined text-[18px]">auto_stories</span>
@@ -166,4 +169,69 @@ function renderCalendar(grouped) {
 
         container.appendChild(yearSection);
     });
+}
+
+/**
+ * Fetch all service documents from Firestore and inject summary info
+ * (theme, service leader, preacher) into the matching calendar cards.
+ */
+async function loadServiceData(sundays) {
+    if (typeof db === 'undefined') return;
+
+    try {
+        const snapshot = await db.collection('services').get();
+        const serviceMap = {};
+        snapshot.forEach(doc => {
+            serviceMap[doc.id] = doc.data();
+        });
+
+        // Walk through all rendered date cards and inject data if a service exists
+        document.querySelectorAll('[data-service-date]').forEach(card => {
+            const dateKey = card.dataset.serviceDate;
+            const svc = serviceMap[dateKey];
+            if (!svc) return;
+
+            const hasContent = svc.theme || svc.serviceLeader || svc.preacher;
+            if (!hasContent) return;
+
+            const summaryEl = card.querySelector('.service-summary');
+            if (!summaryEl) return;
+
+            let html = '';
+            if (svc.theme) {
+                html += `<p class="text-xs font-label-md text-primary flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[14px]">bookmark</span>
+                    ${escapeHtml(svc.theme)}
+                </p>`;
+            }
+            if (svc.serviceLeader) {
+                html += `<p class="text-xs text-on-surface-variant flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[14px]">person</span>
+                    Leader: ${escapeHtml(svc.serviceLeader)}
+                </p>`;
+            }
+            if (svc.preacher) {
+                html += `<p class="text-xs text-on-surface-variant flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[14px]">podium</span>
+                    Preacher: ${escapeHtml(svc.preacher)}
+                </p>`;
+            }
+
+            summaryEl.innerHTML = html;
+            summaryEl.classList.remove('hidden');
+        });
+    } catch (e) {
+        console.error('Error loading service data for calendar:', e);
+    }
+}
+
+// --- AUTH PROTECTION ---
+auth.onAuthStateChanged(async (user) => {
+    // Role-based visibility logic removed; all users can view 'Order of Service'
+});
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
 }
