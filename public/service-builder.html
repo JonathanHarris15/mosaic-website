@@ -128,12 +128,12 @@
             <div class="form-section">
                 <div class="field-group">
                     <label class="field-label">Preparatory Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.preparatoryHymn)" class="input-container">
+                    <div x-data="hymnPicker(service.liturgy.$1)" class="input-container relative">
                         <div class="flex flex-row-reverse items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <span class="material-symbols-outlined text-[18px] text-outline ml-2">music_note</span>
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
                         </div>
-                        <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border border-outline-variant rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                        <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border border-outline-variant rounded-lg shadow-xl max-h-48 overflow-y-auto left-0">
                             <template x-for="h in results" :key="h.id">
                                 <button @click="select(h); open = false" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
                                     <p class="font-label-md text-sm" x-text="h.hymn_name"></p>
@@ -161,12 +161,12 @@
             <div class="form-section">
                 <div class="field-group">
                     <label class="field-label" x-text="service.hasBaptism ? 'Hymn' : 'Hymn 1'"></label>
-                    <div x-data="hymnPicker(service.liturgy.hymn1)" class="input-container">
+                    <div x-data="hymnPicker(service.liturgy.$1)" class="input-container relative">
                         <div class="flex flex-row-reverse items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <span class="material-symbols-outlined text-[18px] text-outline ml-2">music_note</span>
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
                         </div>
-                        <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border border-outline-variant rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                        <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border border-outline-variant rounded-lg shadow-xl max-h-48 overflow-y-auto left-0">
                             <template x-for="h in results" :key="h.id">
                                 <button @click="select(h); open = false" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
                                     <p class="font-label-md text-sm" x-text="h.hymn_name"></p>
@@ -186,12 +186,12 @@
             <div class="form-section" x-show="!service.hasBaptism">
                 <div class="field-group">
                     <label class="field-label">Hymn 2</label>
-                    <div x-data="hymnPicker(service.liturgy.hymn2)" class="input-container">
+                    <div x-data="hymnPicker(service.liturgy.$1)" class="input-container relative">
                         <div class="flex flex-row-reverse items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <span class="material-symbols-outlined text-[18px] text-outline ml-2">music_note</span>
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
                         </div>
-                        <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border border-outline-variant rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                        <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border border-outline-variant rounded-lg shadow-xl max-h-48 overflow-y-auto left-0">
                             <template x-for="h in results" :key="h.id">
                                 <button @click="select(h); open = false" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
                                     <p class="font-label-md text-sm" x-text="h.hymn_name"></p>
@@ -227,12 +227,12 @@
             <div class="form-section">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.hymnMid1)" class="input-container">
+                    <div x-data="hymnPicker(service.liturgy.$1)" class="input-container relative">
                         <div class="flex flex-row-reverse items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <span class="material-symbols-outlined text-[18px] text-outline ml-2">music_note</span>
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
                         </div>
-                        <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border border-outline-variant rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                        <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border border-outline-variant rounded-lg shadow-xl max-h-48 overflow-y-auto left-0">
                             <template x-for="h in results" :key="h.id">
                                 <button @click="select(h); open = false" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
                                     <p class="font-label-md text-sm" x-text="h.hymn_name"></p>
@@ -252,12 +252,12 @@
             <div class="form-section">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.hymnMid2)" class="input-container">
+                    <div x-data="hymnPicker(service.liturgy.$1)" class="input-container relative">
                         <div class="flex flex-row-reverse items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <span class="material-symbols-outlined text-[18px] text-outline ml-2">music_note</span>
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
                         </div>
-                        <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border border-outline-variant rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                        <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border border-outline-variant rounded-lg shadow-xl max-h-48 overflow-y-auto left-0">
                             <template x-for="h in results" :key="h.id">
                                 <button @click="select(h); open = false" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
                                     <p class="font-label-md text-sm" x-text="h.hymn_name"></p>
@@ -304,12 +304,12 @@
             <div class="form-section">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.hymnEnd1)" class="input-container">
+                    <div x-data="hymnPicker(service.liturgy.$1)" class="input-container relative">
                         <div class="flex flex-row-reverse items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <span class="material-symbols-outlined text-[18px] text-outline ml-2">music_note</span>
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
                         </div>
-                        <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border border-outline-variant rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                        <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border border-outline-variant rounded-lg shadow-xl max-h-48 overflow-y-auto left-0">
                             <template x-for="h in results" :key="h.id">
                                 <button @click="select(h); open = false" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
                                     <p class="font-label-md text-sm" x-text="h.hymn_name"></p>
@@ -329,12 +329,12 @@
             <div class="form-section">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.hymnEnd2)" class="input-container">
+                    <div x-data="hymnPicker(service.liturgy.$1)" class="input-container relative">
                         <div class="flex flex-row-reverse items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <span class="material-symbols-outlined text-[18px] text-outline ml-2">music_note</span>
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
                         </div>
-                        <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border border-outline-variant rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                        <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-10 w-full mt-1 bg-white border border-outline-variant rounded-lg shadow-xl max-h-48 overflow-y-auto left-0">
                             <template x-for="h in results" :key="h.id">
                                 <button @click="select(h); open = false" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
                                     <p class="font-label-md text-sm" x-text="h.hymn_name"></p>
