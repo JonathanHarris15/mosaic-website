@@ -150,10 +150,18 @@ function hymnPicker(hymnRef) {
             hymnRef.name = h.hymn_name;
             this.query = '';
             this.results = [];
+            this.$el.dispatchEvent(new CustomEvent('input', { 
+                detail: { id: h.id, name: h.hymn_name }, 
+                bubbles: true 
+            }));
         },
         clear() {
             hymnRef.id = null;
             hymnRef.name = '';
+            this.$el.dispatchEvent(new CustomEvent('input', { 
+                detail: { id: null, name: '' }, 
+                bubbles: true 
+            }));
         }
     };
 }
