@@ -201,7 +201,7 @@
                 <h1 class="font-display-lg text-4xl text-primary mb-2" x-text="formatDate(date)"></h1>
                 <p class="font-body-md text-secondary">Order of Service Builder</p>
             </div>
-            <label class="flex items-center justify-end gap-2 cursor-pointer group mb-1">
+            <label class="flex items-center justify-end gap-2 cursor-pointer group mb-1" x-show="canEdit">
                 <span class="font-label-md text-secondary group-hover:text-primary transition-colors">Include Baptism?</span>
                 <input type="checkbox" x-model="service.hasBaptism" :disabled="!canEdit" class="rounded border-outline-variant text-primary focus:ring-primary disabled:opacity-50">
             </label>
