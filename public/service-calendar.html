@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-    <title>Mosaic Services</title>
+    <title>Service Calendar - Mosaic Services</title>
     <!-- Google Fonts: Noto Serif & Work Sans -->
     <link href="https://fonts.googleapis.com" rel="preconnect" />
     <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
@@ -108,6 +108,23 @@
             }
         }
     </script>
+    <style>
+        /* Custom scrollbar for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #e5e2dc; /* surface-variant */
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #c5c6d0; /* outline-variant */
+        }
+    </style>
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
@@ -119,87 +136,34 @@
 
 <body
     class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed dark">
-    <header class="w-full max-w-7xl mx-auto px-margin pt-md flex justify-end" id="auth-container">
-        <!-- Auth UI will be injected here by auth.js -->
-        <div class="h-10"></div> <!-- Placeholder to prevent layout shift -->
+    <header class="w-full max-w-7xl mx-auto px-margin pt-md flex justify-between items-center">
+        <a href="index.html" class="font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm">arrow_back</span>
+            Back to Portal
+        </a>
+        <div id="auth-container">
+            <!-- Auth UI will be injected here by auth.js -->
+            <div class="h-10"></div>
+        </div>
     </header>
-    <main class="flex-grow max-w-7xl w-full mx-auto px-margin pb-xl flex flex-col gap-margin pt-base">
-        <!-- Logo -->
-        <div class="w-full flex justify-center py-sm">
-            <img alt="Mosaic Liturgy Logo" class="h-24 w-24 object-contain"
-                src="https://lh3.googleusercontent.com/aida/ADBb0uijHszjAD1vpPUJpbneTqxJdVo7bqoahIXaW-sv-CScZsHwzqDfrAEi3X5o8chQ9NjAlKvtZ6Cyp1ThZR3_4t8lebT5SIaTap9oaNQRrKXLV6Ql_O0oNb_OJwk4jHa3nRkpPnEV73sOQ3HRiqMM8m0-AsJ3eoIKLqxFlmrluMZDO-ldcFs4yDdEDe7K9XTLHFZD7B8TXA3dGn8CeCQzheXxD97xjChWDictUoK2cdH0-6VBzIvb0qlCCvpnUxAt0RtbGGjq-k2qxA" />
+
+    <main class="flex-grow max-w-4xl w-full mx-auto px-margin pb-xl flex flex-col gap-margin pt-base">
+        <!-- Header Section -->
+        <div class="text-center py-sm">
+            <h1 class="font-display-lg text-display-lg text-primary mb-xs">Service Calendar</h1>
+            <p class="font-body-lg text-body-lg text-on-surface-variant">Every Sunday from July 9, 2023 to two years from today.</p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-12 gap-margin">
-            <!-- Left Column -->
-            <div class="md:col-span-8 flex flex-col gap-margin">
-                <div
-                    class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg flex flex-col justify-center relative overflow-hidden">
-                    <div class="relative z-10">
-                        <h1 class="font-display-lg text-display-lg text-primary mb-xs">Good Morning, </h1>
-                        <p class="font-body-lg text-body-lg text-on-surface-variant flex items-center gap-xs">
-                            <span class="material-symbols-outlined text-[20px]">schedule</span>
-                            Upcoming: Galatians 3:5-11, Sam Crites
-                        </p>
-                    </div>
-                    <div
-                        class="absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-surface-container to-transparent opacity-50 pointer-events-none">
-                    </div>
-                    <div
-                        class="absolute -right-12 -top-12 w-48 h-48 border-[1px] border-outline-variant rounded-full opacity-20 pointer-events-none">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-md">
-                    <!-- Hymn Directory Button -->
-                    <a href="hymn-directory.html"
-                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
-                        <div
-                            class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary"
-                                style='font-variation-settings: "FILL" 1;'>menu_book</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Hymn Directory</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Browse &amp; assign musical
-                            selections.</p>
-                    </a>
-
-                    <!-- Service Calendar -->
-                    <a href="service-calendar.html"
-                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
-                        <div
-                            class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary"
-                                style='font-variation-settings: "FILL" 1;'>calendar_month</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Service Calendar</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">View upcoming and past service dates.</p>
-                    </a>
-
-                    <!-- Service Guides (Inactive) -->
-                    <div
-                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
-                        <div
-                            class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary"
-                                style='font-variation-settings: "FILL" 1;'>auto_stories</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Service Guides</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Step-by-step structural flows.</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Right Column -->
-            <div class="md:col-span-4 flex flex-col">
-                <div
-                    class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex-grow flex flex-col">
-                    <h2 class="font-headline-md text-headline-md text-primary pb-xs border-b border-surface-variant">
-                        Sunday at a Glance</h2>
-                </div>
+        <!-- Calendar Container -->
+        <div id="calendar-container" class="space-y-lg">
+            <!-- Years and Months will be injected here -->
+            <div class="flex justify-center items-center py-xl">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
             </div>
         </div>
     </main>
+
+    <script src="service-calendar.js"></script>
 </body>
 
 </html>

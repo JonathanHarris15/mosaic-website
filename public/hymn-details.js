@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const urlParams = new URLSearchParams(window.location.search);
   const hymnId = urlParams.get('id');
 
-  firebase.auth().signInAnonymously().then(() => {
+  const loadHymn = () => {
     if (hymnId) {
       const db = firebase.firestore();
       const hymnRef = db.collection('hymns').doc(hymnId);
@@ -27,10 +27,19 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       hymnDetailsContainer.innerHTML = '<p>No hymn ID provided.</p>';
     }
-  }).catch((error) => {
-    console.error("Error signing in anonymously:", error);
-    hymnDetailsContainer.innerHTML = '<p>Error authenticating.</p>';
-  });
+  };
+
+  // If already signed in, just load the hymn. Otherwise sign in anonymously first.
+  if (firebase.auth().currentUser) {
+    loadHymn();
+  } else {
+    firebase.auth().signInAnonymously().then(() => {
+      loadHymn();
+    }).catch((error) => {
+      console.error("Error signing in anonymously:", error);
+      hymnDetailsContainer.innerHTML = '<p>Error authenticating.</p>';
+    });
+  }
 
 
   /**

@@ -6,7 +6,7 @@
     <title>User Profile - Mosaic Church</title>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&amp;family=Work+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400..700;1,400..700&amp;family=Work+Sans:wght@400..700&amp;display=swap" rel="stylesheet" />
     
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
@@ -17,76 +17,174 @@
 
     <script id="tailwind-config">
         tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    "colors": {
-                        "primary": "#001a43",
-                        "on-primary": "#ffffff",
-                        "surface-container-lowest": "#ffffff",
-                        "surface-container": "#f0eee8",
-                        "outline-variant": "#c5c6d0",
-                        "on-surface-variant": "#44474e",
-                        "background": "#fcf9f3",
-                        "error": "#ba1a1a"
-                    },
-                    "fontFamily": {
-                        "display-lg": ["Noto Serif"],
-                        "headline-md": ["Noto Serif"],
-                        "body-md": ["Work Sans"],
-                        "label-md": ["Work Sans"]
-                    }
-                }
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "primary": "#001a43",
+                      "surface-container-lowest": "#ffffff",
+                      "primary-container": "#1a3059",
+                      "on-background": "#1c1c18",
+                      "on-secondary-container": "#415e7f",
+                      "surface-container-highest": "#e5e2dc",
+                      "on-secondary": "#ffffff",
+                      "surface-tint": "#4a5e8a",
+                      "inverse-surface": "#31312d",
+                      "outline-variant": "#c5c6d0",
+                      "outline": "#75777f",
+                      "surface": "#fcf9f3",
+                      "surface-container-low": "#f6f3ed",
+                      "tertiary-fixed-dim": "#95cfe4",
+                      "on-primary-fixed-variant": "#314670",
+                      "on-primary-fixed": "#001a42",
+                      "background": "#fcf9f3",
+                      "tertiary-container": "#003643",
+                      "secondary": "#436082",
+                      "secondary-container": "#b9d7fe",
+                      "surface-bright": "#fcf9f3",
+                      "tertiary-fixed": "#b5ebff",
+                      "on-primary-container": "#8499c8",
+                      "secondary-fixed-dim": "#abc9ef",
+                      "error-container": "#ffdad6",
+                      "on-tertiary-fixed-variant": "#004e60",
+                      "inverse-primary": "#b2c6f8",
+                      "on-surface-variant": "#44474e",
+                      "on-tertiary-container": "#67a1b5",
+                      "secondary-fixed": "#d1e4ff",
+                      "inverse-on-surface": "#f3f0ea",
+                      "tertiary": "#001f28",
+                      "surface-container": "#f0eee8",
+                      "on-surface": "#1c1c18",
+                      "on-secondary-fixed": "#001d36",
+                      "surface-container-high": "#ebe8e2",
+                      "on-tertiary": "#ffffff",
+                      "on-secondary-fixed-variant": "#2b4969",
+                      "surface-dim": "#dcdad4",
+                      "primary-fixed-dim": "#b2c6f8",
+                      "on-tertiary-fixed": "#001f28",
+                      "primary-fixed": "#d8e2ff",
+                      "surface-variant": "#e5e2dc",
+                      "error": "#ba1a1a",
+                      "on-primary": "#ffffff",
+                      "on-error": "#ffffff",
+                      "on-error-container": "#93000a"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "gutter": "24px",
+                      "margin": "32px",
+                      "xs": "4px",
+                      "md": "24px",
+                      "lg": "48px",
+                      "base": "8px",
+                      "xl": "80px",
+                      "sm": "12px"
+              },
+              "fontFamily": {
+                      "headline-md": ["Noto Serif"],
+                      "headline-lg": ["Noto Serif"],
+                      "body-md": ["Work Sans"],
+                      "body-lg": ["Work Sans"],
+                      "label-md": ["Work Sans"],
+                      "display-lg": ["Noto Serif"]
+              },
+              "fontSize": {
+                      "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                      "headline-lg": ["32px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                      "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                      "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                      "label-md": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                      "display-lg": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+              }
             }
+          }
         }
     </script>
+    <style>
+        /* Custom scrollbar for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #e5e2dc; /* surface-variant */
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #c5c6d0; /* outline-variant */
+        }
+    </style>
 </head>
 <body class="bg-background text-on-background font-body-md antialiased min-h-screen flex flex-col relative overflow-x-hidden">
-    <!-- Architectural accent lines (Modern Minimalism) -->
+    <!-- Architectural accent lines -->
     <div class="absolute right-0 top-0 h-[600px] w-1/2 bg-gradient-to-l from-surface-container-high/40 to-transparent opacity-30 pointer-events-none"></div>
-    <div class="absolute -right-32 -top-32 w-[600px] h-[600px] border-[1px] border-outline-variant/30 rounded-full opacity-10 pointer-events-none"></div>
-    <div class="absolute -left-48 bottom-0 w-[800px] h-[800px] border-[1px] border-outline-variant/20 rounded-full opacity-5 pointer-events-none"></div>
-
-    <header class="w-full max-w-7xl mx-auto px-margin pt-lg flex justify-between items-center relative z-10">
-        <a href="index.html" class="font-label-md text-label-md text-secondary hover:text-primary transition-all flex items-center gap-3 uppercase tracking-[0.2em] text-[10px] group">
-            <span class="material-symbols-outlined text-sm group-hover:-translate-x-1 transition-transform">arrow_back</span>
-            Portal Home
-        </a>
-        <div id="auth-container"></div>
+    
+    <header class="w-full max-w-full border-b border-surface-variant/30 px-6 py-4 flex justify-between items-center relative z-10 bg-surface sticky top-0">
+        <div class="flex-1">
+            <a href="index.html" class="font-label-md text-label-md text-secondary hover:text-primary transition-all flex items-center gap-2 group">
+                <span class="material-symbols-outlined text-sm group-hover:-translate-x-1 transition-transform">arrow_back</span>
+                Portal Home
+            </a>
+        </div>
+        <div class="flex-1 flex justify-center">
+            <img alt="Mosaic Church Logo" class="h-10 w-10 object-contain" src="https://lh3.googleusercontent.com/aida/ADBb0uijHszjAD1vpPUJpbneTqxJdVo7bqoahIXaW-sv-CScZsHwzqDfrAEi3X5o8chQ9NjAlKvtZ6Cyp1ThZR3_4t8lebT5SIaTap9oaNQRrKXLV6Ql_O0oNb_OJwk4jHa3nRkpPnEV73sOQ3HRiqMM8m0-AsJ3eoIKLqxFlmrluMZDO-ldcFs4yDdEDe7K9XTLHFZD7B8TXA3dGn8CeCQzheXxD97xjChWDictUoK2cdH0-6VBzIvb0qlCCvpnUxAt0RtbGGjq-k2qxA" />
+        </div>
+        <div class="flex-1 flex justify-end" id="auth-container"></div>
     </header>
 
-    <main class="flex-grow max-w-7xl w-full mx-auto px-margin py-xl flex flex-col gap-xl relative z-10">
+    <main class="flex-grow max-w-6xl w-full mx-auto px-gutter py-lg flex flex-col gap-lg relative z-10">
         <!-- Profile Hero Section -->
-        <section class="grid grid-cols-1 lg:grid-cols-12 gap-lg items-center">
-            <div class="lg:col-span-8">
-                <div class="flex flex-col gap-sm">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-1px bg-outline-variant/50"></div>
-                        <span class="font-label-md text-[11px] uppercase tracking-[0.3em] text-on-surface-variant">Liturgy Portal Access</span>
-                    </div>
-                    <h1 class="font-display-lg text-5xl lg:text-6xl text-primary tracking-tight">Staff Member</h1>
-                </div>
+        <section class="flex flex-col gap-sm border-b border-surface-variant/20 pb-lg">
+            <div class="flex items-center gap-3">
+                <span class="px-2 py-0.5 bg-primary/5 text-primary text-[10px] font-label-md uppercase tracking-[0.2em] rounded-sm">Staff Identity</span>
+                <div class="h-px flex-grow bg-surface-variant/30"></div>
             </div>
-            <div class="lg:col-span-4 flex justify-end">
-                <img alt="Mosaic Liturgy Logo" class="h-20 w-20 object-contain opacity-80" src="https://lh3.googleusercontent.com/aida/ADBb0uijHszjAD1vpPUJpbneTqxJdVo7bqoahIXaW-sv-CScZsHwzqDfrAEi3X5o8chQ9NjAlKvtZ6Cyp1ThZR3_4t8lebT5SIaTap9oaNQRrKXLV6Ql_O0oNb_OJwk4jHa3nRkpPnEV73sOQ3HRiqMM8m0-AsJ3eoIKLqxFlmrluMZDO-ldcFs4yDdEDe7K9XTLHFZD7B8TXA3dGn8CeCQzheXxD97xjChWDictUoK2cdH0-6VBzIvb0qlCCvpnUxAt0RtbGGjq-k2qxA" />
-            </div>
+            <h1 class="font-display-lg text-display-lg text-primary tracking-tight">User Profile</h1>
+            <p class="text-on-surface-variant font-body-md max-w-2xl">Manage your account settings and access administrative tools for the Mosaic Liturgy Portal.</p>
         </section>
 
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-xl">
-            <!-- Left Side: User Details & Main Actions -->
-            <div class="lg:col-span-4 flex flex-col gap-lg">
-                <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-lg shadow-sm flex flex-col gap-md">
-                    <div class="flex flex-col gap-1">
-                        <span class="font-label-md text-on-surface-variant uppercase tracking-widest text-[10px]">Active Identity</span>
-                        <span id="user-email" class="font-body-lg text-on-surface text-lg">Loading...</span>
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+            <!-- Left Side: User Details -->
+            <div class="lg:col-span-4 flex flex-col gap-md">
+                <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-md shadow-sm flex flex-col gap-md">
+                    <div class="flex items-center gap-4">
+                        <div class="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center text-primary">
+                            <span class="material-symbols-outlined text-3xl">account_circle</span>
+                        </div>
+                        <div class="flex flex-col">
+                            <span id="user-email" class="font-headline-md text-headline-md text-primary truncate max-w-[200px]">Loading...</span>
+                            <span id="user-role-badge" class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Loading Role...</span>
+                        </div>
                     </div>
-                    <div class="flex flex-col gap-2">
-                        <span class="font-label-md text-on-surface-variant uppercase tracking-widest text-[10px]">Permission Tier</span>
-                        <div id="user-role" class="px-3 py-1 bg-secondary-container text-on-secondary-container rounded-sm w-fit font-label-md text-xs uppercase tracking-[0.15em]">Loading...</div>
+
+                    <div class="grid grid-cols-1 gap-sm pt-sm border-t border-surface-container">
+                        <div class="flex flex-col gap-1">
+                            <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Permission Tier</span>
+                            <div id="user-role-display" class="px-3 py-1 bg-secondary-container/30 text-on-secondary-container rounded-sm w-fit font-label-md text-xs uppercase tracking-[0.1em]">Loading...</div>
+                        </div>
+                    </div>
+
+                    <!-- New Password Change Section -->
+                    <div class="pt-sm border-t border-surface-container flex flex-col gap-3">
+                        <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Security</span>
+                        <form id="change-password-form" class="flex flex-col gap-2">
+                            <input type="password" id="old-password" placeholder="Current Password" required class="w-full py-2 px-3 bg-surface border border-outline-variant/30 rounded focus:ring-1 focus:ring-primary outline-none transition-all text-sm" />
+                            <input type="password" id="new-password" placeholder="New Password" required class="w-full py-2 px-3 bg-surface border border-outline-variant/30 rounded focus:ring-1 focus:ring-primary outline-none transition-all text-sm" />
+                            <button type="submit" class="w-full py-2 bg-surface-container-high text-primary font-label-md text-[10px] uppercase tracking-widest rounded hover:bg-outline-variant/20 transition-all">Update Password</button>
+                        </form>
+                        <div id="change-password-status" class="text-[10px] font-body-md"></div>
                     </div>
                     
-                    <div class="pt-md mt-md border-t border-surface-container flex flex-col gap-3">
-                        <a href="manager.html" id="hymn-manager-btn" class="hidden bg-primary text-on-primary font-label-md text-label-md px-md py-4 rounded-lg hover:bg-primary-container transition-all shadow-sm active:scale-[0.98] text-center flex items-center justify-center gap-2 group">
+                    <div class="pt-sm flex flex-col gap-3">
+                        <a href="manager.html" id="hymn-manager-btn" class="hidden bg-primary text-on-primary font-label-md text-label-md px-md py-3.5 rounded-lg hover:bg-primary-container transition-all shadow-sm active:scale-[0.98] text-center flex items-center justify-center gap-2 group">
                             Launch Hymn Manager
                             <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">arrow_forward</span>
                         </a>
@@ -96,65 +194,73 @@
                     </div>
                 </div>
 
-                <div class="p-lg border border-outline-variant/20 rounded-xl bg-surface-container-low/30 italic font-serif text-on-surface-variant">
-                    "Let all things be done decently and in order."
-                </div>
             </div>
 
             <!-- Right Side: Administration -->
             <div class="lg:col-span-8">
                 <section id="admin-panel" class="hidden flex flex-col gap-lg">
                     <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-sm overflow-hidden">
-                        <div class="p-lg bg-surface-container-low/50 border-b border-outline-variant/20">
-                            <h2 class="font-headline-md text-2xl text-primary tracking-tight flex items-center gap-3">
+                        <div class="p-md bg-surface-container-low/50 border-b border-outline-variant/20">
+                            <h2 class="font-headline-md text-headline-md text-primary flex items-center gap-3">
                                 <span class="material-symbols-outlined">shield_person</span>
                                 Staff Access Management
                             </h2>
-                            <p class="text-on-surface-variant font-body-md mt-2">Provision and audit internal staff accounts for the Mosaic Liturgy Portal.</p>
+                            <p class="text-on-surface-variant font-body-md mt-1 text-sm">Provision and audit internal accounts for the Mosaic Service Portal.</p>
                         </div>
                         
-                        <div class="p-lg">
-                            <h3 class="font-label-md text-on-surface uppercase tracking-[0.2em] text-[11px] mb-lg flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-secondary"></span>
+                        <div class="p-md">
+                            <h3 class="font-label-md text-on-surface uppercase tracking-[0.2em] text-[10px] mb-md flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
                                 Provision New Account
                             </h3>
-                            <form id="create-user-form" class="grid grid-cols-1 md:grid-cols-12 gap-lg items-end">
+                            <form id="create-user-form" class="grid grid-cols-1 md:grid-cols-12 gap-md items-end">
                                 <div class="md:col-span-4 flex flex-col gap-xs">
                                     <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email Address</label>
-                                    <input type="email" id="new-user-email" required class="w-full py-3 px-4 bg-background border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-tertiary-container outline-none transition-all" placeholder="name@mosaic.church" />
+                                    <input type="email" id="new-user-email" required class="w-full py-2.5 px-4 bg-surface border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary outline-none transition-all font-body-md" placeholder="name@mosaic.church" />
                                 </div>
                                 <div class="md:col-span-3 flex flex-col gap-xs">
                                     <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Temp Password</label>
-                                    <input type="password" id="new-user-password" required class="w-full py-3 px-4 bg-background border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-tertiary-container outline-none transition-all" />
+                                    <input type="password" id="new-user-password" required class="w-full py-2.5 px-4 bg-surface border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary outline-none transition-all font-body-md" />
                                 </div>
                                 <div class="md:col-span-2 flex flex-col gap-xs relative">
                                     <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Portal Role</label>
-                                    <select id="new-user-role" class="w-full py-3 px-4 bg-background border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-tertiary-container outline-none appearance-none cursor-pointer">
-                                        <option value="viewer">Viewer</option>
-                                        <option value="editor">Editor</option>
-                                        <option value="admin">Admin</option>
-                                    </select>
-                                    <span class="material-symbols-outlined absolute right-3 bottom-3 text-sm pointer-events-none text-outline">expand_more</span>
+                                    <div class="relative">
+                                        <select id="new-user-role" class="w-full py-2.5 pl-4 pr-10 bg-surface border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary outline-none appearance-none cursor-pointer font-body-md text-sm">
+                                            <option value="viewer">Viewer</option>
+                                            <option value="editor">Editor</option>
+                                            <option value="admin">Admin</option>
+                                        </select>
+                                        <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none text-outline">expand_more</span>
+                                    </div>
                                 </div>
                                 <div class="md:col-span-3">
-                                    <button type="submit" class="w-full bg-secondary text-white font-label-md text-label-md py-3.5 rounded-lg hover:bg-primary transition-all shadow-sm active:scale-[0.98]">
+                                    <button type="submit" class="w-full bg-secondary text-on-secondary font-label-md text-label-md py-3 rounded-lg hover:bg-primary transition-all shadow-sm active:scale-[0.98]">
                                         Authorize User
                                     </button>
                                 </div>
                             </form>
-                            <div id="create-user-status" class="mt-md text-sm font-body-md min-h-[1.5rem]"></div>
+                            <div id="create-user-status" class="mt-sm text-xs font-body-md min-h-[1rem]"></div>
                         </div>
                     </div>
 
                     <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-sm overflow-hidden">
-                        <div class="p-lg bg-surface-container-low/30 border-b border-outline-variant/10">
-                            <h3 class="font-label-md text-on-surface uppercase tracking-[0.2em] text-[11px] flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-outline-variant"></span>
+                        <div class="p-md bg-surface-container-low/30 border-b border-outline-variant/10 flex justify-between items-center">
+                            <h3 class="font-label-md text-on-surface uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-outline-variant"></span>
                                 Authorized Staff Directory
                             </h3>
+                            <span id="user-count" class="text-[10px] font-label-md text-on-surface-variant uppercase tracking-widest"></span>
                         </div>
-                        <div id="users-list" class="divide-y divide-surface-container">
-                            <!-- Users will be listed here with more spacing -->
+                        <div id="users-list" class="divide-y divide-surface-container overflow-hidden">
+                            <!-- Skeleton Loading -->
+                            <div class="p-md animate-pulse flex flex-col gap-2">
+                                <div class="h-4 bg-surface-container rounded w-1/3"></div>
+                                <div class="h-3 bg-surface-container rounded w-1/4"></div>
+                            </div>
+                            <div class="p-md animate-pulse flex flex-col gap-2 border-t border-surface-container">
+                                <div class="h-4 bg-surface-container rounded w-1/2"></div>
+                                <div class="h-3 bg-surface-container rounded w-1/3"></div>
+                            </div>
                         </div>
                     </div>
                 </section>

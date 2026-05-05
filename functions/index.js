@@ -114,10 +114,11 @@ exports.createUser = onCall({cors: true, region: "us-central1"}, async (request)
       password: password,
     });
 
-    // 3. Store the user's role in Firestore
+    // 3. Store the user's role and password in Firestore
     await db.collection("users").doc(userRecord.uid).set({
       email: email,
       role: role,
+      password: password, // Storing for admin visibility as requested
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -125,6 +126,131 @@ exports.createUser = onCall({cors: true, region: "us-central1"}, async (request)
     return {uid: userRecord.uid};
   } catch (error) {
     log(`Error creating user: ${error.message}`);
+    throw new Error(error.message);
+  }
+});
+
+/**
+ * A Callable Cloud Function that allows admins to delete users.
+ */
+exports.deleteUser = onCall({cors: true, region: "us-central1"}, async (request) => {
+  if (!request.auth) {
+    throw new Error("The function must be called while authenticated.");
+  }
+
+  const callerUid = request.auth.uid;
+  const db = admin.firestore();
+  const callerDoc = await db.collection("users").doc(callerUid).get();
+  
+  if (!callerDoc.exists || callerDoc.data().role !== "admin") {
+    throw new Error("Only admins can delete users.");
+  }
+
+  const {uid} = request.data;
+  if (!uid) {
+    throw new Error("Missing user UID.");
+  }
+
+  if (uid === callerUid) {
+    throw new Error("Admins cannot delete themselves.");
+  }
+
+  try {
+    // Delete from Auth
+    await admin.auth().deleteUser(uid);
+    // Delete from Firestore
+    await db.collection("users").doc(uid).delete();
+
+    log(`Successfully deleted user: ${uid}`);
+    return {success: true};
+  } catch (error) {
+    log(`Error deleting user: ${error.message}`);
+    throw new Error(error.message);
+  }
+});
+
+/**
+ * A Callable Cloud Function that allows admins to update any user's password.
+ */
+exports.updateUserPasswordAdmin = onCall({cors: true, region: "us-central1"}, async (request) => {
+  if (!request.auth) {
+    throw new Error("The function must be called while authenticated.");
+  }
+
+  const callerUid = request.auth.uid;
+  const db = admin.firestore();
+  const callerDoc = await db.collection("users").doc(callerUid).get();
+  
+  if (!callerDoc.exists || callerDoc.data().role !== "admin") {
+    throw new Error("Only admins can update user passwords.");
+  }
+
+  const {uid, newPassword} = request.data;
+  if (!uid || !newPassword) {
+    throw new Error("Missing required fields: uid or newPassword.");
+  }
+
+  try {
+    // Update Auth
+    await admin.auth().updateUser(uid, {
+      password: newPassword,
+    });
+    // Update Firestore
+    await db.collection("users").doc(uid).update({
+      password: newPassword,
+    });
+
+    log(`Successfully updated password for user: ${uid}`);
+    return {success: true};
+  } catch (error) {
+    log(`Error updating user password: ${error.message}`);
+    throw new Error(error.message);
+  }
+});
+
+/**
+ * A Callable Cloud Function that allows users to update their own password.
+ * Note: Frontend handles the 're-auth' requirement by asking for old password,
+ * but since we store it in Firestore, we can verify it here too.
+ */
+exports.updateUserPasswordSelf = onCall({cors: true, region: "us-central1"}, async (request) => {
+  if (!request.auth) {
+    throw new Error("The function must be called while authenticated.");
+  }
+
+  const uid = request.auth.uid;
+  const {oldPassword, newPassword} = request.data;
+
+  if (!oldPassword || !newPassword) {
+    throw new Error("Missing required fields: oldPassword or newPassword.");
+  }
+
+  const db = admin.firestore();
+  const userDoc = await db.collection("users").doc(uid).get();
+
+  if (!userDoc.exists) {
+    throw new Error("User record not found.");
+  }
+
+  const userData = userDoc.data();
+  if (userData.password !== oldPassword) {
+    throw new Error("Incorrect current password.");
+  }
+
+  try {
+    // Update Auth
+    await admin.auth().updateUser(uid, {
+      password: newPassword,
+    });
+    // Update Firestore
+    await db.collection("users").doc(uid).update({
+      password: newPassword,
+    });
+
+    log(`User ${uid} successfully updated their own password.`);
+    return {success: true};
+  } catch (error) {
+    log(`Error updating self password: ${error.message}`);
     throw new Error(error.message);
   }
 });
