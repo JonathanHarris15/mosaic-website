@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Components Demo - Mosaic Services</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#001a43",
+                        "on-primary": "#ffffff",
+                        "secondary": "#436082",
+                        "surface": "#fcf9f3",
+                        "background": "#fcf9f3",
+                        "outline-variant": "#c5c6d0",
+                        "primary-fixed": "#d8e2ff"
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="bible-data.js"></script>
+    <script src="verse-picker.js"></script>
+    <link href="verse-picker.css" rel="stylesheet" />
+</head>
+<body class="bg-background p-12">
+    <div class="max-w-md mx-auto space-y-8">
+        <h1 class="text-3xl font-bold text-primary">Smart Verse Picker Demo</h1>
+        
+        <div class="space-y-2">
+            <label class="block text-sm font-medium text-secondary">Pick a Verse</label>
+            <div x-data="versePicker('John 3:16')" @input="console.log('Selected:', $event.detail)" class="relative">
+                <div class="flex items-center bg-white rounded-lg border border-outline-variant px-3 py-2 shadow-sm">
+                    <input type="text" x-model="query" @input="value = query; $dispatch('input', value)" @focus="open = true" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" placeholder="Search or pick...">
+                    <button @click="toggle()" class="text-secondary hover:text-primary transition-colors">
+                        <span class="material-symbols-outlined text-[20px]">menu_book</span>
+                    </button>
+                </div>
+                <!-- Dropdown content (copied for demo) -->
+                <div x-show="open" @click.away="open = false" x-transition class="verse-picker-dropdown">
+                    <div class="verse-picker-header">
+                        <div class="verse-picker-breadcrumb">
+                            <button @click="step = 'book'; selectedBook = ''" x-text="selectedBook || 'Book'"></button>
+                            <template x-if="selectedBook">
+                                <span class="flex items-center">
+                                    <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                                    <button @click="step = 'chapter'; selectedChapter = null" x-text="selectedChapter || 'Chapter'"></button>
+                                </span>
+                            </template>
+                            <template x-if="selectedChapter">
+                                <span class="flex items-center">
+                                    <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                                    <button @click="step = 'verse'; selectedVerse = null" x-text="selectedVerse || 'Verse'"></button>
+                                </span>
+                            </template>
+                        </div>
+                        <button @click="open = false" class="text-secondary hover:text-primary">X</button>
+                    </div>
+                    
+                    <div class="verse-picker-grid h-48" x-show="step === 'book'">
+                        <template x-for="book in filteredBooks" :key="book">
+                            <button @click="selectBook(book)" class="verse-picker-btn" :class="selectedBook === book ? 'active' : ''" x-text="book"></button>
+                        </template>
+                    </div>
+
+                    <div class="verse-picker-grid h-48" x-show="step === 'chapter'">
+                        <template x-for="chapter in chapters" :key="chapter">
+                            <button @click="selectChapter(chapter)" class="verse-picker-btn" :class="selectedChapter === chapter ? 'active' : ''" x-text="chapter"></button>
+                        </template>
+                    </div>
+
+                    <div class="verse-picker-grid h-48" x-show="step === 'verse'">
+                        <template x-for="verse in verses" :key="verse">
+                            <button @click="selectVerse(verse)" class="verse-picker-btn" 
+                                :class="{
+                                    'active': selectedVerse === verse || selectedRangeEnd === verse,
+                                    'in-range': selectedVerse && selectedRangeEnd && verse > selectedVerse && verse < selectedRangeEnd
+                                }" 
+                                x-text="verse"></button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            <p class="text-xs text-secondary">Supports single verses and ranges (click two verses to select range).</p>
+        </div>
+    </div>
+    <!-- Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+</body>
+</html>

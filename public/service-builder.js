@@ -2,6 +2,7 @@ function serviceForm() {
     return {
         date: '',
         saving: false,
+        originalService: '',
         service: {
             theme: '',
             keyVerse: '',
@@ -27,6 +28,10 @@ function serviceForm() {
             }
         },
 
+        get isDirty() {
+            return this.originalService !== JSON.stringify(this.service);
+        },
+
         async init() {
             const urlParams = new URLSearchParams(window.location.search);
             this.date = urlParams.get('date');
@@ -35,6 +40,13 @@ function serviceForm() {
                 return;
             }
             await this.load();
+
+            window.addEventListener('beforeunload', (e) => {
+                if (this.isDirty) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            });
         },
 
         async load() {
@@ -67,6 +79,7 @@ function serviceForm() {
                     }
                 };
             }
+            this.originalService = JSON.stringify(this.service);
         },
 
         async save() {
@@ -76,7 +89,8 @@ function serviceForm() {
                     ...this.service,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
-                alert('Service saved!');
+                this.originalService = JSON.stringify(this.service);
+                // alert('Service saved!');
             } catch (e) {
                 alert('Error saving. Check console.');
                 console.error(e);

@@ -61,6 +61,64 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="auth.js"></script>
+    <script src="bible-data.js"></script>
+    <script src="verse-picker.js"></script>
+    <link href="verse-picker.css" rel="stylesheet" />
+    <template id="verse-picker-template">
+        <div class="input-container relative">
+            <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                <input type="text" x-model="query" @input="value = query; $dispatch('input', value)" @focus="open = true" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" placeholder="e.g. John 3:16">
+                <button @click="toggle()" class="text-secondary hover:text-primary transition-colors">
+                    <span class="material-symbols-outlined text-[20px]">menu_book</span>
+                </button>
+            </div>
+            <div x-show="open" @click.away="open = false" class="verse-picker-dropdown">
+                <div class="verse-picker-header">
+                    <div class="verse-picker-breadcrumb">
+                        <button @click="step = 'book'; selectedBook = ''" x-text="selectedBook || 'Book'"></button>
+                        <template x-if="selectedBook">
+                            <span class="flex items-center">
+                                <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                                <button @click="step = 'chapter'; selectedChapter = null" x-text="selectedChapter || 'Chapter'"></button>
+                            </span>
+                        </template>
+                        <template x-if="selectedChapter">
+                            <span class="flex items-center">
+                                <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                                <button @click="step = 'verse'; selectedVerse = null" x-text="selectedVerse || 'Verse'"></button>
+                            </span>
+                        </template>
+                    </div>
+                    <button @click="open = false" class="text-secondary hover:text-primary">
+                        <span class="material-symbols-outlined text-sm">close</span>
+                    </button>
+                </div>
+                
+                <div class="verse-picker-grid h-48" x-show="step === 'book'">
+                    <template x-for="book in filteredBooks" :key="book">
+                        <button @click="selectBook(book)" class="verse-picker-btn" :class="selectedBook === book ? 'active' : ''" x-text="book"></button>
+                    </template>
+                </div>
+
+                <div class="verse-picker-grid h-48" x-show="step === 'chapter'">
+                    <template x-for="chapter in chapters" :key="chapter">
+                        <button @click="selectChapter(chapter)" class="verse-picker-btn" :class="selectedChapter === chapter ? 'active' : ''" x-text="chapter"></button>
+                    </template>
+                </div>
+
+                <div class="verse-picker-grid h-48" x-show="step === 'verse'">
+                    <template x-for="verse in verses" :key="verse">
+                        <button @click="selectVerse(verse)" class="verse-picker-btn" 
+                            :class="{
+                                'active': selectedVerse === verse || selectedRangeEnd === verse,
+                                'in-range': selectedVerse && selectedRangeEnd && verse > selectedVerse && verse < selectedRangeEnd
+                            }" 
+                            x-text="verse"></button>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </template>
 </head>
 
 <body
@@ -74,6 +132,10 @@
                 Back to Calendar
             </a>
             <div class="flex items-center gap-4">
+                <div x-show="isDirty" x-transition class="flex items-center gap-2 text-orange-600 bg-orange-50 px-3 py-1.5 rounded-full border border-orange-200 shadow-sm">
+                    <span class="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse"></span>
+                    <span class="font-label-md text-[10px] uppercase tracking-wider font-semibold">Unsaved Changes</span>
+                </div>
                 <button @click="save()" :disabled="saving"
                     class="bg-primary text-on-primary px-6 py-2 rounded-full font-label-md text-label-md hover:bg-opacity-90 transition-all flex items-center gap-2 disabled:opacity-50">
                     <span class="material-symbols-outlined text-[20px]" x-show="!saving">save</span>
@@ -105,7 +167,59 @@
                 </div>
                 <div class="field-group">
                     <label class="field-label">Key Verse</label>
-                    <input type="text" x-model="service.keyVerse" class="field-input">
+                    <div x-data="versePicker(service.keyVerse)" @input="service.keyVerse = $event.detail" class="input-container relative">
+                        <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                            <input type="text" x-model="query" @input="value = query; $dispatch('input', value)" @focus="open = true" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" placeholder="e.g. John 3:16">
+                            <button @click="toggle()" class="text-secondary hover:text-primary transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">menu_book</span>
+                            </button>
+                        </div>
+                        <div x-show="open" @click.away="open = false" x-transition class="verse-picker-dropdown">
+                            <div class="verse-picker-header">
+                                <div class="verse-picker-breadcrumb">
+                                    <button @click="step = 'book'; selectedBook = ''" x-text="selectedBook || 'Book'"></button>
+                                    <template x-if="selectedBook">
+                                        <span class="flex items-center">
+                                            <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                                            <button @click="step = 'chapter'; selectedChapter = null" x-text="selectedChapter || 'Chapter'"></button>
+                                        </span>
+                                    </template>
+                                    <template x-if="selectedChapter">
+                                        <span class="flex items-center">
+                                            <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                                            <button @click="step = 'verse'; selectedVerse = null" x-text="selectedVerse || 'Verse'"></button>
+                                        </span>
+                                    </template>
+                                </div>
+                                <button @click="open = false" class="text-secondary hover:text-primary">
+                                    <span class="material-symbols-outlined text-sm">close</span>
+                                </button>
+                            </div>
+                            
+                            <div class="verse-picker-grid h-48" x-show="step === 'book'">
+                                <template x-for="book in filteredBooks" :key="book">
+                                    <button @click="selectBook(book)" class="verse-picker-btn" :class="selectedBook === book ? 'active' : ''" x-text="book"></button>
+                                </template>
+                            </div>
+
+                            <div class="verse-picker-grid h-48" x-show="step === 'chapter'">
+                                <template x-for="chapter in chapters" :key="chapter">
+                                    <button @click="selectChapter(chapter)" class="verse-picker-btn" :class="selectedChapter === chapter ? 'active' : ''" x-text="chapter"></button>
+                                </template>
+                            </div>
+
+                            <div class="verse-picker-grid h-48" x-show="step === 'verse'">
+                                <template x-for="verse in verses" :key="verse">
+                                    <button @click="selectVerse(verse)" class="verse-picker-btn" 
+                                        :class="{
+                                            'active': selectedVerse === verse || selectedRangeEnd === verse,
+                                            'in-range': selectedVerse && selectedRangeEnd && verse > selectedVerse && verse < selectedRangeEnd
+                                        }" 
+                                        x-text="verse"></button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="field-group">
                     <label class="field-label">Service Leader</label>
@@ -153,7 +267,59 @@
             <div class="form-section">
                 <div class="field-group">
                     <label class="field-label">Scriptural Call to Worship</label>
-                    <input type="text" x-model="service.liturgy.callToWorship" class="field-input" placeholder="e.g. Psalm 9:1-12">
+                    <div x-data="versePicker(service.liturgy.callToWorship)" @input="service.liturgy.callToWorship = $event.detail" class="input-container relative">
+                        <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                            <input type="text" x-model="query" @input="value = query; $dispatch('input', value)" @focus="open = true" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" placeholder="e.g. Psalm 9:1-12">
+                            <button @click="toggle()" class="text-secondary hover:text-primary transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">menu_book</span>
+                            </button>
+                        </div>
+                        <div x-show="open" @click.away="open = false" x-transition class="verse-picker-dropdown">
+                            <div class="verse-picker-header">
+                                <div class="verse-picker-breadcrumb">
+                                    <button @click="step = 'book'; selectedBook = ''" x-text="selectedBook || 'Book'"></button>
+                                    <template x-if="selectedBook">
+                                        <span class="flex items-center">
+                                            <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                                            <button @click="step = 'chapter'; selectedChapter = null" x-text="selectedChapter || 'Chapter'"></button>
+                                        </span>
+                                    </template>
+                                    <template x-if="selectedChapter">
+                                        <span class="flex items-center">
+                                            <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                                            <button @click="step = 'verse'; selectedVerse = null" x-text="selectedVerse || 'Verse'"></button>
+                                        </span>
+                                    </template>
+                                </div>
+                                <button @click="open = false" class="text-secondary hover:text-primary">
+                                    <span class="material-symbols-outlined text-sm">close</span>
+                                </button>
+                            </div>
+                            
+                            <div class="verse-picker-grid h-48" x-show="step === 'book'">
+                                <template x-for="book in filteredBooks" :key="book">
+                                    <button @click="selectBook(book)" class="verse-picker-btn" :class="selectedBook === book ? 'active' : ''" x-text="book"></button>
+                                </template>
+                            </div>
+
+                            <div class="verse-picker-grid h-48" x-show="step === 'chapter'">
+                                <template x-for="chapter in chapters" :key="chapter">
+                                    <button @click="selectChapter(chapter)" class="verse-picker-btn" :class="selectedChapter === chapter ? 'active' : ''" x-text="chapter"></button>
+                                </template>
+                            </div>
+
+                            <div class="verse-picker-grid h-48" x-show="step === 'verse'">
+                                <template x-for="verse in verses" :key="verse">
+                                    <button @click="selectVerse(verse)" class="verse-picker-btn" 
+                                        :class="{
+                                            'active': selectedVerse === verse || selectedRangeEnd === verse,
+                                            'in-range': selectedVerse && selectedRangeEnd && verse > selectedVerse && verse < selectedRangeEnd
+                                        }" 
+                                        x-text="verse"></button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -219,7 +385,59 @@
             <div class="form-section">
                 <div class="field-group">
                     <label class="field-label">Scriptural Assurance of Pardon</label>
-                    <input type="text" x-model="service.liturgy.assuranceOfPardon" class="field-input">
+                    <div x-data="versePicker(service.liturgy.assuranceOfPardon)" @input="service.liturgy.assuranceOfPardon = $event.detail" class="input-container relative">
+                        <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                            <input type="text" x-model="query" @input="value = query; $dispatch('input', value)" @focus="open = true" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" placeholder="e.g. 1 John 1:9">
+                            <button @click="toggle()" class="text-secondary hover:text-primary transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">menu_book</span>
+                            </button>
+                        </div>
+                        <div x-show="open" @click.away="open = false" x-transition class="verse-picker-dropdown">
+                            <div class="verse-picker-header">
+                                <div class="verse-picker-breadcrumb">
+                                    <button @click="step = 'book'; selectedBook = ''" x-text="selectedBook || 'Book'"></button>
+                                    <template x-if="selectedBook">
+                                        <span class="flex items-center">
+                                            <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                                            <button @click="step = 'chapter'; selectedChapter = null" x-text="selectedChapter || 'Chapter'"></button>
+                                        </span>
+                                    </template>
+                                    <template x-if="selectedChapter">
+                                        <span class="flex items-center">
+                                            <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                                            <button @click="step = 'verse'; selectedVerse = null" x-text="selectedVerse || 'Verse'"></button>
+                                        </span>
+                                    </template>
+                                </div>
+                                <button @click="open = false" class="text-secondary hover:text-primary">
+                                    <span class="material-symbols-outlined text-sm">close</span>
+                                </button>
+                            </div>
+                            
+                            <div class="verse-picker-grid h-48" x-show="step === 'book'">
+                                <template x-for="book in filteredBooks" :key="book">
+                                    <button @click="selectBook(book)" class="verse-picker-btn" :class="selectedBook === book ? 'active' : ''" x-text="book"></button>
+                                </template>
+                            </div>
+
+                            <div class="verse-picker-grid h-48" x-show="step === 'chapter'">
+                                <template x-for="chapter in chapters" :key="chapter">
+                                    <button @click="selectChapter(chapter)" class="verse-picker-btn" :class="selectedChapter === chapter ? 'active' : ''" x-text="chapter"></button>
+                                </template>
+                            </div>
+
+                            <div class="verse-picker-grid h-48" x-show="step === 'verse'">
+                                <template x-for="verse in verses" :key="verse">
+                                    <button @click="selectVerse(verse)" class="verse-picker-btn" 
+                                        :class="{
+                                            'active': selectedVerse === verse || selectedRangeEnd === verse,
+                                            'in-range': selectedVerse && selectedRangeEnd && verse > selectedVerse && verse < selectedRangeEnd
+                                        }" 
+                                        x-text="verse"></button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -277,7 +495,59 @@
             <div class="form-section">
                 <div class="field-group">
                     <label class="field-label">Scripture Reading</label>
-                    <input type="text" x-model="service.liturgy.scriptureReading" class="field-input">
+                    <div x-data="versePicker(service.liturgy.scriptureReading)" @input="service.liturgy.scriptureReading = $event.detail" class="input-container relative">
+                        <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                            <input type="text" x-model="query" @input="value = query; $dispatch('input', value)" @focus="open = true" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" placeholder="e.g. Matthew 5:1-12">
+                            <button @click="toggle()" class="text-secondary hover:text-primary transition-colors">
+                                <span class="material-symbols-outlined text-[20px]">menu_book</span>
+                            </button>
+                        </div>
+                        <div x-show="open" @click.away="open = false" x-transition class="verse-picker-dropdown">
+                            <div class="verse-picker-header">
+                                <div class="verse-picker-breadcrumb">
+                                    <button @click="step = 'book'; selectedBook = ''" x-text="selectedBook || 'Book'"></button>
+                                    <template x-if="selectedBook">
+                                        <span class="flex items-center">
+                                            <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                                            <button @click="step = 'chapter'; selectedChapter = null" x-text="selectedChapter || 'Chapter'"></button>
+                                        </span>
+                                    </template>
+                                    <template x-if="selectedChapter">
+                                        <span class="flex items-center">
+                                            <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                                            <button @click="step = 'verse'; selectedVerse = null" x-text="selectedVerse || 'Verse'"></button>
+                                        </span>
+                                    </template>
+                                </div>
+                                <button @click="open = false" class="text-secondary hover:text-primary">
+                                    <span class="material-symbols-outlined text-sm">close</span>
+                                </button>
+                            </div>
+                            
+                            <div class="verse-picker-grid h-48" x-show="step === 'book'">
+                                <template x-for="book in filteredBooks" :key="book">
+                                    <button @click="selectBook(book)" class="verse-picker-btn" :class="selectedBook === book ? 'active' : ''" x-text="book"></button>
+                                </template>
+                            </div>
+
+                            <div class="verse-picker-grid h-48" x-show="step === 'chapter'">
+                                <template x-for="chapter in chapters" :key="chapter">
+                                    <button @click="selectChapter(chapter)" class="verse-picker-btn" :class="selectedChapter === chapter ? 'active' : ''" x-text="chapter"></button>
+                                </template>
+                            </div>
+
+                            <div class="verse-picker-grid h-48" x-show="step === 'verse'">
+                                <template x-for="verse in verses" :key="verse">
+                                    <button @click="selectVerse(verse)" class="verse-picker-btn" 
+                                        :class="{
+                                            'active': selectedVerse === verse || selectedRangeEnd === verse,
+                                            'in-range': selectedVerse && selectedRangeEnd && verse > selectedVerse && verse < selectedRangeEnd
+                                        }" 
+                                        x-text="verse"></button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
