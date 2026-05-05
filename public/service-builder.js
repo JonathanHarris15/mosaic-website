@@ -1,7 +1,6 @@
-function serviceBuilder() {
+function serviceForm() {
     return {
         date: '',
-        status: 'Loading...',
         saving: false,
         service: {
             theme: '',
@@ -9,148 +8,97 @@ function serviceBuilder() {
             serviceLeader: '',
             musicLeader: '',
             preacher: '',
-            elements: []
+            hasBaptism: false,
+            liturgy: {
+                callToWorship: '',
+                hymn1: { id: null, name: '' },
+                confession: '',
+                hymn2: { id: null, name: '' },
+                scriptureReading: '',
+                sermonPassage: '',
+                baptismNames: '',
+                baptismNotes: '',
+                hymn3: { id: null, name: '' },
+                benediction: ''
+            }
         },
-        hymnsResults: [],
-        
+
         async init() {
             const urlParams = new URLSearchParams(window.location.search);
             this.date = urlParams.get('date');
-            
             if (!this.date) {
-                alert('No date specified. Redirecting to calendar.');
                 window.location.href = 'service-calendar.html';
                 return;
             }
-
-            await this.loadService();
+            await this.load();
         },
 
-        async loadService() {
-            try {
-                const doc = await db.collection('services').doc(this.date).get();
-                if (doc.exists) {
-                    this.service = doc.data();
-                    this.status = 'Draft';
-                } else {
-                    this.loadDefaultTemplate();
-                    this.status = 'New Service';
+        async load() {
+            const doc = await db.collection('services').doc(this.date).get();
+            if (doc.exists) {
+                const data = doc.data();
+                // Merge to handle potential missing fields in old schema
+                this.service = { ...this.service, ...data };
+                if (!this.service.liturgy) {
+                    this.service.liturgy = {
+                        callToWorship: '', hymn1: { id: null, name: '' },
+                        confession: '', hymn2: { id: null, name: '' },
+                        scriptureReading: '', sermonPassage: '',
+                        baptismNames: '', baptismNotes: '',
+                        hymn3: { id: null, name: '' }, benediction: ''
+                    };
                 }
-            } catch (error) {
-                console.error("Error loading service:", error);
-                this.status = 'Error Loading';
             }
         },
 
-        loadDefaultTemplate() {
-            const defaultElements = [
-                { id: this.uid(), type: 'heading', title: 'Preparation', content: '' },
-                { id: this.uid(), type: 'custom', title: 'Call to Worship', content: '' },
-                { id: this.uid(), type: 'prayer', title: 'Opening Prayer', content: '' },
-                { id: this.uid(), type: 'hymn', title: 'Hymn 1', content: '', hymnId: null, hymnData: null },
-                { id: this.uid(), type: 'hymn', title: 'Hymn 2', content: '', hymnId: null, hymnData: null },
-                { id: this.uid(), type: 'heading', title: 'Word', content: '' },
-                { id: this.uid(), type: 'scripture', title: 'Scripture Reading', content: '' },
-                { id: this.uid(), type: 'sermon', title: 'Sermon', content: '' },
-                { id: this.uid(), type: 'heading', title: 'Response', content: '' },
-                { id: this.uid(), type: 'hymn', title: 'Response Hymn', content: '', hymnId: null, hymnData: null },
-                { id: this.uid(), type: 'custom', title: 'Lord\'s Supper', content: '' },
-                { id: this.uid(), type: 'custom', title: 'Benediction', content: '' }
-            ];
-            this.service.elements = defaultElements;
-        },
-
-        async saveService() {
+        async save() {
             this.saving = true;
             try {
-                const serviceToSave = {
+                await db.collection('services').doc(this.date).set({
                     ...this.service,
-                    date: this.date,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                };
-                await db.collection('services').doc(this.date).set(serviceToSave);
-                this.status = 'Saved';
-                alert('Service saved successfully!');
-            } catch (error) {
-                console.error("Error saving service:", error);
-                alert('Error saving service. Make sure you are logged in as an editor.');
+                });
+                alert('Service saved!');
+            } catch (e) {
+                alert('Error saving. Check console.');
+                console.error(e);
             } finally {
                 this.saving = false;
             }
         },
 
-        addElement() {
-            this.service.elements.push({
-                id: this.uid(),
-                type: 'custom',
-                title: 'New Element',
-                content: ''
-            });
-        },
-
-        removeElement(index) {
-            if (confirm('Are you sure you want to remove this element?')) {
-                this.service.elements.splice(index, 1);
-            }
-        },
-
-        moveElement(index, direction) {
-            const targetIndex = index + direction;
-            if (targetIndex < 0 || targetIndex >= this.service.elements.length) return;
-            
-            const element = this.service.elements.splice(index, 1)[0];
-            this.service.elements.splice(targetIndex, 0, element);
-        },
-
-        handleTypeChange(element) {
-            if (element.type === 'hymn' && !element.hymnData) {
-                element.hymnId = null;
-                element.hymnData = null;
-            }
-        },
-
-        async searchHymns(query, element) {
-            if (!query || query.length < 2) {
-                this.hymnsResults = [];
-                return;
-            }
-
-            try {
-                // Simple startsWith search for hymns
-                const snapshot = await db.collection('hymns')
-                    .where('hymn_name', '>=', query)
-                    .where('hymn_name', '<=', query + '\uf8ff')
-                    .limit(5)
-                    .get();
-                
-                this.hymnsResults = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            } catch (error) {
-                console.error("Error searching hymns:", error);
-            }
-        },
-
-        selectHymn(element, hymn) {
-            element.hymnId = hymn.id;
-            element.hymnData = {
-                hymn_name: hymn.hymn_name,
-                lyrics_writer: hymn.lyrics_writer
-            };
-            this.hymnsResults = [];
-        },
-
         formatDate(dateStr) {
             if (!dateStr) return '';
-            const [year, month, day] = dateStr.split('-');
-            return new Date(year, month - 1, day).toLocaleDateString(undefined, {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
+            const [y, m, d] = dateStr.split('-');
+            return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
             });
-        },
+        }
+    };
+}
 
-        uid() {
-            return Math.random().toString(36).substr(2, 9);
+function hymnPicker(hymnRef) {
+    return {
+        open: false,
+        query: '',
+        results: [],
+        async search() {
+            if (this.query.length < 2) return;
+            const snap = await db.collection('hymns')
+                .where('hymn_name', '>=', this.query)
+                .where('hymn_name', '<=', this.query + '\uf8ff')
+                .limit(5).get();
+            this.results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        },
+        select(h) {
+            hymnRef.id = h.id;
+            hymnRef.name = h.hymn_name;
+            this.query = '';
+            this.results = [];
+        },
+        clear() {
+            hymnRef.id = null;
+            hymnRef.name = '';
         }
     };
 }
