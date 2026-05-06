@@ -29,17 +29,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  // If already signed in, just load the hymn. Otherwise sign in anonymously first.
-  if (firebase.auth().currentUser) {
+  // Wait for auth state to be restored to ensure the header shows the correct user,
+  // then load the hymn. We don't sign in anonymously here to avoid overwriting real sessions.
+  const unsubscribe = firebase.auth().onAuthStateChanged((user) => {
+    unsubscribe();
     loadHymn();
-  } else {
-    firebase.auth().signInAnonymously().then(() => {
-      loadHymn();
-    }).catch((error) => {
-      console.error("Error signing in anonymously:", error);
-      hymnDetailsContainer.innerHTML = '<p>Error authenticating.</p>';
-    });
-  }
+  });
 
 
   /**

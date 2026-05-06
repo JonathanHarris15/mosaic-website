@@ -44,8 +44,8 @@ function updateAuthUI(user) {
     const authContainer = document.getElementById('auth-container');
     if (!authContainer) return;
 
-    if (user) {
-        // User is signed in
+    if (user && !user.isAnonymous) {
+        // User is signed in with a real account
         authContainer.innerHTML = `
             <div class="flex items-center gap-4">
                 <a href="profile.html" class="px-md py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200 flex items-center gap-1">
@@ -58,7 +58,7 @@ function updateAuthUI(user) {
             </div>
         `;
     } else {
-        // User is signed out
+        // User is signed out or anonymous
         authContainer.innerHTML = `
             <a href="login.html" class="px-md py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200">
                 Log In

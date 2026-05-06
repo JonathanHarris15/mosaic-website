@@ -5,13 +5,17 @@
 
 let currentUserUid = null;
 
+let isInitialAuthCheck = true;
+
 async function initProfile() {
     auth.onAuthStateChanged(async (user) => {
-        if (!user) {
+        if (!user || user.isAnonymous) {
+            // Redirect if not signed in or only signed in anonymously
             window.location.href = 'login.html';
             return;
         }
 
+        isInitialAuthCheck = false;
         currentUserUid = user.uid;
         document.getElementById('user-email').textContent = user.email;
         

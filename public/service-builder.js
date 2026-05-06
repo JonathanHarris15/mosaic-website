@@ -78,31 +78,23 @@ function serviceForm() {
             const doc = await db.collection('services').doc(this.date).get();
             if (doc.exists) {
                 const data = doc.data();
-                this.service = {
-                    theme: data.theme || '',
-                    keyVerse: data.keyVerse || '',
-                    serviceLeader: data.serviceLeader || '',
-                    musicLeader: data.musicLeader || '',
-                    preacher: data.preacher || '',
-                    hasBaptism: data.hasBaptism || false,
-                    notes: data.notes || {},
-                    liturgy: {
-                        preparatoryHymn: data.liturgy?.preparatoryHymn || { id: null, name: '' },
-                        callToWorship: data.liturgy?.callToWorship || '',
-                        hymn1: data.liturgy?.hymn1 || { id: null, name: '' },
-                        hymn2: data.liturgy?.hymn2 || { id: null, name: '' },
-                        callToConfession: data.liturgy?.callToConfession || '',
-                        assuranceOfPardon: data.liturgy?.assuranceOfPardon || '',
-                        hymnMid1: data.liturgy?.hymnMid1 || { id: null, name: '' },
-                        hymnMid2: data.liturgy?.hymnMid2 || { id: null, name: '' },
-                        scriptureReading: data.liturgy?.scriptureReading || '',
-                        sermon: data.liturgy?.sermon || '',
-                        baptism: data.liturgy?.baptism || '',
-                        hymnEnd1: data.liturgy?.hymnEnd1 || { id: null, name: '' },
-                        hymnEnd2: data.liturgy?.hymnEnd2 || { id: null, name: '' },
-                        benediction: data.liturgy?.benediction || ''
+                // Update top-level properties
+                this.service.theme = data.theme || '';
+                this.service.keyVerse = data.keyVerse || '';
+                this.service.serviceLeader = data.serviceLeader || '';
+                this.service.musicLeader = data.musicLeader || '';
+                this.service.preacher = data.preacher || '';
+                this.service.hasBaptism = data.hasBaptism || false;
+                this.service.notes = data.notes || {};
+                
+                // Update liturgy properties
+                if (data.liturgy) {
+                    for (const key in data.liturgy) {
+                        if (this.service.liturgy.hasOwnProperty(key)) {
+                            this.service.liturgy[key] = data.liturgy[key];
+                        }
                     }
-                };
+                }
             }
             this.originalService = JSON.stringify(this.service);
         },
@@ -226,6 +218,130 @@ function serviceForm() {
             const [y, m, d] = dateStr.split('-');
             return new Date(y, m - 1, d).toLocaleDateString(undefined, {
                 weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+            });
+        },
+
+        async downloadMusicSheets() {
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF();
+            
+            const hymnFields = [
+                'preparatoryHymn', 'hymn1', 'hymn2', 'hymnMid1', 'hymnMid2', 'hymnEnd1', 'hymnEnd2'
+            ];
+            
+            const hymnIds = hymnFields
+                .map(field => this.service.liturgy[field]?.id)
+                .filter(id => !!id);
+
+            if (hymnIds.length === 0) {
+                alert('No hymns selected in the Order of Service.');
+                return;
+            }
+
+            let pagesAdded = 0;
+            const originalText = 'Download Music Sheets';
+            
+            try {
+                // Find the button to show status
+                const btn = document.getElementById('download-music-btn');
+                if (btn) btn.innerText = 'Generating PDF...';
+
+                for (const id of hymnIds) {
+                    const doc = await db.collection('hymns').doc(id).get();
+                    if (!doc.exists) continue;
+                    
+                    const hymn = doc.data();
+                    // Always use the first arrangement (version)
+                    const version = hymn.versions && hymn.versions.length > 0 ? hymn.versions[0] : null;
+                    if (!version || !version.pages || version.pages.length === 0) continue;
+
+                    for (const pageUrl of version.pages) {
+                        try {
+                            const imgData = await this._getImageDataUrl(pageUrl);
+                            if (!imgData) continue;
+
+                            // Detect format from data URL (e.g., "data:image/png;base64,...")
+                            let format = 'PNG';
+                            if (imgData.includes('image/jpeg') || imgData.includes('image/jpg')) {
+                                format = 'JPEG';
+                            } else if (imgData.includes('image/webp')) {
+                                format = 'WEBP';
+                            }
+
+                            if (pagesAdded > 0) {
+                                pdf.addPage();
+                            }
+                            
+                            const pageWidth = pdf.internal.pageSize.getWidth();
+                            const pageHeight = pdf.internal.pageSize.getHeight();
+                            
+                            // Layout constants (in mm)
+                            const margin = 10;
+                            const titleFontSize = 14;
+                            const titlePadding = 8;
+                            
+                            // Draw Title
+                            pdf.setFont("helvetica", "bold");
+                            pdf.setFontSize(titleFontSize);
+                            pdf.text(hymn.hymn_name || 'Hymn', pageWidth / 2, margin + 5, { align: 'center' });
+
+                            // Get image dimensions safely
+                            const img = new Image();
+                            await new Promise((resolve, reject) => {
+                                img.onload = resolve;
+                                img.onerror = () => reject(new Error('Failed to load image: ' + pageUrl));
+                                img.src = imgData;
+                            });
+
+                            const imgWidth = img.width;
+                            const imgHeight = img.height;
+
+                            // Available space for the image
+                            const maxWidth = pageWidth - (margin * 2);
+                            const maxHeight = pageHeight - (margin * 2) - titleFontSize - titlePadding;
+
+                            // Calculate scaling ratio to fit BOTH dimensions (prevents clipping)
+                            const ratio = Math.min(maxWidth / imgWidth, maxHeight / imgHeight);
+                            const dw = imgWidth * ratio;
+                            const dh = imgHeight * ratio;
+
+                            // Center the image in the available space
+                            const dx = (pageWidth - dw) / 2;
+                            // Start image below the title area
+                            const dy = margin + titleFontSize + titlePadding + (maxHeight - dh) / 2;
+
+                            pdf.addImage(imgData, format, dx, dy, dw, dh, undefined, 'FAST');
+                            pagesAdded++;
+                        } catch (e) {
+                            console.error('Error adding page to PDF:', e);
+                        }
+                    }
+                }
+
+                if (pagesAdded > 0) {
+                    pdf.save(`Music_Sheets_${this.date}.pdf`);
+                } else {
+                    alert('No music sheets found for the selected hymns.');
+                }
+            } catch (error) {
+                console.error('PDF Generation failed:', error);
+                alert('Failed to generate PDF. check console for details.');
+            } finally {
+                const btn = document.getElementById('download-music-btn');
+                if (btn) {
+                    btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">picture_as_pdf</span> Download Music Sheets';
+                }
+            }
+        },
+
+        async _getImageDataUrl(url) {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
             });
         }
     };

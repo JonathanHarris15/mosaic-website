@@ -19,12 +19,14 @@ document.addEventListener('alpine:init', () => {
         searchQuery: '',
         allTags: [],
         selectedTags: [],
+        loading: true,
         
         /**
          * Initializes the component, fetches tags and the hymn index.
          */
         init() {
             const db = firebase.firestore();
+            this.loading = true;
             
             // Fetch Tags directly from Firestore
             db.collection('tags').orderBy(firebase.firestore.FieldPath.documentId()).get().then(snapshot => {
@@ -47,6 +49,8 @@ document.addEventListener('alpine:init', () => {
                 this.performSearch(); // In case there are initial filters
             }).catch(error => {
                 console.error("Error fetching hymn index:", error);
+            }).finally(() => {
+                this.loading = false;
             });
         },
 
@@ -102,3 +106,32 @@ document.addEventListener('alpine:init', () => {
         }
     }))
 })
+
+/**
+ * Helper to show/hide admin-only UI elements based on user role.
+ */
+async function checkAdminAccess(user) {
+    const adminActions = document.getElementById('admin-actions');
+    if (!adminActions) return;
+
+    if (user && !user.isAnonymous) {
+        try {
+            const userData = await getUserData(user.uid);
+            const role = (userData && userData.role) || 'viewer';
+            if (role === 'editor' || role === 'admin') {
+                adminActions.classList.remove('hidden');
+            } else {
+                adminActions.classList.add('hidden');
+            }
+        } catch (error) {
+            console.error("Error checking user role:", error);
+            adminActions.classList.add('hidden');
+        }
+    } else {
+        adminActions.classList.add('hidden');
+    }
+}
+
+// Listen for authentication changes to show/hide admin controls
+auth.onAuthStateChanged(checkAdminAccess);
+document.addEventListener('auth-changed', (e) => checkAdminAccess(e.detail.user));

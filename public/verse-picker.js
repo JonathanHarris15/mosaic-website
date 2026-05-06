@@ -15,14 +15,49 @@ document.addEventListener('alpine:init', () => {
         books: Object.keys(BIBLE_DATA),
         
         init() {
+            // Watch for external changes (via x-model or manual updates)
             this.$watch('value', (val) => {
-                this.query = val;
+                if (val !== this.query) {
+                    this.query = val || '';
+                    if (val) {
+                        this.parseValue(val);
+                    } else {
+                        this.reset();
+                    }
+                }
             });
+            
+            // Also parse initial value
+            if (this.value) {
+                this.parseValue(this.value);
+            }
+        },
+
+        parseValue(val) {
+            if (!val) return;
+            // Simple regex to try and match "Book Chapter:Verse"
+            // Handles "John 3:16" or "1 John 2:3" or "Song of Solomon 1:2"
+            const match = val.match(/^(.+?)\s+(\d+):(\d+)(?:-(\d+))?.*$/);
+            if (match) {
+                const book = match[1];
+                if (BIBLE_DATA[book]) {
+                    this.selectedBook = book;
+                    this.selectedChapter = parseInt(match[2]);
+                    this.selectedVerse = parseInt(match[3]);
+                    if (match[4]) {
+                        this.rangeBook = book;
+                        this.rangeChapter = this.selectedChapter;
+                        this.rangeVerse = parseInt(match[4]);
+                    }
+                }
+            }
         },
 
         toggle() {
-            this.reset();
             this.open = !this.open;
+            if (this.open) {
+                this.reset();
+            }
         },
 
         reset() {

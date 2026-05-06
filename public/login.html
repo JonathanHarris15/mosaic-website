@@ -95,9 +95,9 @@
             }
         });
 
-        // Redirect if already logged in
+        // Redirect if already logged in with a real account
         auth.onAuthStateChanged(user => {
-            if (user) window.location.href = 'profile.html';
+            if (user && !user.isAnonymous) window.location.href = 'profile.html';
         });
     </script>
 </body>
