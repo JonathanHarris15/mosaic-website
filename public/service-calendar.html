@@ -136,11 +136,24 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
 
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2"></script>
+
     <script src="auth.js"></script>
+    <script src="docx-importer.js"></script>
 </head>
 
 <body
     class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed dark">
+    
+    <!-- Import Docx Elements -->
+    <button id="import-docx-btn" class="hidden fixed bottom-6 right-6 opacity-50 hover:opacity-100 transition-all bg-primary text-on-primary rounded-full p-4 shadow-xl z-50 flex items-center gap-2" title="Import from docx">
+        <span class="material-symbols-outlined">upload_file</span>
+        <span class="font-label-md text-sm hidden md:inline">Import from docx</span>
+    </button>
+    <input type="file" id="docx-file-input" accept=".docx" multiple class="hidden" />
+
     <header class="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-surface-variant/30">
         <div class="w-full max-w-7xl mx-auto px-margin py-md flex justify-between items-center">
             <a href="index.html" class="font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-1">

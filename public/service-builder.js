@@ -11,6 +11,8 @@ function serviceForm() {
         noteEditorWidth: 200,
         _quill: null,
         _scrollHandler: null,
+        hymnRegistry: [],
+        fuse: null,
         service: {
             theme: '',
             keyVerse: '',
@@ -65,6 +67,7 @@ function serviceForm() {
                 return;
             }
             await this.load();
+            this.loadHymnRegistry();
 
             window.addEventListener('beforeunload', (e) => {
                 if (this.canEdit && this.isDirty) {
@@ -72,6 +75,24 @@ function serviceForm() {
                     e.returnValue = '';
                 }
             });
+        },
+
+        async loadHymnRegistry() {
+            try {
+                const getHymnIndex = firebase.app().functions('us-central1').httpsCallable('getHymnIndex');
+                const result = await getHymnIndex();
+                this.hymnRegistry = result.data;
+                
+                // Initialize Fuse.js for fuzzy searching
+                this.fuse = new Fuse(this.hymnRegistry, {
+                    keys: ['hymn_name', 'lyrics_writer', 'music_writer'],
+                    threshold: 0.3, // Lower is stricter, higher is fuzzier
+                    distance: 100,
+                    minMatchCharLength: 2
+                });
+            } catch (error) {
+                console.error("Error loading hymn registry:", error);
+            }
         },
 
         async load() {
@@ -91,7 +112,13 @@ function serviceForm() {
                 if (data.liturgy) {
                     for (const key in data.liturgy) {
                         if (this.service.liturgy.hasOwnProperty(key)) {
-                            this.service.liturgy[key] = data.liturgy[key];
+                            const val = data.liturgy[key];
+                            if (val && typeof val === 'object' && !Array.isArray(val)) {
+                                // Preserve reference for components like hymnPicker
+                                Object.assign(this.service.liturgy[key], val);
+                            } else {
+                                this.service.liturgy[key] = val;
+                            }
                         }
                     }
                 }
@@ -126,24 +153,29 @@ function serviceForm() {
             this.$nextTick(() => {
                 if (!this.canEdit) return; // viewers get read-only HTML panel; no Quill needed
                 const el = document.getElementById('note-quill-inline');
+                if (!el) return;
+
                 if (!this._quill) {
                     this._quill = new Quill(el, {
                         theme: 'snow',
                         modules: { toolbar: [['bold', 'italic'], [{ list: 'bullet' }]] },
-                        placeholder: 'Add a note explaining your reasoning…'
+                        placeholder: 'Add a note explaining your reasoning...'
                     });
+
+                    this._scrollHandler = () => {
+                        if (this.activeNoteKey) this._positionEditor(this.activeNoteKey);
+                    };
+                    window.addEventListener('scroll', this._scrollHandler, { passive: true });
+                    window.addEventListener('resize', this._scrollHandler, { passive: true });
                 }
+
+                // Set editor content
                 const existing = (this.service.notes && this.service.notes[key]) || '';
-                this._quill.root.innerHTML = existing;
+                // Ensure the content is wrapped in paragraphs if it's plain text for Quill
+                this._quill.root.innerHTML = existing.includes('<p>') ? existing : `<p>${existing}</p>`;
+
                 this.$nextTick(() => this._quill.focus());
             });
-            if (!this._scrollHandler) {
-                this._scrollHandler = () => {
-                    if (this.activeNoteKey) this._positionEditor(this.activeNoteKey);
-                };
-                window.addEventListener('scroll', this._scrollHandler, { passive: true });
-                window.addEventListener('resize', this._scrollHandler, { passive: true });
-            }
         },
 
         _positionEditor(key) {
@@ -349,11 +381,29 @@ function serviceForm() {
 
 function hymnPicker(hymnRef) {
     return {
+        hymnRef: hymnRef,
         open: false,
-        query: '',
+        query: hymnRef.name || '',
         results: [],
+        init() {
+            // Keep query in sync when hymnRef changes (e.g. on load)
+            this.$watch('hymnRef.name', (val) => {
+                this.query = val || '';
+            });
+        },
         async search() {
-            if (this.query.length < 2) return;
+            if (this.query.length < 2) {
+                this.results = [];
+                return;
+            }
+
+            // Use Fuse.js if available (pre-loaded registry)
+            if (this.$parent && this.$parent.fuse) {
+                this.results = this.$parent.fuse.search(this.query).slice(0, 5).map(r => r.item);        
+                return;
+            }
+
+            // Fallback to Firestore live search if registry hasn't loaded yet
             const snap = await db.collection('hymns')
                 .where('hymn_name', '>=', this.query)
                 .where('hymn_name', '<=', this.query + '\uf8ff')
@@ -363,8 +413,9 @@ function hymnPicker(hymnRef) {
         select(h) {
             hymnRef.id = h.id;
             hymnRef.name = h.hymn_name;
-            this.query = '';
+            this.query = h.hymn_name;
             this.results = [];
+            this.open = false;
             this.$el.dispatchEvent(new CustomEvent('input', {
                 detail: { id: h.id, name: h.hymn_name },
                 bubbles: true
@@ -373,6 +424,9 @@ function hymnPicker(hymnRef) {
         clear() {
             hymnRef.id = null;
             hymnRef.name = '';
+            this.query = '';
+            this.results = [];
+            this.open = false;
             this.$el.dispatchEvent(new CustomEvent('input', {
                 detail: { id: null, name: '' },
                 bubbles: true

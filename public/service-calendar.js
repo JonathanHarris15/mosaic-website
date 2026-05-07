@@ -227,7 +227,29 @@ async function loadServiceData(sundays) {
 
 // --- AUTH PROTECTION ---
 auth.onAuthStateChanged(async (user) => {
-    // Role-based visibility logic removed; all users can view 'Order of Service'
+    if (user) {
+        try {
+            const userData = await getUserData(user.uid);
+            const role = (userData && userData.role) || 'viewer';
+            if (role === 'editor' || role === 'admin') {
+                const importBtn = document.getElementById('import-docx-btn');
+                if (importBtn) {
+                    importBtn.classList.remove('hidden');
+                    if (window.initDocxImporter) {
+                        window.initDocxImporter(() => {
+                            // Reload service data after successful import
+                            // Note: We need sundays array which is local to the DOMContentLoaded listener
+                            // For now, let's just reload the page or trigger a global reload if needed.
+                            // Better yet, we can dispatch a custom event or store sundays globally.
+                            location.reload(); 
+                        });
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Error checking user permissions:", error);
+        }
+    }
 });
 
 function escapeHtml(str) {

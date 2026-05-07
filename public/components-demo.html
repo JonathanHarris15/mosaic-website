@@ -77,8 +77,8 @@
                         <template x-for="verse in verses" :key="verse">
                             <button @click="selectVerse(verse)" class="verse-picker-btn" 
                                 :class="{
-                                    'active': selectedVerse === verse || selectedRangeEnd === verse,
-                                    'in-range': selectedVerse && selectedRangeEnd && verse > selectedVerse && verse < selectedRangeEnd
+                                    'active': selectedVerse === verse || rangeVerse === verse,
+                                    'in-range': selectedVerse && rangeVerse && verse > selectedVerse && verse < rangeVerse
                                 }" 
                                 x-text="verse"></button>
                         </template>
