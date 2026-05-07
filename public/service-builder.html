@@ -143,94 +143,100 @@
         </div>
 
         <!-- Metadata Section -->
-        <div class="form-section">
-            <div class="space-y-4">
-                <div class="field-group">
-                    <label class="field-label">Service Theme</label>
-                    <input type="text" x-model="service.theme" class="field-input" :disabled="!canEdit">
-                </div>
-                <div class="field-group">
-                    <label class="field-label">Key Verse</label>
-                    <div x-data="versePicker(service.keyVerse)" x-modelable="value" x-model="service.keyVerse" class="input-container relative">
-                        <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
-                            <input type="text" x-model="query" @input="value = query; $dispatch('input', value)" @focus="open = true" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" placeholder="e.g. John 3:16" :disabled="!canEdit">
-                            <button @click="toggle()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
-                                <span class="material-symbols-outlined text-[20px]">menu_book</span>
+        <div class="form-section" data-field-key="theme">
+            <div class="field-group">
+                <label class="field-label">Service Theme</label>
+                <input type="text" x-model="service.theme" class="field-input" :disabled="!canEdit">
+            </div>
+        </div>
+        <div class="form-section" data-field-key="keyVerse">
+            <div class="field-group">
+                <label class="field-label">Key Verse</label>
+                <div x-data="versePicker(service.keyVerse)" x-modelable="value" x-model="service.keyVerse" class="input-container relative">
+                    <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                        <input type="text" x-model="query" @input="value = query; $dispatch('input', value)" @focus="open = true" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" placeholder="e.g. John 3:16" :disabled="!canEdit">
+                        <button @click="toggle()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
+                            <span class="material-symbols-outlined text-[20px]">menu_book</span>
+                        </button>
+                    </div>
+                    <div x-show="open" @click.away="open = false" x-transition class="absolute z-50 mt-1 w-full bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden max-h-[400px] flex flex-col">
+                        <div class="bg-surface-container-low px-4 py-2 border-b border-outline-variant flex items-center justify-between sticky top-0">
+                            <div class="flex flex-row items-center gap-2 text-[10px] font-label-md uppercase tracking-wider text-secondary">
+                                <button @click="step = 'book'; if(selectingRangeEnd){rangeBook=''}else{selectedBook=''}" class="hover:text-primary transition-colors cursor-pointer" x-text="breadcrumbBook"></button>
+                                <template x-if="activeBook">
+                                    <div class="flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                                        <button @click="step = 'chapter'; if(selectingRangeEnd){rangeChapter=null}else{selectedChapter=null}" class="hover:text-primary transition-colors cursor-pointer" x-text="breadcrumbChapter"></button>
+                                    </div>
+                                </template>
+                                <template x-if="activeChapter">
+                                    <div class="flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                                        <span class="text-secondary" x-text="breadcrumbVerse"></span>
+                                    </div>
+                                </template>
+                            </div>
+                            <button @click="open = false" class="text-secondary hover:text-primary cursor-pointer flex items-center">
+                                <span class="material-symbols-outlined text-sm">close</span>
                             </button>
                         </div>
-                        <div x-show="open" @click.away="open = false" x-transition class="absolute z-50 mt-1 w-full bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden max-h-[400px] flex flex-col">
-                            <div class="bg-surface-container-low px-4 py-2 border-b border-outline-variant flex items-center justify-between sticky top-0">
-                                <div class="flex flex-row items-center gap-2 text-[10px] font-label-md uppercase tracking-wider text-secondary">
-                                    <button @click="step = 'book'; if(selectingRangeEnd){rangeBook=''}else{selectedBook=''}" class="hover:text-primary transition-colors cursor-pointer" x-text="breadcrumbBook"></button>
-                                    <template x-if="activeBook">
-                                        <div class="flex items-center gap-1">
-                                            <span class="material-symbols-outlined text-[12px]">chevron_right</span>
-                                            <button @click="step = 'chapter'; if(selectingRangeEnd){rangeChapter=null}else{selectedChapter=null}" class="hover:text-primary transition-colors cursor-pointer" x-text="breadcrumbChapter"></button>
-                                        </div>
-                                    </template>
-                                    <template x-if="activeChapter">
-                                        <div class="flex items-center gap-1">
-                                            <span class="material-symbols-outlined text-[12px]">chevron_right</span>
-                                            <span class="text-secondary" x-text="breadcrumbVerse"></span>
-                                        </div>
-                                    </template>
-                                </div>
-                                <button @click="open = false" class="text-secondary hover:text-primary cursor-pointer flex items-center">
-                                    <span class="material-symbols-outlined text-sm">close</span>
+                        
+                        <div class="p-2 grid grid-cols-4 gap-1 overflow-y-auto h-48" x-show="step === 'book'">
+                            <template x-for="book in filteredBooks" :key="book">
+                                <button @click="selectBook(book)" class="px-2 py-2 rounded-lg text-xs font-label-md transition-all text-center border border-transparent cursor-pointer hover:bg-primary-fixed hover:text-primary" :class="activeBook === book ? 'bg-primary text-on-primary border-primary' : ''" x-text="book"></button>
+                            </template>
+                        </div>
+
+                        <div class="p-2 grid grid-cols-6 gap-1 overflow-y-auto h-48" x-show="step === 'chapter'">
+                            <template x-for="chapter in chapters" :key="chapter">
+                                <button @click="selectChapter(chapter)" class="px-2 py-2 rounded-lg text-sm font-label-md transition-all text-center border border-transparent cursor-pointer hover:bg-primary-fixed hover:text-primary" :class="activeChapter === chapter ? 'bg-primary text-on-primary border-primary' : ''" x-text="chapter"></button>
+                            </template>
+                        </div>
+
+                        <div class="p-2 flex flex-col" x-show="step === 'verse'">
+                            <div class="grid grid-cols-6 gap-1 overflow-y-auto h-40">
+                                <template x-for="verse in verses" :key="verse">
+                                    <button @click="selectVerse(verse)" class="px-2 py-2 rounded-lg text-sm font-label-md transition-all text-center border border-transparent cursor-pointer hover:bg-primary-fixed hover:text-primary" 
+                                        :class="{
+                                            'bg-primary text-on-primary border-primary': (!selectingRangeEnd && selectedVerse === verse) || (selectingRangeEnd && rangeVerse === verse),
+                                            'border-primary/50 text-primary/60': selectingRangeEnd && verse === selectedVerse && rangeBook === selectedBook && rangeChapter === selectedChapter && rangeVerse !== verse
+                                        }" 
+                                        x-text="verse"></button>
+                                </template>
+                            </div>
+                            <template x-if="selectedVerse !== null && !selectingRangeEnd">
+                                <button @click="startRangeSelection()" class="mt-2 w-full text-center text-[10px] font-label-md uppercase tracking-wider text-secondary hover:text-primary border border-outline-variant rounded-lg py-1.5 transition-colors cursor-pointer hover:border-primary hover:bg-primary-fixed/20">
+                                    <span class="material-symbols-outlined text-[14px] align-middle mr-1">arrow_right_alt</span>
+                                    Select range end point
                                 </button>
-                            </div>
-                            
-                            <div class="p-2 grid grid-cols-4 gap-1 overflow-y-auto h-48" x-show="step === 'book'">
-                                <template x-for="book in filteredBooks" :key="book">
-                                    <button @click="selectBook(book)" class="px-2 py-2 rounded-lg text-xs font-label-md transition-all text-center border border-transparent cursor-pointer hover:bg-primary-fixed hover:text-primary" :class="activeBook === book ? 'bg-primary text-on-primary border-primary' : ''" x-text="book"></button>
-                                </template>
-                            </div>
-
-                            <div class="p-2 grid grid-cols-6 gap-1 overflow-y-auto h-48" x-show="step === 'chapter'">
-                                <template x-for="chapter in chapters" :key="chapter">
-                                    <button @click="selectChapter(chapter)" class="px-2 py-2 rounded-lg text-sm font-label-md transition-all text-center border border-transparent cursor-pointer hover:bg-primary-fixed hover:text-primary" :class="activeChapter === chapter ? 'bg-primary text-on-primary border-primary' : ''" x-text="chapter"></button>
-                                </template>
-                            </div>
-
-                            <div class="p-2 flex flex-col" x-show="step === 'verse'">
-                                <div class="grid grid-cols-6 gap-1 overflow-y-auto h-40">
-                                    <template x-for="verse in verses" :key="verse">
-                                        <button @click="selectVerse(verse)" class="px-2 py-2 rounded-lg text-sm font-label-md transition-all text-center border border-transparent cursor-pointer hover:bg-primary-fixed hover:text-primary" 
-                                            :class="{
-                                                'bg-primary text-on-primary border-primary': (!selectingRangeEnd && selectedVerse === verse) || (selectingRangeEnd && rangeVerse === verse),
-                                                'border-primary/50 text-primary/60': selectingRangeEnd && verse === selectedVerse && rangeBook === selectedBook && rangeChapter === selectedChapter && rangeVerse !== verse
-                                            }" 
-                                            x-text="verse"></button>
-                                    </template>
-                                </div>
-                                <template x-if="selectedVerse !== null && !selectingRangeEnd">
-                                    <button @click="startRangeSelection()" class="mt-2 w-full text-center text-[10px] font-label-md uppercase tracking-wider text-secondary hover:text-primary border border-outline-variant rounded-lg py-1.5 transition-colors cursor-pointer hover:border-primary hover:bg-primary-fixed/20">
-                                        <span class="material-symbols-outlined text-[14px] align-middle mr-1">arrow_right_alt</span>
-                                        Select range end point
-                                    </button>
-                                </template>
-                                <div x-show="selectingRangeEnd" class="mt-2 w-full flex items-center justify-center gap-2 text-[10px] font-label-md uppercase tracking-wider text-primary bg-primary-fixed/30 border border-primary-fixed/50 rounded-lg py-1.5">
-                                    <span class="material-symbols-outlined text-[14px]">start</span>
-                                    <span x-text="startLabel"></span>
-                                    <span class="material-symbols-outlined text-[14px]">arrow_right_alt</span>
-                                    <span x-text="rangeVerse ? (rangeBook === selectedBook && rangeChapter === selectedChapter ? rangeChapter + ':' + rangeVerse : (rangeBook === selectedBook ? rangeBook + ' ' + rangeChapter + ':' + rangeVerse : rangeBook + ' ' + rangeChapter + ':' + rangeVerse)) : '...'" class="opacity-60"></span>
-                                </div>
+                            </template>
+                            <div x-show="selectingRangeEnd" class="mt-2 w-full flex items-center justify-center gap-2 text-[10px] font-label-md uppercase tracking-wider text-primary bg-primary-fixed/30 border border-primary-fixed/50 rounded-lg py-1.5">
+                                <span class="material-symbols-outlined text-[14px]">start</span>
+                                <span x-text="startLabel"></span>
+                                <span class="material-symbols-outlined text-[14px]">arrow_right_alt</span>
+                                <span x-text="rangeVerse ? (rangeBook === selectedBook && rangeChapter === selectedChapter ? rangeChapter + ':' + rangeVerse : (rangeBook === selectedBook ? rangeBook + ' ' + rangeChapter + ':' + rangeVerse : rangeBook + ' ' + rangeChapter + ':' + rangeVerse)) : '...'" class="opacity-60"></span>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="field-group">
-                    <label class="field-label">Service Leader</label>
-                    <input type="text" x-model="service.serviceLeader" class="field-input" :disabled="!canEdit">
-                </div>
-                <div class="field-group">
-                    <label class="field-label">Music Leader</label>
-                    <input type="text" x-model="service.musicLeader" class="field-input" :disabled="!canEdit">
-                </div>
-                <div class="field-group">
-                    <label class="field-label">Preacher</label>
-                    <input type="text" x-model="service.preacher" class="field-input" :disabled="!canEdit">
-                </div>
+            </div>
+        </div>
+        <div class="form-section" data-field-key="serviceLeader">
+            <div class="field-group">
+                <label class="field-label">Service Leader</label>
+                <input type="text" x-model="service.serviceLeader" class="field-input" :disabled="!canEdit">
+            </div>
+        </div>
+        <div class="form-section" data-field-key="musicLeader">
+            <div class="field-group">
+                <label class="field-label">Music Leader</label>
+                <input type="text" x-model="service.musicLeader" class="field-input" :disabled="!canEdit">
+            </div>
+        </div>
+        <div class="form-section" data-field-key="preacher">
+            <div class="field-group">
+                <label class="field-label">Preacher</label>
+                <input type="text" x-model="service.preacher" class="field-input" :disabled="!canEdit">
             </div>
         </div>
 
@@ -240,7 +246,7 @@
         <div class="max-w-3xl">
         <div class="space-y-4">
             <!-- 1. Preparatory Hymn -->
-            <div class="form-section">
+            <div class="form-section" data-field-key="preparatoryHymn">
                 <div class="field-group">
                     <label class="field-label">Preparatory Hymn</label>
                     <div x-data="hymnPicker(service.liturgy.preparatoryHymn)" @input="service.liturgy.preparatoryHymn = $event.detail" class="input-container relative">
@@ -275,7 +281,7 @@
             </div>
 
             <!-- 2. Call to Worship -->
-            <div class="form-section">
+            <div class="form-section" data-field-key="callToWorship">
                 <div class="field-group">
                     <label class="field-label">Call to Worship</label>
                     <div x-data="versePicker(service.liturgy.callToWorship)" x-modelable="value" x-model="service.liturgy.callToWorship" class="input-container relative">
@@ -358,7 +364,7 @@
             </div>
 
             <!-- 3. Hymn 1 -->
-            <div class="form-section">
+            <div class="form-section" data-field-key="hymn1">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
                     <div x-data="hymnPicker(service.liturgy.hymn1)" @input="service.liturgy.hymn1 = $event.detail" class="input-container relative">
@@ -393,7 +399,7 @@
             </div>
 
             <!-- 4. Hymn 2 -->
-            <div class="form-section" x-show="!service.hasBaptism" x-transition>
+            <div class="form-section" x-show="!service.hasBaptism" x-transition data-field-key="hymn2">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
                     <div x-data="hymnPicker(service.liturgy.hymn2)" @input="service.liturgy.hymn2 = $event.detail" class="input-container relative">
@@ -428,7 +434,7 @@
             </div>
 
             <!-- 5. Call to Confession -->
-            <div class="form-section">
+            <div class="form-section" data-field-key="callToConfession">
                 <div class="field-group">
                     <label class="field-label">Call to Confession</label>
                     <div x-data="versePicker(service.liturgy.callToConfession)" x-modelable="value" x-model="service.liturgy.callToConfession" class="input-container relative">
@@ -511,7 +517,7 @@
             </div>
 
             <!-- 6. Assurance of Pardon -->
-            <div class="form-section">
+            <div class="form-section" data-field-key="assuranceOfPardon">
                 <div class="field-group">
                     <label class="field-label">Scriptural Assurance of Pardon</label>
                     <div x-data="versePicker(service.liturgy.assuranceOfPardon)" x-modelable="value" x-model="service.liturgy.assuranceOfPardon" class="input-container relative">
@@ -594,7 +600,7 @@
             </div>
 
             <!-- 7. Hymn Mid 1 -->
-            <div class="form-section">
+            <div class="form-section" data-field-key="hymnMid1">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
                     <div x-data="hymnPicker(service.liturgy.hymnMid1)" @input="service.liturgy.hymnMid1 = $event.detail" class="input-container relative">
@@ -629,7 +635,7 @@
             </div>
 
             <!-- 8. Hymn Mid 2 -->
-            <div class="form-section">
+            <div class="form-section" data-field-key="hymnMid2">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
                     <div x-data="hymnPicker(service.liturgy.hymnMid2)" @input="service.liturgy.hymnMid2 = $event.detail" class="input-container relative">
@@ -664,7 +670,7 @@
             </div>
 
             <!-- 9. Scripture Reading -->
-            <div class="form-section">
+            <div class="form-section" data-field-key="scriptureReading">
                 <div class="field-group">
                     <label class="field-label">Scripture Reading</label>
                     <div x-data="versePicker(service.liturgy.scriptureReading)" x-modelable="value" x-model="service.liturgy.scriptureReading" class="input-container relative">
@@ -747,7 +753,7 @@
             </div>
 
             <!-- 10. Sermon -->
-            <div class="form-section">
+            <div class="form-section" data-field-key="sermon">
                 <div class="field-group">
                     <label class="field-label">Sermon</label>
                     <div x-data="versePicker(service.liturgy.sermon)" x-modelable="value" x-model="service.liturgy.sermon" class="input-container relative">
@@ -830,7 +836,7 @@
             </div>
 
             <!-- 11. Baptism -->
-            <div x-show="service.hasBaptism" x-transition class="form-section border-primary bg-primary-fixed/10">
+            <div x-show="service.hasBaptism" x-transition class="form-section border-primary bg-primary-fixed/10" data-field-key="baptism">
                 <div class="field-group !mb-2">
                     <div class="flex flex-row-reverse items-center gap-2">
                         <span class="material-symbols-outlined text-primary text-sm">water_drop</span>
@@ -850,7 +856,7 @@
             </div>
 
             <!-- 12. Hymn End 1 -->
-            <div class="form-section">
+            <div class="form-section" data-field-key="hymnEnd1">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
                     <div x-data="hymnPicker(service.liturgy.hymnEnd1)" @input="service.liturgy.hymnEnd1 = $event.detail" class="input-container relative">
@@ -885,7 +891,7 @@
             </div>
 
             <!-- 13. Hymn End 2 -->
-            <div class="form-section">
+            <div class="form-section" data-field-key="hymnEnd2">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
                     <div x-data="hymnPicker(service.liturgy.hymnEnd2)" @input="service.liturgy.hymnEnd2 = $event.detail" class="input-container relative">
@@ -920,7 +926,7 @@
             </div>
 
             <!-- 14. Benediction -->
-            <div class="form-section">
+            <div class="form-section" data-field-key="benediction">
                 <div class="field-group">
                     <label class="field-label">Benediction</label>
                     <div x-data="versePicker(service.liturgy.benediction)" x-modelable="value" x-model="service.liturgy.benediction" class="input-container relative">
@@ -1085,3 +1091,4 @@
 </body>
 
 </html>
+

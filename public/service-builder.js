@@ -69,6 +69,10 @@ function serviceForm() {
             await this.load();
             this.loadHymnRegistry();
 
+            if (urlParams.get('validate') === 'true') {
+                this.validateForm();
+            }
+
             window.addEventListener('beforeunload', (e) => {
                 if (this.canEdit && this.isDirty) {
                     e.preventDefault();
@@ -124,6 +128,40 @@ function serviceForm() {
                 }
             }
             this.originalService = JSON.stringify(this.service);
+        },
+
+        async validateForm() {
+            this.$nextTick(() => {
+                let fieldsToCheck = [
+                    'preparatoryHymn', 'callToWorship', 'hymn1', 
+                    'callToConfession', 'assuranceOfPardon', 'hymnMid2', 
+                    'scriptureReading', 'sermon', 'hymnEnd1', 'hymnEnd2', 'benediction'
+                ];
+
+                if (this.service.hasBaptism) {
+                    fieldsToCheck.push('baptism');
+                } else {
+                    fieldsToCheck.push('hymn2');
+                    fieldsToCheck.push('hymnMid1');
+                }
+
+                for (const key of fieldsToCheck) {
+                    const val = this.service.liturgy[key];
+                    const isEmpty = (val && typeof val === 'object') ? !val.name : !val;
+
+                    if (isEmpty) {
+                        const section = document.querySelector(`[data-field-key="${key}"]`);
+                        if (section) {
+                            section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            section.classList.add('ring-2', 'ring-red-500', 'ring-offset-2');
+                            setTimeout(() => {
+                                section.classList.remove('ring-2', 'ring-red-500', 'ring-offset-2');
+                            }, 3000);
+                            return;
+                        }
+                    }
+                }
+            });
         },
 
         async save() {
