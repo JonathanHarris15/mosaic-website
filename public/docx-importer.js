@@ -37,15 +37,18 @@ window.initDocxImporter = function(onSuccess) {
         importBtn.classList.add('opacity-100', 'bg-secondary');
         importBtn.innerHTML = `<span class="material-symbols-outlined animate-spin">sync</span> Parsing...`;
 
+        const results = [];
+
         for (const file of files) {
             try {
                 const arrayBuffer = await file.arrayBuffer();
                 const result = await mammoth.extractRawText({ arrayBuffer });
                 const text = result.value;
-                await parseAndSaveService(text);
+                const status = await parseAndSaveService(text);
+                results.push({ name: file.name, ...status });
             } catch (error) {
                 console.error(`Error processing ${file.name}:`, error);
-                alert(`Error processing ${file.name}`);
+                results.push({ name: file.name, success: false, error: error.message || 'Unknown error' });
             }
         }
 
@@ -53,6 +56,19 @@ window.initDocxImporter = function(onSuccess) {
         importBtn.classList.remove('opacity-100', 'bg-secondary');
         importBtn.innerHTML = `<span class="material-symbols-outlined">upload_file</span><span class="font-label-md text-sm hidden md:inline">Import from docx</span>`;
         fileInput.value = '';
+
+        const failures = results.filter(r => !r.success);
+        const successes = results.filter(r => r.success);
+
+        if (failures.length > 0) {
+            let message = `Import complete with errors.\n\n✅ Success: ${successes.length}\n❌ Failed: ${failures.length}\n\nFailures:\n`;
+            failures.forEach(f => {
+                message += `- ${f.name}: ${f.error}\n`;
+            });
+            alert(message);
+        } else if (successes.length > 0) {
+            alert(`Successfully imported ${successes.length} services.`);
+        }
 
         if (onSuccess) onSuccess();
     });
@@ -103,7 +119,9 @@ window.initDocxImporter = function(onSuccess) {
         let dateId = null;
         const dateStr = findValue('Date');
         if (dateStr) {
-            const dateObj = new Date(dateStr);
+            // Remove ordinal suffixes (1st, 2nd, 3rd, 4th, etc.) and caret symbols
+            const cleanDateStr = dateStr.replace(/(\d+)(st|nd|rd|th)/gi, '$1').replace(/\^/g, '');
+            const dateObj = new Date(cleanDateStr);
             if (!isNaN(dateObj)) {
                 // Correct format: YYYY-MM-DD (Month is 0-indexed in JS, so add 1)
                 const year = dateObj.getFullYear();
@@ -111,6 +129,16 @@ window.initDocxImporter = function(onSuccess) {
                 const day = String(dateObj.getDate()).padStart(2, '0');
                 dateId = `${year}-${month}-${day}`;
             }
+        }
+
+        if (!dateId) {
+            return { success: false, error: 'Could not find or parse "Date" field.' };
+        }
+
+        // Project Start Date Check: July 9, 2023
+        const projectStartDate = new Date(2023, 6, 9); // Month is 0-indexed
+        if (new Date(dateId) < projectStartDate) {
+            return { success: false, error: `Date (${dateId}) is before the project start date of July 9, 2023.` };
         }
 
         // Hymn Collection
@@ -165,9 +193,44 @@ window.initDocxImporter = function(onSuccess) {
             }
         }
 
-        if (dateId) {
+        try {
             const db = firebase.firestore();
-            await db.collection('services').doc(dateId).set(service, { merge: true });
+            const docRef = db.collection('services').doc(dateId);
+            const existingDoc = await docRef.get();
+            const exists = existingDoc.exists;
+
+            if (exists) {
+                // SURGICAL UPDATE: Use dot-notation to avoid wiping out the entire nested object
+                const updates = {
+                    theme: service.theme,
+                    keyVerse: service.keyVerse,
+                    serviceLeader: service.serviceLeader,
+                    musicLeader: service.musicLeader,
+                    preacher: service.preacher,
+                    hasBaptism: service.hasBaptism,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                // Surgical updates for liturgy
+                for (const [key, value] of Object.entries(service.liturgy)) {
+                    updates[`liturgy.${key}`] = value;
+                }
+
+                // Surgical updates for notes (preserve existing manual notes not in docx)
+                for (const [key, value] of Object.entries(service.notes)) {
+                    updates[`notes.${key}`] = value;
+                }
+
+                await docRef.update(updates);
+            } else {
+                // New document
+                service.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                await docRef.set(service);
+            }
+
+            return { success: true, dateId, isUpdate: exists };
+        } catch (error) {
+            return { success: false, error: `Firestore error: ${error.message}` };
         }
     };
 

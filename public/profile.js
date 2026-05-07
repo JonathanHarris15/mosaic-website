@@ -33,6 +33,9 @@ async function initProfile() {
             if (role === 'editor' || role === 'admin') {
                 const managerBtn = document.getElementById('hymn-manager-btn');
                 if (managerBtn) managerBtn.classList.remove('hidden');
+                
+                const peoplesBtn = document.getElementById('peoples-manager-btn');
+                if (peoplesBtn) peoplesBtn.classList.remove('hidden');
             }
 
             // Show Admin Panel if admin

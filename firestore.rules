@@ -33,5 +33,15 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if isEditor();
     }
+
+    match /people/{personId} {
+      allow read: if true;
+      allow create, update, delete: if isEditor();
+      
+      match /involvement/{involvementId} {
+        allow read: if true;
+        allow create, update, delete: if isEditor();
+      }
+    }
   }
 }
