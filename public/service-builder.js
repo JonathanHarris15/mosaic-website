@@ -43,6 +43,55 @@ function serviceForm() {
             }
         },
 
+        // --- Person Creation Modal ---
+        showPersonAddModal: false,
+        personToAdd: { name: '', callback: null },
+        duplicateWarning: false,
+
+        promptAddPerson(name, callback) {
+            this.personToAdd = { name, callback };
+            this.showPersonAddModal = true;
+            this.duplicateWarning = false;
+            
+            // Check for exact duplicates immediately
+            this.checkDuplicatePerson(name);
+        },
+
+        async checkDuplicatePerson(name) {
+            if (!name) return;
+            try {
+                const snap = await db.collection('people')
+                    .where('name', '==', name)
+                    .limit(1).get();
+                this.duplicateWarning = !snap.empty;
+            } catch (err) {
+                console.error("Error checking duplicates:", err);
+            }
+        },
+
+        async confirmAddPerson() {
+            if (!this.personToAdd.name) return;
+            this.saving = true;
+            try {
+                const docRef = await db.collection('people').add({
+                    name: this.personToAdd.name,
+                    totalInvolvements: 0,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                const newPerson = { id: docRef.id, name: this.personToAdd.name };
+                if (this.personToAdd.callback) {
+                    this.personToAdd.callback(newPerson);
+                }
+                this.showPersonAddModal = false;
+            } catch (err) {
+                console.error("Error adding person:", err);
+                alert("Failed to add person.");
+            } finally {
+                this.saving = false;
+            }
+        },
+
         get isDirty() {
             return this.originalService !== JSON.stringify(this.service);
         },
@@ -193,8 +242,11 @@ function serviceForm() {
                     { field: 'serviceLeader', role: 'service_leader' },
                     { field: 'musicLeader', role: 'worship_leader' },
                     { field: 'preacher', role: 'preacher' },
+                    { field: 'sermonette', role: 'sermonette' },
                     { field: 'prayerPraise', role: 'prayer', metadata: { prayer_type: 'praise' } },
-                    { field: 'prayerConfession', role: 'prayer', metadata: { prayer_type: 'confession' } }
+                    { field: 'prayerConfession', role: 'prayer', metadata: { prayer_type: 'confession' } },
+                    { field: 'elements', role: 'elements' },
+                    { field: 'other', role: 'other' }
                 ];
 
                 for (const { field, role, metadata } of roles) {
@@ -261,10 +313,16 @@ function serviceForm() {
                     musicLeaderId: this.service.musicLeader.id,
                     preacher: this.service.preacher.name,
                     preacherId: this.service.preacher.id,
+                    sermonette: this.service.sermonette.name,
+                    sermonetteId: this.service.sermonette.id,
                     prayerPraiseName: this.service.prayerPraise.name,
                     prayerPraiseId: this.service.prayerPraise.id,
                     prayerConfessionName: this.service.prayerConfession.name,
                     prayerConfessionId: this.service.prayerConfession.id,
+                    elementsName: this.service.elements.name,
+                    elementsId: this.service.elements.id,
+                    otherName: this.service.other.name,
+                    otherId: this.service.other.id,
                     hasBaptism: this.service.hasBaptism,
                     notes: this.service.notes,
                     liturgy: this.service.liturgy,
@@ -551,13 +609,34 @@ function personPicker(personRef) {
                     .where('name', '<=', this.query + '\uf8ff')
                     .limit(5).get();
                 
-                this.results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                let found = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                // Add virtual "Add New" result if exact match not found
+                const exactMatch = found.find(p => p.name.toLowerCase() === this.query.trim().toLowerCase());
+                if (!exactMatch && this.query.trim().length >= 2) {
+                    found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
+                }
+
+                this.results = found;
             } catch (error) {
                 console.error("Error searching people:", error);
             }
         },
 
         select(p) {
+            if (p.isNew) {
+                this.$dispatch('prompt-add-person', { 
+                    name: p.name, 
+                    callback: (newPerson) => {
+                        this.personRef.id = newPerson.id;
+                        this.personRef.name = newPerson.name;
+                        this.query = newPerson.name;
+                    } 
+                });
+                this.results = [];
+                this.open = false;
+                return;
+            }
             this.personRef.id = p.id;
             this.personRef.name = p.name;
             this.query = p.name;
@@ -574,9 +653,8 @@ function personPicker(personRef) {
         },
 
         onInput() {
-            // Update parent name as they type
-            this.personRef.name = this.query;
-            this.personRef.id = null; // Clear ID if they are typing a new name
+            // Clear ID if they are typing, but don't update name yet to enforce selection/creation
+            this.personRef.id = null; 
             this.search();
         }
     };

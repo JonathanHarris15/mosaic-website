@@ -129,12 +129,93 @@
             background: #c5c6d0;
             /* outline-variant */
         }
+
+        .cursor-edit {
+            cursor: cell;
+        }
+
+        .saving-pulse {
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+
+        /* Sticky Table Header and Column */
+        .sticky-header th {
+            position: sticky;
+            top: 0;
+            z-index: 30;
+            background-color: #ffffff !important; /* Match sticky column background */
+            border-bottom: 1px solid #c5c6d0; /* outline-variant */
+        }
+
+        /* Specifically for the sticky actions header */
+        .sticky-header th.sticky-column {
+            z-index: 40;
+            background-color: #ffffff !important;
+        }
+
+        .sticky-column {
+            position: sticky;
+            right: 0;
+            z-index: 20;
+            background-color: #ffffff !important;
+        }
+
+        /* Ensure dark mode also uses a consistent background */
+        .dark .sticky-column, .dark .sticky-header th {
+            background-color: #ffffff !important;
+            color: #1c1c18 !important; /* Keep text dark for contrast on white bg */
+        }
+        
+        [x-cloak] { display: none !important; }
+        
+        /* Remove specific hover highlight */
+        tr:hover td.sticky-column {
+            background-color: #ffffff !important;
+        }
+
+        .sticky-month-row td {
+            position: sticky;
+            top: 41px; /* Height of the thead */
+            z-index: 25;
+            background-color: #f0eee8; /* surface-container */
+            border-top: 1px solid rgba(0,0,0,0.05);
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+
+        /* Shadow only for service cells, not headers */
+        td.sticky-column::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: -8px;
+            width: 8px;
+            background: linear-gradient(to right, transparent, rgba(0,0,0,0.05));
+            pointer-events: none;
+        }
+
+        .dark td.sticky-column::before {
+            background: linear-gradient(to right, transparent, rgba(0,0,0,0.2));
+        }
+
+        /* Ensure parent row background applies to sticky column */
+        tr:hover .sticky-column {
+            background-color: inherit;
+        }
     </style>
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
     <!-- External Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
@@ -145,53 +226,389 @@
 </head>
 
 <body
-    class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed dark">
+    class="bg-background text-on-background font-body-md text-body-md antialiased h-screen overflow-hidden flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed dark"
+    x-data="{ 
+        view: localStorage.getItem('calendarView') || 'list',
+        showHistory: localStorage.getItem('showHistory') === 'true',
+
+        // --- Person Selector Modal ---
+        showPersonSelector: false,
+        selectorDateKey: '',
+        selectorField: '',
+        selectorRoleName: '',
+        selectedPersonRef: { id: null, name: '' },
+        saving: false,
+        
+        openPersonSelector(dateKey, field, current) {
+            this.selectorDateKey = dateKey;
+            this.selectorField = field;
+            this.selectedPersonRef = { id: current.id, name: current.name };
+            this.selectorRoleName = this.getRoleName(field);
+            this.showPersonSelector = true;
+        },
+        
+        getRoleName(field) {
+            const names = {
+                'serviceLeader': 'Service Leader',
+                'preacher': 'Preacher',
+                'musicLeader': 'Music Leader',
+                'prayerPraiseName': 'Prayer Leader (Praise)',
+                'prayerConfessionName': 'Prayer Leader (Confession)'
+            };
+            return names[field] || 'Person';
+        },
+        
+        async savePersonSelection() {
+            if (!this.selectorDateKey || !this.selectorField) return;
+            
+            // Only allow saving if we have an ID or it's being cleared
+            if (!this.selectedPersonRef.id && this.selectedPersonRef.name) {
+                alert('Please select a person from the list or add them as a new person.');
+                return;
+            }
+
+            this.saving = true;
+            try {
+                const batch = db.batch();
+                const serviceRef = db.collection('services').doc(this.selectorDateKey);
+                const svcDoc = await serviceRef.get();
+                const svc = svcDoc.data() || {};
+
+                // Map field names to ID field names and roles
+                const idFieldMap = {
+                    'serviceLeader': 'serviceLeaderId',
+                    'musicLeader': 'musicLeaderId',
+                    'preacher': 'preacherId',
+                    'prayerPraiseName': 'prayerPraiseId',
+                    'prayerConfessionName': 'prayerConfessionId'
+                };
+                const roleMap = {
+                    'serviceLeader': 'service_leader',
+                    'musicLeader': 'worship_leader',
+                    'preacher': 'preacher',
+                    'prayerPraiseName': 'prayer',
+                    'prayerConfessionName': 'prayer'
+                };
+
+                const idField = idFieldMap[this.selectorField];
+                const oldId = svc[idField];
+                const newId = this.selectedPersonRef.id;
+                const role = roleMap[this.selectorField];
+
+                let metadata = null;
+                if (this.selectorField === 'prayerPraiseName') metadata = { prayer_type: 'praise' };
+                if (this.selectorField === 'prayerConfessionName') metadata = { prayer_type: 'confession' };
+
+                if (oldId !== newId) {
+                    // 1. Remove old involvement record
+                    if (oldId) {
+                        const oldPersonRef = db.collection('people').doc(oldId);
+                        let query = oldPersonRef.collection('involvement')
+                            .where('serviceDate', '==', this.selectorDateKey)
+                            .where('type', '==', role);
+                        
+                        if (metadata && metadata.prayer_type) {
+                            query = query.where('metadata.prayer_type', '==', metadata.prayer_type);
+                        }
+
+                        const invSnap = await query.get();
+                        invSnap.forEach(d => batch.delete(d.ref));
+                        if (!invSnap.empty) {
+                            batch.update(oldPersonRef, {
+                                totalInvolvements: firebase.firestore.FieldValue.increment(-invSnap.size)
+                            });
+                        }
+                    }
+
+                    // 2. Add new involvement record
+                    if (newId) {
+                        const newPersonRef = db.collection('people').doc(newId);
+                        const invData = {
+                            serviceDate: this.selectorDateKey,
+                            type: role,
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                        };
+                        if (metadata) invData.metadata = metadata;
+                        
+                        batch.set(newPersonRef.collection('involvement').doc(), invData);
+                        batch.update(newPersonRef, {
+                            totalInvolvements: firebase.firestore.FieldValue.increment(1)
+                        });
+                    }
+                }
+
+                // Update service document
+                const updates = {};
+                updates[this.selectorField] = this.selectedPersonRef.name || '';
+                if (idField) updates[idField] = newId || null;
+                batch.set(serviceRef, updates, { merge: true });
+
+                await batch.commit();
+                this.showPersonSelector = false;
+                
+                // Refresh data
+                if (window.loadServiceData) await window.loadServiceData();
+            } catch (error) {
+                console.error('Error saving person selection:', error);
+                alert('Failed to save.');
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        // --- Person Creation Modal ---
+        showPersonAddModal: false,
+        personToAdd: { name: '', callback: null },
+        duplicateWarning: false,
+
+        promptAddPerson(name, callback) {
+            this.personToAdd = { name, callback };
+            this.showPersonAddModal = true;
+            this.duplicateWarning = false;
+            this.checkDuplicatePerson(name);
+        },
+
+        async checkDuplicatePerson(name) {
+            if (!name) return;
+            try {
+                const snap = await db.collection('people').where('name', '==', name).limit(1).get();
+                this.duplicateWarning = !snap.empty;
+            } catch (err) { console.error(err); }
+        },
+
+        async confirmAddPerson() {
+            if (!this.personToAdd.name) return;
+            this.saving = true;
+            try {
+                const docRef = await db.collection('people').add({
+                    name: this.personToAdd.name,
+                    totalInvolvements: 0,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                const newPerson = { id: docRef.id, name: this.personToAdd.name };
+                if (this.personToAdd.callback) this.personToAdd.callback(newPerson);
+                this.showPersonAddModal = false;
+            } catch (err) {
+                console.error(err);
+                alert('Failed to add person.');
+            } finally {
+                this.saving = false;
+            }
+        }
+    }"
+    x-init="
+        $watch('view', val => {
+            localStorage.setItem('calendarView', val);
+            if (window.refreshCalendar) window.refreshCalendar(showHistory);
+        });
+        $watch('showHistory', val => {
+            localStorage.setItem('showHistory', val);
+            if (window.refreshCalendar) window.refreshCalendar(val);
+        })
+    "
+    @prompt-add-person.window="promptAddPerson($event.detail.name, $event.detail.callback)">
+
+    <!-- Person Selector Modal -->
+    <div x-show="showPersonSelector" 
+         class="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-primary/20 backdrop-blur-sm"
+         x-transition x-cloak>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl max-w-sm w-full p-6"
+             @click.away="showPersonSelector = false">
+            
+            <div class="flex items-center gap-3 mb-6 text-primary">
+                <span class="material-symbols-outlined text-2xl">person_search</span>
+                <h2 class="font-headline-md text-lg" x-text="'Select ' + selectorRoleName"></h2>
+            </div>
+
+            <div x-data="personPicker(selectedPersonRef)" class="relative mb-8">
+                <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                    <input type="text" placeholder="Search people..." x-model="query" @focus="open = true" @input.debounce="onInput()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
+                    <div class="flex items-center gap-1">
+                        <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer">
+                            <span class="material-symbols-outlined text-[18px]">close</span>
+                        </button>
+                        <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
+                    </div>
+                </div>
+                <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-[90] w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                    <template x-for="p in results" :key="p.id">
+                        <button @click="select(p)" 
+                                :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'"
+                                class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
+                            <div class="flex items-center justify-between">
+                                <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
+                                <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
+                            </div>
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3">
+                <button @click="showPersonSelector = false" 
+                        class="px-4 py-2 rounded-full font-label-md text-sm text-secondary hover:bg-surface-container transition-colors">
+                    Cancel
+                </button>
+                <button @click="savePersonSelection()" 
+                        :disabled="saving"
+                        class="px-6 py-2 rounded-full font-label-md text-sm bg-primary text-on-primary hover:bg-primary-container transition-colors flex items-center gap-2">
+                    <span x-show="saving" class="w-4 h-4 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin"></span>
+                    <span x-text="saving ? 'Saving...' : 'Save Selection'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Person Add Modal -->
+    <div x-show="showPersonAddModal" 
+         class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-primary/20 backdrop-blur-sm"
+         x-transition x-cloak>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl max-w-md w-full p-6"
+             @click.away="showPersonAddModal = false">
+            <div class="flex items-center gap-3 mb-4 text-primary">
+                <span class="material-symbols-outlined text-2xl">person_add</span>
+                <h2 class="font-headline-md text-lg">Add New Person</h2>
+            </div>
+            <p class="font-body-md text-on-surface-variant mb-6 text-sm">
+                You are adding <strong class="text-on-surface" x-text="personToAdd.name"></strong> to the database.
+            </p>
+            <div x-show="duplicateWarning" class="mb-6 p-4 bg-error-container text-on-error-container rounded-xl flex items-start gap-3">
+                <span class="material-symbols-outlined text-[20px] shrink-0">warning</span>
+                <div class="text-xs">
+                    <p class="font-bold mb-1">Potential Duplicate</p>
+                    <p>A person with this exact name already exists. Create anyway?</p>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3">
+                <button @click="showPersonAddModal = false" class="px-4 py-2 rounded-full text-sm text-secondary">Cancel</button>
+                <button @click="confirmAddPerson()" :disabled="saving" class="px-6 py-2 rounded-full text-sm bg-primary text-on-primary">Confirm & Add</button>
+            </div>
+        </div>
+    </div>
     
-    <!-- Import Docx Elements -->
-    <button id="import-docx-btn" class="hidden fixed bottom-6 right-6 opacity-50 hover:opacity-100 transition-all bg-primary text-on-primary rounded-full p-4 shadow-xl z-50 flex items-center gap-2" title="Import from docx">
-        <span class="material-symbols-outlined">upload_file</span>
-        <span class="font-label-md text-sm hidden md:inline">Import from docx</span>
-    </button>
+    <!-- Hidden File Input -->
     <input type="file" id="docx-file-input" accept=".docx" multiple class="hidden" />
 
-    <header class="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-surface-variant/30">
-        <div class="w-full max-w-7xl mx-auto px-margin py-md flex justify-between items-center">
-            <a href="index.html" class="font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-1">
-                <span class="material-symbols-outlined text-sm">arrow_back</span>
-                Back to Portal
-            </a>
-            <div id="auth-container">
+    <header class="flex-shrink-0 bg-background/80 backdrop-blur-md border-b border-surface-variant/30 z-50">
+        <div class="w-full max-w-[1600px] mx-auto px-margin py-md flex justify-between items-center gap-md">
+            <div class="flex items-center gap-md min-w-0">
+                <a href="index.html" class="flex-shrink-0 font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-1">
+                    <span class="material-symbols-outlined text-sm">arrow_back</span>
+                    <span class="hidden md:inline">Back</span>
+                </a>
+                <div class="h-6 w-[1px] bg-surface-variant/50 hidden md:block flex-shrink-0"></div>
+                <h1 class="font-headline-md text-primary truncate">Service Calendar</h1>
+                
+                <!-- Moved Import Docx Button -->
+                <button id="import-docx-btn" class="hidden shrink-0 border border-outline text-secondary px-4 py-1.5 rounded-full font-label-md text-xs hover:bg-secondary hover:text-on-secondary transition-colors flex items-center gap-2 group/btn ml-2" title="Import from docx">
+                    <span class="material-symbols-outlined text-[18px]">upload_file</span>
+                    <span class="hidden md:inline">Import</span>
+                </button>
+            </div>
+
+            <!-- Persistent Controls -->
+            <div class="hidden lg:flex items-center gap-lg">
+                <!-- History Toggle -->
+                <label class="flex items-center gap-3 cursor-pointer group">
+                    <span class="font-label-md text-xs uppercase tracking-wider text-on-surface-variant group-hover:text-primary transition-colors">Show Historic</span>
+                    <div class="relative inline-flex items-center">
+                        <input type="checkbox" x-model="showHistory" class="sr-only peer">
+                        <div class="w-11 h-6 bg-surface-container border border-outline-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary transition-colors"></div>
+                    </div>
+                </label>
+
+                <div class="h-6 w-[1px] bg-surface-variant/50"></div>
+
+                <!-- View Toggle -->
+                <div class="inline-flex bg-surface-container/50 rounded-lg p-1 border border-outline-variant">
+                    <button 
+                        @click="view = 'list'"
+                        :class="view === 'list' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'"
+                        class="flex items-center gap-2 px-4 py-1.5 rounded-md font-label-md text-sm transition-all duration-200">
+                        <span class="material-symbols-outlined text-[20px]">view_list</span>
+                        List
+                    </button>
+                    <button 
+                        @click="view = 'table'"
+                        :class="view === 'table' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'"
+                        class="flex items-center gap-2 px-4 py-1.5 rounded-md font-label-md text-sm transition-all duration-200">
+                        <span class="material-symbols-outlined text-[20px]">table_chart</span>
+                        Table
+                    </button>
+                </div>
+            </div>
+
+            <div id="auth-container" class="flex-shrink-0">
                 <!-- Auth UI will be injected here by auth.js -->
                 <div class="h-10"></div>
             </div>
         </div>
     </header>
 
-    <main class="flex-grow max-w-7xl w-full mx-auto px-margin pb-xl flex flex-col md:flex-row gap-margin pt-base">
+    <main class="flex-grow flex flex-col md:flex-row gap-margin px-margin pb-md pt-base overflow-hidden max-w-[1600px] w-full mx-auto">
         <!-- Sidebar Navigation -->
-        <aside class="w-full md:w-64 flex-shrink-0">
-            <div class="sticky top-[80px] bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col max-h-[calc(100vh-100px)]">
-                <h2 class="font-headline-md text-primary mb-sm flex items-center gap-2 flex-shrink-0">
-                    <span class="material-symbols-outlined">explore</span>
-                    Directory
+        <aside class="w-full md:w-80 flex-shrink-0 flex flex-col overflow-hidden">
+            <div class="flex-grow bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col overflow-hidden">
+                <h2 class="font-headline-md text-primary mb-sm flex items-center justify-between flex-shrink-0">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined">explore</span>
+                        Directory
+                    </div>
+                    <button onclick="window.jumpToUpcoming()" class="p-1 text-secondary hover:text-primary rounded-full hover:bg-surface-container transition-colors" title="Jump to upcoming service">
+                        <span class="material-symbols-outlined text-[20px]">event_repeat</span>
+                    </button>
                 </h2>
-                <nav id="sidebar-nav" class="space-y-xs overflow-y-auto pr-2 custom-scrollbar">
+                <nav id="sidebar-nav" class="flex-grow space-y-xs overflow-y-auto pr-2 custom-scrollbar">
                     <!-- Nav links will be injected here -->
                 </nav>
             </div>
         </aside>
 
         <!-- Calendar Container -->
-        <div class="flex-grow">
-            <!-- Header Section -->
-            <div class="mb-lg">
-                <h1 class="font-display-lg text-display-lg text-primary mb-xs">Service Calendar</h1>
+        <div class="flex-grow min-w-0 flex flex-col overflow-hidden">
+            <!-- Mobile/Small Controls (Hidden in layout) -->
+            <div class="lg:hidden mb-md flex flex-wrap items-center justify-between gap-md p-md bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm flex-shrink-0">
+                <!-- History Toggle -->
+                <label class="flex items-center gap-3 cursor-pointer group">
+                    <span class="font-label-md text-xs uppercase tracking-wider text-on-surface-variant group-hover:text-primary transition-colors">Show History</span>
+                    <div class="relative inline-flex items-center">
+                        <input type="checkbox" x-model="showHistory" class="sr-only peer">
+                        <div class="w-11 h-6 bg-surface-container border border-outline-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary transition-colors"></div>
+                    </div>
+                </label>
+
+                <!-- View Toggle -->
+                <div class="inline-flex bg-surface-container rounded-lg p-1 border border-outline-variant">
+                    <button 
+                        @click="view = 'list'"
+                        :class="view === 'list' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'"
+                        class="flex items-center gap-2 px-3 py-1 rounded-md font-label-md text-xs transition-all duration-200">
+                        <span class="material-symbols-outlined text-[18px]">view_list</span>
+                        List
+                    </button>
+                    <button 
+                        @click="view = 'table'"
+                        :class="view === 'table' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary'"
+                        class="flex items-center gap-2 px-3 py-1 rounded-md font-label-md text-xs transition-all duration-200">
+                        <span class="material-symbols-outlined text-[18px]">table_chart</span>
+                        Table
+                    </button>
+                </div>
             </div>
 
-            <div id="calendar-container" class="space-y-lg">
-                <!-- Years and Months will be injected here -->
-                <div class="flex justify-center items-center py-xl">
-                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            <div id="calendar-container" class="flex-grow overflow-hidden flex flex-col">
+                <div x-show="view === 'list'" x-cloak id="list-view" class="flex-grow overflow-y-auto space-y-lg custom-scrollbar pr-2">
+                    <!-- List items will be injected here -->
+                    <div id="calendar-list-loading" class="flex justify-center items-center py-xl">
+                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                    </div>
+                </div>
+
+                <div x-show="view === 'table'" x-cloak id="table-view" class="flex-grow overflow-hidden flex flex-col">
+                    <div id="calendar-table-container" class="flex-grow overflow-hidden flex flex-col">
+                        <!-- Table will be injected here -->
+                    </div>
                 </div>
             </div>
         </div>

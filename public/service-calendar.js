@@ -1,20 +1,45 @@
+let allSundays = [];
+let serviceDataMap = {};
+
 document.addEventListener('DOMContentLoaded', async () => {
-    const calendarContainer = document.getElementById('calendar-container');
-    const sidebarNav = document.getElementById('sidebar-nav');
     const startDate = new Date(2023, 6, 9); // July 9, 2023 (Month is 0-indexed)
     const endDate = new Date();
     endDate.setFullYear(endDate.getFullYear() + 2);
 
-    const sundays = [];
+    allSundays = [];
     let current = new Date(startDate);
     
     // Ensure we start on a Sunday
     while (current <= endDate) {
-        sundays.push(new Date(current));
+        allSundays.push(new Date(current));
         current.setDate(current.getDate() + 7);
     }
 
-    const grouped = sundays.reduce((acc, date) => {
+    const showHistory = localStorage.getItem('showHistory') === 'true';
+    window.refreshCalendar(showHistory);
+    
+    // Wait for service data to load so layout is final before we scroll
+    await loadServiceData();
+    
+    // Small delay to ensure any layout shifts from image/content injection are settled
+    setTimeout(() => {
+        scrollToClosestSunday(allSundays);
+    }, 200);
+});
+
+window.refreshCalendar = function(showHistory) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const filteredSundays = showHistory 
+        ? allSundays 
+        : allSundays.filter(d => {
+            const date = new Date(d);
+            date.setHours(0, 0, 0, 0);
+            return date >= today;
+        });
+
+    const grouped = filteredSundays.reduce((acc, date) => {
         const year = date.getFullYear();
         const month = date.toLocaleString('default', { month: 'long' });
         if (!acc[year]) acc[year] = {};
@@ -23,19 +48,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         return acc;
     }, {});
 
-    renderCalendar(grouped);
+    renderList(grouped);
+    renderTable(grouped);
     renderSidebar(grouped);
     
-    // Wait for service data to load so layout is final before we scroll
-    await loadServiceData(sundays);
-    
-    // Small delay to ensure any layout shifts from image/content injection are settled
-    setTimeout(() => {
-        scrollToClosestSunday(sundays);
-    }, 200);
-});
+    // Re-apply loaded service data if it exists
+    if (Object.keys(serviceDataMap).length > 0) {
+        injectServiceData(serviceDataMap);
+    }
+};
+
+window.jumpToUpcoming = function() {
+    scrollToClosestSunday(allSundays);
+};
 
 function scrollToClosestSunday(sundays) {
+    if (!sundays || sundays.length === 0) return;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -49,19 +77,32 @@ function scrollToClosestSunday(sundays) {
     // Fallback to the last one if they are all in the past (unlikely)
     if (!upcomingSunday) upcomingSunday = sundays[sundays.length - 1];
 
-    const dateId = `date-${upcomingSunday.getFullYear()}-${upcomingSunday.getMonth()}-${upcomingSunday.getDate()}`;
-    const targetElement = document.getElementById(dateId);
+    const dateKey = `${upcomingSunday.getFullYear()}-${upcomingSunday.getMonth()}-${upcomingSunday.getDate()}`;
+    const view = localStorage.getItem('calendarView') || 'list';
+    const prefix = view === 'table' ? 'table-date-' : 'date-';
+    const targetId = `${prefix}${dateKey}`;
+    const targetElement = document.getElementById(targetId);
     
     if (targetElement) {
-        // Immediate jump centered on the element
+        // Smooth jump centered on the element
         setTimeout(() => {
-            targetElement.scrollIntoView({ behavior: 'auto', block: 'center' });
+            targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
             targetElement.classList.add('ring-2', 'ring-primary', 'ring-offset-4');
             // Remove highlight after a few seconds
             setTimeout(() => {
                 targetElement.classList.remove('ring-2', 'ring-primary', 'ring-offset-4');
             }, 2000);
         }, 100);
+    }
+}
+
+function scrollToSection(year, month = null) {
+    const view = localStorage.getItem('calendarView') || 'list';
+    const prefix = view === 'table' ? 'table-' : '';
+    const id = month ? `${prefix}month-${year}-${month}` : `${prefix}year-${year}`;
+    const targetElement = document.getElementById(id);
+    if (targetElement) {
+        targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 }
 
@@ -76,7 +117,8 @@ function renderSidebar(grouped) {
         yearDiv.className = 'mb-sm';
         
         const yearLink = document.createElement('a');
-        yearLink.href = `#year-${year}`;
+        yearLink.href = 'javascript:void(0)';
+        yearLink.onclick = () => scrollToSection(year);
         yearLink.className = 'block font-headline-md text-secondary hover:text-primary py-1 transition-colors';
         yearLink.textContent = year;
         yearDiv.appendChild(yearLink);
@@ -89,7 +131,8 @@ function renderSidebar(grouped) {
         monthsOrder.forEach(month => {
             if (grouped[year][month]) {
                 const monthLink = document.createElement('a');
-                monthLink.href = `#month-${year}-${month}`;
+                monthLink.href = 'javascript:void(0)';
+                monthLink.onclick = () => scrollToSection(year, month);
                 monthLink.className = 'block font-body-md text-on-surface-variant hover:text-primary text-sm py-0.5 transition-colors';
                 monthLink.textContent = month;
                 monthsDiv.appendChild(monthLink);
@@ -101,8 +144,8 @@ function renderSidebar(grouped) {
     });
 }
 
-function renderCalendar(grouped) {
-    const container = document.getElementById('calendar-container');
+function renderList(grouped) {
+    const container = document.getElementById('list-view');
     container.innerHTML = '';
 
     const years = Object.keys(grouped).sort((a, b) => a - b); 
@@ -178,32 +221,140 @@ function renderCalendar(grouped) {
     });
 }
 
+function renderTable(grouped) {
+    const container = document.getElementById('calendar-table-container');
+    container.innerHTML = '';
+
+    const tableWrapper = document.createElement('div');
+    tableWrapper.className = 'flex-grow overflow-auto border border-outline-variant rounded-xl bg-surface-container-lowest custom-scrollbar relative';
+    
+    const table = document.createElement('table');
+    table.className = 'w-full text-left border-collapse min-w-[1000px] relative';
+    
+    // Sticky Header
+    const thead = document.createElement('thead');
+    thead.className = 'sticky-header font-label-md text-label-md text-primary';
+    thead.innerHTML = `
+        <tr>
+            <th class="px-md py-sm border-b border-outline-variant">Date</th>
+            <th class="px-md py-sm border-b border-outline-variant">Theme</th>
+            <th class="px-md py-sm border-b border-outline-variant">Leader</th>
+            <th class="px-md py-sm border-b border-outline-variant">Preacher</th>
+            <th class="px-md py-sm border-b border-outline-variant">Music</th>
+            <th class="px-md py-sm border-b border-outline-variant">Prayers</th>
+            <th class="px-md py-sm border-b border-outline-variant text-right sticky-column">Actions</th>
+        </tr>
+    `;
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    tbody.className = 'divide-y divide-outline-variant/30';
+
+    const years = Object.keys(grouped).sort((a, b) => a - b); 
+
+    years.forEach(year => {
+        const monthsOrder = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        
+        monthsOrder.forEach(month => {
+            if (grouped[year][month]) {
+                // Month Separator Row
+                const separatorRow = document.createElement('tr');
+                separatorRow.id = `table-month-${year}-${month}`;
+                separatorRow.className = 'sticky-month-row bg-surface-container-low/50 scroll-mt-24';
+                separatorRow.innerHTML = `
+                    <td colspan="7" class="px-md py-2 z-25 bg-surface-container-low/90 backdrop-blur-sm">
+                        <h3 class="font-headline-md text-sm uppercase tracking-wider text-secondary">${month} ${year}</h3>
+                    </td>
+                `;
+                tbody.appendChild(separatorRow);
+
+                grouped[year][month].forEach(date => {
+                    const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                    
+                    const row = document.createElement('tr');
+                    row.id = `table-date-${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+                    row.dataset.serviceDate = formattedDate;
+                    row.className = 'group hover:bg-surface-container-low transition-colors scroll-mt-32';
+                    
+                    row.innerHTML = `
+                        <td class="px-md py-md whitespace-nowrap">
+                            <span class="font-body-md text-on-surface">${date.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                        </td>
+                        <td class="px-md py-md min-w-[200px]">
+                            <div class="theme-cell font-body-md text-primary text-sm line-clamp-2">—</div>
+                        </td>
+                        <td class="px-md py-md whitespace-nowrap">
+                            <div class="leader-cell font-body-md text-on-surface-variant text-sm">—</div>
+                        </td>
+                        <td class="px-md py-md whitespace-nowrap">
+                            <div class="preacher-cell font-body-md text-on-surface-variant text-sm">—</div>
+                        </td>
+                        <td class="px-md py-md whitespace-nowrap">
+                            <div class="music-cell font-body-md text-on-surface-variant text-sm">—</div>
+                        </td>
+                        <td class="px-md py-md whitespace-nowrap">
+                            <div class="prayers-cell font-body-md text-on-surface-variant text-xs space-y-0.5">—</div>
+                        </td>
+                        <td class="px-md py-md text-right whitespace-nowrap sticky-column">
+                            <div class="flex justify-end gap-xs">
+                                <button title="Service Guide" class="p-2 text-secondary hover:text-primary hover:bg-surface-container rounded-full transition-colors">
+                                    <span class="material-symbols-outlined text-[20px]">auto_stories</span>
+                                </button>
+                                <a href="service-builder.html?date=${formattedDate}" title="Order of Service" class="p-2 text-secondary hover:text-primary hover:bg-surface-container rounded-full transition-colors">
+                                    <span class="material-symbols-outlined text-[20px]">list_alt</span>
+                                </a>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
+        });
+    });
+
+    table.appendChild(tbody);
+    tableWrapper.appendChild(table);
+    container.appendChild(tableWrapper);
+}
+
 /**
  * Fetch all service documents from Firestore and inject summary info
  * (theme, service leader, preacher) into the matching calendar cards.
  */
-async function loadServiceData(sundays) {
+async function loadServiceData() {
     if (typeof db === 'undefined') return;
 
     try {
         const snapshot = await db.collection('services').get();
-        const serviceMap = {};
+        serviceDataMap = {};
         snapshot.forEach(doc => {
-            serviceMap[doc.id] = doc.data();
+            serviceDataMap[doc.id] = doc.data();
         });
 
-        // Walk through all rendered date cards and inject data if a service exists
-        document.querySelectorAll('[data-service-date]').forEach(card => {
-            const dateKey = card.dataset.serviceDate;
-            const svc = serviceMap[dateKey];
-            if (!svc) return;
+        injectServiceData(serviceDataMap);
+    } catch (e) {
+        console.error('Error loading service data for calendar:', e);
+    }
+}
 
-            const hasContent = svc.theme || svc.serviceLeader || svc.preacher;
-            if (!hasContent) return;
+function injectServiceData(serviceMap) {
+    const user = auth.currentUser;
+    let canEdit = false;
+    
+    // We check role from local storage or global state if possible, 
+    // but since we need it for injection, we'll try to determine it.
+    // In this app, we can use the 'can-edit' class on the body as a signal 
+    // if we set it during auth change.
+    canEdit = document.body.classList.contains('can-edit');
 
-            const summaryEl = card.querySelector('.service-summary');
-            if (!summaryEl) return;
+    // Walk through all rendered date cards/rows and inject data if a service exists
+    document.querySelectorAll('[data-service-date]').forEach(el => {
+        const dateKey = el.dataset.serviceDate;
+        const svc = serviceMap[dateKey] || {};
 
+        // List View Injection
+        const summaryEl = el.querySelector('.service-summary');
+        if (summaryEl) {
             let html = '';
             if (svc.theme) {
                 html += `<p class="text-xs font-label-md text-primary flex items-center gap-1">
@@ -224,12 +375,239 @@ async function loadServiceData(sundays) {
                 </p>`;
             }
 
-            summaryEl.innerHTML = html;
-            summaryEl.classList.remove('hidden');
-        });
-    } catch (e) {
-        console.error('Error loading service data for calendar:', e);
+            if (html) {
+                summaryEl.innerHTML = html;
+                summaryEl.classList.remove('hidden');
+            } else {
+                summaryEl.classList.add('hidden');
+            }
+        }
+
+        // Table View Injection
+        const themeCell = el.querySelector('.theme-cell');
+        if (themeCell) {
+            themeCell.textContent = svc.theme || '—';
+            if (canEdit) setupInlineEdit(themeCell, dateKey, 'theme');
+        }
+
+        const leaderCell = el.querySelector('.leader-cell');
+        if (leaderCell) {
+            leaderCell.textContent = svc.serviceLeader || '—';
+            leaderCell.setAttribute('data-person-id', svc.serviceLeaderId || '');
+            if (canEdit) setupInlineEdit(leaderCell, dateKey, 'serviceLeader');
+        }
+
+        const preacherCell = el.querySelector('.preacher-cell');
+        if (preacherCell) {
+            preacherCell.textContent = svc.preacher || '—';
+            preacherCell.setAttribute('data-person-id', svc.preacherId || '');
+            if (canEdit) setupInlineEdit(preacherCell, dateKey, 'preacher');
+        }
+
+        const musicCell = el.querySelector('.music-cell');
+        if (musicCell) {
+            musicCell.textContent = svc.musicLeader || '—';
+            musicCell.setAttribute('data-person-id', svc.musicLeaderId || '');
+            if (canEdit) setupInlineEdit(musicCell, dateKey, 'musicLeader');
+        }
+
+        const prayersCell = el.querySelector('.prayers-cell');
+        if (prayersCell) {
+            prayersCell.innerHTML = '';
+            
+            const praiseRow = document.createElement('div');
+            praiseRow.className = 'flex gap-1 items-center';
+            praiseRow.innerHTML = `<span class="opacity-50">P:</span> <span class="praise-name-cell">${svc.prayerPraiseName || '—'}</span>`;
+            praiseRow.querySelector('.praise-name-cell').setAttribute('data-person-id', svc.prayerPraiseId || '');
+            
+            const confRow = document.createElement('div');
+            confRow.className = 'flex gap-1 items-center';
+            confRow.innerHTML = `<span class="opacity-50">C:</span> <span class="conf-name-cell">${svc.prayerConfessionName || '—'}</span>`;
+            confRow.querySelector('.conf-name-cell').setAttribute('data-person-id', svc.prayerConfessionId || '');
+            
+            prayersCell.appendChild(praiseRow);
+            prayersCell.appendChild(confRow);
+
+            if (canEdit) {
+                setupInlineEdit(praiseRow.querySelector('.praise-name-cell'), dateKey, 'prayerPraiseName');
+                setupInlineEdit(confRow.querySelector('.conf-name-cell'), dateKey, 'prayerConfessionName');
+            }
+        }
+    });
+}
+
+function setupInlineEdit(el, dateKey, field) {
+    el.classList.add('cursor-edit', 'hover:bg-primary-fixed/30', 'rounded', 'px-1', '-mx-1', 'transition-colors');
+    el.title = 'Click to edit';
+    
+    // Check if it's a Person field
+    const personFields = ['serviceLeader', 'musicLeader', 'preacher', 'prayerPraiseName', 'prayerConfessionName'];
+
+    el.onclick = (e) => {
+        e.stopPropagation();
+
+        if (personFields.includes(field)) {
+            const currentVal = el.textContent === '—' ? '' : el.textContent;
+            const currentId = el.getAttribute('data-person-id');
+            window.openPersonSelector(dateKey, field, { name: currentVal, id: currentId });
+            return;
+        }
+
+        const currentVal = el.textContent === '—' ? '' : el.textContent;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentVal;
+        input.className = 'w-full bg-surface-container-highest border-primary border rounded px-2 py-1 font-body-md text-sm outline-none focus:ring-1 focus:ring-primary shadow-inner';
+        
+        const originalParent = el.parentElement;
+        const originalDisplay = el.style.display;
+        el.style.display = 'none';
+        originalParent.appendChild(input);
+        input.focus();
+
+        const save = async () => {
+            const newVal = input.value.trim();
+            if (newVal !== currentVal) {
+                // Show saving state
+                el.textContent = newVal || '—';
+                el.classList.add('saving-pulse', 'text-secondary/50');
+                
+                try {
+                    // Map display field to ID field if applicable
+                    const idFieldMap = {
+                        'serviceLeader': 'serviceLeaderId',
+                        'musicLeader': 'musicLeaderId',
+                        'preacher': 'preacherId',
+                        'prayerPraiseName': 'prayerPraiseId',
+                        'prayerConfessionName': 'prayerConfessionId'
+                    };
+
+                    const updates = {
+                        [field]: newVal,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+
+                    // Clear ID if we're updating a name field, as it's now a literal string
+                    if (idFieldMap[field]) {
+                        updates[idFieldMap[field]] = null;
+                    }
+
+                    await db.collection('services').doc(dateKey).set(updates, { merge: true });
+                    
+                    // Update global map to keep views in sync if they toggle
+                    if (!serviceDataMap[dateKey]) serviceDataMap[dateKey] = {};
+                    serviceDataMap[dateKey][field] = newVal;
+                    if (idFieldMap[field]) serviceDataMap[dateKey][idFieldMap[field]] = null;
+                } catch (err) {
+                    console.error('Error updating service field:', err);
+                    alert('Failed to save change.');
+                    el.textContent = currentVal || '—';
+                } finally {
+                    el.classList.remove('saving-pulse', 'text-secondary/50');
+                }
+            }
+            input.remove();
+            el.style.display = originalDisplay;
+        };
+
+        input.onblur = save;
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter') save();
+            if (e.key === 'Escape') {
+                input.remove();
+                el.style.display = originalDisplay;
+            }
+        };
+    };
+}
+
+/**
+ * Global bridge to Alpine person selector modal
+ */
+window.openPersonSelector = (dateKey, field, current) => {
+    // Find Alpine data on body
+    const body = document.querySelector('body');
+    const alpineData = Alpine.$data(body);
+    if (alpineData && alpineData.openPersonSelector) {
+        alpineData.openPersonSelector(dateKey, field, current);
     }
+};
+
+/**
+ * Shared Person Picker component logic (Alpine.js)
+ */
+function personPicker(personRef) {
+    return {
+        personRef: personRef,
+        open: false,
+        query: personRef.name || '',
+        results: [],
+        
+        init() {
+            this.$watch('personRef.name', (val) => {
+                this.query = val || '';
+            });
+        },
+
+        async search() {
+            if (this.query.length < 2) {
+                this.results = [];
+                return;
+            }
+
+            try {
+                const snap = await db.collection('people')
+                    .where('name', '>=', this.query)
+                    .where('name', '<=', this.query + '\uf8ff')
+                    .limit(5).get();
+                
+                let found = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                const exactMatch = found.find(p => p.name.toLowerCase() === this.query.trim().toLowerCase());
+                if (!exactMatch && this.query.trim().length >= 2) {
+                    found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
+                }
+
+                this.results = found;
+            } catch (error) {
+                console.error("Error searching people:", error);
+            }
+        },
+
+        select(p) {
+            if (p.isNew) {
+                this.$dispatch('prompt-add-person', { 
+                    name: p.name, 
+                    callback: (newPerson) => {
+                        this.personRef.id = newPerson.id;
+                        this.personRef.name = newPerson.name;
+                        this.query = newPerson.name;
+                    } 
+                });
+                this.results = [];
+                this.open = false;
+                return;
+            }
+            this.personRef.id = p.id;
+            this.personRef.name = p.name;
+            this.query = p.name;
+            this.results = [];
+            this.open = false;
+        },
+
+        clear() {
+            this.personRef.id = null;
+            this.personRef.name = '';
+            this.query = '';
+            this.results = [];
+            this.open = false;
+        },
+
+        onInput() {
+            this.personRef.id = null; 
+            this.search();
+        }
+    };
 }
 
 // --- AUTH PROTECTION ---
@@ -239,23 +617,26 @@ auth.onAuthStateChanged(async (user) => {
             const userData = await getUserData(user.uid);
             const role = (userData && userData.role) || 'viewer';
             if (role === 'editor' || role === 'admin') {
+                document.body.classList.add('can-edit');
                 const importBtn = document.getElementById('import-docx-btn');
                 if (importBtn) {
                     importBtn.classList.remove('hidden');
                     if (window.initDocxImporter) {
                         window.initDocxImporter(() => {
-                            // Reload service data after successful import
-                            // Note: We need sundays array which is local to the DOMContentLoaded listener
-                            // For now, let's just reload the page or trigger a global reload if needed.
-                            // Better yet, we can dispatch a custom event or store sundays globally.
                             location.reload(); 
                         });
                     }
+                }
+                // Re-inject data to enable edit handlers
+                if (Object.keys(serviceDataMap).length > 0) {
+                    injectServiceData(serviceDataMap);
                 }
             }
         } catch (error) {
             console.error("Error checking user permissions:", error);
         }
+    } else {
+        document.body.classList.remove('can-edit');
     }
 });
 

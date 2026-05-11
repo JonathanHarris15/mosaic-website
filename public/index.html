@@ -118,23 +118,23 @@
 </head>
 
 <body
-    class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed dark">
+    class="bg-background text-on-background font-body-md text-body-md antialiased h-screen overflow-hidden flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed dark">
     <header class="w-full max-w-7xl mx-auto px-margin pt-md flex justify-end" id="auth-container">
         <!-- Auth UI will be injected here by auth.js -->
         <div class="h-10"></div> <!-- Placeholder to prevent layout shift -->
     </header>
-    <main class="flex-grow max-w-7xl w-full mx-auto px-margin pb-xl flex flex-col gap-margin pt-base">
+    <main class="flex-grow max-w-7xl w-full mx-auto px-margin pb-md flex flex-col gap-margin pt-base overflow-hidden">
         <!-- Logo -->
         <div class="w-full flex justify-center py-sm">
             <img alt="Mosaic Liturgy Logo" class="h-24 w-24 object-contain"
                 src="assets/mosaic-logo.png" />
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-12 gap-margin">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-margin flex-grow min-h-0">
             <!-- Left Column -->
             <div class="md:col-span-8 flex flex-col gap-margin">
                 <div
-                    class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg flex flex-col justify-center relative overflow-hidden">
+                    class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg flex flex-col justify-center relative overflow-hidden shrink-0">
                     <div class="relative z-10">
                         <h1 class="font-display-lg text-display-lg text-primary mb-xs" id="greeting">Good Morning</h1>
                         <p class="font-body-lg text-body-lg text-on-surface-variant hidden items-center gap-xs" id="upcoming-box">
@@ -148,7 +148,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-md">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-md shrink-0">
                     <!-- Hymn Directory Button -->
                     <a href="hymn-directory.html"
                         class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
@@ -189,12 +189,12 @@
             </div>
 
             <!-- Right Column -->
-            <div class="md:col-span-4 flex flex-col">
+            <div class="md:col-span-4 flex flex-col overflow-hidden">
                 <div
-                    class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex-grow flex flex-col" id="sunday-glance">
-                    <h2 class="font-headline-md text-headline-md text-primary pb-xs border-b border-surface-variant mb-md">
+                    class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex-grow flex flex-col overflow-hidden" id="sunday-glance">
+                    <h2 class="font-headline-md text-headline-md text-primary pb-xs border-b border-surface-variant mb-md flex-shrink-0">
                         Sunday at a Glance</h2>
-                    <div id="glance-content" class="flex flex-col gap-sm">
+                    <div id="glance-content" class="flex-grow overflow-y-auto flex flex-col gap-sm pr-1">
                         <!-- Data will be injected here -->
                     </div>
                 </div>
