@@ -9,6 +9,8 @@ document.addEventListener('alpine:init', () => {
         people: [],
         isSubmitting: false,
         searchTerm: '',
+        sortKey: 'totalInvolvements', // 'name' or 'totalInvolvements'
+        sortDirection: 'desc',
         
         // Form data for adding a person
         newPersonName: '',
@@ -45,11 +47,25 @@ document.addEventListener('alpine:init', () => {
 
         async loadPeople() {
             try {
-                const snap = await db.collection('people').orderBy('name').get();
-                this.people = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // We'll fetch all and sort client-side for flexibility with searches and counts
+                const snap = await db.collection('people').get();
+                this.people = snap.docs.map(doc => ({ 
+                    id: doc.id, 
+                    totalInvolvements: 0, 
+                    ...doc.data() 
+                }));
             } catch (error) {
                 console.error("Error loading people:", error);
                 this.showToast('Error loading people list', 'error');
+            }
+        },
+
+        toggleSort(key) {
+            if (this.sortKey === key) {
+                this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortKey = key;
+                this.sortDirection = key === 'totalInvolvements' ? 'desc' : 'asc';
             }
         },
 
@@ -61,6 +77,7 @@ document.addEventListener('alpine:init', () => {
             try {
                 await db.collection('people').add({
                     name: name,
+                    totalInvolvements: 0,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 this.newPersonName = '';
@@ -112,8 +129,8 @@ document.addEventListener('alpine:init', () => {
             
             this.isSubmitting = true;
             try {
-                const involvementRef = db.collection('people').doc(this.selectedPerson.id)
-                    .collection('involvement');
+                const personRef = db.collection('people').doc(this.selectedPerson.id);
+                const involvementRef = personRef.collection('involvement');
                 
                 const data = {
                     serviceDate: this.newInvolvement.serviceDate,
@@ -128,8 +145,17 @@ document.addEventListener('alpine:init', () => {
                     };
                 }
                 
-                await involvementRef.add(data);
+                const batch = db.batch();
+                batch.set(involvementRef.doc(), data);
+                batch.update(personRef, {
+                    totalInvolvements: firebase.firestore.FieldValue.increment(1)
+                });
                 
+                await batch.commit();
+                
+                // Update local counts
+                this.selectedPerson.totalInvolvements = (this.selectedPerson.totalInvolvements || 0) + 1;
+
                 // Reset form but keep the date for potential batch entries
                 const lastDate = this.newInvolvement.serviceDate;
                 this.newInvolvement = { 
@@ -152,8 +178,19 @@ document.addEventListener('alpine:init', () => {
         async deleteInvolvement(involvementId) {
             if (!confirm('Remove this involvement record?')) return;
             try {
-                await db.collection('people').doc(this.selectedPerson.id)
-                    .collection('involvement').doc(involvementId).delete();
+                const personRef = db.collection('people').doc(this.selectedPerson.id);
+                
+                const batch = db.batch();
+                batch.delete(personRef.collection('involvement').doc(involvementId));
+                batch.update(personRef, {
+                    totalInvolvements: firebase.firestore.FieldValue.increment(-1)
+                });
+                
+                await batch.commit();
+
+                // Update local counts
+                this.selectedPerson.totalInvolvements = Math.max(0, (this.selectedPerson.totalInvolvements || 0) - 1);
+
                 await this.loadInvolvement(this.selectedPerson.id);
                 this.showToast('Record removed');
             } catch (e) {
@@ -162,9 +199,28 @@ document.addEventListener('alpine:init', () => {
         },
 
         get filteredPeople() {
-            if (!this.searchTerm) return this.people;
-            const term = this.searchTerm.toLowerCase();
-            return this.people.filter(p => p.name.toLowerCase().includes(term));
+            let list = [...this.people];
+            
+            if (this.searchTerm) {
+                const term = this.searchTerm.toLowerCase();
+                list = list.filter(p => p.name.toLowerCase().includes(term));
+            }
+
+            list.sort((a, b) => {
+                let valA = a[this.sortKey];
+                let valB = b[this.sortKey];
+
+                if (typeof valA === 'string') {
+                    valA = valA.toLowerCase();
+                    valB = valB.toLowerCase();
+                }
+
+                if (valA < valB) return this.sortDirection === 'asc' ? -1 : 1;
+                if (valA > valB) return this.sortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            return list;
         },
 
         formatRole(role) {

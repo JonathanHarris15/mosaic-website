@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const calendarContainer = document.getElementById('calendar-container');
     const sidebarNav = document.getElementById('sidebar-nav');
     const startDate = new Date(2023, 6, 9); // July 9, 2023 (Month is 0-indexed)
@@ -25,36 +25,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
     renderCalendar(grouped);
     renderSidebar(grouped);
-    scrollToClosestSunday(sundays);
-    loadServiceData(sundays);
+    
+    // Wait for service data to load so layout is final before we scroll
+    await loadServiceData(sundays);
+    
+    // Small delay to ensure any layout shifts from image/content injection are settled
+    setTimeout(() => {
+        scrollToClosestSunday(sundays);
+    }, 200);
 });
 
 function scrollToClosestSunday(sundays) {
     const today = new Date();
-    let closestDate = sundays[0];
-    let minDiff = Math.abs(today - closestDate);
+    today.setHours(0, 0, 0, 0);
 
-    sundays.forEach(date => {
-        const diff = Math.abs(today - date);
-        if (diff < minDiff) {
-            minDiff = diff;
-            closestDate = date;
-        }
+    // Find the first Sunday that is today or in the future
+    let upcomingSunday = sundays.find(date => {
+        const d = new Date(date);
+        d.setHours(0, 0, 0, 0);
+        return d >= today;
     });
 
-    const dateId = `date-${closestDate.getFullYear()}-${closestDate.getMonth()}-${closestDate.getDate()}`;
+    // Fallback to the last one if they are all in the past (unlikely)
+    if (!upcomingSunday) upcomingSunday = sundays[sundays.length - 1];
+
+    const dateId = `date-${upcomingSunday.getFullYear()}-${upcomingSunday.getMonth()}-${upcomingSunday.getDate()}`;
     const targetElement = document.getElementById(dateId);
     
     if (targetElement) {
-        // Delay slightly to ensure layout is complete and sticky headers don't interfere
+        // Immediate jump centered on the element
         setTimeout(() => {
-            targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            targetElement.scrollIntoView({ behavior: 'auto', block: 'center' });
             targetElement.classList.add('ring-2', 'ring-primary', 'ring-offset-4');
             // Remove highlight after a few seconds
             setTimeout(() => {
                 targetElement.classList.remove('ring-2', 'ring-primary', 'ring-offset-4');
-            }, 3000);
-        }, 500);
+            }, 2000);
+        }, 100);
     }
 }
 

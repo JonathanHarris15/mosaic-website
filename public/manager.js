@@ -47,7 +47,7 @@ document.addEventListener('alpine:init', () => {
 
                 if (role !== 'editor' && role !== 'admin') {
                     alert('You do not have permission to access the Hymn Manager.');
-                    window.location.href = 'profile.html';
+                    window.location.href = 'index.html';
                     return;
                 }
 

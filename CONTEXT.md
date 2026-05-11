@@ -17,6 +17,12 @@ A liturgical event (usually a Sunday service), identified by its date (YYYY-MM-D
   - `musicLeader`: Reference to a Person (historically a string).
   - ... (other liturgy fields)
 
+### Hymn Entry
+A hymn selection within a Service's liturgy.
+- **States**:
+  - **Canonical**: Linked to a document in the `hymns` collection (has a valid `id`). This is the preferred state as it enables music sheet generation.
+  - **Literal**: An unlinked name (has a `name` but `id` is null). These typically arise from docx imports where a match wasn't found. They must be resolved (linked to a Canonical hymn) to enable full functionality.
+
 ### Involvement
 A record of a Person's participation in a Service in a specific Role.
 - **Fields**:

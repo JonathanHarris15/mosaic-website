@@ -37,6 +37,15 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
 }
 
 /**
+ * Logs the user out and redirects to the landing page.
+ */
+function logout() {
+    auth.signOut().then(() => {
+        window.location.href = 'index.html';
+    });
+}
+
+/**
  * Updates the header with the appropriate login/user button.
  * Expects a <header> element or a specific container.
  */
@@ -52,7 +61,7 @@ function updateAuthUI(user) {
                     <span class="material-symbols-outlined text-[18px]">account_circle</span>
                     User Page
                 </a>
-                <button onclick="auth.signOut()" class="px-md py-xs font-label-md text-label-md text-error hover:bg-error-container rounded-lg transition-colors duration-200">
+                <button onclick="logout()" class="px-md py-xs font-label-md text-label-md text-error hover:bg-error-container rounded-lg transition-colors duration-200">
                     Log Out
                 </button>
             </div>

@@ -25,15 +25,84 @@
             extend: {
               "colors": {
                       "primary": "#001a43",
-                      "surface": "#fcf9f3",
-                      "background": "#fcf9f3",
-                      "on-surface": "#1c1c18",
+                      "surface-container-lowest": "#ffffff",
+                      "primary-container": "#1a3059",
+                      "on-background": "#1c1c18",
+                      "on-secondary-container": "#415e7f",
+                      "surface-container-highest": "#e5e2dc",
+                      "on-secondary": "#ffffff",
+                      "surface-tint": "#4a5e8a",
+                      "inverse-surface": "#31312d",
+                      "outline-variant": "#c5c6d0",
                       "outline": "#75777f",
-                      "secondary": "#436082"
+                      "surface": "#fcf9f3",
+                      "surface-container-low": "#f6f3ed",
+                      "tertiary-fixed-dim": "#95cfe4",
+                      "on-primary-fixed-variant": "#314670",
+                      "on-primary-fixed": "#001a42",
+                      "background": "#fcf9f3",
+                      "tertiary-container": "#003643",
+                      "secondary": "#436082",
+                      "secondary-container": "#b9d7fe",
+                      "surface-bright": "#fcf9f3",
+                      "tertiary-fixed": "#b5ebff",
+                      "on-primary-container": "#8499c8",
+                      "secondary-fixed-dim": "#abc9ef",
+                      "error-container": "#ffdad6",
+                      "on-tertiary-fixed-variant": "#004e60",
+                      "inverse-primary": "#b2c6f8",
+                      "on-surface-variant": "#44474e",
+                      "on-tertiary-container": "#67a1b5",
+                      "secondary-fixed": "#d1e4ff",
+                      "inverse-on-surface": "#f3f0ea",
+                      "tertiary": "#001f28",
+                      "surface-container": "#f0eee8",
+                      "on-surface": "#1c1c18",
+                      "on-secondary-fixed": "#001d36",
+                      "surface-container-high": "#ebe8e2",
+                      "on-tertiary": "#ffffff",
+                      "on-secondary-fixed-variant": "#2b4969",
+                      "surface-dim": "#dcdad4",
+                      "primary-fixed-dim": "#b2c6f8",
+                      "on-tertiary-fixed": "#001f28",
+                      "primary-fixed": "#d8e2ff",
+                      "surface-variant": "#e5e2dc",
+                      "error": "#ba1a1a",
+                      "on-primary": "#ffffff",
+                      "on-error": "#ffffff",
+                      "on-error-container": "#93000a"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "gutter": "24px",
+                      "margin": "32px",
+                      "xs": "4px",
+                      "md": "24px",
+                      "lg": "48px",
+                      "base": "8px",
+                      "xl": "80px",
+                      "sm": "12px"
               },
               "fontFamily": {
-                      "headline": ["Noto Serif"],
-                      "body": ["Work Sans"]
+                      "headline-md": ["Noto Serif"],
+                      "headline-lg": ["Noto Serif"],
+                      "body-md": ["Work Sans"],
+                      "body-lg": ["Work Sans"],
+                      "label-md": ["Work Sans"],
+                      "display-lg": ["Noto Serif"]
+              },
+              "fontSize": {
+                      "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                      "headline-lg": ["32px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                      "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                      "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                      "label-md": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                      "display-lg": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}]
               }
             }
           }
@@ -43,128 +112,171 @@
         [x-cloak] { display: none !important; }
         body { font-family: 'Work Sans', sans-serif; }
         h1, h2, h3 { font-family: 'Noto Serif', serif; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #e5e2dc; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #c5c6d0; }
     </style>
 </head>
-<body class="bg-background text-on-surface min-h-screen" x-data="peoplesPage" x-cloak>
-    <!-- Header -->
-    <header class="bg-primary text-white py-6 px-8 shadow-md">
-        <div class="max-w-6xl mx-auto flex justify-between items-center">
-            <div class="flex items-center gap-4">
-                <a href="index.html" class="hover:opacity-80 transition-opacity">
-                    <span class="material-symbols-outlined text-3xl">home</span>
-                </a>
-                <h1 class="text-3xl font-bold tracking-tight">Peoples Page</h1>
-            </div>
-            <nav class="flex gap-6 items-center">
-                <a href="manager.html" class="hover:underline flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[20px]">library_music</span> Hymn Manager
-                </a>
-                <a href="profile.html" class="hover:underline flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[20px]">account_circle</span> Profile
-                </a>
-            </nav>
+<body class="bg-background text-on-background font-body-md antialiased min-h-screen flex flex-col relative overflow-x-hidden" x-data="peoplesPage" x-cloak>
+    <!-- Architectural accent lines -->
+    <div class="absolute right-0 top-0 h-96 w-1/3 bg-gradient-to-l from-surface-container-high to-transparent opacity-30 pointer-events-none"></div>
+
+    <header class="w-full flex justify-between items-center px-6 py-4 max-w-full mx-auto border-b border-surface-variant/30 relative z-10 bg-surface">
+        <div class="flex-1">
+            <a href="manager.html" class="font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-2 uppercase tracking-widest text-[11px]">
+                <span class="material-symbols-outlined text-sm">arrow_back</span>
+                Hymn Manager
+            </a>
         </div>
+        <div class="flex-1 flex justify-center items-center">
+            <div class="flex flex-col items-center gap-1">
+                <img alt="Mosaic Church Logo" class="h-10 w-10 object-contain" src="assets/mosaic-logo.png"/>
+                <div class="flex gap-4 mt-1">
+                    <a href="manager.html" class="font-label-md text-[10px] text-secondary hover:text-primary transition-colors uppercase tracking-widest">Hymns</a>
+                    <a href="peoples-page.html" class="font-label-md text-[10px] text-primary font-bold uppercase tracking-widest border-b-2 border-primary">Peoples</a>
+                </div>
+            </div>
+        </div>
+        <div class="flex-1 flex justify-end" id="auth-container"></div>
     </header>
 
-    <main class="max-w-6xl mx-auto p-8">
-        <!-- Add Person Form -->
-        <section class="bg-white p-6 rounded-lg border border-outline/20 shadow-sm mb-8">
-            <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
-                <span class="material-symbols-outlined">person_add</span> Add New Person
-            </h2>
-            <form @submit.prevent="addPerson" class="flex gap-4">
-                <input type="text" 
-                       x-model="newPersonName" 
-                       placeholder="Enter full name" 
-                       class="flex-grow rounded-md border-outline focus:ring-primary focus:border-primary"
-                       required>
-                <button type="submit" 
-                        :disabled="isSubmitting"
-                        class="bg-primary text-white px-6 py-2 rounded-md hover:bg-opacity-90 transition-all flex items-center gap-2 disabled:opacity-50">
-                    <span x-show="!isSubmitting">Add Person</span>
-                    <span x-show="isSubmitting" class="animate-pulse">Adding...</span>
-                </button>
-            </form>
-        </section>
-
-        <!-- People List -->
-        <section class="bg-white p-6 rounded-lg border border-outline/20 shadow-sm">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold flex items-center gap-2">
-                    <span class="material-symbols-outlined">group</span> Directory
-                </h2>
-                <div class="relative w-64">
-                    <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
-                    <input type="text" 
-                           x-model="searchTerm" 
-                           placeholder="Search people..." 
-                           class="w-full pl-10 rounded-md border-outline text-sm">
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <template x-for="person in filteredPeople" :key="person.id">
-                    <div class="border border-outline/20 p-4 rounded-md hover:border-primary/40 transition-colors group">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <h3 class="font-bold text-lg" x-text="person.name"></h3>
-                                <p class="text-xs text-outline mb-3" x-text="person.id"></p>
-                            </div>
-                            <button @click="deletePerson(person.id)" 
-                                    class="text-red-600 hover:bg-red-50 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                <span class="material-symbols-outlined text-[20px]">delete</span>
-                            </button>
+    <main class="flex-1 max-w-[1400px] w-full mx-auto px-gutter py-lg relative z-10">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-lg">
+            <!-- Left Column: Add Person -->
+            <aside class="lg:col-span-4">
+                <section class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-sm p-md sticky top-lg">
+                    <h2 class="font-headline-md text-xl text-primary mb-4 flex items-center gap-2">
+                        <span class="material-symbols-outlined">person_add</span> Add New Person
+                    </h2>
+                    <form @submit.prevent="addPerson" class="space-y-4">
+                        <div class="flex flex-col gap-xs">
+                            <label class="font-label-md text-[11px] uppercase tracking-widest text-on-surface-variant">Full Name</label>
+                            <input type="text" 
+                                   x-model="newPersonName" 
+                                   placeholder="Enter full name" 
+                                   class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-tertiary-container transition-all outline-none font-body-md"
+                                   required>
                         </div>
-                        <div class="flex gap-2">
-                            <button @click="viewInvolvement(person)" 
-                                    class="text-xs bg-secondary/10 text-secondary px-3 py-1.5 rounded-full hover:bg-secondary/20 transition-colors flex items-center gap-1 font-medium">
-                                <span class="material-symbols-outlined text-[14px]">history</span> View Involvement
-                            </button>
+                        <button type="submit" 
+                                :disabled="isSubmitting"
+                                class="w-full bg-primary text-on-primary font-label-md text-label-md py-3 rounded-lg hover:bg-primary-container transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                            <span x-show="!isSubmitting">Add Person</span>
+                            <span x-show="isSubmitting" class="w-4 h-4 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin"></span>
+                        </button>
+                    </form>
+                </section>
+            </aside>
+
+            <!-- Right Column: People List -->
+            <section class="lg:col-span-8">
+                <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-md border-b border-surface-variant/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface-container-low/50">
+                        <h2 class="font-headline-md text-2xl text-primary tracking-tight flex items-center gap-2">
+                            <span class="material-symbols-outlined">group</span> People Directory
+                        </h2>
+                        
+                        <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                            <!-- Sort Controls -->
+                            <div class="flex items-center bg-surface-container border border-outline-variant/30 p-1 rounded-lg">
+                                <button @click="toggleSort('name')" 
+                                        :class="sortKey === 'name' ? 'bg-white shadow-sm text-primary' : 'text-on-surface-variant'"
+                                        class="px-3 py-1 rounded font-label-md text-[10px] uppercase tracking-widest transition-all flex items-center gap-1">
+                                    Name
+                                    <span class="material-symbols-outlined text-[14px]" x-show="sortKey === 'name'" 
+                                          x-text="sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                </button>
+                                <button @click="toggleSort('totalInvolvements')" 
+                                        :class="sortKey === 'totalInvolvements' ? 'bg-white shadow-sm text-primary' : 'text-on-surface-variant'"
+                                        class="px-3 py-1 rounded font-label-md text-[10px] uppercase tracking-widest transition-all flex items-center gap-1">
+                                    Involvements
+                                    <span class="material-symbols-outlined text-[14px]" x-show="sortKey === 'totalInvolvements'" 
+                                          x-text="sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                </button>
+                            </div>
+                            
+                            <!-- Search -->
+                            <div class="relative flex-grow md:w-64">
+                                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant text-sm">search</span>
+                                <input type="text" 
+                                       x-model="searchTerm" 
+                                       placeholder="Search people..." 
+                                       class="w-full pl-9 py-2 bg-surface-container-low border border-outline-variant/50 rounded-lg text-sm focus:ring-1 focus:ring-tertiary-container outline-none transition-all">
+                            </div>
                         </div>
                     </div>
-                </template>
-                <div x-show="filteredPeople.length === 0" class="col-span-full py-12 text-center text-outline italic">
-                    No people found. Add someone above to get started.
+
+                    <div class="p-md grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <template x-for="person in filteredPeople" :key="person.id">
+                            <div class="bg-surface border border-outline-variant/20 p-4 rounded-xl hover:border-primary/40 transition-all group relative shadow-sm">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h3 class="font-headline-md text-lg text-primary" x-text="person.name"></h3>
+                                        <div class="flex items-center gap-2 mt-1">
+                                            <span class="bg-secondary-container text-on-secondary-container text-[10px] px-2 py-0.5 rounded font-label-md uppercase tracking-wider" 
+                                                  x-text="`${person.totalInvolvements || 0} Involvements`"></span>
+                                        </div>
+                                    </div>
+                                    <button @click="deletePerson(person.id)" 
+                                            class="text-error/40 hover:text-error hover:bg-error-container/30 p-1.5 rounded-full transition-all opacity-0 group-hover:opacity-100">
+                                        <span class="material-symbols-outlined text-[18px]">delete</span>
+                                    </button>
+                                </div>
+                                <div class="flex gap-2 mt-4">
+                                    <button @click="viewInvolvement(person)" 
+                                            class="text-[11px] bg-primary text-on-primary px-4 py-1.5 rounded-full hover:bg-primary-container transition-all flex items-center gap-1.5 font-label-md uppercase tracking-widest">
+                                        <span class="material-symbols-outlined text-[14px]">history</span> View Involvement
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="filteredPeople.length === 0" class="col-span-full py-12 text-center text-on-surface-variant italic font-body-md">
+                            No people found. Add someone above to get started.
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </section>
+            </section>
+        </div>
     </main>
 
     <!-- Involvement Modal -->
     <div x-show="showInvolvementModal" 
-         class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+         class="fixed inset-0 bg-primary/20 backdrop-blur-sm z-50 flex items-center justify-center p-4"
          @keydown.escape.window="showInvolvementModal = false"
          x-transition:enter="transition ease-out duration-300"
          x-transition:enter-start="opacity-0"
          x-transition:enter-end="opacity-100"
          x-transition:leave="transition ease-in duration-200"
          x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0">
+         x-transition:leave-end="opacity-0"
+         style="display: none;">
         
-        <div class="bg-white w-full max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[80vh]" @click.away="showInvolvementModal = false">
-            <header class="p-6 border-b border-outline/10 flex justify-between items-center bg-surface rounded-t-xl">
+        <div class="bg-surface-container-lowest w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] border border-outline-variant/30" @click.away="showInvolvementModal = false">
+            <header class="p-6 border-b border-surface-variant/30 flex justify-between items-center bg-surface-container-low/50 rounded-t-2xl">
                 <div>
-                    <h2 class="text-2xl font-bold" x-text="selectedPerson?.name"></h2>
-                    <p class="text-sm text-outline">Service Involvement History</p>
+                    <h2 class="font-headline-md text-2xl text-primary" x-text="selectedPerson?.name"></h2>
+                    <p class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Service Involvement History</p>
                 </div>
-                <button @click="showInvolvementModal = false" class="text-outline hover:text-on-surface">
-                    <span class="material-symbols-outlined text-3xl">close</span>
+                <button @click="showInvolvementModal = false" class="text-on-surface-variant hover:text-primary p-2 hover:bg-surface-container rounded-full transition-all">
+                    <span class="material-symbols-outlined text-2xl">close</span>
                 </button>
             </header>
             
-            <div class="flex-grow overflow-y-auto p-6">
+            <div class="flex-grow overflow-y-auto p-6 space-y-8 scrollbar-thin">
                 <!-- Log New Involvement Form -->
-                <section class="mb-8 bg-surface/50 p-4 rounded-lg border border-outline/10">
-                    <h3 class="font-bold text-sm uppercase tracking-wider text-outline mb-4">Log New Involvement</h3>
+                <section class="bg-surface-container border border-outline-variant/20 p-5 rounded-xl shadow-inner">
+                    <h3 class="font-label-md text-[11px] uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-sm">add_circle</span> Log Participation
+                    </h3>
                     <form @submit.prevent="addInvolvement" class="space-y-4">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-xs font-bold mb-1">Service Date</label>
-                                <input type="date" x-model="newInvolvement.serviceDate" class="w-full text-sm rounded border-outline/30">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="flex flex-col gap-xs">
+                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Service Date</label>
+                                <input type="date" x-model="newInvolvement.serviceDate" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2">
                             </div>
-                            <div>
-                                <label class="block text-xs font-bold mb-1">Role</label>
-                                <select x-model="newInvolvement.type" class="w-full text-sm rounded border-outline/30">
+                            <div class="flex flex-col gap-xs">
+                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Role</label>
+                                <select x-model="newInvolvement.type" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2">
                                     <option value="">Select Role...</option>
                                     <option value="service_leader">Service Leader</option>
                                     <option value="preacher">Preacher</option>
@@ -176,61 +288,65 @@
                         </div>
 
                         <template x-if="newInvolvement.type === 'prayer'">
-                            <div class="space-y-3 p-3 bg-white rounded border border-outline/10">
+                            <div class="space-y-3 p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/20">
                                 <div class="flex gap-4">
-                                    <label class="flex items-center gap-2 text-sm">
-                                        <input type="radio" x-model="newInvolvement.prayerType" value="praise"> Praise
+                                    <label class="flex items-center gap-2 text-sm font-body-md cursor-pointer">
+                                        <input type="radio" x-model="newInvolvement.prayerType" value="praise" class="text-primary focus:ring-primary"> Praise
                                     </label>
-                                    <label class="flex items-center gap-2 text-sm">
-                                        <input type="radio" x-model="newInvolvement.prayerType" value="confession"> Confession
+                                    <label class="flex items-center gap-2 text-sm font-body-md cursor-pointer">
+                                        <input type="radio" x-model="newInvolvement.prayerType" value="confession" class="text-primary focus:ring-primary"> Confession
                                     </label>
                                 </div>
                                 <textarea x-model="newInvolvement.prayerText" 
                                           placeholder="Prayer content (optional)" 
-                                          class="w-full text-sm rounded border-outline/30" 
+                                          class="w-full text-sm rounded-lg border-outline-variant/50 focus:ring-1 focus:ring-tertiary-container transition-all" 
                                           rows="2"></textarea>
                             </div>
                         </template>
 
                         <button type="submit" 
                                 :disabled="isSubmitting"
-                                class="w-full bg-secondary text-white py-2 rounded font-bold text-sm hover:bg-opacity-90 disabled:opacity-50">
+                                class="w-full bg-secondary text-on-secondary py-2.5 rounded-lg font-label-md text-xs uppercase tracking-widest hover:bg-primary-container transition-all shadow-sm disabled:opacity-50">
                             Log Participation
                         </button>
                     </form>
                 </section>
 
-                <h3 class="font-bold text-sm uppercase tracking-wider text-outline mb-4">History</h3>
                 <div class="space-y-4">
-                    <template x-for="item in involvement" :key="item.id">
-                        <div class="flex gap-4 p-4 border-l-4 border-primary bg-surface/30 rounded-r-lg group/item">
-                            <div class="flex-grow">
-                                <div class="flex justify-between items-start mb-1">
-                                    <span class="font-bold text-primary" x-text="formatRole(item.type)"></span>
-                                    <div class="flex items-center gap-3">
-                                        <span class="text-sm font-medium" x-text="item.serviceDate"></span>
-                                        <button @click="deleteInvolvement(item.id)" class="opacity-0 group-hover/item:opacity-100 text-red-600 hover:bg-red-50 p-0.5 rounded transition-all">
-                                            <span class="material-symbols-outlined text-[16px]">delete</span>
-                                        </button>
+                    <h3 class="font-label-md text-[11px] uppercase tracking-widest text-on-surface-variant mb-2">History Records</h3>
+                    <div class="space-y-3">
+                        <template x-for="item in involvement" :key="item.id">
+                            <div class="flex gap-4 p-4 border border-outline-variant/10 bg-surface shadow-sm rounded-xl group/item hover:border-primary/30 transition-all relative">
+                                <a :href="`service-builder.html?date=${item.serviceDate}`" class="absolute inset-0 z-0" title="Go to service page"></a>
+                                <div class="flex-grow relative z-10 pointer-events-none">
+                                    <div class="flex justify-between items-start mb-1">
+                                        <span class="font-headline-md text-primary" x-text="formatRole(item.type)"></span>
+                                        <div class="flex items-center gap-3">
+                                            <span class="font-label-md text-[11px] text-on-surface-variant" x-text="item.serviceDate"></span>
+                                            <button @click.stop.prevent="deleteInvolvement(item.id)" 
+                                                    class="opacity-0 group-hover/item:opacity-100 text-error/60 hover:text-error hover:bg-error-container/30 p-1 rounded-full transition-all pointer-events-auto">
+                                                <span class="material-symbols-outlined text-[16px]">delete</span>
+                                            </button>
+                                        </div>
                                     </div>
+                                    <template x-if="item.type === 'prayer'">
+                                        <div class="text-sm italic text-on-surface-variant mt-2 pl-3 border-l-2 border-outline-variant/30">
+                                            <p class="font-bold text-[10px] uppercase tracking-widest mb-1" x-text="item.metadata?.prayer_type === 'praise' ? 'Praise' : 'Confession'"></p>
+                                            <p class="font-body-md" x-text="item.metadata?.prayer_text"></p>
+                                        </div>
+                                    </template>
                                 </div>
-                                <template x-if="item.type === 'prayer'">
-                                    <div class="text-sm italic text-on-surface/80 mt-2">
-                                        <p class="font-semibold" x-text="item.metadata?.prayer_type === 'praise' ? 'Praise' : 'Confession'"></p>
-                                        <p x-text="item.metadata?.prayer_text"></p>
-                                    </div>
-                                </template>
                             </div>
+                        </template>
+                        <div x-show="involvement.length === 0" class="py-12 text-center text-on-surface-variant italic font-body-md">
+                            No involvement records found for this person.
                         </div>
-                    </template>
-                    <div x-show="involvement.length === 0" class="py-12 text-center text-outline italic">
-                        No involvement records found for this person.
                     </div>
                 </div>
             </div>
             
-            <footer class="p-4 bg-surface rounded-b-xl border-t border-outline/10 text-right">
-                <button @click="showInvolvementModal = false" class="bg-primary text-white px-6 py-2 rounded-md hover:bg-opacity-90">Close</button>
+            <footer class="p-4 bg-surface-container-low/50 rounded-b-2xl border-t border-surface-variant/30 text-right">
+                <button @click="showInvolvementModal = false" class="bg-primary text-on-primary font-label-md text-xs uppercase tracking-widest px-8 py-2.5 rounded-lg hover:bg-primary-container transition-all shadow-sm">Close</button>
             </footer>
         </div>
     </div>

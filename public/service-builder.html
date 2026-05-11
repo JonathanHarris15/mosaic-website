@@ -75,6 +75,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
     <script src="auth.js"></script>
     <script src="bible-data.js"></script>
     <script src="verse-picker.js"></script>
@@ -224,22 +225,74 @@
         <div class="form-section" data-field-key="serviceLeader">
             <div class="field-group">
                 <label class="field-label">Service Leader</label>
-                <input type="text" x-model="service.serviceLeader" class="field-input" :disabled="!canEdit">
+                <div x-data="personPicker(service.serviceLeader)" 
+                                             class="input-container relative">                    <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                        <input type="text" placeholder="Search people..." x-model="query" @focus="open = true" @input.debounce="onInput()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
+                        <div class="flex items-center gap-1">
+                            <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
+                                <span class="material-symbols-outlined text-[18px]">close</span>
+                            </button>
+                            <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
+                        </div>
+                    </div>
+                    <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                        <template x-for="p in results" :key="p.id">
+                            <button @click="select(p)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
+                                <p class="font-label-md text-sm" x-text="p.name"></p>
+                            </button>
+                        </template>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="form-section" data-field-key="musicLeader">
             <div class="field-group">
                 <label class="field-label">Music Leader</label>
-                <input type="text" x-model="service.musicLeader" class="field-input" :disabled="!canEdit">
+                <div x-data="personPicker(service.musicLeader)" 
+                     class="input-container relative">
+                    <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                        <input type="text" placeholder="Search people..." x-model="query" @focus="open = true" @input.debounce="onInput()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
+                        <div class="flex items-center gap-1">
+                            <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
+                                <span class="material-symbols-outlined text-[18px]">close</span>
+                            </button>
+                            <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
+                        </div>
+                    </div>
+                    <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                        <template x-for="p in results" :key="p.id">
+                            <button @click="select(p)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
+                                <p class="font-label-md text-sm" x-text="p.name"></p>
+                            </button>
+                        </template>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="form-section" data-field-key="preacher">
             <div class="field-group">
                 <label class="field-label">Preacher</label>
-                <input type="text" x-model="service.preacher" class="field-input" :disabled="!canEdit">
+                <div x-data="personPicker(service.preacher)" 
+                     class="input-container relative">
+                    <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                        <input type="text" placeholder="Search people..." x-model="query" @focus="open = true" @input.debounce="onInput()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
+                        <div class="flex items-center gap-1">
+                            <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
+                                <span class="material-symbols-outlined text-[18px]">close</span>
+                            </button>
+                            <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
+                        </div>
+                    </div>
+                    <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                        <template x-for="p in results" :key="p.id">
+                            <button @click="select(p)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
+                                <p class="font-label-md text-sm" x-text="p.name"></p>
+                            </button>
+                        </template>
+                    </div>
+                </div>
             </div>
         </div>
-
         </div><!-- /max-w-3xl header -->
 
         <!-- Liturgy Flow: wider container to allow right-margin notes -->
@@ -249,14 +302,23 @@
             <div class="form-section" data-field-key="preparatoryHymn">
                 <div class="field-group">
                     <label class="field-label">Preparatory Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.preparatoryHymn)" @input="service.liturgy.preparatoryHymn = $event.detail" class="input-container relative">
-                        <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                    <div x-data="hymnPicker(service.liturgy.preparatoryHymn)" class="input-container relative">
+                        <div class="flex items-center rounded-lg border px-3 py-2 transition-colors"
+                             :class="isCanonical ? 'border-green-500/50 bg-green-50/50' : (isLiteral ? 'border-amber-500/50 bg-amber-50/50' : 'border-outline-variant bg-surface-container-low')">
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
                             <div class="flex items-center gap-1">
                                 <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
                                     <span class="material-symbols-outlined text-[18px]">close</span>
                                 </button>
-                                <span class="material-symbols-outlined text-[18px] text-secondary">music_note</span>
+                                <template x-if="isCanonical">
+                                    <span class="material-symbols-outlined text-[18px] text-green-600" title="Canonical Hymn">check_circle</span>
+                                </template>
+                                <template x-if="isLiteral">
+                                    <span class="material-symbols-outlined text-[18px] text-amber-600 animate-pulse" title="Literal Hymn (Unmatched)">warning</span>
+                                </template>
+                                <template x-if="!isCanonical && !isLiteral">
+                                    <span class="material-symbols-outlined text-[18px] text-secondary">music_note</span>
+                                </template>
                             </div>
                         </div>
                         <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
@@ -352,6 +414,38 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Prayer Leader Praise -->
+                <div class="mt-4 border-t border-outline-variant/10 pt-4" x-show="showPrayerPraise || service.prayerPraise.id">
+                    <div class="field-group">
+                        <label class="field-label text-[10px]">Prayer Leader (Praise)</label>
+                        <div x-data="personPicker(service.prayerPraise)" 
+                             class="input-container relative">
+                            <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-1.5">
+                                <input type="text" placeholder="Search people..." x-model="query" @focus="open = true" @input.debounce="onInput()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-xs" :disabled="!canEdit">
+                                <div class="flex items-center gap-1">
+                                    <button x-show="query" @click="clear(); showPrayerPraise = false" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
+                                        <span class="material-symbols-outlined text-[16px]">close</span>
+                                    </button>
+                                    <span class="material-symbols-outlined text-[16px] text-secondary">person</span>
+                                </div>
+                            </div>
+                            <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                                <template x-for="p in results" :key="p.id">
+                                    <button @click="select(p)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
+                                        <p class="font-label-md text-xs" x-text="p.name"></p>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-end" x-show="canEdit && !showPrayerPraise && !service.prayerPraise.id">
+                    <button @click="showPrayerPraise = true" class="text-[10px] font-label-md uppercase tracking-wider text-secondary/40 hover:text-primary transition-colors flex items-center gap-1">
+                        <span class="material-symbols-outlined text-[14px]">add</span> Add Prayer Leader
+                    </button>
+                </div>
+
                 <!-- Note controls -->
                 <button x-show="canEdit && !(service.notes && service.notes['callToWorship'])" @click="openNote('callToWorship')" class="note-add-btn" title="Add note" aria-label="Add note" data-note-key="callToWorship"><span class="material-symbols-outlined" style="font-size:15px">add</span></button>
                 <button x-show="service.notes && service.notes['callToWorship']" @click="openNote('callToWorship')" class="note-bubble-btn" title="View/edit note" aria-label="Edit note" data-note-key="callToWorship"><span class="material-symbols-outlined" style="font-size:13px">sticky_note_2</span></button>
@@ -367,14 +461,23 @@
             <div class="form-section" data-field-key="hymn1">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.hymn1)" @input="service.liturgy.hymn1 = $event.detail" class="input-container relative">
-                        <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                    <div x-data="hymnPicker(service.liturgy.hymn1)" class="input-container relative">
+                        <div class="flex items-center rounded-lg border px-3 py-2 transition-colors"
+                             :class="isCanonical ? 'border-green-500/50 bg-green-50/50' : (isLiteral ? 'border-amber-500/50 bg-amber-50/50' : 'border-outline-variant bg-surface-container-low')">
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
                             <div class="flex items-center gap-1">
                                 <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
                                     <span class="material-symbols-outlined text-[18px]">close</span>
                                 </button>
-                                <span class="material-symbols-outlined text-[18px] text-secondary">music_note</span>
+                                <template x-if="isCanonical">
+                                    <span class="material-symbols-outlined text-[18px] text-green-600" title="Canonical Hymn">check_circle</span>
+                                </template>
+                                <template x-if="isLiteral">
+                                    <span class="material-symbols-outlined text-[18px] text-amber-600 animate-pulse" title="Literal Hymn (Unmatched)">warning</span>
+                                </template>
+                                <template x-if="!isCanonical && !isLiteral">
+                                    <span class="material-symbols-outlined text-[18px] text-secondary">music_note</span>
+                                </template>
                             </div>
                         </div>
                         <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
@@ -402,14 +505,23 @@
             <div class="form-section" x-show="!service.hasBaptism" x-transition data-field-key="hymn2">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.hymn2)" @input="service.liturgy.hymn2 = $event.detail" class="input-container relative">
-                        <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                    <div x-data="hymnPicker(service.liturgy.hymn2)" class="input-container relative">
+                        <div class="flex items-center rounded-lg border px-3 py-2 transition-colors"
+                             :class="isCanonical ? 'border-green-500/50 bg-green-50/50' : (isLiteral ? 'border-amber-500/50 bg-amber-50/50' : 'border-outline-variant bg-surface-container-low')">
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
                             <div class="flex items-center gap-1">
                                 <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
                                     <span class="material-symbols-outlined text-[18px]">close</span>
                                 </button>
-                                <span class="material-symbols-outlined text-[18px] text-secondary">music_note</span>
+                                <template x-if="isCanonical">
+                                    <span class="material-symbols-outlined text-[18px] text-green-600" title="Canonical Hymn">check_circle</span>
+                                </template>
+                                <template x-if="isLiteral">
+                                    <span class="material-symbols-outlined text-[18px] text-amber-600 animate-pulse" title="Literal Hymn (Unmatched)">warning</span>
+                                </template>
+                                <template x-if="!isCanonical && !isLiteral">
+                                    <span class="material-symbols-outlined text-[18px] text-secondary">music_note</span>
+                                </template>
                             </div>
                         </div>
                         <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
@@ -505,6 +617,38 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Prayer Leader Confession -->
+                <div class="mt-4 border-t border-outline-variant/10 pt-4" x-show="showPrayerConfession || service.prayerConfession.id">
+                    <div class="field-group">
+                        <label class="field-label text-[10px]">Prayer Leader (Confession)</label>
+                        <div x-data="personPicker(service.prayerConfession)" 
+                             class="input-container relative">
+                            <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-1.5">
+                                <input type="text" placeholder="Search people..." x-model="query" @focus="open = true" @input.debounce="onInput()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-xs" :disabled="!canEdit">
+                                <div class="flex items-center gap-1">
+                                    <button x-show="query" @click="clear(); showPrayerConfession = false" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
+                                        <span class="material-symbols-outlined text-[16px]">close</span>
+                                    </button>
+                                    <span class="material-symbols-outlined text-[16px] text-secondary">person</span>
+                                </div>
+                            </div>
+                            <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                                <template x-for="p in results" :key="p.id">
+                                    <button @click="select(p)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
+                                        <p class="font-label-md text-xs" x-text="p.name"></p>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-end" x-show="canEdit && !showPrayerConfession && !service.prayerConfession.id">
+                    <button @click="showPrayerConfession = true" class="text-[10px] font-label-md uppercase tracking-wider text-secondary/40 hover:text-primary transition-colors flex items-center gap-1">
+                        <span class="material-symbols-outlined text-[14px]">add</span> Add Prayer Leader
+                    </button>
+                </div>
+
                 <!-- Note controls -->
                 <button x-show="canEdit && !(service.notes && service.notes['callToConfession'])" @click="openNote('callToConfession')" class="note-add-btn" title="Add note" aria-label="Add note" data-note-key="callToConfession"><span class="material-symbols-outlined" style="font-size:15px">add</span></button>
                 <button x-show="service.notes && service.notes['callToConfession']" @click="openNote('callToConfession')" class="note-bubble-btn" title="View/edit note" aria-label="Edit note" data-note-key="callToConfession"><span class="material-symbols-outlined" style="font-size:13px">sticky_note_2</span></button>
@@ -603,14 +747,23 @@
             <div class="form-section" data-field-key="hymnMid1">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.hymnMid1)" @input="service.liturgy.hymnMid1 = $event.detail" class="input-container relative">
-                        <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                    <div x-data="hymnPicker(service.liturgy.hymnMid1)" class="input-container relative">
+                        <div class="flex items-center rounded-lg border px-3 py-2 transition-colors"
+                             :class="isCanonical ? 'border-green-500/50 bg-green-50/50' : (isLiteral ? 'border-amber-500/50 bg-amber-50/50' : 'border-outline-variant bg-surface-container-low')">
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
                             <div class="flex items-center gap-1">
                                 <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
                                     <span class="material-symbols-outlined text-[18px]">close</span>
                                 </button>
-                                <span class="material-symbols-outlined text-[18px] text-secondary">music_note</span>
+                                <template x-if="isCanonical">
+                                    <span class="material-symbols-outlined text-[18px] text-green-600" title="Canonical Hymn">check_circle</span>
+                                </template>
+                                <template x-if="isLiteral">
+                                    <span class="material-symbols-outlined text-[18px] text-amber-600 animate-pulse" title="Literal Hymn (Unmatched)">warning</span>
+                                </template>
+                                <template x-if="!isCanonical && !isLiteral">
+                                    <span class="material-symbols-outlined text-[18px] text-secondary">music_note</span>
+                                </template>
                             </div>
                         </div>
                         <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
@@ -638,14 +791,23 @@
             <div class="form-section" data-field-key="hymnMid2">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.hymnMid2)" @input="service.liturgy.hymnMid2 = $event.detail" class="input-container relative">
-                        <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                    <div x-data="hymnPicker(service.liturgy.hymnMid2)" class="input-container relative">
+                        <div class="flex items-center rounded-lg border px-3 py-2 transition-colors"
+                             :class="isCanonical ? 'border-green-500/50 bg-green-50/50' : (isLiteral ? 'border-amber-500/50 bg-amber-50/50' : 'border-outline-variant bg-surface-container-low')">
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
                             <div class="flex items-center gap-1">
                                 <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
                                     <span class="material-symbols-outlined text-[18px]">close</span>
                                 </button>
-                                <span class="material-symbols-outlined text-[18px] text-secondary">music_note</span>
+                                <template x-if="isCanonical">
+                                    <span class="material-symbols-outlined text-[18px] text-green-600" title="Canonical Hymn">check_circle</span>
+                                </template>
+                                <template x-if="isLiteral">
+                                    <span class="material-symbols-outlined text-[18px] text-amber-600 animate-pulse" title="Literal Hymn (Unmatched)">warning</span>
+                                </template>
+                                <template x-if="!isCanonical && !isLiteral">
+                                    <span class="material-symbols-outlined text-[18px] text-secondary">music_note</span>
+                                </template>
                             </div>
                         </div>
                         <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
@@ -859,14 +1021,23 @@
             <div class="form-section" data-field-key="hymnEnd1">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.hymnEnd1)" @input="service.liturgy.hymnEnd1 = $event.detail" class="input-container relative">
-                        <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                    <div x-data="hymnPicker(service.liturgy.hymnEnd1)" class="input-container relative">
+                        <div class="flex items-center rounded-lg border px-3 py-2 transition-colors"
+                             :class="isCanonical ? 'border-green-500/50 bg-green-50/50' : (isLiteral ? 'border-amber-500/50 bg-amber-50/50' : 'border-outline-variant bg-surface-container-low')">
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
                             <div class="flex items-center gap-1">
                                 <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
                                     <span class="material-symbols-outlined text-[18px]">close</span>
                                 </button>
-                                <span class="material-symbols-outlined text-[18px] text-secondary">music_note</span>
+                                <template x-if="isCanonical">
+                                    <span class="material-symbols-outlined text-[18px] text-green-600" title="Canonical Hymn">check_circle</span>
+                                </template>
+                                <template x-if="isLiteral">
+                                    <span class="material-symbols-outlined text-[18px] text-amber-600 animate-pulse" title="Literal Hymn (Unmatched)">warning</span>
+                                </template>
+                                <template x-if="!isCanonical && !isLiteral">
+                                    <span class="material-symbols-outlined text-[18px] text-secondary">music_note</span>
+                                </template>
                             </div>
                         </div>
                         <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
@@ -894,14 +1065,23 @@
             <div class="form-section" data-field-key="hymnEnd2">
                 <div class="field-group">
                     <label class="field-label">Hymn</label>
-                    <div x-data="hymnPicker(service.liturgy.hymnEnd2)" @input="service.liturgy.hymnEnd2 = $event.detail" class="input-container relative">
-                        <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                    <div x-data="hymnPicker(service.liturgy.hymnEnd2)" class="input-container relative">
+                        <div class="flex items-center rounded-lg border px-3 py-2 transition-colors"
+                             :class="isCanonical ? 'border-green-500/50 bg-green-50/50' : (isLiteral ? 'border-amber-500/50 bg-amber-50/50' : 'border-outline-variant bg-surface-container-low')">
                             <input type="text" placeholder="Search hymns..." x-model="query" @focus="open = true" @input.debounce="search()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
                             <div class="flex items-center gap-1">
                                 <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
                                     <span class="material-symbols-outlined text-[18px]">close</span>
                                 </button>
-                                <span class="material-symbols-outlined text-[18px] text-secondary">music_note</span>
+                                <template x-if="isCanonical">
+                                    <span class="material-symbols-outlined text-[18px] text-green-600" title="Canonical Hymn">check_circle</span>
+                                </template>
+                                <template x-if="isLiteral">
+                                    <span class="material-symbols-outlined text-[18px] text-amber-600 animate-pulse" title="Literal Hymn (Unmatched)">warning</span>
+                                </template>
+                                <template x-if="!isCanonical && !isLiteral">
+                                    <span class="material-symbols-outlined text-[18px] text-secondary">music_note</span>
+                                </template>
                             </div>
                         </div>
                         <div x-show="open && results.length > 0" @click.away="open = false" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">

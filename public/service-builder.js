@@ -6,6 +6,8 @@ function serviceForm() {
         user: null,
         originalService: '',
         activeNoteKey: null,
+        showPrayerPraise: false,
+        showPrayerConfession: false,
         noteEditorTop: 100,
         noteEditorLeft: 0,
         noteEditorWidth: 200,
@@ -16,9 +18,11 @@ function serviceForm() {
         service: {
             theme: '',
             keyVerse: '',
-            serviceLeader: '',
-            musicLeader: '',
-            preacher: '',
+            serviceLeader: { name: '', id: null },
+            musicLeader: { name: '', id: null },
+            preacher: { name: '', id: null },
+            prayerPraise: { name: '', id: null },
+            prayerConfession: { name: '', id: null },
             hasBaptism: false,
             notes: {},
             liturgy: {
@@ -106,9 +110,23 @@ function serviceForm() {
                 // Update top-level properties
                 this.service.theme = data.theme || '';
                 this.service.keyVerse = data.keyVerse || '';
-                this.service.serviceLeader = data.serviceLeader || '';
-                this.service.musicLeader = data.musicLeader || '';
-                this.service.preacher = data.preacher || '';
+                
+                this.service.serviceLeader.name = data.serviceLeader || '';
+                this.service.serviceLeader.id = data.serviceLeaderId || null;
+                this.service.musicLeader.name = data.musicLeader || '';
+                this.service.musicLeader.id = data.musicLeaderId || null;
+                this.service.preacher.name = data.preacher || '';
+                this.service.preacher.id = data.preacherId || null;
+                
+                this.service.prayerPraise.name = data.prayerPraiseName || '';
+                this.service.prayerPraise.id = data.prayerPraiseId || null;
+                this.service.prayerConfession.name = data.prayerConfessionName || '';
+                this.service.prayerConfession.id = data.prayerConfessionId || null;
+
+                // Auto-show prayer pickers if they have data
+                if (this.service.prayerPraise.id) this.showPrayerPraise = true;
+                if (this.service.prayerConfession.id) this.showPrayerConfession = true;
+
                 this.service.hasBaptism = data.hasBaptism || false;
                 this.service.notes = data.notes || {};
                 
@@ -167,11 +185,98 @@ function serviceForm() {
         async save() {
             this.saving = true;
             try {
-                await db.collection('services').doc(this.date).set({
-                    ...this.service,
+                const batch = db.batch();
+                const original = JSON.parse(this.originalService);
+                
+                // Role synchronization logic
+                const roles = [
+                    { field: 'serviceLeader', role: 'service_leader' },
+                    { field: 'musicLeader', role: 'worship_leader' },
+                    { field: 'preacher', role: 'preacher' },
+                    { field: 'prayerPraise', role: 'prayer', metadata: { prayer_type: 'praise' } },
+                    { field: 'prayerConfession', role: 'prayer', metadata: { prayer_type: 'confession' } }
+                ];
+
+                for (const { field, role, metadata } of roles) {
+                    const oldId = original[field].id;
+                    const newId = this.service[field].id;
+
+                    if (oldId !== newId) {
+                        // 1. Handle removal of old involvement
+                        if (oldId) {
+                            const oldPersonRef = db.collection('people').doc(oldId);
+                            // Find and delete the involvement record for this date and role
+                            let query = oldPersonRef.collection('involvement')
+                                .where('serviceDate', '==', this.date)
+                                .where('type', '==', role);
+                            
+                            if (metadata && metadata.prayer_type) {
+                                query = query.where('metadata.prayer_type', '==', metadata.prayer_type);
+                            }
+
+                            const invSnap = await query.get();
+                            
+                            invSnap.forEach(doc => {
+                                batch.delete(doc.ref);
+                            });
+
+                            if (!invSnap.empty) {
+                                batch.update(oldPersonRef, {
+                                    totalInvolvements: firebase.firestore.FieldValue.increment(-invSnap.size)
+                                });
+                            }
+                        }
+
+                        // 2. Handle addition of new involvement
+                        if (newId) {
+                            const newPersonRef = db.collection('people').doc(newId);
+                            const newInvRef = newPersonRef.collection('involvement').doc();
+                            
+                            const invData = {
+                                serviceDate: this.date,
+                                type: role,
+                                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                            };
+
+                            if (metadata) {
+                                invData.metadata = metadata;
+                            }
+                            
+                            batch.set(newInvRef, invData);
+
+                            batch.update(newPersonRef, {
+                                totalInvolvements: firebase.firestore.FieldValue.increment(1)
+                            });
+                        }
+                    }
+                }
+
+                // Flatten service object for Firestore storage
+                const toSave = {
+                    theme: this.service.theme,
+                    keyVerse: this.service.keyVerse,
+                    serviceLeader: this.service.serviceLeader.name,
+                    serviceLeaderId: this.service.serviceLeader.id,
+                    musicLeader: this.service.musicLeader.name,
+                    musicLeaderId: this.service.musicLeader.id,
+                    preacher: this.service.preacher.name,
+                    preacherId: this.service.preacher.id,
+                    prayerPraiseName: this.service.prayerPraise.name,
+                    prayerPraiseId: this.service.prayerPraise.id,
+                    prayerConfessionName: this.service.prayerConfession.name,
+                    prayerConfessionId: this.service.prayerConfession.id,
+                    hasBaptism: this.service.hasBaptism,
+                    notes: this.service.notes,
+                    liturgy: this.service.liturgy,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                };
+
+                const serviceRef = db.collection('services').doc(this.date);
+                batch.set(serviceRef, toSave);
+
+                await batch.commit();
                 this.originalService = JSON.stringify(this.service);
+                console.log('Service and involvements saved successfully.');
             } catch (e) {
                 if (e.code === 'permission-denied') {
                     alert('Permission denied. Your account does not have permission to save services.');
@@ -260,9 +365,11 @@ function serviceForm() {
             if (!confirm('Are you sure you want to clear the current service? This will reset all liturgy fields.')) return;
             this.service.theme = '';
             this.service.keyVerse = '';
-            this.service.serviceLeader = '';
-            this.service.musicLeader = '';
-            this.service.preacher = '';
+            this.service.serviceLeader = { name: '', id: null };
+            this.service.musicLeader = { name: '', id: null };
+            this.service.preacher = { name: '', id: null };
+            this.service.prayerPraise = { name: '', id: null };
+            this.service.prayerConfession = { name: '', id: null };
             this.service.hasBaptism = false;
             this.service.notes = {};
             this.service.liturgy = {
@@ -417,12 +524,79 @@ function serviceForm() {
     };
 }
 
+function personPicker(personRef) {
+    return {
+        personRef: personRef,
+        open: false,
+        query: personRef.name || '',
+        results: [],
+        
+        init() {
+            // Keep local query in sync with incoming name
+            this.$watch('personRef.name', (val) => {
+                this.query = val || '';
+            });
+        },
+
+        async search() {
+            if (this.query.length < 2) {
+                this.results = [];
+                return;
+            }
+
+            try {
+                // Search Firestore people collection
+                const snap = await db.collection('people')
+                    .where('name', '>=', this.query)
+                    .where('name', '<=', this.query + '\uf8ff')
+                    .limit(5).get();
+                
+                this.results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            } catch (error) {
+                console.error("Error searching people:", error);
+            }
+        },
+
+        select(p) {
+            this.personRef.id = p.id;
+            this.personRef.name = p.name;
+            this.query = p.name;
+            this.results = [];
+            this.open = false;
+        },
+
+        clear() {
+            this.personRef.id = null;
+            this.personRef.name = '';
+            this.query = '';
+            this.results = [];
+            this.open = false;
+        },
+
+        onInput() {
+            // Update parent name as they type
+            this.personRef.name = this.query;
+            this.personRef.id = null; // Clear ID if they are typing a new name
+            this.search();
+        }
+    };
+}
+
 function hymnPicker(hymnRef) {
     return {
         hymnRef: hymnRef,
         open: false,
         query: hymnRef.name || '',
         results: [],
+        
+        get isCanonical() {
+            return !!this.hymnRef.id;
+        },
+
+        get isLiteral() {
+            return !this.hymnRef.id && !!this.hymnRef.name;
+        },
+
         init() {
             // Keep query in sync when hymnRef changes (e.g. on load)
             this.$watch('hymnRef.name', (val) => {
@@ -449,26 +623,18 @@ function hymnPicker(hymnRef) {
             this.results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         },
         select(h) {
-            hymnRef.id = h.id;
-            hymnRef.name = h.hymn_name;
+            this.hymnRef.id = h.id;
+            this.hymnRef.name = h.hymn_name;
             this.query = h.hymn_name;
             this.results = [];
             this.open = false;
-            this.$el.dispatchEvent(new CustomEvent('input', {
-                detail: { id: h.id, name: h.hymn_name },
-                bubbles: true
-            }));
         },
         clear() {
-            hymnRef.id = null;
-            hymnRef.name = '';
+            this.hymnRef.id = null;
+            this.hymnRef.name = '';
             this.query = '';
             this.results = [];
             this.open = false;
-            this.$el.dispatchEvent(new CustomEvent('input', {
-                detail: { id: null, name: '' },
-                bubbles: true
-            }));
         }
     };
 }
