@@ -53,6 +53,13 @@ document.addEventListener('alpine:init', () => {
 
                 this.loadHymns();
                 this.loadTags();
+
+                // Check for name query param to pre-fill
+                const urlParams = new URLSearchParams(window.location.search);
+                const nameParam = urlParams.get('name');
+                if (nameParam && !this.isEditing) {
+                    this.formData.hymn_name = nameParam;
+                }
             });
         },
 

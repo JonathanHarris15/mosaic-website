@@ -240,6 +240,7 @@ function renderTable(grouped) {
             <th class="px-md py-sm border-b border-outline-variant">Theme</th>
             <th class="px-md py-sm border-b border-outline-variant">Leader</th>
             <th class="px-md py-sm border-b border-outline-variant">Preacher</th>
+            <th class="px-md py-sm border-b border-outline-variant">Baptism</th>
             <th class="px-md py-sm border-b border-outline-variant">Music</th>
             <th class="px-md py-sm border-b border-outline-variant">Prayers</th>
             <th class="px-md py-sm border-b border-outline-variant text-right sticky-column">Actions</th>
@@ -262,7 +263,7 @@ function renderTable(grouped) {
                 separatorRow.id = `table-month-${year}-${month}`;
                 separatorRow.className = 'sticky-month-row bg-surface-container-low/50 scroll-mt-24';
                 separatorRow.innerHTML = `
-                    <td colspan="7" class="px-md py-2 z-25 bg-surface-container-low/90 backdrop-blur-sm">
+                    <td colspan="8" class="px-md py-2 z-25 bg-surface-container-low/90 backdrop-blur-sm">
                         <h3 class="font-headline-md text-sm uppercase tracking-wider text-secondary">${month} ${year}</h3>
                     </td>
                 `;
@@ -287,7 +288,18 @@ function renderTable(grouped) {
                             <div class="leader-cell font-body-md text-on-surface-variant text-sm">—</div>
                         </td>
                         <td class="px-md py-md whitespace-nowrap">
-                            <div class="preacher-cell font-body-md text-on-surface-variant text-sm">—</div>
+                            <div class="preacher-column-cell flex flex-col items-start gap-1">
+                                <div class="preacher-cell font-body-md text-on-surface-variant text-sm">—</div>
+                                <div class="sermonette-row flex items-center gap-1 group/sermonette">
+                                    <div class="sermonette-cell font-body-md text-xs text-tertiary hidden"></div>
+                                    <button title="Add Sermonette" class="add-sermonette-btn hidden p-0.5 text-tertiary/50 hover:text-tertiary transition-colors rounded">
+                                        <span class="material-symbols-outlined text-[16px]">add</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-md py-md whitespace-nowrap">
+                            <div class="baptism-cell font-body-md text-on-surface-variant text-sm">—</div>
                         </td>
                         <td class="px-md py-md whitespace-nowrap">
                             <div class="music-cell font-body-md text-on-surface-variant text-sm">—</div>
@@ -356,6 +368,43 @@ function injectServiceData(serviceMap) {
         const summaryEl = el.querySelector('.service-summary');
         if (summaryEl) {
             let html = '';
+            
+            // Badges Row
+            if (svc.hasBaptism || svc.sermonette || canEdit) {
+                html += `<div class="flex flex-wrap gap-2 mb-2">`;
+                if (svc.hasBaptism) {
+                    const baptismName = svc.liturgy?.baptism || svc.baptism || '';
+                    html += `
+                        <span class="group/baptism relative inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider cursor-help">
+                            <span class="material-symbols-outlined text-[14px]">water_drop</span>
+                            Baptism
+                            ${baptismName ? `
+                            <div class="invisible group-hover/baptism:visible opacity-0 group-hover/baptism:opacity-100 transition-all duration-200 absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-primary text-on-primary text-[11px] font-medium rounded-lg shadow-xl whitespace-nowrap z-[100] normal-case tracking-normal flex flex-col items-center">
+                                <span>Candidate: ${escapeHtml(baptismName)}</span>
+                                <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-primary"></div>
+                            </div>
+                            ` : ''}
+                        </span>`;
+                }
+                if (svc.sermonette) {
+                    html += `
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[10px] font-bold uppercase tracking-wider">
+                            <span class="material-symbols-outlined text-[14px]">mic</span>
+                            Sermonette
+                        </span>`;
+                } else if (canEdit) {
+                    // Hidden "Add Sermonette" ghost button
+                    html += `
+                        <button onclick="window.openPersonSelector('${dateKey}', 'sermonette', { name: '', id: null })" 
+                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                title="Add Sermonette">
+                            <span class="material-symbols-outlined text-[14px]">add</span>
+                            Sermonette
+                        </button>`;
+                }
+                html += `</div>`;
+            }
+
             if (svc.theme) {
                 html += `<p class="text-xs font-label-md text-primary flex items-center gap-1">
                     <span class="material-symbols-outlined text-[14px]">bookmark</span>
@@ -372,6 +421,12 @@ function injectServiceData(serviceMap) {
                 html += `<p class="text-xs text-on-surface-variant flex items-center gap-1">
                     <span class="material-symbols-outlined text-[14px]">podium</span>
                     Preacher: ${escapeHtml(svc.preacher)}
+                </p>`;
+            }
+            if (svc.sermonette) {
+                html += `<p class="text-xs text-on-surface-variant flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[14px]">mic</span>
+                    Sermonette: ${escapeHtml(svc.sermonette)}
                 </p>`;
             }
 
@@ -402,6 +457,39 @@ function injectServiceData(serviceMap) {
             preacherCell.textContent = svc.preacher || '—';
             preacherCell.setAttribute('data-person-id', svc.preacherId || '');
             if (canEdit) setupInlineEdit(preacherCell, dateKey, 'preacher');
+        }
+
+        const sermonetteCell = el.querySelector('.sermonette-cell');
+        const addSermonetteBtn = el.querySelector('.add-sermonette-btn');
+        if (sermonetteCell) {
+            if (svc.sermonette) {
+                sermonetteCell.textContent = `${svc.sermonette} (Sermonette)`;
+                sermonetteCell.setAttribute('data-person-id', svc.sermonetteId || '');
+                sermonetteCell.classList.remove('hidden');
+                if (addSermonetteBtn) addSermonetteBtn.classList.add('hidden');
+            } else {
+                sermonetteCell.textContent = '';
+                sermonetteCell.setAttribute('data-person-id', '');
+                sermonetteCell.classList.add('hidden');
+                
+                if (canEdit && addSermonetteBtn) {
+                    addSermonetteBtn.classList.remove('hidden');
+                    addSermonetteBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        window.openPersonSelector(dateKey, 'sermonette', { name: '', id: null });
+                    };
+                } else if (addSermonetteBtn) {
+                    addSermonetteBtn.classList.add('hidden');
+                }
+            }
+            if (canEdit && svc.sermonette) setupInlineEdit(sermonetteCell, dateKey, 'sermonette');
+        }
+
+        const baptismCell = el.querySelector('.baptism-cell');
+        if (baptismCell) {
+            const baptismVal = svc.liturgy?.baptism || svc.baptism || ''; // Fallback for various schema versions
+            baptismCell.textContent = baptismVal || '—';
+            if (canEdit) setupInlineEdit(baptismCell, dateKey, 'baptism');
         }
 
         const musicCell = el.querySelector('.music-cell');
@@ -441,13 +529,14 @@ function setupInlineEdit(el, dateKey, field) {
     el.title = 'Click to edit';
     
     // Check if it's a Person field
-    const personFields = ['serviceLeader', 'musicLeader', 'preacher', 'prayerPraiseName', 'prayerConfessionName'];
+    const personFields = ['serviceLeader', 'musicLeader', 'preacher', 'sermonette', 'prayerPraiseName', 'prayerConfessionName'];
 
     el.onclick = (e) => {
         e.stopPropagation();
 
         if (personFields.includes(field)) {
-            const currentVal = el.textContent === '—' ? '' : el.textContent;
+            let currentVal = el.textContent === '—' || el.textContent === '— (Sermonette)' ? '' : el.textContent;
+            if (field === 'sermonette') currentVal = currentVal.replace(' (Sermonette)', '');
             const currentId = el.getAttribute('data-person-id');
             window.openPersonSelector(dateKey, field, { name: currentVal, id: currentId });
             return;
@@ -478,14 +567,21 @@ function setupInlineEdit(el, dateKey, field) {
                         'serviceLeader': 'serviceLeaderId',
                         'musicLeader': 'musicLeaderId',
                         'preacher': 'preacherId',
+                        'sermonette': 'sermonetteId',
                         'prayerPraiseName': 'prayerPraiseId',
                         'prayerConfessionName': 'prayerConfessionId'
                     };
 
                     const updates = {
-                        [field]: newVal,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     };
+
+                    if (field === 'baptism') {
+                        updates.hasBaptism = newVal !== '';
+                        updates['liturgy.baptism'] = newVal;
+                    } else {
+                        updates[field] = newVal;
+                    }
 
                     // Clear ID if we're updating a name field, as it's now a literal string
                     if (idFieldMap[field]) {
@@ -496,8 +592,17 @@ function setupInlineEdit(el, dateKey, field) {
                     
                     // Update global map to keep views in sync if they toggle
                     if (!serviceDataMap[dateKey]) serviceDataMap[dateKey] = {};
-                    serviceDataMap[dateKey][field] = newVal;
-                    if (idFieldMap[field]) serviceDataMap[dateKey][idFieldMap[field]] = null;
+                    if (field === 'baptism') {
+                        serviceDataMap[dateKey].hasBaptism = updates.hasBaptism;
+                        if (!serviceDataMap[dateKey].liturgy) serviceDataMap[dateKey].liturgy = {};
+                        serviceDataMap[dateKey].liturgy.baptism = newVal;
+                    } else {
+                        serviceDataMap[dateKey][field] = newVal;
+                        if (idFieldMap[field]) serviceDataMap[dateKey][idFieldMap[field]] = null;
+                    }
+                    
+                    // Trigger a re-injection to update all views (List and Table)
+                    injectServiceData(serviceDataMap);
                 } catch (err) {
                     console.error('Error updating service field:', err);
                     alert('Failed to save change.');

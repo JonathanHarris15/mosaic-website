@@ -35,7 +35,23 @@ Canonical names for types of involvement.
 - `service_leader`: The primary facilitator of the service.
 - `preacher`: The person delivering the sermon.
 - `worship_leader`: The person leading the musical worship.
-- `sermonette`: The person delivering a shorter message.
+- `sermonette`: The person delivering a shorter message. In the calendar view, this is displayed as a badge and is editable inline by admins.
+- `baptism`: A liturgical event marked by `hasBaptism: true`. Displayed as a read-only badge in the calendar views.
+
+## User Interface Conventions
+
+### Service Calendar
+- **Baptism Indicator**: 
+  - **List View**: A blue status badge with a `water_drop` icon.
+  - **Table View**: A dedicated "Baptism" column showing the candidate's name or notes.
+  - **Editing**: Editable inline as a free-text field (not linked to a Person record). Setting a value automatically sets `hasBaptism: true`; clearing it sets `hasBaptism: false`.
+- **Sermonette Indicator**: 
+  - **List View**: A purple status badge with a `mic` icon.
+  - **Table View**: Displayed within the "Preacher" column as a secondary entry (e.g., "Jane Doe (Sermonette)").
+  - **Editing**: Editable inline by admins, linked to a Person record.
+- **Editing Summary**: 
+  - Sermonette leaders are linked to People and editable from list/table.
+  - Baptism is free-text and editable from the table view.
 - `prayer`: The person leading a specific prayer.
   - `prayer_type`: 'praise' or 'confession'.
   - `prayer_text`: The content of the prayer.

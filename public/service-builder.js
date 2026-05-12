@@ -21,8 +21,11 @@ function serviceForm() {
             serviceLeader: { name: '', id: null },
             musicLeader: { name: '', id: null },
             preacher: { name: '', id: null },
+            sermonette: { name: '', id: null },
             prayerPraise: { name: '', id: null },
             prayerConfession: { name: '', id: null },
+            elements: { name: '', id: null },
+            other: { name: '', id: null },
             hasBaptism: false,
             notes: {},
             liturgy: {
@@ -120,7 +123,8 @@ function serviceForm() {
                 return;
             }
             await this.load();
-            this.loadHymnRegistry();
+            await this.loadHymnRegistry();
+            await this.autoLinkHymns();
 
             if (urlParams.get('validate') === 'true') {
                 this.validateForm();
@@ -145,10 +149,48 @@ function serviceForm() {
                     keys: ['hymn_name', 'lyrics_writer', 'music_writer'],
                     threshold: 0.3, // Lower is stricter, higher is fuzzier
                     distance: 100,
-                    minMatchCharLength: 2
+                    minMatchCharLength: 2,
+                    includeScore: true
                 });
             } catch (error) {
                 console.error("Error loading hymn registry:", error);
+            }
+        },
+
+        async autoLinkHymns() {
+            if (!this.fuse || !this.hymnRegistry || this.hymnRegistry.length === 0) return;
+
+            let updated = false;
+            const hymnFields = [
+                'preparatoryHymn', 'hymn1', 'hymn2', 'hymnMid1', 'hymnMid2', 'hymnEnd1', 'hymnEnd2'
+            ];
+
+            for (const field of hymnFields) {
+                const hymn = this.service.liturgy[field];
+                if (hymn && hymn.name && !hymn.id) {
+                    // Try to find a match
+                    const results = this.fuse.search(hymn.name);
+                    if (results.length > 0) {
+                        const topMatch = results[0];
+                        // If it's a very high confidence match (threshold 0.3 is current, let's say < 0.1 for auto-link)
+                        // Or if names match exactly (case insensitive)
+                        const isExactMatch = topMatch.item.hymn_name.toLowerCase() === hymn.name.toLowerCase();
+                        const isHighConfidence = topMatch.score < 0.1;
+
+                        if (isExactMatch || isHighConfidence) {
+                            console.log(`Auto-linking literal hymn "${hymn.name}" to canonical "${topMatch.item.hymn_name}" (ID: ${topMatch.item.id})`);
+                            hymn.id = topMatch.item.id;
+                            hymn.name = topMatch.item.hymn_name;
+                            updated = true;
+                        }
+                    }
+                }
+            }
+
+            if (updated && this.canEdit) {
+                // We should save the service to persist these links
+                console.log("Saving service after auto-linking hymns...");
+                await this.save();
             }
         },
 
@@ -166,11 +208,18 @@ function serviceForm() {
                 this.service.musicLeader.id = data.musicLeaderId || null;
                 this.service.preacher.name = data.preacher || '';
                 this.service.preacher.id = data.preacherId || null;
+                this.service.sermonette.name = data.sermonette || '';
+                this.service.sermonette.id = data.sermonetteId || null;
                 
                 this.service.prayerPraise.name = data.prayerPraiseName || '';
                 this.service.prayerPraise.id = data.prayerPraiseId || null;
                 this.service.prayerConfession.name = data.prayerConfessionName || '';
                 this.service.prayerConfession.id = data.prayerConfessionId || null;
+
+                this.service.elements.name = data.elementsName || '';
+                this.service.elements.id = data.elementsId || null;
+                this.service.other.name = data.otherName || '';
+                this.service.other.id = data.otherId || null;
 
                 // Auto-show prayer pickers if they have data
                 if (this.service.prayerPraise.id) this.showPrayerPraise = true;
@@ -199,33 +248,49 @@ function serviceForm() {
 
         async validateForm() {
             this.$nextTick(() => {
-                let fieldsToCheck = [
+                const roleFields = ['serviceLeader', 'musicLeader', 'preacher'];
+                let liturgyFields = [
                     'preparatoryHymn', 'callToWorship', 'hymn1', 
                     'callToConfession', 'assuranceOfPardon', 'hymnMid2', 
                     'scriptureReading', 'sermon', 'hymnEnd1', 'hymnEnd2', 'benediction'
                 ];
 
                 if (this.service.hasBaptism) {
-                    fieldsToCheck.push('baptism');
+                    liturgyFields.push('baptism');
                 } else {
-                    fieldsToCheck.push('hymn2');
-                    fieldsToCheck.push('hymnMid1');
+                    liturgyFields.push('hymn2');
+                    liturgyFields.push('hymnMid1');
                 }
 
-                for (const key of fieldsToCheck) {
+                const highlight = (key) => {
+                    const section = document.querySelector(`[data-field-key="${key}"]`);
+                    if (section) {
+                        section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        section.classList.add('ring-2', 'ring-red-500', 'ring-offset-2');
+                        setTimeout(() => {
+                            section.classList.remove('ring-2', 'ring-red-500', 'ring-offset-2');
+                        }, 3000);
+                        return true;
+                    }
+                    return false;
+                };
+
+                // 1. Check Roles
+                for (const key of roleFields) {
+                    const val = this.service[key];
+                    if (!val || !val.name) {
+                        if (highlight(key)) return;
+                    }
+                }
+
+                // 2. Check Liturgy
+                for (const key of liturgyFields) {
                     const val = this.service.liturgy[key];
                     const isEmpty = (val && typeof val === 'object') ? !val.name : !val;
+                    const isLiteral = (val && typeof val === 'object' && val.name && !val.id);
 
-                    if (isEmpty) {
-                        const section = document.querySelector(`[data-field-key="${key}"]`);
-                        if (section) {
-                            section.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            section.classList.add('ring-2', 'ring-red-500', 'ring-offset-2');
-                            setTimeout(() => {
-                                section.classList.remove('ring-2', 'ring-red-500', 'ring-offset-2');
-                            }, 3000);
-                            return;
-                        }
+                    if (isEmpty || isLiteral) {
+                        if (highlight(key)) return;
                     }
                 }
             });
@@ -426,8 +491,11 @@ function serviceForm() {
             this.service.serviceLeader = { name: '', id: null };
             this.service.musicLeader = { name: '', id: null };
             this.service.preacher = { name: '', id: null };
+            this.service.sermonette = { name: '', id: null };
             this.service.prayerPraise = { name: '', id: null };
             this.service.prayerConfession = { name: '', id: null };
+            this.service.elements = { name: '', id: null };
+            this.service.other = { name: '', id: null };
             this.service.hasBaptism = false;
             this.service.notes = {};
             this.service.liturgy = {

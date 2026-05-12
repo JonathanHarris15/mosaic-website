@@ -341,44 +341,73 @@
                         glanceContent.innerHTML = '<p class="text-on-surface-variant italic">No specific details set for this Sunday yet.</p>';
                     }
 
-                    // 4. Check for Incomplete Fields
+                    // 4. Check for Incomplete Fields and Literal Hymns
                     const liturgy = svc.liturgy || {};
-                    // Fields to check: Preparatory Hymn, Call to Worship, Hymn 1, Hymn 2, Call to Confession, 
-                    // Assurance of Pardon, Hymn Mid 1, Hymn Mid 2, Scripture Reading, Sermon, 
-                    // Hymn End 1, Hymn End 2, Benediction.
-                    // Note: Hymn fields are objects {id, name}
-                    const fieldsToCheck = [
-                        { val: liturgy.preparatoryHymn?.name, label: 'Preparatory Hymn' },
+                    const missingFields = [];
+                    const literalHymns = [];
+
+                    // Check Roles
+                    if (!svc.serviceLeader) missingFields.push('Service Leader');
+                    if (!svc.musicLeader) missingFields.push('Music Leader');
+                    if (!svc.preacher) missingFields.push('Preacher');
+
+                    // Check Liturgy Text Fields
+                    const textFields = [
                         { val: liturgy.callToWorship, label: 'Call to Worship' },
-                        { val: liturgy.hymn1?.name, label: 'Hymn 1' },
                         { val: liturgy.callToConfession, label: 'Call to Confession' },
                         { val: liturgy.assuranceOfPardon, label: 'Assurance of Pardon' },
-                        { val: liturgy.hymnMid2?.name, label: 'Hymn Mid 2' },
                         { val: liturgy.scriptureReading, label: 'Scripture Reading' },
                         { val: liturgy.sermon, label: 'Sermon' },
-                        { val: liturgy.hymnEnd1?.name, label: 'Hymn End 1' },
-                        { val: liturgy.hymnEnd2?.name, label: 'Hymn End 2' },
                         { val: liturgy.benediction, label: 'Benediction' }
                     ];
-
-                    // Conditional fields based on Baptism
                     if (svc.hasBaptism) {
-                        fieldsToCheck.push({ val: liturgy.baptism, label: 'Baptism' });
-                    } else {
-                        fieldsToCheck.push({ val: liturgy.hymn2?.name, label: 'Hymn 2' });
-                        fieldsToCheck.push({ val: liturgy.hymnMid1?.name, label: 'Hymn Mid 1' });
+                        textFields.push({ val: liturgy.baptism, label: 'Baptism' });
+                    }
+                    textFields.forEach(f => {
+                        if (!f.val || f.val.trim() === '') missingFields.push(f.label);
+                    });
+
+                    // Check Hymn Fields
+                    const hymnFields = [
+                        { val: liturgy.preparatoryHymn, label: 'Preparatory Hymn' },
+                        { val: liturgy.hymn1, label: 'Hymn 1' },
+                        { val: liturgy.hymnMid2, label: 'Hymn Mid 2' },
+                        { val: liturgy.hymnEnd1, label: 'Hymn End 1' },
+                        { val: liturgy.hymnEnd2, label: 'Hymn End 2' }
+                    ];
+                    if (!svc.hasBaptism) {
+                        hymnFields.push({ val: liturgy.hymn2, label: 'Hymn 2' });
+                        hymnFields.push({ val: liturgy.hymnMid1, label: 'Hymn Mid 1' });
                     }
 
-                    const incompleteCount = fieldsToCheck.filter(f => !f.val || f.val.trim() === '').length;
+                    hymnFields.forEach(f => {
+                        if (!f.val || !f.val.name || f.val.name.trim() === '') {
+                            missingFields.push(f.label);
+                        } else if (!f.val.id) {
+                            literalHymns.push(f.label);
+                        }
+                    });
 
-                    if (incompleteCount > 0) {
+                    const totalIssues = missingFields.length + literalHymns.length;
+
+                    if (totalIssues > 0) {
                         const alertDiv = document.createElement('a');
                         alertDiv.href = `service-builder.html?date=${dateKey}&validate=true`;
                         alertDiv.className = 'mt-auto pt-md flex items-center justify-between group/alert cursor-pointer';
+                        
+                        let message = '';
+                        if (missingFields.length > 0 && literalHymns.length > 0) {
+                            message = `${totalIssues} items need attention (missing fields & unlinked hymns)`;
+                        } else if (literalHymns.length > 0) {
+                            message = `${literalHymns.length} hymn${literalHymns.length > 1 ? 's' : ''} not linked to database`;
+                        } else {
+                            message = `${missingFields.length} field${missingFields.length > 1 ? 's' : ''} not completed`;
+                        }
+
                         alertDiv.innerHTML = `
                             <div class="flex items-center gap-2 bg-error-container text-on-error-container px-3 py-2 rounded-lg w-full transition-transform group-hover/alert:scale-[1.02]">
                                 <span class="material-symbols-outlined text-[20px]">warning</span>
-                                <span class="text-sm font-medium">${incompleteCount} fields not completed on this week's service.</span>
+                                <span class="text-sm font-medium">${message}</span>
                                 <span class="material-symbols-outlined text-[18px] ml-auto">chevron_right</span>
                             </div>
                         `;
