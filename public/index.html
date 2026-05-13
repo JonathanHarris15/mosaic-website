@@ -174,8 +174,8 @@
                         <p class="font-body-md text-body-md text-on-surface-variant">View upcoming and past service dates.</p>
                     </a>
 
-                    <!-- Service Analytics (Inactive) -->
-                    <div
+                    <!-- Service Analytics -->
+                    <a href="analytics.html"
                         class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
                         <div
                             class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
@@ -184,7 +184,7 @@
                         </div>
                         <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Service Analytics</h2>
                         <p class="font-body-md text-body-md text-on-surface-variant">Insights into historical services.</p>
-                    </div>
+                    </a>
                 </div>
             </div>
 
@@ -277,9 +277,9 @@
                     console.log("Service data found:", svc);
                     
                     // Update Upcoming Text (under greeting)
-                    if (svc.liturgy?.scriptureReading || svc.preacher) {
+                    if (svc.liturgy?.sermon || svc.preacher) {
                         const parts = [];
-                        if (svc.liturgy?.scriptureReading) parts.push(svc.liturgy.scriptureReading);
+                        if (svc.liturgy?.sermon) parts.push(svc.liturgy.sermon);
                         if (svc.preacher) parts.push(svc.preacher);
                         
                         upcomingText.textContent = `Upcoming: ${parts.join(', ')}`;
