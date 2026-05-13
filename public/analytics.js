@@ -39,7 +39,7 @@ export function analyticsPage() {
 
         async fetchAndProcessData() {
             try {
-                const snapshot = await db.collection('services').orderBy(firebase.firestore.FieldPath.documentId(), 'desc').get();
+                const snapshot = await db.collection('services').get();
                 const total = snapshot.size;
                 let processed = 0;
                 
@@ -89,7 +89,7 @@ export function analyticsPage() {
                         };
                     }
                     map[key].count++;
-                    map[key].dates.push(date);
+                    map[key].dates.unshift(date);
                 }
             });
         },
@@ -119,7 +119,7 @@ export function analyticsPage() {
                             };
                         }
                         chapters[chapterKey].count++;
-                        chapters[chapterKey].services.push({
+                        chapters[chapterKey].services.unshift({
                             date,
                             element: field.label,
                             reference: field.value
