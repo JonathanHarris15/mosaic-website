@@ -125,14 +125,16 @@
         }
     </style>
 </head>
-<body class="bg-background text-on-background font-body-md h-screen overflow-hidden flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed dark" x-data="hymnLookup()">
+<body class="bg-background text-on-background font-body-md min-h-screen md:h-screen md:overflow-hidden overflow-x-hidden flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed dark" 
+      x-data="hymnLookup()"
+      x-effect="document.body.style.overflow = showFilters ? 'hidden' : ''">
     <!-- Top Navigation Area -->
     <header class="flex-shrink-0 bg-background/80 backdrop-blur-md border-b border-surface-variant/30 z-50">
-        <div class="w-full max-w-[1600px] mx-auto px-margin py-md flex justify-between items-center gap-md">
+        <div class="w-full max-w-[1600px] mx-auto px-4 md:px-margin py-2 md:py-md flex justify-between items-center gap-md">
             <div class="flex-none min-w-0">
                 <a href="index.html" class="inline-flex font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-1">
                     <span class="material-symbols-outlined text-sm">arrow_back</span>
-                    <span class="hidden md:inline">Back to Portal</span>
+                    <span class="hidden md:inline">Back to Dashboard</span>
                 </a>
             </div>
             <!-- Logo + Title centered together -->
@@ -148,7 +150,7 @@
         </div>
     </header>
 
-    <main class="flex-grow flex flex-col gap-margin px-margin pb-md pt-base overflow-hidden max-w-[1600px] w-full mx-auto">
+    <main class="flex-grow flex flex-col gap-margin px-margin pb-md pt-base md:overflow-hidden max-w-[1600px] w-full mx-auto">
         <!-- Search Bar -->
         <div class="flex-shrink-0 w-full max-w-3xl mx-auto mb-xs">
             <div class="flex items-center w-full border border-outline-variant rounded-xl bg-surface-container-lowest focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all shadow-sm">
@@ -158,18 +160,36 @@
                 <input class="w-full py-3 px-4 bg-transparent border-none focus:ring-0 font-body-md text-body-md text-on-background placeholder:text-outline outline-none" 
                        placeholder="Search by title, lyrics, or author..." type="text"
                        x-model="searchQuery" @keydown.enter="performSearch()"/>
-                <button class="bg-primary text-on-primary font-label-md text-label-md px-8 py-3 rounded-r-xl hover:bg-primary-container transition-colors"
-                        @click="performSearch()">
-                    Search
+                <button class="bg-primary text-on-primary flex items-center justify-center px-6 py-3 rounded-r-xl hover:bg-primary-container transition-colors"
+                        @click="performSearch()"
+                        aria-label="Search">
+                    <span class="material-symbols-outlined">search</span>
                 </button>
             </div>
         </div>
 
+        <!-- Mobile Filter Button -->
+        <div class="md:hidden flex-shrink-0 mb-4">
+            <button @click="showFilters = true" class="w-full flex items-center justify-between bg-surface-container-lowest border border-outline-variant rounded-xl p-4 shadow-sm hover:bg-surface-container-low transition-colors">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">filter_list</span>
+                    <span class="font-headline-md text-sm uppercase tracking-wider text-primary">Filters</span>
+                    <template x-if="selectedTags.length > 0">
+                        <span class="bg-primary text-on-primary text-[10px] font-bold px-2 py-0.5 rounded-full" x-text="selectedTags.length"></span>
+                    </template>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-on-surface-variant truncate max-w-[150px]" x-show="selectedTags.length > 0" x-text="selectedTags.join(', ')"></span>
+                    <span class="material-symbols-outlined text-outline">chevron_right</span>
+                </div>
+            </button>
+        </div>
+
         <!-- Two Column Layout -->
-        <div class="flex-grow flex flex-col md:flex-row gap-margin overflow-hidden min-h-0">
+        <div class="flex-grow flex flex-col md:flex-row gap-margin md:overflow-hidden min-h-0">
             <!-- Left Column: Filter by Tags -->
-            <aside class="w-full md:w-80 flex-shrink-0 flex flex-col overflow-hidden">
-                <div class="flex-grow bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col overflow-hidden">
+            <aside class="hidden md:flex md:w-80 flex-shrink-0 flex-col md:overflow-hidden md:max-h-full">
+                <div class="flex-grow bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col md:overflow-hidden">
                     <div class="flex items-center gap-2 mb-sm pb-sm border-b border-surface-variant flex-shrink-0">
                         <span class="material-symbols-outlined text-primary">filter_list</span>
                         <h2 class="font-headline-md text-sm uppercase tracking-wider text-primary">Filter by Tags</h2>
@@ -229,12 +249,55 @@
         </div>
     </main>
 
-    <!-- Floating Manage Hymns Button (Hidden by default) -->
-    <div id="admin-actions" class="fixed bottom-6 right-6 hidden z-50">
-        <a href="manager.html" class="flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2.5 rounded-full shadow-lg hover:bg-primary-container hover:scale-105 transition-all duration-200 group">
-            <span class="material-symbols-outlined text-[20px]">settings</span>
-            <span class="font-label-md text-xs uppercase tracking-wider">Manage Hymns</span>
-        </a>
+    <!-- Mobile Filter Modal -->
+    <div x-show="showFilters" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 translate-y-full"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 translate-y-full"
+         class="fixed inset-0 z-[100] bg-background flex flex-col md:hidden"
+         style="display: none;">
+        <!-- Modal Header -->
+        <div class="flex-shrink-0 px-margin py-md border-b border-surface-variant flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">filter_list</span>
+                <h2 class="font-headline-md text-sm uppercase tracking-wider text-primary">Filter by Tags</h2>
+            </div>
+            <button @click="showFilters = false" class="p-2 -mr-2 text-on-surface-variant hover:text-primary">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        
+        <!-- Modal Content (Scrollable Tags) -->
+        <div class="flex-grow overflow-y-auto p-margin custom-scrollbar">
+            <div class="flex justify-between items-center mb-4">
+                <span class="text-xs text-on-surface-variant font-label-md uppercase tracking-widest" x-text="allTags.length + ' Available Tags'"></span>
+                <button @click="selectedTags = []; performSearch()" 
+                        x-show="selectedTags.length > 0"
+                        class="text-xs text-primary font-label-md uppercase tracking-widest hover:underline">
+                    Clear All
+                </button>
+            </div>
+            <div class="space-y-2">
+                <template x-for="tag in allTags" :key="tag">
+                    <button @click="toggleTag(tag)" 
+                            :class="selectedTags.includes(tag) ? 'bg-secondary-container text-on-secondary-container shadow-md' : 'bg-surface-container-lowest border border-outline-variant text-on-surface-variant'"
+                            class="w-full text-left px-4 py-3 rounded-xl font-body-md text-base flex justify-between items-center transition-all duration-200">
+                        <span x-text="tag"></span>
+                        <span x-show="selectedTags.includes(tag)" class="material-symbols-outlined text-primary">check_circle</span>
+                    </button>
+                </template>
+            </div>
+        </div>
+        
+        <!-- Modal Footer -->
+        <div class="flex-shrink-0 p-margin border-t border-surface-variant bg-surface-container-low shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <button @click="showFilters = false" class="w-full bg-primary text-on-primary font-label-md py-4 rounded-xl shadow-lg hover:bg-primary-container transition-all active:scale-[0.98]">
+                Show <span x-text="filteredHymns.length"></span> Results
+            </button>
+        </div>
     </div>
 
     <script src="main.js"></script>

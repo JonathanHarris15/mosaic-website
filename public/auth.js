@@ -56,20 +56,21 @@ function updateAuthUI(user) {
     if (user && !user.isAnonymous) {
         // User is signed in with a real account
         authContainer.innerHTML = `
-            <div class="flex items-center gap-4">
-                <a href="profile.html" class="px-md py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200 flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[18px]">account_circle</span>
-                    User Page
+            <div class="flex items-center gap-2 md:gap-4">
+                <a href="profile.html" class="p-2 md:px-md md:py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200 flex items-center gap-1" title="User Page">
+                    <span class="material-symbols-outlined text-[20px] md:text-[18px]">account_circle</span>
+                    <span class="hidden md:inline">User Page</span>
                 </a>
-                <button onclick="logout()" class="px-md py-xs font-label-md text-label-md text-error hover:bg-error-container rounded-lg transition-colors duration-200">
-                    Log Out
+                <button onclick="logout()" class="p-2 md:px-md md:py-xs font-label-md text-label-md text-error hover:bg-error-container rounded-lg transition-colors duration-200 flex items-center gap-1" title="Log Out">
+                    <span class="material-symbols-outlined text-[20px] md:text-[18px]">logout</span>
+                    <span class="hidden md:inline">Log Out</span>
                 </button>
             </div>
         `;
     } else {
         // User is signed out or anonymous
         authContainer.innerHTML = `
-            <a href="login.html" class="px-md py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200">
+            <a href="login.html" class="px-4 py-2 md:px-md md:py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200">
                 Log In
             </a>
         `;

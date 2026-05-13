@@ -11,3 +11,6 @@ docs/.venv/
 
 # Firebase
 .firebase/
+
+# Misc
+examples/

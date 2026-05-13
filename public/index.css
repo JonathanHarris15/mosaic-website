@@ -13,10 +13,8 @@
 }
 
 html, body {
-    height: 100%; /* Force full viewport height */
     margin: 0;
     padding: 0;
-    overflow: hidden; /* No scroll on the window itself */
 }
 
 body {

@@ -1,3 +1,30 @@
+const CANONICAL_MAPPING = {
+    'Theme': { field: 'theme', type: 'text' },
+    'Key Verse': { field: 'keyVerse', type: 'text' },
+    'Service Leader': { field: 'serviceLeader', type: 'person' },
+    'Music Leader': { field: 'musicLeader', type: 'person' },
+    'Preacher': { field: 'preacher', type: 'person' },
+    'Sermonette': { field: 'sermonette', type: 'person' },
+    'Prayer (Praise)': { field: 'prayerPraise', type: 'person' },
+    'Prayer (Confession)': { field: 'prayerConfession', type: 'person' },
+    'Elements of the Service': { field: 'elements', type: 'person' },
+    'Other Involvement': { field: 'other', type: 'person' },
+    'Baptism': { field: 'baptism', type: 'text', liturgy: true },
+    'Preparatory Hymn': { field: 'preparatoryHymn', type: 'hymn', liturgy: true },
+    'Call to Worship': { field: 'callToWorship', type: 'text', liturgy: true },
+    'Hymn 1': { field: 'hymn1', type: 'hymn', liturgy: true },
+    'Hymn 2': { field: 'hymn2', type: 'hymn', liturgy: true },
+    'Call to Confession': { field: 'callToConfession', type: 'text', liturgy: true },
+    'Assurance of Pardon': { field: 'assuranceOfPardon', type: 'text', liturgy: true },
+    'Hymn Mid 1': { field: 'hymnMid1', type: 'hymn', liturgy: true },
+    'Hymn Mid 2': { field: 'hymnMid2', type: 'hymn', liturgy: true },
+    'Scripture Reading': { field: 'scriptureReading', type: 'text', liturgy: true },
+    'Sermon': { field: 'sermon', type: 'text', liturgy: true },
+    'Hymn End 1': { field: 'hymnEnd1', type: 'hymn', liturgy: true },
+    'Hymn End 2': { field: 'hymnEnd2', type: 'hymn', liturgy: true },
+    'Benediction': { field: 'benediction', type: 'text', liturgy: true }
+};
+
 function serviceForm() {
     return {
         date: '',
@@ -13,6 +40,7 @@ function serviceForm() {
         noteEditorWidth: 200,
         _quill: null,
         _scrollHandler: null,
+        _sortable: null,
         hymnRegistry: [],
         fuse: null,
         service: {
@@ -26,6 +54,8 @@ function serviceForm() {
             prayerConfession: { name: '', id: null },
             elements: { name: '', id: null },
             other: { name: '', id: null },
+            isIrregular: false,
+            irregularElements: [],
             hasBaptism: false,
             notes: {},
             liturgy: {
@@ -136,6 +166,10 @@ function serviceForm() {
                     e.returnValue = '';
                 }
             });
+
+            if (this.service.isIrregular) {
+                this.$nextTick(() => this.initSortable());
+            }
         },
 
         async loadHymnRegistry() {
@@ -201,6 +235,8 @@ function serviceForm() {
                 // Update top-level properties
                 this.service.theme = data.theme || '';
                 this.service.keyVerse = data.keyVerse || '';
+                this.service.isIrregular = data.isIrregular || false;
+                this.service.irregularElements = data.irregularElements || [];
                 
                 this.service.serviceLeader.name = data.serviceLeader || '';
                 this.service.serviceLeader.id = data.serviceLeaderId || null;
@@ -246,8 +282,119 @@ function serviceForm() {
             this.originalService = JSON.stringify(this.service);
         },
 
+        toggleIrregular() {
+            if (!this.service.isIrregular) {
+                // Toggling TO Irregular: Flatten existing fields
+                const elements = [];
+                // Add in a logical order
+                const orderedKeys = [
+                    'Theme', 'Key Verse', 'Service Leader', 'Music Leader', 'Preacher', 'Sermonette',
+                    'Prayer (Praise)', 'Prayer (Confession)', 'Baptism', 'Preparatory Hymn', 'Call to Worship',
+                    'Hymn 1', 'Hymn 2', 'Call to Confession', 'Assurance of Pardon', 'Hymn Mid 1', 'Hymn Mid 2',
+                    'Scripture Reading', 'Sermon', 'Hymn End 1', 'Hymn End 2', 'Benediction'
+                ];
+
+                for (const key of orderedKeys) {
+                    const mapping = CANONICAL_MAPPING[key];
+                    if (!mapping) continue;
+
+                    let value;
+                    if (mapping.liturgy) {
+                        value = this.service.liturgy[mapping.field];
+                    } else {
+                        value = this.service[mapping.field];
+                    }
+                    
+                    // Only add if it has content OR is a primary role
+                    const hasContent = (typeof value === 'object') ? (value && (value.name || value.id)) : value;
+                    if (hasContent || ['Service Leader', 'Music Leader', 'Preacher'].includes(key)) {
+                        elements.push({ 
+                            key, 
+                            value: value ? JSON.parse(JSON.stringify(value)) : (mapping.type === 'text' ? '' : {name:'', id:null}), 
+                            type: mapping.type 
+                        });
+                    }
+                }
+                this.service.irregularElements = elements;
+                this.service.isIrregular = true;
+                this.$nextTick(() => this.initSortable());
+            } else {
+                // Toggling BACK to Regular: Sync back what we can
+                if (confirm('Toggle back to Regular service? Custom elements will be hidden but preserved in the database.')) {
+                    this.service.irregularElements.forEach(el => {
+                        const mapping = CANONICAL_MAPPING[el.key];
+                        if (mapping) {
+                            if (mapping.liturgy) {
+                                this.service.liturgy[mapping.field] = JSON.parse(JSON.stringify(el.value));
+                            } else {
+                                this.service[mapping.field] = JSON.parse(JSON.stringify(el.value));
+                            }
+                        }
+                    });
+                    this.service.isIrregular = false;
+                }
+            }
+        },
+
+        addBlankElement() {
+            this.service.irregularElements.push({ key: '', value: '', type: 'text' });
+        },
+
+        removeElement(index) {
+            this.service.irregularElements.splice(index, 1);
+        },
+
+        onElementKeyChange(el) {
+            const mapping = CANONICAL_MAPPING[el.key];
+            if (mapping) {
+                // Check if this canonical element already exists elsewhere
+                const existing = this.service.irregularElements.filter(e => e.key === el.key);
+                if (existing.length > 1) {
+                    alert(`Hey, the "${el.key}" element already exists!`);
+                    el.key = '';
+                    return;
+                }
+                el.type = mapping.type;
+                // Initialize value structure if needed
+                if (el.type === 'person' || el.type === 'hymn') {
+                    if (typeof el.value !== 'object' || el.value === null) {
+                        el.value = { name: '', id: null };
+                    }
+                } else if (el.type === 'text') {
+                    if (typeof el.value === 'object') el.value = '';
+                }
+            } else {
+                el.type = 'text'; // Default for custom keys
+            }
+        },
+
+        initSortable() {
+            const el = document.getElementById('irregular-elements-list');
+            if (!el || !window.Sortable) return;
+            
+            if (this._sortable) this._sortable.destroy();
+            
+            this._sortable = Sortable.create(el, {
+                handle: '.drag-handle',
+                animation: 150,
+                onEnd: (evt) => {
+                    const item = this.service.irregularElements.splice(evt.oldIndex, 1)[0];
+                    this.service.irregularElements.splice(evt.newIndex, 0, item);
+                }
+            });
+        },
+
         async validateForm() {
             this.$nextTick(() => {
+                if (this.service.isIrregular) {
+                    // Simpler validation for irregular services?
+                    // For now, just check if it's empty
+                    if (this.service.irregularElements.length === 0) {
+                        alert('Irregular service must have at least one element.');
+                        return;
+                    }
+                    return;
+                }
                 const roleFields = ['serviceLeader', 'musicLeader', 'preacher'];
                 let liturgyFields = [
                     'preparatoryHymn', 'callToWorship', 'hymn1', 
@@ -302,6 +449,21 @@ function serviceForm() {
                 const batch = db.batch();
                 const original = JSON.parse(this.originalService);
                 
+                // For irregular services, sync canonical elements back to standard fields 
+                // so they are visible to calendar/dashboard and tracked for involvements.
+                if (this.service.isIrregular) {
+                    this.service.irregularElements.forEach(el => {
+                        const mapping = CANONICAL_MAPPING[el.key];
+                        if (mapping) {
+                            if (mapping.liturgy) {
+                                this.service.liturgy[mapping.field] = JSON.parse(JSON.stringify(el.value));
+                            } else {
+                                this.service[mapping.field] = JSON.parse(JSON.stringify(el.value));
+                            }
+                        }
+                    });
+                }
+
                 // Role synchronization logic
                 const roles = [
                     { field: 'serviceLeader', role: 'service_leader' },
@@ -315,7 +477,7 @@ function serviceForm() {
                 ];
 
                 for (const { field, role, metadata } of roles) {
-                    const oldId = original[field].id;
+                    const oldId = original[field] ? original[field].id : null;
                     const newId = this.service[field].id;
 
                     if (oldId !== newId) {
@@ -389,6 +551,8 @@ function serviceForm() {
                     otherName: this.service.other.name,
                     otherId: this.service.other.id,
                     hasBaptism: this.service.hasBaptism,
+                    isIrregular: this.service.isIrregular,
+                    irregularElements: this.service.irregularElements,
                     notes: this.service.notes,
                     liturgy: this.service.liturgy,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -450,14 +614,21 @@ function serviceForm() {
             const section = btn.closest('.form-section');
             if (!section) return;
             const rect = section.getBoundingClientRect();
-            const mainEl = document.querySelector('main');
-            const mainRect = mainEl ? mainEl.getBoundingClientRect() : { right: window.innerWidth - 16 };
-            // Anchor to the right of the form-section card, fill to viewport right edge
-            const editorLeft  = rect.right + 28;
-            const editorRight = window.innerWidth - 40; // 40px clears the scrollbar
-            this.noteEditorLeft  = Math.round(editorLeft);
-            this.noteEditorWidth = Math.max(160, Math.round(editorRight - editorLeft));
-            this.noteEditorTop   = Math.max(70, Math.round(rect.top));
+            
+            // Check if we are on mobile/small screen
+            if (window.innerWidth < 1024) {
+                // Fixed centered modal for mobile
+                this.noteEditorWidth = Math.min(window.innerWidth - 48, 500);
+                this.noteEditorLeft = (window.innerWidth - this.noteEditorWidth) / 2;
+                this.noteEditorTop = 100; // Fixed top offset
+            } else {
+                // Anchor to the right of the form-section card for desktop
+                const editorLeft  = rect.right + 28;
+                const editorRight = window.innerWidth - 40;
+                this.noteEditorLeft  = Math.round(editorLeft);
+                this.noteEditorWidth = Math.max(160, Math.round(editorRight - editorLeft));
+                this.noteEditorTop   = Math.max(70, Math.round(rect.top));
+            }
         },
 
         saveNote() {

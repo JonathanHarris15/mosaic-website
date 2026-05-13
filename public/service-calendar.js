@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         current.setDate(current.getDate() + 7);
     }
 
-    const showHistory = localStorage.getItem('showHistory') === 'true';
+    const showHistory = false;
     window.refreshCalendar(showHistory);
     
     // Wait for service data to load so layout is final before we scroll
@@ -107,42 +107,76 @@ function scrollToSection(year, month = null) {
 }
 
 function renderSidebar(grouped) {
-    const nav = document.getElementById('sidebar-nav');
-    nav.innerHTML = '';
+    const navs = [
+        document.getElementById('sidebar-nav'),
+        document.getElementById('mobile-sidebar-nav')
+    ];
+    
+    navs.forEach(nav => {
+        if (!nav) return;
+        nav.innerHTML = '';
 
-    const years = Object.keys(grouped).sort((a, b) => a - b);
+        const years = Object.keys(grouped).sort((a, b) => a - b);
 
-    years.forEach(year => {
-        const yearDiv = document.createElement('div');
-        yearDiv.className = 'mb-sm';
-        
-        const yearLink = document.createElement('a');
-        yearLink.href = 'javascript:void(0)';
-        yearLink.onclick = () => scrollToSection(year);
-        yearLink.className = 'block font-headline-md text-secondary hover:text-primary py-1 transition-colors';
-        yearLink.textContent = year;
-        yearDiv.appendChild(yearLink);
+        years.forEach(year => {
+            const yearDiv = document.createElement('div');
+            yearDiv.className = 'mb-sm';
+            
+            const yearLink = document.createElement('a');
+            yearLink.href = 'javascript:void(0)';
+            yearLink.onclick = () => scrollToSection(year);
+            yearLink.className = 'block font-headline-md text-secondary hover:text-primary py-1 transition-colors';
+            yearLink.textContent = year;
+            yearDiv.appendChild(yearLink);
 
-        const monthsDiv = document.createElement('div');
-        monthsDiv.className = 'ml-md space-y-1';
-        
-        const monthsOrder = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-        
-        monthsOrder.forEach(month => {
-            if (grouped[year][month]) {
-                const monthLink = document.createElement('a');
-                monthLink.href = 'javascript:void(0)';
-                monthLink.onclick = () => scrollToSection(year, month);
-                monthLink.className = 'block font-body-md text-on-surface-variant hover:text-primary text-sm py-0.5 transition-colors';
-                monthLink.textContent = month;
-                monthsDiv.appendChild(monthLink);
-            }
+            const monthsDiv = document.createElement('div');
+            monthsDiv.className = 'ml-md space-y-1';
+            
+            const monthsOrder = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            
+            monthsOrder.forEach(month => {
+                if (grouped[year][month]) {
+                    const monthLink = document.createElement('a');
+                    monthLink.href = 'javascript:void(0)';
+                    monthLink.onclick = () => scrollToSection(year, month);
+                    monthLink.className = 'block font-body-md text-on-surface-variant hover:text-primary text-sm py-0.5 transition-colors';
+                    monthLink.textContent = month;
+                    monthsDiv.appendChild(monthLink);
+                }
+            });
+
+            yearDiv.appendChild(monthsDiv);
+            nav.appendChild(yearDiv);
         });
-
-        yearDiv.appendChild(monthsDiv);
-        nav.appendChild(yearDiv);
     });
 }
+
+window.navigateToGuide = function(date) {
+    const svc = serviceDataMap[date];
+    const isViewer = window.currentUserRole === 'viewer';
+    
+    if (!isViewer && svc) {
+        let incomplete = false;
+        if (svc.guide && svc.guide.elements) {
+            const prayer = svc.guide.elements.find(el => el.type === 'pastoral_prayer');
+            const kids = svc.guide.elements.find(el => el.type === 'kids_section');
+            const announcements = svc.guide.elements.find(el => el.type === 'announcements');
+            
+            if (prayer && prayer.enabled && (!prayer.nation || !prayer.capital)) incomplete = true;
+            if (kids && kids.enabled && (!kids.lessonTitle || !kids.lessonVerse)) incomplete = true;
+            if (announcements && announcements.enabled && (!announcements.items || announcements.items.length === 0 || !announcements.items[0].title)) incomplete = true;
+        } else {
+            // No guide config yet - definitely incomplete
+            incomplete = true;
+        }
+
+        if (incomplete) {
+            const proceed = confirm("Warning: There are elements that you have not completed yet. Please do so before going to the service guide page.\n\nDo you still want to proceed to the editor?");
+            if (!proceed) return;
+        }
+    }
+    window.location.href = `service-guide.html?date=${date}`;
+};
 
 function renderList(grouped) {
     const container = document.getElementById('list-view');
@@ -195,13 +229,13 @@ function renderList(grouped) {
                     `;
 
                     const actions = document.createElement('div');
-                    actions.className = 'flex gap-sm w-full sm:w-auto justify-end flex-shrink-0';
+                    actions.className = 'flex flex-col sm:flex-row gap-sm w-full sm:w-auto justify-end flex-shrink-0';
                     actions.innerHTML = `
-                        <button class="flex-1 sm:flex-none bg-secondary text-on-secondary px-4 py-2 rounded-full font-label-md text-label-md hover:bg-primary transition-colors flex items-center justify-center gap-2 group/btn">
+                        <button onclick="window.navigateToGuide('${formattedDate}')" class="flex-grow sm:flex-none bg-secondary text-on-secondary px-4 py-2 rounded-full font-label-md text-label-md hover:bg-primary transition-colors flex items-center justify-center gap-2 group/btn">
                             <span class="material-symbols-outlined text-[18px]">auto_stories</span>
                             <span>Service Guide</span>
                         </button>
-                        <a href="service-builder.html?date=${formattedDate}" class="flex-1 sm:flex-none border border-outline text-secondary px-4 py-2 rounded-full font-label-md text-label-md hover:bg-secondary hover:text-on-secondary hover:border-secondary transition-colors flex items-center justify-center gap-2 group/btn">
+                        <a href="service-builder.html?date=${formattedDate}" class="flex-grow sm:flex-none border border-outline text-secondary px-4 py-2 rounded-full font-label-md text-label-md hover:bg-secondary hover:text-on-secondary hover:border-secondary transition-colors flex items-center justify-center gap-2 group/btn">
                             <span class="material-symbols-outlined text-[18px]">list_alt</span>
                             <span>Order of Service</span>
                         </a>
@@ -236,7 +270,7 @@ function renderTable(grouped) {
     thead.className = 'sticky-header font-label-md text-label-md text-primary';
     thead.innerHTML = `
         <tr>
-            <th class="px-md py-sm border-b border-outline-variant">Date</th>
+            <th class="px-md py-sm border-b border-outline-variant sticky-col-left">Date</th>
             <th class="px-md py-sm border-b border-outline-variant">Theme</th>
             <th class="px-md py-sm border-b border-outline-variant">Leader</th>
             <th class="px-md py-sm border-b border-outline-variant">Preacher</th>
@@ -278,7 +312,7 @@ function renderTable(grouped) {
                     row.className = 'group hover:bg-surface-container-low transition-colors scroll-mt-32';
                     
                     row.innerHTML = `
-                        <td class="px-md py-md whitespace-nowrap">
+                        <td class="px-md py-md whitespace-nowrap sticky-col-left">
                             <span class="font-body-md text-on-surface">${date.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
                         </td>
                         <td class="px-md py-md min-w-[200px]">
@@ -309,7 +343,7 @@ function renderTable(grouped) {
                         </td>
                         <td class="px-md py-md text-right whitespace-nowrap sticky-column">
                             <div class="flex justify-end gap-xs">
-                                <button title="Service Guide" class="p-2 text-secondary hover:text-primary hover:bg-surface-container rounded-full transition-colors">
+                                <button onclick="window.navigateToGuide('${formattedDate}')" title="Service Guide" class="p-2 text-secondary hover:text-primary hover:bg-surface-container rounded-full transition-colors">
                                     <span class="material-symbols-outlined text-[20px]">auto_stories</span>
                                 </button>
                                 <a href="service-builder.html?date=${formattedDate}" title="Order of Service" class="p-2 text-secondary hover:text-primary hover:bg-surface-container rounded-full transition-colors">
@@ -370,8 +404,15 @@ function injectServiceData(serviceMap) {
             let html = '';
             
             // Badges Row
-            if (svc.hasBaptism || svc.sermonette || canEdit) {
+            if (svc.hasBaptism || svc.sermonette || svc.isIrregular || canEdit) {
                 html += `<div class="flex flex-wrap gap-2 mb-2">`;
+                if (svc.isIrregular) {
+                    html += `
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold uppercase tracking-wider">
+                            <span class="material-symbols-outlined text-[14px]">layers</span>
+                            Irregular
+                        </span>`;
+                }
                 if (svc.hasBaptism) {
                     const baptismName = svc.liturgy?.baptism || svc.baptism || '';
                     html += `
@@ -412,13 +453,13 @@ function injectServiceData(serviceMap) {
                 </p>`;
             }
             if (svc.serviceLeader) {
-                html += `<p class="text-xs text-on-surface-variant flex items-center gap-1">
+                html += `<p class="hidden md:flex text-xs text-on-surface-variant items-center gap-1">
                     <span class="material-symbols-outlined text-[14px]">person</span>
                     Leader: ${escapeHtml(svc.serviceLeader)}
                 </p>`;
             }
             if (svc.preacher) {
-                html += `<p class="text-xs text-on-surface-variant flex items-center gap-1">
+                html += `<p class="hidden md:flex text-xs text-on-surface-variant items-center gap-1">
                     <span class="material-symbols-outlined text-[14px]">podium</span>
                     Preacher: ${escapeHtml(svc.preacher)}
                 </p>`;
@@ -439,6 +480,18 @@ function injectServiceData(serviceMap) {
         }
 
         // Table View Injection
+        const dateCell = el.querySelector('.sticky-col-left');
+        if (dateCell && svc.isIrregular) {
+            // Check if badge already exists
+            if (!dateCell.querySelector('.irregular-indicator')) {
+                const indicator = document.createElement('span');
+                indicator.className = 'irregular-indicator material-symbols-outlined text-[14px] text-amber-600 ml-1 align-middle cursor-help';
+                indicator.textContent = 'layers';
+                indicator.title = 'Irregular Service';
+                dateCell.appendChild(indicator);
+            }
+        }
+
         const themeCell = el.querySelector('.theme-cell');
         if (themeCell) {
             themeCell.textContent = svc.theme || '—';
@@ -721,6 +774,7 @@ auth.onAuthStateChanged(async (user) => {
         try {
             const userData = await getUserData(user.uid);
             const role = (userData && userData.role) || 'viewer';
+            window.currentUserRole = role;
             if (role === 'editor' || role === 'admin') {
                 document.body.classList.add('can-edit');
                 const importBtn = document.getElementById('import-docx-btn');

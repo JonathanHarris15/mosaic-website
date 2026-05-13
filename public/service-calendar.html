@@ -165,8 +165,20 @@
             background-color: #ffffff !important;
         }
 
+        .sticky-col-left {
+            position: sticky;
+            left: 0;
+            z-index: 20;
+            background-color: #ffffff !important;
+        }
+
+        .sticky-header th.sticky-col-left {
+            z-index: 40;
+            background-color: #ffffff !important;
+        }
+
         /* Ensure dark mode also uses a consistent background */
-        .dark .sticky-column, .dark .sticky-header th {
+        .dark .sticky-column, .dark .sticky-header th, .dark .sticky-col-left {
             background-color: #ffffff !important;
             color: #1c1c18 !important; /* Keep text dark for contrast on white bg */
         }
@@ -174,7 +186,7 @@
         [x-cloak] { display: none !important; }
         
         /* Remove specific hover highlight */
-        tr:hover td.sticky-column {
+        tr:hover td.sticky-column, tr:hover td.sticky-col-left {
             background-color: #ffffff !important;
         }
 
@@ -198,13 +210,28 @@
             background: linear-gradient(to right, transparent, rgba(0,0,0,0.05));
             pointer-events: none;
         }
+        
+        td.sticky-col-left::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            right: -8px;
+            width: 8px;
+            background: linear-gradient(to left, transparent, rgba(0,0,0,0.05));
+            pointer-events: none;
+        }
 
         .dark td.sticky-column::before {
             background: linear-gradient(to right, transparent, rgba(0,0,0,0.2));
         }
+        
+        .dark td.sticky-col-left::after {
+            background: linear-gradient(to left, transparent, rgba(0,0,0,0.2));
+        }
 
         /* Ensure parent row background applies to sticky column */
-        tr:hover .sticky-column {
+        tr:hover .sticky-column, tr:hover .sticky-col-left {
             background-color: inherit;
         }
     </style>
@@ -226,10 +253,11 @@
 </head>
 
 <body
-    class="bg-background text-on-background font-body-md text-body-md antialiased h-screen overflow-hidden flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed dark"
+    class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen md:h-screen md:overflow-hidden overflow-x-hidden flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed dark"
     x-data="{ 
         view: localStorage.getItem('calendarView') || 'list',
-        showHistory: localStorage.getItem('showHistory') === 'true',
+        showHistory: false,
+        showDirectory: false,
 
         // --- Person Selector Modal ---
         showPersonSelector: false,
@@ -400,6 +428,8 @@
             }
         }
     }"
+    x-effect="document.body.style.overflow = showDirectory ? 'hidden' : ''"
+    @close-directory.window="showDirectory = false"
     x-init="
         $watch('view', val => {
             localStorage.setItem('calendarView', val);
@@ -493,12 +523,12 @@
     <!-- Hidden File Input -->
     <input type="file" id="docx-file-input" accept=".docx" multiple class="hidden" />
 
-    <header class="flex-shrink-0 bg-background/80 backdrop-blur-md border-b border-surface-variant/30 z-50">
+    <header class="sticky top-0 flex-shrink-0 bg-background/80 backdrop-blur-md border-b border-surface-variant/30 z-[60]">
         <div class="w-full max-w-[1600px] mx-auto px-margin py-md flex justify-between items-center gap-md">
             <div class="flex items-center gap-md min-w-0">
                 <a href="index.html" class="flex-shrink-0 font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-1">
                     <span class="material-symbols-outlined text-sm">arrow_back</span>
-                    <span class="hidden md:inline">Back</span>
+                    <span class="hidden md:inline">Back to Dashboard</span>
                 </a>
                 <div class="h-6 w-[1px] bg-surface-variant/50 hidden md:block flex-shrink-0"></div>
                 <h1 class="font-headline-md text-primary truncate">Service Calendar</h1>
@@ -551,7 +581,7 @@
 
     <main class="flex-grow flex flex-col md:flex-row gap-margin px-margin pb-md pt-base overflow-hidden max-w-[1600px] w-full mx-auto">
         <!-- Sidebar Navigation -->
-        <aside class="w-full md:w-80 flex-shrink-0 flex flex-col overflow-hidden">
+        <aside class="hidden md:flex md:w-80 flex-shrink-0 flex-col md:overflow-hidden">
             <div class="flex-grow bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col overflow-hidden">
                 <h2 class="font-headline-md text-primary mb-sm flex items-center justify-between flex-shrink-0">
                     <div class="flex items-center gap-2">
@@ -569,7 +599,7 @@
         </aside>
 
         <!-- Calendar Container -->
-        <div class="flex-grow min-w-0 flex flex-col overflow-hidden">
+        <div class="flex-grow min-w-0 flex flex-col overflow-hidden pr-14 md:pr-0">
             <!-- Mobile/Small Controls (Hidden in layout) -->
             <div class="lg:hidden mb-md flex flex-wrap items-center justify-between gap-md p-md bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm flex-shrink-0">
                 <!-- History Toggle -->
@@ -616,6 +646,69 @@
             </div>
         </div>
     </main>
+
+    <!-- Mobile Directory Modal -->
+    <div x-show="showDirectory" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 translate-y-full"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 translate-y-full"
+         class="fixed inset-0 z-[100] bg-background flex flex-col md:hidden"
+         style="display: none;">
+        <!-- Modal Header -->
+        <div class="flex-shrink-0 px-margin py-md border-b border-surface-variant flex justify-between items-center">
+            <div class="flex items-center gap-2 text-primary">
+                <span class="material-symbols-outlined">explore</span>
+                <h2 class="font-headline-md text-sm uppercase tracking-wider">Directory</h2>
+            </div>
+            <button @click="showDirectory = false" class="p-2 -mr-2 text-on-surface-variant hover:text-primary">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        
+        <!-- Modal Content (Scrollable Nav) -->
+        <div class="flex-grow overflow-y-auto p-margin custom-scrollbar">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-xs text-on-surface-variant font-label-md uppercase tracking-widest">Available Services</span>
+                <button onclick="window.jumpToUpcoming(); document.dispatchEvent(new CustomEvent('close-directory'))" 
+                        class="text-xs text-primary font-label-md uppercase tracking-widest flex items-center gap-1">
+                    <span class="material-symbols-outlined text-sm">event_repeat</span>
+                    Jump to Upcoming
+                </button>
+            </div>
+            <nav id="mobile-sidebar-nav" class="space-y-xs" @click="showDirectory = false">
+                <!-- Nav links will be injected here by service-calendar.js -->
+            </nav>
+        </div>
+        
+        <!-- Modal Footer -->
+        <div class="flex-shrink-0 p-margin border-t border-surface-variant bg-surface-container-low">
+            <button @click="showDirectory = false" class="w-full bg-primary text-on-primary font-label-md py-4 rounded-xl shadow-lg hover:bg-primary-container transition-all active:scale-[0.98]">
+                Return to Calendar
+            </button>
+        </div>
+    </div>
+
+    <!-- Mobile Floating Navigation -->
+    <div class="md:hidden fixed bottom-6 right-6 flex flex-col gap-3 z-40">
+        <!-- Scroll to Top -->
+        <button @click="window.scrollTo({ top: 0, behavior: 'smooth' })" 
+                class="w-12 h-12 bg-surface-container-highest text-primary border border-outline-variant rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all">
+            <span class="material-symbols-outlined">north</span>
+        </button>
+        <!-- Open Directory -->
+        <button @click="showDirectory = true" 
+                class="w-12 h-12 bg-primary text-on-primary rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all">
+            <span class="material-symbols-outlined">explore</span>
+        </button>
+        <!-- Jump to Upcoming -->
+        <button onclick="window.jumpToUpcoming()" 
+                class="w-12 h-12 bg-secondary text-on-secondary rounded-xl shadow-lg flex items-center justify-center active:scale-95 transition-all">
+            <span class="material-symbols-outlined">event_repeat</span>
+        </button>
+    </div>
 
     <script src="service-calendar.js"></script>
 </body>

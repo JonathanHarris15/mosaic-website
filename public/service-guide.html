@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Service Guide Generator - Mosaic Services</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&family=Work+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#001a43",
+                        "secondary": "#436082",
+                        "surface": "#fcf9f3",
+                        "outline-variant": "#c5c6d0",
+                        "error": "#b3261e",
+                        "success": "#2e7d32"
+                    },
+                    fontFamily: {
+                        "serif": ["Noto Serif", "serif"],
+                        "sans": ["Work Sans", "sans-serif"],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Sortable -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
+    <script src="auth.js"></script>
+    <!-- Guide Logic -->
+    <script src="service-guide.js"></script>
+    <!-- Alpine -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+        [x-cloak] { display: none !important; }
+        
+        /* Print Styles */
+        @media print {
+            @page {
+                size: letter landscape;
+                margin: 0;
+            }
+            body { background: white !important; margin: 0; padding: 0; }
+            .no-print { display: none !important; }
+            
+            /* Hide the live preview entirely during print */
+            #main-layout { display: none !important; }
+            
+            /* The booklet print layer should only be visible when printing */
+            .booklet-print-layer {
+                display: block !important;
+                width: 11in;
+            }
+            
+            .spread-container {
+                width: 11in;
+                height: 8.5in;
+                display: flex;
+                page-break-after: always;
+                overflow: hidden;
+            }
+
+            .print-page {
+                width: 5.5in;
+                height: 8.5in;
+                padding: 0.2in;
+                box-sizing: border-box;
+                font-family: 'Times New Roman', Times, serif;
+                font-size: 10pt;
+                line-height: 1.2;
+                position: relative;
+                overflow: hidden;
+            }
+        }
+
+        /* LIVE PREVIEW SCREEN STYLES ONLY */
+        @media screen {
+            .booklet-print-layer { display: none !important; }
+            
+            .preview-page {
+                @apply bg-white shadow-lg mx-auto mb-8 relative text-black overflow-hidden;
+                width: 5.5in;
+                height: 8.5in;
+                padding: 0.2in;
+                box-sizing: border-box;
+                font-family: 'Times New Roman', Times, serif;
+                font-size: 10pt;
+                line-height: 1.2;
+            }
+        }
+
+        .latex-h1 { @apply text-[1.1rem] font-normal block; }
+        .latex-hr { @apply border-t border-black my-1 w-full; }
+        .latex-spacing-2 { line-height: 2.2; }
+
+        /* Force all lists to be bulleted in preview */
+        .preview-page ul, .preview-page ol {
+            list-style-type: disc !important;
+            @apply pl-8;
+        }
+        
+        .toc-item { @apply flex items-center gap-2 p-2 bg-white border border-outline-variant rounded mb-1 cursor-pointer hover:bg-surface transition-colors; }
+        .toc-item.ghost { @apply opacity-40 bg-primary/10; }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .zoom-controls {
+            @apply absolute bottom-8 right-8 z-[100] flex flex-col gap-2 no-print;
+        }
+        .zoom-btn {
+            @apply w-12 h-12 bg-white shadow-xl rounded-full flex items-center justify-center text-primary hover:bg-surface active:scale-95 transition-all border border-outline-variant;
+        }
+    </style>
+</head>
+<body class="bg-[#f0f2f5] font-sans antialiased text-black" x-data="guideEditor()" x-init="init()">
+
+    <!-- Header / Top Bar -->
+    <header class="no-print h-16 bg-primary text-white flex items-center justify-between px-6 sticky top-0 z-50 shadow-md">
+        <div class="flex items-center gap-4">
+            <a href="service-calendar.html" class="hover:opacity-80">
+                <span class="material-symbols-outlined">arrow_back</span>
+            </a>
+            <h1 class="text-lg font-semibold" x-text="(userRole === 'viewer' ? 'Service Guide: ' : 'Service Guide Editor: ') + formatDate(date)"></h1>
+        </div>
+        <div class="flex items-center gap-3">
+            <div x-show="typeof isOverflowing !== 'undefined' && isOverflowing" x-cloak class="flex items-center gap-2 px-3 py-1 bg-red-400/10 border border-red-400/30 rounded-full mr-1">
+                <span class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+                <span class="text-[9px] font-bold uppercase tracking-widest text-red-400" x-text="visibleElements.length + ' Pages (Limit 16)'"></span>
+            </div>
+            <div x-show="typeof hasChanges !== 'undefined' && hasChanges" x-cloak class="flex items-center gap-2 px-3 py-1 bg-yellow-400/10 border border-yellow-400/30 rounded-full mr-1">
+                <span class="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.8)]"></span>
+                <span class="text-[9px] font-bold uppercase tracking-widest text-yellow-400">Unsaved</span>
+            </div>
+            <button x-show="userRole !== 'viewer'" @click="save()" class="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-2 transition-colors">
+                <span class="material-symbols-outlined text-[20px]">save</span>
+                <span>Save</span>
+            </button>
+            <button @click="window.print()" class="px-4 py-2 bg-white text-primary font-semibold rounded-lg flex items-center gap-2 hover:bg-surface transition-colors">
+                <span class="material-symbols-outlined text-[20px]">print</span>
+                <span>Print PDF</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- PRINT ONLY BOOKLET LAYER -->
+    <div class="booklet-print-layer hidden" x-cloak>
+        <template x-for="(spread, sIdx) in bookletSpreads" :key="'spread-' + sIdx">
+            <div class="spread-container">
+                <!-- Left Page -->
+                <div class="print-page border-r border-black/5">
+                    <div x-data="{ el: spread.left, index: spread.leftIdx }">
+                        <!-- Page Numbering -->
+                        <template x-if="index >= 1 && index <= 14">
+                            <div class="absolute bottom-4 text-[10pt] font-serif select-none"
+                                 :class="index % 2 === 1 ? 'left-6' : 'right-6'"
+                                 x-text="index">
+                            </div>
+                        </template>
+                        <!-- Page Content Templates (Duplicated for Booklet) -->
+                        <template x-if="el.type === 'title_page'"><div class="h-full flex flex-col items-center pt-[1in]"><img src="assets/standard/titlepageim.png" class="w-full mb-[0.8in]" /><div class="text-[1.1rem] mt-[0.2in]" x-text="formatLongDate(date)"></div></div></template>
+                        <template x-if="el.type === 'order_of_service'"><div class="text-[10pt] flex flex-col h-full"><div class="flex justify-between items-baseline"><span class="text-[1.1rem] font-bold">Order of Service</span><span class="text-[1.1rem] italic" x-text="service.theme"></span></div><div class="latex-hr mb-1"></div><div class="text-center text-[8pt] italic mb-3 leading-relaxed"><span x-text="keyVerseText"></span><span x-show="keyVerseText && service.keyVerse">—</span><span x-text="service.keyVerse"></span></div><div class="latex-spacing-2 flex-grow flex flex-col justify-between"><div class="flex justify-between"><span class="font-bold">Preparatory</span><span class="italic" x-text="service.liturgy?.preparatoryHymn?.name || ''"></span></div><div class="font-bold">Welcome</div><div class="font-bold">Moment of Silent Preparation</div><div class="flex justify-between"><span class="font-bold">Scriptural Call to Worship</span><span x-text="service.liturgy?.callToWorship || ''"></span></div><div class="flex justify-between"><span class="font-bold">Hymn</span><span class="italic" x-text="service.liturgy?.hymn1?.name || ''"></span></div><div class="font-bold">Prayer of Praise</div><div class="flex justify-between"><span class="font-bold">Call To Confession</span><span x-text="service.liturgy?.callToConfession || ''"></span></div><div class="font-bold">Prayer of Confession</div><div class="flex justify-between"><span class="font-bold">Scriptural Assurance of Pardon</span><span x-text="service.liturgy?.assuranceOfPardon || ''"></span></div><div class="flex justify-between"><span class="font-bold">Hymn</span><span class="italic" x-text="service.liturgy?.hymnMid1?.name || ''"></span></div><div class="flex justify-between"><span class="font-bold">Hymn</span><span class="italic" x-text="service.liturgy?.hymnMid2?.name || ''"></span></div><div class="flex justify-between"><span class="font-bold">Scripture Reading</span><span x-text="service.liturgy?.scriptureReading || ''"></span></div><div class="font-bold">Pastoral Prayer</div><div class="flex justify-between"><span class="font-bold">Sermon</span><span x-text="service.liturgy?.sermon || ''"></span></div><template x-if="service.hasBaptism"><div class="flex justify-between text-primary font-bold"><span>Sacrament of Baptism</span><span x-text="service.liturgy?.baptism || ''"></span></div></template><div class="flex justify-between"><span class="font-bold">Hymn</span><span class="italic" x-text="service.liturgy?.hymnEnd1?.name || ''"></span></div><div class="flex justify-between"><span class="font-bold">Hymn</span><span class="italic" x-text="service.liturgy?.hymnEnd2?.name || ''"></span></div><div class="font-bold">The Lord's Supper</div><div class="font-bold">Moment of Silent Reflection</div><div class="flex justify-between"><span class="font-bold">Benediction</span><span x-text="service.liturgy?.benediction || ''"></span></div></div><div class="mt-4 flex-shrink-0"><div class="grid grid-cols-3 gap-2 text-[8pt] pb-1 border-b border-black"><span>Preacher: <span x-text="service.preacher || 'TBD'"></span></span><span class="text-center">Music Leader: <span x-text="service.musicLeader || 'TBD'"></span></span><span class="text-right">Service Leader: <span x-text="service.serviceLeader || 'TBD'"></span></span></div><div class="text-center italic mt-4 text-[9pt]">Our service typically concludes at approximately 11:45 a.m.</div></div></div></template>
+                        <template x-if="el.type === 'hymn_pages'"><div class="h-full flex flex-col pb-8"><div class="flex justify-between items-baseline"><span class="text-[1.1rem] font-bold">Hymn</span><span class="text-[1.1rem] italic" x-text="hymnDetails[el.hymnId]?.hymn_name || el.hymnName || ''"></span></div><div class="latex-hr mb-2"></div><div class="flex-1 flex flex-col items-center justify-start overflow-hidden mt-4"><template x-if="el.hymnId && getHymnImages(el.hymnId).length > 0"><img :src="getHymnImages(el.hymnId)[el.pageIndex]" class="max-w-full max-h-[95%] object-contain" /></template><template x-if="!el.hymnId || getHymnImages(el.hymnId).length === 0"><div class="w-full h-full flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded text-gray-400"><span class="material-symbols-outlined text-4xl mb-2">music_note</span><p class="text-sm font-sans text-center">No music sheet found for:<br/><b x-text="el.hymnName || hymnDetails[el.hymnId]?.hymn_name"></b></p></div></template></div><div class="text-center text-[7pt] italic mt-2"><template x-if="el.pageIndex < (el.totalPages - 1)"><span>(next page)</span></template><template x-if="el.pageIndex === (el.totalPages - 1)"><span x-text="hymnDetails[el.hymnId]?.attribution || ''"></span></template></div></div></template>
+                        <template x-if="el.type === 'pastoral_prayer'"><div class="text-[10pt] relative"><div class="flex justify-between items-baseline"><span class="text-[1.1rem] font-bold">Pastoral Prayer</span></div><div class="latex-hr mb-4"></div><div class="space-y-[8.5em] mb-4 flex-shrink-0"><div><span class="font-bold">Members:</span></div><div><span class="font-bold">Church:</span></div><div><span class="font-bold">Nation/Country:</span> <span class="italic" x-text="el.nation || ''"></span></div></div><div class="mt-4 pl-6 space-y-1 text-[9.5pt]"><div><b>Continent:</b> <span x-text="el.continent || ''"></span></div><div><b>Capital:</b> <span x-text="el.capital || ''"></span></div><div><b>Population:</b> <span x-text="el.population || ''"></span></div><div><b>Official Language:</b> <span x-text="el.language || ''"></span></div><div><b>Total Languages:</b> <span x-text="el.totalLanguages || ''"></span></div><div><b>Literacy Rate:</b> <span x-text="el.literacy || ''"></span></div><div><b>Christian %:</b> <span x-text="el.christianPct || ''"></span></div><div><b>Evangelical %:</b> <span x-text="el.evangelicalPct || ''"></span></div><div><b>Un-evangelized %:</b> <span x-text="el.unevangelizedPct || ''"></span></div></div><div class="absolute top-[50%] right-0 w-[40%] flex items-center justify-center aspect-square overflow-hidden"><template x-if="el.countryImage"><img :src="el.countryImage" class="w-full h-full object-contain" /></template></div><div class="mt-8"><div class="underline font-bold mb-2">Prayer Prompts for Country:</div><ul class="pl-8 space-y-0.5 text-[9.5pt]"><template x-for="p in (el.prompts || [])"><li x-text="p"></li></template></ul></div></div></template>
+                        <template x-if="el.type === 'announcements'"><div class="flex flex-col h-full text-[10pt]"><div class="flex justify-between items-baseline"><span class="text-[1.1rem] font-bold">Announcements</span></div><div class="latex-hr mb-2"></div><div class="min-h-[2.2in] mb-4 overflow-hidden"><template x-for="item in (el.items || [])"><div class="mb-2 last:mb-0 text-[10pt] leading-snug"><span class="font-bold" x-text="item.title + (item.title ? ': ' : '')"></span><span x-html="item.content"></span></div></template></div><div class="text-center mb-6"><div class="underline font-bold text-[10pt] mb-2">Weekly Events</div><div class="text-left text-[10pt] leading-tight space-y-3"><p><b>Mosaic Kids:</b> We have a Mosaic Kids at 8:30 a.m. on Sunday mornings before service. During this hour, the kids will be given a structured lesson plan from the Gospel Project.</p><p><b>Service Review:</b> On Mondays, following the service, we meet for lunch at 12:00 p.m. to review the entire service, giving godly encouragement and loving feedback</p></div></div><div class="w-full mb-6"><div class="grid grid-cols-4 gap-2 text-center border-t border-black pt-2"><div class="flex justify-center"><img src="assets/standard/WeeklyPlaylistQR.png" class="w-[6em] h-[6em]" /></div><div class="flex justify-center"><img src="assets/standard/ComprehensivePlaylistQR.png" class="w-[6em] h-[6em]" /></div><div class="flex justify-center"><img src="assets/standard/GivingQR.png" class="w-[6em] h-[6em]" /></div><div class="flex justify-center"><img src="assets/standard/FirstTimeGuestQR.png" class="w-[6em] h-[6em]" /></div></div></div><div class="mt-auto"><div class="flex justify-between items-baseline"><span class="text-[1.1rem] font-bold">Preaching Schedule</span></div><div class="latex-hr mb-1"></div><table class="w-full text-[9.5pt] border-collapse table-fixed"><thead><tr class="border-b border-black"><th class="text-left py-1 font-normal w-1/3">Date</th><th class="text-center py-1 font-normal w-1/3">Preacher</th><th class="text-right py-1 font-normal w-1/3">Sermon Text</th></tr></thead><tbody><template x-for="item in schedule.slice(0,5)"><tr><td class="py-1 text-left truncate" x-text="getShortDate(item.id)"></td><td class="py-1 text-center truncate" x-text="item.preacher || 'TBA'"></td><td class="py-1 text-right truncate" x-text="item.liturgy?.sermon || 'TBA'"></td></tr></template></tbody></table></div><div class="flex justify-center items-center py-2"><img src="assets/standard/logo.png" class="w-[3.5em] h-auto mr-4" /><div class="text-[9.5pt] leading-snug"><div><b>Meeting Address:</b> 4080 State Hwy 6 Frontage Rd</div><div><b>Website:</b> www.mosaiccstx.org</div></div></div></div></template>
+                        <template x-if="el.type === 'sermon_notes'"><div class="h-full flex flex-col"><div class="flex justify-between items-baseline"><span class="text-[1.1rem] font-bold">Sermon Notes</span></div><div class="latex-hr mb-4"></div></div></template>
+                        <template x-if="el.type === 'kids_section'"><div class="text-[10pt]"><div class="flex justify-between items-baseline"><span class="text-[1.1rem] font-bold">Parent Discussion: Mosaic Kids</span></div><div class="latex-hr mb-4"></div><p class="text-[9.5pt] leading-relaxed indent-8">For parents whose kids attended Mosaic Kids...</p><div class="mt-8 text-center"><div class="text-[1.1rem] font-bold italic" x-text="el.lessonTitle || 'Lesson Title'"></div><div class="text-[9pt]" x-text="el.lessonVerse || 'Scripture Passage'"></div></div><div class="mt-8 space-y-6"><div><div class="font-bold italic mb-2">Bible Story Summary:</div><ul class="text-[9pt] space-y-1"><template x-for="s in (el.summary || [])"><li x-text="s"></li></template></ul></div><div><div class="font-bold italic mb-2">Review Questions:</div><ul class="text-[9pt] space-y-1"><template x-for="q in (el.questions || [])"><li x-text="q"></li></template></ul></div></div></div></template>
+                        <template x-if="el.type === 'custom_page'"><div class="h-full prose prose-sm max-w-none font-serif" x-html="el.content || ''"></div></template>
+                    </div>
+                </div>
+                <!-- Right Page -->
+                <div class="print-page">
+                    <div x-data="{ el: spread.right, index: spread.rightIdx }">
+                        <!-- Page Numbering -->
+                        <template x-if="index >= 1 && index <= 14">
+                            <div class="absolute bottom-4 text-[10pt] font-serif select-none"
+                                 :class="index % 2 === 1 ? 'left-6' : 'right-6'"
+                                 x-text="index">
+                            </div>
+                        </template>
+                        <!-- Page Content Templates (Duplicated for Booklet) -->
+                        <template x-if="el.type === 'title_page'"><div class="h-full flex flex-col items-center pt-[1in]"><img src="assets/standard/titlepageim.png" class="w-full mb-[0.8in]" /><div class="text-[1.1rem] mt-[0.2in]" x-text="formatLongDate(date)"></div></div></template>
+                        <template x-if="el.type === 'order_of_service'"><div class="text-[10pt] flex flex-col h-full"><div class="flex justify-between items-baseline"><span class="text-[1.1rem] font-bold">Order of Service</span><span class="text-[1.1rem] italic" x-text="service.theme"></span></div><div class="latex-hr mb-1"></div><div class="text-center text-[8pt] italic mb-3 leading-relaxed"><span x-text="keyVerseText"></span><span x-show="keyVerseText && service.keyVerse">—</span><span x-text="service.keyVerse"></span></div><div class="latex-spacing-2 flex-grow flex flex-col justify-between"><div class="flex justify-between"><span class="font-bold">Preparatory</span><span class="italic" x-text="service.liturgy?.preparatoryHymn?.name || ''"></span></div><div class="font-bold">Welcome</div><div class="font-bold">Moment of Silent Preparation</div><div class="flex justify-between"><span class="font-bold">Scriptural Call to Worship</span><span x-text="service.liturgy?.callToWorship || ''"></span></div><div class="flex justify-between"><span class="font-bold">Hymn</span><span class="italic" x-text="service.liturgy?.hymn1?.name || ''"></span></div><div class="font-bold">Prayer of Praise</div><div class="flex justify-between"><span class="font-bold">Call To Confession</span><span x-text="service.liturgy?.callToConfession || ''"></span></div><div class="font-bold">Prayer of Confession</div><div class="flex justify-between"><span class="font-bold">Scriptural Assurance of Pardon</span><span x-text="service.liturgy?.assuranceOfPardon || ''"></span></div><div class="flex justify-between"><span class="font-bold">Hymn</span><span class="italic" x-text="service.liturgy?.hymnMid1?.name || ''"></span></div><div class="flex justify-between"><span class="font-bold">Hymn</span><span class="italic" x-text="service.liturgy?.hymnMid2?.name || ''"></span></div><div class="flex justify-between"><span class="font-bold">Scripture Reading</span><span x-text="service.liturgy?.scriptureReading || ''"></span></div><div class="font-bold">Pastoral Prayer</div><div class="flex justify-between"><span class="font-bold">Sermon</span><span x-text="service.liturgy?.sermon || ''"></span></div><template x-if="service.hasBaptism"><div class="flex justify-between text-primary font-bold"><span>Sacrament of Baptism</span><span x-text="service.liturgy?.baptism || ''"></span></div></template><div class="flex justify-between"><span class="font-bold">Hymn</span><span class="italic" x-text="service.liturgy?.hymnEnd1?.name || ''"></span></div><div class="flex justify-between"><span class="font-bold">Hymn</span><span class="italic" x-text="service.liturgy?.hymnEnd2?.name || ''"></span></div><div class="font-bold">The Lord's Supper</div><div class="font-bold">Moment of Silent Reflection</div><div class="flex justify-between"><span class="font-bold">Benediction</span><span x-text="service.liturgy?.benediction || ''"></span></div></div><div class="mt-4 flex-shrink-0"><div class="grid grid-cols-3 gap-2 text-[8pt] pb-1 border-b border-black"><span>Preacher: <span x-text="service.preacher || 'TBD'"></span></span><span class="text-center">Music Leader: <span x-text="service.musicLeader || 'TBD'"></span></span><span class="text-right">Service Leader: <span x-text="service.serviceLeader || 'TBD'"></span></span></div><div class="text-center italic mt-4 text-[9pt]">Our service typically concludes at approximately 11:45 a.m.</div></div></div></template>
+                        <template x-if="el.type === 'hymn_pages'"><div class="h-full flex flex-col pb-8"><div class="flex justify-between items-baseline"><span class="text-[1.1rem] font-bold">Hymn</span><span class="text-[1.1rem] italic" x-text="hymnDetails[el.hymnId]?.hymn_name || el.hymnName || ''"></span></div><div class="latex-hr mb-2"></div><div class="flex-1 flex flex-col items-center justify-start overflow-hidden mt-4"><template x-if="el.hymnId && getHymnImages(el.hymnId).length > 0"><img :src="getHymnImages(el.hymnId)[el.pageIndex]" class="max-w-full max-h-[95%] object-contain" /></template><template x-if="!el.hymnId || getHymnImages(el.hymnId).length === 0"><div class="w-full h-full flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded text-gray-400"><span class="material-symbols-outlined text-4xl mb-2">music_note</span><p class="text-sm font-sans text-center">No music sheet found for:<br/><b x-text="el.hymnName || hymnDetails[el.hymnId]?.hymn_name"></b></p></div></template></div><div class="text-center text-[7pt] italic mt-2"><template x-if="el.pageIndex < (el.totalPages - 1)"><span>(next page)</span></template><template x-if="el.pageIndex === (el.totalPages - 1)"><span x-text="hymnDetails[el.hymnId]?.attribution || ''"></span></template></div></div></template>
+                        <template x-if="el.type === 'pastoral_prayer'"><div class="text-[10pt] relative"><div class="flex justify-between items-baseline"><span class="text-[1.1rem] font-bold">Pastoral Prayer</span></div><div class="latex-hr mb-4"></div><div class="space-y-[8.5em] mb-4 flex-shrink-0"><div><span class="font-bold">Members:</span></div><div><span class="font-bold">Church:</span></div><div><span class="font-bold">Nation/Country:</span> <span class="italic" x-text="el.nation || ''"></span></div></div><div class="mt-4 pl-6 space-y-1 text-[9.5pt]"><div><b>Continent:</b> <span x-text="el.continent || ''"></span></div><div><b>Capital:</b> <span x-text="el.capital || ''"></span></div><div><b>Population:</b> <span x-text="el.population || ''"></span></div><div><b>Official Language:</b> <span x-text="el.language || ''"></span></div><div><b>Total Languages:</b> <span x-text="el.totalLanguages || ''"></span></div><div><b>Literacy Rate:</b> <span x-text="el.literacy || ''"></span></div><div><b>Christian %:</b> <span x-text="el.christianPct || ''"></span></div><div><b>Evangelical %:</b> <span x-text="el.evangelicalPct || ''"></span></div><div><b>Un-evangelized %:</b> <span x-text="el.unevangelizedPct || ''"></span></div></div><div class="absolute top-[50%] right-0 w-[40%] flex items-center justify-center aspect-square overflow-hidden"><template x-if="el.countryImage"><img :src="el.countryImage" class="w-full h-full object-contain" /></template></div><div class="mt-8"><div class="underline font-bold mb-2">Prayer Prompts for Country:</div><ul class="pl-8 space-y-0.5 text-[9.5pt]"><template x-for="p in (el.prompts || [])"><li x-text="p"></li></template></ul></div></div></template>
+                        <template x-if="el.type === 'announcements'"><div class="flex flex-col h-full text-[10pt]"><div class="flex justify-between items-baseline"><span class="text-[1.1rem] font-bold">Announcements</span></div><div class="latex-hr mb-2"></div><div class="min-h-[2.2in] mb-4 overflow-hidden"><template x-for="item in (el.items || [])"><div class="mb-2 last:mb-0 text-[10pt] leading-snug"><span class="font-bold" x-text="item.title + (item.title ? ': ' : '')"></span><span x-html="item.content"></span></div></template></div><div class="text-center mb-6"><div class="underline font-bold text-[10pt] mb-2">Weekly Events</div><div class="text-left text-[10pt] leading-tight space-y-3"><p><b>Mosaic Kids:</b> We have a Mosaic Kids at 8:30 a.m. on Sunday mornings before service. During this hour, the kids will be given a structured lesson plan from the Gospel Project.</p><p><b>Service Review:</b> On Mondays, following the service, we meet for lunch at 12:00 p.m. to review the entire service, giving godly encouragement and loving feedback</p></div></div><div class="w-full mb-6"><div class="grid grid-cols-4 gap-2 text-center border-t border-black pt-2"><div class="flex justify-center"><img src="assets/standard/WeeklyPlaylistQR.png" class="w-[6em] h-[6em]" /></div><div class="flex justify-center"><img src="assets/standard/ComprehensivePlaylistQR.png" class="w-[6em] h-[6em]" /></div><div class="flex justify-center"><img src="assets/standard/GivingQR.png" class="w-[6em] h-[6em]" /></div><div class="flex justify-center"><img src="assets/standard/FirstTimeGuestQR.png" class="w-[6em] h-[6em]" /></div></div></div><div class="mt-auto"><div class="flex justify-between items-baseline"><span class="text-[1.1rem] font-bold">Preaching Schedule</span></div><div class="latex-hr mb-1"></div><table class="w-full text-[9.5pt] border-collapse table-fixed"><thead><tr class="border-b border-black"><th class="text-left py-1 font-normal w-1/3">Date</th><th class="text-center py-1 font-normal w-1/3">Preacher</th><th class="text-right py-1 font-normal w-1/3">Sermon Text</th></tr></thead><tbody><template x-for="item in schedule.slice(0,5)"><tr><td class="py-1 text-left truncate" x-text="getShortDate(item.id)"></td><td class="py-1 text-center truncate" x-text="item.preacher || 'TBA'"></td><td class="py-1 text-right truncate" x-text="item.liturgy?.sermon || 'TBA'"></td></tr></template></tbody></table></div><div class="flex justify-center items-center py-2"><img src="assets/standard/logo.png" class="w-[3.5em] h-auto mr-4" /><div class="text-[9.5pt] leading-snug"><div><b>Meeting Address:</b> 4080 State Hwy 6 Frontage Rd</div><div><b>Website:</b> www.mosaiccstx.org</div></div></div></div></template>
+                        <template x-if="el.type === 'sermon_notes'"><div class="h-full flex flex-col"><div class="flex justify-between items-baseline"><span class="text-[1.1rem] font-bold">Sermon Notes</span></div><div class="latex-hr mb-4"></div></div></template>
+                        <template x-if="el.type === 'kids_section'"><div class="text-[10pt]"><div class="flex justify-between items-baseline"><span class="text-[1.1rem] font-bold">Parent Discussion: Mosaic Kids</span></div><div class="latex-hr mb-4"></div><p class="text-[9.5pt] leading-relaxed indent-8">For parents whose kids attended Mosaic Kids...</p><div class="mt-8 text-center"><div class="text-[1.1rem] font-bold italic" x-text="el.lessonTitle || 'Lesson Title'"></div><div class="text-[9pt]" x-text="el.lessonVerse || 'Scripture Passage'"></div></div><div class="mt-8 space-y-6"><div><div class="font-bold italic mb-2">Bible Story Summary:</div><ul class="text-[9pt] space-y-1"><template x-for="s in (el.summary || [])"><li x-text="s"></li></template></ul></div><div><div class="font-bold italic mb-2">Review Questions:</div><ul class="text-[9pt] space-y-1"><template x-for="q in (el.questions || [])"><li x-text="q"></li></template></ul></div></div></div></template>
+                        <template x-if="el.type === 'custom_page'"><div class="h-full prose prose-sm max-w-none font-serif" x-html="el.content || ''"></div></template>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <main id="main-layout" class="flex h-[calc(100vh-64px)] overflow-hidden">
+        
+        <!-- Left Sidebar: Table of Contents / Elements -->
+        <aside class="no-print w-64 bg-white border-r border-outline-variant flex flex-col shadow-sm">
+            <div class="p-4 border-b border-outline-variant bg-surface">
+                <h2 class="font-semibold text-secondary uppercase tracking-wider text-[10px]">Guide Elements</h2>
+                <p x-show="userRole !== 'viewer'" class="text-[10px] text-gray-400 mt-0.5">Drag to reorder elements.</p>
+            </div>
+            
+            <div id="toc-list" class="flex-1 overflow-y-auto p-3 custom-scrollbar">
+                <template x-for="(el, index) in elements" :key="el.id">
+                    <div class="toc-item group" :class="{'opacity-50': !el.enabled, 'ring-2 ring-primary bg-surface': selectedElement?.id === el.id}" @click="selectElement(el)">
+                        <span x-show="userRole !== 'viewer'" class="material-symbols-outlined text-gray-400 drag-handle cursor-move">drag_indicator</span>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-[11px] font-medium text-primary truncate" x-text="el.label"></div>
+                            <div class="text-[8px] text-gray-400 uppercase tracking-tight" x-text="el.type.replace('_', ' ')"></div>
+                        </div>
+                        <div x-show="userRole !== 'viewer'" class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button @click.stop="el.enabled = !el.enabled; recalculateSermonNotes()" class="text-gray-400 hover:text-primary">
+                                <span class="material-symbols-outlined text-[14px]" x-text="el.enabled ? 'visibility' : 'visibility_off'"></span>
+                            </button>
+                            <button @click.stop="deleteElement(el.id)" class="text-gray-400 hover:text-red-500">
+                                <span class="material-symbols-outlined text-[14px]">delete</span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+                
+                <button x-show="userRole !== 'viewer'" @click="addCustomPage()" class="w-full py-2 border border-dashed border-outline-variant rounded text-secondary text-[10px] font-bold uppercase flex items-center justify-center gap-2 hover:border-primary hover:text-primary transition-all mt-4">
+                    <span class="material-symbols-outlined text-[16px]">add_circle</span>
+                    <span>Add Page</span>
+                </button>
+            </div>
+            
+            <div class="p-3 border-t border-outline-variant bg-surface text-[9px] text-gray-400">
+                16-page booklet logic active.
+            </div>
+        </aside>
+
+        <!-- Middle: Live Preview -->
+        <section class="flex-1 bg-gray-200 relative flex flex-col overflow-hidden shadow-inner">
+            <div class="flex-1 overflow-y-auto p-8 flex flex-col items-center custom-scrollbar" id="viewport-container">
+                <div class="print-container transition-transform duration-200 origin-top" :style="`transform: scale(${zoomLevel});`" id="viewport">
+                    
+                    <template x-for="(el, index) in visibleElements" :key="el.id">
+                        <div class="preview-page page-break" :id="'preview-' + el.id">
+                            
+                            <!-- Page Numbering (1-14 for pages 2-15) -->
+                            <template x-if="index >= 1 && index <= 14">
+                                <div class="absolute bottom-4 text-[10pt] font-serif select-none"
+                                     :class="index % 2 === 1 ? 'left-6' : 'right-6'"
+                                     x-text="index">
+                                </div>
+                            </template>
+                            <!-- ==> TITLE PAGE <== -->
+                            <template x-if="el.type === 'title_page'">
+                                <div class="h-full flex flex-col items-center pt-[1in]">
+                                    <img src="assets/standard/titlepageim.png" class="w-full mb-[0.8in]" alt="Title Image" />
+                                    <div class="text-[1.1rem] mt-[0.2in]" x-text="formatLongDate(date)"></div>
+                                </div>
+                            </template>
+                            <!-- ==> ORDER OF SERVICE <== -->
+                            <template x-if="el.type === 'order_of_service'">
+                                <div class="text-[10pt] flex flex-col h-full">
+                                    <div class="flex justify-between items-baseline flex-shrink-0">
+                                        <span class="text-[1.1rem] font-bold">Order of Service</span>
+                                        <span class="text-[1.1rem] italic" x-text="service.theme"></span>
+                                    </div>
+                                    <div class="latex-hr mb-1 flex-shrink-0"></div>
+                                    
+                                    <div class="text-center text-[8pt] italic mb-3 flex-shrink-0 max-h-[4.5em] overflow-hidden leading-relaxed">
+                                        <span x-text="keyVerseText"></span>
+                                        <span x-show="keyVerseText && service.keyVerse">—</span>
+                                        <span x-text="service.keyVerse"></span>
+                                    </div>
+
+                                    <div class="latex-spacing-2 flex-grow flex flex-col justify-between overflow-hidden">
+                                        <div class="flex justify-between">
+                                            <span class="font-bold">Preparatory</span>
+                                            <span class="italic" x-text="service.liturgy?.preparatoryHymn?.name || ''"></span>
+                                        </div>
+                                        <div class="font-bold">Welcome</div>
+                                        <div class="font-bold">Moment of Silent Preparation</div>
+                                        <div class="flex justify-between">
+                                            <span class="font-bold">Scriptural Call to Worship</span>
+                                            <span x-text="service.liturgy?.callToWorship || ''"></span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="font-bold">Hymn</span>
+                                            <span class="italic" x-text="service.liturgy?.hymn1?.name || ''"></span>
+                                        </div>
+                                        
+                                        <div class="font-bold">Prayer of Praise</div>
+                                        <div class="flex justify-between">
+                                            <span class="font-bold">Call To Confession</span>
+                                            <span x-text="service.liturgy?.callToConfession || ''"></span>
+                                        </div>
+                                        <div class="font-bold">Prayer of Confession</div>
+                                        <div class="flex justify-between">
+                                            <span class="font-bold">Scriptural Assurance of Pardon</span>
+                                            <span x-text="service.liturgy?.assuranceOfPardon || ''"></span>
+                                        </div>
+
+                                        <div class="flex justify-between">
+                                            <span class="font-bold">Hymn</span>
+                                            <span class="italic" x-text="service.liturgy?.hymnMid1?.name || ''"></span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="font-bold">Hymn</span>
+                                            <span class="italic" x-text="service.liturgy?.hymnMid2?.name || ''"></span>
+                                        </div>
+
+                                        <div class="flex justify-between">
+                                            <span class="font-bold">Scripture Reading</span>
+                                            <span x-text="service.liturgy?.scriptureReading || ''"></span>
+                                        </div>
+                                        <div class="font-bold">Pastoral Prayer</div>
+                                        <div class="flex justify-between">
+                                            <span class="font-bold">Sermon</span>
+                                            <span x-text="service.liturgy?.sermon || ''"></span>
+                                        </div>
+
+                                        <template x-if="service.hasBaptism">
+                                            <div class="flex justify-between text-primary font-bold">
+                                                <span>Sacrament of Baptism</span>
+                                                <span x-text="service.liturgy?.baptism || ''"></span>
+                                            </div>
+                                        </template>
+
+                                        <div class="flex justify-between">
+                                            <span class="font-bold">Hymn</span>
+                                            <span class="italic" x-text="service.liturgy?.hymnEnd1?.name || ''"></span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="font-bold">Hymn</span>
+                                            <span class="italic" x-text="service.liturgy?.hymnEnd2?.name || ''"></span>
+                                        </div>
+                                        <div class="font-bold">The Lord's Supper</div>
+                                        <div class="font-bold">Moment of Silent Reflection</div>
+                                        <div class="flex justify-between">
+                                            <span class="font-bold">Benediction</span>
+                                            <span x-text="service.liturgy?.benediction || ''"></span>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-4 flex-shrink-0">
+                                        <div class="grid grid-cols-3 gap-2 text-[8pt] pb-1 border-b border-black">
+                                            <span>Preacher: <span x-text="service.preacher || 'TBD'"></span></span>
+                                            <span class="text-center">Music Leader: <span x-text="service.musicLeader || 'TBD'"></span></span>
+                                            <span class="text-right">Service Leader: <span x-text="service.serviceLeader || 'TBD'"></span></span>
+                                        </div>
+                                        <div class="text-center italic mt-4 text-[9pt]">
+                                            Our service typically concludes at approximately 11:45 a.m.
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- ==> HYMN PAGE <== -->
+                            <template x-if="el.type === 'hymn_pages'">
+                                <div class="h-full flex flex-col pb-8">
+                                    <div class="flex justify-between items-baseline">
+                                        <span class="text-[1.1rem] font-bold">Hymn</span>
+                                        <span class="text-[1.1rem] italic" x-text="hymnDetails[el.hymnId]?.hymn_name || el.hymnName || ''"></span>
+                                    </div>
+                                    <div class="latex-hr mb-2"></div>
+                                    <div class="flex-1 flex flex-col items-center justify-start overflow-hidden mt-4">
+                                        <template x-if="el.hymnId && getHymnImages(el.hymnId).length > 0">
+                                            <img :src="getHymnImages(el.hymnId)[el.pageIndex]" class="max-w-full max-h-[95%] object-contain" />
+                                        </template>
+                                        <template x-if="!el.hymnId || getHymnImages(el.hymnId).length === 0">
+                                            <div class="w-full h-full flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded text-gray-400">
+                                                <span class="material-symbols-outlined text-4xl mb-2">music_note</span>
+                                                <p class="text-sm font-sans text-center">No music sheet found for:<br/><b x-text="el.hymnName || hymnDetails[el.hymnId]?.hymn_name"></b></p>
+                                            </div>
+                                        </template>
+                                    </div>
+                                    <div class="text-center text-[7pt] italic mt-2">
+                                        <template x-if="el.pageIndex < (el.totalPages - 1)"><span>(next page)</span></template>
+                                        <template x-if="el.pageIndex === (el.totalPages - 1)"><span x-text="hymnDetails[el.hymnId]?.attribution || ''"></span></template>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- ==> PASTORAL PRAYER <== -->
+                            <template x-if="el.type === 'pastoral_prayer'">
+                                <div class="text-[10pt] relative">
+                                    <div class="flex justify-between items-baseline"><span class="text-[1.1rem] font-bold">Pastoral Prayer</span></div>
+                                    <div class="latex-hr mb-4"></div>
+
+                                    <div class="space-y-[8.5em] mb-4 flex-shrink-0">
+                                        <div><span class="font-bold">Members:</span></div>
+                                        <div><span class="font-bold">Church:</span></div>
+                                        <div><span class="font-bold">Nation/Country:</span> <span class="italic" x-text="el.nation || ''"></span></div>
+                                    </div>
+
+                                    <div class="mt-4 pl-6 space-y-1 text-[9.5pt]">
+                                        <div><b>Continent:</b> <span x-text="el.continent || ''"></span></div>
+                                        <div><b>Capital:</b> <span x-text="el.capital || ''"></span></div>
+                                        <div><b>Population:</b> <span x-text="el.population || ''"></span></div>
+                                        <div><b>Official Language:</b> <span x-text="el.language || ''"></span></div>
+                                        <div><b>Total Languages:</b> <span x-text="el.totalLanguages || ''"></span></div>
+                                        <div><b>Literacy Rate:</b> <span x-text="el.literacy || ''"></span></div>
+                                        <div><b>Christian %:</b> <span x-text="el.christianPct || ''"></span></div>
+                                        <div><b>Evangelical %:</b> <span x-text="el.evangelicalPct || ''"></span></div>
+                                        <div><b>Un-evangelized %:</b> <span x-text="el.unevangelizedPct || ''"></span></div>
+                                    </div>
+
+                                    <div class="absolute top-[50%] right-0 w-[40%] flex items-center justify-center aspect-square overflow-hidden">
+                                        <template x-if="el.countryImage">
+                                            <img :src="el.countryImage" class="w-full h-full object-contain" />
+                                        </template>
+                                        <template x-if="!el.countryImage">
+                                            <div class="w-full h-full border border-dashed border-gray-200 flex items-center justify-center bg-transparent">
+                                                <span class="text-[8pt] text-gray-400 italic text-center px-2">No Country Map<br/>Uploaded</span>
+                                            </div>
+                                        </template>
+                                    </div>
+
+
+                                    <div class="mt-8">
+                                        <div class="underline font-bold mb-2">Prayer Prompts for Country:</div>
+                                        <ul class="pl-8 space-y-0.5 text-[9.5pt]">
+                                            <template x-for="p in (el.prompts || [])">
+                                                <li x-text="p"></li>
+                                            </template>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </template>
+                            <!-- ==> ANNOUNCEMENTS <== -->
+                            <template x-if="el.type === 'announcements'">
+                                <div class="flex flex-col h-full text-[10pt]">
+                                    <div class="flex justify-between items-baseline"><span class="text-[1.1rem] font-bold">Announcements</span></div>
+                                    <div class="latex-hr mb-2"></div>
+                                    
+                                    <div class="min-h-[2.2in] mb-4 overflow-hidden">
+                                        <template x-for="item in (el.items || [])">
+                                            <div class="mb-2 last:mb-0 text-[10pt] leading-snug">
+                                                <span class="font-bold" x-text="item.title + (item.title ? ': ' : '')"></span>
+                                                <span x-html="item.content"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                    
+                                    <div class="text-center mb-6">
+                                        <div class="underline font-bold text-[10pt] mb-2">Weekly Events</div>
+                                        <div class="text-left text-[10pt] leading-tight space-y-3">
+                                            <p><b>Mosaic Kids:</b> We have a Mosaic Kids at 8:30 a.m. on Sunday mornings before service. During this hour, the kids will be given a structured lesson plan from the Gospel Project.</p>
+                                            <p><b>Service Review:</b> On Mondays, following the service, we meet for lunch at 12:00 p.m. to review the entire service, giving godly encouragement and loving feedback</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="w-full mb-6">
+                                        <table class="w-full border-collapse">
+                                            <thead>
+                                                <tr>
+                                                    <th class="text-[8.5pt] font-bold py-1 w-1/4">Weekly Playlist</th>
+                                                    <th class="text-[8.5pt] font-bold py-1 w-1/4">Comprehensive Playlist</th>
+                                                    <th class="text-[8.5pt] font-bold py-1 w-1/4">Giving</th>
+                                                    <th class="text-[8.5pt] font-bold py-1 w-1/4">First Time Guest</th>
+                                                </tr>
+                                            </thead>
+                                        </table>
+                                        <div class="border-t border-black mb-3"></div>
+                                        <div class="grid grid-cols-4 gap-2 text-center">
+                                            <div class="flex justify-center"><img src="assets/standard/WeeklyPlaylistQR.png" class="w-[6em] h-[6em] object-contain" /></div>
+                                            <div class="flex justify-center"><img src="assets/standard/ComprehensivePlaylistQR.png" class="w-[6em] h-[6em] object-contain" /></div>
+                                            <div class="flex justify-center"><img src="assets/standard/GivingQR.png" class="w-[6em] h-[6em] object-contain" /></div>
+                                            <div class="flex justify-center"><img src="assets/standard/FirstTimeGuestQR.png" class="w-[6em] h-[6em] object-contain" /></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-auto">
+                                        <div class="flex justify-between items-baseline flex-shrink-0"><span class="text-[1.1rem] font-bold">Preaching Schedule</span></div>
+                                        <div class="latex-hr mb-1"></div>
+                                        <table class="w-full text-[9.5pt] border-collapse table-fixed">
+                                            <thead><tr class="border-b border-black"><th class="text-left py-1 font-normal w-1/3">Date</th><th class="text-center py-1 font-normal w-1/3">Preacher</th><th class="text-right py-1 font-normal w-1/3">Sermon Text</th></tr></thead>
+                                            <tbody class="leading-relaxed">
+                                                <template x-for="item in schedule.slice(0,5)">
+                                                    <tr><td class="py-1 text-left truncate" x-text="getShortDate(item.id)"></td><td class="py-1 text-center truncate" x-text="item.preacher || 'TBA'"></td><td class="py-1 text-right truncate" x-text="item.liturgy?.sermon || 'TBA'"></td></tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                        <div class="border-t border-black mt-0.5"></div>
+                                    </div>
+
+                                    <div class="flex-1 flex justify-center items-center py-2">
+                                        <div class="flex items-center gap-6">
+                                            <img src="assets/standard/logo.png" class="w-[3.5em] h-auto flex-shrink-0" />
+                                            <div class="text-[9.5pt] leading-snug text-left">
+                                                <div><b>Meeting Address:</b> 4080 State Hwy 6 Frontage Rd</div>
+                                                <div class="mt-0.5"><b>Website:</b> www.mosaiccstx.org</div>
+                                                <div class="mt-0.5"><b>Info:</b> admin@mosaiccstx.org</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- ==> SERMON NOTES <== -->
+                            <template x-if="el.type === 'sermon_notes'">
+                                <div class="h-full flex flex-col">
+                                    <div class="flex justify-between items-baseline flex-shrink-0"><span class="text-[1.1rem] font-bold">Sermon Notes</span></div>
+                                    <div class="latex-hr mb-4 flex-shrink-0"></div>
+                                    <div class="flex-1"></div>
+                                </div>
+                            </template>
+
+                            <!-- ==> MOSAIC KIDS <== -->
+                            <template x-if="el.type === 'kids_section'">
+                                <div class="text-[10pt]">
+                                    <div class="flex justify-between items-baseline flex-shrink-0"><span class="text-[1.1rem] font-bold">Parent Discussion: Mosaic Kids</span></div>
+                                    <div class="latex-hr mb-4 flex-shrink-0"></div>
+                                    <p class="text-[9.5pt] leading-relaxed indent-8">For parents whose kids attended Mosaic Kids, this section contains a summary of the lesson they received as well as provides questions for you to ask your kids. We, as a church, want to assist you as parents in educating your kids and to help them continue to think about what they learned beyond just Sunday.</p>
+                                    <div class="mt-8 text-center space-y-2">
+                                        <div class="text-[1.1rem] font-bold italic" x-text="el.lessonTitle || 'Lesson Title'"></div>
+                                        <div class="text-[9pt]" x-text="el.lessonVerse || 'Scripture Passage'"></div>
+                                        <div class="latex-hr w-[80%] mx-auto opacity-30"></div>
+                                    </div>
+                                    <div class="mt-8 space-y-6">
+                                        <div>
+                                            <div class="font-bold italic mb-2">Bible Story Summary:</div>
+                                            <ul class="text-[9pt] space-y-1">
+                                                <template x-for="s in (el.summary || [])">
+                                                    <li x-text="s"></li>
+                                                </template>
+                                            </ul>
+                                        </div>
+                                        <div class="latex-hr w-[80%] mx-auto opacity-30"></div>
+                                        <div>
+                                            <div class="font-bold italic mb-2">Review Questions:</div>
+                                            <ul class="text-[9pt] space-y-1">
+                                                <template x-for="q in (el.questions || [])">
+                                                    <li x-text="q"></li>
+                                                </template>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </template>
+                            <!-- ==> CUSTOM PAGE <== -->
+                            <template x-if="el.type === 'custom_page'">
+                                <div class="h-full prose prose-sm max-w-none font-serif" x-html="el.content || '<h1>Custom Page</h1>'"></div>
+                            </template>
+
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Viewport Zoom Controls -->
+            <div class="zoom-controls">
+                <button @click="zoomLevel = Math.min(zoomLevel + 0.1, 1.5)" class="zoom-btn" title="Zoom In">
+                    <span class="material-symbols-outlined">add</span>
+                </button>
+                <div class="bg-white px-2 py-1 rounded-lg shadow border border-outline-variant text-[10px] font-bold text-center" x-text="Math.round(zoomLevel * 100) + '%'"></div>
+                <button @click="zoomLevel = Math.max(zoomLevel - 0.1, 0.5)" class="zoom-btn" title="Zoom Out">
+                    <span class="material-symbols-outlined">remove</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Right Sidebar: Task Manager / Inspector -->
+        <aside x-show="userRole !== 'viewer'" class="no-print w-96 bg-white border-l border-outline-variant flex flex-col shadow-sm">
+            <div class="p-4 border-b border-outline-variant bg-surface flex justify-between items-center">
+                <div>
+                    <h2 class="font-semibold text-secondary uppercase tracking-wider text-[10px]">Task Manager</h2>
+                    <p class="text-[10px] text-gray-400 mt-0.5" x-text="selectedElement ? 'Editing: ' + selectedElement.label : 'Select a required task'"></p>
+                </div>
+                <template x-if="selectedElement">
+                    <button @click="selectedElement = null" class="text-gray-400 hover:text-primary">
+                        <span class="material-symbols-outlined text-lg">close</span>
+                    </button>
+                </template>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-5 custom-scrollbar">
+                <!-- If no element selected, show required tasks -->
+                <template x-if="!selectedElement">
+                    <div class="space-y-4">
+                        <div class="text-[10px] font-bold uppercase text-gray-400 mb-2">Required Sections</div>
+                        <template x-for="task in ['pastoral_prayer', 'kids_section', 'announcements']">
+                            <button @click="selectElement(elements.find(el => el.type === task))" 
+                                    class="w-full p-4 rounded-xl border flex items-center gap-4 transition-all group"
+                                    :class="tasksRemaining > 0 ? 'border-outline-variant hover:border-primary' : 'border-success/30 bg-success/5'">
+                                <div class="w-10 h-10 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform"
+                                     :class="task === 'pastoral_prayer' ? 'bg-blue-50 text-blue-600' : task === 'kids_section' ? 'bg-purple-50 text-purple-600' : 'bg-orange-50 text-orange-600'">
+                                    <span class="material-symbols-outlined" x-text="task === 'pastoral_prayer' ? 'public' : task === 'kids_section' ? 'child_care' : 'campaign'"></span>
+                                </div>
+                                <div class="flex-1 text-left">
+                                    <div class="text-sm font-bold text-primary" x-text="task.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())"></div>
+                                    <div class="text-[10px] text-gray-400" x-text="'Standard 16-page guide requirement'"></div>
+                                </div>
+                                <span class="material-symbols-outlined text-gray-300">chevron_right</span>
+                            </button>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Detailed Inputs for Selected Element -->
+                <template x-if="selectedElement">
+                    <div class="space-y-6">
+                        <!-- Pastoral Prayer Inputs -->
+                        <template x-if="selectedElement.type === 'pastoral_prayer'">
+                            <div class="space-y-4">
+                                <!-- Image Upload Section -->
+                                <div class="p-4 bg-blue-50/50 rounded-xl border border-blue-100 mb-4">
+                                    <label class="block text-[10px] font-bold uppercase text-blue-600 mb-2">Country Map Image</label>
+                                    <div class="flex items-center gap-4">
+                                        <div class="w-16 h-16 bg-white rounded border border-blue-200 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm text-blue-200">
+                                            <template x-if="selectedElement.countryImage">
+                                                <img :src="selectedElement.countryImage" class="w-full h-full object-contain" />
+                                            </template>
+                                            <template x-if="!selectedElement.countryImage">
+                                                <span class="material-symbols-outlined">image</span>
+                                            </template>
+                                        </div>
+                                        <label class="flex-1">
+                                            <span class="inline-block px-4 py-2 bg-white border border-blue-200 rounded-lg text-xs font-bold text-blue-600 cursor-pointer hover:bg-blue-50 transition-colors text-center w-full">Select Image</span>
+                                            <input type="file" class="hidden" accept="image/*" @change="handleImageUpload" />
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div class="col-span-2"><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Nation</label><textarea rows="1" x-model="selectedElement.nation" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Continent</label><textarea rows="1" x-model="selectedElement.continent" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Capital</label><textarea rows="1" x-model="selectedElement.capital" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Population</label><textarea rows="1" x-model="selectedElement.population" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Official Language</label><textarea rows="1" x-model="selectedElement.language" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Total Languages</label><textarea rows="1" x-model="selectedElement.totalLanguages" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Literacy Rate</label><textarea rows="1" x-model="selectedElement.literacy" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Christian %</label><textarea rows="1" x-model="selectedElement.christianPct" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Evangelical %</label><textarea rows="1" x-model="selectedElement.evangelicalPct" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Un-evangelized %</label><textarea rows="1" x-model="selectedElement.unevangelizedPct" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Prayer Prompts</label>
+                                    <template x-for="(p, i) in selectedElement.prompts">
+                                        <div class="flex gap-2 mb-2">
+                                            <textarea rows="1" x-model="selectedElement.prompts[i]" x-init="autoResize($el)" @input="autoResize($el)" class="flex-1 text-sm rounded border-outline-variant px-3 py-1 resize-none overflow-hidden"></textarea>
+                                            <button @click="selectedElement.prompts.splice(i, 1)" class="text-error"><span class="material-symbols-outlined text-sm">delete</span></button>
+                                        </div>
+                                    </template>
+                                    <button @click="selectedElement.prompts.push('')" class="text-[10px] text-primary font-bold uppercase flex items-center gap-1 mt-2">
+                                        <span class="material-symbols-outlined text-sm">add_circle</span> Add Prompt
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Mosaic Kids Inputs -->
+                        <template x-if="selectedElement.type === 'kids_section'">
+                            <div class="space-y-4">
+                                <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Lesson Title</label><textarea rows="1" x-model="selectedElement.lessonTitle" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Passage Reference</label><textarea rows="1" x-model="selectedElement.lessonVerse" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                <div>
+                                    <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Story Summary Points</label>
+                                    <template x-for="(s, i) in selectedElement.summary">
+                                        <div class="flex gap-2 mb-2">
+                                            <textarea rows="1" x-model="selectedElement.summary[i]" x-init="autoResize($el)" @input="autoResize($el)" class="flex-1 text-sm rounded border-outline-variant px-3 py-1 resize-none overflow-hidden"></textarea>
+                                            <button @click="selectedElement.summary.splice(i, 1)" class="text-error"><span class="material-symbols-outlined text-sm">delete</span></button>
+                                        </div>
+                                    </template>
+                                    <button @click="selectedElement.summary.push(''); $nextTick(() => { /* New items resized via x-init */ })" class="text-[10px] text-primary font-bold uppercase flex items-center gap-1 mt-2">
+                                        <span class="material-symbols-outlined text-sm">add_circle</span> Add Point
+                                    </button>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Review Questions</label>
+                                    <template x-for="(q, i) in selectedElement.questions">
+                                        <div class="flex gap-2 mb-2">
+                                            <textarea rows="1" x-model="selectedElement.questions[i]" x-init="autoResize($el)" @input="autoResize($el)" class="flex-1 text-sm rounded border-outline-variant px-3 py-1 resize-none overflow-hidden"></textarea>
+                                            <button @click="selectedElement.questions.splice(i, 1)" class="text-error"><span class="material-symbols-outlined text-sm">delete</span></button>
+                                        </div>
+                                    </template>
+                                    <button @click="selectedElement.questions.push('')" class="text-[10px] text-primary font-bold uppercase flex items-center gap-1 mt-2">
+                                        <span class="material-symbols-outlined text-sm">add_circle</span> Add Question
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Custom Page Inputs -->
+                        <template x-if="selectedElement.type === 'custom_page'">
+                            <div class="space-y-6">
+                                <div class="p-4 bg-orange-50 rounded-xl border border-orange-100">
+                                    <div class="flex items-center gap-3 mb-4">
+                                        <div class="w-10 h-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center">
+                                            <span class="material-symbols-outlined">description</span>
+                                        </div>
+                                        <div>
+                                            <div class="text-[10px] font-bold uppercase text-orange-600">Import Content</div>
+                                            <div class="text-[11px] text-gray-500">Use a Word document as a template</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="flex flex-col gap-2">
+                                        <button @click="downloadWordTemplate()" class="w-full py-2 bg-white border border-orange-200 rounded-lg text-[10px] font-bold uppercase text-orange-600 hover:bg-orange-100/50 transition-colors flex items-center justify-center gap-2">
+                                            <span class="material-symbols-outlined text-[16px]">download</span>
+                                            <span>Download Template</span>
+                                        </button>
+                                        
+                                        <label class="w-full py-2 bg-orange-600 border border-transparent rounded-lg text-[10px] font-bold uppercase text-white hover:bg-orange-700 transition-colors flex items-center justify-center gap-2 cursor-pointer">
+                                            <span class="material-symbols-outlined text-[16px]">upload_file</span>
+                                            <span>Import .docx File</span>
+                                            <input type="file" class="hidden" accept=".docx" @change="handleDocxImport" />
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="mt-4 p-3 bg-white/50 rounded-lg text-[9px] text-gray-500 leading-relaxed italic">
+                                        <b>Tip:</b> Set your Word document to 5.5" x 8.5" with 0.2" margins for the best fit.
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Page Title (Internal)</label>
+                                    <input type="text" x-model="selectedElement.label" class="w-full text-sm rounded border-outline-variant px-3 py-2" />
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Raw HTML Content</label>
+                                    <textarea x-model="selectedElement.content" rows="12" class="w-full text-[11px] font-mono rounded border-outline-variant px-3 py-2 bg-gray-50" placeholder="Paste or edit HTML here..."></textarea>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+            
+            <!-- Bottom Task Status -->
+            <div class="p-4 border-t border-outline-variant bg-surface">
+                <button @click="goToNextTask()" 
+                        class="w-full py-3 rounded-xl flex items-center justify-center gap-3 shadow-md transition-all active:scale-95"
+                        :class="tasksRemaining > 0 ? 'bg-primary text-white' : 'bg-success text-white'">
+                    <template x-if="tasksRemaining > 0">
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center text-xs font-bold" x-text="tasksRemaining"></span>
+                            <span class="font-bold uppercase tracking-tight text-sm">Tasks Left</span>
+                        </div>
+                    </template>
+                    <template x-if="tasksRemaining === 0">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined">check_circle</span>
+                            <span class="font-bold uppercase tracking-tight text-sm">All Tasks Complete</span>
+                        </div>
+                    </template>
+                </button>
+                <div class="mt-2 text-center">
+                    <button @click="save()" class="text-[10px] text-gray-400 hover:text-primary underline">Save Progress</button>
+                </div>
+            </div>
+        </aside>
+    </main>
+</body>
+</html>

@@ -12,10 +12,37 @@ An individual whose involvement with the church is tracked.
 ### Service
 A liturgical event (usually a Sunday service), identified by its date (YYYY-MM-DD).
 - **Fields**:
+  - `isIrregular`: Boolean flag indicating if the service follows a non-standard structure.
+  - `elements`: (For Irregular Services) An ordered array of objects representing the liturgy.
   - `serviceLeader`: Reference to a Person (historically a string).
   - `preacher`: Reference to a Person (historically a string).
   - `musicLeader`: Reference to a Person (historically a string).
-  - ... (other liturgy fields)
+  ... (other liturgy fields)
+
+### Service Guide
+The printed document (output) handed to congregants. It is a persistent entity linked to a Service.
+- **Components**: Includes the OOS plus "Guide-only" content:
+  - **Title Page**: Date, theme, and key verse.
+  - **Pastoral Prayer**: Specific prayer text/scripture for the week.
+  - **Notes Pages**: Guided sections for sermon notes.
+  - **Announcements**: Upcoming events and weekly schedule.
+  - **Music Sheets**: Canonical hymns rendered as sheet music.
+  - **Mosaic Kids**: Parent discussion and lesson details.
+- **Persistence**: Configuration (element order, custom text, visibility) is stored in Firestore.
+- **Editing**: Managed via a Split-View Editor with a Draggable Table of Contents and Live Preview.
+
+### Order of Service (OOS)
+The sequence of liturgical elements for a specific Service. 
+- **Source**: Derived from the Service entity's liturgy fields (for standard services) or elements array (for irregular services).
+- **Purpose**: Defines the sequence of events for the Sunday gathering. It is a core part of the Service Guide.
+
+### Service Element (Irregular Only)
+A dynamic component of an Irregular Service.
+- **Fields**:
+  - `key`: The label for the element (e.g., "Preacher", "Historic Confession").
+  - `value`: The content or Person reference.
+  - `type`: 'person', 'text', or 'hymn' (to determine the editor UI).
+- **Syncing**: If `key` matches a **Canonical Role** or **Liturgy Field**, it syncs with the standard `Service` fields.
 
 ### Hymn Entry
 A hymn selection within a Service's liturgy.

@@ -118,12 +118,12 @@
 </head>
 
 <body
-    class="bg-background text-on-background font-body-md text-body-md antialiased h-screen overflow-hidden flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed dark">
-    <header class="w-full max-w-7xl mx-auto px-margin pt-md flex justify-end" id="auth-container">
+    class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen overflow-x-hidden flex flex-col selection:bg-primary-fixed selection:text-on-primary-fixed dark">
+    <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex justify-end" id="auth-container">
         <!-- Auth UI will be injected here by auth.js -->
         <div class="h-10"></div> <!-- Placeholder to prevent layout shift -->
     </header>
-    <main class="flex-grow max-w-7xl w-full mx-auto px-margin pb-md flex flex-col gap-margin pt-base overflow-hidden">
+    <main class="flex-grow max-w-7xl w-full mx-auto px-margin pb-md flex flex-col gap-margin pt-base overflow-visible">
         <!-- Logo -->
         <div class="w-full flex justify-center py-sm">
             <img alt="Mosaic Liturgy Logo" class="h-24 w-24 object-contain"
@@ -189,9 +189,9 @@
             </div>
 
             <!-- Right Column -->
-            <div class="md:col-span-4 flex flex-col overflow-hidden">
+            <div class="md:col-span-4 flex flex-col md:overflow-hidden">
                 <div
-                    class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex-grow flex flex-col overflow-hidden" id="sunday-glance">
+                    class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex-grow flex flex-col md:overflow-hidden" id="sunday-glance">
                     <h2 class="font-headline-md text-headline-md text-primary pb-xs border-b border-surface-variant mb-md flex-shrink-0">
                         Sunday at a Glance</h2>
                     <div id="glance-content" class="flex-grow overflow-y-auto flex flex-col gap-sm pr-1">
@@ -226,24 +226,33 @@
             const baseGreeting = getGreeting();
             greetingEl.textContent = baseGreeting;
 
-            // 2. Add Name if logged in
-            auth.onAuthStateChanged(async (user) => {
-                if (user) {
-                    let name = 'Friend';
-                    try {
-                        const userData = await getUserData(user.uid);
-                        if (userData && userData.email) {
+            // 2. Handle User Auth and Role
+            const user = await new Promise(resolve => {
+                const unsubscribe = auth.onAuthStateChanged(u => {
+                    unsubscribe();
+                    resolve(u);
+                });
+            });
+
+            let userRole = 'viewer';
+            if (user) {
+                let name = 'Friend';
+                try {
+                    const userData = await getUserData(user.uid);
+                    if (userData) {
+                        userRole = userData.role || 'viewer';
+                        if (userData.email) {
                             name = userData.email.split('@')[0];
                             name = name.charAt(0).toUpperCase() + name.slice(1);
                         }
-                    } catch (e) {
-                        console.error("Error fetching user data:", e);
                     }
-                    greetingEl.textContent = `${baseGreeting}, ${name}`;
-                } else {
-                    greetingEl.textContent = baseGreeting;
+                } catch (e) {
+                    console.error("Error fetching user data:", e);
                 }
-            });
+                greetingEl.textContent = `${baseGreeting}, ${name}`;
+            } else {
+                greetingEl.textContent = baseGreeting;
+            }
 
             // 3. Fetch Next Sunday's Service
             try {
@@ -284,42 +293,46 @@
                     // Update Sunday at a Glance Panel
                     let glanceHtml = '';
                     
-                    if (svc.theme) {
-                        glanceHtml += `
-                            <div class="flex flex-col">
-                                <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Theme</span>
-                                <span class="text-body-lg text-primary font-medium">${svc.theme}</span>
-                            </div>
-                        `;
-                    }
-                    
-                    if (svc.preacher) {
-                        glanceHtml += `
-                            <div class="flex flex-col">
-                                <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Preacher</span>
-                                <span class="text-body-md text-on-surface">${svc.preacher}</span>
-                            </div>
-                        `;
-                    }
-
-                    const roles = [];
-                    if (svc.serviceLeader) roles.push({ label: 'Service Leader', name: svc.serviceLeader });
-                    if (svc.musicLeader) roles.push({ label: 'Music Leader', name: svc.musicLeader });
-
-                    if (roles.length > 0) {
-                        glanceHtml += `
-                            <div class="flex flex-col gap-xs mt-xs">
-                                <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Roles</span>
-                                <div class="flex flex-col gap-1">
-                                    ${roles.map(r => `
-                                        <div class="flex justify-between text-sm">
-                                            <span class="text-on-surface-variant">${r.label}</span>
-                                            <span class="text-on-surface font-medium">${r.name}</span>
-                                        </div>
-                                    `).join('')}
+                    if (svc.isIrregular) {
+                        glanceHtml = ''; // Irregular services don't flag the glance panel
+                    } else {
+                        if (svc.theme) {
+                            glanceHtml += `
+                                <div class="flex flex-col">
+                                    <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Theme</span>
+                                    <span class="text-body-lg text-primary font-medium">${svc.theme}</span>
                                 </div>
-                            </div>
-                        `;
+                            `;
+                        }
+                        
+                        if (svc.preacher) {
+                            glanceHtml += `
+                                <div class="flex flex-col">
+                                    <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Preacher</span>
+                                    <span class="text-body-md text-on-surface">${svc.preacher}</span>
+                                </div>
+                            `;
+                        }
+
+                        const roles = [];
+                        if (svc.serviceLeader) roles.push({ label: 'Service Leader', name: svc.serviceLeader });
+                        if (svc.musicLeader) roles.push({ label: 'Music Leader', name: svc.musicLeader });
+
+                        if (roles.length > 0) {
+                            glanceHtml += `
+                                <div class="flex flex-col gap-xs mt-xs">
+                                    <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Roles</span>
+                                    <div class="flex flex-col gap-1">
+                                        ${roles.map(r => `
+                                            <div class="flex justify-between text-sm">
+                                                <span class="text-on-surface-variant">${r.label}</span>
+                                                <span class="text-on-surface font-medium">${r.name}</span>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            `;
+                        }
                     }
 
                     if (svc.hasBaptism) {
@@ -390,7 +403,7 @@
 
                     const totalIssues = missingFields.length + literalHymns.length;
 
-                    if (totalIssues > 0) {
+                    if (!svc.isIrregular && totalIssues > 0 && (userRole === 'admin' || userRole === 'editor')) {
                         const alertDiv = document.createElement('a');
                         alertDiv.href = `service-builder.html?date=${dateKey}&validate=true`;
                         alertDiv.className = 'mt-auto pt-md flex items-center justify-between group/alert cursor-pointer';

@@ -20,6 +20,7 @@ document.addEventListener('alpine:init', () => {
         allTags: [],
         selectedTags: [],
         loading: true,
+        showFilters: false,
         
         /**
          * Initializes the component, fetches tags and the hymn index.

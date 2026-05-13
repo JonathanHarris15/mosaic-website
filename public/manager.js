@@ -15,6 +15,8 @@ document.addEventListener('alpine:init', () => {
         allTags: [],
         
         isEditing: false,
+        showFormModal: false,
+        selectedHymnId: null,
         editingHymnId: null,
         isSubmitting: false,
         
@@ -95,10 +97,11 @@ document.addEventListener('alpine:init', () => {
         },
 
         /**
-         * Resets the form to its default empty state.
+         * Resets the form to its default empty state and closes the modal.
          */
         resetForm() {
             this.isEditing = false;
+            this.showFormModal = false;
             this.editingHymnId = null;
             this.tagInput = '';
             this.suggestions = [];
@@ -114,11 +117,22 @@ document.addEventListener('alpine:init', () => {
         },
 
         /**
+         * Opens the modal for creating a new hymn.
+         * @param {string} [name=''] - Initial name to pre-fill.
+         */
+        startCreateHymn(name = '') {
+            this.resetForm();
+            this.showFormModal = true;
+            this.formData.hymn_name = name;
+        },
+
+        /**
          * Populates the form with data from an existing hymn to begin editing.
          * @param {Object} hymn - The hymn object to edit.
          */
         startEditHymn(hymn) {
             this.isEditing = true;
+            this.showFormModal = true;
             this.editingHymnId = hymn.id;
             this.originalPageUrls = [];
             
@@ -142,7 +156,6 @@ document.addEventListener('alpine:init', () => {
                     })
                 };
             });
-            window.scrollTo({ top: 0, behavior: 'smooth' });
         },
 
         /**
