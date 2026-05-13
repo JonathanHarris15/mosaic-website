@@ -89,13 +89,14 @@
             <div class="flex border-b border-outline-variant">
                 <button @click="activeTab = 'hymns'" :class="activeTab === 'hymns' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">Hymn Usage</button>
                 <button @click="activeTab = 'bible'" :class="activeTab === 'bible' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">Bible Heat Map</button>
+                <button @click="activeTab = 'people'" :class="activeTab === 'people' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">People's Involvement</button>
             </div>
 
-            <!-- Actions Area (Only show for Hymns tab) -->
-            <div x-show="activeTab === 'hymns'" class="py-4">
+            <!-- Actions Area -->
+            <div x-show="activeTab === 'hymns' || activeTab === 'people'" class="py-4">
                 <div class="relative w-full max-w-md">
                     <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
-                    <input type="text" x-model="hymnSearch" placeholder="Filter by hymn name..." 
+                    <input type="text" x-model="activeTab === 'hymns' ? hymnSearch : peopleSearch" :placeholder="activeTab === 'hymns' ? 'Filter by hymn name...' : 'Search people...'" 
                         class="w-full pl-12 pr-4 py-2.5 bg-surface-container-low border-outline-variant rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all shadow-sm text-sm" />
                 </div>
             </div>
@@ -181,161 +182,94 @@
                     </div>
                 </div>
 
-                <!-- Bible Tab -->
-                <div x-show="activeTab === 'bible'" x-transition class="h-full flex flex-col overflow-hidden">
+                <!-- People Tab -->
+                <div x-show="activeTab === 'people'" x-transition class="h-full flex flex-col overflow-hidden">
                     <div class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-4 gap-gutter overflow-hidden">
-                        <!-- Filters Panel -->
-                        <div class="lg:col-span-1 overflow-y-auto custom-scrollbar pr-2">
-                            <div class="card p-6 space-y-6">
-                                <h3 class="label-xs text-primary font-bold border-b border-outline-variant pb-2">Source Elements</h3>
-                                <div class="space-y-3">
-                                    <template x-for="(val, key) in bibleFilters">
-                                        <label class="flex items-center gap-3 cursor-pointer group">
-                                            <input type="checkbox" x-model="bibleFilters[key]" @change="fetchAndProcessData()" 
-                                                class="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary transition-all cursor-pointer" />
-                                            <span class="text-sm font-medium text-on-surface-variant group-hover:text-primary transition-colors capitalize" x-text="key.replace(/([A-Z])/g, ' $1')"></span>
-                                        </label>
-                                    </template>
-                                </div>
+                        <!-- People List Table -->
+                        <div class="lg:col-span-3 card flex flex-col overflow-hidden">
+                            <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                <table class="w-full text-left border-collapse">
+                                    <thead class="bg-surface-container-low border-b border-outline-variant sticky top-0 z-10 shadow-sm">
+                                        <tr>
+                                            <th class="px-6 py-4 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group" @click="sortByPeople('name')">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="label-xs">Name</span>
+                                                    <span class="material-symbols-outlined text-sm text-primary transition-opacity" :class="peopleSortKey === 'name' ? 'opacity-100' : 'opacity-0'" x-text="peopleSortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                                </div>
+                                            </th>
+                                            <th class="px-6 py-4 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group" @click="sortByPeople('totalInvolvements')">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="label-xs">Total Services</span>
+                                                    <span class="material-symbols-outlined text-sm text-primary transition-opacity" :class="peopleSortKey === 'totalInvolvements' ? 'opacity-100' : 'opacity-0'" x-text="peopleSortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                                </div>
+                                            </th>
+                                            <th class="px-6 py-4">
+                                                <span class="label-xs">Top Roles</span>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-outline-variant/30">
+                                        <template x-for="p in filteredPeople" :key="p.id">
+                                            <tr @click="selectPerson(p)" class="hover:bg-surface-container-low transition-colors group cursor-pointer" :class="selectedPerson?.id === p.id ? 'bg-primary/5' : ''">
+                                                <td class="px-6 py-4">
+                                                    <div class="font-bold text-primary tracking-tight" x-text="p.name"></div>
+                                                </td>
+                                                <td class="px-6 py-4 font-medium text-lg" x-text="p.totalInvolvements || 0"></td>
+                                                <td class="px-6 py-4">
+                                                    <div class="flex flex-wrap gap-1">
+                                                        <template x-for="role in (p.topRoles || [])" :key="role">
+                                                            <span class="px-2 py-0.5 bg-surface-container text-on-surface-variant text-[9px] font-bold rounded uppercase tracking-tighter border border-outline-variant/30" x-text="role.replace(/_/g, ' ')"></span>
+                                                        </template>
+                                                        <template x-if="!p.topRoles || p.topRoles.length === 0">
+                                                            <span class="text-[10px] text-on-surface-variant italic opacity-50">Calculating...</span>
+                                                        </template>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
 
-                        <!-- Main Display Panel -->
-                        <div class="lg:col-span-3 flex flex-col overflow-hidden h-full">
+                        <!-- Involvement History Sidebar -->
+                        <div class="lg:col-span-1 flex flex-col overflow-hidden">
                             <div class="card h-full flex flex-col overflow-hidden">
-                                <!-- Overview Header (Timeline) -->
-                                <template x-if="!selectedBook">
-                                    <div class="p-6 flex flex-col h-full overflow-hidden">
-                                        <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 flex-none">
-                                            <div class="space-y-1">
-                                                <h3 class="font-headline text-2xl text-primary font-bold">Scripture Timeline</h3>
-                                                <p class="text-[10px] text-on-surface-variant italic">Frequency by Book and Chapter. Click a book for verse-level detail.</p>
-                                            </div>
-                                            <div class="flex items-center gap-3 bg-surface-container-low px-4 py-2 rounded-lg border border-outline-variant/20">
-                                                <span class="label-xs">Less</span>
-                                                <div class="flex gap-[2px]">
-                                                    <div class="w-3 h-3 rounded-[1px] bg-surface-container"></div>
-                                                    <div class="w-3 h-3 rounded-[1px] bg-blue-100"></div>
-                                                    <div class="w-3 h-3 rounded-[1px] bg-blue-400"></div>
-                                                    <div class="w-3 h-3 rounded-[1px] bg-blue-700"></div>
-                                                    <div class="w-3 h-3 rounded-[1px] bg-blue-900"></div>
+                                <div class="p-6 border-b border-outline-variant flex-none">
+                                    <h3 class="font-headline text-lg text-primary font-bold" x-text="selectedPerson ? selectedPerson.name : 'Select a Person'"></h3>
+                                    <p class="text-[10px] text-on-surface-variant italic">Involvement History</p>
+                                </div>
+                                <div class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
+                                    <template x-if="selectedPerson">
+                                        <template x-for="inv in personInvolvement" :key="inv.id">
+                                            <div class="p-3 bg-surface-container-low rounded-xl border border-outline-variant/30 space-y-2">
+                                                <div class="flex justify-between items-start">
+                                                    <span class="px-2 py-0.5 bg-primary/5 text-primary text-[9px] font-bold uppercase rounded border border-primary/10" x-text="inv.type.replace(/_/g, ' ')"></span>
+                                                    <span class="text-[10px] text-on-surface-variant font-medium" x-text="formatDate(inv.serviceDate)"></span>
                                                 </div>
-                                                <span class="label-xs">More</span>
+                                                <div x-show="inv.metadata" class="text-[10px] text-on-surface-variant italic line-clamp-2" x-text="inv.metadata"></div>
+                                                <a :href="`service-builder.html?date=${inv.serviceDate}`" class="block text-[9px] font-bold text-primary hover:underline">View Service</a>
                                             </div>
+                                        </template>
+                                    </template>
+                                    <template x-if="!selectedPerson">
+                                        <div class="flex flex-col items-center justify-center py-12 text-center space-y-3 opacity-50">
+                                            <span class="material-symbols-outlined text-4xl">person_search</span>
+                                            <p class="text-xs font-medium italic">Click a person to see their contributions.</p>
                                         </div>
-
-                                        <!-- Jagged Timeline Grid -->
-                                        <div class="flex-1 min-h-0 bg-surface-container-low/50 rounded-xl p-6 border border-outline-variant/20 overflow-y-auto custom-scrollbar">
-                                            <div class="space-y-3">
-                                                <template x-for="bookGroup in bibleStats.timeline" :key="bookGroup.book">
-                                                    <div class="flex items-center gap-6 group cursor-pointer" @click="selectBook(bookGroup.book)">
-                                                        <div class="w-32 shrink-0 text-right">
-                                                            <span class="font-headline text-[10px] md:text-xs font-bold text-on-surface-variant group-hover:text-primary transition-colors truncate block" x-text="bookGroup.book"></span>
-                                                        </div>
-                                                        <div class="flex flex-wrap gap-[2px]">
-                                                            <template x-for="ch in bookGroup.chapters" :key="ch.chapter">
-                                                                <div 
-                                                                    class="w-2 h-4 md:w-2.5 md:h-5 rounded-[1px] transition-all hover:scale-150 hover:z-10" 
-                                                                    :class="getHeatColor(ch.count)"
-                                                                    :title="`${bookGroup.book} ${ch.chapter} (${ch.count} uses)`">
-                                                                </div>
-                                                            </template>
-                                                        </div>
-                                                    </div>
-                                                </template>
-                                            </div>
+                                    </template>
+                                    <template x-if="selectedPerson && personInvolvement.length === 0 && !loadingInvolvement">
+                                        <div class="flex flex-col items-center justify-center py-12 text-center space-y-3 opacity-50">
+                                            <span class="material-symbols-outlined text-4xl">history_toggle_off</span>
+                                            <p class="text-xs font-medium italic">No recent involvement records found.</p>
                                         </div>
-                                    </div>
-                                </template>
-
-                                <!-- Drill Down View -->
-                                <template x-if="selectedBook">
-                                    <div class="p-6 flex flex-col h-full overflow-hidden animate-in slide-in-from-right-4 duration-300">
-                                        <div class="flex justify-between items-center border-b border-outline-variant pb-6 mb-6 flex-none">
-                                            <div class="space-y-1">
-                                                <div class="flex items-center gap-4">
-                                                    <h2 class="font-headline text-3xl text-primary font-bold" x-text="selectedBook"></h2>
-                                                    <span class="px-3 py-1 bg-primary text-on-primary text-[10px] font-bold rounded-full uppercase tracking-widest" x-text="`${drillDownData.chapters.length} Chapters`"></span>
-                                                </div>
-                                                <div class="label-xs text-primary/60">Verse-Level Saturation & Service History</div>
-                                            </div>
-                                            <button @click="selectedBook = null" class="flex items-center gap-2 px-4 py-2 text-primary hover:bg-primary/5 rounded-lg transition-all font-bold border border-primary/20 shadow-sm">
-                                                <span class="material-symbols-outlined text-lg">arrow_back</span>
-                                                <span>Back to Overview</span>
-                                            </button>
+                                    </template>
+                                    <template x-if="loadingInvolvement">
+                                        <div class="flex justify-center py-12">
+                                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                                         </div>
-                                        
-                                        <div class="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-3 gap-8 overflow-hidden">
-                                            <!-- Verse Sub-Grid -->
-                                            <div class="xl:col-span-2 flex flex-col overflow-hidden">
-                                                <div class="flex items-center justify-between mb-3 flex-none">
-                                                    <h4 class="label-xs text-primary font-bold">Scripture Density</h4>
-                                                    <p class="text-[10px] text-on-surface-variant italic">Rows: Chapters | Columns: Verses</p>
-                                                </div>
-                                                <div class="flex-1 min-h-0 bg-surface-container-low/50 rounded-2xl p-6 border border-outline-variant/20 overflow-y-auto custom-scrollbar">
-                                                    <div class="space-y-4">
-                                                        <template x-for="ch in drillDownData.chapters" :key="ch.chapter">
-                                                            <div class="flex items-start gap-4 group">
-                                                                <div class="w-8 shrink-0 text-right pt-0.5">
-                                                                    <span class="text-[10px] font-bold text-on-surface-variant group-hover:text-primary transition-colors" x-text="ch.chapter"></span>
-                                                                </div>
-                                                                <div class="flex flex-wrap gap-[2px]">
-                                                                    <template x-for="v in ch.verses" :key="v.verse">
-                                                                        <div 
-                                                                            class="w-2.5 h-3.5 md:w-3 md:h-4 rounded-[1px] cursor-pointer transition-all hover:scale-150 hover:z-10 shadow-sm"
-                                                                            :class="[
-                                                                                getVerseHeatColor(v.count),
-                                                                                selectedChapter === ch.chapter ? 'ring-1 ring-primary/30' : ''
-                                                                            ]"
-                                                                            :title="`Verse ${v.verse}: ${v.count} uses`"
-                                                                            @click="selectChapter(ch.chapter)">
-                                                                        </div>
-                                                                    </template>
-                                                                </div>
-                                                            </div>
-                                                        </template>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Citations Timeline -->
-                                            <div class="xl:col-span-1 flex flex-col overflow-hidden border-l border-outline-variant/20 pl-4">
-                                                <div class="flex items-center justify-between mb-3 flex-none">
-                                                    <h4 class="label-xs text-primary font-bold">
-                                                        Citations <span x-show="selectedChapter" x-text="` (Ch ${selectedChapter})`" class="text-on-surface-variant font-normal"></span>
-                                                    </h4>
-                                                    <span class="text-[10px] font-bold bg-primary/10 text-primary px-3 py-1 rounded-full uppercase tracking-tighter" x-text="`${currentCitations.length} Entries` font-bold"></span>
-                                                </div>
-                                                
-                                                <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2 space-y-3">
-                                                    <template x-for="svc in currentCitations" :key="svc.date + svc.element">
-                                                        <div class="group bg-surface-container-low p-4 rounded-xl flex flex-col gap-3 hover:shadow-md transition-all border border-outline-variant/30">
-                                                            <div class="flex justify-between items-start">
-                                                                <div class="space-y-1">
-                                                                    <div class="text-md font-bold text-primary tracking-tight leading-tight" x-text="svc.reference"></div>
-                                                                    <div class="flex items-center gap-2">
-                                                                        <span class="px-2 py-0.5 bg-primary/5 text-primary text-[8px] font-bold uppercase rounded border border-primary/10" x-text="svc.element"></span>
-                                                                        <span class="text-[10px] text-on-surface-variant font-medium" x-text="formatDate(svc.date)"></span>
-                                                                    </div>
-                                                                </div>
-                                                                <a :href="`service-builder.html?date=${svc.date}`" 
-                                                                    class="p-2 bg-white text-primary rounded-lg border border-outline-variant hover:bg-primary hover:text-white hover:border-primary transition-all shadow-sm shrink-0">
-                                                                    <span class="material-symbols-outlined text-sm">open_in_new</span>
-                                                                </a>
-                                                            </div>
-                                                        </div>
-                                                    </template>
-                                                    <template x-if="currentCitations.length === 0">
-                                                        <div class="flex flex-col items-center justify-center py-12 text-center space-y-3 opacity-50 bg-surface-container-low/30 rounded-2xl border border-dashed border-outline-variant">
-                                                            <span class="material-symbols-outlined text-4xl">search_off</span>
-                                                            <p class="text-xs font-medium italic">Click a chapter or verse to filter history.</p>
-                                                        </div>
-                                                    </template>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </template>
+                                    </template>
+                                </div>
                             </div>
                         </div>
                     </div>

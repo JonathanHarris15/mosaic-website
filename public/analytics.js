@@ -5,6 +5,13 @@ export function analyticsPage() {
         activeTab: 'hymns', // 'hymns' or 'bible'
         loading: true,
         progress: 0,
+        people: [],
+        peopleSearch: '',
+        peopleSortKey: 'totalInvolvements',
+        peopleSortOrder: 'desc',
+        selectedPerson: null,
+        personInvolvement: [],
+        loadingInvolvement: false,
         bibleStats: {
             chapters: {}, // { "Genesis-1": { count: 0, services: [], verses: { 1: count, 2: count } } }
             books: {},    // { "Genesis": { count: 0 } }
@@ -45,6 +52,7 @@ export function analyticsPage() {
                 
                 const hymnsMap = {}; 
                 const bibleChapters = {};
+                const peopleMap = {}; // { name: { roles: { role: count } } }
 
                 const now = new Date();
                 const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -56,6 +64,7 @@ export function analyticsPage() {
                     
                     this.processHymns(data, date, hymnsMap);
                     this.processBibleReferences(data, date, bibleChapters);
+                    this.processServicePeople(data, peopleMap);
 
                     processed++;
                     this.progress = Math.round((processed / total) * 100);
@@ -63,10 +72,127 @@ export function analyticsPage() {
 
                 this.hymnStats = Object.values(hymnsMap).sort((a, b) => b.count - a.count);
                 this.bibleStats.chapters = bibleChapters;
+                this.roleAnalytics = peopleMap;
                 this.generateTimeline();
+                
+                // Fetch people after aggregation is ready
+                await this.fetchPeople();
 
             } catch (error) {
                 console.error("Error fetching analytics data:", error);
+            }
+        },
+
+        processServicePeople(data, map) {
+            const roleFields = {
+                serviceLeader: 'Service Leader',
+                preacher: 'Preacher',
+                musicLeader: 'Worship Leader',
+                sermonette: 'Sermonette'
+            };
+
+            Object.entries(roleFields).forEach(([field, label]) => {
+                const name = data[field];
+                if (name && typeof name === 'string') {
+                    const normalized = name.trim();
+                    if (!map[normalized]) map[normalized] = { roles: {} };
+                    map[normalized].roles[label] = (map[normalized].roles[label] || 0) + 1;
+                }
+            });
+        },
+
+        async fetchPeople() {
+            try {
+                const snap = await db.collection('people').get();
+                this.people = snap.docs.map(doc => {
+                    const data = doc.data();
+                    const name = data.name;
+                    const analytics = this.roleAnalytics?.[name] || { roles: {} };
+                    const topRoles = Object.entries(analytics.roles)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 3)
+                        .map(r => r[0]);
+
+                    return {
+                        id: doc.id,
+                        name: name,
+                        totalInvolvements: data.totalInvolvements || 0,
+                        topRoles: topRoles
+                    };
+                });
+            } catch (error) {
+                console.error("Error fetching people:", error);
+            }
+        },
+
+        get filteredPeople() {
+            let list = [...this.people];
+            if (this.peopleSearch) {
+                const q = this.peopleSearch.toLowerCase();
+                list = list.filter(p => p.name.toLowerCase().includes(q));
+            }
+
+            return list.sort((a, b) => {
+                let valA, valB;
+                if (this.peopleSortKey === 'name') {
+                    valA = a.name.toLowerCase();
+                    valB = b.name.toLowerCase();
+                } else {
+                    valA = a.totalInvolvements || 0;
+                    valB = b.totalInvolvements || 0;
+                }
+
+                if (valA < valB) return this.peopleSortOrder === 'asc' ? -1 : 1;
+                if (valA > valB) return this.peopleSortOrder === 'asc' ? 1 : -1;
+                return 0;
+            });
+        },
+
+        sortByPeople(key) {
+            if (this.peopleSortKey === key) {
+                this.peopleSortOrder = this.peopleSortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.peopleSortKey = key;
+                this.peopleSortOrder = key === 'name' ? 'asc' : 'desc';
+            }
+        },
+
+        async selectPerson(person) {
+            this.selectedPerson = person;
+            this.loadingInvolvement = true;
+            this.personInvolvement = [];
+            
+            try {
+                const snap = await db.collection('people').doc(person.id)
+                    .collection('involvement')
+                    .orderBy('serviceDate', 'desc')
+                    .limit(50)
+                    .get();
+                
+                this.personInvolvement = snap.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+
+                // Update top roles for this person in the main list
+                const roleCounts = {};
+                this.personInvolvement.forEach(inv => {
+                    roleCounts[inv.type] = (roleCounts[inv.type] || 0) + 1;
+                });
+                const topRoles = Object.entries(roleCounts)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 3)
+                    .map(entry => entry[0]);
+                
+                const pIndex = this.people.findIndex(p => p.id === person.id);
+                if (pIndex !== -1) {
+                    this.people[pIndex].topRoles = topRoles;
+                }
+
+            } catch (error) {
+                console.error("Error fetching involvement:", error);
+            } finally {
+                this.loadingInvolvement = false;
             }
         },
 
