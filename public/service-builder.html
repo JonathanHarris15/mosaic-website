@@ -278,13 +278,11 @@
                                 <span class="material-symbols-outlined text-[14px]">arrow_right_alt</span>
                                 <span x-text="rangeVerse ? (rangeBook === selectedBook && rangeChapter === selectedChapter ? rangeChapter + ':' + rangeVerse : (rangeBook === selectedBook ? rangeBook + ' ' + rangeChapter + ':' + rangeVerse : rangeBook + ' ' + rangeChapter + ':' + rangeVerse)) : '...'" class="opacity-60"></span>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="form-section" data-field-key="serviceLeader">
-            <div class="field-group">
+                            </div>
+                            </div>
+                            </div>
+
+                            <div class="form-section" data-field-key="serviceLeader">            <div class="field-group">
                 <label class="field-label">Service Leader</label>
                 <div x-data="personPicker(service.serviceLeader)" 
                                              class="input-container relative">                    <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
@@ -370,12 +368,8 @@
             </div>
         </div>
 
-        </div>
-
-        <!-- Liturgy Flow: wider container to allow right-margin notes -->
-        <div class="max-w-3xl">
-        <div class="space-y-4">
-            <!-- 1. Preparatory Hymn -->
+        <!-- Liturgy Flow -->
+        <!-- 1. Preparatory Hymn -->
             <div class="form-section" data-field-key="preparatoryHymn">
                 <div class="field-group">
                     <label class="field-label">Preparatory Hymn</label>
@@ -1338,7 +1332,8 @@
                 </div>
             </div>
         </div>
-            </div>
+    </div>
+</div>
         </template>
 
         <!-- Irregular Elements Editor -->
