@@ -9,13 +9,7 @@
 export function parseBibleReference(ref) {
     if (!ref) return [];
     
-    // Regular expression to find "Book Chapter:Verse"
-    // This is a simplified parser; in a real-world app, we'd use a library like bcv-parser
-    // but for our heat map, we just need the Book and Chapter(s).
-    
     const results = [];
-    
-    // Split by common separators if multiple ranges exist (e.g., "John 3:16; 4:1")
     const parts = ref.split(/[;|,]/);
     
     parts.forEach(part => {
@@ -26,11 +20,22 @@ export function parseBibleReference(ref) {
         if (match) {
             const book = match[1].trim();
             const startChapter = parseInt(match[2]);
+            const startVerse = parseInt(match[3]);
             const endChapter = match[4] ? parseInt(match[4]) : startChapter;
+            const endVerse = match[5] ? parseInt(match[5]) : startVerse;
             
-            // Add all chapters in range
-            for (let c = startChapter; c <= endChapter; c++) {
-                results.push({ book, chapter: c });
+            if (startChapter === endChapter) {
+                const verses = [];
+                for (let v = startVerse; v <= endVerse; v++) {
+                    verses.push(v);
+                }
+                results.push({ book, chapter: startChapter, verses });
+            } else {
+                // For multi-chapter ranges, we'd need BIBLE_DATA to know how many verses are in the first chapter.
+                // Since this is for a heat map, we'll at least record the chapters.
+                for (let c = startChapter; c <= endChapter; c++) {
+                    results.push({ book, chapter: c, verses: [] }); // Verses empty for multi-chapter to keep it simple unless we have BIBLE_DATA
+                }
             }
         }
     });

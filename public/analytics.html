@@ -18,34 +18,39 @@
             theme: {
                 extend: {
                     colors: {
-                        "inverse-primary": "#b2c6f8", "surface-variant": "#e5e2dc", "on-primary": "#ffffff", "primary": "#001a43",
-                        "on-primary-fixed-variant": "#314670", "on-tertiary-container": "#67a1b5", "on-secondary-fixed-variant": "#2b4969",
-                        "surface-container-low": "#f6f3ed", "tertiary": "#001f28", "on-tertiary-fixed": "#001f28",
-                        "secondary-container": "#b9d7fe", "secondary-fixed-dim": "#abc9ef", "surface": "#fcf9f3",
-                        "outline-variant": "#c5c6d0", "primary-container": "#1a3059", "secondary": "#436082",
-                        "on-secondary": "#ffffff", "on-surface": "#1c1c18", "primary-fixed": "#d8e2ff",
-                        "surface-container-highest": "#e5e2dc", "on-primary-container": "#8499c8", "on-secondary-fixed": "#001d36",
-                        "surface-dim": "#dcdad4", "on-secondary-container": "#415e7f", "on-surface-variant": "#44474e",
-                        "tertiary-container": "#003643", "primary-fixed-dim": "#b2c6f8", "tertiary-fixed-dim": "#95cfe4",
-                        "tertiary-fixed": "#b5ebff", "on-primary-fixed": "#001a42", "error": "#ba1a1a",
-                        "surface-bright": "#fcf9f3", "on-background": "#1c1c18", "on-tertiary-fixed-variant": "#004e60",
-                        "secondary-fixed": "#d1e4ff", "on-tertiary": "#ffffff", "on-error": "#ffffff",
-                        "inverse-surface": "#31312d", "on-error-container": "#93000a", "outline": "#75777f",
-                        "surface-container": "#f0eee8", "surface-container-high": "#ebe8e2", "inverse-on-surface": "#f3f0ea",
-                        "surface-tint": "#4a5e8a", "surface-container-lowest": "#ffffff", "background": "#fcf9f3",
-                        "error-container": "#ffdad6"
+                        "primary": "#001a43",
+                        "on-primary": "#ffffff",
+                        "secondary": "#436082",
+                        "on-secondary": "#ffffff",
+                        "surface": "#fcf9f3",
+                        "background": "#fcf9f3",
+                        "outline-variant": "#c5c6d0",
+                        "surface-container-low": "#f6f3ed",
+                        "surface-container-lowest": "#ffffff",
+                        "on-surface": "#1c1c18",
+                        "on-surface-variant": "#44474e",
+                        "error": "#ba1a1a"
                     },
                     fontFamily: {
-                        "headline-md": ["Noto Serif"], "display-lg": ["Noto Serif"], "label-md": ["Work Sans"],
-                        "headline-lg": ["Noto Serif"], "body-lg": ["Work Sans"], "body-md": ["Work Sans"]
+                        "headline": ["Noto Serif", "serif"],
+                        "body": ["Work Sans", "sans-serif"]
+                    },
+                    spacing: {
+                        "gutter": "24px",
+                        "md": "24px",
+                        "lg": "48px",
+                        "margin": "32px"
                     }
                 }
             }
         }
     </script>
-    <style>
-        .heat-cell { width: 12px; height: 12px; border-radius: 2px; }
-        .tab-active { border-bottom: 2px solid #001a43; color: #001a43; font-weight: 600; }
+    <style type="text/tailwindcss">
+        [x-cloak] { display: none !important; }
+        .tab-active { @apply border-b-2 border-primary text-primary font-semibold; }
+        .card { @apply bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm transition-all duration-200; }
+        .heat-cell { @apply w-3 h-3 md:w-4 md:h-4 rounded-[2px] cursor-pointer transition-transform hover:scale-125 hover:z-10; }
+        .label-xs { @apply font-body text-[10px] md:text-xs font-medium uppercase tracking-wider text-on-surface-variant; }
     </style>
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
@@ -62,188 +67,233 @@
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 
-<body x-data="analyticsPage()" class="bg-background text-on-background font-body-md antialiased min-h-screen dark">
-    <header class="w-full max-w-7xl mx-auto px-margin pt-md flex justify-between items-center">
-        <a href="index.html" class="flex items-center gap-2 text-primary hover:opacity-80 transition-opacity">
-            <span class="material-symbols-outlined">arrow_back</span>
-            <span class="font-bold">Dashboard</span>
-        </a>
-        <div id="auth-container"></div>
+<body x-data="analyticsPage()" class="bg-background text-on-surface font-body antialiased h-screen overflow-hidden flex flex-col">
+    <!-- Header -->
+    <header class="flex-none w-full bg-background/80 backdrop-blur-md border-b border-outline-variant z-[100]">
+        <div class="max-w-7xl mx-auto px-margin h-16 flex justify-between items-center">
+            <div class="flex items-center gap-6">
+                <a href="index.html" class="flex items-center gap-3 text-primary hover:opacity-70 transition-opacity group">
+                    <span class="material-symbols-outlined transition-transform group-hover:-translate-x-1">arrow_back</span>
+                </a>
+                <div class="h-6 w-px bg-outline-variant"></div>
+                <h1 class="font-headline text-xl md:text-2xl text-primary font-bold tracking-tight">Service Analytics</h1>
+            </div>
+            <div id="auth-container"></div>
+        </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-margin py-lg">
-        <div class="mb-lg">
-            <h1 class="font-display-lg text-4xl text-primary mb-2">Service Analytics</h1>
-            <p class="text-on-surface-variant">Historical insights into liturgical elements and scripture usage.</p>
-        </div>
-
-        <!-- Loading State -->
-        <template x-if="loading">
-            <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-xl text-center">
-                <div class="mb-4 text-primary font-bold">Analyzing Historical Services...</div>
-                <div class="w-full bg-surface-container rounded-full h-2.5 max-w-md mx-auto">
-                    <div class="bg-primary h-2.5 rounded-full transition-all duration-300" :style="`width: ${progress}%`"></div>
-                </div>
-                <div class="mt-2 text-sm text-on-surface-variant" x-text="`${progress}% complete`"></div>
+    <!-- Navigation and Controls (Fixed) -->
+    <div x-show="!loading" x-cloak class="flex-none bg-background z-[90] border-b border-outline-variant/30">
+        <div class="max-w-7xl mx-auto px-margin">
+            <!-- Navigation Tabs -->
+            <div class="flex border-b border-outline-variant">
+                <button @click="activeTab = 'hymns'" :class="activeTab === 'hymns' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">Hymn Usage</button>
+                <button @click="activeTab = 'bible'" :class="activeTab === 'bible' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">Bible Heat Map</button>
+                <button @click="activeTab = 'people'" :class="activeTab === 'people' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">People's Involvement</button>
             </div>
-        </template>
 
-        <!-- Main Content -->
-        <template x-if="!loading">
-            <div class="space-y-md">
-                <!-- Tabs -->
-                <div class="flex border-b border-outline-variant">
-                    <button @click="activeTab = 'hymns'" :class="activeTab === 'hymns' ? 'tab-active' : ''" class="px-6 py-3 text-on-surface-variant hover:text-primary transition-colors">Hymn Usage</button>
-                    <button @click="activeTab = 'bible'" :class="activeTab === 'bible' ? 'tab-active' : ''" class="px-6 py-3 text-on-surface-variant hover:text-primary transition-colors">Bible Heat Map</button>
+            <!-- Actions Area -->
+            <div x-show="activeTab === 'hymns' || activeTab === 'people'" class="py-4">
+                <div class="relative w-full max-w-md">
+                    <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+                    <input type="text" x-model="activeTab === 'hymns' ? hymnSearch : peopleSearch" :placeholder="activeTab === 'hymns' ? 'Filter by hymn name...' : 'Search people...'" 
+                        class="w-full pl-12 pr-4 py-2.5 bg-surface-container-low border-outline-variant rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all shadow-sm text-sm" />
                 </div>
+            </div>
+        </div>
+    </div>
 
-                <!-- Hymn Tab -->
-                <div x-show="activeTab === 'hymns'" class="space-y-md">
-                    <div class="flex justify-between items-center bg-surface-container-lowest border border-outline-variant rounded-xl p-md">
-                        <div class="relative w-full max-w-md">
-                            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
-                            <input type="text" x-model="hymnSearch" placeholder="Search hymns..." class="w-full pl-10 pr-4 py-2 bg-surface-container border-none rounded-lg focus:ring-2 focus:ring-primary" />
+    <!-- Scrollable Content Area -->
+    <main class="flex-1 overflow-hidden">
+        <div class="max-w-7xl mx-auto px-margin h-full">
+            <!-- Loading State -->
+            <template x-if="loading">
+                <div class="py-lg h-full flex items-center justify-center">
+                    <div class="card p-xl flex flex-col items-center justify-center space-y-6 min-h-[400px] w-full max-w-2xl">
+                        <div class="space-y-3 text-center">
+                            <div class="text-primary font-bold text-lg animate-pulse">Analyzing Historical Services...</div>
+                            <div class="text-sm text-on-surface-variant" x-text="`${progress}% complete`"></div>
+                        </div>
+                        <div class="w-full bg-surface-container-low rounded-full h-1.5 max-w-md overflow-hidden">
+                            <div class="bg-primary h-full transition-all duration-300 ease-out" :style="`width: ${progress}%`"></div>
                         </div>
                     </div>
+                </div>
+            </template>
 
-                    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden">
-                        <table class="w-full text-left">
-                            <thead class="bg-surface-container text-xs font-bold uppercase text-on-surface-variant">
-                                <tr>
-                                    <th class="px-6 py-4">Hymn Name</th>
-                                    <th class="px-6 py-4">Status</th>
-                                    <th class="px-6 py-4">Times Used</th>
-                                    <th class="px-6 py-4">Last Used</th>
-                                    <th class="px-6 py-4">Recency</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-outline-variant">
-                                <template x-for="h in filteredHymns" :key="h.id || h.name">
-                                    <tr class="hover:bg-surface-container-low transition-colors group">
-                                        <td class="px-6 py-4">
-                                            <div class="font-bold text-primary" x-text="h.name"></div>
-                                        </td>
-                                        <td class="px-6 py-4">
-                                            <span x-show="h.id" class="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-bold">Canonical</span>
-                                            <span x-show="!h.id" class="px-2 py-1 bg-gray-100 text-gray-500 text-xs rounded-full font-bold">Literal</span>
-                                        </td>
-                                        <td class="px-6 py-4 font-medium" x-text="h.count"></td>
-                                        <td class="px-6 py-4 text-on-surface-variant" x-text="formatDate(h.dates[0])"></td>
-                                        <td class="px-6 py-4">
-                                            <span class="text-sm" :class="getDaysSince(h.dates[0]) > 180 ? 'text-error' : 'text-on-surface-variant'" x-text="`${getDaysSince(h.dates[0])} days ago`"></span>
-                                        </td>
+            <!-- Main Content -->
+            <template x-if="!loading">
+                <div x-cloak class="h-full py-6 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
+                    <!-- Hymn Tab -->
+                    <div x-show="activeTab === 'hymns'" x-transition class="h-full flex flex-col">
+                        <div class="card flex-1 overflow-hidden flex flex-col">
+                            <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                <table class="w-full text-left border-collapse">
+                                    <thead class="bg-surface-container-low border-b border-outline-variant sticky top-0 z-10 shadow-sm">
+                                    <tr>
+                                        <th class="px-6 py-4 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group" @click="sortBy('name')">
+                                            <div class="flex items-center gap-2">
+                                                <span class="label-xs">Hymn Name</span>
+                                                <span class="material-symbols-outlined text-sm text-primary transition-opacity" :class="sortKey === 'name' ? 'opacity-100' : 'opacity-0'" x-text="sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                            </div>
+                                        </th>
+                                        <th class="px-6 py-4 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group" @click="sortBy('status')">
+                                            <div class="flex items-center gap-2">
+                                                <span class="label-xs">Status</span>
+                                                <span class="material-symbols-outlined text-sm text-primary transition-opacity" :class="sortKey === 'status' ? 'opacity-100' : 'opacity-0'" x-text="sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                            </div>
+                                        </th>
+                                        <th class="px-6 py-4 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group" @click="sortBy('count')">
+                                            <div class="flex items-center gap-2">
+                                                <span class="label-xs">Times Used</span>
+                                                <span class="material-symbols-outlined text-sm text-primary transition-opacity" :class="sortKey === 'count' ? 'opacity-100' : 'opacity-0'" x-text="sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                            </div>
+                                        </th>
+                                        <th class="px-6 py-4 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group" @click="sortBy('lastUsed')">
+                                            <div class="flex items-center gap-2">
+                                                <span class="label-xs">Last Used</span>
+                                                <span class="material-symbols-outlined text-sm text-primary transition-opacity" :class="sortKey === 'lastUsed' ? 'opacity-100' : 'opacity-0'" x-text="sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                            </div>
+                                        </th>
                                     </tr>
-                                </template>
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody class="divide-y divide-outline-variant/30">
+                                    <template x-for="h in filteredHymns" :key="h.id || h.name">
+                                        <tr class="hover:bg-surface-container-low/50 transition-colors group">
+                                            <td class="px-6 py-4">
+                                                <div class="font-bold text-primary tracking-tight" x-text="h.name"></div>
+                                            </td>
+                                            <td class="px-6 py-4">
+                                                <span x-show="h.id" class="px-3 py-1 bg-blue-50 text-blue-700 text-[10px] font-bold rounded-full uppercase tracking-widest border border-blue-100">Canonical</span>
+                                                <span x-show="!h.id" class="px-3 py-1 bg-surface-container-low text-on-surface-variant text-[10px] font-bold rounded-full uppercase tracking-widest border border-outline-variant/30">Literal</span>
+                                            </td>
+                                            <td class="px-6 py-4 font-medium text-lg" x-text="h.count"></td>
+                                            <td class="px-6 py-4">
+                                                <div class="flex flex-col">
+                                                    <span class="font-medium" :class="getDaysSince(h.dates[0]) > 180 ? 'text-error' : 'text-primary'" x-text="getDaysSince(h.dates[0]) === 0 ? 'Today' : `${getDaysSince(h.dates[0])} days ago` "></span>
+                                                    <span class="text-[10px] text-on-surface-variant font-medium uppercase tracking-tighter" x-text="formatDate(h.dates[0])"></span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Bible Tab -->
-                <div x-show="activeTab === 'bible'" class="space-y-md">
-                    <div class="grid grid-cols-1 lg:grid-cols-4 gap-md">
-                        <!-- Filters -->
-                        <div class="lg:col-span-1 bg-surface-container-lowest border border-outline-variant rounded-xl p-md space-y-4">
-                            <h3 class="font-bold text-primary uppercase text-xs tracking-widest">Source Elements</h3>
-                            <div class="space-y-2">
-                                <template x-for="(val, key) in bibleFilters">
-                                    <label class="flex items-center gap-3 cursor-pointer group">
-                                        <input type="checkbox" x-model="bibleFilters[key]" @change="fetchAndProcessData()" class="rounded border-outline text-primary focus:ring-primary" />
-                                        <span class="text-sm text-on-surface-variant group-hover:text-primary capitalize" x-text="key.replace(/([A-Z])/g, ' $1')"></span>
-                                    </label>
-                                </template>
+                <!-- People Tab -->
+                <div x-show="activeTab === 'people'" x-transition class="h-full flex flex-col overflow-hidden">
+                    <div class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-4 gap-gutter overflow-hidden">
+                        <!-- People List Table -->
+                        <div class="lg:col-span-3 card flex flex-col overflow-hidden">
+                            <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                <table class="w-full text-left border-collapse">
+                                    <thead class="bg-surface-container-low border-b border-outline-variant sticky top-0 z-10 shadow-sm">
+                                        <tr>
+                                            <th class="px-6 py-4 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group" @click="sortByPeople('name')">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="label-xs">Name</span>
+                                                    <span class="material-symbols-outlined text-sm text-primary transition-opacity" :class="peopleSortKey === 'name' ? 'opacity-100' : 'opacity-0'" x-text="peopleSortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                                </div>
+                                            </th>
+                                            <th class="px-6 py-4 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group" @click="sortByPeople('totalInvolvements')">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="label-xs">Total Services</span>
+                                                    <span class="material-symbols-outlined text-sm text-primary transition-opacity" :class="peopleSortKey === 'totalInvolvements' ? 'opacity-100' : 'opacity-0'" x-text="peopleSortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                                </div>
+                                            </th>
+                                            <th class="px-6 py-4">
+                                                <span class="label-xs">Top Roles</span>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-outline-variant/30">
+                                        <template x-for="p in filteredPeople" :key="p.id">
+                                            <tr @click="selectPerson(p)" class="hover:bg-surface-container-low transition-colors group cursor-pointer" :class="selectedPerson?.id === p.id ? 'bg-primary/5' : ''">
+                                                <td class="px-6 py-4">
+                                                    <div class="font-bold text-primary tracking-tight" x-text="p.name"></div>
+                                                </td>
+                                                <td class="px-6 py-4 font-medium text-lg" x-text="p.totalInvolvements || 0"></td>
+                                                <td class="px-6 py-4">
+                                                    <div class="flex flex-wrap gap-1">
+                                                        <template x-for="role in (p.topRoles || [])" :key="role">
+                                                            <span class="px-2 py-0.5 bg-surface-container text-on-surface-variant text-[9px] font-bold rounded uppercase tracking-tighter border border-outline-variant/30" x-text="role.replace(/_/g, ' ')"></span>
+                                                        </template>
+                                                        <template x-if="!p.topRoles || p.topRoles.length === 0">
+                                                            <span class="text-[10px] text-on-surface-variant italic opacity-50">Calculating...</span>
+                                                        </template>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
 
-                        <!-- Heat Map Container -->
-                        <div class="lg:col-span-3 bg-surface-container-lowest border border-outline-variant rounded-xl p-md">
-                            <div class="mb-4 flex justify-between items-center">
-                                <h3 class="font-bold text-primary">Scripture Timeline</h3>
-                                <div class="flex items-center gap-2 text-xs text-on-surface-variant">
-                                    <span>Less used</span>
-                                    <div class="flex gap-1">
-                                        <div class="w-3 h-3 bg-blue-50"></div>
-                                        <div class="w-3 h-3 bg-blue-300"></div>
-                                        <div class="w-3 h-3 bg-blue-600"></div>
-                                        <div class="w-3 h-3 bg-blue-900"></div>
-                                    </div>
-                                    <span>More used</span>
+                        <!-- Involvement History Sidebar -->
+                        <div class="lg:col-span-1 flex flex-col overflow-hidden">
+                            <div class="card h-full flex flex-col overflow-hidden">
+                                <div class="p-6 border-b border-outline-variant flex-none">
+                                    <h3 class="font-headline text-lg text-primary font-bold" x-text="selectedPerson ? selectedPerson.name : 'Select a Person'"></h3>
+                                    <p class="text-[10px] text-on-surface-variant italic">Involvement History</p>
+                                </div>
+                                <div class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
+                                    <template x-if="selectedPerson">
+                                        <template x-for="inv in personInvolvement" :key="inv.id">
+                                            <div class="p-3 bg-surface-container-low rounded-xl border border-outline-variant/30 space-y-2">
+                                                <div class="flex justify-between items-start">
+                                                    <span class="px-2 py-0.5 bg-primary/5 text-primary text-[9px] font-bold uppercase rounded border border-primary/10" x-text="inv.type.replace(/_/g, ' ')"></span>
+                                                    <span class="text-[10px] text-on-surface-variant font-medium" x-text="formatDate(inv.serviceDate)"></span>
+                                                </div>
+                                                <div x-show="inv.metadata" class="text-[10px] text-on-surface-variant italic line-clamp-2" x-text="inv.metadata"></div>
+                                                <a :href="`service-builder.html?date=${inv.serviceDate}`" class="block text-[9px] font-bold text-primary hover:underline">View Service</a>
+                                            </div>
+                                        </template>
+                                    </template>
+                                    <template x-if="!selectedPerson">
+                                        <div class="flex flex-col items-center justify-center py-12 text-center space-y-3 opacity-50">
+                                            <span class="material-symbols-outlined text-4xl">person_search</span>
+                                            <p class="text-xs font-medium italic">Click a person to see their contributions.</p>
+                                        </div>
+                                    </template>
+                                    <template x-if="selectedPerson && personInvolvement.length === 0 && !loadingInvolvement">
+                                        <div class="flex flex-col items-center justify-center py-12 text-center space-y-3 opacity-50">
+                                            <span class="material-symbols-outlined text-4xl">history_toggle_off</span>
+                                            <p class="text-xs font-medium italic">No recent involvement records found.</p>
+                                        </div>
+                                    </template>
+                                    <template x-if="loadingInvolvement">
+                                        <div class="flex justify-center py-12">
+                                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                                        </div>
+                                    </template>
                                 </div>
                             </div>
-
-                            <!-- Timeline Grid -->
-                            <div class="flex flex-wrap gap-[2px] max-h-[500px] overflow-y-auto p-1 bg-surface-container-low rounded-lg">
-                                <template x-for="t in bibleStats.timeline" :key="t.key">
-                                    <div 
-                                        class="heat-cell cursor-pointer transition-transform hover:scale-125"
-                                        :class="getHeatColor(t.count)"
-                                        :title="`${t.book} ${t.chapter} (${t.count} uses)`"
-                                        @click="selectBook(t.book)">
-                                    </div>
-                                </template>
-                            </div>
-                            <div class="mt-4 text-[10px] text-on-surface-variant italic">Each square represents one chapter of the Bible. Click a square to view details for that book.</div>
                         </div>
                     </div>
-
-                    <!-- Book Detail (Drill Down) -->
-                    <template x-if="selectedBook">
-                        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md space-y-4">
-                            <div class="flex justify-between items-center">
-                                <h3 class="font-headline-md text-primary" x-text="selectedBook"></h3>
-                                <button @click="selectedBook = null" class="text-on-surface-variant hover:text-primary flex items-center gap-1">
-                                    <span class="material-symbols-outlined text-sm">close</span> Close Details
-                                </button>
-                            </div>
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-lg">
-                                <!-- Chapter Density -->
-                                <div>
-                                    <h4 class="text-xs font-bold uppercase text-on-surface-variant mb-3">Chapter Usage</h4>
-                                    <div class="flex flex-wrap gap-2">
-                                        <template x-for="ch in drillDownData" :key="ch.key">
-                                            <div class="flex flex-col items-center gap-1">
-                                                <button 
-                                                    @click="selectChapter(ch.chapter)"
-                                                    class="w-8 h-8 rounded flex items-center justify-center text-xs font-medium transition-all" 
-                                                     :class="[
-                                                        ch.count > 0 ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant',
-                                                        selectedChapter === ch.chapter ? 'ring-2 ring-offset-2 ring-primary scale-110' : ''
-                                                     ]"
-                                                     x-text="ch.chapter"></button>
-                                                <span class="text-[10px] text-on-surface-variant" x-text="ch.count"></span>
-                                            </div>
-                                        </template>
-                                    </div>
-                                </div>
-
-                                <!-- Service List -->
-                                <div>
-                                    <h4 class="text-xs font-bold uppercase text-on-surface-variant mb-3">
-                                        Citations <span x-show="selectedChapter" x-text="` (Chapter ${selectedChapter})`"></span>
-                                    </h4>
-                                    <div class="space-y-2 max-h-[300px] overflow-y-auto pr-2">
-                                        <template x-for="svc in currentCitations" :key="svc.date + svc.element">
-                                            <div class="bg-surface-container-low p-3 rounded-lg flex justify-between items-center">
-                                                <div>
-                                                    <div class="text-sm font-bold text-primary" x-text="svc.reference"></div>
-                                                    <div class="text-[10px] text-on-surface-variant" x-text="`${svc.element} on ${formatDate(svc.date)}`"></div>
-                                                </div>
-                                                <a :href="`service-builder.html?date=${svc.date}`" class="text-primary hover:underline text-xs">View Service</a>
-                                            </div>
-                                        </template>
-                                        <template x-if="currentCitations.length === 0">
-                                            <p class="text-sm text-on-surface-variant italic">No citations found for this selection.</p>
-                                        </template>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
                 </div>
             </div>
         </template>
     </main>
 
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #c5c6d0; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #91949e; }
+        
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slide-in-from-bottom-4 { from { transform: translateY(1rem); } to { transform: translateY(0); } }
+        @keyframes zoom-in-95 { from { transform: scale(0.95); } to { transform: scale(1); } }
+        
+        .animate-in { animation: fade-in 0.5s ease-out forwards; }
+        .fade-in { animation-name: fade-in; }
+        .slide-in-from-bottom-4 { animation-name: slide-in-from-bottom-4; }
+        .zoom-in-95 { animation-name: zoom-in-95; }
+        .duration-300 { animation-duration: 300ms; }
+        .duration-500 { animation-duration: 500ms; }
+    </style>
 </body>
 </html>
