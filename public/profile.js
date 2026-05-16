@@ -25,12 +25,19 @@ async function initProfile() {
             const role = (userData && userData.role) || 'viewer';
             
             // Update role displays
-            const roleText = role.charAt(0).toUpperCase() + role.slice(1);
+            const roleLabels = {
+                'admin': 'Admin',
+                'super_admin': 'Super Admin',
+                'elder': 'Elder',
+                'editor': 'Editor',
+                'viewer': 'Viewer'
+            };
+            const roleText = roleLabels[role] || role.charAt(0).toUpperCase() + role.slice(1);
             document.getElementById('user-role-badge').textContent = `${roleText} Access`;
             document.getElementById('user-role-display').textContent = roleText;
 
-            // Show Hymn Manager button if editor or admin
-            if (role === 'editor' || role === 'admin') {
+            // Show Hymn Manager button if editor, elder, admin, or super_admin
+            if (['editor', 'elder', 'admin', 'super_admin'].includes(role)) {
                 const managerBtn = document.getElementById('hymn-manager-btn');
                 if (managerBtn) managerBtn.classList.remove('hidden');
                 
@@ -38,8 +45,8 @@ async function initProfile() {
                 if (peoplesBtn) peoplesBtn.classList.remove('hidden');
             }
 
-            // Show Admin Panel if admin
-            if (role === 'admin') {
+            // Show Admin Panel if admin or super_admin
+            if (['admin', 'super_admin'].includes(role)) {
                 const adminPanel = document.getElementById('admin-panel');
                 if (adminPanel) {
                     adminPanel.classList.remove('hidden');
@@ -137,9 +144,21 @@ async function loadUsersList() {
         snapshot.forEach(doc => {
             const data = doc.data();
             const role = data.role || 'viewer';
-            const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+            const roleLabels = {
+                'admin': 'Admin',
+                'super_admin': 'Super Admin',
+                'elder': 'Elder',
+                'editor': 'Editor',
+                'viewer': 'Viewer'
+            };
+            const roleLabel = roleLabels[role] || role.charAt(0).toUpperCase() + role.slice(1);
             const isSelf = doc.id === currentUserUid;
             
+            // Status color logic
+            let statusColor = 'bg-outline-variant';
+            if (role === 'admin' || role === 'super_admin') statusColor = 'bg-primary';
+            else if (role === 'editor' || role === 'elder') statusColor = 'bg-secondary';
+
             const userItem = document.createElement('div');
             userItem.className = 'flex flex-col p-md bg-surface-container-lowest hover:bg-surface-container-low transition-colors group border-b border-surface-container';
             userItem.innerHTML = `
@@ -147,7 +166,7 @@ async function loadUsersList() {
                     <div class="flex flex-col gap-0.5">
                         <p class="font-headline-md text-sm text-primary group-hover:text-primary-container transition-colors">${data.email || 'No Email'}</p>
                         <div class="flex items-center gap-2">
-                            <span class="w-1.5 h-1.5 rounded-full ${role === 'admin' ? 'bg-primary' : (role === 'editor' ? 'bg-secondary' : 'bg-outline-variant')}"></span>
+                            <span class="w-1.5 h-1.5 rounded-full ${statusColor}"></span>
                             <span class="text-[10px] font-label-md text-on-surface-variant uppercase tracking-widest">${roleLabel}</span>
                         </div>
                     </div>
@@ -157,7 +176,9 @@ async function loadUsersList() {
                                     class="text-[11px] font-label-md uppercase tracking-wider py-1.5 pl-3 pr-8 bg-surface-container-low border border-outline-variant/30 rounded focus:ring-1 focus:ring-primary outline-none appearance-none cursor-pointer">
                                 <option value="viewer" ${role === 'viewer' ? 'selected' : ''}>Viewer</option>
                                 <option value="editor" ${role === 'editor' ? 'selected' : ''}>Editor</option>
+                                <option value="elder" ${role === 'elder' ? 'selected' : ''}>Elder</option>
                                 <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
+                                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>Super Admin</option>
                             </select>
                             <span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-xs pointer-events-none text-outline">expand_more</span>
                         </div>

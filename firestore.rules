@@ -4,12 +4,12 @@ service cloud.firestore {
     
     // Helper to check if user is admin
     function isAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin'];
     }
 
     // Helper to check if user is editor
     function isEditor() {
-      return request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'editor' || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['editor', 'admin', 'elder', 'super_admin'];
     }
 
     match /users/{userId} {
@@ -44,6 +44,21 @@ service cloud.firestore {
         allow read: if true;
         allow create, update, delete: if isEditor();
       }
+
+      match /pastoral_prayer_history/{historyId} {
+        allow read: if true;
+        allow create, update, delete: if isEditor();
+      }
+    }
+
+    // Allow collection group queries for pastoral_prayer_history
+    match /{path=**}/pastoral_prayer_history/{historyId} {
+      allow read: if true;
+    }
+
+    match /people_tags/{tagId} {
+      allow read: if true;
+      allow create, update, delete: if isEditor();
     }
   }
 }

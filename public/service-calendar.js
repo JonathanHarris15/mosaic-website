@@ -1,3 +1,254 @@
+function calendarPage() {
+    return {
+        view: localStorage.getItem('calendarView') || 'list',
+        showHistory: (localStorage.getItem('showHistory') === 'true'),
+        showDirectory: false,
+
+        // --- Person Selector Modal ---
+        showPersonSelector: false,
+        selectorDateKey: '',
+        selectorField: '',
+        selectorRoleName: '',
+        selectedPersonRef: { id: null, name: '' },
+        activeSuggestionsKey: null,
+        saving: false,
+
+        // --- Pastoral Prayer Suggestions ---
+        prayerSuggestions: { males: [], females: [] },
+
+        async fetchPrayerSuggestions() {
+            try {
+                const now = new Date();
+                const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+                const snap = await db.collection('people')
+                    .where('tags', 'array-contains', 'Member')
+                    .get();
+                
+                const members = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                const getTop3 = (sex) => {
+                    return members
+                        .filter(m => m.sex === sex)
+                        .filter(m => !m.lastPastoralPrayerDate || m.lastPastoralPrayerDate < todayStr)
+                        .sort((a, b) => {
+                            const dateA = a.lastPastoralPrayerDate || '0000-00-00';
+                            const dateB = b.lastPastoralPrayerDate || '0000-00-00';
+                            return dateA.localeCompare(dateB);
+                        })
+                        .slice(0, 3);
+                };
+
+                this.prayerSuggestions = {
+                    males: getTop3('male'),
+                    females: getTop3('female')
+                };
+            } catch (err) {
+                console.error("Error fetching prayer suggestions:", err);
+            }
+        },
+        
+        openPersonSelector(dateKey, field, current) {
+            this.selectorDateKey = dateKey;
+            this.selectorField = field;
+            this.selectedPersonRef = { id: current.id, name: current.name };
+            this.selectorRoleName = this.getRoleName(field);
+            
+            // Set suggestions key if applicable
+            if (field === 'prayerMale') this.activeSuggestionsKey = 'males';
+            else if (field === 'prayerFemale') this.activeSuggestionsKey = 'females';
+            else this.activeSuggestionsKey = null;
+
+            if (this.activeSuggestionsKey) this.fetchPrayerSuggestions();
+            
+            this.showPersonSelector = true;
+        },
+        
+        getRoleName(field) {
+            const names = {
+                'serviceLeader': 'Service Leader',
+                'preacher': 'Preacher',
+                'sermonette': 'Sermonette',
+                'musicLeader': 'Music Leader',
+                'prayerPraiseName': 'Prayer Leader (Praise)',
+                'prayerConfessionName': 'Prayer Leader (Confession)',
+                'prayerMale': 'Male Being Prayed For',
+                'prayerFemale': 'Female Being Prayed For'
+            };
+            return names[field] || 'Person';
+        },
+        
+        async savePersonSelection() {
+            if (!this.selectorDateKey || !this.selectorField) return;
+            
+            if (!this.selectedPersonRef.id && this.selectedPersonRef.name) {
+                alert('Please select a person from the list or add them as a new person.');
+                return;
+            }
+
+            this.saving = true;
+            try {
+                const batch = db.batch();
+                const serviceRef = db.collection('services').doc(this.selectorDateKey);
+                const svcDoc = await serviceRef.get();
+                const svc = svcDoc.data() || {};
+
+                const idFieldMap = {
+                    'serviceLeader': 'serviceLeaderId',
+                    'musicLeader': 'musicLeaderId',
+                    'preacher': 'preacherId',
+                    'sermonette': 'sermonetteId',
+                    'prayerPraiseName': 'prayerPraiseId',
+                    'prayerConfessionName': 'prayerConfessionId',
+                    'prayerMale': null,
+                    'prayerFemale': null
+                };
+                const roleMap = {
+                    'serviceLeader': 'service_leader',
+                    'musicLeader': 'worship_leader',
+                    'preacher': 'preacher',
+                    'sermonette': 'sermonette',
+                    'prayerPraiseName': 'prayer',
+                    'prayerConfessionName': 'prayer',
+                    'prayerMale': 'pastoral_prayer',
+                    'prayerFemale': 'pastoral_prayer'
+                };
+
+                const idField = idFieldMap[this.selectorField];
+                let oldId = idField ? svc[idField] : null;
+                const newId = this.selectedPersonRef.id;
+                const role = roleMap[this.selectorField];
+
+                if (this.selectorField === 'prayerMale' || this.selectorField === 'prayerFemale') {
+                    oldId = (svc.liturgy && svc.liturgy[this.selectorField]) ? svc.liturgy[this.selectorField].id : null;
+                }
+
+                let metadata = null;
+                if (this.selectorField === 'prayerPraiseName') metadata = { prayer_type: 'praise' };
+                if (this.selectorField === 'prayerConfessionName') metadata = { prayer_type: 'confession' };
+
+                if (oldId !== newId) {
+                    if (oldId) {
+                        const oldPersonRef = db.collection('people').doc(oldId);
+                        if (role === 'pastoral_prayer') {
+                            batch.delete(oldPersonRef.collection('pastoral_prayer_history').doc(this.selectorDateKey));
+                        } else {
+                            let query = oldPersonRef.collection('involvement')
+                                .where('serviceDate', '==', this.selectorDateKey)
+                                .where('type', '==', role);
+                            if (metadata && metadata.prayer_type) query = query.where('metadata.prayer_type', '==', metadata.prayer_type);
+                            const invSnap = await query.get();
+                            invSnap.forEach(d => batch.delete(d.ref));
+                            if (!invSnap.empty) {
+                                batch.update(oldPersonRef, { totalInvolvements: firebase.firestore.FieldValue.increment(-invSnap.size) });
+                            }
+                        }
+                    }
+
+                    if (newId) {
+                        const newPersonRef = db.collection('people').doc(newId);
+                        if (role === 'pastoral_prayer') {
+                            batch.set(newPersonRef.collection('pastoral_prayer_history').doc(this.selectorDateKey), {
+                                serviceDate: this.selectorDateKey,
+                                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                        } else {
+                            const invData = {
+                                serviceDate: this.selectorDateKey,
+                                type: role,
+                                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                            };
+                            if (metadata) invData.metadata = metadata;
+                            batch.set(newPersonRef.collection('involvement').doc(), invData);
+                            batch.update(newPersonRef, { totalInvolvements: firebase.firestore.FieldValue.increment(1) });
+                        }
+                    }
+                }
+
+                const updates = {};
+                if (this.selectorField === 'prayerMale' || this.selectorField === 'prayerFemale') {
+                    if (!svc.liturgy) updates.liturgy = {};
+                    updates[`liturgy.${this.selectorField}`] = { id: newId || null, name: this.selectedPersonRef.name || '' };
+                } else {
+                    updates[this.selectorField] = this.selectedPersonRef.name || '';
+                    if (idField) updates[idField] = newId || null;
+                }
+                batch.set(serviceRef, updates, { merge: true });
+                await batch.commit();
+
+                if (role === 'pastoral_prayer') {
+                    const idsToFix = [oldId, newId].filter(id => id);
+                    for (const pid of idsToFix) {
+                        const pRef = db.collection('people').doc(pid);
+                        const histSnap = await pRef.collection('pastoral_prayer_history').orderBy('serviceDate', 'desc').limit(1).get();
+                        const latestDate = histSnap.empty ? '0000-00-00' : histSnap.docs[0].data().serviceDate;
+                        await pRef.update({ lastPastoralPrayerDate: latestDate });
+                    }
+                }
+
+                this.showPersonSelector = false;
+                if (window.loadServiceData) await window.loadServiceData();
+            } catch (error) {
+                console.error('Error saving person selection:', error);
+                alert('Failed to save.');
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        // --- Person Creation Modal ---
+        showPersonAddModal: false,
+        personToAdd: { name: '', callback: null },
+        duplicateWarning: false,
+
+        promptAddPerson(name, callback) {
+            this.personToAdd = { name, callback };
+            this.showPersonAddModal = true;
+            this.duplicateWarning = false;
+            this.checkDuplicatePerson(name);
+        },
+
+        async checkDuplicatePerson(name) {
+            if (!name) return;
+            try {
+                const snap = await db.collection('people').where('name', '==', name).limit(1).get();
+                this.duplicateWarning = !snap.empty;
+            } catch (err) { console.error(err); }
+        },
+
+        async confirmAddPerson() {
+            if (!this.personToAdd.name) return;
+            this.saving = true;
+            try {
+                const docRef = await db.collection('people').add({
+                    name: this.personToAdd.name,
+                    totalInvolvements: 0,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                const newPerson = { id: docRef.id, name: this.personToAdd.name };
+                if (this.personToAdd.callback) this.personToAdd.callback(newPerson);
+                this.showPersonAddModal = false;
+            } catch (err) {
+                console.error(err);
+                alert('Failed to add person.');
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        init() {
+            this.$watch('view', val => {
+                localStorage.setItem('calendarView', val);
+                if (window.refreshCalendar) window.refreshCalendar(this.showHistory);
+            });
+            this.$watch('showHistory', val => {
+                localStorage.setItem('showHistory', val);
+                if (window.refreshCalendar) window.refreshCalendar(val);
+            });
+        }
+    };
+}
+
 let allSundays = [];
 let serviceDataMap = {};
 
@@ -153,7 +404,7 @@ function renderSidebar(grouped) {
 
 window.navigateToGuide = function(date) {
     const svc = serviceDataMap[date];
-    const isViewer = window.currentUserRole === 'viewer';
+    const isViewer = !['editor', 'elder', 'admin', 'super_admin'].includes(window.currentUserRole);
     
     if (!isViewer && svc) {
         let incomplete = false;
@@ -277,6 +528,7 @@ function renderTable(grouped) {
             <th class="px-md py-sm border-b border-outline-variant">Baptism</th>
             <th class="px-md py-sm border-b border-outline-variant">Music</th>
             <th class="px-md py-sm border-b border-outline-variant">Prayers</th>
+            <th class="px-md py-sm border-b border-outline-variant">Pastoral Prayer</th>
             <th class="px-md py-sm border-b border-outline-variant text-right sticky-column">Actions</th>
         </tr>
     `;
@@ -297,7 +549,7 @@ function renderTable(grouped) {
                 separatorRow.id = `table-month-${year}-${month}`;
                 separatorRow.className = 'sticky-month-row bg-surface-container-low/50 scroll-mt-24';
                 separatorRow.innerHTML = `
-                    <td colspan="8" class="px-md py-2 z-25 bg-surface-container-low/90 backdrop-blur-sm">
+                    <td colspan="9" class="px-md py-2 z-25 bg-surface-container-low/90 backdrop-blur-sm">
                         <h3 class="font-headline-md text-sm uppercase tracking-wider text-secondary">${month} ${year}</h3>
                     </td>
                 `;
@@ -340,6 +592,9 @@ function renderTable(grouped) {
                         </td>
                         <td class="px-md py-md whitespace-nowrap">
                             <div class="prayers-cell font-body-md text-on-surface-variant text-xs space-y-0.5">—</div>
+                        </td>
+                        <td class="px-md py-md whitespace-nowrap">
+                            <div class="pastoral-prayer-cell font-body-md text-on-surface-variant text-xs space-y-0.5">—</div>
                         </td>
                         <td class="px-md py-md text-right whitespace-nowrap sticky-column">
                             <div class="flex justify-end gap-xs">
@@ -552,6 +807,42 @@ function injectServiceData(serviceMap) {
             if (canEdit) setupInlineEdit(musicCell, dateKey, 'musicLeader');
         }
 
+        const prayerFemaleCell = el.querySelector('.prayer-female-cell');
+        if (prayerFemaleCell) {
+            const val = (svc.liturgy && svc.liturgy.prayerFemale) ? svc.liturgy.prayerFemale.name : '—';
+            const id = (svc.liturgy && svc.liturgy.prayerFemale) ? svc.liturgy.prayerFemale.id : '';
+            prayerFemaleCell.textContent = val || '—';
+            prayerFemaleCell.setAttribute('data-person-id', id || '');
+            if (canEdit) setupInlineEdit(prayerFemaleCell, dateKey, 'prayerFemale');
+        }
+
+        const pastoralPrayerCell = el.querySelector('.pastoral-prayer-cell');
+        if (pastoralPrayerCell) {
+            pastoralPrayerCell.innerHTML = '';
+            
+            const maleRow = document.createElement('div');
+            maleRow.className = 'flex gap-1 items-center';
+            const maleName = (svc.liturgy && svc.liturgy.prayerMale) ? svc.liturgy.prayerMale.name : '—';
+            const maleId = (svc.liturgy && svc.liturgy.prayerMale) ? svc.liturgy.prayerMale.id : '';
+            maleRow.innerHTML = `<span class="opacity-50">M:</span> <span class="male-name-cell">${maleName || '—'}</span>`;
+            maleRow.querySelector('.male-name-cell').setAttribute('data-person-id', maleId || '');
+            
+            const femaleRow = document.createElement('div');
+            femaleRow.className = 'flex gap-1 items-center';
+            const femaleName = (svc.liturgy && svc.liturgy.prayerFemale) ? svc.liturgy.prayerFemale.name : '—';
+            const femaleId = (svc.liturgy && svc.liturgy.prayerFemale) ? svc.liturgy.prayerFemale.id : '';
+            femaleRow.innerHTML = `<span class="opacity-50">F:</span> <span class="female-name-cell">${femaleName || '—'}</span>`;
+            femaleRow.querySelector('.female-name-cell').setAttribute('data-person-id', femaleId || '');
+            
+            pastoralPrayerCell.appendChild(maleRow);
+            pastoralPrayerCell.appendChild(femaleRow);
+
+            if (canEdit) {
+                setupInlineEdit(maleRow.querySelector('.male-name-cell'), dateKey, 'prayerMale');
+                setupInlineEdit(femaleRow.querySelector('.female-name-cell'), dateKey, 'prayerFemale');
+            }
+        }
+
         const prayersCell = el.querySelector('.prayers-cell');
         if (prayersCell) {
             prayersCell.innerHTML = '';
@@ -582,7 +873,7 @@ function setupInlineEdit(el, dateKey, field) {
     el.title = 'Click to edit';
     
     // Check if it's a Person field
-    const personFields = ['serviceLeader', 'musicLeader', 'preacher', 'sermonette', 'prayerPraiseName', 'prayerConfessionName'];
+    const personFields = ['serviceLeader', 'musicLeader', 'preacher', 'sermonette', 'prayerPraiseName', 'prayerConfessionName', 'prayerMale', 'prayerFemale'];
 
     el.onclick = (e) => {
         e.stopPropagation();
@@ -694,9 +985,23 @@ window.openPersonSelector = (dateKey, field, current) => {
 /**
  * Shared Person Picker component logic (Alpine.js)
  */
-function personPicker(personRef) {
+function personPicker(personRef, suggestionsKey = null) {
+    if (!personRef) personRef = { name: '', id: null };
     return {
         personRef: personRef,
+        suggestionsKey: suggestionsKey,
+        get suggestions() {
+            // Resolve the key. If it's 'activeSuggestionsKey', look it up on the parent scope (proxied via this)
+            let key = this.suggestionsKey;
+            if (key === 'activeSuggestionsKey') {
+                key = this.activeSuggestionsKey; 
+            }
+            
+            if (key === 'males' || key === 'females') {
+                return (this.prayerSuggestions && this.prayerSuggestions[key]) || [];
+            }
+            return [];
+        },
         open: false,
         query: personRef.name || '',
         results: [],
@@ -704,6 +1009,12 @@ function personPicker(personRef) {
         init() {
             this.$watch('personRef.name', (val) => {
                 this.query = val || '';
+            });
+            // Auto-open suggestions when modal is shown (watch parent prop proxied via this)
+            this.$watch('showPersonSelector', (val) => {
+                if (val && this.suggestionsKey) {
+                    this.open = true;
+                }
             });
         },
 
@@ -775,7 +1086,7 @@ auth.onAuthStateChanged(async (user) => {
             const userData = await getUserData(user.uid);
             const role = (userData && userData.role) || 'viewer';
             window.currentUserRole = role;
-            if (role === 'editor' || role === 'admin') {
+            if (['editor', 'elder', 'admin', 'super_admin'].includes(role)) {
                 document.body.classList.add('can-edit');
                 const importBtn = document.getElementById('import-docx-btn');
                 if (importBtn) {

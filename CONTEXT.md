@@ -3,11 +3,24 @@
 ## Core Entities
 
 ### Person
-An individual whose involvement with the church is tracked.
+An individual whose involvement with the church is tracked. This is the primary container for all data related to a church member or affiliate.
 - **Fields**:
   - `name`: Full name.
+  - `totalInvolvements`: Total count of involvement records.
+  - `contact`: (Nested Object) Contact information.
+    - `email`: Email address.
+    - `phone`: Phone number.
+    - `address`: Physical or mailing address.
+  - `sex`: Gender of the person ('male' or 'female').
+  - `membership`: (Nested Object) Status and church relationship.
+    - `status`: 'member', 'regular_attender', 'visitor', or 'inactive'.
+    - `joinedAt`: Date they became a member.
+  - `lastPastoralPrayerDate`: The date (YYYY-MM-DD) of the last time this person was prayed for in the pastoral prayer.
+  - `createdAt`: Timestamp when the record was created.
+  - `updatedAt`: Timestamp of the last modification.
 - **Sub-collections**:
-  - `involvement`: Records of participation in services.
+  - `involvement`: Records of active participation in services (e.g., preaching, leading).
+  - `pastoral_prayer_history`: Records of when the person was the subject of the pastoral prayer.
 
 ### Service
 A liturgical event (usually a Sunday service), identified by its date (YYYY-MM-DD).
@@ -64,6 +77,8 @@ Canonical names for types of involvement.
 - `worship_leader`: The person leading the musical worship.
 - `sermonette`: The person delivering a shorter message. In the calendar view, this is displayed as a badge and is editable inline by admins.
 - `baptism`: A liturgical event marked by `hasBaptism: true`. Displayed as a read-only badge in the calendar views.
+- `prayer`: The person leading a specific prayer (praise or confession).
+- `pastoral_prayer`: The person being prayed for in the weekly pastoral prayer (subject). Note: These are tracked in the `pastoral_prayer_history` collection, not the `involvement` collection.
 
 ## User Interface Conventions
 
@@ -79,6 +94,3 @@ Canonical names for types of involvement.
 - **Editing Summary**: 
   - Sermonette leaders are linked to People and editable from list/table.
   - Baptism is free-text and editable from the table view.
-- `prayer`: The person leading a specific prayer.
-  - `prayer_type`: 'praise' or 'confession'.
-  - `prayer_text`: The content of the prayer.

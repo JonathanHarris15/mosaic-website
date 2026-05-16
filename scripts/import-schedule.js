@@ -194,10 +194,15 @@ async function run() {
                 // Ensure person exists
                 let personId = peopleMap.get(personName);
                 if (!personId) {
+                    const now = admin.firestore.FieldValue.serverTimestamp();
                     const personRef = await db.collection('people').add({
                         name: personName,
                         totalInvolvements: 0,
-                        createdAt: admin.firestore.FieldValue.serverTimestamp()
+                        contact: {},
+                        membership: { status: 'visitor' },
+                        lastPastoralPrayerDate: null,
+                        createdAt: now,
+                        updatedAt: now
                     });
                     personId = personRef.id;
                     peopleMap.set(personName, personId);

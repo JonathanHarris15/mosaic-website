@@ -13,7 +13,13 @@ document.addEventListener('alpine:init', () => {
         sortDirection: 'desc',
         
         // Form data for adding a person
-        newPersonName: '',
+        newPerson: {
+            name: '',
+            email: '',
+            phone: '',
+            address: '',
+            sex: '' // '' or 'male' or 'female'
+        },
         
         // Involvement tracking
         selectedPerson: null,
@@ -26,7 +32,15 @@ document.addEventListener('alpine:init', () => {
         },
         
         // UI State
+        showAddPersonModal: false,
         showInvolvementModal: false,
+        showMergeModal: false,
+        mergeSource: null, // The person being retired
+        mergeTarget: null, // The person surviving
+        allTags: [],
+        tagMetadata: {}, // { tagName: { hiddenFromOthers: bool, hidePeople: bool } }
+        selectedTags: [],
+        currentUserRole: 'viewer',
 
         async init() {
             auth.onAuthStateChanged(async (user) => {
@@ -35,14 +49,103 @@ document.addEventListener('alpine:init', () => {
                     return;
                 }
                 const userData = await getUserData(user.uid);
-                const role = (userData && userData.role) || 'viewer';
-                if (role !== 'editor' && role !== 'admin') {
+                this.currentUserRole = (userData && userData.role) || 'viewer';
+                if (!['editor', 'elder', 'admin', 'super_admin'].includes(this.currentUserRole)) {
                     alert('Permission denied.');
                     window.location.href = 'index.html';
                     return;
                 }
                 this.loadPeople();
+                this.loadTags();
             });
+        },
+
+        get isAdmin() {
+            return ['elder', 'super_admin'].includes(this.currentUserRole);
+        },
+
+        async loadTags() {
+            try {
+                const snap = await db.collection('people_tags').get();
+                const metadata = {};
+                const tags = [];
+                
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    const tagName = doc.id;
+                    metadata[tagName] = {
+                        hiddenFromOthers: data.hiddenFromOthers || false,
+                        hidePeople: data.hidePeople || false
+                    };
+                    
+                    if (this.isAdmin || !data.hiddenFromOthers) {
+                        tags.push(tagName);
+                    }
+                });
+                
+                this.allTags = tags.sort();
+                this.tagMetadata = metadata;
+            } catch (e) {
+                console.error("Error loading tags:", e);
+            }
+        },
+
+        async toggleTagVisibility(tagName) {
+            if (!this.isAdmin) return;
+            const current = this.tagMetadata[tagName]?.hiddenFromOthers || false;
+            try {
+                await db.collection('people_tags').doc(tagName).update({
+                    hiddenFromOthers: !current,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                this.tagMetadata[tagName].hiddenFromOthers = !current;
+                this.showToast(`Tag "${tagName}" is now ${!current ? 'hidden from others' : 'visible to all'}`);
+                await this.loadTags(); // Refresh list to respect visibility for others
+            } catch (e) {
+                console.error("Error toggling tag visibility:", e);
+            }
+        },
+
+        async togglePeopleVisibility(tagName) {
+            if (!this.isAdmin) return;
+            const current = this.tagMetadata[tagName]?.hidePeople || false;
+            try {
+                await db.collection('people_tags').doc(tagName).update({
+                    hidePeople: !current,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                this.tagMetadata[tagName].hidePeople = !current;
+                this.showToast(`People with tag "${tagName}" are now ${!current ? 'hidden from directory' : 'visible in directory'}`);
+            } catch (e) {
+                console.error("Error toggling people visibility:", e);
+            }
+        },
+
+        async createNewTag(tagName) {
+            tagName = tagName.trim();
+            if (!tagName) return;
+            if (this.allTags.find(t => t.toLowerCase() === tagName.toLowerCase())) {
+                this.showToast('Tag already exists', 'error');
+                return;
+            }
+
+            try {
+                await db.collection('people_tags').doc(tagName).set({ name: tagName });
+                this.allTags.push(tagName);
+                this.allTags.sort();
+                this.showToast(`Tag "${tagName}" created`);
+            } catch (e) {
+                console.error("Error creating tag:", e);
+                this.showToast('Error creating tag', 'error');
+            }
+        },
+
+        toggleTagFilter(tag) {
+            if (this.selectedTags.includes(tag)) {
+                this.selectedTags = this.selectedTags.filter(t => t !== tag);
+            } else {
+                this.selectedTags.push(tag);
+            }
         },
 
         async loadPeople() {
@@ -52,11 +155,186 @@ document.addEventListener('alpine:init', () => {
                 this.people = snap.docs.map(doc => ({ 
                     id: doc.id, 
                     totalInvolvements: 0, 
+                    contact: {},
+                    membership: {},
+                    tags: [],
                     ...doc.data() 
                 }));
             } catch (error) {
                 console.error("Error loading people:", error);
                 this.showToast('Error loading people list', 'error');
+            }
+        },
+
+        async addTag(person, tagName) {
+            tagName = tagName.trim();
+            if (!tagName) return;
+
+            // Find match or use original (case-insensitive check)
+            const existingTag = this.allTags.find(t => t.toLowerCase() === tagName.toLowerCase());
+            const finalTagName = existingTag || tagName;
+
+            const tags = person.tags || [];
+            if (tags.includes(finalTagName)) {
+                this.showToast(`Person already has tag "${finalTagName}"`, 'error');
+                return;
+            }
+
+            try {
+                const batch = db.batch();
+                
+                // If it's a new tag, add it to the global people_tags collection
+                if (!existingTag) {
+                    batch.set(db.collection('people_tags').doc(finalTagName), { name: finalTagName });
+                    this.allTags.push(finalTagName);
+                    this.allTags.sort();
+                }
+
+                const newTags = [...tags, finalTagName];
+                batch.update(db.collection('people').doc(person.id), {
+                    tags: newTags,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                await batch.commit();
+                person.tags = newTags;
+                
+                // Sync local list if editing a clone
+                const localIdx = this.people.findIndex(p => p.id === person.id);
+                if (localIdx !== -1) {
+                    this.people[localIdx].tags = newTags;
+                }
+
+                this.showToast(`Tag "${finalTagName}" added successfully`);
+            } catch (e) {
+                console.error("Error adding tag:", e);
+                this.showToast('Error adding tag', 'error');
+            }
+        },
+
+        async removeTag(person, tag) {
+            const tags = person.tags || [];
+            const newTags = tags.filter(t => t !== tag);
+
+            try {
+                await db.collection('people').doc(person.id).update({
+                    tags: newTags,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                person.tags = newTags;
+
+                // Sync local list if editing a clone
+                const localIdx = this.people.findIndex(p => p.id === person.id);
+                if (localIdx !== -1) {
+                    this.people[localIdx].tags = newTags;
+                }
+
+                this.showToast(`Tag "${tag}" removed successfully`);
+            } catch (e) {
+                console.error("Error removing tag:", e);
+                this.showToast('Error removing tag', 'error');
+            }
+        },
+
+        initiateMerge(person) {
+            if (!this.mergeSource) {
+                this.mergeSource = person;
+                this.showToast(`Selected "${person.name}" as duplicate to merge. Now click "Merge Into" on the surviving record.`);
+            } else if (this.mergeSource.id === person.id) {
+                this.mergeSource = null;
+                this.showToast('Merge selection cleared.');
+            } else {
+                this.mergeTarget = person;
+                this.showMergeModal = true;
+            }
+        },
+
+        async executeMerge() {
+            if (!this.mergeSource || !this.mergeTarget) return;
+            this.isSubmitting = true;
+            
+            try {
+                const sourceId = this.mergeSource.id;
+                const targetId = this.mergeTarget.id;
+                const sourceRef = db.collection('people').doc(sourceId);
+                const targetRef = db.collection('people').doc(targetId);
+
+                // 1. Merge core fields (Fill-in-the-blanks)
+                const updates = {};
+                if (!this.mergeTarget.contact?.email && this.mergeSource.contact?.email) {
+                    updates['contact.email'] = this.mergeSource.contact.email;
+                }
+                if (!this.mergeTarget.contact?.phone && this.mergeSource.contact?.phone) {
+                    updates['contact.phone'] = this.mergeSource.contact.phone;
+                }
+                if (!this.mergeTarget.contact?.address && this.mergeSource.contact?.address) {
+                    updates['contact.address'] = this.mergeSource.contact.address;
+                }
+                if (!this.mergeTarget.sex && this.mergeSource.sex) {
+                    updates.sex = this.mergeSource.sex;
+                }
+
+                // 2. Union Tags
+                const sourceTags = this.mergeSource.tags || [];
+                const targetTags = this.mergeTarget.tags || [];
+                const combinedTags = [...new Set([...sourceTags, ...targetTags])];
+                if (combinedTags.length !== targetTags.length) {
+                    updates.tags = combinedTags;
+                }
+
+                // 3. Migrate Sub-collections
+                const migrateSub = async (collName) => {
+                    const sourceSnap = await sourceRef.collection(collName).get();
+                    const targetSnap = await targetRef.collection(collName).get();
+                    
+                    const existingKeys = new Set(targetSnap.docs.map(doc => {
+                        const d = doc.data();
+                        return `${d.serviceDate}_${d.type || ''}`;
+                    }));
+
+                    const batch = db.batch();
+                    for (const doc of sourceSnap.docs) {
+                        const data = doc.data();
+                        const key = `${data.serviceDate}_${data.type || ''}`;
+                        if (!existingKeys.has(key)) {
+                            batch.set(targetRef.collection(collName).doc(), data);
+                        }
+                        batch.delete(doc.ref);
+                    }
+                    await batch.commit();
+                };
+
+                await migrateSub('involvement');
+                await migrateSub('pastoral_prayer_history');
+
+                // 4. Update Target Metadata
+                const finalInvSnap = await targetRef.collection('involvement').get();
+                const finalPrayerSnap = await targetRef.collection('pastoral_prayer_history').get();
+                
+                const pastoralPrayers = finalPrayerSnap.docs
+                    .map(doc => doc.data().serviceDate)
+                    .sort();
+                const lastDate = pastoralPrayers.length > 0 ? pastoralPrayers[pastoralPrayers.length - 1] : (this.mergeTarget.lastPastoralPrayerDate || null);
+
+                updates.totalInvolvements = finalInvSnap.size;
+                updates.lastPastoralPrayerDate = lastDate;
+                updates.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+
+                await targetRef.update(updates);
+
+                // 5. Delete Source
+                await sourceRef.delete();
+
+                this.showToast(`Successfully merged "${this.mergeSource.name}" into "${this.mergeTarget.name}"`);
+                this.showMergeModal = false;
+                this.mergeSource = null;
+                this.mergeTarget = null;
+                await this.loadPeople();
+            } catch (e) {
+                console.error("Merge failed:", e);
+                this.showToast('Merge operation failed', 'error');
+            } finally {
+                this.isSubmitting = false;
             }
         },
 
@@ -70,18 +348,29 @@ document.addEventListener('alpine:init', () => {
         },
 
         async addPerson() {
-            const name = this.newPersonName.trim();
+            const name = this.newPerson.name.trim();
             if (!name) return;
             
             this.isSubmitting = true;
             try {
+                const now = firebase.firestore.FieldValue.serverTimestamp();
                 await db.collection('people').add({
                     name: name,
                     totalInvolvements: 0,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    contact: {
+                        email: (this.newPerson.email || '').trim(),
+                        phone: (this.newPerson.phone || '').trim(),
+                        address: (this.newPerson.address || '').trim()
+                    },
+                    sex: this.newPerson.sex || null,
+                    lastPastoralPrayerDate: null,
+                    tags: [],
+                    createdAt: now,
+                    updatedAt: now
                 });
-                this.newPersonName = '';
+                this.newPerson = { name: '', email: '', phone: '', address: '', sex: '' };
                 await this.loadPeople();
+                this.showAddPersonModal = false;
                 this.showToast('Person added successfully');
             } catch (e) {
                 console.error(e);
@@ -103,10 +392,45 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        async viewInvolvement(person) {
-            this.selectedPerson = person;
+        async editPerson(person) {
+            this.selectedPerson = JSON.parse(JSON.stringify(person)); // Deep clone for editing
+            // Ensure contact object exists so x-model doesn't fail
+            if (!this.selectedPerson.contact) {
+                this.selectedPerson.contact = {};
+            }
             this.showInvolvementModal = true;
             this.loadInvolvement(person.id);
+        },
+
+        async updatePerson() {
+            if (!this.selectedPerson) return;
+            this.isSubmitting = true;
+            try {
+                const personRef = db.collection('people').doc(this.selectedPerson.id);
+                const updates = {
+                    name: this.selectedPerson.name.trim(),
+                    'contact.email': (this.selectedPerson.contact?.email || '').trim(),
+                    'contact.phone': (this.selectedPerson.contact?.phone || '').trim(),
+                    'contact.address': (this.selectedPerson.contact?.address || '').trim(),
+                    sex: this.selectedPerson.sex || null,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                await personRef.update(updates);
+                
+                // Update local list
+                const idx = this.people.findIndex(p => p.id === this.selectedPerson.id);
+                if (idx !== -1) {
+                    this.people[idx] = { ...this.people[idx], ...this.selectedPerson };
+                }
+
+                this.showToast('Person updated successfully');
+            } catch (e) {
+                console.error("Error updating person:", e);
+                this.showToast('Error updating person', 'error');
+            } finally {
+                this.isSubmitting = false;
+            }
         },
 
         async loadInvolvement(personId) {
@@ -201,9 +525,24 @@ document.addEventListener('alpine:init', () => {
         get filteredPeople() {
             let list = [...this.people];
             
+            // Filter out people with tags marked as hidePeople: true for non-admins
+            if (!this.isAdmin) {
+                list = list.filter(p => {
+                    const personTags = p.tags || [];
+                    return !personTags.some(tag => this.tagMetadata[tag]?.hidePeople);
+                });
+            }
+            
             if (this.searchTerm) {
                 const term = this.searchTerm.toLowerCase();
                 list = list.filter(p => p.name.toLowerCase().includes(term));
+            }
+
+            if (this.selectedTags.length > 0) {
+                list = list.filter(p => {
+                    const personTags = p.tags || [];
+                    return this.selectedTags.every(t => personTags.includes(t));
+                });
             }
 
             list.sort((a, b) => {

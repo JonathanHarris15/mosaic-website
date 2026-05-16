@@ -19,6 +19,8 @@ const CANONICAL_MAPPING = {
     'Hymn Mid 1': { field: 'hymnMid1', type: 'hymn', liturgy: true },
     'Hymn Mid 2': { field: 'hymnMid2', type: 'hymn', liturgy: true },
     'Scripture Reading': { field: 'scriptureReading', type: 'text', liturgy: true },
+    'Prayer Male': { field: 'prayerMale', type: 'person', liturgy: true },
+    'Prayer Female': { field: 'prayerFemale', type: 'person', liturgy: true },
     'Sermon': { field: 'sermon', type: 'text', liturgy: true },
     'Hymn End 1': { field: 'hymnEnd1', type: 'hymn', liturgy: true },
     'Hymn End 2': { field: 'hymnEnd2', type: 'hymn', liturgy: true },
@@ -68,6 +70,8 @@ function serviceForm() {
                 hymnMid1: { id: null, name: '' },
                 hymnMid2: { id: null, name: '' },
                 scriptureReading: '',
+                prayerMale: { id: null, name: '' },
+                prayerFemale: { id: null, name: '' },
                 sermon: '',
                 baptism: '',
                 hymnEnd1: { id: null, name: '' },
@@ -80,6 +84,43 @@ function serviceForm() {
         showPersonAddModal: false,
         personToAdd: { name: '', callback: null },
         duplicateWarning: false,
+
+        // --- Pastoral Prayer Suggestions ---
+        prayerSuggestions: { males: [], females: [] },
+
+        async fetchPrayerSuggestions() {
+            try {
+                const now = new Date();
+                const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+                // Fetch all members and sort locally to avoid composite index requirements
+                const snap = await db.collection('people')
+                    .where('tags', 'array-contains', 'Member')
+                    .get();
+                
+                const members = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                const getTop3 = (sex) => {
+                    return members
+                        .filter(m => m.sex === sex)
+                        // Filter out those scheduled for today or future
+                        .filter(m => !m.lastPastoralPrayerDate || m.lastPastoralPrayerDate < todayStr)
+                        .sort((a, b) => {
+                            const dateA = a.lastPastoralPrayerDate || '0000-00-00';
+                            const dateB = b.lastPastoralPrayerDate || '0000-00-00';
+                            return dateA.localeCompare(dateB);
+                        })
+                        .slice(0, 3);
+                };
+
+                this.prayerSuggestions = {
+                    males: getTop3('male'),
+                    females: getTop3('female')
+                };
+            } catch (err) {
+                console.error("Error fetching prayer suggestions:", err);
+            }
+        },
 
         promptAddPerson(name, callback) {
             this.personToAdd = { name, callback };
@@ -136,7 +177,7 @@ function serviceForm() {
                     try {
                         const userData = await getUserData(user.uid);
                         const role = (userData && userData.role) || 'viewer';
-                        this.canEdit = (role === 'editor' || role === 'admin');
+                        this.canEdit = (['editor', 'elder', 'admin', 'super_admin'].includes(role));
                     } catch (error) {
                         console.error("Error checking user permissions:", error);
                         this.canEdit = false;
@@ -155,6 +196,7 @@ function serviceForm() {
             await this.load();
             await this.loadHymnRegistry();
             await this.autoLinkHymns();
+            await this.fetchPrayerSuggestions();
 
             if (urlParams.get('validate') === 'true') {
                 this.validateForm();
@@ -476,58 +518,45 @@ function serviceForm() {
                     { field: 'other', role: 'other' }
                 ];
 
+                const liturgyRoles = [
+                    { field: 'prayerMale', role: 'pastoral_prayer' },
+                    { field: 'prayerFemale', role: 'pastoral_prayer' }
+                ];
+
+                const peopleToRecalculate = new Set();
+
+                // 1. Process Standard Roles
                 for (const { field, role, metadata } of roles) {
                     const oldId = original[field] ? original[field].id : null;
                     const newId = this.service[field].id;
-
                     if (oldId !== newId) {
-                        // 1. Handle removal of old involvement
+                        if (oldId) await this._removeInvolvement(batch, oldId, role, metadata);
+                        if (newId) await this._addInvolvement(batch, newId, role, metadata);
+                    }
+                }
+
+                // 2. Process Pastoral Prayer Roles (Liturgy)
+                for (const { field, role } of liturgyRoles) {
+                    const oldId = original.liturgy[field] ? original.liturgy[field].id : null;
+                    const newId = this.service.liturgy[field].id;
+                    if (oldId !== newId) {
                         if (oldId) {
-                            const oldPersonRef = db.collection('people').doc(oldId);
-                            // Find and delete the involvement record for this date and role
-                            let query = oldPersonRef.collection('involvement')
-                                .where('serviceDate', '==', this.date)
-                                .where('type', '==', role);
-                            
-                            if (metadata && metadata.prayer_type) {
-                                query = query.where('metadata.prayer_type', '==', metadata.prayer_type);
-                            }
-
-                            const invSnap = await query.get();
-                            
-                            invSnap.forEach(doc => {
-                                batch.delete(doc.ref);
-                            });
-
-                            if (!invSnap.empty) {
-                                batch.update(oldPersonRef, {
-                                    totalInvolvements: firebase.firestore.FieldValue.increment(-invSnap.size)
-                                });
-                            }
+                            await this._removePastoralPrayer(batch, oldId);
+                            peopleToRecalculate.add(oldId);
                         }
-
-                        // 2. Handle addition of new involvement
                         if (newId) {
-                            const newPersonRef = db.collection('people').doc(newId);
-                            const newInvRef = newPersonRef.collection('involvement').doc();
-                            
-                            const invData = {
-                                serviceDate: this.date,
-                                type: role,
-                                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                            };
-
-                            if (metadata) {
-                                invData.metadata = metadata;
-                            }
-                            
-                            batch.set(newInvRef, invData);
-
-                            batch.update(newPersonRef, {
-                                totalInvolvements: firebase.firestore.FieldValue.increment(1)
-                            });
+                            await this._addPastoralPrayer(batch, newId);
+                            peopleToRecalculate.add(newId);
                         }
                     }
+                }
+
+                // Recalculate lastPastoralPrayerDate for affected people
+                for (const personId of peopleToRecalculate) {
+                    const latestDate = await this._calculateLatestPastoralPrayer(personId);
+                    batch.update(db.collection('people').doc(personId), {
+                        lastPastoralPrayerDate: latestDate
+                    });
                 }
 
                 // Flatten service object for Firestore storage
@@ -679,6 +708,8 @@ function serviceForm() {
                 hymnMid1: { id: null, name: '' },
                 hymnMid2: { id: null, name: '' },
                 scriptureReading: '',
+                prayerMale: { id: null, name: '' },
+                prayerFemale: { id: null, name: '' },
                 sermon: '',
                 baptism: '',
                 hymnEnd1: { id: null, name: '' },
@@ -817,13 +848,80 @@ function serviceForm() {
                 reader.onerror = reject;
                 reader.readAsDataURL(blob);
             });
+        },
+
+        // --- Involvement Helpers ---
+        async _addInvolvement(batch, personId, role, metadata = null) {
+            const personRef = db.collection('people').doc(personId);
+            const invRef = personRef.collection('involvement').doc();
+            const invData = {
+                serviceDate: this.date,
+                type: role,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            if (metadata) invData.metadata = metadata;
+            batch.set(invRef, invData);
+            batch.update(personRef, {
+                totalInvolvements: firebase.firestore.FieldValue.increment(1)
+            });
+        },
+
+        async _removeInvolvement(batch, personId, role, metadata = null) {
+            const personRef = db.collection('people').doc(personId);
+            let query = personRef.collection('involvement')
+                .where('serviceDate', '==', this.date)
+                .where('type', '==', role);
+            if (metadata && metadata.prayer_type) {
+                query = query.where('metadata.prayer_type', '==', metadata.prayer_type);
+            }
+            const snap = await query.get();
+            snap.forEach(doc => batch.delete(doc.ref));
+            if (!snap.empty) {
+                batch.update(personRef, {
+                    totalInvolvements: firebase.firestore.FieldValue.increment(-snap.size)
+                });
+            }
+        },
+
+        async _addPastoralPrayer(batch, personId) {
+            const personRef = db.collection('people').doc(personId);
+            const histRef = personRef.collection('pastoral_prayer_history').doc(this.date);
+            batch.set(histRef, {
+                serviceDate: this.date,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        },
+
+        async _removePastoralPrayer(batch, personId) {
+            const personRef = db.collection('people').doc(personId);
+            const histRef = personRef.collection('pastoral_prayer_history').doc(this.date);
+            batch.delete(histRef);
+        },
+
+        async _calculateLatestPastoralPrayer(personId) {
+            const personRef = db.collection('people').doc(personId);
+            const histSnap = await personRef.collection('pastoral_prayer_history')
+                .orderBy('serviceDate', 'desc')
+                .limit(1)
+                .get();
+            
+            if (histSnap.empty) return null;
+            return histSnap.docs[0].data().serviceDate;
         }
     };
 }
 
-function personPicker(personRef) {
+function personPicker(personRef, suggestionsKey = null) {
+    if (!personRef) personRef = { name: '', id: null };
     return {
         personRef: personRef,
+        suggestionsKey: suggestionsKey,
+        get suggestions() {
+            if (typeof this.suggestionsKey === 'string' && this.prayerSuggestions) {
+                return this.prayerSuggestions[this.suggestionsKey] || [];
+            }
+            return Array.isArray(this.suggestionsKey) ? this.suggestionsKey : [];
+        },
         open: false,
         query: personRef.name || '',
         results: [],

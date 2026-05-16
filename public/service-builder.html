@@ -281,8 +281,10 @@
                             </div>
                             </div>
                             </div>
+                            </div>
 
-                            <div class="form-section" data-field-key="serviceLeader">            <div class="field-group">
+                            <div class="form-section" data-field-key="serviceLeader">
+            <div class="field-group">
                 <label class="field-label">Service Leader</label>
                 <div x-data="personPicker(service.serviceLeader)" 
                                              class="input-container relative">                    <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
@@ -1029,6 +1031,113 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Pastoral Prayer Members (Male & Female) -->
+                <div class="mt-4 grid grid-cols-1 gap-4 p-4 bg-surface-container-low rounded-xl border border-outline-variant/50">
+                    <div class="field-group !mb-0 md:flex-row md:items-center md:justify-between md:gap-8">
+                        <label class="field-label !text-[10px]">Male Being Prayed For</label>
+                        <div x-data="personPicker(service.liturgy.prayerMale, 'males')" 
+                             @click.away="open = false"
+                             class="input-container relative transition-all"
+                             :class="open ? 'z-[60]' : 'z-10'">
+                            <div class="flex items-center bg-white rounded-lg border border-outline-variant px-3 py-1.5 shadow-sm">
+                                <input type="text" x-model="query" @input="onInput" @focus="open = true" @mousedown.stop
+                                    placeholder="Search male member..."
+                                    class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
+                                <button x-show="query || personRef.id" @click="clear()" class="text-secondary hover:text-error transition-colors" :disabled="!canEdit">
+                                    <span class="material-symbols-outlined text-[18px]">close</span>
+                                </button>
+                            </div>
+
+                            <!-- Dropdown -->
+                            <div x-show="open && (suggestions.length > 0 || results.length > 0 || query.length >= 2)" 
+                                 x-transition 
+                                 class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto custom-scrollbar">
+                                <!-- Suggestions -->
+                                <template x-if="suggestions.length > 0 && (query.length < 2 || query === personRef.name)">
+                                    <div>
+                                        <div class="px-3 py-1.5 bg-surface-container-low text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant/30">Suggestions (Longest Wait)</div>
+                                        <template x-for="p in suggestions" :key="p.id">
+                                            <button @click="select(p)" class="w-full text-left px-3 py-2 hover:bg-primary-container/20 flex flex-col transition-colors border-b border-outline-variant/10">
+                                                <span class="text-sm font-bold text-primary" x-text="p.name"></span>
+                                                <span class="text-[9px] text-secondary font-medium uppercase" x-text="p.lastPastoralPrayerDate && p.lastPastoralPrayerDate !== '0000-00-00' ? `Last: ${p.lastPastoralPrayerDate}` : 'Never prayed for'"></span>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <!-- Search Results -->
+                                <template x-for="p in results" :key="p.id">
+                                    <button @click="select(p)" class="w-full text-left px-3 py-2 hover:bg-primary-container/20 flex flex-col transition-colors border-b border-outline-variant/10">
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-sm font-bold text-primary" x-text="p.name"></span>
+                                            <template x-if="p.isNew">
+                                                <span class="text-[9px] font-bold text-primary bg-primary-container px-1.5 py-0.5 rounded uppercase">New Person</span>
+                                            </template>
+                                        </div>
+                                        <template x-if="!p.isNew">
+                                            <span class="text-[9px] text-secondary font-medium uppercase" x-text="p.lastPastoralPrayerDate ? `Last: ${p.lastPastoralPrayerDate}` : 'Never prayed for'"></span>
+                                        </template>
+                                    </button>
+                                </template>
+
+                                <div x-show="!results.length && query.length >= 2" class="px-3 py-4 text-center text-xs text-secondary italic">No exact matches found.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="field-group !mb-0 md:flex-row md:items-center md:justify-between md:gap-8">
+                        <label class="field-label !text-[10px]">Female Being Prayed For</label>
+                        <div x-data="personPicker(service.liturgy.prayerFemale, 'females')" 
+                             class="input-container relative transition-all"
+                             :class="open ? 'z-[60]' : 'z-10'">
+                            <div class="flex items-center bg-white rounded-lg border border-outline-variant px-3 py-1.5 shadow-sm">
+                                <input type="text" x-model="query" @input="onInput" @focus="open = true" @click.away="open = false" 
+                                    placeholder="Search female member..."
+                                    class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
+                                <button x-show="query || personRef.id" @click="clear()" class="text-secondary hover:text-error transition-colors" :disabled="!canEdit">
+                                    <span class="material-symbols-outlined text-[18px]">close</span>
+                                </button>
+                            </div>
+
+                            <!-- Dropdown -->
+                            <div x-show="open && (suggestions.length > 0 || results.length > 0 || query.length >= 2)" 
+                                 x-transition 
+                                 class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto custom-scrollbar">
+                                <!-- Suggestions -->
+                                <template x-if="suggestions.length > 0 && (query.length < 2 || query === personRef.name)">
+                                    <div>
+                                        <div class="px-3 py-1.5 bg-surface-container-low text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant/30">Suggestions (Longest Wait)</div>
+                                        <template x-for="p in suggestions" :key="p.id">
+                                            <button @click="select(p)" class="w-full text-left px-3 py-2 hover:bg-primary-container/20 flex flex-col transition-colors border-b border-outline-variant/10">
+                                                <span class="text-sm font-bold text-primary" x-text="p.name"></span>
+                                                <span class="text-[9px] text-secondary font-medium uppercase" x-text="p.lastPastoralPrayerDate && p.lastPastoralPrayerDate !== '0000-00-00' ? `Last: ${p.lastPastoralPrayerDate}` : 'Never prayed for'"></span>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <!-- Search Results -->
+                                <template x-for="p in results" :key="p.id">
+                                    <button @click="select(p)" class="w-full text-left px-3 py-2 hover:bg-primary-container/20 flex flex-col transition-colors border-b border-outline-variant/10">
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-sm font-bold text-primary" x-text="p.name"></span>
+                                            <template x-if="p.isNew">
+                                                <span class="text-[9px] font-bold text-primary bg-primary-container px-1.5 py-0.5 rounded uppercase">New Person</span>
+                                            </template>
+                                        </div>
+                                        <template x-if="!p.isNew">
+                                            <span class="text-[9px] text-secondary font-medium uppercase" x-text="p.lastPastoralPrayerDate ? `Last: ${p.lastPastoralPrayerDate}` : 'Never prayed for'"></span>
+                                        </template>
+                                    </button>
+                                </template>
+
+                                <div x-show="!results.length && query.length >= 2" class="px-3 py-4 text-center text-xs text-secondary italic">No exact matches found.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Note controls -->
                 <button x-show="canEdit && !(service.notes && service.notes['scriptureReading'])" @click="openNote('scriptureReading')" class="note-add-btn" title="Add note" aria-label="Add note" data-note-key="scriptureReading"><span class="material-symbols-outlined" style="font-size:15px">add</span></button>
                 <button x-show="service.notes && service.notes['scriptureReading']" @click="openNote('scriptureReading')" class="note-bubble-btn" title="View/edit note" aria-label="Edit note" data-note-key="scriptureReading"><span class="material-symbols-outlined" style="font-size:13px">sticky_note_2</span></button>

@@ -119,7 +119,7 @@ async function checkAdminAccess(user) {
         try {
             const userData = await getUserData(user.uid);
             const role = (userData && userData.role) || 'viewer';
-            if (role === 'editor' || role === 'admin') {
+            if (['editor', 'elder', 'admin', 'super_admin'].includes(role)) {
                 adminActions.classList.remove('hidden');
             } else {
                 adminActions.classList.add('hidden');

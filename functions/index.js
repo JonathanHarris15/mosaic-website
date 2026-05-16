@@ -97,7 +97,7 @@ exports.createUser = onCall({cors: true, region: "us-central1"}, async (request)
   const db = admin.firestore();
   const callerDoc = await db.collection("users").doc(callerUid).get();
   
-  if (!callerDoc.exists || callerDoc.data().role !== "admin") {
+  if (!callerDoc.exists || !["admin", "super_admin"].includes(callerDoc.data().role)) {
     throw new Error("Only admins can create new users.");
   }
 
@@ -142,7 +142,7 @@ exports.deleteUser = onCall({cors: true, region: "us-central1"}, async (request)
   const db = admin.firestore();
   const callerDoc = await db.collection("users").doc(callerUid).get();
   
-  if (!callerDoc.exists || callerDoc.data().role !== "admin") {
+  if (!callerDoc.exists || !["admin", "super_admin"].includes(callerDoc.data().role)) {
     throw new Error("Only admins can delete users.");
   }
 
@@ -181,7 +181,7 @@ exports.updateUserPasswordAdmin = onCall({cors: true, region: "us-central1"}, as
   const db = admin.firestore();
   const callerDoc = await db.collection("users").doc(callerUid).get();
   
-  if (!callerDoc.exists || callerDoc.data().role !== "admin") {
+  if (!callerDoc.exists || !["admin", "super_admin"].includes(callerDoc.data().role)) {
     throw new Error("Only admins can update user passwords.");
   }
 
