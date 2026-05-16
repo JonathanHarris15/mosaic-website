@@ -9,9 +9,15 @@ export function analyticsPage() {
         peopleSearch: '',
         peopleSortKey: 'totalInvolvements',
         peopleSortOrder: 'desc',
+        pastoralSearch: '',
+        praiseSortKey: 'lastPrayed',
+        praiseSortOrder: 'asc',
         selectedPerson: null,
         personInvolvement: [],
         loadingInvolvement: false,
+        hymnStats: [],
+        roleAnalytics: {},
+        prayerStats: {},
         bibleStats: {
             chapters: {}, // { "Genesis-1": { count: 0, services: [], verses: { 1: count, 2: count } } }
             books: {},    // { "Genesis": { count: 0 } }
@@ -29,9 +35,13 @@ export function analyticsPage() {
         },
         selectedBook: null,
         selectedChapter: null,
+        showBookNames: false,
+        gridZoom: 1, // 1 is standard, 0.75 is small, 1.5 is large
         drillDownData: null, // Will hold the book object with chapters and verses usage
         sortKey: 'count', // 'name', 'status', 'count', 'lastUsed'
         sortOrder: 'desc', // 'asc', 'desc'
+        currentUserRole: 'viewer',
+        tagMetadata: {},
 
         async init() {
             auth.onAuthStateChanged(async (user) => {
@@ -39,9 +49,32 @@ export function analyticsPage() {
                     window.location.href = 'login.html';
                     return;
                 }
+                const userData = await getUserData(user.uid);
+                this.currentUserRole = (userData && userData.role) || 'viewer';
+                await this.loadTagMetadata();
                 await this.fetchAndProcessData();
                 this.loading = false;
             });
+        },
+
+        get isAdmin() {
+            return ['elder', 'super_admin'].includes(this.currentUserRole);
+        },
+
+        async loadTagMetadata() {
+            try {
+                const snap = await db.collection('people_tags').get();
+                const metadata = {};
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    metadata[doc.id] = {
+                        hidePeople: data.hidePeople || false
+                    };
+                });
+                this.tagMetadata = metadata;
+            } catch (e) {
+                console.error("Error loading tag metadata:", e);
+            }
         },
 
         async fetchAndProcessData() {
@@ -67,8 +100,47 @@ export function analyticsPage() {
                     this.processServicePeople(data, peopleMap);
 
                     processed++;
-                    this.progress = Math.round((processed / total) * 100);
+                    this.progress = Math.round((processed / total) * 0.5 * 100);
                 });
+
+                // Fetch Pastoral Prayer History (Collection Group)
+                const prayerSnap = await db.collectionGroup('pastoral_prayer_history').get();
+                const prayerMap = {}; // { personId: { count: 0, lastDate: '', dates: [] } }
+                
+                prayerSnap.forEach(doc => {
+                    const personId = doc.ref.parent.parent.id;
+                    const prayerData = doc.data();
+                    const sDate = prayerData.serviceDate;
+                    
+                    if (sDate && sDate <= todayStr) {
+                        if (!prayerMap[personId]) {
+                            prayerMap[personId] = { count: 0, lastDate: '', dates: [] };
+                        }
+                        prayerMap[personId].count++;
+                        prayerMap[personId].dates.push(sDate);
+                    }
+                });
+                
+                // Finalize prayer stats (sort dates, calculate intervals)
+                Object.values(prayerMap).forEach(stat => {
+                    stat.dates.sort();
+                    stat.lastDate = stat.dates[stat.dates.length - 1];
+                    
+                    if (stat.dates.length >= 2) {
+                        let totalDiff = 0;
+                        for (let i = 1; i < stat.dates.length; i++) {
+                            const d1 = new Date(stat.dates[i-1]);
+                            const d2 = new Date(stat.dates[i]);
+                            totalDiff += (d2 - d1) / (1000 * 60 * 60 * 24);
+                        }
+                        stat.avgInterval = totalDiff / (stat.dates.length - 1);
+                    } else {
+                        stat.avgInterval = null;
+                    }
+                });
+                
+                this.prayerStats = prayerMap;
+                this.progress = 75;
 
                 this.hymnStats = Object.values(hymnsMap).sort((a, b) => b.count - a.count);
                 this.bibleStats.chapters = bibleChapters;
@@ -77,6 +149,7 @@ export function analyticsPage() {
                 
                 // Fetch people after aggregation is ready
                 await this.fetchPeople();
+                this.progress = 100;
 
             } catch (error) {
                 console.error("Error fetching analytics data:", error);
@@ -84,21 +157,65 @@ export function analyticsPage() {
         },
 
         processServicePeople(data, map) {
+            // Some fields store name directly, others use a "Name" suffix
             const roleFields = {
-                serviceLeader: 'Service Leader',
-                preacher: 'Preacher',
-                musicLeader: 'Worship Leader',
-                sermonette: 'Sermonette'
+                // Direct name fields
+                serviceLeader: 'service_leader',
+                preacher: 'preacher',
+                musicLeader: 'worship_leader',
+                sermonette: 'sermonette',
+                // Suffix name fields
+                prayerPraiseName: 'prayer',
+                prayerConfessionName: 'prayer',
+                elementsName: 'other',
+                otherName: 'other'
             };
 
-            Object.entries(roleFields).forEach(([field, label]) => {
-                const name = data[field];
-                if (name && typeof name === 'string') {
-                    const normalized = name.trim();
-                    if (!map[normalized]) map[normalized] = { roles: {} };
-                    map[normalized].roles[label] = (map[normalized].roles[label] || 0) + 1;
+            const addInvolvement = (val, type) => {
+                if (!val) return;
+                let name = '';
+                if (typeof val === 'string') {
+                    name = val.trim();
+                } else if (typeof val === 'object' && val.name) {
+                    name = val.name.trim();
+                }
+                
+                if (name && name !== '—') { // Ignore the em-dash placeholder
+                    if (!map[name]) map[name] = { roles: {} };
+                    map[name].roles[type] = (map[name].roles[type] || 0) + 1;
+                }
+            };
+
+            Object.entries(roleFields).forEach(([field, type]) => {
+                // Check the field itself (e.g. 'serviceLeader')
+                addInvolvement(data[field], type);
+                
+                // Also check if there's a version without the "Name" suffix if we are looking at one
+                // or vice-versa, just to be safe with legacy data
+                if (field.endsWith('Name')) {
+                    const baseField = field.replace('Name', '');
+                    if (data[baseField] && data[baseField] !== data[field]) {
+                        addInvolvement(data[baseField], type);
+                    }
                 }
             });
+
+            // Handle irregular elements
+            if (data.isIrregular && Array.isArray(data.irregularElements)) {
+                data.irregularElements.forEach(el => {
+                    if (el.type === 'person' && el.value) {
+                        let type = el.key.toLowerCase().replace(/\s+/g, '_');
+                        // Map common irregular keys to canonical types
+                        if (type.includes('prayer')) type = 'prayer';
+                        if (type.includes('preacher')) type = 'preacher';
+                        if (type.includes('leader')) {
+                            if (type.includes('worship') || type.includes('music')) type = 'worship_leader';
+                            else if (type.includes('service')) type = 'service_leader';
+                        }
+                        addInvolvement(el.value, type);
+                    }
+                });
+            }
         },
 
         async fetchPeople() {
@@ -107,17 +224,25 @@ export function analyticsPage() {
                 this.people = snap.docs.map(doc => {
                     const data = doc.data();
                     const name = data.name;
+                    const pId = doc.id;
                     const analytics = this.roleAnalytics?.[name] || { roles: {} };
                     const topRoles = Object.entries(analytics.roles)
                         .sort((a, b) => b[1] - a[1])
                         .slice(0, 3)
                         .map(r => r[0]);
 
+                    const pStats = this.prayerStats?.[pId] || { count: 0, lastDate: null, avgInterval: null };
+
                     return {
-                        id: doc.id,
+                        id: pId,
                         name: name,
+                        sex: data.sex || null,
                         totalInvolvements: data.totalInvolvements || 0,
-                        topRoles: topRoles
+                        topRoles: topRoles,
+                        tags: data.tags || [],
+                        prayerCount: pStats.count,
+                        lastPrayerDate: data.lastPastoralPrayerDate || pStats.lastDate,
+                        avgInterval: pStats.avgInterval
                     };
                 });
             } catch (error) {
@@ -126,7 +251,16 @@ export function analyticsPage() {
         },
 
         get filteredPeople() {
-            let list = [...this.people];
+            let list = this.people.filter(p => p.totalInvolvements > 0);
+            
+            // Filter out people with tags marked as hidePeople: true for non-admins
+            if (!this.isAdmin) {
+                list = list.filter(p => {
+                    const personTags = p.tags || [];
+                    return !personTags.some(tag => this.tagMetadata[tag]?.hidePeople);
+                });
+            }
+
             if (this.peopleSearch) {
                 const q = this.peopleSearch.toLowerCase();
                 list = list.filter(p => p.name.toLowerCase().includes(q));
@@ -154,6 +288,60 @@ export function analyticsPage() {
             } else {
                 this.peopleSortKey = key;
                 this.peopleSortOrder = key === 'name' ? 'asc' : 'desc';
+            }
+        },
+
+        get filteredPraisePeople() {
+            return this.getFilteredPraiseList();
+        },
+
+        get filteredPraiseMales() {
+            return this.getFilteredPraiseList('male');
+        },
+
+        get filteredPraiseFemales() {
+            return this.getFilteredPraiseList('female');
+        },
+
+        getFilteredPraiseList(sexFilter = null) {
+            let list = this.people.filter(p => (p.tags || []).includes('Member'));
+
+            if (sexFilter) {
+                list = list.filter(p => p.sex === sexFilter);
+            }
+
+            if (this.pastoralSearch) {
+                const q = this.pastoralSearch.toLowerCase();
+                list = list.filter(p => p.name.toLowerCase().includes(q));
+            }
+
+            return list.sort((a, b) => {
+                let valA, valB;
+                if (this.praiseSortKey === 'name') {
+                    valA = a.name.toLowerCase();
+                    valB = b.name.toLowerCase();
+                } else if (this.praiseSortKey === 'count') {
+                    valA = a.prayerCount || 0;
+                    valB = b.prayerCount || 0;
+                } else if (this.praiseSortKey === 'lastPrayed') {
+                    valA = a.lastPrayerDate || '0000-00-00';
+                    valB = b.lastPrayerDate || '0000-00-00';
+                    if (valA === '') valA = '0000-00-00';
+                    if (valB === '') valB = '0000-00-00';
+                }
+
+                if (valA < valB) return this.praiseSortOrder === 'asc' ? -1 : 1;
+                if (valA > valB) return this.praiseSortOrder === 'asc' ? 1 : -1;
+                return 0;
+            });
+        },
+
+        sortByPraise(key) {
+            if (this.praiseSortKey === key) {
+                this.praiseSortOrder = this.praiseSortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.praiseSortKey = key;
+                this.praiseSortOrder = key === 'name' ? 'asc' : 'desc';
             }
         },
 
@@ -226,7 +414,7 @@ export function analyticsPage() {
 
             versePickerFields.forEach(field => {
                 if (field.value && this.bibleFilters[field.key]) {
-                    const refs = parseBibleReference(field.value);
+                    const refs = parseBibleReference(field.value, BIBLE_DATA);
                     refs.forEach(ref => {
                         const chapterKey = `${ref.book}-${ref.chapter}`;
                         if (!chapters[chapterKey]) {
@@ -406,13 +594,15 @@ export function analyticsPage() {
         },
 
         getDaysSince(dateStr) {
-            if (!dateStr) return 0;
+            if (!dateStr || dateStr === '0000-00-00') return Infinity;
             const [y, m, d] = dateStr.split('-').map(Number);
             const last = new Date(y, m - 1, d);
             const now = new Date();
             now.setHours(0, 0, 0, 0);
             const diff = now - last;
+            // Negative diff means future date
             return Math.floor(diff / (1000 * 60 * 60 * 24));
         }
+
     };
 }

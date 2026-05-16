@@ -147,29 +147,72 @@
     </header>
 
     <main class="flex-grow flex flex-col md:flex-row gap-margin px-margin pb-md pt-base max-w-[1600px] w-full mx-auto relative z-10">
-        <!-- Sidebar: Add Person -->
-        <aside class="w-full md:w-80 flex-shrink-0 flex flex-col">
+        <!-- Sidebar: Tags Manager -->
+        <aside class="w-full md:w-80 flex-shrink-0 flex flex-col gap-4">
             <section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col shadow-sm">
-                <h2 class="font-headline-md text-sm uppercase tracking-wider text-primary mb-4 flex items-center gap-2 flex-shrink-0">
-                    <span class="material-symbols-outlined text-[18px]">person_add</span> Add New Person
-                </h2>
-                <div class="pr-2">
-                    <form @submit.prevent="addPerson" class="space-y-4">
-                        <div class="flex flex-col gap-xs">
-                            <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Full Name</label>
-                            <input type="text" 
-                                   x-model="newPersonName" 
-                                   placeholder="Enter full name" 
-                                   class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary transition-all outline-none font-body-md text-sm"
-                                   required>
-                        </div>
-                        <button type="submit" 
-                                :disabled="isSubmitting"
-                                class="w-full bg-primary text-on-primary font-label-md text-xs uppercase tracking-widest py-3 rounded-lg hover:bg-primary-container transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                            <span x-show="!isSubmitting">Add Person</span>
-                            <span x-show="isSubmitting" class="w-4 h-4 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin"></span>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="font-headline-md text-sm uppercase tracking-wider text-primary flex items-center gap-2 flex-shrink-0">
+                        <span class="material-symbols-outlined text-[18px]">sell</span> Tags Manager
+                    </h2>
+                    <div x-data="{ open: false, newTagName: '' }" class="relative">
+                        <button @click="open = true; $nextTick(() => $refs.newTagInput.focus())" 
+                                class="text-primary hover:bg-primary/10 p-1 rounded-full transition-all"
+                                title="Create New Tag">
+                            <span class="material-symbols-outlined text-sm">add</span>
                         </button>
-                    </form>
+                        <div x-show="open" 
+                             @click.away="open = false"
+                             class="absolute right-0 top-full mt-2 w-48 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-xl p-3 z-30">
+                            <input x-ref="newTagInput"
+                                   type="text" 
+                                   x-model="newTagName" 
+                                   @keydown.enter.prevent="createNewTag(newTagName); newTagName = ''; open = false"
+                                   placeholder="Tag name..."
+                                   class="w-full text-xs py-1.5 px-3 bg-surface-container-low border border-outline-variant/50 rounded focus:ring-1 focus:ring-primary outline-none mb-2">
+                            <button @click="createNewTag(newTagName); newTagName = ''; open = false"
+                                    class="w-full bg-primary text-on-primary text-[10px] uppercase tracking-widest py-1.5 rounded font-label-md">
+                                Create Tag
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex flex-col gap-1 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin">
+                    <template x-for="tag in allTags" :key="tag">
+                        <div class="flex items-center gap-1 group/tagrow">
+                            <button @click="toggleTagFilter(tag)"
+                                    :class="selectedTags.includes(tag) ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-low text-on-surface-variant border-transparent hover:border-outline-variant'"
+                                    class="flex-grow flex items-center justify-between px-3 py-2 rounded-lg border text-xs transition-all text-left">
+                                <span x-text="tag"></span>
+                                <span x-show="selectedTags.includes(tag)" class="material-symbols-outlined text-sm">check</span>
+                            </button>
+                            
+                            <!-- Admin Visibility Controls -->
+                            <div x-show="isAdmin" class="flex items-center gap-0.5 opacity-0 group-hover/tagrow:opacity-100 transition-opacity">
+                                <button @click.stop="toggleTagVisibility(tag)" 
+                                        :class="tagMetadata[tag]?.hiddenFromOthers ? 'text-primary bg-primary/10' : 'text-outline-variant hover:text-primary'"
+                                        class="p-1 rounded transition-colors"
+                                        :title="tagMetadata[tag]?.hiddenFromOthers ? 'Hidden from non-admins' : 'Visible to all'">
+                                    <span class="material-symbols-outlined text-sm" x-text="tagMetadata[tag]?.hiddenFromOthers ? 'visibility_off' : 'visibility'"></span>
+                                </button>
+                                <button @click.stop="togglePeopleVisibility(tag)" 
+                                        :class="tagMetadata[tag]?.hidePeople ? 'text-primary bg-primary/10' : 'text-outline-variant hover:text-primary'"
+                                        class="p-1 rounded transition-colors"
+                                        :title="tagMetadata[tag]?.hidePeople ? 'People with this tag are hidden' : 'People with this tag are visible'">
+                                    <span class="material-symbols-outlined text-sm" x-text="tagMetadata[tag]?.hidePeople ? 'person_off' : 'person'"></span>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                    <div x-show="allTags.length === 0" class="text-xs text-on-surface-variant italic py-4">
+                        No tags found.
+                    </div>
+                </div>
+
+                <div x-show="selectedTags.length > 0" class="mt-4 pt-4 border-t border-surface-variant/30">
+                    <button @click="selectedTags = []" class="text-[10px] uppercase tracking-widest text-secondary hover:text-primary font-bold flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">filter_alt_off</span> Clear Filters
+                    </button>
                 </div>
             </section>
         </aside>
@@ -177,9 +220,14 @@
         <!-- Main Content: People List -->
         <section class="flex-grow flex flex-col min-w-0 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm">
             <div class="p-md border-b border-surface-variant/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface-container-low/50 flex-shrink-0">
-                <h2 class="font-headline-md text-sm uppercase tracking-wider text-primary flex items-center gap-2">
-                    <span class="material-symbols-outlined text-[18px]">group</span> People Directory
-                </h2>
+                <div class="flex items-center gap-4">
+                    <h2 class="font-headline-md text-sm uppercase tracking-wider text-primary flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[18px]">group</span> People Directory <span class="text-[8px] font-mono opacity-20">v2.1</span>
+                    </h2>
+                    <button @click="showAddPersonModal = true" class="bg-primary text-on-primary text-[10px] uppercase tracking-widest px-4 py-1.5 rounded-full hover:bg-primary-container transition-all flex items-center gap-1.5 font-label-md shadow-sm">
+                        <span class="material-symbols-outlined text-sm">person_add</span> Add Person
+                    </button>
+                </div>
                 
                 <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
                     <!-- Sort Controls -->
@@ -216,11 +264,76 @@
                     <template x-for="person in filteredPeople" :key="person.id">
                         <div class="bg-surface border border-outline-variant/20 p-4 rounded-xl hover:border-primary/40 transition-all group relative shadow-sm hover:shadow-md">
                             <div class="flex justify-between items-start">
-                                <div>
-                                    <h3 class="font-headline-md text-lg text-primary" x-text="person.name"></h3>
-                                    <div class="flex items-center gap-2 mt-1">
-                                        <span class="bg-secondary-container text-on-secondary-container text-[10px] px-2 py-0.5 rounded font-label-md uppercase tracking-wider" 
-                                              x-text="`${person.totalInvolvements || 0} Involvements`"></span>
+                                <div class="flex-grow">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <h3 class="font-headline-md text-lg text-primary" x-text="person.name"></h3>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <div x-show="person.contact?.email" class="flex items-center gap-1.5 text-on-surface-variant text-xs">
+                                            <span class="material-symbols-outlined text-[14px]">mail</span>
+                                            <span x-text="person.contact.email"></span>
+                                        </div>
+                                        <div x-show="person.contact?.phone" class="flex items-center gap-1.5 text-on-surface-variant text-xs">
+                                            <span class="material-symbols-outlined text-[14px]">call</span>
+                                            <span x-text="person.contact.phone"></span>
+                                        </div>
+                                        <div class="flex items-center flex-wrap gap-x-3 gap-y-1 pt-1.5">
+                                            <!-- Last Prayed For & Involvements Row -->
+                                            <div class="flex items-center gap-2">
+                                                <div x-show="person.lastPastoralPrayerDate" class="flex items-center gap-1.5 text-secondary text-[10px] font-bold">
+                                                    <span class="material-symbols-outlined text-[14px]">volunteer_activism</span>
+                                                    <span x-text="person.lastPastoralPrayerDate === '0000-00-00' ? 'Last: Never' : `Last: ${person.lastPastoralPrayerDate}`"></span>
+                                                </div>
+                                                <span class="bg-secondary-container text-on-secondary-container text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-tighter border border-secondary/10" 
+                                                      x-text="`${person.totalInvolvements || 0} Involvements`"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Cache Bust: 2024-05-15 18:42 -->
+
+                                    <!-- Tag Management -->
+                                    <div class="mt-4 border-t border-surface-variant/30 pt-3">
+                                        <p class="font-label-md text-[9px] uppercase tracking-widest text-on-surface-variant mb-2">Tags</p>
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <!-- Existing Tags -->
+                                            <template x-for="tag in (person.tags || [])" :key="tag">
+                                                <span class="inline-flex items-center gap-1 bg-surface-container-high text-on-surface text-[10px] px-2 py-0.5 rounded-full border border-outline-variant/30 group/tag">
+                                                    <span x-text="tag"></span>
+                                                    <button @click="removeTag(person, tag)" class="hover:text-error transition-colors">
+                                                        <span class="material-symbols-outlined text-[12px] align-middle">close</span>
+                                                    </button>
+                                                </span>
+                                            </template>
+                                            
+                                            <!-- Add Tag Input -->
+                                            <div class="relative" x-data="{ open: false, tagQuery: '' }">
+                                                <button x-show="!open" @click="open = true; $nextTick(() => $refs.tagInput.focus())" 
+                                                        class="inline-flex items-center gap-1 bg-surface-container-lowest text-primary text-[10px] px-2 py-0.5 rounded-full border border-primary/20 hover:bg-primary-fixed transition-colors font-medium">
+                                                    <span class="material-symbols-outlined text-[12px]">add</span> Add Tag
+                                                </button>
+                                                
+                                                <div x-show="open" class="flex flex-col gap-1 min-w-[120px]">
+                                                    <input x-ref="tagInput" 
+                                                           type="text" 
+                                                           x-model="tagQuery" 
+                                                           @keydown.enter.prevent="addTag(person, tagQuery); tagQuery = ''; open = false"
+                                                           @click.away="open = false; tagQuery = ''"
+                                                           placeholder="Type tag..."
+                                                           class="text-[10px] px-2 py-0.5 rounded-full border border-primary/40 focus:ring-1 focus:ring-primary outline-none w-full bg-surface-container-lowest">
+                                                    
+                                                    <!-- Suggestions -->
+                                                    <div x-show="tagQuery && allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(person.tags || []).includes(t)).length > 0"
+                                                         class="absolute z-20 top-full mt-1 w-full bg-white border border-outline-variant rounded-lg shadow-xl py-1 max-h-40 overflow-y-auto">
+                                                        <template x-for="tag in allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(person.tags || []).includes(t))" :key="tag">
+                                                            <button @click="addTag(person, tag); tagQuery = ''; open = false"
+                                                                    class="w-full text-left px-3 py-1.5 text-[10px] hover:bg-primary-fixed transition-colors">
+                                                                <span x-text="tag"></span>
+                                                            </button>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 <button @click="deletePerson(person.id)" 
@@ -229,9 +342,15 @@
                                 </button>
                             </div>
                             <div class="flex gap-2 mt-4">
-                                <button @click="viewInvolvement(person)" 
+                                <button @click="editPerson(person)" 
                                         class="text-[11px] bg-primary text-on-primary px-4 py-1.5 rounded-full hover:bg-primary-container transition-all flex items-center gap-1.5 font-label-md uppercase tracking-widest shadow-sm">
-                                    <span class="material-symbols-outlined text-[14px]">history</span> View Involvement
+                                    <span class="material-symbols-outlined text-[14px]">edit</span> Edit Person
+                                </button>
+                                <button @click="initiateMerge(person)" 
+                                        :class="mergeSource?.id === person.id ? 'bg-error text-white' : (mergeSource ? 'bg-secondary text-white' : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest')"
+                                        class="text-[11px] px-4 py-1.5 rounded-full transition-all flex items-center gap-1.5 font-label-md uppercase tracking-widest shadow-sm">
+                                    <span class="material-symbols-outlined text-[14px]" x-text="mergeSource?.id === person.id ? 'close' : 'merge'"></span>
+                                    <span x-text="mergeSource?.id === person.id ? 'Cancel' : (mergeSource ? 'Merge Into' : 'Merge')"></span>
                                 </button>
                             </div>
                         </div>
@@ -243,6 +362,122 @@
             </div>
         </section>
     </main>
+
+    <!-- Add Person Modal -->
+    <div x-show="showAddPersonModal" 
+         class="fixed inset-0 bg-primary/20 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+         x-transition:enter="transition ease-out duration-300"
+         style="display: none;">
+        <div class="bg-surface-container-lowest w-full max-w-md rounded-2xl shadow-2xl flex flex-col border border-outline-variant/30" @click.away="showAddPersonModal = false">
+            <header class="p-6 border-b border-surface-variant/30 bg-surface-container-low/50 rounded-t-2xl flex justify-between items-center">
+                <div>
+                    <h2 class="font-headline-md text-xl text-primary">Add New Person</h2>
+                    <p class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant mt-1">Create a new directory entry</p>
+                </div>
+                <button @click="showAddPersonModal = false" class="text-on-surface-variant hover:text-primary transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </header>
+            
+            <div class="p-6">
+                <form @submit.prevent="addPerson" class="space-y-4">
+                    <div class="flex flex-col gap-xs">
+                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Full Name</label>
+                        <input type="text" 
+                               x-model="newPerson.name" 
+                               placeholder="Enter full name" 
+                               class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary transition-all outline-none font-body-md text-sm"
+                               required>
+                    </div>
+                    <div class="flex flex-col gap-xs">
+                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email</label>
+                        <input type="email" 
+                               x-model="newPerson.email" 
+                               placeholder="Email address" 
+                               class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary transition-all outline-none font-body-md text-sm">
+                    </div>
+                    <div class="flex flex-col gap-xs">
+                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Phone</label>
+                        <input type="tel" 
+                               x-model="newPerson.phone" 
+                               placeholder="Phone number" 
+                               class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary transition-all outline-none font-body-md text-sm">
+                    </div>
+                    <div class="flex flex-col gap-xs">
+                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Address</label>
+                        <input type="text" 
+                               x-model="newPerson.address" 
+                               placeholder="Street address, City, Zip" 
+                               class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary transition-all outline-none font-body-md text-sm">
+                    </div>
+
+                    <div class="flex flex-col gap-xs">
+                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Sex</label>
+                        <div class="relative">
+                            <select x-model="newPerson.sex" 
+                                    class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary transition-all outline-none font-body-md text-sm appearance-none">
+                                <option value="">Select Sex...</option>
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                            </select>
+                            <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">expand_more</span>
+                        </div>
+                    </div>
+                    
+                    <div class="pt-4 flex gap-3">
+                        <button type="button" @click="showAddPersonModal = false" class="flex-1 px-4 py-2.5 rounded-lg font-label-md text-xs uppercase tracking-widest border border-outline-variant hover:bg-surface-container transition-all">Cancel</button>
+                        <button type="submit" 
+                                :disabled="isSubmitting"
+                                class="flex-1 bg-primary text-on-primary font-label-md text-xs uppercase tracking-widest py-3 rounded-lg hover:bg-primary-container transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                            <span x-show="!isSubmitting">Add Person</span>
+                            <span x-show="isSubmitting" class="w-4 h-4 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Merge Confirmation Modal -->
+    <div x-show="showMergeModal" 
+         class="fixed inset-0 bg-primary/20 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+         x-transition:enter="transition ease-out duration-300"
+         style="display: none;">
+        <div class="bg-surface-container-lowest w-full max-w-md rounded-2xl shadow-2xl flex flex-col border border-outline-variant/30" @click.away="showMergeModal = false">
+            <header class="p-6 border-b border-surface-variant/30 bg-surface-container-low/50 rounded-t-2xl">
+                <h2 class="font-headline-md text-xl text-primary">Confirm Merge</h2>
+                <p class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant mt-1">This action cannot be undone</p>
+            </header>
+            
+            <div class="p-6 space-y-4">
+                <div class="p-4 bg-error-container/20 border border-error/20 rounded-lg">
+                    <p class="text-sm font-medium text-primary">You are merging:</p>
+                    <p class="text-lg font-bold text-error mt-1" x-text="mergeSource?.name"></p>
+                    <div class="flex justify-center my-2 text-on-surface-variant">
+                        <span class="material-symbols-outlined">arrow_downward</span>
+                    </div>
+                    <p class="text-sm font-medium text-primary">Into (Survivor):</p>
+                    <p class="text-lg font-bold text-primary mt-1" x-text="mergeTarget?.name"></p>
+                </div>
+
+                <div class="space-y-2 text-xs text-on-surface-variant italic">
+                    <p>• All involvement history will be moved.</p>
+                    <p>• All pastoral prayer history will be moved.</p>
+                    <p>• Tags from both will be combined.</p>
+                    <p>• Missing contact info will be filled from the duplicate.</p>
+                    <p class="font-bold text-error mt-2">The record for <span x-text="mergeSource?.name"></span> will be permanently deleted.</p>
+                </div>
+            </div>
+
+            <footer class="p-4 bg-surface-container-low/50 rounded-b-2xl border-t border-surface-variant/30 flex gap-3">
+                <button @click="showMergeModal = false" class="flex-1 px-4 py-2.5 rounded-lg font-label-md text-xs uppercase tracking-widest border border-outline-variant hover:bg-surface-container transition-all">Cancel</button>
+                <button @click="executeMerge" :disabled="isSubmitting" class="flex-1 bg-primary text-on-primary px-4 py-2.5 rounded-lg font-label-md text-xs uppercase tracking-widest hover:bg-primary-container transition-all shadow-sm flex items-center justify-center gap-2">
+                    <span x-show="!isSubmitting">Execute Merge</span>
+                    <span x-show="isSubmitting" class="w-4 h-4 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin"></span>
+                </button>
+            </footer>
+        </div>
+    </div>
 
     <!-- Involvement Modal -->
     <div x-show="showInvolvementModal" 
@@ -257,102 +492,145 @@
          style="display: none;">
         
         <div class="bg-surface-container-lowest w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] border border-outline-variant/30" @click.away="showInvolvementModal = false">
-            <header class="p-6 border-b border-surface-variant/30 flex justify-between items-center bg-surface-container-low/50 rounded-t-2xl">
-                <div>
-                    <h2 class="font-headline-md text-2xl text-primary" x-text="selectedPerson?.name"></h2>
-                    <p class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Service Involvement History</p>
-                </div>
-                <button @click="showInvolvementModal = false" class="text-on-surface-variant hover:text-primary p-2 hover:bg-surface-container rounded-full transition-all">
-                    <span class="material-symbols-outlined text-2xl">close</span>
-                </button>
-            </header>
-            
-            <div class="flex-grow overflow-y-auto p-6 space-y-8 scrollbar-thin">
-                <!-- Log New Involvement Form -->
-                <section class="bg-surface-container border border-outline-variant/20 p-5 rounded-xl shadow-inner">
-                    <h3 class="font-label-md text-[11px] uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
-                        <span class="material-symbols-outlined text-sm">add_circle</span> Log Participation
-                    </h3>
-                    <form @submit.prevent="addInvolvement" class="space-y-4">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="flex flex-col gap-xs">
-                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Service Date</label>
-                                <input type="date" x-model="newInvolvement.serviceDate" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2">
-                            </div>
-                            <div class="flex flex-col gap-xs">
-                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Role</label>
-                                <select x-model="newInvolvement.type" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2">
-                                    <option value="">Select Role...</option>
-                                    <option value="service_leader">Service Leader</option>
-                                    <option value="preacher">Preacher</option>
-                                    <option value="worship_leader">Worship Leader</option>
-                                    <option value="sermonette">Sermonette</option>
-                                    <option value="prayer">Prayer Leader</option>
-                                </select>
-                            </div>
+            <template x-if="selectedPerson">
+                <div class="flex flex-col h-full overflow-hidden">
+                    <header class="p-6 border-b border-surface-variant/30 flex justify-between items-center bg-surface-container-low/50 rounded-t-2xl">
+                        <div>
+                            <h2 class="font-headline-md text-2xl text-primary" x-text="selectedPerson.name"></h2>
+                            <p class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Profile & Involvement History</p>
                         </div>
-
-                        <template x-if="newInvolvement.type === 'prayer'">
-                            <div class="space-y-3 p-4 bg-surface-container-lowest rounded-lg border border-outline-variant/20">
-                                <div class="flex gap-4">
-                                    <label class="flex items-center gap-2 text-sm font-body-md cursor-pointer">
-                                        <input type="radio" x-model="newInvolvement.prayerType" value="praise" class="text-primary focus:ring-primary"> Praise
-                                    </label>
-                                    <label class="flex items-center gap-2 text-sm font-body-md cursor-pointer">
-                                        <input type="radio" x-model="newInvolvement.prayerType" value="confession" class="text-primary focus:ring-primary"> Confession
-                                    </label>
-                                </div>
-                                <textarea x-model="newInvolvement.prayerText" 
-                                          placeholder="Prayer content (optional)" 
-                                          class="w-full text-sm rounded-lg border-outline-variant/50 focus:ring-1 focus:ring-tertiary-container transition-all" 
-                                          rows="2"></textarea>
-                            </div>
-                        </template>
-
-                        <button type="submit" 
-                                :disabled="isSubmitting"
-                                class="w-full bg-secondary text-on-secondary py-2.5 rounded-lg font-label-md text-xs uppercase tracking-widest hover:bg-primary-container transition-all shadow-sm disabled:opacity-50">
-                            Log Participation
+                        <button @click="showInvolvementModal = false" class="text-on-surface-variant hover:text-primary p-2 hover:bg-surface-container rounded-full transition-all">
+                            <span class="material-symbols-outlined text-2xl">close</span>
                         </button>
-                    </form>
-                </section>
+                    </header>
+                    
+                    <div class="flex-grow overflow-y-auto p-6 space-y-8 scrollbar-thin">
+                        <!-- Edit Profile Section -->
+                        <section class="bg-surface-container-low border border-outline-variant/30 p-5 rounded-xl space-y-4">
+                            <h3 class="font-label-md text-[11px] uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-sm">person_edit</span> Profile Details
+                            </h3>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="flex flex-col gap-xs">
+                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Full Name</label>
+                                    <input type="text" x-model="selectedPerson.name" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
+                                </div>
+                                <div class="flex flex-col gap-xs">
+                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email</label>
+                                    <input type="email" x-model="selectedPerson.contact.email" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
+                                </div>
+                                <div class="flex flex-col gap-xs">
+                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Phone</label>
+                                    <input type="tel" x-model="selectedPerson.contact.phone" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
+                                </div>
+                                <div class="flex flex-col gap-xs">
+                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Address</label>
+                                    <input type="text" x-model="selectedPerson.contact.address" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
+                                </div>
+                                <div class="flex flex-col gap-xs">
+                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Sex</label>
+                                    <div class="relative">
+                                        <select x-model="selectedPerson.sex" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3 appearance-none">
+                                            <option value="">Select Sex...</option>
+                                            <option value="male">Male</option>
+                                            <option value="female">Female</option>
+                                        </select>
+                                        <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant text-[16px]">expand_more</span>
+                                    </div>
+                                </div>
+                            </div>
 
-                <div class="space-y-4">
-                    <h3 class="font-label-md text-[11px] uppercase tracking-widest text-on-surface-variant mb-2">History Records</h3>
-                    <div class="space-y-3">
-                        <template x-for="item in involvement" :key="item.id">
-                            <div class="flex gap-4 p-4 border border-outline-variant/10 bg-surface shadow-sm rounded-xl group/item hover:border-primary/30 transition-all relative">
-                                <a :href="`service-builder.html?date=${item.serviceDate}`" class="absolute inset-0 z-0" title="Go to service page"></a>
-                                <div class="flex-grow relative z-10 pointer-events-none">
-                                    <div class="flex justify-between items-start mb-1">
-                                        <span class="font-headline-md text-primary" x-text="formatRole(item.type)"></span>
-                                        <div class="flex items-center gap-3">
-                                            <span class="font-label-md text-[11px] text-on-surface-variant" x-text="item.serviceDate"></span>
-                                            <button @click.stop.prevent="deleteInvolvement(item.id)" 
-                                                    class="opacity-0 group-hover/item:opacity-100 text-error/60 hover:text-error hover:bg-error-container/30 p-1 rounded-full transition-all pointer-events-auto">
-                                                <span class="material-symbols-outlined text-[16px]">delete</span>
+                            <!-- Tags Management in Modal -->
+                            <div class="flex flex-col gap-xs pt-2">
+                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Tags</label>
+                                <div class="flex flex-wrap gap-1.5 p-3 bg-surface-container-lowest border border-outline-variant/20 rounded-lg min-h-[44px]">
+                                    <template x-for="tag in (selectedPerson.tags || [])" :key="tag">
+                                        <span class="inline-flex items-center gap-1 bg-surface-container-high text-on-surface text-[10px] px-2 py-0.5 rounded-full border border-outline-variant/30">
+                                            <span x-text="tag"></span>
+                                            <button @click="removeTag(selectedPerson, tag)" class="hover:text-error transition-colors">
+                                                <span class="material-symbols-outlined text-[12px] align-middle">close</span>
                                             </button>
+                                        </span>
+                                    </template>
+                                    
+                                    <div class="relative" x-data="{ open: false, tagQuery: '' }">
+                                        <button x-show="!open" @click="open = true; $nextTick(() => $refs.modalTagInput.focus())" 
+                                                class="inline-flex items-center gap-1 bg-surface-container-lowest text-primary text-[10px] px-2 py-0.5 rounded-full border border-primary/20 hover:bg-primary-fixed transition-colors font-medium">
+                                            <span class="material-symbols-outlined text-[12px]">add</span> Add Tag
+                                        </button>
+                                        
+                                        <div x-show="open" class="flex flex-col gap-1 min-w-[120px]">
+                                            <input x-ref="modalTagInput" 
+                                                   type="text" 
+                                                   x-model="tagQuery" 
+                                                   @keydown.enter.prevent="addTag(selectedPerson, tagQuery); tagQuery = ''; open = false"
+                                                   @click.away="open = false; tagQuery = ''"
+                                                   placeholder="Type tag..."
+                                                   class="text-[10px] px-2 py-0.5 rounded-full border border-primary/40 focus:ring-1 focus:ring-primary outline-none w-full bg-surface-container-lowest">
+                                            
+                                            <div x-show="tagQuery && allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(selectedPerson.tags || []).includes(t)).length > 0"
+                                                 class="absolute z-20 top-full mt-1 w-full bg-white border border-outline-variant rounded-lg shadow-xl py-1 max-h-40 overflow-y-auto">
+                                                <template x-for="tag in allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(selectedPerson.tags || []).includes(t))" :key="tag">
+                                                    <button @click="addTag(selectedPerson, tag); tagQuery = ''; open = false"
+                                                            class="w-full text-left px-3 py-1.5 text-[10px] hover:bg-primary-fixed transition-colors">
+                                                        <span x-text="tag"></span>
+                                                    </button>
+                                                </template>
+                                            </div>
                                         </div>
                                     </div>
-                                    <template x-if="item.type === 'prayer'">
-                                        <div class="text-sm italic text-on-surface-variant mt-2 pl-3 border-l-2 border-outline-variant/30">
-                                            <p class="font-bold text-[10px] uppercase tracking-widest mb-1" x-text="item.metadata?.prayer_type === 'praise' ? 'Praise' : 'Confession'"></p>
-                                            <p class="font-body-md" x-text="item.metadata?.prayer_text"></p>
-                                        </div>
-                                    </template>
                                 </div>
                             </div>
-                        </template>
-                        <div x-show="involvement.length === 0" class="py-12 text-center text-on-surface-variant italic font-body-md">
-                            No involvement records found for this person.
+
+                            <div class="flex justify-end">
+                                <button @click="updatePerson" 
+                                        :disabled="isSubmitting"
+                                        class="bg-primary text-on-primary px-6 py-2 rounded-lg font-label-md text-[10px] uppercase tracking-widest hover:bg-primary-container transition-all shadow-sm flex items-center gap-2">
+                                    <span x-show="!isSubmitting">Save Profile</span>
+                                    <span x-show="isSubmitting" class="w-3 h-3 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin"></span>
+                                </button>
+                            </div>
+                        </section>
+
+                        <div class="space-y-4">
+                            <h3 class="font-label-md text-[11px] uppercase tracking-widest text-on-surface-variant mb-2">History Records</h3>
+                            <div class="space-y-3">
+                                <template x-for="item in involvement" :key="item.id">
+                                    <div class="flex gap-4 p-4 border border-outline-variant/10 bg-surface shadow-sm rounded-xl group/item hover:border-primary/30 transition-all relative">
+                                        <a :href="`service-builder.html?date=${item.serviceDate}`" class="absolute inset-0 z-0" title="Go to service page"></a>
+                                        <div class="flex-grow relative z-10 pointer-events-none">
+                                            <div class="flex justify-between items-start mb-1">
+                                                <span class="font-headline-md text-primary" x-text="formatRole(item.type)"></span>
+                                                <div class="flex items-center gap-3">
+                                                    <span class="font-label-md text-[11px] text-on-surface-variant" x-text="item.serviceDate"></span>
+                                                    <button @click.stop.prevent="deleteInvolvement(item.id)" 
+                                                            class="opacity-0 group-hover/item:opacity-100 text-error/60 hover:text-error hover:bg-error-container/30 p-1 rounded-full transition-all pointer-events-auto">
+                                                        <span class="material-symbols-outlined text-[16px]">delete</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <template x-if="item.type === 'prayer'">
+                                                <div class="text-sm italic text-on-surface-variant mt-2 pl-3 border-l-2 border-outline-variant/30">
+                                                    <p class="font-bold text-[10px] uppercase tracking-widest mb-1" x-text="item.metadata?.prayer_type === 'praise' ? 'Praise' : 'Confession'"></p>
+                                                    <p class="font-body-md" x-text="item.metadata?.prayer_text"></p>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                                <div x-show="involvement.length === 0" class="py-12 text-center text-on-surface-variant italic font-body-md">
+                                    No involvement records found for this person.
+                                </div>
+                            </div>
                         </div>
                     </div>
+                    
+                    <footer class="p-4 bg-surface-container-low/50 rounded-b-2xl border-t border-surface-variant/30 text-right">
+                        <button @click="showInvolvementModal = false" class="bg-primary text-on-primary font-label-md text-xs uppercase tracking-widest px-8 py-2.5 rounded-lg hover:bg-primary-container transition-all shadow-sm">Close</button>
+                    </footer>
                 </div>
-            </div>
-            
-            <footer class="p-4 bg-surface-container-low/50 rounded-b-2xl border-t border-surface-variant/30 text-right">
-                <button @click="showInvolvementModal = false" class="bg-primary text-on-primary font-label-md text-xs uppercase tracking-widest px-8 py-2.5 rounded-lg hover:bg-primary-container transition-all shadow-sm">Close</button>
-            </footer>
+            </template>
         </div>
     </div>
 

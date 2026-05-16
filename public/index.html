@@ -335,6 +335,27 @@
                         }
                     }
 
+                    // Pastoral Prayer
+                    const prayers = [];
+                    if (svc.liturgy?.prayerMale?.name) prayers.push(svc.liturgy.prayerMale.name);
+                    if (svc.liturgy?.prayerFemale?.name) prayers.push(svc.liturgy.prayerFemale.name);
+
+                    if (prayers.length > 0) {
+                        glanceHtml += `
+                            <div class="flex flex-col gap-xs mt-xs">
+                                <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Pastoral Prayer</span>
+                                <div class="flex flex-col gap-1">
+                                    ${prayers.map(p => `
+                                        <div class="flex items-center gap-xs text-on-surface">
+                                            <span class="material-symbols-outlined text-[20px] text-primary">favorite</span>
+                                            <span class="text-sm font-medium">${p}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }
+
                     if (svc.hasBaptism) {
                         const baptismName = svc.liturgy?.baptism || 'Name not specified';
                         glanceHtml += `
@@ -403,32 +424,63 @@
 
                     const totalIssues = missingFields.length + literalHymns.length;
 
-                    if (!svc.isIrregular && totalIssues > 0 && (userRole === 'admin' || userRole === 'editor')) {
-                        const alertDiv = document.createElement('a');
-                        alertDiv.href = `service-builder.html?date=${dateKey}&validate=true`;
-                        alertDiv.className = 'mt-auto pt-md flex items-center justify-between group/alert cursor-pointer';
+                    if (['editor', 'elder', 'admin', 'super_admin'].includes(userRole)) {
+                        const actionDiv = document.createElement('div');
+                        actionDiv.className = 'mt-auto pt-md flex flex-col gap-2';
                         
-                        let message = '';
-                        if (missingFields.length > 0 && literalHymns.length > 0) {
-                            message = `${totalIssues} items need attention (missing fields & unlinked hymns)`;
-                        } else if (literalHymns.length > 0) {
-                            message = `${literalHymns.length} hymn${literalHymns.length > 1 ? 's' : ''} not linked to database`;
-                        } else {
-                            message = `${missingFields.length} field${missingFields.length > 1 ? 's' : ''} not completed`;
+                        if (!svc.isIrregular && totalIssues > 0) {
+                            const alertDiv = document.createElement('a');
+                            alertDiv.href = `service-builder.html?date=${dateKey}&validate=true`;
+                            alertDiv.className = 'flex items-center justify-between group/alert cursor-pointer';
+                            
+                            let message = '';
+                            if (missingFields.length > 0 && literalHymns.length > 0) {
+                                message = `${totalIssues} items need attention (missing fields & unlinked hymns)`;
+                            } else if (literalHymns.length > 0) {
+                                message = `${literalHymns.length} hymn${literalHymns.length > 1 ? 's' : ''} not linked to database`;
+                            } else {
+                                message = `${missingFields.length} field${missingFields.length > 1 ? 's' : ''} not completed`;
+                            }
+
+                            alertDiv.innerHTML = `
+                                <div class="flex items-center gap-2 bg-error-container text-on-error-container px-3 py-2 rounded-lg w-full transition-transform group-hover/alert:scale-[1.02]">
+                                    <span class="material-symbols-outlined text-[20px]">warning</span>
+                                    <span class="text-sm font-medium">${message}</span>
+                                    <span class="material-symbols-outlined text-[18px] ml-auto">chevron_right</span>
+                                </div>
+                            `;
+                            actionDiv.appendChild(alertDiv);
                         }
 
-                        alertDiv.innerHTML = `
-                            <div class="flex items-center gap-2 bg-error-container text-on-error-container px-3 py-2 rounded-lg w-full transition-transform group-hover/alert:scale-[1.02]">
-                                <span class="material-symbols-outlined text-[20px]">warning</span>
-                                <span class="text-sm font-medium">${message}</span>
-                                <span class="material-symbols-outlined text-[18px] ml-auto">chevron_right</span>
+                        const editBtn = document.createElement('a');
+                        editBtn.href = `service-builder.html?date=${dateKey}`;
+                        editBtn.className = 'flex items-center justify-center group';
+                        editBtn.innerHTML = `
+                            <div class="flex items-center gap-2 bg-primary text-on-primary px-4 py-2 rounded-lg w-full justify-center transition-all hover:bg-primary/90 shadow-sm">
+                                <span class="material-symbols-outlined text-[20px]">edit</span>
+                                <span class="text-sm font-medium">Open in Service Editor</span>
                             </div>
                         `;
-                        glanceContent.appendChild(alertDiv);
+                        actionDiv.appendChild(editBtn);
+                        glanceContent.appendChild(actionDiv);
                     }
                 } else {
                     console.log("No service data found for:", dateKey);
                     glanceContent.innerHTML = '<p class="text-on-surface-variant italic">No service data found for this Sunday.</p>';
+                    
+                    if (['editor', 'elder', 'admin', 'super_admin'].includes(userRole)) {
+                        const createBtn = document.createElement('a');
+                        createBtn.href = `service-builder.html?date=${dateKey}`;
+                        createBtn.className = 'mt-auto pt-md flex items-center justify-center group';
+                        createBtn.innerHTML = `
+                            <div class="flex items-center gap-2 bg-primary text-on-primary px-4 py-2 rounded-lg w-full justify-center transition-all hover:bg-primary/90 shadow-sm">
+                                <span class="material-symbols-outlined text-[20px]">add</span>
+                                <span class="text-sm font-medium">Create Service</span>
+                            </div>
+                        `;
+                        glanceContent.appendChild(createBtn);
+                    }
+
                     upcomingBox.classList.add('hidden');
                     upcomingBox.classList.remove('flex');
                 }

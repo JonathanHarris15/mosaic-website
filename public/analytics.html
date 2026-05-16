@@ -70,7 +70,7 @@
 <body x-data="analyticsPage()" class="bg-background text-on-surface font-body antialiased h-screen overflow-hidden flex flex-col">
     <!-- Header -->
     <header class="flex-none w-full bg-background/80 backdrop-blur-md border-b border-outline-variant z-[100]">
-        <div class="max-w-7xl mx-auto px-margin h-16 flex justify-between items-center">
+        <div class="px-margin h-16 flex justify-between items-center">
             <div class="flex items-center gap-6">
                 <a href="index.html" class="flex items-center gap-3 text-primary hover:opacity-70 transition-opacity group">
                     <span class="material-symbols-outlined transition-transform group-hover:-translate-x-1">arrow_back</span>
@@ -84,19 +84,20 @@
 
     <!-- Navigation and Controls (Fixed) -->
     <div x-show="!loading" x-cloak class="flex-none bg-background z-[90] border-b border-outline-variant/30">
-        <div class="max-w-7xl mx-auto px-margin">
+        <div class="px-margin">
             <!-- Navigation Tabs -->
             <div class="flex border-b border-outline-variant">
                 <button @click="activeTab = 'hymns'" :class="activeTab === 'hymns' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">Hymn Usage</button>
                 <button @click="activeTab = 'bible'" :class="activeTab === 'bible' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">Bible Heat Map</button>
                 <button @click="activeTab = 'people'" :class="activeTab === 'people' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">People's Involvement</button>
+                <button @click="activeTab = 'praise'" :class="activeTab === 'praise' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">Pastoral Prayer</button>
             </div>
 
             <!-- Actions Area -->
-            <div x-show="activeTab === 'hymns' || activeTab === 'people'" class="py-4">
+            <div x-show="activeTab === 'hymns' || activeTab === 'people' || activeTab === 'praise'" class="py-4">
                 <div class="relative w-full max-w-md">
                     <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
-                    <input type="text" x-model="activeTab === 'hymns' ? hymnSearch : peopleSearch" :placeholder="activeTab === 'hymns' ? 'Filter by hymn name...' : 'Search people...'" 
+                    <input type="text" x-model="activeTab === 'hymns' ? hymnSearch : (activeTab === 'people' ? peopleSearch : pastoralSearch)" :placeholder="activeTab === 'hymns' ? 'Filter by hymn name...' : (activeTab === 'people' ? 'Search people...' : 'Search members...')" 
                         class="w-full pl-12 pr-4 py-2.5 bg-surface-container-low border-outline-variant rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all shadow-sm text-sm" />
                 </div>
             </div>
@@ -105,7 +106,7 @@
 
     <!-- Scrollable Content Area -->
     <main class="flex-1 overflow-hidden">
-        <div class="max-w-7xl mx-auto px-margin h-full">
+        <div class="px-margin h-full">
             <!-- Loading State -->
             <template x-if="loading">
                 <div class="py-lg h-full flex items-center justify-center">
@@ -123,9 +124,9 @@
 
             <!-- Main Content -->
             <template x-if="!loading">
-                <div x-cloak class="h-full py-6 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
+                <div x-cloak class="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
                     <!-- Hymn Tab -->
-                    <div x-show="activeTab === 'hymns'" x-transition class="h-full flex flex-col">
+                    <div x-show="activeTab === 'hymns'" x-transition class="h-full py-6 flex flex-col">
                         <div class="card flex-1 overflow-hidden flex flex-col">
                             <div class="flex-1 overflow-y-auto custom-scrollbar">
                                 <table class="w-full text-left border-collapse">
@@ -170,7 +171,7 @@
                                             <td class="px-6 py-4 font-medium text-lg" x-text="h.count"></td>
                                             <td class="px-6 py-4">
                                                 <div class="flex flex-col">
-                                                    <span class="font-medium" :class="getDaysSince(h.dates[0]) > 180 ? 'text-error' : 'text-primary'" x-text="getDaysSince(h.dates[0]) === 0 ? 'Today' : `${getDaysSince(h.dates[0])} days ago` "></span>
+                                                    <span class="font-medium" :class="getDaysSince(h.dates[0]) > 180 ? 'text-error' : 'text-primary'" x-text="getDaysSince(h.dates[0]) === Infinity ? 'Never' : (getDaysSince(h.dates[0]) === 0 ? 'Today' : `${getDaysSince(h.dates[0])} days ago`) "></span>
                                                     <span class="text-[10px] text-on-surface-variant font-medium uppercase tracking-tighter" x-text="formatDate(h.dates[0])"></span>
                                                 </div>
                                             </td>
@@ -182,91 +183,197 @@
                     </div>
                 </div>
 
-                <!-- People Tab -->
-                <div x-show="activeTab === 'people'" x-transition class="h-full flex flex-col overflow-hidden">
-                    <div class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-4 gap-gutter overflow-hidden">
-                        <!-- People List Table -->
-                        <div class="lg:col-span-3 card flex flex-col overflow-hidden">
-                            <div class="flex-1 overflow-y-auto custom-scrollbar">
-                                <table class="w-full text-left border-collapse">
-                                    <thead class="bg-surface-container-low border-b border-outline-variant sticky top-0 z-10 shadow-sm">
-                                        <tr>
-                                            <th class="px-6 py-4 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group" @click="sortByPeople('name')">
-                                                <div class="flex items-center gap-2">
-                                                    <span class="label-xs">Name</span>
-                                                    <span class="material-symbols-outlined text-sm text-primary transition-opacity" :class="peopleSortKey === 'name' ? 'opacity-100' : 'opacity-0'" x-text="peopleSortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
-                                                </div>
-                                            </th>
-                                            <th class="px-6 py-4 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group" @click="sortByPeople('totalInvolvements')">
-                                                <div class="flex items-center gap-2">
-                                                    <span class="label-xs">Total Services</span>
-                                                    <span class="material-symbols-outlined text-sm text-primary transition-opacity" :class="peopleSortKey === 'totalInvolvements' ? 'opacity-100' : 'opacity-0'" x-text="peopleSortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
-                                                </div>
-                                            </th>
-                                            <th class="px-6 py-4">
-                                                <span class="label-xs">Top Roles</span>
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-outline-variant/30">
-                                        <template x-for="p in filteredPeople" :key="p.id">
-                                            <tr @click="selectPerson(p)" class="hover:bg-surface-container-low transition-colors group cursor-pointer" :class="selectedPerson?.id === p.id ? 'bg-primary/5' : ''">
-                                                <td class="px-6 py-4">
-                                                    <div class="font-bold text-primary tracking-tight" x-text="p.name"></div>
-                                                </td>
-                                                <td class="px-6 py-4 font-medium text-lg" x-text="p.totalInvolvements || 0"></td>
-                                                <td class="px-6 py-4">
-                                                    <div class="flex flex-wrap gap-1">
-                                                        <template x-for="role in (p.topRoles || [])" :key="role">
-                                                            <span class="px-2 py-0.5 bg-surface-container text-on-surface-variant text-[9px] font-bold rounded uppercase tracking-tighter border border-outline-variant/30" x-text="role.replace(/_/g, ' ')"></span>
-                                                        </template>
-                                                        <template x-if="!p.topRoles || p.topRoles.length === 0">
-                                                            <span class="text-[10px] text-on-surface-variant italic opacity-50">Calculating...</span>
-                                                        </template>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        </template>
-                                    </tbody>
-                                </table>
+                <!-- Bible Tab -->
+                <div x-show="activeTab === 'bible'" x-transition class="h-full flex gap-md overflow-hidden">
+                    <!-- Col 1: Filters Panel -->
+                    <div class="w-64 flex-none flex flex-col h-full py-6">
+                        <div class="card p-6 flex-1 flex flex-col overflow-hidden">
+                            <div class="flex items-center gap-2 mb-6">
+                                <span class="material-symbols-outlined text-primary text-sm">filter_list</span>
+                                <h4 class="label-xs text-primary font-bold">Include Elements</h4>
+                            </div>
+                            <div class="flex-1 overflow-y-auto custom-scrollbar space-y-2">
+                                <template x-for="(val, key) in bibleFilters" :key="key">
+                                    <label class="flex items-center gap-3 cursor-pointer group p-3 hover:bg-surface-container-low rounded-xl transition-all border border-transparent hover:border-outline-variant/30">
+                                        <div class="relative flex items-center">
+                                            <input type="checkbox" x-model="bibleFilters[key]" @change="fetchAndProcessData()" 
+                                                class="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary focus:ring-offset-0 transition-all cursor-pointer">
+                                        </div>
+                                        <span class="text-xs font-semibold text-on-surface-variant group-hover:text-primary transition-colors leading-tight" x-text="key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())"></span>
+                                    </label>
+                                </template>
                             </div>
                         </div>
+                    </div>
 
-                        <!-- Involvement History Sidebar -->
-                        <div class="lg:col-span-1 flex flex-col overflow-hidden">
-                            <div class="card h-full flex flex-col overflow-hidden">
-                                <div class="p-6 border-b border-outline-variant flex-none">
-                                    <h3 class="font-headline text-lg text-primary font-bold" x-text="selectedPerson ? selectedPerson.name : 'Select a Person'"></h3>
-                                    <p class="text-[10px] text-on-surface-variant italic">Involvement History</p>
+                    <!-- Col 2: Scripture Coverage (Main Grid) -->
+                    <div class="flex-1 flex flex-col h-full overflow-hidden py-6">
+                        <div class="card flex-1 flex flex-col overflow-hidden relative group/heatmap">
+                            <!-- Header -->
+                            <div class="p-4 border-b border-outline-variant bg-surface-container-low flex justify-between items-center">
+                                <div class="flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-primary">grid_view</span>
+                                    <h3 class="font-headline font-bold text-primary">Scripture Coverage</h3>
                                 </div>
-                                <div class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
-                                    <template x-if="selectedPerson">
-                                        <template x-for="inv in personInvolvement" :key="inv.id">
-                                            <div class="p-3 bg-surface-container-low rounded-xl border border-outline-variant/30 space-y-2">
-                                                <div class="flex justify-between items-start">
-                                                    <span class="px-2 py-0.5 bg-primary/5 text-primary text-[9px] font-bold uppercase rounded border border-primary/10" x-text="inv.type.replace(/_/g, ' ')"></span>
-                                                    <span class="text-[10px] text-on-surface-variant font-medium" x-text="formatDate(inv.serviceDate)"></span>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-tighter">Usage Intensity:</span>
+                                    <div class="flex gap-1">
+                                        <div class="w-3 h-3 rounded-[2px] bg-surface-container"></div>
+                                        <div class="w-3 h-3 rounded-[2px] bg-blue-100"></div>
+                                        <div class="w-3 h-3 rounded-[2px] bg-blue-300"></div>
+                                        <div class="w-3 h-3 rounded-[2px] bg-blue-500"></div>
+                                        <div class="w-3 h-3 rounded-[2px] bg-blue-700"></div>
+                                        <div class="w-3 h-3 rounded-[2px] bg-blue-900"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Scrollable Grid -->
+                            <div class="flex-1 overflow-y-auto custom-scrollbar p-6">
+                                <div class="space-y-4">
+                                    <template x-for="(book, index) in bibleStats.timeline" :key="book.book">
+                                        <div class="contents">
+                                            <!-- Visual Break -->
+                                            <template x-if="book.book === 'Matthew'">
+                                                <div class="py-6 flex items-center gap-4">
+                                                    <div class="h-px flex-1 bg-gradient-to-r from-transparent via-outline-variant to-transparent"></div>
+                                                    <span class="text-[10px] font-bold text-primary/40 uppercase tracking-[0.2em]">New Testament</span>
+                                                    <div class="h-px flex-1 bg-gradient-to-r from-outline-variant via-outline-variant to-transparent"></div>
                                                 </div>
-                                                <div x-show="inv.metadata" class="text-[10px] text-on-surface-variant italic line-clamp-2" x-text="inv.metadata"></div>
-                                                <a :href="`service-builder.html?date=${inv.serviceDate}`" class="block text-[9px] font-bold text-primary hover:underline">View Service</a>
+                                            </template>
+
+                                            <div class="flex items-start" :class="showBookNames ? 'gap-4' : 'gap-1'">
+                                                <!-- Book Title Sidebar (Dynamic Width) -->
+                                                <div :class="showBookNames ? 'w-24' : 'w-4'" class="flex-none pt-0.5 flex flex-col transition-all duration-300">
+                                                    <template x-if="showBookNames">
+                                                        <div class="w-full">
+                                                            <h4 class="text-[10px] font-bold text-primary uppercase tracking-widest truncate" x-text="book.book" :title="book.book"></h4>
+                                                            <div class="text-[8px] text-on-surface-variant font-medium opacity-60" x-text="`${book.chapters.length} ch` "></div>
+                                                        </div>
+                                                    </template>
+                                                    <template x-if="!showBookNames">
+                                                        <span class="text-[9px] font-bold text-primary/30 uppercase cursor-help select-none" x-text="book.book[0]" :title="book.book"></span>
+                                                    </template>
+                                                </div>
+                                                
+                                                <!-- Grid Cells -->
+                                                <div class="flex flex-wrap gap-[2px]">
+                                                    <template x-for="ch in book.chapters" :key="ch.chapter">
+                                                        <div 
+                                                            @click="selectBook(book.book); selectChapter(ch.chapter)"
+                                                            :class="getHeatColor(ch.count)"
+                                                            class="border border-outline-variant/40 relative group transition-all"
+                                                            :style="`width: ${12 * gridZoom}px; height: ${12 * gridZoom}px; border-radius: ${2 * gridZoom}px;`"
+                                                            :class="selectedBook === book.book && selectedChapter === ch.chapter ? 'ring-2 ring-primary ring-offset-1 z-20' : ''"
+                                                            :title="`${book.book} ${ch.chapter}: ${ch.count} uses`"
+                                                        >
+                                                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                                                                <div class="bg-primary text-white text-[10px] py-1 px-2 rounded whitespace-nowrap shadow-lg">
+                                                                    <span x-text="`${book.book} ${ch.chapter}`"></span>: <span x-text="ch.count"></span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </template>
+                                                </div>
                                             </div>
-                                        </template>
-                                    </template>
-                                    <template x-if="!selectedPerson">
-                                        <div class="flex flex-col items-center justify-center py-12 text-center space-y-3 opacity-50">
-                                            <span class="material-symbols-outlined text-4xl">person_search</span>
-                                            <p class="text-xs font-medium italic">Click a person to see their contributions.</p>
                                         </div>
                                     </template>
-                                    <template x-if="selectedPerson && personInvolvement.length === 0 && !loadingInvolvement">
-                                        <div class="flex flex-col items-center justify-center py-12 text-center space-y-3 opacity-50">
+                                </div>
+                            </div>
+
+                            <!-- Floating Controls (Inside Card) -->
+                            <div class="absolute bottom-4 right-4 flex items-center gap-2 z-30">
+                                <!-- Zoom Controls -->
+                                <div class="bg-surface-container-lowest/95 backdrop-blur shadow-lg border border-outline-variant rounded-xl p-1 flex items-center gap-0.5">
+                                    <button @click="gridZoom = Math.max(0.5, gridZoom - 0.25)" class="p-1.5 hover:bg-surface-container rounded-lg transition-colors text-primary" title="Zoom Out">
+                                        <span class="material-symbols-outlined text-base">zoom_out</span>
+                                    </button>
+                                    <div class="w-10 text-center text-[10px] font-bold text-primary" x-text="`${Math.round(gridZoom * 100)}%` "></div>
+                                    <button @click="gridZoom = Math.min(2, gridZoom + 0.25)" class="p-1.5 hover:bg-surface-container rounded-lg transition-colors text-primary" title="Zoom In">
+                                        <span class="material-symbols-outlined text-base">zoom_in</span>
+                                    </button>
+                                </div>
+                                <!-- Names Toggle -->
+                                <button @click="showBookNames = !showBookNames" 
+                                    class="bg-surface-container-lowest/95 backdrop-blur shadow-lg border border-outline-variant rounded-xl px-3 py-2 flex items-center gap-2 group transition-all hover:bg-primary hover:text-white">
+                                    <span class="material-symbols-outlined text-base" x-text="showBookNames ? 'visibility_off' : 'visibility'"></span>
+                                    <span class="text-[10px] font-bold uppercase tracking-wider" x-text="showBookNames ? 'Hide' : 'Show'"></span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Col 3: Details Panel (Animated Slide) -->
+                    <div x-show="selectedBook" 
+                        x-transition:enter="transition ease-out duration-300 transform"
+                        x-transition:enter-start="opacity-0 translate-x-8"
+                        x-transition:enter-end="opacity-100 translate-x-0"
+                        x-transition:leave="transition ease-in duration-200 transform"
+                        x-transition:leave-start="opacity-100 translate-x-0"
+                        x-transition:leave-end="opacity-0 translate-x-8"
+                        class="w-80 flex-none flex flex-col h-full py-6"
+                    >
+                        <div class="card h-full flex flex-col overflow-hidden">
+                            <!-- Header -->
+                            <div class="p-6 border-b border-outline-variant flex-none bg-surface-container-low">
+                                <div class="flex justify-between items-start mb-2">
+                                    <h3 class="font-headline text-xl text-primary font-bold" x-text="selectedBook"></h3>
+                                    <button @click="selectedBook = null; selectedChapter = null" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-error/10 text-on-surface-variant hover:text-error transition-all">
+                                        <span class="material-symbols-outlined text-lg">close</span>
+                                    </button>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <div class="px-3 py-1 bg-primary/10 text-primary text-[10px] font-bold rounded-lg" x-text="selectedChapter ? `Chapter ${selectedChapter}` : 'All Chapters'"></div>
+                                </div>
+                            </div>
+
+                            <!-- Content -->
+                            <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                <!-- Verse Grid -->
+                                <template x-if="selectedChapter && drillDownData">
+                                    <div class="p-6 border-b border-outline-variant space-y-4">
+                                        <div class="flex items-center gap-2">
+                                            <span class="material-symbols-outlined text-primary text-sm">analytics</span>
+                                            <h4 class="label-xs text-primary font-bold">Verse Usage</h4>
+                                        </div>
+                                        <div class="flex flex-wrap gap-1">
+                                            <template x-for="v in drillDownData.chapters.find(c => c.chapter === selectedChapter).verses" :key="v.verse">
+                                                <div 
+                                                    :class="getVerseHeatColor(v.count)"
+                                                    class="w-6 h-6 flex items-center justify-center rounded-[2px] text-[9px] font-bold transition-all cursor-default border border-outline-variant/10"
+                                                    :class="v.count > 0 ? 'text-white' : 'text-on-surface-variant/30'"
+                                                    x-text="v.verse"
+                                                    :title="`Verse ${v.verse}: ${v.count} uses`"
+                                                ></div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- Citations -->
+                                <div class="p-4 space-y-4">
+                                    <h4 class="label-xs px-2 flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-xs">history</span>
+                                        Recent Citations
+                                    </h4>
+                                    <template x-for="cite in currentCitations" :key="cite.date + cite.element">
+                                        <div class="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/30 space-y-3 hover:border-primary/40 hover:shadow-sm transition-all group/cite">
+                                            <div class="flex justify-between items-start">
+                                                <span class="px-2 py-0.5 bg-primary/5 text-primary text-[9px] font-bold uppercase rounded border border-primary/10" x-text="cite.element"></span>
+                                                <span class="text-[10px] text-on-surface-variant font-medium" x-text="formatDate(cite.date)"></span>
+                                            </div>
+                                            <div class="text-[11px] font-bold text-primary leading-relaxed" x-text="cite.reference"></div>
+                                            <a :href="`service-builder.html?date=${cite.date}`" class="inline-flex items-center gap-1 text-[9px] font-bold text-primary hover:underline group-hover/cite:translate-x-1 transition-transform">
+                                                View Service
+                                                <span class="material-symbols-outlined text-[10px]">arrow_forward</span>
+                                            </a>
+                                        </div>
+                                    </template>
+
+                                    <template x-if="currentCitations.length === 0">
+                                        <div class="py-12 text-center opacity-50 space-y-3">
                                             <span class="material-symbols-outlined text-4xl">history_toggle_off</span>
-                                            <p class="text-xs font-medium italic">No recent involvement records found.</p>
-                                        </div>
-                                    </template>
-                                    <template x-if="loadingInvolvement">
-                                        <div class="flex justify-center py-12">
-                                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                                            <p class="text-xs font-medium italic">No recorded usage found.</p>
                                         </div>
                                     </template>
                                 </div>
@@ -274,8 +381,229 @@
                         </div>
                     </div>
                 </div>
-            </div>
-        </template>
+
+                    <!-- People Tab -->
+                    <div x-show="activeTab === 'people'" x-transition class="h-full py-6 flex flex-col overflow-hidden">
+                        <div class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-5 gap-md overflow-hidden">
+                            <!-- People List Table -->
+                            <div class="lg:col-span-4 card flex flex-col overflow-hidden">
+                                <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                    <table class="w-full text-left border-collapse table-fixed">
+                                        <thead class="bg-surface-container-low border-b border-outline-variant sticky top-0 z-10 shadow-sm">
+                                            <tr>
+                                                <th class="w-1/3 px-4 py-3 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group" @click="sortByPeople('name')">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="label-xs">Name</span>
+                                                        <span class="material-symbols-outlined text-xs text-primary transition-opacity" :class="peopleSortKey === 'name' ? 'opacity-100' : 'opacity-0'" x-text="peopleSortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                                    </div>
+                                                </th>
+                                                <th class="w-24 px-4 py-3 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group" @click="sortByPeople('totalInvolvements')">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="label-xs">Services</span>
+                                                        <span class="material-symbols-outlined text-xs text-primary transition-opacity" :class="peopleSortKey === 'totalInvolvements' ? 'opacity-100' : 'opacity-0'" x-text="peopleSortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                                    </div>
+                                                </th>
+                                                <th class="px-4 py-3">
+                                                    <span class="label-xs">Top Roles</span>
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-outline-variant/30">
+                                            <template x-for="p in filteredPeople" :key="p.id">
+                                                <tr @click="selectPerson(p)" class="hover:bg-surface-container-low transition-colors group cursor-pointer" :class="selectedPerson?.id === p.id ? 'bg-primary/5' : ''">
+                                                    <td class="px-4 py-2">
+                                                        <div class="text-xs font-bold text-primary tracking-tight truncate" x-text="p.name"></div>
+                                                    </td>
+                                                    <td class="px-4 py-2 text-sm font-medium" x-text="p.totalInvolvements || 0"></td>
+                                                    <td class="px-4 py-2">
+                                                        <div class="flex flex-wrap gap-1">
+                                                            <template x-for="role in (p.topRoles || [])" :key="role">
+                                                                <span class="px-1.5 py-0.5 bg-surface-container text-on-surface-variant text-[8px] font-bold rounded uppercase tracking-tighter border border-outline-variant/30" x-text="role.replace(/_/g, ' ')"></span>
+                                                            </template>
+                                                            <template x-if="!p.topRoles || p.topRoles.length === 0">
+                                                                <span class="text-[9px] text-on-surface-variant italic opacity-50">None</span>
+                                                            </template>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Involvement History Sidebar -->
+                            <div class="lg:col-span-1 flex flex-col overflow-hidden">
+                                <div class="card h-full flex flex-col overflow-hidden">
+                                    <div class="p-4 border-b border-outline-variant flex-none bg-surface-container-low">
+                                        <h3 class="font-headline text-sm text-primary font-bold truncate" x-text="selectedPerson ? selectedPerson.name : 'Select Person'"></h3>
+                                        <p class="text-[9px] text-on-surface-variant uppercase tracking-widest font-bold opacity-60">History</p>
+                                    </div>
+                                    <div class="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
+                                        <template x-if="selectedPerson">
+                                            <template x-for="inv in personInvolvement" :key="inv.id">
+                                                <div class="p-2.5 bg-surface-container-low rounded-lg border border-outline-variant/30 space-y-1.5 hover:border-primary/40 transition-all">
+                                                    <div class="flex justify-between items-start">
+                                                        <span class="px-1.5 py-0.5 bg-primary/5 text-primary text-[8px] font-bold uppercase rounded border border-primary/10" x-text="inv.type.replace(/_/g, ' ')"></span>
+                                                        <span class="text-[8px] text-on-surface-variant font-bold opacity-60" x-text="formatDate(inv.serviceDate)"></span>
+                                                    </div>
+                                                    <div x-show="inv.metadata" class="text-[9px] text-on-surface-variant italic line-clamp-2 leading-tight">
+                                                        <template x-if="inv.type === 'prayer'">
+                                                            <span>
+                                                                <span x-text="inv.metadata.prayer_type === 'praise' ? 'Praise: ' : 'Confession: '"></span>
+                                                                <span x-text="inv.metadata.prayer_text"></span>
+                                                            </span>
+                                                        </template>
+                                                        <template x-if="inv.type !== 'prayer'">
+                                                            <span x-text="typeof inv.metadata === 'string' ? inv.metadata : JSON.stringify(inv.metadata)"></span>
+                                                        </template>
+                                                    </div>
+                                                    <a :href="`service-builder.html?date=${inv.serviceDate}`" class="inline-flex items-center gap-1 text-[8px] font-bold text-primary hover:underline">
+                                                        Service
+                                                        <span class="material-symbols-outlined text-[10px]">arrow_forward</span>
+                                                    </a>
+                                                </div>
+                                            </template>
+                                        </template>
+                                        <template x-if="!selectedPerson">
+                                            <div class="flex flex-col items-center justify-center py-12 text-center space-y-3 opacity-50">
+                                                <span class="material-symbols-outlined text-3xl">person_search</span>
+                                                <p class="text-[10px] font-medium italic">Click a person.</p>
+                                            </div>
+                                        </template>
+                                        <template x-if="selectedPerson && personInvolvement.length === 0 && !loadingInvolvement">
+                                            <div class="flex flex-col items-center justify-center py-12 text-center space-y-3 opacity-50">
+                                                <span class="material-symbols-outlined text-3xl">history_toggle_off</span>
+                                                <p class="text-[10px] font-medium italic">No history.</p>
+                                            </div>
+                                        </template>
+                                        <template x-if="loadingInvolvement">
+                                            <div class="flex justify-center py-12">
+                                                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pastoral Prayer Tab -->
+                    <div x-show="activeTab === 'praise'" x-transition class="h-full py-6 flex flex-col overflow-hidden">
+                        <div class="flex gap-4 h-full overflow-hidden">
+                            <!-- Males Column -->
+                            <div class="card flex-1 overflow-hidden flex flex-col">
+                                <div class="px-6 py-3 border-b border-outline-variant bg-surface-container-low flex justify-between items-center">
+                                    <h3 class="text-xs font-bold text-primary uppercase tracking-wider">Males</h3>
+                                    <span class="text-[10px] font-bold text-on-surface-variant bg-surface-container-highest px-2 py-0.5 rounded-full" x-text="`${filteredPraiseMales.length} people`"></span>
+                                </div>
+                                <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                    <table class="w-full text-left border-collapse table-fixed">
+                                        <thead class="bg-surface-container-low border-b border-outline-variant sticky top-0 z-10 shadow-sm">
+                                            <tr>
+                                                <th class="px-6 py-4 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group" @click="sortByPraise('name')">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="label-xs">Name</span>
+                                                        <span class="material-symbols-outlined text-xs text-primary transition-opacity" :class="praiseSortKey === 'name' ? 'opacity-100' : 'opacity-0'" x-text="praiseSortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                                    </div>
+                                                </th>
+                                                <th class="w-20 px-4 py-4 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group text-center" @click="sortByPraise('count')">
+                                                    <div class="flex items-center justify-center gap-1">
+                                                        <span class="label-xs">Qty</span>
+                                                        <span class="material-symbols-outlined text-[10px] text-primary transition-opacity" :class="praiseSortKey === 'count' ? 'opacity-100' : 'opacity-0'" x-text="praiseSortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                                    </div>
+                                                </th>
+                                                <th class="w-32 px-4 py-4 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group" @click="sortByPraise('lastPrayed')">
+                                                    <div class="flex items-center gap-1">
+                                                        <span class="label-xs">Last Prayed</span>
+                                                        <span class="material-symbols-outlined text-[10px] text-primary transition-opacity" :class="praiseSortKey === 'lastPrayed' ? 'opacity-100' : 'opacity-0'" x-text="praiseSortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                                    </div>
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-outline-variant/30">
+                                            <template x-for="p in filteredPraiseMales" :key="p.id">
+                                                <tr class="hover:bg-surface-container-low transition-colors group">
+                                                    <td class="px-6 py-3">
+                                                        <div class="text-xs font-bold text-primary truncate" x-text="p.name"></div>
+                                                    </td>
+                                                    <td class="px-4 py-3 text-sm font-medium text-center" x-text="p.prayerCount || 0"></td>
+                                                    <td class="px-4 py-3">
+                                                        <div class="flex flex-col">
+                                                            <span class="text-xs font-bold text-primary" x-text="p.lastPrayerDate || '—'"></span>
+                                                            <template x-if="p.lastPrayerDate">
+                                                                <div>
+                                                                    <span x-show="getDaysSince(p.lastPrayerDate) >= 0" class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="getDaysSince(p.lastPrayerDate) === Infinity ? 'Never' : `${getDaysSince(p.lastPrayerDate)}d ago` "></span>
+                                                                    <span x-show="getDaysSince(p.lastPrayerDate) < 0" class="text-[9px] text-success font-bold uppercase" x-text="`In ${Math.abs(getDaysSince(p.lastPrayerDate))} days` "></span>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Females Column -->
+                            <div class="card flex-1 overflow-hidden flex flex-col">
+                                <div class="px-6 py-3 border-b border-outline-variant bg-surface-container-low flex justify-between items-center">
+                                    <h3 class="text-xs font-bold text-primary uppercase tracking-wider">Females</h3>
+                                    <span class="text-[10px] font-bold text-on-surface-variant bg-surface-container-highest px-2 py-0.5 rounded-full" x-text="`${filteredPraiseFemales.length} people`"></span>
+                                </div>
+                                <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                    <table class="w-full text-left border-collapse table-fixed">
+                                        <thead class="bg-surface-container-low border-b border-outline-variant sticky top-0 z-10 shadow-sm">
+                                            <tr>
+                                                <th class="px-6 py-4 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group" @click="sortByPraise('name')">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="label-xs">Name</span>
+                                                        <span class="material-symbols-outlined text-xs text-primary transition-opacity" :class="praiseSortKey === 'name' ? 'opacity-100' : 'opacity-0'" x-text="praiseSortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                                    </div>
+                                                </th>
+                                                <th class="w-20 px-4 py-4 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group text-center" @click="sortByPraise('count')">
+                                                    <div class="flex items-center justify-center gap-1">
+                                                        <span class="label-xs">Qty</span>
+                                                        <span class="material-symbols-outlined text-[10px] text-primary transition-opacity" :class="praiseSortKey === 'count' ? 'opacity-100' : 'opacity-0'" x-text="praiseSortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                                    </div>
+                                                </th>
+                                                <th class="w-32 px-4 py-4 cursor-pointer hover:bg-surface-container-highest/50 transition-colors group" @click="sortByPraise('lastPrayed')">
+                                                    <div class="flex items-center gap-1">
+                                                        <span class="label-xs">Last Prayed</span>
+                                                        <span class="material-symbols-outlined text-[10px] text-primary transition-opacity" :class="praiseSortKey === 'lastPrayed' ? 'opacity-100' : 'opacity-0'" x-text="praiseSortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'"></span>
+                                                    </div>
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-outline-variant/30">
+                                            <template x-for="p in filteredPraiseFemales" :key="p.id">
+                                                <tr class="hover:bg-surface-container-low transition-colors group">
+                                                    <td class="px-6 py-3">
+                                                        <div class="text-xs font-bold text-primary truncate" x-text="p.name"></div>
+                                                    </td>
+                                                    <td class="px-4 py-3 text-sm font-medium text-center" x-text="p.prayerCount || 0"></td>
+                                                    <td class="px-4 py-3">
+                                                        <div class="flex flex-col">
+                                                            <span class="text-xs font-bold text-primary" x-text="p.lastPrayerDate || '—'"></span>
+                                                            <template x-if="p.lastPrayerDate">
+                                                                <div>
+                                                                    <span x-show="getDaysSince(p.lastPrayerDate) >= 0" class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="getDaysSince(p.lastPrayerDate) === Infinity ? 'Never' : `${getDaysSince(p.lastPrayerDate)}d ago` "></span>
+                                                                    <span x-show="getDaysSince(p.lastPrayerDate) < 0" class="text-[9px] text-success font-bold uppercase" x-text="`In ${Math.abs(getDaysSince(p.lastPrayerDate))} days` "></span>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
     </main>
 
     <style>
