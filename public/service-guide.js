@@ -210,7 +210,7 @@ function guideEditor() {
         async loadService() {
             const doc = await db.collection('services').doc(this.date).get();
             if (doc.exists) {
-                const data = doc.data();
+                const data = this.normalizeServiceData(doc.data());
                 this.service = data;
                 if (data.guide && data.guide.elements) {
                     this.elements = data.guide.elements;
@@ -221,6 +221,30 @@ function guideEditor() {
                     });
                 }
             }
+        },
+
+        normalizeServiceData(raw) {
+            const data = {};
+            // First pass: non-dotted keys
+            for (const [key, val] of Object.entries(raw)) {
+                if (!key.includes('.')) data[key] = val;
+            }
+            // Second pass: dotted keys (e.g. 'liturgy.sermon')
+            for (const [key, val] of Object.entries(raw)) {
+                if (key.includes('.')) {
+                    const parts = key.split('.');
+                    let obj = data;
+                    for (let i = 0; i < parts.length - 1; i++) {
+                        if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) {
+                            obj[parts[i]] = {};
+                        }
+                        obj = obj[parts[i]];
+                    }
+                    const leaf = parts[parts.length - 1];
+                    if (!obj[leaf]) obj[leaf] = val;
+                }
+            }
+            return data;
         },
 
         async fetchHymnDetails() {
@@ -247,7 +271,9 @@ function guideEditor() {
                     .where(firebase.firestore.FieldPath.documentId(), '<=', endStr)
                     .get();
                 const services = [];
-                snap.forEach(doc => { services.push({ id: doc.id, ...doc.data() }); });
+                snap.forEach(doc => { 
+                    services.push({ id: doc.id, ...this.normalizeServiceData(doc.data()) }); 
+                });
                 this.schedule = services.sort((a, b) => a.id.localeCompare(b.id));
             } catch (error) { console.error("Error fetching schedule:", error); }
         },
