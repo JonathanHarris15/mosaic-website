@@ -13,6 +13,29 @@ function calendarPage() {
         activeSuggestionsKey: null,
         saving: false,
 
+        async saveVerseSelection(dateKey, field, val) {
+            this.saving = true;
+            try {
+                const updates = {
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    [`liturgy.${field}`]: val
+                };
+                await db.collection('services').doc(dateKey).set(updates, { merge: true });
+                
+                if (!serviceDataMap[dateKey]) serviceDataMap[dateKey] = {};
+                if (!serviceDataMap[dateKey].liturgy) serviceDataMap[dateKey].liturgy = {};
+                serviceDataMap[dateKey].liturgy[field] = val;
+                
+                // Success - re-inject to update UI
+                injectServiceData(serviceDataMap);
+            } catch (err) {
+                console.error('Error saving verse selection:', err);
+                alert('Failed to save.');
+            } finally {
+                this.saving = false;
+            }
+        },
+
         // --- Pastoral Prayer Suggestions ---
         prayerSuggestions: { males: [], females: [] },
 
@@ -51,7 +74,11 @@ function calendarPage() {
         openPersonSelector(dateKey, field, current) {
             this.selectorDateKey = dateKey;
             this.selectorField = field;
-            this.selectedPersonRef = { id: current.id, name: current.name };
+            // Mutate in place rather than replacing the object — personPicker's x-data captures
+            // the selectedPersonRef object reference at init time, so replacing it disconnects
+            // personPicker.personRef from this.selectedPersonRef and savePersonSelection() reads stale data.
+            this.selectedPersonRef.id = current.id || null;
+            this.selectedPersonRef.name = current.name || '';
             this.selectorRoleName = this.getRoleName(field);
             
             // Set suggestions key if applicable
@@ -120,7 +147,12 @@ function calendarPage() {
                 const role = roleMap[this.selectorField];
 
                 if (this.selectorField === 'prayerMale' || this.selectorField === 'prayerFemale') {
+                    // Check proper nested structure first, then fall back to old dotted-key literal field format
                     oldId = (svc.liturgy && svc.liturgy[this.selectorField]) ? svc.liturgy[this.selectorField].id : null;
+                    if (!oldId) {
+                        const dottedKey = `liturgy.${this.selectorField}`;
+                        oldId = svc[dottedKey] ? svc[dottedKey].id : null;
+                    }
                 }
 
                 let metadata = null;
@@ -165,14 +197,45 @@ function calendarPage() {
                     }
                 }
 
-                const updates = {};
+                const updates = {
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                // Update Optimistic Local State
+                if (!serviceDataMap[this.selectorDateKey]) serviceDataMap[this.selectorDateKey] = {};
+                const localSvc = serviceDataMap[this.selectorDateKey];
+
                 if (this.selectorField === 'prayerMale' || this.selectorField === 'prayerFemale') {
-                    if (!svc.liturgy) updates.liturgy = {};
-                    updates[`liturgy.${this.selectorField}`] = { id: newId || null, name: this.selectedPersonRef.name || '' };
+                    // Update liturgy in Firestore
+                    const currentLiturgy = (svc.liturgy && typeof svc.liturgy === 'object') ? { ...svc.liturgy } : {};
+                    currentLiturgy[this.selectorField] = { id: newId || null, name: this.selectedPersonRef.name || '' };
+                    updates.liturgy = currentLiturgy;
+
+                    // Sync names to Guide elements if they exist
+                    if (svc.guide && svc.guide.elements) {
+                        const prayerEl = svc.guide.elements.find(el => el.type === 'pastoral_prayer');
+                        if (prayerEl) {
+                            if (this.selectorField === 'prayerMale') prayerEl.maleMember = this.selectedPersonRef.name || '';
+                            if (this.selectorField === 'prayerFemale') prayerEl.femaleMember = this.selectedPersonRef.name || '';
+                            updates.guide = svc.guide;
+                        }
+                    }
+
+                    // Update Local State
+                    if (!localSvc.liturgy) localSvc.liturgy = {};
+                    localSvc.liturgy[this.selectorField] = { id: newId || null, name: this.selectedPersonRef.name || '' };
                 } else {
                     updates[this.selectorField] = this.selectedPersonRef.name || '';
                     if (idField) updates[idField] = newId || null;
+
+                    // Update Local State
+                    localSvc[this.selectorField] = this.selectedPersonRef.name || '';
+                    if (idField) localSvc[idField] = newId || null;
                 }
+
+                // Trigger optimistic update
+                injectServiceData(serviceDataMap);
+
                 batch.set(serviceRef, updates, { merge: true });
                 await batch.commit();
 
@@ -187,6 +250,7 @@ function calendarPage() {
                 }
 
                 this.showPersonSelector = false;
+                // Full reload to ensure everything is perfectly in sync with Firestore
                 if (window.loadServiceData) await window.loadServiceData();
             } catch (error) {
                 console.error('Error saving person selection:', error);
@@ -522,6 +586,7 @@ function renderTable(grouped) {
     thead.innerHTML = `
         <tr>
             <th class="px-md py-sm border-b border-outline-variant sticky-col-left">Date</th>
+            <th class="px-md py-sm border-b border-outline-variant">Sermon</th>
             <th class="px-md py-sm border-b border-outline-variant">Theme</th>
             <th class="px-md py-sm border-b border-outline-variant">Leader</th>
             <th class="px-md py-sm border-b border-outline-variant">Preacher</th>
@@ -567,8 +632,11 @@ function renderTable(grouped) {
                         <td class="px-md py-md whitespace-nowrap sticky-col-left">
                             <span class="font-body-md text-on-surface">${date.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
                         </td>
+                        <td class="px-md py-md min-w-[160px]">
+                            <div class="sermon-cell font-body-md text-primary text-sm">—</div>
+                        </td>
                         <td class="px-md py-md min-w-[200px]">
-                            <div class="theme-cell font-body-md text-primary text-sm line-clamp-2">—</div>
+                            <div class="theme-cell font-body-md text-on-surface-variant text-sm line-clamp-2">—</div>
                         </td>
                         <td class="px-md py-md whitespace-nowrap">
                             <div class="leader-cell font-body-md text-on-surface-variant text-sm">—</div>
@@ -629,7 +697,34 @@ async function loadServiceData() {
         const snapshot = await db.collection('services').get();
         serviceDataMap = {};
         snapshot.forEach(doc => {
-            serviceDataMap[doc.id] = doc.data();
+            const raw = doc.data();
+
+            // Older saves used set() with merge and dotted key names like 'liturgy.sermon',
+            // which Firestore stores as a literal field name containing a dot rather than
+            // as a nested path. Normalize those back into their proper nested structure so
+            // the display code (which reads svc.liturgy.sermon) finds the value.
+            const data = {};
+            for (const [key, val] of Object.entries(raw)) {
+                if (!key.includes('.')) {
+                    data[key] = val;
+                }
+            }
+            for (const [key, val] of Object.entries(raw)) {
+                if (key.includes('.')) {
+                    const parts = key.split('.');
+                    let obj = data;
+                    for (let i = 0; i < parts.length - 1; i++) {
+                        if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) {
+                            obj[parts[i]] = {};
+                        }
+                        obj = obj[parts[i]];
+                    }
+                    const leaf = parts[parts.length - 1];
+                    if (!obj[leaf]) obj[leaf] = val;
+                }
+            }
+
+            serviceDataMap[doc.id] = data;
         });
 
         injectServiceData(serviceDataMap);
@@ -745,6 +840,12 @@ function injectServiceData(serviceMap) {
                 indicator.title = 'Irregular Service';
                 dateCell.appendChild(indicator);
             }
+        }
+
+        const sermonCell = el.querySelector('.sermon-cell');
+        if (sermonCell) {
+            sermonCell.textContent = (svc.liturgy && svc.liturgy.sermon) || '—';
+            if (canEdit) setupInlineEdit(sermonCell, dateKey, 'sermon');
         }
 
         const themeCell = el.querySelector('.theme-cell');
@@ -886,6 +987,147 @@ function setupInlineEdit(el, dateKey, field) {
             return;
         }
 
+        if (field === 'sermon') {
+            const currentVal = el.textContent === '—' ? '' : el.textContent;
+
+            // Fix flicker by checking if already editing this cell
+            if (el.querySelector('.verse-picker-inline')) return;
+
+            const originalDisplay = el.style.display;
+            const pickerHtml = `
+                <div x-data="versePicker('${currentVal}')"
+                     class="verse-picker-inline relative w-full">
+                    <div class="flex items-center bg-surface-container-low rounded border border-primary px-2 py-1">
+                        <input type="text" x-model="query" @input="value = query" @focus="open = true" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" placeholder="e.g. Romans 8:28-39">
+                        <button @click="toggle()" class="text-secondary hover:text-primary transition-colors cursor-pointer">
+                            <span class="material-symbols-outlined text-[18px]">menu_book</span>
+                        </button>
+                    </div>
+                    <div x-show="open" x-transition class="verse-picker-dropdown">
+                        <div class="verse-picker-header">
+                            <div class="verse-picker-breadcrumbs">
+                                <button @click="step = 'book'; if(selectingRangeEnd){rangeBook=''}else{selectedBook=''}" class="verse-picker-btn verse-picker-btn-book" style="padding: 2px 4px; font-size: 10px;" x-text="breadcrumbBook"></button>
+                                <template x-if="activeBook">
+                                    <div class="flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                                        <button @click="step = 'chapter'; if(selectingRangeEnd){rangeChapter=null}else{selectedChapter=null}" class="verse-picker-btn verse-picker-btn-chapter" style="padding: 2px 4px; font-size: 10px;" x-text="breadcrumbChapter"></button>
+                                    </div>
+                                </template>
+                                <template x-if="activeChapter">
+                                    <div class="flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                                        <span class="text-secondary" x-text="breadcrumbVerse"></span>
+                                    </div>
+                                </template>
+                            </div>
+                            <button @click="open = false" class="text-secondary hover:text-primary cursor-pointer flex items-center">
+                                <span class="material-symbols-outlined text-sm">close</span>
+                            </button>
+                        </div>
+                        
+                        <div class="verse-picker-grid h-32" style="grid-template-columns: repeat(4, minmax(0, 1fr))" x-show="step === 'book'">
+                            <template x-for="book in filteredBooks" :key="book">
+                                <button @click="selectBook(book)" class="verse-picker-btn verse-picker-btn-book" :class="activeBook === book ? 'verse-picker-btn-active' : ''" x-text="book"></button>
+                            </template>
+                        </div>
+
+                        <div class="verse-picker-grid h-32" style="grid-template-columns: repeat(6, minmax(0, 1fr))" x-show="step === 'chapter'">
+                            <template x-for="chapter in chapters" :key="chapter">
+                                <button @click="selectChapter(chapter)" class="verse-picker-btn verse-picker-btn-chapter" :class="activeChapter === chapter ? 'verse-picker-btn-active' : ''" x-text="chapter"></button>
+                            </template>
+                        </div>
+
+                        <div class="p-2 flex flex-col" x-show="step === 'verse'">
+                            <div class="verse-picker-grid h-24" style="grid-template-columns: repeat(6, minmax(0, 1fr))">
+                                <template x-for="verse in verses" :key="verse">
+                                    <button @click="selectVerse(verse)" class="verse-picker-btn verse-picker-btn-verse" 
+                                        :class="{
+                                            'verse-picker-btn-active': (!selectingRangeEnd && selectedVerse === verse) || (selectingRangeEnd && rangeVerse === verse),
+                                            'border-primary/50 text-primary/60': selectingRangeEnd && verse === selectedVerse && rangeBook === selectedBook && rangeChapter === selectedChapter && rangeVerse !== verse
+                                        }" 
+                                        x-text="verse"></button>
+                                </template>
+                            </div>
+                            <template x-if="selectedVerse !== null && !selectingRangeEnd">
+                                <button @click="startRangeSelection()" class="verse-picker-range-btn">
+                                    <span class="material-symbols-outlined text-[14px] align-middle mr-1">arrow_right_alt</span>
+                                    Range
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            el.style.display = 'none';
+
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = pickerHtml.trim();
+            const pickerEl = tempDiv.firstChild;
+            
+            el.parentElement.appendChild(pickerEl);
+            
+            const closePicker = async () => {
+                if (!pickerEl.isConnected) return;
+
+                // Read the current value from Alpine before removing the element
+                const alpineData = window.Alpine ? Alpine.$data(pickerEl) : null;
+                const finalVal = (alpineData ? alpineData.query : '').trim();
+
+                pickerEl.remove();
+                el.style.display = originalDisplay;
+
+                if (finalVal !== currentVal) {
+                    try {
+                        const ref = db.collection('services').doc(dateKey);
+                        try {
+                            // update() interprets dot notation as a nested field path.
+                            // set() with merge treats 'liturgy.sermon' as a literal key name.
+                            await ref.update({
+                                'liturgy.sermon': finalVal,
+                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                        } catch (e) {
+                            if (e.code !== 'not-found') throw e;
+                            // Document doesn't exist yet — create it
+                            await ref.set({
+                                liturgy: { sermon: finalVal },
+                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                        }
+                        if (!serviceDataMap[dateKey]) serviceDataMap[dateKey] = {};
+                        if (!serviceDataMap[dateKey].liturgy) serviceDataMap[dateKey].liturgy = {};
+                        serviceDataMap[dateKey].liturgy.sermon = finalVal;
+                        injectServiceData(serviceDataMap);
+                    } catch (err) {
+                        console.error('Error saving sermon reference:', err);
+                        alert('Failed to save.');
+                    }
+                }
+            };
+
+            // Initialize Alpine on the new element
+            if (window.Alpine) {
+                Alpine.initTree(pickerEl);
+                setTimeout(() => {
+                    const input = pickerEl.querySelector('input');
+                    if (input) input.focus();
+                }, 10);
+            }
+
+            // Dismiss picker when clicking outside — use capture so it runs before Alpine
+            const outsideClickHandler = (e) => {
+                if (!pickerEl.contains(e.target)) {
+                    closePicker();
+                    document.removeEventListener('click', outsideClickHandler, true);
+                }
+            };
+            // Defer attachment so the opening click doesn't immediately close it
+            setTimeout(() => document.addEventListener('click', outsideClickHandler, true), 50);
+
+            return;
+        }
+
         const currentVal = el.textContent === '—' ? '' : el.textContent;
         const input = document.createElement('input');
         input.type = 'text';
@@ -922,7 +1164,6 @@ function setupInlineEdit(el, dateKey, field) {
 
                     if (field === 'baptism') {
                         updates.hasBaptism = newVal !== '';
-                        updates['liturgy.baptism'] = newVal;
                     } else {
                         updates[field] = newVal;
                     }
@@ -932,7 +1173,16 @@ function setupInlineEdit(el, dateKey, field) {
                         updates[idFieldMap[field]] = null;
                     }
 
+                    // set() with merge is correct for top-level fields (creates the doc if needed).
                     await db.collection('services').doc(dateKey).set(updates, { merge: true });
+
+                    // Baptism also writes into the nested liturgy map — must use update() so
+                    // dot notation is interpreted as a field path, not a literal key name.
+                    if (field === 'baptism') {
+                        await db.collection('services').doc(dateKey).update({
+                            'liturgy.baptism': newVal
+                        });
+                    }
                     
                     // Update global map to keep views in sync if they toggle
                     if (!serviceDataMap[dateKey]) serviceDataMap[dateKey] = {};
@@ -969,6 +1219,14 @@ function setupInlineEdit(el, dateKey, field) {
         };
     };
 }
+
+window.openVersePicker = (dateKey, field, current) => {
+    const body = document.querySelector('body');
+    const alpineData = Alpine.$data(body);
+    if (alpineData && alpineData.openVersePicker) {
+        alpineData.openVersePicker(dateKey, field, current);
+    }
+};
 
 /**
  * Global bridge to Alpine person selector modal

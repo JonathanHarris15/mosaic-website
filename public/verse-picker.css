@@ -1,1 +1,116 @@
-/* Styles moved to service-builder.html for Tailwind CDN compatibility */
+/* Verse Picker Styles */
+.verse-picker-dropdown {
+    position: absolute;
+    z-index: 9999;
+    margin-top: 4px;
+    width: 320px;
+    background-color: #ffffff;
+    border: 1px solid #c5c6d0; /* outline-variant */
+    border-radius: 12px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.verse-picker-header {
+    background-color: #f6f3ed; /* surface-container-low */
+    padding: 8px 16px;
+    border-bottom: 1px solid #c5c6d0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+}
+
+.verse-picker-breadcrumbs {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #436082; /* secondary */
+}
+
+.verse-picker-grid {
+    padding: 8px;
+    display: grid;
+    gap: 4px;
+    overflow-y: auto;
+}
+
+.verse-picker-btn {
+    padding: 8px;
+    border-radius: 8px;
+    text-align: center;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: transparent;
+}
+
+.verse-picker-btn:hover {
+    background-color: #d8e2ff; /* primary-fixed */
+    color: #001a43; /* primary */
+}
+
+.verse-picker-btn-book {
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.verse-picker-btn-chapter, .verse-picker-btn-verse {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.verse-picker-btn-active {
+    background-color: #001a43 !important; /* primary */
+    color: #ffffff !important;
+    border-color: #001a43 !important;
+}
+
+.verse-picker-range-btn {
+    margin-top: 8px;
+    width: 100%;
+    text-align: center;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #436082; /* secondary */
+    border: 1px solid #c5c6d0;
+    border-radius: 8px;
+    padding: 6px 0;
+    transition: all 0.2s;
+    cursor: pointer;
+    background: #ffffff;
+}
+
+.verse-picker-range-btn:hover {
+    color: #001a43;
+    border-color: #001a43;
+    background-color: rgba(216, 226, 255, 0.2);
+}
+
+.verse-picker-range-indicator {
+    margin-top: 8px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #001a43;
+    background-color: rgba(216, 226, 255, 0.3);
+    border: 1px solid rgba(216, 226, 255, 0.5);
+    border-radius: 8px;
+    padding: 6px 0;
+}

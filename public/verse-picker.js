@@ -98,9 +98,11 @@ document.addEventListener('alpine:init', () => {
             }
 
             if (this.selectedVerse === null) {
+                // Wait — don't save yet; let the user decide whether to add a range
                 this.selectedVerse = verse;
-                this.updateValue();
             } else if (this.selectedVerse === verse) {
+                // Second click on same verse = confirm single verse
+                this.updateValue();
                 this.open = false;
             } else {
                 // Same-chapter range

@@ -273,7 +273,29 @@ function serviceForm() {
         async load() {
             const doc = await db.collection('services').doc(this.date).get();
             if (doc.exists) {
-                const data = doc.data();
+                const raw = doc.data();
+
+                // Normalize literal dotted-key fields (e.g. 'liturgy.sermon') created by
+                // older saves that used set() with merge, which stores them as top-level
+                // field names containing a dot rather than as nested paths.
+                const data = {};
+                for (const [key, val] of Object.entries(raw)) {
+                    if (!key.includes('.')) data[key] = val;
+                }
+                for (const [key, val] of Object.entries(raw)) {
+                    if (key.includes('.')) {
+                        const parts = key.split('.');
+                        let obj = data;
+                        for (let i = 0; i < parts.length - 1; i++) {
+                            if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) {
+                                obj[parts[i]] = {};
+                            }
+                            obj = obj[parts[i]];
+                        }
+                        const leaf = parts[parts.length - 1];
+                        if (!obj[leaf]) obj[leaf] = val;
+                    }
+                }
                 // Update top-level properties
                 this.service.theme = data.theme || '';
                 this.service.keyVerse = data.keyVerse || '';
@@ -320,6 +342,8 @@ function serviceForm() {
                         }
                     }
                 }
+                // Store guide data to preserve/update it during save
+                this.service.guide = data.guide || null;
             }
             this.originalService = JSON.stringify(this.service);
         },
@@ -587,8 +611,19 @@ function serviceForm() {
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
+                // Sync Pastoral Prayer names to Guide elements if they exist
+                if (this.service.guide && this.service.guide.elements) {
+                    const prayerEl = this.service.guide.elements.find(el => el.type === 'pastoral_prayer');
+                    if (prayerEl) {
+                        prayerEl.maleMember = this.service.liturgy.prayerMale.name || '';
+                        prayerEl.femaleMember = this.service.liturgy.prayerFemale.name || '';
+                        toSave.guide = this.service.guide;
+                    }
+                }
+
                 const serviceRef = db.collection('services').doc(this.date);
-                batch.set(serviceRef, toSave);
+                // Use merge: true to preserve other top-level fields (like 'guide' if it wasn't updated here)
+                batch.set(serviceRef, toSave, { merge: true });
 
                 await batch.commit();
                 this.originalService = JSON.stringify(this.service);
