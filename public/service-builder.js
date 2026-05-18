@@ -819,11 +819,20 @@ function serviceForm() {
                             const margin = 10;
                             const titleFontSize = 14;
                             const titlePadding = 8;
+                            let topOffset = 0;
+
+                            // Add Theme of Service on the first page only
+                            if (pagesAdded === 0 && this.service.theme) {
+                                pdf.setFont("helvetica", "bold");
+                                pdf.setFontSize(12);
+                                pdf.text(`Theme of Service: ${this.service.theme}`, pageWidth / 2, margin, { align: 'center' });
+                                topOffset = 10; // Shift everything else down
+                            }
                             
                             // Draw Title
                             pdf.setFont("helvetica", "bold");
                             pdf.setFontSize(titleFontSize);
-                            pdf.text(hymn.hymn_name || 'Hymn', pageWidth / 2, margin + 5, { align: 'center' });
+                            pdf.text(hymn.hymn_name || 'Hymn', pageWidth / 2, margin + topOffset + 5, { align: 'center' });
 
                             // Get image dimensions safely
                             const img = new Image();
@@ -838,7 +847,7 @@ function serviceForm() {
 
                             // Available space for the image
                             const maxWidth = pageWidth - (margin * 2);
-                            const maxHeight = pageHeight - (margin * 2) - titleFontSize - titlePadding;
+                            const maxHeight = pageHeight - (margin * 2) - titleFontSize - titlePadding - topOffset;
 
                             // Calculate scaling ratio to fit BOTH dimensions (prevents clipping)
                             const ratio = Math.min(maxWidth / imgWidth, maxHeight / imgHeight);
@@ -848,7 +857,7 @@ function serviceForm() {
                             // Center the image in the available space
                             const dx = (pageWidth - dw) / 2;
                             // Start image below the title area
-                            const dy = margin + titleFontSize + titlePadding + (maxHeight - dh) / 2;
+                            const dy = margin + topOffset + titleFontSize + titlePadding + (maxHeight - dh) / 2;
 
                             pdf.addImage(imgData, format, dx, dy, dw, dh, undefined, 'FAST');
                             pagesAdded++;
