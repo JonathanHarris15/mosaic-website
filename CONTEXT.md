@@ -1,5 +1,67 @@
 # Mosaic Domain Model
 
+## Language
+
+**Elder**:
+A church officer with a shepherding role. The canonical term in code (role: `elder`).
+_Avoid_: Shepherd (use only as UI-facing label, never in code identifiers)
+
+**Shepherding System**:
+The set of features accessible to Elders and super admins. Surfaces in the UI as the "Shepherd Landing Page."
+_Avoid_: Elder Dashboard, Elder System
+
+**Elder Meeting**:
+A formal gathering of Elders (e.g., a consistory or session meeting). Produces Meeting Minutes.
+_Avoid_: Check-in, pastoral meeting
+
+**Meeting Minutes**:
+The official record of an Elder Meeting. A standalone document with a title, date, and a Note Body. Stored in the `elder_meetings` Firestore collection. Displayed on a split-pane page: full list by default, clicking a record collapses the list to a sidebar and opens the Note Module editor in the main area.
+_Avoid_: Notes, summary
+
+**Shepherding Note**:
+A typed, dated record attached to a Person's Shepherding Profile. Has a Note Type, an optional Subject Line, and a Note Body. Written by an Elder. Visible to all Elders and super admins. Any elder or super admin can edit or delete any note.
+_Avoid_: Member note, pastoral note, check-in (use only as a Note Type value, not as the concept itself)
+
+**Subject Line**:
+An optional short plain-text field on a Shepherding Note. Serves as its human-readable identifier in the @-mention picker and in the note card header. Falls back to Note Type + date when absent.
+_Avoid_: Title, heading, label
+
+**Note Type**:
+The category of a Shepherding Note. Known types: Elder Check-in, Elder Interview, Life Update, Other. Extensible.
+_Avoid_: Note category, note tag
+
+**Note Body**:
+The rich-text content of a Shepherding Note or Meeting Minutes record. Stored as TipTap JSON. May contain Cross-References.
+_Avoid_: Content, text, body (use Note Body as the full compound term)
+
+**Note Module**:
+The shared TipTap-based editor component used to author both Shepherding Notes and Meeting Minutes. Provides the @-mention Cross-Reference picker. Mounted in different surrounding UIs depending on context (inline panel on Shepherding Profile; split-pane editor on Meeting Minutes page).
+_Avoid_: Editor, rich text editor, text area
+
+**Cross-Reference**:
+An inline link embedded in a Note Body that points to a Person, Shepherding Note, or Meeting Minutes record. Triggered by typing `@` in the Note Module editor. Rendered as a styled chip. Stores the referenced entity's ID, kind (`person` | `note` | `meeting`), and label at write time. If the referenced entity is later deleted, renders as a greyed-out chip with the original label and `[removed]`. Reminders, tags, note types, and other metadata are not Cross-Referenceable.
+_Avoid_: Link, mention, tag (tag refers to Shepherding Tag)
+
+**Shepherding Profile**:
+The elder-only view of an existing Person record. Displays all Shepherding Notes for that Person. The underlying Person is created and managed in the People Manager; the Shepherding Profile layers on top of it.
+_Avoid_: Member page, elder profile
+
+**Filtered View**:
+A shared, elder-configured saved filter over the People list that appears as a table widget on every elder's Shepherd Landing Page. Any elder or super admin can create, edit, or delete one.
+_Avoid_: Custom table, saved search, widget
+
+**Follow-up Reminder**:
+A standalone dated reminder visible to all elders on the Shepherd Landing Page. Can optionally @mention one or more Persons. Any elder or super admin can create one. Automatically disappears after its due date. Push notification delivery to specific elders is a planned future feature.
+_Avoid_: Task, to-do, alert
+
+**Shepherding Tag**:
+An elder-defined label that can be applied to a Person within the Shepherding System. Tags are the primary filter criterion for Filtered Views. Any elder or super admin can create, delete, or apply/remove tags on a Person. Examples: "Red Flag", "New Member Follow-up", "Married".
+_Avoid_: Label, category, attribute
+
+**Red Flag**:
+A Shepherding Tag (not a built-in field) used as the canonical example of elder-defined tagging. No special UI treatment beyond being a tag.
+_Avoid_: Alert, priority, built-in status
+
 ## Core Entities
 
 ### Person
