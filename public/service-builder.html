@@ -1552,12 +1552,7 @@
                 </button>
             </div>
 
-            <!-- Irregular Toggle -->
-            <button @click="toggleIrregular()" 
-                class="text-secondary/40 hover:text-primary transition-colors duration-200 flex items-center gap-1.5 px-4 py-2 rounded-lg hover:bg-surface-container text-[10px] font-label-md uppercase tracking-widest">
-                <span class="material-symbols-outlined text-[16px]" x-text="service.isIrregular ? 'layers' : 'layers_clear'"></span>
-                <span x-text="service.isIrregular ? 'Switch to Regular Service' : 'Make Irregular Service'"></span>
-            </button>
+            <!-- Irregular Toggle (hidden until re-enabled) -->
         </div>
 
         <!-- 15. Destructive Actions -->
