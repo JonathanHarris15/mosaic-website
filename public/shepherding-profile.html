@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Shepherding Profile | Mosaic</title>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "inverse-primary": "#b2c6f8",
+                        "surface-variant": "#e5e2dc",
+                        "on-primary": "#ffffff",
+                        "primary": "#001a43",
+                        "on-primary-fixed-variant": "#314670",
+                        "on-tertiary-container": "#67a1b5",
+                        "on-secondary-fixed-variant": "#2b4969",
+                        "surface-container-low": "#f6f3ed",
+                        "tertiary": "#001f28",
+                        "on-tertiary-fixed": "#001f28",
+                        "secondary-container": "#b9d7fe",
+                        "secondary-fixed-dim": "#abc9ef",
+                        "surface": "#fcf9f3",
+                        "outline-variant": "#c5c6d0",
+                        "primary-container": "#1a3059",
+                        "secondary": "#436082",
+                        "on-secondary": "#ffffff",
+                        "on-surface": "#1c1c18",
+                        "primary-fixed": "#d8e2ff",
+                        "surface-container-highest": "#e5e2dc",
+                        "on-primary-container": "#8499c8",
+                        "on-secondary-fixed": "#001d36",
+                        "surface-dim": "#dcdad4",
+                        "on-secondary-container": "#415e7f",
+                        "on-surface-variant": "#44474e",
+                        "tertiary-container": "#003643",
+                        "primary-fixed-dim": "#b2c6f8",
+                        "tertiary-fixed-dim": "#95cfe4",
+                        "tertiary-fixed": "#b5ebff",
+                        "on-primary-fixed": "#001a42",
+                        "error": "#ba1a1a",
+                        "surface-bright": "#fcf9f3",
+                        "on-background": "#1c1c18",
+                        "on-tertiary-fixed-variant": "#004e60",
+                        "secondary-fixed": "#d1e4ff",
+                        "on-tertiary": "#ffffff",
+                        "on-error": "#ffffff",
+                        "inverse-surface": "#31312d",
+                        "on-error-container": "#93000a",
+                        "outline": "#75777f",
+                        "surface-container": "#f0eee8",
+                        "surface-container-high": "#ebe8e2",
+                        "inverse-on-surface": "#f3f0ea",
+                        "surface-tint": "#4a5e8a",
+                        "surface-container-lowest": "#ffffff",
+                        "background": "#fcf9f3",
+                        "error-container": "#ffdad6"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"
+                    },
+                    spacing: {
+                        "gutter": "24px", "base": "8px", "md": "24px", "xs": "4px",
+                        "xl": "80px", "margin": "32px", "sm": "12px", "lg": "48px"
+                    },
+                    fontFamily: {
+                        "headline-md": ["Noto Serif"], "display-lg": ["Noto Serif"],
+                        "label-md": ["Work Sans"], "headline-lg": ["Noto Serif"],
+                        "body-lg": ["Work Sans"], "body-md": ["Work Sans"]
+                    },
+                    fontSize: {
+                        "headline-md": ["24px", { lineHeight: "1.3", fontWeight: "600" }],
+                        "display-lg": ["48px", { lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700" }],
+                        "label-md": ["14px", { lineHeight: "1.2", letterSpacing: "0.05em", fontWeight: "600" }],
+                        "headline-lg": ["32px", { lineHeight: "1.2", fontWeight: "600" }],
+                        "body-lg": ["18px", { lineHeight: "1.6", fontWeight: "400" }],
+                        "body-md": ["16px", { lineHeight: "1.5", fontWeight: "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        [x-cloak] { display: none !important; }
+        .ProseMirror { outline: none; min-height: 180px; padding: 16px; }
+        .ProseMirror p { margin: 0 0 0.5em; }
+        .ProseMirror p:last-child { margin-bottom: 0; }
+        .ProseMirror ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.5em; }
+        .ProseMirror ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 0.5em; }
+        .ProseMirror li p { margin: 0; }
+        .note-body p { margin: 0 0 0.4em; }
+        .note-body p:last-child { margin-bottom: 0; }
+        .note-body ul { list-style-type: disc; padding-left: 1.4em; margin-bottom: 0.4em; }
+        .note-body ol { list-style-type: decimal; padding-left: 1.4em; margin-bottom: 0.4em; }
+        .note-body li p { margin: 0; }
+        .mention-chip { display:inline; background:#d8e2ff; color:#001a42; border-radius:3px; padding:0 4px; font-weight:500; text-decoration:none; cursor:pointer; }
+        a.mention-chip:hover { background:#b2c6f8; }
+        .ProseMirror .mention-chip { cursor:default; }
+        .ProseMirror table { border-collapse:collapse; width:100%; margin-bottom:0.5em; table-layout:fixed; }
+        .ProseMirror th, .ProseMirror td { border:1px solid #c5c6d0; padding:4px 8px; min-width:50px; position:relative; vertical-align:top; }
+        .ProseMirror th { background:#f0eee8; font-weight:600; }
+        .selectedCell { background:#d8e2ff !important; }
+        .note-table { border-collapse:collapse; width:100%; margin-bottom:0.5em; }
+        .note-table th, .note-table td { border:1px solid #c5c6d0; padding:4px 8px; text-align:left; vertical-align:top; }
+        .note-table th { background:#f0eee8; font-weight:600; }
+    </style>
+    <style>
+        .profile-layout { display: grid; gap: 32px; align-items: start; }
+        @media (min-width: 1024px) { .profile-layout { grid-template-columns: 320px 1fr; } }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="auth.js"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+
+<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+      x-data="shepherdingProfile" x-cloak>
+
+    <!-- Header -->
+    <header class="w-full max-w-[1600px] mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
+        <a href="shepherding-people.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
+            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+            <span class="font-label-md text-label-md">People</span>
+        </a>
+        <div id="auth-container" class="flex items-center">
+            <div class="h-10"></div>
+        </div>
+    </header>
+
+    <!-- Loading state -->
+    <div x-show="loading" class="flex-grow flex items-center justify-center">
+        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    </div>
+
+    <!-- Main content -->
+    <main x-show="!loading && person" class="flex-grow max-w-[1600px] w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
+
+        <!-- Person Header -->
+        <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-md">
+            <div class="flex flex-col gap-xs">
+                <h1 class="font-headline-lg text-headline-lg text-primary" x-text="person?.name"></h1>
+                <div class="flex flex-wrap items-center gap-sm">
+                    <span class="font-label-md text-label-md text-on-surface-variant capitalize"
+                          x-text="person?.sex || 'Unknown'"></span>
+                    <template x-if="person?.contact?.email">
+                        <span class="font-label-md text-label-md text-on-surface-variant" x-text="person?.contact?.email"></span>
+                    </template>
+                    <template x-if="person?.contact?.phone">
+                        <span class="font-label-md text-label-md text-on-surface-variant" x-text="person?.contact?.phone"></span>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <div class="profile-layout">
+
+            <!-- Left column: Tags -->
+            <div class="flex flex-col gap-md">
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-md">
+                    <h2 class="font-headline-md text-headline-md text-primary">Shepherding Tags</h2>
+
+                    <!-- Applied tags -->
+                    <div class="flex flex-wrap gap-xs">
+                        <template x-for="tagId in (person?.tags || [])" :key="tagId">
+                            <span class="flex items-center gap-xs px-sm py-xs bg-primary text-on-primary rounded-full font-label-md text-label-md">
+                                <span x-text="getTagName(tagId)"></span>
+                                <button @click="toggleTag(tagId)" class="hover:opacity-70 transition-opacity">
+                                    <span class="material-symbols-outlined text-[14px]">close</span>
+                                </button>
+                            </span>
+                        </template>
+                        <span x-show="(person?.tags || []).length === 0"
+                              class="text-on-surface-variant italic text-sm">No tags applied.</span>
+                    </div>
+
+                    <!-- Add tags -->
+                    <div class="flex flex-col gap-xs">
+                        <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider text-xs">Add tag</span>
+                        <div class="flex flex-wrap gap-xs">
+                            <template x-for="tag in shepherdingTags.filter(t => !hasTag(t.id))" :key="tag.id">
+                                <button @click="toggleTag(tag.id)"
+                                    class="px-sm py-xs bg-surface-container text-on-surface hover:bg-surface-container-high rounded-full font-label-md text-label-md transition-colors flex items-center gap-xs">
+                                    <span class="material-symbols-outlined text-[14px]">add</span>
+                                    <span x-text="tag.name"></span>
+                                </button>
+                            </template>
+                            <span x-show="shepherdingTags.filter(t => !hasTag(t.id)).length === 0 && shepherdingTags.length > 0"
+                                  class="text-on-surface-variant italic text-sm">All tags applied.</span>
+                        </div>
+                    </div>
+
+                    <!-- Create new tag -->
+                    <div class="flex flex-col gap-xs pt-xs border-t border-outline-variant">
+                        <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider text-xs">Create tag</span>
+                        <div class="flex gap-xs">
+                            <input type="text" x-model="newTagName"
+                                   placeholder="New tag name…"
+                                   @keydown.enter="createTag()"
+                                   class="flex-grow border border-outline-variant rounded-lg px-sm py-xs font-body-md text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                            <button @click="createTag()"
+                                :disabled="!newTagName.trim()"
+                                class="px-sm py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                                Create
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right column: Notes -->
+            <div class="flex flex-col gap-md">
+                <div class="flex items-center justify-between">
+                    <h2 class="font-headline-md text-headline-md text-primary">Shepherding Notes</h2>
+                    <button x-show="!showNoteEditor" @click="openAddNote()"
+                        class="flex items-center gap-1 px-md py-xs bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary/90 transition-colors">
+                        <span class="material-symbols-outlined text-[18px]">add</span>
+                        Add Note
+                    </button>
+                </div>
+
+                <!-- Inline rich-text editor -->
+                <div x-show="showNoteEditor" x-cloak
+                     class="bg-surface-container-lowest border border-outline-variant rounded-xl flex flex-col">
+
+                    <!-- Editor header -->
+                    <div class="flex items-center justify-between px-lg py-md border-b border-outline-variant">
+                        <h3 class="font-headline-md text-headline-md text-on-surface"
+                            x-text="editingNote ? 'Edit Note' : 'New Note'"></h3>
+                        <button @click="closeEditor()"
+                            class="text-on-surface-variant hover:text-on-surface transition-colors">
+                            <span class="material-symbols-outlined text-[20px]">close</span>
+                        </button>
+                    </div>
+
+                    <!-- Note type + subject -->
+                    <div class="flex gap-sm flex-wrap px-lg py-md border-b border-outline-variant">
+                        <label class="flex flex-col gap-xs flex-shrink-0">
+                            <span class="font-label-md text-label-md text-on-surface-variant">Note type</span>
+                            <select x-model="noteForm.type"
+                                    class="border border-outline-variant rounded-lg pl-sm pr-8 py-xs font-body-md text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                                <template x-for="type in noteTypes" :key="type">
+                                    <option :value="type" x-text="type"></option>
+                                </template>
+                            </select>
+                        </label>
+                        <label class="flex flex-col gap-xs flex-grow min-w-0">
+                            <span class="font-label-md text-label-md text-on-surface-variant">
+                                Title <span class="opacity-50 normal-case">(optional)</span>
+                            </span>
+                            <input type="text" x-model="noteForm.subject"
+                                   placeholder="Brief title…"
+                                   class="border border-outline-variant rounded-lg px-sm py-xs font-body-md text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                        </label>
+                    </div>
+
+                    <!-- Toolbar -->
+                    <div class="flex items-center flex-wrap gap-xs px-md py-xs border-b border-outline-variant bg-surface-container">
+
+                        <!-- Font Family -->
+                        <select @change="setFontFamily($event.target.value)"
+                                class="border border-outline-variant rounded px-2 py-1 text-xs font-label-md text-on-surface-variant bg-surface-container hover:bg-surface-container-high focus:outline-none focus:ring-1 focus:ring-primary/30 cursor-pointer">
+                            <option value="">Font</option>
+                            <option value="Work Sans, sans-serif">Work Sans</option>
+                            <option value="Noto Serif, serif">Noto Serif</option>
+                            <option value="monospace">Monospace</option>
+                        </select>
+
+                        <!-- Font Size -->
+                        <select @change="setFontSize($event.target.value)"
+                                class="border border-outline-variant rounded px-2 py-1 text-xs font-label-md text-on-surface-variant bg-surface-container hover:bg-surface-container-high focus:outline-none focus:ring-1 focus:ring-primary/30 cursor-pointer">
+                            <option value="">Size</option>
+                            <option value="12px">Small (12)</option>
+                            <option value="14px">14</option>
+                            <option value="16px">Normal (16)</option>
+                            <option value="18px">18</option>
+                            <option value="20px">Large (20)</option>
+                            <option value="24px">24</option>
+                            <option value="32px">Heading</option>
+                        </select>
+
+                        <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+
+                        <!-- Bold -->
+                        <button type="button" @mousedown.prevent="editorCmd('toggleBold')"
+                            :class="editorUpdated >= 0 && isActive('bold') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
+                            class="w-8 h-8 rounded flex items-center justify-center font-bold text-sm transition-colors"
+                            title="Bold (Ctrl+B)">B</button>
+                        <!-- Italic -->
+                        <button type="button" @mousedown.prevent="editorCmd('toggleItalic')"
+                            :class="editorUpdated >= 0 && isActive('italic') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
+                            class="w-8 h-8 rounded flex items-center justify-center italic text-sm transition-colors"
+                            title="Italic (Ctrl+I)">I</button>
+                        <!-- Underline -->
+                        <button type="button" @mousedown.prevent="editorCmd('toggleUnderline')"
+                            :class="editorUpdated >= 0 && isActive('underline') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
+                            class="w-8 h-8 rounded flex items-center justify-center underline text-sm transition-colors"
+                            title="Underline (Ctrl+U)">U</button>
+
+                        <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+
+                        <!-- Bullet list -->
+                        <button type="button" @mousedown.prevent="editorCmd('toggleBulletList')"
+                            :class="editorUpdated >= 0 && isActive('bulletList') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
+                            class="w-8 h-8 rounded flex items-center justify-center transition-colors"
+                            title="Bullet list">
+                            <span class="material-symbols-outlined text-[16px]">format_list_bulleted</span>
+                        </button>
+                        <!-- Ordered list -->
+                        <button type="button" @mousedown.prevent="editorCmd('toggleOrderedList')"
+                            :class="editorUpdated >= 0 && isActive('orderedList') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
+                            class="w-8 h-8 rounded flex items-center justify-center transition-colors"
+                            title="Numbered list">
+                            <span class="material-symbols-outlined text-[16px]">format_list_numbered</span>
+                        </button>
+
+                        <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+
+                        <!-- Highlight -->
+                        <div class="relative" x-data="{ open: false }">
+                            <button type="button" @mousedown.prevent="open = !open"
+                                :class="editorUpdated >= 0 && isActive('highlight') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
+                                class="w-8 h-8 rounded flex items-center justify-center transition-colors"
+                                title="Highlight text">
+                                <span class="material-symbols-outlined text-[16px]">highlight</span>
+                            </button>
+                            <div x-show="open" style="display:none;min-width:116px"
+                                 class="absolute top-full left-0 mt-1 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-md z-50 p-2 flex flex-wrap gap-1">
+                                <button type="button" @mousedown.prevent="setHighlight('#fef08a'); open = false"
+                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#fef08a" title="Yellow"></button>
+                                <button type="button" @mousedown.prevent="setHighlight('#bbf7d0'); open = false"
+                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#bbf7d0" title="Green"></button>
+                                <button type="button" @mousedown.prevent="setHighlight('#bfdbfe'); open = false"
+                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#bfdbfe" title="Blue"></button>
+                                <button type="button" @mousedown.prevent="setHighlight('#fecaca'); open = false"
+                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#fecaca" title="Red"></button>
+                                <button type="button" @mousedown.prevent="setHighlight('#fed7aa'); open = false"
+                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#fed7aa" title="Orange"></button>
+                                <button type="button" @mousedown.prevent="setHighlight('#f0abfc'); open = false"
+                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#f0abfc" title="Purple"></button>
+                                <button type="button" @mousedown.prevent="setHighlight(null); open = false"
+                                    class="w-6 h-6 rounded border border-outline-variant hover:bg-surface-container flex items-center justify-center text-on-surface-variant"
+                                    title="Remove highlight">
+                                    <span class="material-symbols-outlined text-[12px]">close</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Insert table -->
+                        <div class="flex items-center gap-xs" x-data="{ tRows: 3, tCols: 3 }">
+                            <span class="font-label-md text-label-md text-on-surface-variant text-xs">Table</span>
+                            <input type="number" x-model.number="tRows" min="1" max="20"
+                                   class="w-10 h-6 border border-outline-variant rounded px-1 text-xs text-center bg-surface focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                   title="Rows" />
+                            <span class="text-xs text-on-surface-variant leading-none">×</span>
+                            <input type="number" x-model.number="tCols" min="1" max="20"
+                                   class="w-10 h-6 border border-outline-variant rounded px-1 text-xs text-center bg-surface focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                   title="Cols" />
+                            <button type="button" @mousedown.prevent="insertTable(tRows, tCols)"
+                                class="w-6 h-6 rounded flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors"
+                                title="Insert table">
+                                <span class="material-symbols-outlined text-[14px]">add</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Table editing toolbar (contextual) -->
+                    <div x-show="editorUpdated >= 0 && isActive('table')"
+                         style="display:none"
+                         class="flex items-center flex-wrap gap-xs px-md py-xs border-b border-outline-variant bg-secondary-container/30">
+                        <span class="font-label-md text-label-md text-on-surface-variant text-xs mr-xs">Table:</span>
+                        <button type="button" @mousedown.prevent="editorCmd('addColumnBefore')"
+                            class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors"
+                            title="Add column before">+ Col ←</button>
+                        <button type="button" @mousedown.prevent="editorCmd('addColumnAfter')"
+                            class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors"
+                            title="Add column after">+ Col →</button>
+                        <button type="button" @mousedown.prevent="editorCmd('deleteColumn')"
+                            class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-error/10 hover:text-error rounded transition-colors"
+                            title="Delete column">− Col</button>
+                        <div class="w-px h-4 bg-outline-variant mx-xs"></div>
+                        <button type="button" @mousedown.prevent="editorCmd('addRowBefore')"
+                            class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors"
+                            title="Add row above">+ Row ↑</button>
+                        <button type="button" @mousedown.prevent="editorCmd('addRowAfter')"
+                            class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors"
+                            title="Add row below">+ Row ↓</button>
+                        <button type="button" @mousedown.prevent="editorCmd('deleteRow')"
+                            class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-error/10 hover:text-error rounded transition-colors"
+                            title="Delete row">− Row</button>
+                        <div class="w-px h-4 bg-outline-variant mx-xs"></div>
+                        <button type="button" @mousedown.prevent="editorCmd('deleteTable')"
+                            class="px-2 py-1 text-xs font-label-md text-error hover:bg-error/10 rounded transition-colors"
+                            title="Delete table">Delete table</button>
+                    </div>
+
+                    <!-- TipTap editor mount point -->
+                    <div id="tiptap-note-editor"
+                         class="font-body-md text-on-surface bg-surface-container-lowest cursor-text"
+                         @click="focusEditor()">
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex justify-end gap-sm px-lg py-md border-t border-outline-variant">
+                        <button @click="closeEditor()"
+                            class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">
+                            Cancel
+                        </button>
+                        <button @click="saveNote()"
+                            class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors">
+                            <span x-text="editingNote ? 'Save Changes' : 'Add Note'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <div x-show="notes.length === 0 && !showNoteEditor" class="text-on-surface-variant italic text-sm">
+                    No notes yet. Add the first one.
+                </div>
+
+                <div class="flex flex-col gap-md">
+                    <template x-for="note in notes.filter(n => !editingNote || n.id !== editingNote.id)" :key="note.id">
+                        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-sm">
+                            <div class="flex items-start justify-between gap-sm">
+                                <div class="flex flex-wrap items-center gap-sm">
+                                    <span class="px-sm py-xs bg-secondary-container text-on-secondary-container rounded font-label-md text-label-md"
+                                          x-text="note.type"></span>
+                                    <template x-if="note.subject">
+                                        <span class="font-body-md text-on-surface font-semibold text-sm" x-text="note.subject"></span>
+                                    </template>
+                                    <span class="font-label-md text-label-md text-on-surface-variant"
+                                          x-text="formatDate(note.createdAt)"></span>
+                                    <span class="font-label-md text-label-md text-on-surface-variant"
+                                          x-text="'by ' + (note.authorName || 'Unknown')"></span>
+                                    <template x-if="note.updatedAt">
+                                        <span class="font-label-md text-label-md text-outline italic">(edited)</span>
+                                    </template>
+                                </div>
+                                <div class="flex items-center gap-xs flex-shrink-0">
+                                    <button @click="openEditNote(note)"
+                                        class="text-on-surface-variant hover:text-primary transition-colors">
+                                        <span class="material-symbols-outlined text-[18px]">edit</span>
+                                    </button>
+                                    <button @click="deleteNote(note.id)"
+                                        class="text-on-surface-variant hover:text-error transition-colors">
+                                        <span class="material-symbols-outlined text-[18px]">delete</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="font-body-md text-on-surface note-body border-t border-outline-variant pt-sm mt-xs" x-html="renderNoteHtml(note)"></div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast -->
+    <div x-show="toast.show" x-cloak x-transition
+         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-lg py-sm rounded-lg shadow-lg font-label-md text-label-md"
+         :class="toast.type === 'error' ? 'bg-error text-on-error' : 'bg-inverse-surface text-inverse-on-surface'">
+        <span x-text="toast.message"></span>
+    </div>
+
+    <script src="shepherding-profile.js"></script>
+</body>
+</html>

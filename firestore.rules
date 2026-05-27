@@ -12,6 +12,11 @@ service cloud.firestore {
       return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['editor', 'admin', 'elder', 'super_admin'];
     }
 
+    // Helper to check if user is elder or super_admin
+    function isElder() {
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['elder', 'super_admin'];
+    }
+
     match /users/{userId} {
       // Allow users to read their own document
       allow read: if request.auth != null && request.auth.uid == userId;
@@ -59,6 +64,40 @@ service cloud.firestore {
     match /people_tags/{tagId} {
       allow read: if true;
       allow create, update, delete: if isEditor();
+    }
+
+    // Shepherding System — elders and super_admins only
+    match /shepherding_tags/{tagId} {
+      allow read, write: if isElder();
+    }
+
+    match /shepherding_views/{viewId} {
+      allow read, write: if isElder();
+    }
+
+    match /shepherding_reminders/{reminderId} {
+      allow read, write: if isElder();
+    }
+
+    match /elder_meetings/{meetingId} {
+      allow read, write: if isElder();
+    }
+
+    match /elder_documents/{docId} {
+      allow read, write: if isElder();
+    }
+
+    match /elder_document_structure/{docId} {
+      allow read, write: if isElder();
+    }
+
+    match /people/{personId}/shepherding_notes/{noteId} {
+      allow read, write: if isElder();
+    }
+
+    // Collection group query for shepherding_notes (used by People list page)
+    match /{path=**}/shepherding_notes/{noteId} {
+      allow read: if isElder();
     }
   }
 }
