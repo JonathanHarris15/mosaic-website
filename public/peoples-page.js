@@ -525,11 +525,12 @@ document.addEventListener('alpine:init', () => {
         get filteredPeople() {
             let list = [...this.people];
             
-            // Filter out people with tags marked as hidePeople: true for non-admins
+            // Filter out people with tags marked as hidePeople: true for non-admins,
+            // or explicitly hidden by the shepherding system
             if (!this.isAdmin) {
                 list = list.filter(p => {
                     const personTags = p.tags || [];
-                    return !personTags.some(tag => this.tagMetadata[tag]?.hidePeople);
+                    return !personTags.some(tag => this.tagMetadata[tag]?.hidePeople) && !p.shepherdingHidden;
                 });
             }
             

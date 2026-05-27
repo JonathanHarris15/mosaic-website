@@ -15,7 +15,7 @@ A formal gathering of Elders (e.g., a consistory or session meeting). Produces M
 _Avoid_: Check-in, pastoral meeting
 
 **Meeting Minutes**:
-The official record of an Elder Meeting. A standalone document with a title, date, and a Note Body. Stored in the `elder_meetings` Firestore collection. Displayed on a split-pane page: full list by default, clicking a record collapses the list to a sidebar and opens the Note Module editor in the main area.
+The official record of an Elder Meeting. An Elder Document stored in the `elder_documents` collection, organised within the Document Library. The `elder_meetings` collection is superseded by `elder_documents`.
 _Avoid_: Notes, summary
 
 **Shepherding Note**:
@@ -27,7 +27,7 @@ An optional short plain-text field on a Shepherding Note. Serves as its human-re
 _Avoid_: Title, heading, label
 
 **Note Type**:
-The category of a Shepherding Note. Known types: Elder Check-in, Elder Interview, Life Update, Other. Extensible.
+The category of a Shepherding Note. Known types: Elder Check-in, Elder Interview, Elder Meeting, Life Update, Other. 'Elder Meeting' is the default type for notes created via a Person Panel inside an Elder Document. Extensible.
 _Avoid_: Note category, note tag
 
 **Note Body**:
@@ -39,7 +39,7 @@ The shared TipTap-based editor component used to author both Shepherding Notes a
 _Avoid_: Editor, rich text editor, text area
 
 **Cross-Reference**:
-An inline link embedded in a Note Body that points to a Person, Shepherding Note, or Meeting Minutes record. Triggered by typing `@` in the Note Module editor. Rendered as a styled chip. Stores the referenced entity's ID, kind (`person` | `note` | `meeting`), and label at write time. If the referenced entity is later deleted, renders as a greyed-out chip with the original label and `[removed]`. Reminders, tags, note types, and other metadata are not Cross-Referenceable.
+An inline link embedded in a Note Body that points to a Person, Shepherding Note, Elder Document, or Folder. Triggered by typing `@` in the Note Module editor. Rendered as a styled chip. Stores the referenced entity's ID, kind (`person` | `note` | `elder_document` | `elder_folder`), and label at write time. The former `meeting` kind is superseded by `elder_document`. Reminders, tags, note types, and other metadata are not Cross-Referenceable.
 _Avoid_: Link, mention, tag (tag refers to Shepherding Tag)
 
 **Shepherding Profile**:
