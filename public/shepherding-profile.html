@@ -456,6 +456,14 @@
                                 </div>
                             </div>
                             <div class="font-body-md text-on-surface note-body border-t border-outline-variant pt-sm mt-xs" x-html="renderNoteHtml(note)"></div>
+                            <template x-if="note.sourceDocumentId">
+                                <div class="flex items-center gap-xs pt-xs border-t border-outline-variant mt-xs">
+                                    <span class="material-symbols-outlined text-[12px] text-on-surface-variant">article</span>
+                                    <a :href="'shepherding-document.html?id=' + note.sourceDocumentId"
+                                       class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors"
+                                       x-text="'From: ' + (sourceDocTitles[note.sourceDocumentId] || 'Document') + ' →'"></a>
+                                </div>
+                            </template>
                         </div>
                     </template>
                 </div>

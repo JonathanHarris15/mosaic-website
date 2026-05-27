@@ -1,4 +1,4 @@
-const NOTE_TYPES = ['Elder Check-in', 'Elder Interview', 'Life Update', 'Other'];
+const NOTE_TYPES = ['Elder Check-in', 'Elder Interview', 'Elder Meeting Minutes', 'Life Update', 'Other'];
 
 // Kept outside Alpine to avoid reactive proxying of the TipTap editor object
 let _noteEditor = null;
@@ -276,6 +276,7 @@ document.addEventListener('alpine:init', () => {
         person: null,
 
         notes: [],
+        sourceDocTitles: {},
         showNoteEditor: false,
         editingNote: null,
         noteForm: { type: 'Elder Check-in', subject: '', contentJson: null },
@@ -342,6 +343,20 @@ document.addEventListener('alpine:init', () => {
                     .orderBy('createdAt', 'desc')
                     .get();
                 this.notes = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                const sourceIds = [...new Set(this.notes.map(n => n.sourceDocumentId).filter(Boolean))];
+                if (sourceIds.length > 0) {
+                    const results = await Promise.allSettled(
+                        sourceIds.map(id => db.collection('elder_documents').doc(id).get())
+                    );
+                    const titles = {};
+                    results.forEach((r, i) => {
+                        if (r.status === 'fulfilled' && r.value.exists) {
+                            titles[sourceIds[i]] = r.value.data().title || 'Untitled Document';
+                        }
+                    });
+                    this.sourceDocTitles = titles;
+                }
             } catch (e) {
                 console.error('Error loading notes:', e);
             }
@@ -558,8 +573,26 @@ document.addEventListener('alpine:init', () => {
         },
 
         async deleteNote(id) {
+            const note = this.notes.find(n => n.id === id);
+            if (!note) return;
             if (!confirm('Delete this note? This cannot be undone.')) return;
             try {
+                if (note.sourceDocumentId) {
+                    await this._detachPanelFromDocument(note.sourceDocumentId, note.id, note.contentJson, note.content);
+                    // Notify any open document tab so it can replace the panel live
+                    try {
+                        const bc = new BroadcastChannel('mosaic-shepherding');
+                        bc.postMessage({
+                            type: 'note-deleted',
+                            noteId: note.id,
+                            sourceDocumentId: note.sourceDocumentId,
+                            personName: this.person?.name || '',
+                            noteType: note.type || '',
+                            bodySnapshot: note.contentJson ? JSON.stringify(note.contentJson) : null,
+                        });
+                        bc.close();
+                    } catch (_) {}
+                }
                 await db.collection('people').doc(this.personId)
                     .collection('shepherding_notes').doc(id).delete();
                 this.notes = this.notes.filter(n => n.id !== id);
@@ -567,6 +600,47 @@ document.addEventListener('alpine:init', () => {
             } catch (e) {
                 console.error('Error deleting note:', e);
                 this.showToast('Error deleting note', 'error');
+            }
+        },
+
+        async _detachPanelFromDocument(docId, noteId, noteContentJson, noteText) {
+            try {
+                const docSnap = await db.collection('elder_documents').doc(docId).get();
+                if (!docSnap.exists) return;
+                const docData = docSnap.data();
+                const contentJson = docData.contentJson;
+                if (!contentJson || !contentJson.content) return;
+
+                let changed = false;
+                const newContent = [];
+                for (const node of contentJson.content) {
+                    if (node.type === 'personPanel' && node.attrs && node.attrs.noteId === noteId) {
+                        const personName = node.attrs.personName || '';
+                        const noteType = node.attrs.noteType || '';
+                        const headerText = [personName, noteType].filter(Boolean).join(' — ');
+                        const headerPara = {
+                            type: 'paragraph',
+                            content: [{ type: 'text', text: headerText, marks: [{ type: 'bold' }] }],
+                        };
+                        const bodyNodes = (noteContentJson && noteContentJson.content && noteContentJson.content.length > 0)
+                            ? noteContentJson.content
+                            : noteText
+                                ? [{ type: 'paragraph', content: [{ type: 'text', text: noteText }] }]
+                                : [];
+                        newContent.push(headerPara, ...bodyNodes);
+                        changed = true;
+                    } else {
+                        newContent.push(node);
+                    }
+                }
+
+                if (!changed) return;
+                await db.collection('elder_documents').doc(docId).update({
+                    contentJson: { ...contentJson, content: newContent },
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                });
+            } catch (e) {
+                console.error('Error detaching panel from document:', e);
             }
         },
 
