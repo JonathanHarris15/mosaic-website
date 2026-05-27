@@ -1032,9 +1032,16 @@
                     </div>
                 </div>
 
-                <!-- Pastoral Prayer Members (Male & Female) -->
+                <!-- Prayer Type + Members -->
                 <div class="mt-4 grid grid-cols-1 gap-4 p-4 bg-surface-container-low rounded-xl border border-outline-variant/50">
                     <div class="field-group !mb-0 md:flex-row md:items-center md:justify-between md:gap-8">
+                        <label class="field-label !text-[10px]">Prayer Type</label>
+                        <select x-model="service.liturgy.prayerLabel" class="w-full md:ml-auto md:max-w-md bg-white rounded-lg border border-outline-variant px-3 py-1.5 text-sm" :disabled="!canEdit">
+                            <option value="Pastoral Prayer">Pastoral Prayer</option>
+                            <option value="Congregational Prayer">Congregational Prayer</option>
+                        </select>
+                    </div>
+                    <div x-show="service.liturgy.prayerLabel !== 'Congregational Prayer'" class="field-group !mb-0 md:flex-row md:items-center md:justify-between md:gap-8">
                         <label class="field-label !text-[10px]">Male Being Prayed For</label>
                         <div x-data="personPicker(service.liturgy.prayerMale, 'males')" 
                              @click.away="open = false"
@@ -1086,7 +1093,7 @@
                         </div>
                     </div>
 
-                    <div class="field-group !mb-0 md:flex-row md:items-center md:justify-between md:gap-8">
+                    <div x-show="service.liturgy.prayerLabel !== 'Congregational Prayer'" class="field-group !mb-0 md:flex-row md:items-center md:justify-between md:gap-8">
                         <label class="field-label !text-[10px]">Female Being Prayed For</label>
                         <div x-data="personPicker(service.liturgy.prayerFemale, 'females')" 
                              class="input-container relative transition-all"
@@ -1545,12 +1552,7 @@
                 </button>
             </div>
 
-            <!-- Irregular Toggle -->
-            <button @click="toggleIrregular()" 
-                class="text-secondary/40 hover:text-primary transition-colors duration-200 flex items-center gap-1.5 px-4 py-2 rounded-lg hover:bg-surface-container text-[10px] font-label-md uppercase tracking-widest">
-                <span class="material-symbols-outlined text-[16px]" x-text="service.isIrregular ? 'layers' : 'layers_clear'"></span>
-                <span x-text="service.isIrregular ? 'Switch to Regular Service' : 'Make Irregular Service'"></span>
-            </button>
+            <!-- Irregular Toggle (hidden until re-enabled) -->
         </div>
 
         <!-- 15. Destructive Actions -->

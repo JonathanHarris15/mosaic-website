@@ -50,6 +50,8 @@ function guideEditor() {
                 // Construct initial elements if not already saved
                 if (self.elements.length === 0) {
                     self.generateDefaultElements();
+                } else {
+                    self.fixBrokenElements();
                 }
 
                 if (self.userRole === 'admin' || self.userRole === 'editor') {
@@ -73,6 +75,44 @@ function guideEditor() {
                     }, { deep: true });
                 }
             });
+        },
+
+        fixBrokenElements() {
+            const liturgy = this.service.liturgy || {};
+            const hasBaptism = this.service.hasBaptism;
+            const shouldHaveHymn2 = !hasBaptism && liturgy.hymn2?.name;
+            const hasHymn2 = this.elements.some(el => el.id.startsWith('hymn-h2'));
+
+            if (!shouldHaveHymn2 || hasHymn2) return;
+
+            // Saved guide is missing hymn2 — regenerate from scratch,
+            // preserving any content already filled in for prayer, kids, and announcements.
+            const savedPrayer = JSON.parse(JSON.stringify(
+                this.elements.find(el => el.type === 'pastoral_prayer') || null
+            ));
+            const savedKids = JSON.parse(JSON.stringify(
+                this.elements.find(el => el.type === 'kids_section') || null
+            ));
+            const savedAnnouncements = JSON.parse(JSON.stringify(
+                this.elements.find(el => el.type === 'announcements') || null
+            ));
+
+            this.generateDefaultElements();
+
+            if (savedPrayer) {
+                const el = this.elements.find(e => e.type === 'pastoral_prayer');
+                if (el) Object.assign(el, savedPrayer);
+            }
+            if (savedKids) {
+                const el = this.elements.find(e => e.type === 'kids_section');
+                if (el) Object.assign(el, savedKids);
+            }
+            if (savedAnnouncements) {
+                const el = this.elements.find(e => e.type === 'announcements');
+                if (el) Object.assign(el, savedAnnouncements);
+            }
+
+            this.hasChanges = true;
         },
 
         generateDefaultElements() {
@@ -119,10 +159,13 @@ function guideEditor() {
                 }
             };
 
-            // Sequential Flow: Title -> OOS -> Preparatory -> Hymn 1 -> Mid 1 -> Mid 2 -> Pastoral Prayer
+            // Sequential Flow: Title -> OOS -> Preparatory -> Hymn 1 -> [Hymn 2 + Mid 1 if no baptism] -> Mid 2 -> Pastoral Prayer
             addHymnPages(liturgy.preparatoryHymn, 'hymn-prep');
             addHymnPages(liturgy.hymn1, 'hymn-h1');
-            addHymnPages(liturgy.hymnMid1, 'hymn-m1');
+            if (!this.service.hasBaptism) {
+                addHymnPages(liturgy.hymn2, 'hymn-h2');
+                addHymnPages(liturgy.hymnMid1, 'hymn-m1');
+            }
             addHymnPages(liturgy.hymnMid2, 'hymn-m2');
 
             // Pastoral Prayer (Pre-initialized with demographic fields)

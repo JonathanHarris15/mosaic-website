@@ -1,7 +1,7 @@
 function calendarPage() {
     return {
         view: localStorage.getItem('calendarView') || 'list',
-        showHistory: (localStorage.getItem('showHistory') === 'true'),
+        showHistory: false,
         showDirectory: false,
 
         // --- Person Selector Modal ---
@@ -306,7 +306,6 @@ function calendarPage() {
                 if (window.refreshCalendar) window.refreshCalendar(this.showHistory);
             });
             this.$watch('showHistory', val => {
-                localStorage.setItem('showHistory', val);
                 if (window.refreshCalendar) window.refreshCalendar(val);
             });
         }
