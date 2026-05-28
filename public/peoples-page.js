@@ -18,6 +18,7 @@ document.addEventListener('alpine:init', () => {
             email: '',
             phone: '',
             address: '',
+            birthday: '',
             sex: '' // '' or 'male' or 'female'
         },
         
@@ -270,6 +271,9 @@ document.addEventListener('alpine:init', () => {
                 if (!this.mergeTarget.contact?.address && this.mergeSource.contact?.address) {
                     updates['contact.address'] = this.mergeSource.contact.address;
                 }
+                if (!this.mergeTarget.birthday && this.mergeSource.birthday) {
+                    updates.birthday = this.mergeSource.birthday;
+                }
                 if (!this.mergeTarget.sex && this.mergeSource.sex) {
                     updates.sex = this.mergeSource.sex;
                 }
@@ -362,13 +366,14 @@ document.addEventListener('alpine:init', () => {
                         phone: (this.newPerson.phone || '').trim(),
                         address: (this.newPerson.address || '').trim()
                     },
+                    birthday: this.newPerson.birthday || null,
                     sex: this.newPerson.sex || null,
                     lastPastoralPrayerDate: null,
                     tags: [],
                     createdAt: now,
                     updatedAt: now
                 });
-                this.newPerson = { name: '', email: '', phone: '', address: '', sex: '' };
+                this.newPerson = { name: '', email: '', phone: '', address: '', birthday: '', sex: '' };
                 await this.loadPeople();
                 this.showAddPersonModal = false;
                 this.showToast('Person added successfully');
@@ -412,6 +417,7 @@ document.addEventListener('alpine:init', () => {
                     'contact.email': (this.selectedPerson.contact?.email || '').trim(),
                     'contact.phone': (this.selectedPerson.contact?.phone || '').trim(),
                     'contact.address': (this.selectedPerson.contact?.address || '').trim(),
+                    birthday: this.selectedPerson.birthday || null,
                     sex: this.selectedPerson.sex || null,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };

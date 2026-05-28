@@ -61,6 +61,10 @@ export function analyticsPage() {
             return ['elder', 'super_admin'].includes(this.currentUserRole);
         },
 
+        get isEditor() {
+            return ['editor', 'elder', 'admin', 'super_admin'].includes(this.currentUserRole);
+        },
+
         async loadTagMetadata() {
             try {
                 const snap = await db.collection('people_tags').get();

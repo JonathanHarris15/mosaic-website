@@ -12,6 +12,20 @@ document.addEventListener('alpine:init', () => {
         tagFilterMode: 'any',
         sortBy: 'name',
 
+        showAddPersonModal: false,
+        newPerson: {
+            name: '',
+            email: '',
+            phone: '',
+            address: '',
+            birthday: '',
+            sex: ''
+        },
+        isSubmitting: false,
+
+        showTagManagementModal: false,
+        tagPerson: null,
+
         loading: true,
         toast: { show: false, message: '', type: 'success' },
 
@@ -122,6 +136,86 @@ document.addEventListener('alpine:init', () => {
         getTagName(tagId) {
             const tag = this.shepherdingTags.find(t => t.id === tagId);
             return tag ? tag.name : tagId;
+        },
+
+        async addPerson() {
+            const name = this.newPerson.name.trim();
+            if (!name) return;
+            
+            this.isSubmitting = true;
+            try {
+                const now = firebase.firestore.FieldValue.serverTimestamp();
+                const docRef = await db.collection('people').add({
+                    name: name,
+                    totalInvolvements: 0,
+                    contact: {
+                        email: (this.newPerson.email || '').trim(),
+                        phone: (this.newPerson.phone || '').trim(),
+                        address: (this.newPerson.address || '').trim()
+                    },
+                    birthday: this.newPerson.birthday || null,
+                    sex: this.newPerson.sex || null,
+                    lastPastoralPrayerDate: null,
+                    tags: [],
+                    createdAt: now,
+                    updatedAt: now
+                });
+                
+                const newId = docRef.id;
+                this.newPerson = { name: '', email: '', phone: '', address: '', birthday: '', sex: '' };
+                await this.loadPeople();
+                this.showAddPersonModal = false;
+                this.showToast('Person added successfully');
+                
+                // Redirect to the new person's profile
+                window.location.href = `shepherding-profile.html?id=${newId}`;
+            } catch (e) {
+                console.error(e);
+                this.showToast('Error adding person', 'error');
+            } finally {
+                this.isSubmitting = false;
+            }
+        },
+
+        openTagManagement(person) {
+            this.tagPerson = { ...person };
+            if (!this.tagPerson.tags) this.tagPerson.tags = [];
+            this.showTagManagementModal = true;
+        },
+
+        async togglePersonTag(tagId) {
+            if (!this.tagPerson) return;
+            const hasIt = this.tagPerson.tags.includes(tagId);
+            const newTags = hasIt 
+                ? this.tagPerson.tags.filter(t => t !== tagId)
+                : [...this.tagPerson.tags, tagId];
+            
+            // Optimization: Apply hidePeople logic if relevant
+            const hidePeopleIds = new Set(this.shepherdingTags.filter(t => t.hidePeople).map(t => t.id));
+            const shepherdingHidden = newTags.some(id => hidePeopleIds.has(id));
+
+            try {
+                await db.collection('people').doc(this.tagPerson.id).update({
+                    tags: hasIt 
+                        ? firebase.firestore.FieldValue.arrayRemove(tagId)
+                        : firebase.firestore.FieldValue.arrayUnion(tagId),
+                    shepherdingHidden
+                });
+                
+                this.tagPerson.tags = newTags;
+                
+                // Update in main list
+                const idx = this.people.findIndex(p => p.id === this.tagPerson.id);
+                if (idx !== -1) {
+                    this.people[idx].tags = newTags;
+                    this.people[idx].shepherdingHidden = shepherdingHidden;
+                }
+                
+                this.showToast(`Tag ${hasIt ? 'removed' : 'applied'}`);
+            } catch (e) {
+                console.error('Error toggling person tag:', e);
+                this.showToast('Error updating tags', 'error');
+            }
         },
 
         formatLastNote(personId) {

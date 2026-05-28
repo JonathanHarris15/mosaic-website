@@ -147,16 +147,13 @@
 
         <!-- Person Header -->
         <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-md">
-            <div class="flex flex-col gap-xs">
+            <div class="flex flex-col gap-xs flex-grow">
                 <h1 class="font-headline-lg text-headline-lg text-primary" x-text="person?.name"></h1>
-                <div class="flex flex-wrap items-center gap-sm">
+                <div class="flex items-center gap-2 mt-1">
                     <span class="font-label-md text-label-md text-on-surface-variant capitalize"
                           x-text="person?.sex || 'Unknown'"></span>
-                    <template x-if="person?.contact?.email">
-                        <span class="font-label-md text-label-md text-on-surface-variant" x-text="person?.contact?.email"></span>
-                    </template>
-                    <template x-if="person?.contact?.phone">
-                        <span class="font-label-md text-label-md text-on-surface-variant" x-text="person?.contact?.phone"></span>
+                    <template x-if="person?.membership?.status">
+                        <span class="px-2 py-0.5 bg-secondary/10 text-secondary text-[10px] font-bold rounded-full uppercase tracking-widest border border-secondary/20" x-text="person.membership.status"></span>
                     </template>
                 </div>
             </div>
@@ -164,8 +161,50 @@
 
         <div class="profile-layout">
 
-            <!-- Left column: Tags -->
+            <!-- Left column: Info & Tags -->
             <div class="flex flex-col gap-md">
+                <!-- Member Details Panel -->
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-sm">
+                    <div class="flex items-center justify-between mb-1">
+                        <h2 class="font-headline-md text-headline-md text-primary">Member Details</h2>
+                        <button @click="openEditProfile()" class="text-secondary hover:text-primary transition-colors flex items-center gap-1 font-label-md text-label-md">
+                            <span class="material-symbols-outlined text-[18px]">edit</span>
+                            <span>Edit</span>
+                        </button>
+                    </div>
+
+                    <div class="flex flex-col gap-3">
+                        <template x-if="person?.contact?.email">
+                            <div class="flex items-center gap-3 text-on-surface-variant">
+                                <span class="material-symbols-outlined text-[20px]">mail</span>
+                                <span class="font-body-md text-sm" x-text="person.contact.email"></span>
+                            </div>
+                        </template>
+                        <template x-if="person?.contact?.phone">
+                            <div class="flex items-center gap-3 text-on-surface-variant">
+                                <span class="material-symbols-outlined text-[20px]">call</span>
+                                <span class="font-body-md text-sm" x-text="person.contact.phone"></span>
+                            </div>
+                        </template>
+                        <template x-if="person?.contact?.address">
+                            <div class="flex items-start gap-3 text-on-surface-variant">
+                                <span class="material-symbols-outlined text-[20px] mt-0.5">location_on</span>
+                                <span class="font-body-md text-sm" x-text="person.contact.address"></span>
+                            </div>
+                        </template>
+                        <template x-if="person?.birthday">
+                            <div class="flex items-center gap-3 text-secondary font-medium">
+                                <span class="material-symbols-outlined text-[20px]">cake</span>
+                                <span class="font-body-md text-sm" x-text="formatDate(person.birthday)"></span>
+                            </div>
+                        </template>
+                        <template x-if="!person?.contact?.email && !person?.contact?.phone && !person?.contact?.address && !person?.birthday">
+                            <p class="text-on-surface-variant italic text-sm">No contact details provided.</p>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Shepherding Tags Panel -->
                 <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-md">
                     <h2 class="font-headline-md text-headline-md text-primary">Shepherding Tags</h2>
 
@@ -469,6 +508,58 @@
                 </div>
             </div>
         </div>
+
+        <!-- Edit Profile Modal -->
+        <template x-if="showEditProfileModal">
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showEditProfileModal = false"></div>
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative flex flex-col max-h-[90vh]">
+                    <header class="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-container-low">
+                        <h3 class="font-headline text-lg text-primary font-bold">Edit Profile</h3>
+                        <button @click="showEditProfileModal = false" class="text-on-surface-variant hover:text-error transition-colors">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </header>
+                    <div class="p-6 overflow-y-auto custom-scrollbar space-y-4">
+                        <div class="flex flex-col gap-xs">
+                            <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Full Name</label>
+                            <input type="text" x-model="selectedPerson.name" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
+                        </div>
+                        <div class="flex flex-col gap-xs">
+                            <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email</label>
+                            <input type="email" x-model="selectedPerson.contact.email" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
+                        </div>
+                        <div class="flex flex-col gap-xs">
+                            <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Phone</label>
+                            <input type="tel" x-model="selectedPerson.contact.phone" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
+                        </div>
+                        <div class="flex flex-col gap-xs">
+                            <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Address</label>
+                            <textarea x-model="selectedPerson.contact.address" rows="2" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm"></textarea>
+                        </div>
+                        <div class="flex flex-col gap-xs">
+                            <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Birthday</label>
+                            <input type="date" x-model="selectedPerson.birthday" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
+                        </div>
+                        <div class="flex flex-col gap-xs">
+                            <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Sex</label>
+                            <select x-model="selectedPerson.sex" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
+                                <option value="">Unknown</option>
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                            </select>
+                        </div>
+                    </div>
+                    <footer class="p-4 border-t border-outline-variant bg-surface-container-low flex justify-end gap-3">
+                        <button @click="showEditProfileModal = false" class="px-4 py-2 text-sm font-label-md text-on-surface-variant hover:bg-surface-container transition-all">Cancel</button>
+                        <button @click="saveProfile()" :disabled="isSubmitting" class="px-6 py-2 bg-primary text-on-primary rounded-full text-sm font-label-md hover:bg-primary/90 transition-all shadow-sm flex items-center gap-2">
+                            <span x-show="isSubmitting" class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                            <span x-text="isSubmitting ? 'Saving...' : 'Save Changes'"></span>
+                        </button>
+                    </footer>
+                </div>
+            </div>
+        </template>
     </main>
 
     <!-- Toast -->

@@ -163,11 +163,23 @@
             <section class="flex-1 min-w-0 flex flex-col gap-md">
                 <div class="flex items-center justify-between">
                     <h2 class="font-headline-md text-headline-md text-primary">Filtered Views</h2>
-                    <button @click="showViewModal = true"
+                    <button @click="editingViewId = null; newView = { title: '', filterTags: [], filterMode: 'any' }; showViewModal = true"
                         class="flex items-center gap-1 px-md py-xs bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary/90 transition-colors">
                         <span class="material-symbols-outlined text-[18px]">add</span>
                         New View
                     </button>
+                </div>
+
+                <!-- View Selector Tabs -->
+                <div x-show="views.length > 0" class="flex flex-wrap gap-2">
+                    <template x-for="view in views" :key="view.id">
+                        <button @click="selectedViewId = (selectedViewId === view.id ? null : view.id)"
+                            :class="selectedViewId === view.id ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest border border-outline-variant text-on-surface-variant hover:bg-surface-container-low'"
+                            class="px-4 py-2 rounded-full font-label-md text-label-md transition-all shadow-sm flex items-center gap-2">
+                            <span x-text="view.title"></span>
+                            <span x-show="selectedViewId === view.id" class="material-symbols-outlined text-[14px]">close</span>
+                        </button>
+                    </template>
                 </div>
 
                 <div x-show="views.length === 0" class="text-on-surface-variant italic text-sm">
@@ -175,7 +187,7 @@
                 </div>
 
                 <template x-for="view in views" :key="view.id">
-                    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden">
+                    <div x-show="selectedViewId === view.id" x-transition.opacity class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden">
                         <!-- View Header -->
                         <div class="flex items-center justify-between px-lg py-md border-b border-outline-variant">
                             <div class="flex flex-col gap-xs">
@@ -192,10 +204,16 @@
                                 <span x-show="!view.filterTags || view.filterTags.length === 0"
                                       class="font-label-md text-label-md text-on-surface-variant">Showing all active members</span>
                             </div>
-                            <button @click="deleteView(view.id)"
-                                class="text-on-surface-variant hover:text-error transition-colors flex-shrink-0">
-                                <span class="material-symbols-outlined text-[20px]">delete</span>
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <button @click="openEditView(view)"
+                                    class="text-on-surface-variant hover:text-primary transition-colors flex-shrink-0">
+                                    <span class="material-symbols-outlined text-[20px]">edit</span>
+                                </button>
+                                <button @click="deleteView(view.id)"
+                                    class="text-on-surface-variant hover:text-error transition-colors flex-shrink-0">
+                                    <span class="material-symbols-outlined text-[20px]">delete</span>
+                                </button>
+                            </div>
                         </div>
 
                         <!-- People Table -->
@@ -204,7 +222,6 @@
                                 <thead class="bg-surface-container">
                                     <tr>
                                         <th class="text-left px-lg py-sm font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Name</th>
-                                        <th class="text-left px-lg py-sm font-label-md text-label-md text-on-surface-variant uppercase tracking-wider hidden sm:table-cell">Status</th>
                                         <th class="text-left px-lg py-sm font-label-md text-label-md text-on-surface-variant uppercase tracking-wider hidden md:table-cell">Tags</th>
                                         <th class="px-lg py-sm"></th>
                                     </tr>
@@ -213,14 +230,6 @@
                                     <template x-for="person in getPeopleForView(view)" :key="person.id">
                                         <tr class="border-t border-outline-variant hover:bg-surface-container-low transition-colors">
                                             <td class="px-lg py-sm font-body-md text-on-surface" x-text="person.name"></td>
-                                            <td class="px-lg py-sm hidden sm:table-cell">
-                                                <span class="font-label-md text-label-md capitalize"
-                                                      :class="{
-                                                        'text-secondary': person.membership?.status === 'member',
-                                                        'text-on-surface-variant': person.membership?.status !== 'member'
-                                                      }"
-                                                      x-text="(person.membership?.status || 'unknown').replace('_', ' ')"></span>
-                                            </td>
                                             <td class="px-lg py-sm hidden md:table-cell">
                                                 <div class="flex flex-wrap gap-xs">
                                                     <template x-for="tagId in (person.tags || [])" :key="tagId">
@@ -312,12 +321,12 @@
         </div>
     </div>
 
-    <!-- Add Filtered View Modal -->
+    <!-- Add/Edit Filtered View Modal -->
     <div x-show="showViewModal" x-cloak
          class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
-         @click.self="showViewModal = false">
+         @click.self="showViewModal = false; editingViewId = null">
         <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-md flex flex-col gap-md">
-            <h2 class="font-headline-md text-headline-md text-primary">New Filtered View</h2>
+            <h2 class="font-headline-md text-headline-md text-primary" x-text="editingViewId ? 'Edit Filtered View' : 'New Filtered View'"></h2>
             <div class="flex flex-col gap-sm">
                 <label class="flex flex-col gap-xs">
                     <span class="font-label-md text-label-md text-on-surface-variant">View title</span>
@@ -357,12 +366,12 @@
                 </div>
             </div>
             <div class="flex justify-end gap-sm mt-xs">
-                <button @click="showViewModal = false; newView = { title: '', filterTags: [], filterMode: 'any' }"
+                <button @click="showViewModal = false; editingViewId = null; newView = { title: '', filterTags: [], filterMode: 'any' }"
                     class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">Cancel</button>
-                <button @click="addView()"
+                <button @click="editingViewId ? updateView() : addView()"
                     :disabled="!newView.title.trim()"
                     class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                    Create View
+                    <span x-text="editingViewId ? 'Save Changes' : 'Create View'"></span>
                 </button>
             </div>
         </div>

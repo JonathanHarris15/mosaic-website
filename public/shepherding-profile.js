@@ -282,6 +282,10 @@ document.addEventListener('alpine:init', () => {
         noteForm: { type: 'Elder Check-in', subject: '', contentJson: null },
         editorUpdated: 0,
 
+        showEditProfileModal: false,
+        selectedPerson: null,
+        isSubmitting: false,
+
         shepherdingTags: [],
         showTagPanel: false,
         newTagName: '',
@@ -705,11 +709,51 @@ document.addEventListener('alpine:init', () => {
             return tag ? tag.name : tagId;
         },
 
+        // ── Profile Editing ──────────────────────────────────────────────────
+
+        openEditProfile() {
+            this.selectedPerson = JSON.parse(JSON.stringify(this.person));
+            if (!this.selectedPerson.contact) this.selectedPerson.contact = {};
+            this.showEditProfileModal = true;
+        },
+
+        async saveProfile() {
+            if (!this.selectedPerson) return;
+            this.isSubmitting = true;
+            try {
+                const personRef = db.collection('people').doc(this.personId);
+                const updates = {
+                    name: this.selectedPerson.name.trim(),
+                    'contact.email': (this.selectedPerson.contact?.email || '').trim(),
+                    'contact.phone': (this.selectedPerson.contact?.phone || '').trim(),
+                    'contact.address': (this.selectedPerson.contact?.address || '').trim(),
+                    birthday: this.selectedPerson.birthday || null,
+                    sex: this.selectedPerson.sex || null,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                await personRef.update(updates);
+                this.person = { ...this.person, ...this.selectedPerson };
+                this.showEditProfileModal = false;
+                this.showToast('Profile updated');
+            } catch (e) {
+                console.error('Error updating profile:', e);
+                this.showToast('Error updating profile', 'error');
+            } finally {
+                this.isSubmitting = false;
+            }
+        },
+
         // ── Helpers ───────────────────────────────────────────────────────────
 
-        formatDate(timestamp) {
-            if (!timestamp) return '';
-            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+        formatDate(val) {
+            if (!val) return '';
+            // If it's a string like "YYYY-MM-DD"
+            if (typeof val === 'string' && val.includes('-')) {
+                const [y, m, d] = val.split('-');
+                return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+            }
+            const date = val.toDate ? val.toDate() : new Date(val);
             return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         },
 

@@ -9,6 +9,8 @@ document.addEventListener('alpine:init', () => {
         newReminder: { title: '', dueDatetime: '' },
 
         views: [],
+        selectedViewId: null,
+        editingViewId: null,
         showViewModal: false,
         newView: { title: '', filterTags: [], filterMode: 'any' },
 
@@ -132,7 +134,7 @@ document.addEventListener('alpine:init', () => {
         async addView() {
             if (!this.newView.title.trim()) return;
             try {
-                await db.collection('shepherding_views').add({
+                const docRef = await db.collection('shepherding_views').add({
                     title: this.newView.title.trim(),
                     filterTags: [...this.newView.filterTags],
                     filterMode: this.newView.filterMode,
@@ -143,6 +145,7 @@ document.addEventListener('alpine:init', () => {
                 this.newView = { title: '', filterTags: [], filterMode: 'any' };
                 this.showViewModal = false;
                 await this.loadViews();
+                this.selectedViewId = docRef.id;
                 this.showToast('Filtered view created');
             } catch (e) {
                 console.error('Error adding view:', e);
@@ -150,10 +153,47 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        openEditView(view) {
+            this.editingViewId = view.id;
+            this.newView = {
+                title: view.title,
+                filterTags: [...(view.filterTags || [])],
+                filterMode: view.filterMode || 'any'
+            };
+            this.showViewModal = true;
+        },
+
+        async updateView() {
+            if (!this.editingViewId || !this.newView.title.trim()) return;
+            try {
+                await db.collection('shepherding_views').doc(this.editingViewId).update({
+                    title: this.newView.title.trim(),
+                    filterTags: [...this.newView.filterTags],
+                    filterMode: this.newView.filterMode,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                });
+                this.newView = { title: '', filterTags: [], filterMode: 'any' };
+                this.showViewModal = false;
+                const updatedId = this.editingViewId;
+                this.editingViewId = null;
+                await this.loadViews();
+                this.selectedViewId = updatedId;
+                this.showToast('View updated');
+            } catch (e) {
+                console.error('Error updating view:', e);
+                this.showToast('Error updating view', 'error');
+            }
+        },
+
         async deleteView(id) {
+            if (!confirm('Are you sure you want to delete this view?')) return;
             try {
                 await db.collection('shepherding_views').doc(id).delete();
+                const idx = this.views.findIndex(v => v.id === id);
                 this.views = this.views.filter(v => v.id !== id);
+                if (this.selectedViewId === id) {
+                    this.selectedViewId = this.views.length > 0 ? this.views[Math.max(0, idx - 1)].id : null;
+                }
                 this.showToast('View deleted');
             } catch (e) {
                 console.error('Error deleting view:', e);

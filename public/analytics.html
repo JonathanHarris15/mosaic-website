@@ -90,11 +90,11 @@
                 <button @click="activeTab = 'hymns'" :class="activeTab === 'hymns' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">Hymn Usage</button>
                 <button @click="activeTab = 'bible'" :class="activeTab === 'bible' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">Bible Heat Map</button>
                 <button @click="activeTab = 'people'" :class="activeTab === 'people' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">People's Involvement</button>
-                <button @click="activeTab = 'praise'" :class="activeTab === 'praise' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">Pastoral Prayer</button>
+                <button x-show="isEditor" @click="activeTab = 'praise'" :class="activeTab === 'praise' ? 'tab-active' : 'text-on-surface-variant hover:text-primary'" class="px-8 py-4 transition-all duration-200">Pastoral Prayer</button>
             </div>
 
             <!-- Actions Area -->
-            <div x-show="activeTab === 'hymns' || activeTab === 'people' || activeTab === 'praise'" class="py-4">
+            <div x-show="activeTab === 'hymns' || activeTab === 'people' || (activeTab === 'praise' && isEditor)" class="py-4">
                 <div class="relative w-full max-w-md">
                     <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
                     <input type="text" x-model="activeTab === 'hymns' ? hymnSearch : (activeTab === 'people' ? peopleSearch : pastoralSearch)" :placeholder="activeTab === 'hymns' ? 'Filter by hymn name...' : (activeTab === 'people' ? 'Search people...' : 'Search members...')" 
@@ -489,7 +489,7 @@
                     </div>
 
                     <!-- Pastoral Prayer Tab -->
-                    <div x-show="activeTab === 'praise'" x-transition class="h-full py-6 flex flex-col overflow-hidden">
+                    <div x-show="activeTab === 'praise' && isEditor" x-transition class="h-full py-6 flex flex-col overflow-hidden">
                         <div class="flex gap-4 h-full overflow-hidden">
                             <!-- Males Column -->
                             <div class="card flex-1 overflow-hidden flex flex-col">

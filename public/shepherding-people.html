@@ -120,115 +120,142 @@
     <!-- Main content -->
     <main x-show="!loading" class="flex-grow max-w-7xl w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
 
-        <!-- Page Title -->
-        <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-md">
+        <!-- Page Title & Actions -->
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-md">
             <div>
                 <h1 class="font-headline-lg text-headline-lg text-primary">People</h1>
                 <p class="font-body-md text-body-md text-on-surface-variant mt-xs">
                     <span x-text="filteredPeople.length"></span> of <span x-text="people.length"></span> people shown
                 </p>
             </div>
-            <!-- Sort control -->
-            <div class="flex items-center gap-sm">
-                <span class="font-label-md text-label-md text-on-surface-variant">Sort by</span>
-                <div class="flex rounded-lg border border-outline-variant overflow-hidden">
-                    <button @click="sortBy = 'name'"
-                        :class="sortBy === 'name' ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container'"
-                        class="px-sm py-xs font-label-md text-label-md transition-colors">
-                        Name
-                    </button>
-                    <button @click="sortBy = 'attention'"
-                        :class="sortBy === 'attention' ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container'"
-                        class="px-sm py-xs font-label-md text-label-md transition-colors border-l border-outline-variant">
-                        Needs Attention
-                    </button>
+            
+            <div class="flex flex-col sm:flex-row items-center gap-md">
+                <button @click="showAddPersonModal = true"
+                    class="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-primary text-on-primary font-label-md text-label-md rounded-full hover:bg-primary/90 transition-all shadow-sm active:scale-95">
+                    <span class="material-symbols-outlined text-[20px]">person_add</span>
+                    <span>Add Person</span>
+                </button>
+
+                <!-- Sort control -->
+                <div class="flex items-center gap-sm bg-surface-container-low p-1 rounded-xl border border-outline-variant/30">
+                    <span class="font-label-md text-[11px] uppercase tracking-widest text-on-surface-variant px-2">Sort by</span>
+                    <div class="flex bg-surface-container-lowest rounded-lg border border-outline-variant/50 overflow-hidden shadow-sm">
+                        <button @click="sortBy = 'name'"
+                            :class="sortBy === 'name' ? 'bg-primary text-on-primary' : 'bg-transparent text-on-surface-variant hover:bg-surface-container'"
+                            class="px-4 py-2 font-label-md text-label-md transition-colors">
+                            Name
+                        </button>
+                        <button @click="sortBy = 'attention'"
+                            :class="sortBy === 'attention' ? 'bg-primary text-on-primary' : 'bg-transparent text-on-surface-variant hover:bg-surface-container'"
+                            class="px-4 py-2 font-label-md text-label-md transition-colors border-l border-outline-variant/50">
+                            Needs Attention
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Filters -->
-        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-md">
-
-            <!-- Search -->
-            <div class="relative">
-                <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-[20px] text-outline pointer-events-none">search</span>
-                <input type="text" x-model="search" placeholder="Search by name…"
-                       class="w-full pl-[40px] pr-md py-sm border border-outline-variant rounded-lg font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
-            </div>
-
-            <!-- Tag filter -->
-            <div class="flex flex-col gap-xs" x-show="shepherdingTags.length > 0">
-                <div class="flex items-center justify-between">
-                    <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider text-xs">Tags</span>
-                    <div class="flex items-center gap-xs" x-show="tagFilters.length > 1">
-                        <button @click="tagFilterMode = 'any'"
-                            :class="tagFilterMode === 'any' ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:bg-surface-container'"
-                            class="px-xs py-[2px] font-label-md text-label-md rounded transition-colors text-xs">
-                            Match any
-                        </button>
-                        <button @click="tagFilterMode = 'all'"
-                            :class="tagFilterMode === 'all' ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface-variant hover:bg-surface-container'"
-                            class="px-xs py-[2px] font-label-md text-label-md rounded transition-colors text-xs">
-                            Match all
-                        </button>
-                    </div>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-lg shadow-sm">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-lg items-start">
+                <!-- Search -->
+                <div class="lg:col-span-5 relative">
+                    <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-[20px] text-outline pointer-events-none">search</span>
+                    <input type="text" x-model="search" placeholder="Search by name…"
+                           class="w-full pl-[40px] pr-md py-3 border border-outline-variant rounded-xl font-body-md text-body-md bg-surface-container-low focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" />
                 </div>
-                <div class="flex flex-wrap gap-xs">
-                    <template x-for="tag in shepherdingTags" :key="tag.id">
-                        <button @click="toggleTagFilter(tag.id)"
-                            :class="tagFilters.includes(tag.id)
-                                ? 'bg-primary text-on-primary'
-                                : 'bg-surface-container text-on-surface hover:bg-surface-container-high'"
-                            class="px-sm py-xs font-label-md text-label-md rounded-full transition-colors"
-                            x-text="tag.name">
-                        </button>
-                    </template>
+
+                <!-- Tag filter -->
+                <div class="lg:col-span-7 flex flex-col gap-3" x-show="shepherdingTags.length > 0">
+                    <div class="flex items-center justify-between">
+                        <span class="font-label-md text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Filter by Tags</span>
+                        <div class="flex items-center gap-xs" x-show="tagFilters.length > 1">
+                            <button @click="tagFilterMode = 'any'"
+                                :class="tagFilterMode === 'any' ? 'bg-secondary-container text-on-secondary-container ring-1 ring-secondary/20' : 'text-on-surface-variant hover:bg-surface-container'"
+                                class="px-2 py-[2px] font-label-md text-label-md rounded transition-colors text-[10px] uppercase font-bold tracking-wider">
+                                Match any
+                            </button>
+                            <button @click="tagFilterMode = 'all'"
+                                :class="tagFilterMode === 'all' ? 'bg-secondary-container text-on-secondary-container ring-1 ring-secondary/20' : 'text-on-surface-variant hover:bg-surface-container'"
+                                class="px-2 py-[2px] font-label-md text-label-md rounded transition-colors text-[10px] uppercase font-bold tracking-wider">
+                                Match all
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="tag in shepherdingTags" :key="tag.id">
+                            <button @click="toggleTagFilter(tag.id)"
+                                :class="tagFilters.includes(tag.id)
+                                    ? 'bg-primary text-on-primary ring-2 ring-primary-fixed shadow-md'
+                                    : 'bg-surface-container text-on-surface hover:bg-surface-container-high border border-outline-variant/30'"
+                                class="px-4 py-1.5 font-label-md text-xs rounded-full transition-all duration-200 active:scale-95"
+                                x-text="tag.name">
+                            </button>
+                        </template>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- People table -->
-        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden">
-            <div class="overflow-x-auto">
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl overflow-hidden shadow-sm">
+            <div class="overflow-x-auto custom-scrollbar">
                 <table class="w-full text-sm">
-                    <thead class="bg-surface-container">
+                    <thead class="bg-surface-container-low border-b border-outline-variant">
                         <tr>
-                            <th class="text-left px-lg py-sm font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Name</th>
-                            <th class="text-left px-lg py-sm font-label-md text-label-md text-on-surface-variant uppercase tracking-wider hidden md:table-cell">Tags</th>
-                            <th class="text-left px-lg py-sm font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Last Note</th>
-                            <th class="px-lg py-sm"></th>
+                            <th class="text-left px-lg py-4 font-label-md text-[11px] text-on-surface-variant uppercase tracking-[0.2em] font-bold">Member Name</th>
+                            <th class="text-left px-lg py-4 font-label-md text-[11px] text-on-surface-variant uppercase tracking-[0.2em] font-bold hidden md:table-cell">Applied Tags</th>
+                            <th class="text-left px-lg py-4 font-label-md text-[11px] text-on-surface-variant uppercase tracking-[0.2em] font-bold">Last Shepherding Note</th>
+                            <th class="px-lg py-4"></th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody class="divide-y divide-outline-variant/30">
                         <template x-for="person in filteredPeople" :key="person.id">
-                            <tr class="border-t border-outline-variant hover:bg-surface-container-low transition-colors cursor-pointer"
+                            <tr class="hover:bg-primary/5 transition-colors group cursor-pointer"
                                 @click="window.location.href = `shepherding-profile.html?id=${person.id}`">
-                                <td class="px-lg py-sm font-body-md text-on-surface" x-text="person.name"></td>
-                                <td class="px-lg py-sm hidden md:table-cell">
-                                    <div class="flex flex-wrap gap-xs">
-                                        <template x-for="tagId in (person.tags || [])" :key="tagId">
-                                            <span class="px-xs py-[2px] bg-primary-fixed text-on-primary-fixed rounded font-label-md text-label-md"
-                                                  x-text="getTagName(tagId)"></span>
-                                        </template>
-                                        <span x-show="!(person.tags || []).length"
-                                              class="text-outline font-label-md text-label-md">—</span>
+                                <td class="px-lg py-4">
+                                    <div class="font-body-md text-on-surface font-bold group-hover:text-primary transition-colors" x-text="person.name"></div>
+                                </td>
+                                <td class="px-lg py-4 hidden md:table-cell">
+                                    <div class="flex items-center gap-2">
+                                        <button @click.stop="openTagManagement(person)" 
+                                                class="w-7 h-7 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-primary-fixed/30 hover:text-primary transition-all shrink-0">
+                                            <span class="material-symbols-outlined text-[18px]">edit</span>
+                                        </button>
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <template x-for="tagId in (person.tags || [])" :key="tagId">
+                                                <span class="px-2 py-0.5 bg-primary-fixed/50 text-on-primary-fixed rounded text-[10px] font-bold uppercase tracking-tighter border border-primary-fixed">
+                                                    <span x-text="getTagName(tagId)"></span>
+                                                </span>
+                                            </template>
+                                            <span x-show="!(person.tags || []).length"
+                                                  class="font-label-md text-[10px] uppercase italic tracking-widest text-outline/40">No tags</span>
+                                        </div>
                                     </div>
                                 </td>
-                                <td class="px-lg py-sm">
-                                    <span class="font-label-md text-label-md"
-                                          :class="lastNoteColor(person.id)"
-                                          x-text="formatLastNote(person.id)"></span>
+                                <td class="px-lg py-4">
+                                    <div class="flex flex-col gap-0.5">
+                                        <span class="font-label-md text-sm font-semibold"
+                                              :class="lastNoteColor(person.id)"
+                                              x-text="formatLastNote(person.id)"></span>
+                                        <span x-show="lastNoteDates[person.id]" class="text-[10px] text-on-surface-variant/60 uppercase font-bold tracking-tighter">Recorded Date</span>
+                                    </div>
                                 </td>
-                                <td class="px-lg py-sm text-right">
-                                    <span class="material-symbols-outlined text-[18px] text-outline">chevron_right</span>
+                                <td class="px-lg py-4 text-right">
+                                    <div class="w-8 h-8 rounded-full bg-surface-container group-hover:bg-primary group-hover:text-white flex items-center justify-center transition-all">
+                                        <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                                    </div>
                                 </td>
                             </tr>
                         </template>
 
                         <!-- Empty state -->
                         <tr x-show="filteredPeople.length === 0">
-                            <td colspan="4" class="px-lg py-lg text-center text-on-surface-variant italic">
-                                No people match your current filters.
+                            <td colspan="4" class="px-lg py-20 text-center text-on-surface-variant space-y-4">
+                                <div class="flex flex-col items-center gap-2 opacity-50">
+                                    <span class="material-symbols-outlined text-5xl">person_search</span>
+                                    <p class="font-body-md italic">No members found matching your search.</p>
+                                </div>
                             </td>
                         </tr>
                     </tbody>
@@ -237,6 +264,97 @@
         </div>
 
     </main>
+
+    <!-- Add Person Modal -->
+    <template x-if="showAddPersonModal">
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showAddPersonModal = false"></div>
+            <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative flex flex-col max-h-[90vh]">
+                <header class="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-container-low">
+                    <h3 class="font-headline text-lg text-primary font-bold">Add New Person</h3>
+                    <button @click="showAddPersonModal = false" class="text-on-surface-variant hover:text-error transition-colors">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </header>
+                <div class="p-6 overflow-y-auto custom-scrollbar space-y-4">
+                    <div class="flex flex-col gap-xs">
+                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Full Name</label>
+                        <input type="text" x-model="newPerson.name" placeholder="Required" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
+                    </div>
+                    <div class="flex flex-col gap-xs">
+                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email</label>
+                        <input type="email" x-model="newPerson.email" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
+                    </div>
+                    <div class="flex flex-col gap-xs">
+                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Phone</label>
+                        <input type="tel" x-model="newPerson.phone" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
+                    </div>
+                    <div class="flex flex-col gap-xs">
+                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Address</label>
+                        <textarea x-model="newPerson.address" rows="2" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm"></textarea>
+                    </div>
+                    <div class="flex flex-col gap-xs">
+                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Birthday</label>
+                        <input type="date" x-model="newPerson.birthday" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
+                    </div>
+                    <div class="flex flex-col gap-xs">
+                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Sex</label>
+                        <select x-model="newPerson.sex" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
+                            <option value="">Unknown</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                        </select>
+                    </div>
+                </div>
+                <footer class="p-4 border-t border-outline-variant bg-surface-container-low flex justify-end gap-3">
+                    <button @click="showAddPersonModal = false" class="px-4 py-2 text-sm font-label-md text-on-surface-variant hover:bg-surface-container transition-all">Cancel</button>
+                    <button @click="addPerson()" :disabled="isSubmitting || !newPerson.name.trim()" class="px-6 py-2 bg-primary text-on-primary rounded-full text-sm font-label-md hover:bg-primary/90 transition-all shadow-sm flex items-center gap-2">
+                        <span x-show="isSubmitting" class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                        <span x-text="isSubmitting ? 'Adding...' : 'Add Person'"></span>
+                    </button>
+                </footer>
+            </div>
+        </div>
+    </template>
+
+    <!-- Manage Tags Modal (Individual Person) -->
+    <template x-if="showTagManagementModal">
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showTagManagementModal = false"></div>
+            <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative flex flex-col max-h-[90vh]">
+                <header class="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-container-low">
+                    <div class="flex flex-col">
+                        <h3 class="font-headline text-lg text-primary font-bold">Manage Tags</h3>
+                        <p class="text-xs text-on-surface-variant" x-text="tagPerson?.name"></p>
+                    </div>
+                    <button @click="showTagManagementModal = false" class="text-on-surface-variant hover:text-error transition-colors">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </header>
+                <div class="p-6 overflow-y-auto custom-scrollbar">
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="tag in shepherdingTags" :key="tag.id">
+                            <button @click="togglePersonTag(tag.id)"
+                                :class="tagPerson.tags.includes(tag.id)
+                                    ? 'bg-primary text-on-primary ring-2 ring-primary-fixed'
+                                    : 'bg-surface-container text-on-surface hover:bg-surface-container-high border border-outline-variant/30'"
+                                class="px-4 py-2 rounded-full font-label-md text-xs transition-all duration-200 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[14px]" x-text="tagPerson.tags.includes(tag.id) ? 'check_circle' : 'add_circle'"></span>
+                                <span x-text="tag.name"></span>
+                            </button>
+                        </template>
+                        <div x-show="shepherdingTags.length === 0" class="py-8 text-center w-full opacity-50">
+                            <p class="italic text-sm">No tags defined in the system.</p>
+                            <a href="shepherding-dashboard.html" class="text-primary font-bold text-xs hover:underline mt-2 inline-block">Go to Dashboard to create tags</a>
+                        </div>
+                    </div>
+                </div>
+                <footer class="p-4 border-t border-outline-variant bg-surface-container-low flex justify-end">
+                    <button @click="showTagManagementModal = false" class="px-6 py-2 bg-primary text-on-primary rounded-full text-sm font-label-md hover:bg-primary/90 transition-all shadow-sm">Done</button>
+                </footer>
+            </div>
+        </div>
+    </template>
 
     <!-- Toast -->
     <div x-show="toast.show" x-cloak x-transition
