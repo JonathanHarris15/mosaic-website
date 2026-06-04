@@ -95,6 +95,10 @@ service cloud.firestore {
       allow read, write: if isElder();
     }
 
+    match /people/{personId}/shepherding_activity/{activityId} {
+      allow read, write: if isElder();
+    }
+
     // Collection group query for shepherding_notes (used by People list page)
     match /{path=**}/shepherding_notes/{noteId} {
       allow read: if isElder();

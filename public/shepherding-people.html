@@ -87,9 +87,40 @@
             }
         }
     </script>
-    <style type="text/tailwindcss">
+
+    <style>
         [x-cloak] { display: none !important; }
+
+        /* Lock the page — no body scroll */
+        html, body {
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* Fixed filter sidebar — aligned with the People List table */
+        .filter-sidebar {
+            position: fixed;
+            top: 220px;  /* lines up with the table below header+title+search */
+            left: 32px;
+            width: 280px;
+            max-height: calc(100vh - 220px - 32px);
+            overflow-y: auto;
+            z-index: 10;
+        }
+
+        /* Main content pushed right to clear the fixed sidebar */
+        .content-area {
+            margin-left: 344px; /* 32px left-pad + 280px sidebar + 32px gap */
+            padding: 0 32px 0 0;
+        }
+
+        /* Only the people table scrolls */
+        .scrollable-table {
+            overflow-y: auto;
+            max-height: calc(100vh - 220px);
+        }
     </style>
+
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -98,11 +129,13 @@
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 
-<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+<body class="bg-background text-on-background font-body-md text-body-md antialiased"
       x-data="shepherdingPeople" x-cloak>
 
-    <!-- Header -->
-    <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- HEADER                                      -->
+    <!-- ═══════════════════════════════════════════ -->
+    <header style="max-width:80rem; margin:0 auto; padding:8px 32px;" class="flex items-center justify-between">
         <a href="shepherding-dashboard.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
             <span class="material-symbols-outlined text-[20px]">arrow_back</span>
             <span class="font-label-md text-label-md">Dashboard</span>
@@ -112,32 +145,159 @@
         </div>
     </header>
 
-    <!-- Loading state -->
-    <div x-show="loading" class="flex-grow flex items-center justify-center">
+    <!-- Loading spinner -->
+    <div x-show="loading" style="display:flex; align-items:center; justify-content:center; flex:1; min-height:60vh;">
         <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
     </div>
 
-    <!-- Main content -->
-    <main x-show="!loading" class="flex-grow max-w-7xl w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- FIXED FILTER SIDEBAR (left side)            -->
+    <!-- ═══════════════════════════════════════════ -->
+    <aside x-show="!loading" class="filter-sidebar">
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm divide-y divide-outline-variant">
+
+            <!-- Saved Views -->
+            <div class="p-6 flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                    <span class="font-label-md text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Saved Views</span>
+                    <button @click="showSaveViewModal = !showSaveViewModal"
+                        class="text-on-surface-variant hover:text-secondary transition-colors"
+                        title="Save current filters">
+                        <span class="material-symbols-outlined text-[18px]">bookmark_add</span>
+                    </button>
+                </div>
+                <!-- Save view inline form -->
+                <div x-show="showSaveViewModal" x-cloak class="flex gap-1 items-center">
+                    <input type="text" x-model="newFilterViewName"
+                           placeholder="View name…"
+                           @keydown.enter="saveFilterView()"
+                           @keydown.escape="showSaveViewModal = false; newFilterViewName = ''"
+                           class="flex-grow min-w-0 border border-outline-variant rounded-lg px-2 py-1 font-body-md text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                    <button @click="saveFilterView()" :disabled="isSavingView || !newFilterViewName.trim()"
+                        class="px-2 py-1 font-label-md text-xs bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 flex-shrink-0">
+                        <span x-show="isSavingView" class="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>
+                        Save
+                    </button>
+                    <button @click="showSaveViewModal = false; newFilterViewName = ''"
+                        class="text-on-surface-variant hover:text-on-surface transition-colors flex-shrink-0">
+                        <span class="material-symbols-outlined text-[18px]">close</span>
+                    </button>
+                </div>
+                <!-- View list -->
+                <div class="flex flex-col gap-1">
+                    <template x-for="view in filterViews" :key="view.id">
+                        <div class="flex items-center justify-between gap-1 group">
+                            <button @click="loadFilterView(view)"
+                                class="flex-grow text-left text-sm text-on-surface hover:text-primary transition-colors truncate font-label-md"
+                                x-text="view.title"></button>
+                            <button @click.stop="deleteFilterView(view.id)"
+                                class="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-on-surface-variant opacity-0 group-hover:opacity-100 hover:text-error transition-all">
+                                <span class="material-symbols-outlined text-[12px]">close</span>
+                            </button>
+                        </div>
+                    </template>
+                    <p x-show="filterViews.length === 0" class="text-xs text-on-surface-variant italic">No saved views yet.</p>
+                </div>
+            </div>
+
+            <!-- Filter by Tags -->
+            <div class="p-6 flex flex-col gap-3" x-show="shepherdingTags.length > 0">
+                <div class="flex items-center justify-between">
+                    <span class="font-label-md text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Filter by Tags</span>
+                    <div class="flex items-center gap-1" x-show="tagFilters.length > 1">
+                        <button @click="tagFilterMode = 'any'"
+                            :class="tagFilterMode === 'any' ? 'bg-secondary-container text-on-secondary-container ring-1 ring-secondary/20' : 'text-on-surface-variant hover:bg-surface-container'"
+                            class="px-2 py-[2px] rounded transition-colors text-[9px] uppercase font-bold tracking-wider font-label-md">
+                            Any
+                        </button>
+                        <button @click="tagFilterMode = 'all'"
+                            :class="tagFilterMode === 'all' ? 'bg-secondary-container text-on-secondary-container ring-1 ring-secondary/20' : 'text-on-surface-variant hover:bg-surface-container'"
+                            class="px-2 py-[2px] rounded transition-colors text-[9px] uppercase font-bold tracking-wider font-label-md">
+                            All
+                        </button>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                    <template x-for="tag in shepherdingTags" :key="tag.id">
+                        <button @click="toggleTagFilter(tag.id)"
+                            :class="tagFilters.includes(tag.id)
+                                ? 'bg-primary text-on-primary ring-2 ring-primary-fixed shadow-sm'
+                                : 'bg-surface-container text-on-surface hover:bg-surface-container-high border border-outline-variant/30'"
+                            class="px-3 py-1 font-label-md text-xs rounded-full transition-all duration-200 active:scale-95"
+                            x-text="tag.name">
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Filter by Status -->
+            <div class="p-6 flex flex-col gap-3">
+                <div class="flex items-center justify-between w-full">
+                    <button @click="showStatusFilter = !showStatusFilter"
+                        class="flex items-center gap-2">
+                        <span class="font-label-md text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Filter by Status</span>
+                        <span x-show="statusZoneFilters.length > 0"
+                            class="px-1.5 py-0.5 bg-primary text-on-primary rounded-full font-label-md text-[9px] font-bold"
+                            x-text="statusZoneFilters.length"></span>
+                        <span class="material-symbols-outlined text-[16px] text-on-surface-variant transition-transform duration-200"
+                              :class="showStatusFilter ? 'rotate-180' : ''">expand_more</span>
+                    </button>
+                    <button x-show="statusZoneFilters.length > 0"
+                        @click="statusZoneFilters = []"
+                        class="text-[9px] font-label-md text-on-surface-variant hover:text-error transition-colors uppercase tracking-wider font-bold">
+                        Clear
+                    </button>
+                </div>
+                <div x-show="showStatusFilter" class="flex flex-col gap-1 items-center pt-1">
+                    <div class="grid gap-1" style="grid-template-columns: 56px 36px 36px 36px">
+                        <div></div>
+                        <div class="text-center font-label-md text-[9px] uppercase tracking-wide text-on-surface-variant">Urg.</div>
+                        <div class="text-center font-label-md text-[9px] uppercase tracking-wide text-on-surface-variant">Swht.</div>
+                        <div class="text-center font-label-md text-[9px] uppercase tracking-wide text-on-surface-variant">Not</div>
+                    </div>
+                    <template x-for="imp in ['important', 'somewhat_important', 'not_important']" :key="imp">
+                        <div class="grid gap-1 items-center" style="grid-template-columns: 56px 36px 36px 36px">
+                            <div class="text-right pr-2 font-label-md text-[9px] uppercase tracking-wide text-on-surface-variant leading-tight"
+                                 x-text="imp === 'important' ? 'Imp.' : imp === 'somewhat_important' ? 'Swht.' : 'Not'"></div>
+                            <template x-for="urg in ['urgent', 'somewhat_urgent', 'not_urgent']" :key="urg">
+                                <button @click="toggleStatusZone(urg, imp)"
+                                    :class="isZoneSelected(urg, imp)
+                                        ? 'bg-primary border-primary ring-2 ring-primary/30 shadow-sm'
+                                        : statusCellColor(urg, imp) + ' hover:border-outline hover:bg-surface-container-high'"
+                                    class="w-8 h-8 border-2 rounded flex items-center justify-center transition-all duration-150 cursor-pointer mx-auto">
+                                    <span x-show="isZoneSelected(urg, imp)"
+                                          class="w-2 h-2 rounded-full bg-on-primary"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+        </div>
+    </aside>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- MAIN CONTENT (right of sidebar)             -->
+    <!-- ═══════════════════════════════════════════ -->
+    <main x-show="!loading" class="content-area">
 
         <!-- Page Title & Actions -->
-        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-md">
+        <div style="margin-bottom:32px;" class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             <div>
                 <h1 class="font-headline-lg text-headline-lg text-primary">People</h1>
-                <p class="font-body-md text-body-md text-on-surface-variant mt-xs">
+                <p class="font-body-md text-body-md text-on-surface-variant mt-1">
                     <span x-text="filteredPeople.length"></span> of <span x-text="people.length"></span> people shown
                 </p>
             </div>
-            
-            <div class="flex flex-col sm:flex-row items-center gap-md">
+            <div class="flex flex-col sm:flex-row items-center gap-6">
                 <button @click="showAddPersonModal = true"
                     class="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-primary text-on-primary font-label-md text-label-md rounded-full hover:bg-primary/90 transition-all shadow-sm active:scale-95">
                     <span class="material-symbols-outlined text-[20px]">person_add</span>
                     <span>Add Person</span>
                 </button>
-
                 <!-- Sort control -->
-                <div class="flex items-center gap-sm bg-surface-container-low p-1 rounded-xl border border-outline-variant/30">
+                <div class="flex items-center gap-3 bg-surface-container-low p-1 rounded-xl border border-outline-variant/30">
                     <span class="font-label-md text-[11px] uppercase tracking-widest text-on-surface-variant px-2">Sort by</span>
                     <div class="flex bg-surface-container-lowest rounded-lg border border-outline-variant/50 overflow-hidden shadow-sm">
                         <button @click="sortBy = 'name'"
@@ -155,70 +315,35 @@
             </div>
         </div>
 
-        <!-- Filters -->
-        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-lg shadow-sm">
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-lg items-start">
-                <!-- Search -->
-                <div class="lg:col-span-5 relative">
-                    <span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-[20px] text-outline pointer-events-none">search</span>
-                    <input type="text" x-model="search" placeholder="Search by name…"
-                           class="w-full pl-[40px] pr-md py-3 border border-outline-variant rounded-xl font-body-md text-body-md bg-surface-container-low focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" />
-                </div>
-
-                <!-- Tag filter -->
-                <div class="lg:col-span-7 flex flex-col gap-3" x-show="shepherdingTags.length > 0">
-                    <div class="flex items-center justify-between">
-                        <span class="font-label-md text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Filter by Tags</span>
-                        <div class="flex items-center gap-xs" x-show="tagFilters.length > 1">
-                            <button @click="tagFilterMode = 'any'"
-                                :class="tagFilterMode === 'any' ? 'bg-secondary-container text-on-secondary-container ring-1 ring-secondary/20' : 'text-on-surface-variant hover:bg-surface-container'"
-                                class="px-2 py-[2px] font-label-md text-label-md rounded transition-colors text-[10px] uppercase font-bold tracking-wider">
-                                Match any
-                            </button>
-                            <button @click="tagFilterMode = 'all'"
-                                :class="tagFilterMode === 'all' ? 'bg-secondary-container text-on-secondary-container ring-1 ring-secondary/20' : 'text-on-surface-variant hover:bg-surface-container'"
-                                class="px-2 py-[2px] font-label-md text-label-md rounded transition-colors text-[10px] uppercase font-bold tracking-wider">
-                                Match all
-                            </button>
-                        </div>
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                        <template x-for="tag in shepherdingTags" :key="tag.id">
-                            <button @click="toggleTagFilter(tag.id)"
-                                :class="tagFilters.includes(tag.id)
-                                    ? 'bg-primary text-on-primary ring-2 ring-primary-fixed shadow-md'
-                                    : 'bg-surface-container text-on-surface hover:bg-surface-container-high border border-outline-variant/30'"
-                                class="px-4 py-1.5 font-label-md text-xs rounded-full transition-all duration-200 active:scale-95"
-                                x-text="tag.name">
-                            </button>
-                        </template>
-                    </div>
-                </div>
-            </div>
+        <!-- Search bar -->
+        <div class="relative" style="margin-bottom:24px;">
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-outline pointer-events-none">search</span>
+            <input type="text" x-model="search" placeholder="Search by name…"
+                   class="w-full pl-[40px] pr-6 py-3 border border-outline-variant rounded-xl font-body-md text-body-md bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all shadow-sm" />
         </div>
 
-        <!-- People table -->
-        <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl overflow-hidden shadow-sm">
-            <div class="overflow-x-auto custom-scrollbar">
+        <!-- People table (scrollable) -->
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm scrollable-table">
                 <table class="w-full text-sm">
-                    <thead class="bg-surface-container-low border-b border-outline-variant">
+                    <thead class="bg-surface-container-low border-b border-outline-variant" style="position: sticky; top: 0; z-index: 1;">
                         <tr>
-                            <th class="text-left px-lg py-4 font-label-md text-[11px] text-on-surface-variant uppercase tracking-[0.2em] font-bold">Member Name</th>
-                            <th class="text-left px-lg py-4 font-label-md text-[11px] text-on-surface-variant uppercase tracking-[0.2em] font-bold hidden md:table-cell">Applied Tags</th>
-                            <th class="text-left px-lg py-4 font-label-md text-[11px] text-on-surface-variant uppercase tracking-[0.2em] font-bold">Last Shepherding Note</th>
-                            <th class="px-lg py-4"></th>
+                            <th class="text-left px-6 py-4 font-label-md text-[11px] text-on-surface-variant uppercase tracking-[0.2em] font-bold">Name</th>
+                            <th class="text-left px-6 py-4 font-label-md text-[11px] text-on-surface-variant uppercase tracking-[0.2em] font-bold hidden lg:table-cell">Applied Tags</th>
+                            <th class="text-left px-6 py-4 font-label-md text-[11px] text-on-surface-variant uppercase tracking-[0.2em] font-bold hidden md:table-cell">Status</th>
+                            <th class="text-left px-6 py-4 font-label-md text-[11px] text-on-surface-variant uppercase tracking-[0.2em] font-bold">Last Note</th>
+                            <th class="px-6 py-4"></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-outline-variant/30">
                         <template x-for="person in filteredPeople" :key="person.id">
                             <tr class="hover:bg-primary/5 transition-colors group cursor-pointer"
                                 @click="window.location.href = `shepherding-profile.html?id=${person.id}`">
-                                <td class="px-lg py-4">
+                                <td class="px-6 py-4">
                                     <div class="font-body-md text-on-surface font-bold group-hover:text-primary transition-colors" x-text="person.name"></div>
                                 </td>
-                                <td class="px-lg py-4 hidden md:table-cell">
+                                <td class="px-6 py-4 hidden lg:table-cell">
                                     <div class="flex items-center gap-2">
-                                        <button @click.stop="openTagManagement(person)" 
+                                        <button @click.stop="openTagManagement(person)"
                                                 class="w-7 h-7 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-primary-fixed/30 hover:text-primary transition-all shrink-0">
                                             <span class="material-symbols-outlined text-[18px]">edit</span>
                                         </button>
@@ -233,7 +358,21 @@
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-lg py-4">
+                                <td class="px-6 py-4 hidden md:table-cell">
+                                    <template x-if="person.shepherdingStatus">
+                                        <div class="flex flex-col gap-0.5">
+                                            <span class="font-label-md text-[10px] uppercase tracking-wider font-bold"
+                                                  :class="person.shepherdingStatus.urgency === 'urgent' && person.shepherdingStatus.importance === 'important' ? 'text-error' : 'text-secondary'"
+                                                  x-text="urgencyLabel(person.shepherdingStatus.urgency)"></span>
+                                            <span class="text-[10px] text-on-surface-variant"
+                                                  x-text="importanceLabel(person.shepherdingStatus.importance)"></span>
+                                        </div>
+                                    </template>
+                                    <template x-if="!person.shepherdingStatus">
+                                        <span class="font-label-md text-[10px] italic text-outline/40 uppercase tracking-widest">—</span>
+                                    </template>
+                                </td>
+                                <td class="px-6 py-4">
                                     <div class="flex flex-col gap-0.5">
                                         <span class="font-label-md text-sm font-semibold"
                                               :class="lastNoteColor(person.id)"
@@ -241,17 +380,16 @@
                                         <span x-show="lastNoteDates[person.id]" class="text-[10px] text-on-surface-variant/60 uppercase font-bold tracking-tighter">Recorded Date</span>
                                     </div>
                                 </td>
-                                <td class="px-lg py-4 text-right">
+                                <td class="px-6 py-4 text-right">
                                     <div class="w-8 h-8 rounded-full bg-surface-container group-hover:bg-primary group-hover:text-white flex items-center justify-center transition-all">
                                         <span class="material-symbols-outlined text-[18px]">chevron_right</span>
                                     </div>
                                 </td>
                             </tr>
                         </template>
-
                         <!-- Empty state -->
                         <tr x-show="filteredPeople.length === 0">
-                            <td colspan="4" class="px-lg py-20 text-center text-on-surface-variant space-y-4">
+                            <td colspan="5" class="px-6 py-20 text-center text-on-surface-variant">
                                 <div class="flex flex-col items-center gap-2 opacity-50">
                                     <span class="material-symbols-outlined text-5xl">person_search</span>
                                     <p class="font-body-md italic">No members found matching your search.</p>
@@ -259,11 +397,14 @@
                             </td>
                         </tr>
                     </tbody>
-                </table>
-            </div>
+            </table>
         </div>
 
     </main>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- MODALS                                      -->
+    <!-- ═══════════════════════════════════════════ -->
 
     <!-- Add Person Modal -->
     <template x-if="showAddPersonModal">
@@ -277,27 +418,27 @@
                     </button>
                 </header>
                 <div class="p-6 overflow-y-auto custom-scrollbar space-y-4">
-                    <div class="flex flex-col gap-xs">
+                    <div class="flex flex-col gap-1">
                         <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Full Name</label>
                         <input type="text" x-model="newPerson.name" placeholder="Required" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
                     </div>
-                    <div class="flex flex-col gap-xs">
+                    <div class="flex flex-col gap-1">
                         <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email</label>
                         <input type="email" x-model="newPerson.email" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
                     </div>
-                    <div class="flex flex-col gap-xs">
+                    <div class="flex flex-col gap-1">
                         <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Phone</label>
                         <input type="tel" x-model="newPerson.phone" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
                     </div>
-                    <div class="flex flex-col gap-xs">
+                    <div class="flex flex-col gap-1">
                         <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Address</label>
                         <textarea x-model="newPerson.address" rows="2" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm"></textarea>
                     </div>
-                    <div class="flex flex-col gap-xs">
+                    <div class="flex flex-col gap-1">
                         <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Birthday</label>
                         <input type="date" x-model="newPerson.birthday" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
                     </div>
-                    <div class="flex flex-col gap-xs">
+                    <div class="flex flex-col gap-1">
                         <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Sex</label>
                         <select x-model="newPerson.sex" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
                             <option value="">Unknown</option>
@@ -317,7 +458,7 @@
         </div>
     </template>
 
-    <!-- Manage Tags Modal (Individual Person) -->
+    <!-- Manage Tags Modal -->
     <template x-if="showTagManagementModal">
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showTagManagementModal = false"></div>
@@ -358,7 +499,7 @@
 
     <!-- Toast -->
     <div x-show="toast.show" x-cloak x-transition
-         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-lg py-sm rounded-lg shadow-lg font-label-md text-label-md"
+         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-8 py-3 rounded-lg shadow-lg font-label-md text-label-md"
          :class="toast.type === 'error' ? 'bg-error text-on-error' : 'bg-inverse-surface text-inverse-on-surface'">
         <span x-text="toast.message"></span>
     </div>

@@ -128,10 +128,56 @@
 
     <!-- Header -->
     <header class="w-full max-w-[1600px] mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a href="shepherding-people.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
-            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
-            <span class="font-label-md text-label-md">People</span>
-        </a>
+        <!-- Breadcrumb nav -->
+        <nav class="flex items-center gap-1 font-label-md text-label-md text-on-surface-variant min-w-0">
+
+            <!-- Default: came from People list -->
+            <template x-if="!fromPage || fromPage === 'people'">
+                <a href="shepherding-people.html" class="flex items-center gap-1 hover:text-primary transition-colors flex-shrink-0">
+                    <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+                    <span>People</span>
+                </a>
+            </template>
+
+            <!-- Came from Dashboard -->
+            <template x-if="fromPage === 'dashboard'">
+                <div class="flex items-center gap-1 min-w-0">
+                    <a href="shepherding-dashboard.html" class="flex items-center gap-1 hover:text-primary transition-colors flex-shrink-0">
+                        <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+                        <span>Dashboard</span>
+                    </a>
+                    <span class="material-symbols-outlined text-[14px] opacity-40 flex-shrink-0">chevron_right</span>
+                    <span class="text-on-surface truncate" x-text="person?.name || '…'"></span>
+                </div>
+            </template>
+
+            <!-- Came from an Elder Document -->
+            <template x-if="fromPage === 'document'">
+                <div class="flex items-center gap-1 min-w-0">
+                    <a href="shepherding-documents.html" class="hover:text-primary transition-colors flex-shrink-0">Documents</a>
+                    <span class="material-symbols-outlined text-[14px] opacity-40 flex-shrink-0">chevron_right</span>
+                    <a :href="'shepherding-document.html?id=' + fromId"
+                       class="hover:text-primary transition-colors truncate max-w-[160px]"
+                       x-text="fromTitle || 'Document'"></a>
+                    <span class="material-symbols-outlined text-[14px] opacity-40 flex-shrink-0">chevron_right</span>
+                    <span class="text-on-surface truncate" x-text="person?.name || '…'"></span>
+                </div>
+            </template>
+
+            <!-- Came from a Care List -->
+            <template x-if="fromPage === 'carelist'">
+                <div class="flex items-center gap-1 min-w-0">
+                    <a href="shepherding-documents.html" class="hover:text-primary transition-colors flex-shrink-0">Documents</a>
+                    <span class="material-symbols-outlined text-[14px] opacity-40 flex-shrink-0">chevron_right</span>
+                    <a :href="'shepherding-care-list.html?id=' + fromId"
+                       class="hover:text-primary transition-colors truncate max-w-[160px]"
+                       x-text="fromTitle || 'Care List'"></a>
+                    <span class="material-symbols-outlined text-[14px] opacity-40 flex-shrink-0">chevron_right</span>
+                    <span class="text-on-surface truncate" x-text="person?.name || '…'"></span>
+                </div>
+            </template>
+
+        </nav>
         <div id="auth-container" class="flex items-center">
             <div class="h-10"></div>
         </div>
@@ -210,7 +256,7 @@
 
                     <!-- Applied tags -->
                     <div class="flex flex-wrap gap-xs">
-                        <template x-for="tagId in (person?.tags || [])" :key="tagId">
+                        <template x-for="tagId in [...new Set(person?.tags || [])]" :key="tagId">
                             <span class="flex items-center gap-xs px-sm py-xs bg-primary text-on-primary rounded-full font-label-md text-label-md">
                                 <span x-text="getTagName(tagId)"></span>
                                 <button @click="toggleTag(tagId)" class="hover:opacity-70 transition-opacity">
@@ -254,17 +300,75 @@
                         </div>
                     </div>
                 </div>
+                <!-- Pastoral Status Panel -->
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-md">
+                    <h2 class="font-headline-md text-headline-md text-primary">Pastoral Status</h2>
+
+                    <!-- Matrix grid -->
+                    <div class="flex flex-col gap-1">
+                        <!-- Column headers -->
+                        <div class="grid gap-1" style="grid-template-columns: 72px 52px 52px 52px">
+                            <div></div>
+                            <div class="text-center font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant pb-1">Urgent</div>
+                            <div class="text-center font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant pb-1">Somewhat</div>
+                            <div class="text-center font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant pb-1">Not Urgent</div>
+                        </div>
+                        <!-- Rows -->
+                        <template x-for="imp in ['important', 'somewhat_important', 'not_important']" :key="imp">
+                            <div class="grid gap-1 items-center" style="grid-template-columns: 72px 52px 52px 52px">
+                                <div class="text-right pr-2 font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant leading-tight"
+                                     x-text="imp === 'important' ? 'Important' : imp === 'somewhat_important' ? 'Somewhat' : 'Not Imp.'"></div>
+                                <template x-for="urg in ['urgent', 'somewhat_urgent', 'not_urgent']" :key="urg">
+                                    <button @click="setShepherdingStatus(urg, imp)"
+                                        :class="isCurrentStatus(urg, imp)
+                                            ? 'bg-primary border-primary ring-2 ring-primary/30 shadow-md'
+                                            : statusCellColor(urg, imp) + ' hover:border-outline hover:bg-surface-container-high'"
+                                        class="w-[52px] h-[52px] border-2 rounded-lg flex items-center justify-center transition-all duration-150 cursor-pointer">
+                                        <span x-show="isCurrentStatus(urg, imp)"
+                                              class="w-3 h-3 rounded-full bg-on-primary shadow-sm"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Status label / clear -->
+                    <div class="flex items-center gap-xs pt-xs border-t border-outline-variant min-h-[28px]">
+                        <template x-if="person?.shepherdingStatus">
+                            <div class="flex items-center gap-xs w-full">
+                                <span class="material-symbols-outlined text-[15px] text-secondary">radio_button_checked</span>
+                                <span class="text-sm text-on-surface font-medium" x-text="formatStatus(person.shepherdingStatus)"></span>
+                                <button @click="setShepherdingStatus(person.shepherdingStatus.urgency, person.shepherdingStatus.importance)"
+                                    class="ml-auto text-xs text-on-surface-variant hover:text-error transition-colors font-label-md">
+                                    Clear
+                                </button>
+                            </div>
+                        </template>
+                        <template x-if="!person?.shepherdingStatus">
+                            <p class="text-sm text-on-surface-variant italic">Click a cell to set status.</p>
+                        </template>
+                    </div>
+                </div>
             </div>
 
-            <!-- Right column: Notes -->
+            <!-- Right column: Pastoral Record -->
             <div class="flex flex-col gap-md">
-                <div class="flex items-center justify-between">
-                    <h2 class="font-headline-md text-headline-md text-primary">Shepherding Notes</h2>
-                    <button x-show="!showNoteEditor" @click="openAddNote()"
-                        class="flex items-center gap-1 px-md py-xs bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary/90 transition-colors">
-                        <span class="material-symbols-outlined text-[18px]">add</span>
-                        Add Note
-                    </button>
+                <div class="flex items-center justify-between gap-sm flex-wrap">
+                    <h2 class="font-headline-md text-headline-md text-primary">Pastoral Record</h2>
+                    <div class="flex items-center gap-xs">
+                        <button @click="collapseStatusChanges = !collapseStatusChanges"
+                            :class="collapseStatusChanges ? 'bg-surface-container text-on-surface-variant' : 'bg-transparent text-on-surface-variant'"
+                            class="flex items-center gap-xs px-sm py-xs font-label-md text-label-md rounded-lg border border-outline-variant hover:bg-surface-container-high transition-colors">
+                            <span class="material-symbols-outlined text-[15px]"
+                                  x-text="collapseStatusChanges ? 'unfold_more' : 'unfold_less'"></span>
+                            <span x-text="collapseStatusChanges ? 'Show changes' : 'Collapse changes'"></span>
+                        </button>
+                        <button x-show="!showNoteEditor" @click="openAddNote()"
+                            class="flex items-center gap-1 px-md py-xs bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary/90 transition-colors">
+                            <span class="material-symbols-outlined text-[18px]">add</span>
+                            Add Note
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Inline rich-text editor -->
@@ -286,6 +390,7 @@
                         <label class="flex flex-col gap-xs flex-shrink-0">
                             <span class="font-label-md text-label-md text-on-surface-variant">Note type</span>
                             <select x-model="noteForm.type"
+                                    @change="handleNoteTypeChange()"
                                     class="border border-outline-variant rounded-lg pl-sm pr-8 py-xs font-body-md text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
                                 <template x-for="type in noteTypes" :key="type">
                                     <option :value="type" x-text="type"></option>
@@ -461,51 +566,229 @@
                     </div>
                 </div>
 
-                <div x-show="notes.length === 0 && !showNoteEditor" class="text-on-surface-variant italic text-sm">
-                    No notes yet. Add the first one.
+                <div x-show="pastoralRecord.length === 0 && !showNoteEditor" class="text-on-surface-variant italic text-sm">
+                    No record yet. Add the first note.
                 </div>
 
                 <div class="flex flex-col gap-md">
-                    <template x-for="note in notes.filter(n => !editingNote || n.id !== editingNote.id)" :key="note.id">
-                        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-sm">
-                            <div class="flex items-start justify-between gap-sm">
-                                <div class="flex flex-wrap items-center gap-sm">
-                                    <span class="px-sm py-xs bg-secondary-container text-on-secondary-container rounded font-label-md text-label-md"
-                                          x-text="note.type"></span>
-                                    <template x-if="note.subject">
-                                        <span class="font-body-md text-on-surface font-semibold text-sm" x-text="note.subject"></span>
+                    <template x-for="entry in displayRecord" :key="entry.id">
+                        <div>
+                            <!-- Shepherding Note -->
+                            <template x-if="entry._entryKind === 'note'">
+                                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-sm">
+                                    <div class="flex items-start justify-between gap-sm">
+                                        <div class="flex flex-wrap items-center gap-sm">
+                                            <span class="px-sm py-xs bg-secondary-container text-on-secondary-container rounded font-label-md text-label-md"
+                                                  x-text="entry.type"></span>
+                                            <template x-if="entry.subject">
+                                                <span class="font-body-md text-on-surface font-semibold text-sm" x-text="entry.subject"></span>
+                                            </template>
+                                            <span class="font-label-md text-label-md text-on-surface-variant"
+                                                  x-text="formatDate(entry.createdAt)"></span>
+                                            <span class="font-label-md text-label-md text-on-surface-variant"
+                                                  x-text="'by ' + (entry.authorName || 'Unknown')"></span>
+                                            <template x-if="entry.updatedAt">
+                                                <span class="font-label-md text-label-md text-outline italic">(edited)</span>
+                                            </template>
+                                        </div>
+                                        <div class="flex items-center gap-xs flex-shrink-0" x-show="!entry.isCareList">
+                                            <button @click="openEditNote(entry)"
+                                                class="text-on-surface-variant hover:text-primary transition-colors">
+                                                <span class="material-symbols-outlined text-[18px]">edit</span>
+                                            </button>
+                                            <button @click="deleteNote(entry.id)"
+                                                class="text-on-surface-variant hover:text-error transition-colors">
+                                                <span class="material-symbols-outlined text-[18px]">delete</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="font-body-md text-on-surface note-body border-t border-outline-variant pt-sm mt-xs" x-html="renderNoteHtml(entry)"></div>
+                                    <template x-if="entry.sourceDocumentId">
+                                        <div class="flex items-center gap-xs pt-xs border-t border-outline-variant mt-xs">
+                                            <span class="material-symbols-outlined text-[12px] text-on-surface-variant">article</span>
+                                            <a :href="'shepherding-document.html?id=' + entry.sourceDocumentId"
+                                               class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors"
+                                               x-text="'From: ' + (sourceDocTitles[entry.sourceDocumentId] || 'Document') + ' →'"></a>
+                                        </div>
                                     </template>
-                                    <span class="font-label-md text-label-md text-on-surface-variant"
-                                          x-text="formatDate(note.createdAt)"></span>
-                                    <span class="font-label-md text-label-md text-on-surface-variant"
-                                          x-text="'by ' + (note.authorName || 'Unknown')"></span>
-                                    <template x-if="note.updatedAt">
-                                        <span class="font-label-md text-label-md text-outline italic">(edited)</span>
-                                    </template>
-                                </div>
-                                <div class="flex items-center gap-xs flex-shrink-0">
-                                    <button @click="openEditNote(note)"
-                                        class="text-on-surface-variant hover:text-primary transition-colors">
-                                        <span class="material-symbols-outlined text-[18px]">edit</span>
-                                    </button>
-                                    <button @click="deleteNote(note.id)"
-                                        class="text-on-surface-variant hover:text-error transition-colors">
-                                        <span class="material-symbols-outlined text-[18px]">delete</span>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="font-body-md text-on-surface note-body border-t border-outline-variant pt-sm mt-xs" x-html="renderNoteHtml(note)"></div>
-                            <template x-if="note.sourceDocumentId">
-                                <div class="flex items-center gap-xs pt-xs border-t border-outline-variant mt-xs">
-                                    <span class="material-symbols-outlined text-[12px] text-on-surface-variant">article</span>
-                                    <a :href="'shepherding-document.html?id=' + note.sourceDocumentId"
-                                       class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors"
-                                       x-text="'From: ' + (sourceDocTitles[note.sourceDocumentId] || 'Document') + ' →'"></a>
                                 </div>
                             </template>
+
+                            <!-- Status Change -->
+                            <template x-if="entry._entryKind === 'status_change'">
+                                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-sm">
+                                    <div class="flex flex-wrap items-center gap-sm">
+                                        <span class="flex items-center gap-xs px-sm py-xs bg-surface-container text-on-surface-variant rounded font-label-md text-label-md">
+                                            <span class="material-symbols-outlined text-[14px]">swap_vert</span>
+                                            Status changed
+                                        </span>
+                                        <span class="font-label-md text-label-md text-on-surface-variant" x-text="formatDate(entry.createdAt)"></span>
+                                        <span class="font-label-md text-label-md text-on-surface-variant" x-text="'by ' + (entry.authorName || 'Unknown')"></span>
+                                        <template x-if="entry.source === 'document' && entry.sourceDocumentId">
+                                            <a :href="'shepherding-document.html?id=' + entry.sourceDocumentId"
+                                               class="flex items-center gap-xs font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors"
+                                               x-text="'via ' + (sourceDocTitles[entry.sourceDocumentId] || 'Document') + ' →'"></a>
+                                        </template>
+                                        <template x-if="entry.source === 'people_list'">
+                                            <span class="font-label-md text-label-md text-on-surface-variant italic">via People list</span>
+                                        </template>
+                                    </div>
+                                    <div class="flex items-center gap-md border-t border-outline-variant pt-sm">
+                                        <!-- From -->
+                                        <div class="flex flex-col items-center gap-1">
+                                            <template x-if="entry.previousStatus">
+                                                <div x-html="renderMiniMatrix(entry.previousStatus)"></div>
+                                            </template>
+                                            <template x-if="!entry.previousStatus">
+                                                <div class="w-[64px] h-[64px] flex items-center justify-center">
+                                                    <span class="text-xs text-on-surface-variant italic">None</span>
+                                                </div>
+                                            </template>
+                                            <span class="text-[10px] text-on-surface-variant"
+                                                  x-text="entry.previousStatus ? formatStatus(entry.previousStatus) : 'No status'"></span>
+                                        </div>
+                                        <span class="material-symbols-outlined text-[18px] text-on-surface-variant flex-shrink-0">arrow_forward</span>
+                                        <!-- To -->
+                                        <div class="flex flex-col items-center gap-1">
+                                            <template x-if="entry.newStatus">
+                                                <div x-html="renderMiniMatrix(entry.newStatus)"></div>
+                                            </template>
+                                            <template x-if="!entry.newStatus">
+                                                <div class="w-[64px] h-[64px] flex items-center justify-center">
+                                                    <span class="text-xs text-on-surface-variant italic">Cleared</span>
+                                                </div>
+                                            </template>
+                                            <span class="text-[10px] font-medium"
+                                                  :class="entry.newStatus ? 'text-on-surface' : 'text-on-surface-variant italic'"
+                                                  x-text="entry.newStatus ? formatStatus(entry.newStatus) : 'Cleared'"></span>
+                                        </div>
+                                    </div>
+                                    <!-- Explanation -->
+                                    <div class="border-t border-outline-variant pt-sm flex flex-col gap-xs">
+                                        <template x-if="!editingExplanation[entry.id]">
+                                            <div class="flex items-start justify-between gap-sm">
+                                                <p x-show="entry.explanation" class="text-sm text-on-surface" x-text="entry.explanation"></p>
+                                                <button @click="startEditExplanation(entry.id, entry.explanation)"
+                                                    class="text-xs text-on-surface-variant hover:text-primary transition-colors font-label-md flex items-center gap-xs flex-shrink-0 ml-auto">
+                                                    <span class="material-symbols-outlined text-[14px]">edit_note</span>
+                                                    <span x-text="entry.explanation ? 'Edit explanation' : 'Add explanation'"></span>
+                                                </button>
+                                            </div>
+                                        </template>
+                                        <template x-if="editingExplanation[entry.id]">
+                                            <div class="flex flex-col gap-xs">
+                                                <textarea x-model="explanationDraft[entry.id]"
+                                                    placeholder="Why was this status changed?"
+                                                    rows="2"
+                                                    class="w-full border border-outline-variant rounded-lg px-sm py-xs font-body-md text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"></textarea>
+                                                <div class="flex gap-xs justify-end">
+                                                    <button @click="cancelEditExplanation(entry.id)"
+                                                        class="px-sm py-xs text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors">
+                                                        Cancel
+                                                    </button>
+                                                    <button @click="saveExplanation(entry.id)"
+                                                        class="px-sm py-xs text-xs font-label-md bg-primary text-on-primary rounded transition-colors">
+                                                        Save
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Tag Change -->
+                            <template x-if="entry._entryKind === 'tag_change'">
+                                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-sm">
+                                    <div class="flex flex-wrap items-center gap-sm">
+                                        <span class="flex items-center gap-xs px-sm py-xs bg-surface-container text-on-surface-variant rounded font-label-md text-label-md">
+                                            <span class="material-symbols-outlined text-[14px]">label</span>
+                                            Tag <span x-text="entry.action === 'added' ? 'added' : 'removed'"></span>
+                                        </span>
+                                        <span :class="entry.action === 'added' ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface-variant line-through'"
+                                              class="px-sm py-xs rounded-full font-label-md text-label-md"
+                                              x-text="'#' + entry.tagName"></span>
+                                        <span class="font-label-md text-label-md text-on-surface-variant" x-text="formatDate(entry.createdAt)"></span>
+                                        <span class="font-label-md text-label-md text-on-surface-variant" x-text="'by ' + (entry.authorName || 'Unknown')"></span>
+                                        <template x-if="entry.source === 'people_list'">
+                                            <span class="font-label-md text-label-md text-on-surface-variant italic">via People list</span>
+                                        </template>
+                                    </div>
+                                    <!-- Explanation -->
+                                    <div class="border-t border-outline-variant pt-sm flex flex-col gap-xs">
+                                        <template x-if="!editingExplanation[entry.id]">
+                                            <div class="flex items-start justify-between gap-sm">
+                                                <p x-show="entry.explanation" class="text-sm text-on-surface" x-text="entry.explanation"></p>
+                                                <button @click="startEditExplanation(entry.id, entry.explanation)"
+                                                    class="text-xs text-on-surface-variant hover:text-primary transition-colors font-label-md flex items-center gap-xs flex-shrink-0 ml-auto">
+                                                    <span class="material-symbols-outlined text-[14px]">edit_note</span>
+                                                    <span x-text="entry.explanation ? 'Edit explanation' : 'Add explanation'"></span>
+                                                </button>
+                                            </div>
+                                        </template>
+                                        <template x-if="editingExplanation[entry.id]">
+                                            <div class="flex flex-col gap-xs">
+                                                <textarea x-model="explanationDraft[entry.id]"
+                                                    placeholder="Why was this tag changed?"
+                                                    rows="2"
+                                                    class="w-full border border-outline-variant rounded-lg px-sm py-xs font-body-md text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"></textarea>
+                                                <div class="flex gap-xs justify-end">
+                                                    <button @click="cancelEditExplanation(entry.id)"
+                                                        class="px-sm py-xs text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors">
+                                                        Cancel
+                                                    </button>
+                                                    <button @click="saveExplanation(entry.id)"
+                                                        class="px-sm py-xs text-xs font-label-md bg-primary text-on-primary rounded transition-colors">
+                                                        Save
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Collapsed status group -->
+                            <template x-if="entry._entryKind === 'status_group'">
+                                <div class="flex items-center gap-sm py-xs">
+                                    <div class="flex-grow h-px bg-outline-variant"></div>
+                                    <span class="flex items-center gap-xs text-xs text-on-surface-variant flex-shrink-0 px-sm py-xs bg-surface-container rounded-full border border-outline-variant">
+                                        <span class="material-symbols-outlined text-[13px]">swap_vert</span>
+                                        <span x-text="entry.count + ' change' + (entry.count === 1 ? '' : 's')"></span>
+                                    </span>
+                                    <div class="flex-grow h-px bg-outline-variant"></div>
+                                </div>
+                            </template>
+
                         </div>
                     </template>
                 </div>
+            </div>
+        </div>
+
+        <!-- Danger Zone -->
+        <div class="mt-lg pt-lg border-t border-outline-variant flex flex-col gap-sm">
+            <h2 class="font-label-md text-label-md text-outline uppercase tracking-widest text-xs">Danger Zone</h2>
+            <div class="flex items-center justify-between border border-error/30 rounded-xl p-md bg-error-container/20">
+                <div class="flex flex-col gap-xs">
+                    <span class="font-label-md text-label-md text-on-surface">Delete status history</span>
+                    <span class="text-xs text-on-surface-variant">Permanently removes the history of status changes for this person. Notes and tags are preserved.</span>
+                </div>
+                <button @click="deleteStatusHistory()"
+                    class="ml-md flex-shrink-0 px-md py-xs font-label-md text-label-md bg-error text-on-error rounded-lg hover:bg-error/90 transition-colors">
+                    Delete History
+                </button>
+            </div>
+
+            <div class="flex items-center justify-between border border-error/30 rounded-xl p-md bg-error-container/20">
+                <div class="flex flex-col gap-xs">
+                    <span class="font-label-md text-label-md text-on-surface">Delete this person</span>
+                    <span class="text-xs text-on-surface-variant">Permanently removes this person and all their shepherding notes. This cannot be undone.</span>
+                </div>
+                <button @click="openDeletePerson()"
+                    class="ml-md flex-shrink-0 px-md py-xs font-label-md text-label-md bg-error text-on-error rounded-lg hover:bg-error/90 transition-colors">
+                    Delete
+                </button>
             </div>
         </div>
 
@@ -555,6 +838,56 @@
                         <button @click="saveProfile()" :disabled="isSubmitting" class="px-6 py-2 bg-primary text-on-primary rounded-full text-sm font-label-md hover:bg-primary/90 transition-all shadow-sm flex items-center gap-2">
                             <span x-show="isSubmitting" class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
                             <span x-text="isSubmitting ? 'Saving...' : 'Save Changes'"></span>
+                        </button>
+                    </footer>
+                </div>
+            </div>
+        </template>
+        <!-- Delete Person Modal -->
+        <template x-if="showDeletePersonModal">
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="!isDeleting && (showDeletePersonModal = false)"></div>
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative flex flex-col">
+                    <header class="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-error-container/30">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-error text-[20px]">warning</span>
+                            <h3 class="font-headline text-lg text-error font-bold">Delete Person</h3>
+                        </div>
+                        <button @click="showDeletePersonModal = false" :disabled="isDeleting"
+                            class="text-on-surface-variant hover:text-error transition-colors disabled:opacity-40">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </header>
+                    <div class="p-6 flex flex-col gap-md">
+                        <p class="text-sm text-on-surface">
+                            Are you sure you want to permanently delete
+                            <span class="font-semibold" x-text="person?.name"></span>?
+                            All shepherding notes will also be deleted. <span class="font-semibold text-error">This cannot be undone.</span>
+                        </p>
+                        <div class="flex flex-col gap-xs">
+                            <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Confirm with your password</label>
+                            <input type="password" x-model="deletePassword"
+                                   placeholder="Your password"
+                                   @keydown.enter="confirmDeletePerson()"
+                                   :disabled="isDeleting"
+                                   class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-error outline-none text-sm disabled:opacity-50" />
+                        </div>
+                        <template x-if="deleteError">
+                            <p class="text-xs text-error flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[14px]">error</span>
+                                <span x-text="deleteError"></span>
+                            </p>
+                        </template>
+                    </div>
+                    <footer class="p-4 border-t border-outline-variant bg-surface-container-low flex justify-end gap-3">
+                        <button @click="showDeletePersonModal = false" :disabled="isDeleting"
+                            class="px-4 py-2 text-sm font-label-md text-on-surface-variant hover:bg-surface-container transition-all disabled:opacity-40">
+                            Cancel
+                        </button>
+                        <button @click="confirmDeletePerson()" :disabled="isDeleting || !deletePassword"
+                            class="px-6 py-2 bg-error text-on-error rounded-full text-sm font-label-md hover:bg-error/90 transition-all shadow-sm flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+                            <span x-show="isDeleting" class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                            <span x-text="isDeleting ? 'Deleting...' : 'Delete Person'"></span>
                         </button>
                     </footer>
                 </div>

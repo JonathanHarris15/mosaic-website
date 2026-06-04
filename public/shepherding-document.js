@@ -1,5 +1,6 @@
 // ── Module-level state shared with NodeViews ──────────────────────────────────
 let _currentDocId    = null;
+let _currentDocTitle = '';
 let _currentUserName = '';
 let _currentUserId   = '';
 
@@ -10,6 +11,7 @@ let _mentionNotes    = [];
 let _mentionDocs     = [];
 let _mentionFolders  = [];
 let _mentionDataLoaded = false;
+let _allTagsList = []; // [{ id, name }] — for inline # trigger
 
 // People list for the panel person picker (id → name map)
 let _peopleList = []; // [{ id, name }]
@@ -28,11 +30,12 @@ function collectFolders(node, out) {
 async function loadDocMentionData() {
     if (_mentionDataLoaded) return;
     try {
-        const [peopleResult, docsResult, notesResult, structResult] = await Promise.allSettled([
+        const [peopleResult, docsResult, notesResult, structResult, tagsResult] = await Promise.allSettled([
             db.collection('people').orderBy('name', 'asc').get(),
             db.collection('elder_documents').get(),
             db.collectionGroup('shepherding_notes').orderBy('createdAt', 'desc').get(),
             db.collection('elder_document_structure').doc('root').get(),
+            db.collection('people_tags').orderBy('name', 'asc').get(),
         ]);
 
         const personMap = {};
@@ -65,6 +68,10 @@ async function loadDocMentionData() {
         if (structResult.status === 'fulfilled' && structResult.value.exists) {
             _mentionFolders = [];
             collectFolders(structResult.value.data(), _mentionFolders);
+        }
+
+        if (tagsResult.status === 'fulfilled') {
+            _allTagsList = tagsResult.value.docs.map(doc => ({ id: doc.id, name: doc.data().name || doc.id }));
         }
 
         _mentionDataLoaded = true;
@@ -202,8 +209,8 @@ function docRenderNode(node) {
             const label = (node.attrs?.label || '?').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             let parsed = null;
             try { parsed = JSON.parse(rawId); } catch {}
-            if (parsed?.kind === 'person') return `<a class="mention-chip" href="shepherding-profile.html?id=${encodeURIComponent(parsed.id)}">@${label}</a>`;
-            if (parsed?.kind === 'note' && parsed.personId) return `<a class="mention-chip" href="shepherding-profile.html?id=${encodeURIComponent(parsed.personId)}">@${label}</a>`;
+            if (parsed?.kind === 'person') return `<a class="mention-chip" href="shepherding-profile.html?id=${encodeURIComponent(parsed.id)}&fromPage=document&fromId=${encodeURIComponent(_currentDocId||'')}&fromTitle=${encodeURIComponent(_currentDocTitle||'')}">@${label}</a>`;
+            if (parsed?.kind === 'note' && parsed.personId) return `<a class="mention-chip" href="shepherding-profile.html?id=${encodeURIComponent(parsed.personId)}&fromPage=document&fromId=${encodeURIComponent(_currentDocId||'')}&fromTitle=${encodeURIComponent(_currentDocTitle||'')}">@${label}</a>`;
             if (parsed?.kind === 'elder_document') return `<a class="mention-chip" href="shepherding-document.html?id=${encodeURIComponent(parsed.id)}">@${label}</a>`;
             if (parsed?.kind === 'elder_folder') return `<a class="mention-chip" href="shepherding-documents.html?folder=${encodeURIComponent(parsed.id)}">@${label}</a>`;
             return `<span class="mention-chip" style="opacity:.5">@${label}</span>`;
@@ -341,7 +348,7 @@ function createInlinePickerPlugin() {
             try {
                 const ref = await db.collection('people').doc(person.id)
                     .collection('shepherding_notes').add({
-                        type: 'Elder Meeting Minutes', subject: '', contentJson: null, content: '',
+                        type: 'Elder Meeting', subject: '', contentJson: null, content: '',
                         authorName: _currentUserName, authorUid: _currentUserId,
                         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                         sourceDocumentId: _currentDocId,
@@ -352,7 +359,7 @@ function createInlinePickerPlugin() {
                 const from = Math.min(Math.max(0, triggerFrom), maxPos);
                 const to   = Math.min(Math.max(from, view.state.selection.from), maxPos);
                 const panelNode = state.schema.nodes.personPanel.create({
-                    personId: person.id, noteId, personName: person.name, noteType: 'Elder Meeting Minutes',
+                    personId: person.id, noteId, personName: person.name, noteType: 'Elder Meeting',
                 });
                 view.dispatch(state.tr.replaceWith(from, to, panelNode));
             } catch (e) { console.error('Error inserting panel:', e); }
@@ -420,7 +427,7 @@ function createInlinePickerPlugin() {
 
 // ── Person Panel NodeView ─────────────────────────────────────────────────────
 
-const NOTE_TYPES_ALL = ['Elder Check-in', 'Elder Interview', 'Elder Meeting Minutes', 'Life Update', 'Other'];
+let NOTE_TYPES_ALL = ['Elder Check-in', 'Elder Interview', 'Elder Meeting', 'Life Update', 'Other', 'Create New Note Type'];
 
 function makePersonPanelNodeView({ node, getPos, editor }) {
     let currentAttrs = { ...node.attrs };
@@ -453,12 +460,28 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
         const opt = document.createElement('option');
         opt.value = t;
         opt.textContent = t;
-        if (t === (node.attrs.noteType || 'Elder Meeting Minutes')) opt.selected = true;
+        if (t === (node.attrs.noteType || 'Elder Meeting')) opt.selected = true;
         typeSelect.appendChild(opt);
     });
     typeSelect.addEventListener('change', e => {
         e.stopPropagation();
-        const newType = typeSelect.value;
+        let newType = typeSelect.value;
+
+        if (newType === 'Create New Note Type') {
+            const prompted = prompt('Enter new note type:');
+            if (prompted && prompted.trim()) {
+                newType = prompted.trim();
+                if (!NOTE_TYPES_ALL.includes(newType)) {
+                    // Insert before 'Create New Note Type'
+                    const base = NOTE_TYPES_ALL.filter(t => t !== 'Create New Note Type');
+                    NOTE_TYPES_ALL = [...base, newType, 'Create New Note Type'];
+                }
+            } else {
+                typeSelect.value = node.attrs.noteType || 'Elder Meeting';
+                return;
+            }
+        }
+
         if (typeof getPos === 'function') {
             editor.view.dispatch(
                 editor.view.state.tr.setNodeMarkup(getPos(), null, { ...currentAttrs, noteType: newType })
@@ -470,10 +493,168 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
             .catch(err => console.error('Error updating note type:', err));
     });
 
+    // Status + tag state for the panel
+    let panelCurrentStatus = null;
+    let panelPersonTags = [];
+    let statusMatrixPopup = null;
+
+    const PANEL_URGENCY_LEVELS    = ['urgent', 'somewhat_urgent', 'not_urgent'];
+    const PANEL_IMPORTANCE_LEVELS = ['important', 'somewhat_important', 'not_important'];
+    const PANEL_URGENCY_LABEL     = { urgent: 'Urgent', somewhat_urgent: 'Somewhat', not_urgent: 'Not Urgent' };
+    const PANEL_IMPORTANCE_LABEL  = { important: 'Important', somewhat_important: 'Somewhat', not_important: 'Not Imp.' };
+
+    const statusBtn = document.createElement('button');
+    statusBtn.type = 'button';
+    statusBtn.className = 'person-panel-status';
+    statusBtn.title = 'Set pastoral status';
+
+    function updatePanelStatusDisplay() {
+        if (panelCurrentStatus) {
+            statusBtn.textContent = `${PANEL_URGENCY_LABEL[panelCurrentStatus.urgency] || ''} · ${PANEL_IMPORTANCE_LABEL[panelCurrentStatus.importance] || ''}`;
+            statusBtn.style.color = '#436082';
+        } else {
+            statusBtn.textContent = 'Set status';
+            statusBtn.style.color = '#75777f';
+        }
+    }
+
+    async function loadPanelPersonData(personId) {
+        try {
+            const snap = await db.collection('people').doc(personId).get();
+            if (snap.exists) {
+                panelCurrentStatus = snap.data().shepherdingStatus || null;
+                panelPersonTags = snap.data().tags || [];
+            }
+            updatePanelStatusDisplay();
+        } catch (e) { console.error('Error loading panel data:', e); }
+    }
+
+    async function handlePanelStatusClear() {
+        const previousStatus = panelCurrentStatus;
+        if (!previousStatus) return;
+        destroyStatusPopup();
+        try {
+            await db.collection('people').doc(currentAttrs.personId).update({
+                shepherdingStatus: null,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+            await db.collection('people').doc(currentAttrs.personId)
+                .collection('shepherding_activity').add({
+                    kind: 'status_change', previousStatus, newStatus: null,
+                    authorUid: _currentUserId, authorName: _currentUserName,
+                    source: 'document', sourceDocumentId: _currentDocId,
+                    explanation: '', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                });
+            panelCurrentStatus = null;
+            updatePanelStatusDisplay();
+        } catch (e) { console.error('Error clearing panel status:', e); }
+    }
+
+    function destroyStatusPopup() {
+        statusMatrixPopup?.remove();
+        statusMatrixPopup = null;
+    }
+
+    async function handlePanelStatusSet(urgency, importance) {
+        const clearing = panelCurrentStatus?.urgency === urgency && panelCurrentStatus?.importance === importance;
+        const previousStatus = panelCurrentStatus;
+        const newStatus = clearing ? null : { urgency, importance };
+        destroyStatusPopup();
+        try {
+            await db.collection('people').doc(currentAttrs.personId).update({
+                shepherdingStatus: newStatus,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+            await db.collection('people').doc(currentAttrs.personId)
+                .collection('shepherding_activity').add({
+                    kind: 'status_change',
+                    previousStatus,
+                    newStatus,
+                    authorUid: _currentUserId,
+                    authorName: _currentUserName,
+                    source: 'document',
+                    sourceDocumentId: _currentDocId,
+                    explanation: '',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                });
+            panelCurrentStatus = newStatus;
+            updatePanelStatusDisplay();
+        } catch (e) { console.error('Error setting panel status:', e); }
+    }
+
+    function showStatusMatrixPopup(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (statusMatrixPopup) { destroyStatusPopup(); return; }
+
+        statusMatrixPopup = document.createElement('div');
+        statusMatrixPopup.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px;font-family:"Work Sans",sans-serif;font-size:12px;';
+
+        const headerRow = document.createElement('div');
+        headerRow.style.cssText = 'display:grid;grid-template-columns:44px 44px 44px 44px;gap:3px;margin-bottom:3px;';
+        headerRow.appendChild(document.createElement('div'));
+        PANEL_URGENCY_LEVELS.forEach(u => {
+            const h = document.createElement('div');
+            h.style.cssText = 'text-align:center;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#75777f;padding-bottom:2px;';
+            h.textContent = PANEL_URGENCY_LABEL[u].slice(0, 3);
+            headerRow.appendChild(h);
+        });
+        statusMatrixPopup.appendChild(headerRow);
+
+        PANEL_IMPORTANCE_LEVELS.forEach(imp => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:grid;grid-template-columns:44px 44px 44px 44px;gap:3px;margin-bottom:3px;';
+            const rowLabel = document.createElement('div');
+            rowLabel.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;padding-right:4px;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#75777f;line-height:1.2;text-align:right;';
+            rowLabel.textContent = PANEL_IMPORTANCE_LABEL[imp].slice(0, 3);
+            row.appendChild(rowLabel);
+            PANEL_URGENCY_LEVELS.forEach(urg => {
+                const isActive = panelCurrentStatus?.urgency === urg && panelCurrentStatus?.importance === imp;
+                const cell = document.createElement('button');
+                cell.type = 'button';
+                cell.style.cssText = `width:44px;height:44px;border-radius:6px;border:2px solid ${isActive ? '#001a43' : '#c5c6d0'};background:${isActive ? '#001a43' : 'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;`;
+                if (isActive) {
+                    const dot = document.createElement('span');
+                    dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#fff;display:block;';
+                    cell.appendChild(dot);
+                }
+                cell.addEventListener('mousedown', e2 => { e2.preventDefault(); e2.stopPropagation(); handlePanelStatusSet(urg, imp); });
+                row.appendChild(cell);
+            });
+            statusMatrixPopup.appendChild(row);
+        });
+
+        if (panelCurrentStatus) {
+            const clearBtn = document.createElement('button');
+            clearBtn.type = 'button';
+            clearBtn.style.cssText = 'width:100%;margin-top:6px;padding:4px 8px;font-size:11px;font-family:inherit;color:#75777f;background:transparent;border:none;cursor:pointer;text-align:center;';
+            clearBtn.textContent = 'Clear status';
+            clearBtn.addEventListener('mousedown', e2 => { e2.preventDefault(); e2.stopPropagation(); handlePanelStatusSet(panelCurrentStatus.urgency, panelCurrentStatus.importance); });
+            statusMatrixPopup.appendChild(clearBtn);
+        }
+
+        const rect = statusBtn.getBoundingClientRect();
+        statusMatrixPopup.style.top  = `${rect.bottom + 4}px`;
+        statusMatrixPopup.style.left = `${Math.min(rect.left, window.innerWidth - 210)}px`;
+        document.body.appendChild(statusMatrixPopup);
+
+        const closeOnOutside = ev => {
+            if (!statusMatrixPopup?.contains(ev.target) && ev.target !== statusBtn) {
+                destroyStatusPopup();
+                document.removeEventListener('mousedown', closeOnOutside);
+            }
+        };
+        setTimeout(() => document.addEventListener('mousedown', closeOnOutside), 0);
+    }
+
+    statusBtn.addEventListener('mousedown', showStatusMatrixPopup);
+    updatePanelStatusDisplay();
+    loadPanelPersonData(node.attrs.personId);
+
     const viewLink = document.createElement('a');
     viewLink.className = 'person-panel-view-link';
     viewLink.textContent = 'View profile →';
-    viewLink.href = `shepherding-profile.html?id=${node.attrs.personId}`;
+    viewLink.href = `shepherding-profile.html?id=${node.attrs.personId}&fromPage=document&fromId=${encodeURIComponent(_currentDocId || '')}&fromTitle=${encodeURIComponent(_currentDocTitle || '')}`;
     viewLink.target = '_blank';
     viewLink.addEventListener('mousedown', e => e.stopPropagation());
 
@@ -492,6 +673,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
 
     header.appendChild(nameBtn);
     header.appendChild(typeSelect);
+    header.appendChild(statusBtn);
     header.appendChild(viewLink);
     header.appendChild(deleteBtn);
 
@@ -543,9 +725,45 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
 
             const content = snap.data().contentJson || '';
             const { Editor, StarterKit, Underline, TextStyle, FontFamily, FontSize, Highlight } = window._TipTap;
+            const trigExt = createInlineTriggersExtension({
+                personId: attrs.personId,
+                getAllTags:       () => _allTagsList,
+                getPersonTags:   () => panelPersonTags,
+                getCurrentStatus: () => panelCurrentStatus,
+                createTag: async (name) => {
+                    const trimmed = name.trim();
+                    await db.collection('people_tags').doc(trimmed).set({ name: trimmed, hiddenFromOthers: false, hidePeople: false });
+                    if (!_allTagsList.find(t => t.id === trimmed)) _allTagsList.push({ id: trimmed, name: trimmed });
+                    return { id: trimmed, name: trimmed };
+                },
+                onTagAdd: async (tagId, tagName) => {
+                    await db.collection('people').doc(attrs.personId).update({ tags: firebase.firestore.FieldValue.arrayUnion(tagId) });
+                    await db.collection('people').doc(attrs.personId).collection('shepherding_activity').add({
+                        kind: 'tag_change', tagId, tagName, action: 'added',
+                        authorUid: _currentUserId, authorName: _currentUserName,
+                        source: 'document', sourceDocumentId: _currentDocId,
+                        explanation: '', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    });
+                    if (!panelPersonTags.includes(tagId)) panelPersonTags = [...panelPersonTags, tagId];
+                },
+                onTagRemove: async (tagId, tagName) => {
+                    await db.collection('people').doc(attrs.personId).update({ tags: firebase.firestore.FieldValue.arrayRemove(tagId) });
+                    await db.collection('people').doc(attrs.personId).collection('shepherding_activity').add({
+                        kind: 'tag_change', tagId, tagName, action: 'removed',
+                        authorUid: _currentUserId, authorName: _currentUserName,
+                        source: 'document', sourceDocumentId: _currentDocId,
+                        explanation: '', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    });
+                    panelPersonTags = panelPersonTags.filter(t => t !== tagId);
+                },
+                onStatusChange: async (urg, imp) => {
+                    if (!urg) await handlePanelStatusClear();
+                    else await handlePanelStatusSet(urg, imp);
+                },
+            });
             bodyEditor = new Editor({
                 element: bodyMount,
-                extensions: [StarterKit, Underline, TextStyle, FontFamily, FontSize, Highlight.configure({ multicolor: true })],
+                extensions: [StarterKit, Underline, TextStyle, FontFamily, FontSize, Highlight.configure({ multicolor: true }), trigExt],
                 content,
                 onUpdate() {
                     clearTimeout(bodyTimer);
@@ -597,7 +815,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
             if (updatedNode.type.name !== 'personPanel') return false;
 
             nameBtn.textContent = updatedNode.attrs.personName || 'Unknown Person';
-            typeSelect.value    = updatedNode.attrs.noteType || 'Elder Meeting Minutes';
+            typeSelect.value    = updatedNode.attrs.noteType || 'Elder Meeting';
             viewLink.href       = `shepherding-profile.html?id=${updatedNode.attrs.personId}`;
 
             if (updatedNode.attrs.personId !== currentAttrs.personId ||
@@ -605,6 +823,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
                 clearTimeout(bodyTimer);
                 currentAttrs = { ...updatedNode.attrs };
                 initBodyEditor(currentAttrs);
+                loadPanelPersonData(currentAttrs.personId);
             } else {
                 currentAttrs = { ...updatedNode.attrs };
             }
@@ -614,10 +833,13 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
         destroy() {
             clearTimeout(bodyTimer);
             if (bodyEditor) { bodyEditor.destroy(); bodyEditor = null; }
+            destroyStatusPopup();
         },
 
         stopEvent(event) {
             if (typeSelect.contains(event.target)) return true;
+            if (statusBtn.contains(event.target)) return true;
+            if (statusMatrixPopup?.contains(event.target)) return true;
             if (header.contains(event.target)) return false;
             return bodyMount.contains(event.target);
         },
@@ -643,7 +865,7 @@ function createPersonPanelNode() {
                 personId:     { default: '' },
                 noteId:       { default: '' },
                 personName:   { default: '' },
-                noteType:     { default: 'Elder Meeting Minutes' },
+                noteType:     { default: 'Elder Meeting' },
                 bodySnapshot: { default: null },
             };
         },
@@ -754,7 +976,8 @@ document.addEventListener('alpine:init', () => {
                 if (!snap.exists) { window.location.href = 'shepherding-documents.html'; return; }
                 this.doc  = { id: snap.id, ...snap.data() };
                 this.title = this.doc.title || '';
-                _currentDocId = this.docId;
+                _currentDocId    = this.docId;
+                _currentDocTitle = this.title;
             } catch (e) {
                 console.error('Error loading document:', e);
                 this.showToast('Error loading document', 'error');
@@ -842,6 +1065,33 @@ document.addEventListener('alpine:init', () => {
                     }),
                 ],
                 content: this.doc?.contentJson || '',
+                editorProps: {
+                    handleClick(view, pos, event) {
+                        const target = event.target.closest('.mention-chip');
+                        if (!target) return false;
+
+                        const actualPos = view.posAtDOM(target, 0);
+                        const node = view.state.doc.nodeAt(actualPos);
+                        if (node && node.type.name === 'mention') {
+                            const rawId = node.attrs?.id || '';
+                            let parsed = null;
+                            try { parsed = JSON.parse(rawId); } catch {}
+                            if (!parsed) return false;
+
+                            if (parsed.kind === 'person') {
+                                window.location.href = `shepherding-profile.html?id=${encodeURIComponent(parsed.id)}&fromPage=document&fromId=${encodeURIComponent(_currentDocId||'')}&fromTitle=${encodeURIComponent(_currentDocTitle||'')}`;
+                            } else if (parsed.kind === 'note' && parsed.personId) {
+                                window.location.href = `shepherding-profile.html?id=${encodeURIComponent(parsed.personId)}&fromPage=document&fromId=${encodeURIComponent(_currentDocId||'')}&fromTitle=${encodeURIComponent(_currentDocTitle||'')}`;
+                            } else if (parsed.kind === 'elder_document') {
+                                window.location.href = `shepherding-document.html?id=${encodeURIComponent(parsed.id)}`;
+                            } else if (parsed.kind === 'elder_folder') {
+                                window.location.href = `shepherding-documents.html?folder=${encodeURIComponent(parsed.id)}`;
+                            }
+                            return true;
+                        }
+                        return false;
+                    },
+                },
                 onTransaction() { self.editorUpdated++; self.scheduleSave(); },
             });
         },
@@ -915,7 +1165,7 @@ document.addEventListener('alpine:init', () => {
                 if (isNew) {
                     const ref = await db.collection('people').doc(person.id)
                         .collection('shepherding_notes').add({
-                            type:            'Elder Meeting Minutes',
+                            type:            'Elder Meeting',
                             subject:         '',
                             contentJson:     null,
                             content:         '',
@@ -936,7 +1186,7 @@ document.addEventListener('alpine:init', () => {
                 if (this._pickerMode === 'insert') {
                     _docEditor?.chain().focus().insertContent({
                         type:  'personPanel',
-                        attrs: { personId: person.id, noteId, personName: person.name, noteType: 'Elder Meeting Minutes' },
+                        attrs: { personId: person.id, noteId, personName: person.name, noteType: 'Elder Meeting' },
                     }).run();
                 } else {
                     // Reattach: move note from old person to new person

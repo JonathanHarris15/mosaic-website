@@ -2,6 +2,14 @@
   "indexes": [],
   "fieldOverrides": [
     {
+      "collectionGroup": "shepherding_activity",
+      "fieldPath": "createdAt",
+      "indexes": [
+        { "order": "ASCENDING",  "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
       "collectionGroup": "shepherding_notes",
       "fieldPath": "createdAt",
       "indexes": [

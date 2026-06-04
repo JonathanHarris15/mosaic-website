@@ -100,7 +100,7 @@
                     <span class="material-symbols-outlined text-[18px]">create_new_folder</span>
                     New Folder
                 </button>
-                <button @click="createDocument()"
+                <button @click="openCreateModal()"
                     class="flex items-center gap-1 px-md py-xs bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary/90 transition-colors">
                     <span class="material-symbols-outlined text-[18px]">note_add</span>
                     New Document
@@ -233,6 +233,116 @@
             Double-click a folder to open it. Double-click a document to edit it. Drag items into folders to reorganise.
         </p>
     </main>
+
+    <!-- Create Document Modal -->
+    <div x-show="showCreateModal" x-cloak
+         class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+         @click.self="showCreateModal = false">
+        <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-sm flex flex-col gap-md">
+            <h2 class="font-headline-md text-headline-md text-primary">New Document</h2>
+            
+            <div class="flex flex-col gap-sm">
+                <label class="font-label-md text-label-md text-on-surface-variant">Document Type</label>
+                <div class="grid grid-cols-2 gap-sm">
+                    <button @click="createDocType = 'note'"
+                            :class="createDocType === 'note' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface'"
+                            class="px-md py-sm rounded-lg font-label-md text-sm transition-colors border border-outline-variant/30">
+                        Note
+                    </button>
+                    <button @click="createDocType = 'care-list'"
+                            :class="createDocType === 'care-list' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface'"
+                            class="px-md py-sm rounded-lg font-label-md text-sm transition-colors border border-outline-variant/30">
+                        Care List
+                    </button>
+                </div>
+            </div>
+
+            <div x-show="createDocType === 'care-list'" class="flex flex-col gap-sm overflow-y-auto max-h-[60vh]">
+                <label class="font-label-md text-label-md text-on-surface-variant">Filter Selection</label>
+                <div class="flex gap-sm mb-xs">
+                    <label class="flex items-center gap-xs cursor-pointer">
+                        <input type="radio" x-model="createFilterMode" value="preset" class="accent-primary" />
+                        <span class="font-body-md text-sm text-on-surface">Preset</span>
+                    </label>
+                    <label class="flex items-center gap-xs cursor-pointer">
+                        <input type="radio" x-model="createFilterMode" value="custom" class="accent-primary" />
+                        <span class="font-body-md text-sm text-on-surface">Custom</span>
+                    </label>
+                </div>
+
+                <div x-show="createFilterMode === 'preset'" class="flex flex-col gap-sm">
+                    <select x-model="selectedViewId" class="w-full bg-surface border-outline-variant rounded-lg text-sm">
+                        <template x-for="view in views" :key="view.id">
+                            <option :value="view.id" x-text="view.title"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <div x-show="createFilterMode === 'custom'" class="flex flex-col gap-md">
+                    <!-- Custom Tags -->
+                    <div class="flex flex-col gap-xs">
+                        <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Tags</span>
+                        <div class="flex flex-wrap gap-1">
+                            <template x-for="tag in shepherdingTags" :key="tag.id">
+                                <button @click="toggleCustomFilterTag(tag.id)"
+                                    :class="customFilter.filterTags.includes(tag.id) ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface'"
+                                    class="px-2 py-1 rounded-full text-[10px] font-label-md transition-colors"
+                                    x-text="tag.name">
+                                </button>
+                            </template>
+                        </div>
+                        <div class="flex gap-sm mt-xs" x-show="customFilter.filterTags.length > 1">
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="radio" x-model="customFilter.filterMode" value="any" class="w-3 h-3 accent-primary" />
+                                <span class="text-[10px] text-on-surface">Any</span>
+                            </label>
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="radio" x-model="customFilter.filterMode" value="all" class="w-3 h-3 accent-primary" />
+                                <span class="text-[10px] text-on-surface">All</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Custom Status Matrix -->
+                    <div class="flex flex-col gap-xs">
+                        <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Status Matrix</span>
+                        <div class="flex flex-col gap-1 items-center">
+                            <div class="grid gap-1" style="grid-template-columns: 44px 28px 28px 28px">
+                                <div></div>
+                                <div class="text-center font-label-md text-[8px] uppercase text-on-surface-variant">Urg</div>
+                                <div class="text-center font-label-md text-[8px] uppercase text-on-surface-variant">Swht</div>
+                                <div class="text-center font-label-md text-[8px] uppercase text-on-surface-variant">Not</div>
+                            </div>
+                            <template x-for="imp in ['important', 'somewhat_important', 'not_important']" :key="imp">
+                                <div class="grid gap-1 items-center" style="grid-template-columns: 44px 28px 28px 28px">
+                                    <div class="font-label-md text-[8px] uppercase text-on-surface-variant leading-tight" x-text="imp.split('_')[0]"></div>
+                                    <template x-for="urg in ['urgent', 'somewhat_urgent', 'not_urgent']" :key="urg">
+                                        <button @click="toggleCustomFilterZone(urg, imp)"
+                                            :class="isCustomZoneSelected(urg, imp) ? 'ring-2 ring-primary ring-inset' : ''"
+                                            class="w-7 h-7 rounded border transition-all"
+                                            :class="customZoneCellColor(urg, imp)">
+                                        </button>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-xs text-on-surface-variant mt-sm">This list will only show people matching this filter.</p>
+            </div>
+
+            <div class="flex justify-end gap-sm mt-md">
+                <button @click="showCreateModal = false"
+                    class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">
+                    Cancel
+                </button>
+                <button @click="createDocument()"
+                    class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors">
+                    Create
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Move Modal -->
     <div x-show="showMoveModal" x-cloak

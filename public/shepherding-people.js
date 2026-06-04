@@ -1,3 +1,9 @@
+const URGENCY_LEVELS = ['urgent', 'somewhat_urgent', 'not_urgent'];
+const IMPORTANCE_LEVELS = ['important', 'somewhat_important', 'not_important'];
+const URGENCY_LABEL = { urgent: 'Urgent', somewhat_urgent: 'Somewhat', not_urgent: 'Not Urgent' };
+const IMPORTANCE_LABEL = { important: 'Important', somewhat_important: 'Somewhat', not_important: 'Not Imp.' };
+function statusZoneKey(u, i) { return `${u}__${i}`; }
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('shepherdingPeople', () => ({
         currentUser: null,
@@ -10,7 +16,14 @@ document.addEventListener('alpine:init', () => {
         search: '',
         tagFilters: [],
         tagFilterMode: 'any',
+        statusZoneFilters: [],
         sortBy: 'name',
+
+        filterViews: [],
+        showSaveViewModal: false,
+        newFilterViewName: '',
+        isSavingView: false,
+        showStatusFilter: true,
 
         showAddPersonModal: false,
         newPerson: {
@@ -30,6 +43,20 @@ document.addEventListener('alpine:init', () => {
         toast: { show: false, message: '', type: 'success' },
 
         async init() {
+            // Restore filters from session storage (persists across in-session navigation)
+            try {
+                const savedFilters = sessionStorage.getItem('shepherding_tagFilters');
+                if (savedFilters) this.tagFilters = JSON.parse(savedFilters);
+                const savedMode = sessionStorage.getItem('shepherding_tagFilterMode');
+                if (savedMode) this.tagFilterMode = savedMode;
+                const savedZones = sessionStorage.getItem('shepherding_statusZoneFilters');
+                if (savedZones) this.statusZoneFilters = JSON.parse(savedZones);
+            } catch {}
+
+            this.$watch('tagFilters', val => sessionStorage.setItem('shepherding_tagFilters', JSON.stringify(val)));
+            this.$watch('tagFilterMode', val => sessionStorage.setItem('shepherding_tagFilterMode', val));
+            this.$watch('statusZoneFilters', val => sessionStorage.setItem('shepherding_statusZoneFilters', JSON.stringify(val)));
+
             auth.onAuthStateChanged(async (user) => {
                 if (!user) {
                     window.location.href = 'login.html';
@@ -46,6 +73,7 @@ document.addEventListener('alpine:init', () => {
                 await Promise.all([
                     this.loadPeople(),
                     this.loadTags(),
+                    this.loadFilterViews(),
                 ]);
                 this.loading = false;
             });
@@ -104,6 +132,15 @@ document.addEventListener('alpine:init', () => {
                 });
             }
 
+            if (this.statusZoneFilters.length > 0) {
+                result = result.filter(p => {
+                    if (!p.shepherdingStatus) return false;
+                    return this.statusZoneFilters.includes(
+                        statusZoneKey(p.shepherdingStatus.urgency, p.shepherdingStatus.importance)
+                    );
+                });
+            }
+
             if (this.search.trim()) {
                 const q = this.search.trim().toLowerCase();
                 result = result.filter(p => p.name?.toLowerCase().includes(q));
@@ -136,6 +173,95 @@ document.addEventListener('alpine:init', () => {
         getTagName(tagId) {
             const tag = this.shepherdingTags.find(t => t.id === tagId);
             return tag ? tag.name : tagId;
+        },
+
+        // ── Status matrix ─────────────────────────────────────────────────────
+
+        toggleStatusZone(urgency, importance) {
+            const key = statusZoneKey(urgency, importance);
+            if (this.statusZoneFilters.includes(key)) {
+                this.statusZoneFilters = this.statusZoneFilters.filter(z => z !== key);
+            } else {
+                this.statusZoneFilters = [...this.statusZoneFilters, key];
+            }
+        },
+
+        isZoneSelected(urgency, importance) {
+            return this.statusZoneFilters.includes(statusZoneKey(urgency, importance));
+        },
+
+        statusCellColor(urgency, importance) {
+            const urgIdx = URGENCY_LEVELS.indexOf(urgency);
+            const impIdx = IMPORTANCE_LEVELS.indexOf(importance);
+            const score = urgIdx + impIdx;
+            if (score <= 1) return 'border-error/40 bg-error-container/20';
+            if (score <= 3) return 'border-secondary/30 bg-secondary-container/20';
+            return 'border-outline-variant bg-surface-container';
+        },
+
+        formatStatus(status) {
+            if (!status) return '';
+            return `${URGENCY_LABEL[status.urgency] || ''} · ${IMPORTANCE_LABEL[status.importance] || ''}`;
+        },
+
+        urgencyLabel(u) { return URGENCY_LABEL[u] || u; },
+        importanceLabel(i) { return IMPORTANCE_LABEL[i] || i; },
+
+        // ── Filter views ──────────────────────────────────────────────────────
+
+        async loadFilterViews() {
+            try {
+                const snap = await db.collection('shepherding_views').orderBy('title', 'asc').get();
+                this.filterViews = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            } catch (e) {
+                console.error('Error loading filter views:', e);
+            }
+        },
+
+        loadFilterView(view) {
+            this.tagFilters = view.filterTags || [];
+            this.tagFilterMode = view.filterMode || 'any';
+            this.statusZoneFilters = view.statusZoneFilters || [];
+            if (view.sortBy) this.sortBy = view.sortBy;
+        },
+
+        async saveFilterView() {
+            const title = this.newFilterViewName.trim();
+            if (!title) return;
+            this.isSavingView = true;
+            try {
+                const view = {
+                    title,
+                    filterTags: this.tagFilters,
+                    filterMode: this.tagFilterMode,
+                    statusZoneFilters: this.statusZoneFilters,
+                    sortBy: this.sortBy,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    createdBy: auth.currentUser.uid,
+                };
+                const ref = await db.collection('shepherding_views').add(view);
+                this.filterViews = [...this.filterViews, { id: ref.id, ...view }]
+                    .sort((a, b) => a.title.localeCompare(b.title));
+                this.newFilterViewName = '';
+                this.showSaveViewModal = false;
+                this.showToast(`View "${title}" saved`);
+            } catch (e) {
+                console.error('Error saving filter view:', e);
+                this.showToast('Error saving view', 'error');
+            } finally {
+                this.isSavingView = false;
+            }
+        },
+
+        async deleteFilterView(id) {
+            try {
+                await db.collection('shepherding_views').doc(id).delete();
+                this.filterViews = this.filterViews.filter(v => v.id !== id);
+                this.showToast('View deleted');
+            } catch (e) {
+                console.error('Error deleting view:', e);
+                this.showToast('Error deleting view', 'error');
+            }
         },
 
         async addPerson() {
@@ -186,31 +312,45 @@ document.addEventListener('alpine:init', () => {
         async togglePersonTag(tagId) {
             if (!this.tagPerson) return;
             const hasIt = this.tagPerson.tags.includes(tagId);
-            const newTags = hasIt 
+            const newTags = hasIt
                 ? this.tagPerson.tags.filter(t => t !== tagId)
                 : [...this.tagPerson.tags, tagId];
-            
-            // Optimization: Apply hidePeople logic if relevant
+
             const hidePeopleIds = new Set(this.shepherdingTags.filter(t => t.hidePeople).map(t => t.id));
             const shepherdingHidden = newTags.some(id => hidePeopleIds.has(id));
+            const tag = this.shepherdingTags.find(t => t.id === tagId);
+            const tagName = tag ? tag.name : tagId;
+            const authorName = this.currentUser?.email ? this.currentUser.email.split('@')[0] : 'Elder';
 
             try {
                 await db.collection('people').doc(this.tagPerson.id).update({
-                    tags: hasIt 
+                    tags: hasIt
                         ? firebase.firestore.FieldValue.arrayRemove(tagId)
                         : firebase.firestore.FieldValue.arrayUnion(tagId),
                     shepherdingHidden
                 });
-                
+                await db.collection('people').doc(this.tagPerson.id)
+                    .collection('shepherding_activity').add({
+                        kind: 'tag_change',
+                        tagId,
+                        tagName,
+                        action: hasIt ? 'removed' : 'added',
+                        authorUid: this.currentUser.uid,
+                        authorName,
+                        source: 'people_list',
+                        sourceDocumentId: null,
+                        explanation: '',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    });
+
                 this.tagPerson.tags = newTags;
-                
-                // Update in main list
+
                 const idx = this.people.findIndex(p => p.id === this.tagPerson.id);
                 if (idx !== -1) {
                     this.people[idx].tags = newTags;
                     this.people[idx].shepherdingHidden = shepherdingHidden;
                 }
-                
+
                 this.showToast(`Tag ${hasIt ? 'removed' : 'applied'}`);
             } catch (e) {
                 console.error('Error toggling person tag:', e);

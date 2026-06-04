@@ -42,9 +42,29 @@ _Avoid_: Editor, rich text editor, text area
 An inline link embedded in a Note Body that points to a Person, Shepherding Note, Elder Document, or Folder. Triggered by typing `@` in the Note Module editor. Rendered as a styled chip. Stores the referenced entity's ID, kind (`person` | `note` | `elder_document` | `elder_folder`), and label at write time. The former `meeting` kind is superseded by `elder_document`. Reminders, tags, note types, and other metadata are not Cross-Referenceable.
 _Avoid_: Link, mention, tag (tag refers to Shepherding Tag)
 
+**Shepherding Status**:
+The current pastoral attention level assigned to a Person, expressed as a combination of urgency (urgent, somewhat_urgent, not_urgent) and importance (important, somewhat_important, not_important). Can be set from the Shepherding Profile, the People list, or an Elder Document. Changing it generates a Status Change in the Pastoral Record. A Person with no status set has no assigned attention level.
+_Avoid_: Priority, flag, alert level, severity
+
 **Shepherding Profile**:
-The elder-only view of an existing Person record. Displays all Shepherding Notes for that Person. The underlying Person is created and managed in the People Manager; the Shepherding Profile layers on top of it.
+The elder-only view of an existing Person record. Displays the Pastoral Record for that Person. The underlying Person is created and managed in the People Manager; the Shepherding Profile layers on top of it.
 _Avoid_: Member page, elder profile
+
+**Pastoral Record**:
+The chronological feed displayed on a Shepherding Profile. The single unified view of all shepherding activity for a Person, combining Shepherding Notes, Status Changes, and Tag Changes in reverse-chronological order.
+_Avoid_: Activity feed, timeline, history log
+
+**Status Change**:
+A Pastoral Record entry that captures a transition in a Person's Shepherding Status. Records the previous and new status values, which Elder made the change, the source (Shepherding Profile, People list, or Elder Document), and an optional Explanation. Generated automatically whenever a Shepherding Status is set or cleared.
+_Avoid_: Status update, status event, status history entry
+
+**Tag Change**:
+A Pastoral Record entry that captures a Shepherding Tag being added to or removed from a Person. Records the tag name, whether the action was an addition or removal, which Elder made the change, the source, and an optional Explanation. Generated when tags are changed from the Shepherding Profile or the People list.
+_Avoid_: Tag event, tag history entry
+
+**Explanation**:
+An optional plain-text annotation that any Elder or super admin can add to a Status Change or Tag Change entry after the fact. Records the reason or context for the change. Distinct from a Shepherding Note — an Explanation is always scoped to a specific Status Change or Tag Change and carries no rich-text editor.
+_Avoid_: Note (use Shepherding Note for standalone records), comment, reason
 
 **Filtered View**:
 A shared, elder-configured saved filter over the People list that appears as a table widget on every elder's Shepherd Landing Page. Any elder or super admin can create, edit, or delete one.
@@ -145,9 +165,15 @@ Canonical names for types of involvement.
 ## Shepherding System
 
 ### Elder Document
-A standalone text document created and managed by elders, stored in the `elder_documents` collection. Not attached to any Person. Replaces and generalises the former `elder_meetings` concept — a "Meeting Minutes" document is simply an Elder Document with an appropriate title or folder, not a distinct entity type.
-- **Fields**: `title`, `contentJson`, `authorName`, `authorUid`, `createdAt`, `updatedAt`, `updatedByName`.
-- No `type` field — folder placement serves as the sole categorisation mechanism.
+A standalone text document created and managed by elders, stored in the `elder_documents` collection. Not attached to any Person. Replaces and generalises the former `elder_meetings` concept.
+- **Fields**: `title`, `contentJson`, `authorName`, `authorUid`, `createdAt`, `updatedAt`, `updatedByName`, `docType` (optional, defaults to 'note'), `filterId` (for care-list type).
+- `docType`: Can be `'note'` (standard TipTap document) or `'care-list'`.
+
+### Care List
+A type of Elder Document that displays a filtered list of people. The first column shows the person's name (sticky); additional elder-defined columns scroll horizontally and allow editing person attributes inline — including applying or removing Shepherding Tags (`#` / `-#` triggers) and setting the Shepherding Status (`$$` trigger, which spawns the status matrix inline). Status changes made via `$$` generate a Status Change on the person's Pastoral Record. Unlike Shepherding Notes, Care List cell content is private to the Care List document and does not sync to the person's Shepherding Profile.
+
+### Care List Editor
+The interface for a Care List document. It presents the filtered list of people and a dedicated rich-text editor for each. A single shared toolbar at the top provides formatting tools for the currently focused editor. Changes are saved automatically on edit.
 
 ### Document Library Access
 All elders and super admins have equal create/read/update/delete access to all Elder Documents and the folder structure. The `isElder()` Firestore rule (`['elder', 'super_admin']`) covers the entire Document Library — no per-author restrictions.
@@ -169,6 +195,12 @@ Renaming is inline for both folders and documents: clicking the rename icon (or 
 Creating a new document or folder follows the same inline pattern: the item appears immediately in the current folder with its name field already in edit mode (text selected), ready for the elder to type the name. No modal, no navigation. The elder double-clicks to open a document only after naming it.
 
 Deleting a non-empty folder requires a confirmation dialog that lists the count of affected documents. On confirmation, all contained Elder Documents (at any depth) are deleted from Firestore and the folder is removed from the structure tree.
+
+### Status Change
+A record in a Person's Pastoral Record capturing a Shepherding Status transition. Stored in a sub-collection under the Person. Fields: previous status, new status, author name and UID, source (`profile` | `people_list` | `document`), optional source document ID, timestamp, and an optional Explanation. The Person document retains a denormalized `shepherdingStatus` field for list/filter queries; that field and the Status Change sub-collection are always written together.
+
+### Tag Change
+A record in a Person's Pastoral Record capturing a Shepherding Tag being applied or removed. Stored in the same sub-collection as Status Changes. Fields: tag ID, tag name, action (`added` | `removed`), author name and UID, source (`profile` | `people_list` | `document`), optional source document ID, timestamp, and an optional Explanation.
 
 ### Shepherding Note
 A rich-text note attached to a specific Person (stored in `people/{id}/shepherding_notes`). Distinct from an Elder Document — a Shepherding Note is person-scoped context; an Elder Document is board-level, standalone content.

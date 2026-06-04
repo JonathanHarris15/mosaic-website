@@ -193,7 +193,7 @@
                             <div class="flex flex-col gap-xs">
                                 <h3 class="font-headline-md text-headline-md text-on-surface" x-text="view.title"></h3>
                                 <div class="flex flex-wrap gap-xs" x-show="view.filterTags && view.filterTags.length > 0">
-                                    <span class="font-label-md text-label-md text-on-surface-variant">Showing:</span>
+                                    <span class="font-label-md text-label-md text-on-surface-variant">Tags:</span>
                                     <template x-for="tagId in view.filterTags" :key="tagId">
                                         <span class="px-xs py-[2px] bg-secondary-container text-on-secondary-container rounded font-label-md text-label-md"
                                               x-text="getTagName(tagId)"></span>
@@ -201,7 +201,12 @@
                                     <span class="font-label-md text-label-md text-on-surface-variant"
                                           x-text="view.filterMode === 'all' ? '(match all)' : '(match any)'"></span>
                                 </div>
-                                <span x-show="!view.filterTags || view.filterTags.length === 0"
+                                <div class="flex items-center gap-xs" x-show="view.statusZoneFilters && view.statusZoneFilters.length > 0">
+                                    <span class="font-label-md text-label-md text-on-surface-variant">Status:</span>
+                                    <span class="px-xs py-[2px] bg-primary-fixed text-on-primary-fixed rounded font-label-md text-label-md"
+                                          x-text="view.statusZoneFilters.length + ' zone' + (view.statusZoneFilters.length === 1 ? '' : 's') + ' selected'"></span>
+                                </div>
+                                <span x-show="(!view.filterTags || view.filterTags.length === 0) && (!view.statusZoneFilters || view.statusZoneFilters.length === 0)"
                                       class="font-label-md text-label-md text-on-surface-variant">Showing all active members</span>
                             </div>
                             <div class="flex items-center gap-2">
@@ -239,7 +244,7 @@
                                                 </div>
                                             </td>
                                             <td class="px-lg py-sm text-right">
-                                                <a :href="`shepherding-profile.html?id=${person.id}`"
+                                                <a :href="`shepherding-profile.html?id=${person.id}&fromPage=dashboard`"
                                                    class="text-primary hover:underline font-label-md text-label-md">View</a>
                                             </td>
                                         </tr>
@@ -325,15 +330,21 @@
     <div x-show="showViewModal" x-cloak
          class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
          @click.self="showViewModal = false; editingViewId = null">
-        <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-md flex flex-col gap-md">
-            <h2 class="font-headline-md text-headline-md text-primary" x-text="editingViewId ? 'Edit Filtered View' : 'New Filtered View'"></h2>
-            <div class="flex flex-col gap-sm">
+        <div class="bg-surface-container-lowest rounded-xl border border-outline-variant w-full max-w-md flex flex-col max-h-[85vh]">
+            <!-- Modal header -->
+            <div class="px-lg pt-lg pb-md flex-shrink-0">
+                <h2 class="font-headline-md text-headline-md text-primary" x-text="editingViewId ? 'Edit Filtered View' : 'New Filtered View'"></h2>
+            </div>
+
+            <!-- Scrollable body -->
+            <div class="px-lg pb-md flex flex-col gap-md overflow-y-auto flex-1">
                 <label class="flex flex-col gap-xs">
                     <span class="font-label-md text-label-md text-on-surface-variant">View title</span>
                     <input type="text" x-model="newView.title" placeholder="e.g. Red Flag Members"
                            class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
                 </label>
 
+                <!-- Filter by Tags -->
                 <div class="flex flex-col gap-xs">
                     <span class="font-label-md text-label-md text-on-surface-variant">Filter by tags</span>
                     <p class="text-xs text-on-surface-variant">Leave empty to show all active members.</p>
@@ -364,9 +375,50 @@
                         </label>
                     </div>
                 </div>
+
+                <!-- Filter by Status Matrix -->
+                <div class="flex flex-col gap-xs border-t border-outline-variant/50 pt-md">
+                    <div class="flex items-center justify-between">
+                        <span class="font-label-md text-label-md text-on-surface-variant">Filter by status</span>
+                        <button x-show="newView.statusZoneFilters.length > 0"
+                            @click="newView.statusZoneFilters = []"
+                            class="text-[10px] font-label-md text-on-surface-variant hover:text-error transition-colors uppercase tracking-wider font-bold">
+                            Clear
+                        </button>
+                    </div>
+                    <p class="text-xs text-on-surface-variant">Select cells to filter by urgency × importance. Leave empty to include all.</p>
+                    <div class="flex flex-col gap-1 items-center pt-1">
+                        <!-- Column headers: Urgent / Somewhat / Not -->
+                        <div class="grid gap-1" style="grid-template-columns: 56px 36px 36px 36px">
+                            <div></div>
+                            <div class="text-center font-label-md text-[9px] uppercase tracking-wide text-on-surface-variant">Urg.</div>
+                            <div class="text-center font-label-md text-[9px] uppercase tracking-wide text-on-surface-variant">Swht.</div>
+                            <div class="text-center font-label-md text-[9px] uppercase tracking-wide text-on-surface-variant">Not</div>
+                        </div>
+                        <!-- Row: Important -->
+                        <template x-for="imp in ['important', 'somewhat_important', 'not_important']" :key="imp">
+                            <div class="grid gap-1 items-center" style="grid-template-columns: 56px 36px 36px 36px">
+                                <div class="text-right pr-2 font-label-md text-[9px] uppercase tracking-wide text-on-surface-variant leading-tight"
+                                     x-text="imp === 'important' ? 'Imp.' : imp === 'somewhat_important' ? 'Swht.' : 'Not'"></div>
+                                <template x-for="urg in ['urgent', 'somewhat_urgent', 'not_urgent']" :key="urg">
+                                    <button @click="toggleViewStatusZone(urg, imp)"
+                                        :class="isViewZoneSelected(urg, imp)
+                                            ? 'bg-primary border-primary ring-2 ring-primary/30 shadow-sm'
+                                            : viewStatusCellColor(urg, imp) + ' hover:border-outline hover:bg-surface-container-high'"
+                                        class="w-8 h-8 border-2 rounded flex items-center justify-center transition-all duration-150 cursor-pointer mx-auto">
+                                        <span x-show="isViewZoneSelected(urg, imp)"
+                                              class="w-2 h-2 rounded-full bg-on-primary"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
             </div>
-            <div class="flex justify-end gap-sm mt-xs">
-                <button @click="showViewModal = false; editingViewId = null; newView = { title: '', filterTags: [], filterMode: 'any' }"
+
+            <!-- Modal footer -->
+            <div class="px-lg py-md border-t border-outline-variant flex justify-end gap-sm flex-shrink-0">
+                <button @click="showViewModal = false; editingViewId = null; newView = { title: '', filterTags: [], filterMode: 'any', statusZoneFilters: [] }"
                     class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">Cancel</button>
                 <button @click="editingViewId ? updateView() : addView()"
                     :disabled="!newView.title.trim()"

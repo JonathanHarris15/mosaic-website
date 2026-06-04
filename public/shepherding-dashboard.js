@@ -1,3 +1,7 @@
+const DASH_URGENCY_LEVELS = ['urgent', 'somewhat_urgent', 'not_urgent'];
+const DASH_IMPORTANCE_LEVELS = ['important', 'somewhat_important', 'not_important'];
+function dashZoneKey(u, i) { return `${u}__${i}`; }
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('shepherdingDashboard', () => ({
         currentUser: null,
@@ -12,7 +16,7 @@ document.addEventListener('alpine:init', () => {
         selectedViewId: null,
         editingViewId: null,
         showViewModal: false,
-        newView: { title: '', filterTags: [], filterMode: 'any' },
+        newView: { title: '', filterTags: [], filterMode: 'any', statusZoneFilters: [] },
 
         people: [],
 
@@ -138,11 +142,13 @@ document.addEventListener('alpine:init', () => {
                     title: this.newView.title.trim(),
                     filterTags: [...this.newView.filterTags],
                     filterMode: this.newView.filterMode,
+                    statusZoneFilters: [...this.newView.statusZoneFilters],
+                    sortBy: 'name',
                     createdBy: this.currentUser.uid,
                     createdByName: this.currentUserName,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 });
-                this.newView = { title: '', filterTags: [], filterMode: 'any' };
+                this.newView = { title: '', filterTags: [], filterMode: 'any', statusZoneFilters: [] };
                 this.showViewModal = false;
                 await this.loadViews();
                 this.selectedViewId = docRef.id;
@@ -158,7 +164,8 @@ document.addEventListener('alpine:init', () => {
             this.newView = {
                 title: view.title,
                 filterTags: [...(view.filterTags || [])],
-                filterMode: view.filterMode || 'any'
+                filterMode: view.filterMode || 'any',
+                statusZoneFilters: [...(view.statusZoneFilters || [])],
             };
             this.showViewModal = true;
         },
@@ -170,9 +177,10 @@ document.addEventListener('alpine:init', () => {
                     title: this.newView.title.trim(),
                     filterTags: [...this.newView.filterTags],
                     filterMode: this.newView.filterMode,
+                    statusZoneFilters: [...this.newView.statusZoneFilters],
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                 });
-                this.newView = { title: '', filterTags: [], filterMode: 'any' };
+                this.newView = { title: '', filterTags: [], filterMode: 'any', statusZoneFilters: [] };
                 this.showViewModal = false;
                 const updatedId = this.editingViewId;
                 this.editingViewId = null;
@@ -294,16 +302,51 @@ document.addEventListener('alpine:init', () => {
         },
 
         getPeopleForView(view) {
-            if (!view.filterTags || view.filterTags.length === 0) {
-                return this.people.filter(p => p.membership?.status !== 'inactive');
+            let result = this.people.filter(p => p.membership?.status !== 'inactive');
+
+            if (view.filterTags && view.filterTags.length > 0) {
+                result = result.filter(p => {
+                    const personTags = p.tags || [];
+                    if (view.filterMode === 'all') {
+                        return view.filterTags.every(t => personTags.includes(t));
+                    }
+                    return view.filterTags.some(t => personTags.includes(t));
+                });
             }
-            return this.people.filter(p => {
-                const personTags = p.tags || [];
-                if (view.filterMode === 'all') {
-                    return view.filterTags.every(t => personTags.includes(t));
-                }
-                return view.filterTags.some(t => personTags.includes(t));
-            });
+
+            if (view.statusZoneFilters && view.statusZoneFilters.length > 0) {
+                result = result.filter(p => {
+                    if (!p.shepherdingStatus) return false;
+                    return view.statusZoneFilters.includes(
+                        dashZoneKey(p.shepherdingStatus.urgency, p.shepherdingStatus.importance)
+                    );
+                });
+            }
+
+            return result;
+        },
+
+        toggleViewStatusZone(urg, imp) {
+            const key = dashZoneKey(urg, imp);
+            const idx = this.newView.statusZoneFilters.indexOf(key);
+            if (idx === -1) {
+                this.newView.statusZoneFilters = [...this.newView.statusZoneFilters, key];
+            } else {
+                this.newView.statusZoneFilters = this.newView.statusZoneFilters.filter(z => z !== key);
+            }
+        },
+
+        isViewZoneSelected(urg, imp) {
+            return this.newView.statusZoneFilters.includes(dashZoneKey(urg, imp));
+        },
+
+        viewStatusCellColor(urg, imp) {
+            const urgIdx = DASH_URGENCY_LEVELS.indexOf(urg);
+            const impIdx = DASH_IMPORTANCE_LEVELS.indexOf(imp);
+            const score = urgIdx + impIdx;
+            if (score <= 1) return 'border-error/40 bg-error-container/20';
+            if (score <= 3) return 'border-secondary/30 bg-secondary-container/20';
+            return 'border-outline-variant bg-surface-container';
         },
 
         getTagName(tagId) {

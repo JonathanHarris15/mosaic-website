@@ -1,4 +1,9 @@
-const NOTE_TYPES = ['Elder Check-in', 'Elder Interview', 'Elder Meeting Minutes', 'Life Update', 'Other'];
+const NOTE_TYPES = ['Elder Check-in', 'Elder Interview', 'Elder Meeting', 'Life Update', 'Other'];
+
+const URGENCY_LEVELS = ['urgent', 'somewhat_urgent', 'not_urgent'];
+const IMPORTANCE_LEVELS = ['important', 'somewhat_important', 'not_important'];
+const URGENCY_LABEL = { urgent: 'Urgent', somewhat_urgent: 'Somewhat Urgent', not_urgent: 'Not Urgent' };
+const IMPORTANCE_LABEL = { important: 'Important', somewhat_important: 'Somewhat Important', not_important: 'Not Important' };
 
 // Kept outside Alpine to avoid reactive proxying of the TipTap editor object
 let _noteEditor = null;
@@ -275,8 +280,15 @@ document.addEventListener('alpine:init', () => {
         personId: null,
         person: null,
 
+        fromPage: null,
+        fromId: null,
+        fromTitle: null,
+
         notes: [],
+        activity: [],
         sourceDocTitles: {},
+        editingExplanation: {},
+        explanationDraft: {},
         showNoteEditor: false,
         editingNote: null,
         noteForm: { type: 'Elder Check-in', subject: '', contentJson: null },
@@ -290,13 +302,23 @@ document.addEventListener('alpine:init', () => {
         showTagPanel: false,
         newTagName: '',
 
-        noteTypes: NOTE_TYPES,
+        showDeletePersonModal: false,
+        deletePassword: '',
+        deleteError: '',
+        isDeleting: false,
+
+        collapseStatusChanges: false,
+
+        noteTypes: [...NOTE_TYPES, 'Create New Note Type'],
         loading: true,
         toast: { show: false, message: '', type: 'success' },
 
         async init() {
             const params = new URLSearchParams(window.location.search);
-            this.personId = params.get('id');
+            this.personId  = params.get('id');
+            this.fromPage  = params.get('fromPage')  || null;
+            this.fromId    = params.get('fromId')    || null;
+            this.fromTitle = params.get('fromTitle') || null;
             if (!this.personId) {
                 window.location.href = 'shepherding-dashboard.html';
                 return;
@@ -322,6 +344,7 @@ document.addEventListener('alpine:init', () => {
                     this.loadPerson(),
                     this.loadNotes(),
                     this.loadTags(),
+                    this.loadActivity(),
                 ]);
                 this.loading = false;
             });
@@ -342,11 +365,18 @@ document.addEventListener('alpine:init', () => {
 
         async loadNotes() {
             try {
-                const snap = await db.collection('people').doc(this.personId)
-                    .collection('shepherding_notes')
-                    .orderBy('createdAt', 'desc')
-                    .get();
-                this.notes = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const [notesSnap, careListNotes] = await Promise.all([
+                    db.collection('people').doc(this.personId)
+                        .collection('shepherding_notes')
+                        .orderBy('createdAt', 'desc')
+                        .get(),
+                    this.loadCareListNotes()
+                ]);
+
+                this.notes = [
+                    ...notesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+                    ...careListNotes
+                ];
 
                 const sourceIds = [...new Set(this.notes.map(n => n.sourceDocumentId).filter(Boolean))];
                 if (sourceIds.length > 0) {
@@ -364,6 +394,107 @@ document.addEventListener('alpine:init', () => {
             } catch (e) {
                 console.error('Error loading notes:', e);
             }
+        },
+
+        async loadCareListNotes() {
+            try {
+                const snap = await db.collection('elder_documents')
+                    .where('docType', '==', 'care-list')
+                    .get();
+
+                const careListNotes = [];
+                snap.docs.forEach(doc => {
+                    const data = doc.data();
+                    const personCells = data.careListData?.[this.personId];
+                    if (personCells) {
+                        const columns = data.careListColumns || [];
+                        Object.entries(personCells).forEach(([colId, contentJson]) => {
+                            if (contentJson && contentJson.content && contentJson.content.length > 0) {
+                                // Basic check for non-empty TipTap doc
+                                const hasText = contentJson.content.some(n => n.content && n.content.length > 0 || n.type === 'table');
+                                if (hasText) {
+                                    const col = columns.find(c => c.id === colId);
+                                    careListNotes.push({
+                                        id: `carelist-${doc.id}-${colId}`,
+                                        type: 'Care List',
+                                        subject: col ? col.name : 'Notes',
+                                        contentJson: contentJson,
+                                        createdAt: data.updatedAt || data.createdAt,
+                                        authorName: data.updatedByName || 'Elder',
+                                        sourceDocumentId: doc.id,
+                                        isCareList: true
+                                    });
+                                }
+                            }
+                        });
+                    }
+                });
+                return careListNotes;
+            } catch (e) {
+                console.error('Error loading Care List notes:', e);
+                return [];
+            }
+        },
+
+        async loadActivity() {
+            try {
+                const snap = await db.collection('people').doc(this.personId)
+                    .collection('shepherding_activity')
+                    .orderBy('createdAt', 'desc')
+                    .get();
+                this.activity = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                const actSourceIds = [...new Set(
+                    this.activity.filter(a => a.sourceDocumentId).map(a => a.sourceDocumentId)
+                )].filter(id => !this.sourceDocTitles[id]);
+                if (actSourceIds.length > 0) {
+                    const results = await Promise.allSettled(
+                        actSourceIds.map(id => db.collection('elder_documents').doc(id).get())
+                    );
+                    const titles = { ...this.sourceDocTitles };
+                    results.forEach((r, i) => {
+                        if (r.status === 'fulfilled' && r.value.exists) {
+                            titles[actSourceIds[i]] = r.value.data().title || 'Untitled Document';
+                        }
+                    });
+                    this.sourceDocTitles = titles;
+                }
+            } catch (e) {
+                console.error('Error loading activity:', e);
+            }
+        },
+
+        get pastoralRecord() {
+            const items = [
+                ...this.notes
+                    .filter(n => !this.editingNote || n.id !== this.editingNote.id)
+                    .map(n => ({ ...n, _entryKind: 'note' })),
+                ...this.activity.map(a => ({ ...a, _entryKind: a.kind })),
+            ];
+            return items.sort((a, b) => {
+                const ts = v => v?.createdAt?.toDate ? v.createdAt.toDate().getTime() : 0;
+                return ts(b) - ts(a);
+            });
+        },
+
+        get displayRecord() {
+            if (!this.collapseStatusChanges) return this.pastoralRecord;
+            const result = [];
+            let count = 0;
+            let groupIdx = 0;
+            for (const entry of this.pastoralRecord) {
+                if (entry._entryKind === 'status_change' || entry._entryKind === 'tag_change') {
+                    count++;
+                } else {
+                    if (count > 0) {
+                        result.push({ _entryKind: 'status_group', count, id: 'sg_' + groupIdx++ });
+                        count = 0;
+                    }
+                    result.push(entry);
+                }
+            }
+            if (count > 0) result.push({ _entryKind: 'status_group', count, id: 'sg_' + groupIdx });
+            return result;
         },
 
         async loadTags() {
@@ -406,6 +537,24 @@ document.addEventListener('alpine:init', () => {
             if (_noteEditor) {
                 _noteEditor.destroy();
                 _noteEditor = null;
+            }
+        },
+
+        handleNoteTypeChange() {
+            if (this.noteForm.type === 'Create New Note Type') {
+                const newType = prompt('Enter new note type:');
+                if (newType && newType.trim()) {
+                    const trimmed = newType.trim();
+                    if (!this.noteTypes.includes(trimmed)) {
+                        // Insert before 'Create New Note Type'
+                        const baseTypes = this.noteTypes.filter(t => t !== 'Create New Note Type');
+                        this.noteTypes = [...baseTypes, trimmed, 'Create New Note Type'];
+                    }
+                    this.noteForm.type = trimmed;
+                } else {
+                    // Revert to first option if cancelled
+                    this.noteForm.type = this.noteTypes[0];
+                }
             }
         },
 
@@ -669,6 +818,7 @@ document.addEventListener('alpine:init', () => {
             const newTags = hasIt ? current.filter(t => t !== tagId) : [...current, tagId];
             const hidePeopleIds = new Set(this.shepherdingTags.filter(t => t.hidePeople).map(t => t.id));
             const shepherdingHidden = newTags.some(id => hidePeopleIds.has(id));
+            const tagName = this.getTagName(tagId);
             try {
                 await db.collection('people').doc(this.personId).update({
                     tags: hasIt
@@ -676,7 +826,21 @@ document.addEventListener('alpine:init', () => {
                         : firebase.firestore.FieldValue.arrayUnion(tagId),
                     shepherdingHidden,
                 });
+                await db.collection('people').doc(this.personId)
+                    .collection('shepherding_activity').add({
+                        kind: 'tag_change',
+                        tagId,
+                        tagName,
+                        action: hasIt ? 'removed' : 'added',
+                        authorUid: this.currentUser.uid,
+                        authorName: this.currentUserName,
+                        source: 'profile',
+                        sourceDocumentId: null,
+                        explanation: '',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    });
                 this.person.tags = newTags;
+                await this.loadActivity();
             } catch (e) {
                 console.error('Error toggling tag:', e);
                 this.showToast('Error updating tags', 'error');
@@ -744,7 +908,182 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        // ── Delete Person ─────────────────────────────────────────────────────
+
+        openDeletePerson() {
+            this.deletePassword = '';
+            this.deleteError = '';
+            this.showDeletePersonModal = true;
+        },
+
+        async confirmDeletePerson() {
+            if (!this.deletePassword) {
+                this.deleteError = 'Please enter your password.';
+                return;
+            }
+            this.isDeleting = true;
+            this.deleteError = '';
+            try {
+                const liveUser = auth.currentUser;
+                const credential = firebase.auth.EmailAuthProvider.credential(
+                    liveUser.email,
+                    this.deletePassword
+                );
+                await liveUser.reauthenticateWithCredential(credential);
+            } catch (e) {
+                this.deleteError = 'Incorrect password. Please try again.';
+                this.isDeleting = false;
+                return;
+            }
+
+            try {
+                // Delete all notes and activity records first
+                const [notesSnap, activitySnap] = await Promise.all([
+                    db.collection('people').doc(this.personId).collection('shepherding_notes').get(),
+                    db.collection('people').doc(this.personId).collection('shepherding_activity').get(),
+                ]);
+                const batch = db.batch();
+                notesSnap.docs.forEach(doc => batch.delete(doc.ref));
+                activitySnap.docs.forEach(doc => batch.delete(doc.ref));
+                if (!notesSnap.empty || !activitySnap.empty) await batch.commit();
+
+                // Delete the person document
+                await db.collection('people').doc(this.personId).delete();
+
+                window.location.href = 'shepherding-people.html';
+            } catch (e) {
+                console.error('Error deleting person:', e);
+                this.deleteError = 'An error occurred while deleting. Please try again.';
+                this.isDeleting = false;
+            }
+        },
+
+        async deleteStatusHistory() {
+            if (!confirm('Are you sure you want to delete all status change history for this person? This cannot be undone.')) return;
+            
+            try {
+                const snap = await db.collection('people').doc(this.personId)
+                    .collection('shepherding_activity')
+                    .where('kind', '==', 'status_change')
+                    .get();
+                
+                if (snap.empty) {
+                    this.showToast('No status history to delete.');
+                    return;
+                }
+
+                const batch = db.batch();
+                snap.docs.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
+
+                await this.loadActivity();
+                this.showToast('Status history deleted.');
+            } catch (e) {
+                console.error('Error deleting status history:', e);
+                this.showToast('Error deleting status history', 'error');
+            }
+        },
+
+        // ── Pastoral Status ───────────────────────────────────────────────────
+
+        isCurrentStatus(urgency, importance) {
+            const s = this.person?.shepherdingStatus;
+            return s?.urgency === urgency && s?.importance === importance;
+        },
+
+        async setShepherdingStatus(urgency, importance) {
+            const clearing = this.isCurrentStatus(urgency, importance);
+            const previousStatus = this.person?.shepherdingStatus || null;
+            const newStatus = clearing ? null : { urgency, importance };
+            try {
+                await db.collection('people').doc(this.personId).update({
+                    shepherdingStatus: newStatus,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                });
+                await db.collection('people').doc(this.personId)
+                    .collection('shepherding_activity').add({
+                        kind: 'status_change',
+                        previousStatus,
+                        newStatus,
+                        authorUid: this.currentUser.uid,
+                        authorName: this.currentUserName,
+                        source: 'profile',
+                        sourceDocumentId: null,
+                        explanation: '',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    });
+                this.person.shepherdingStatus = newStatus;
+                await this.loadActivity();
+                this.showToast(clearing ? 'Status cleared' : 'Status updated');
+            } catch (e) {
+                console.error('Error updating status:', e);
+                this.showToast('Error updating status', 'error');
+            }
+        },
+
+        formatStatus(status) {
+            if (!status) return '';
+            return `${URGENCY_LABEL[status.urgency] || status.urgency} · ${IMPORTANCE_LABEL[status.importance] || status.importance}`;
+        },
+
+        statusCellColor(urgency, importance) {
+            const urgIdx = URGENCY_LEVELS.indexOf(urgency);
+            const impIdx = IMPORTANCE_LEVELS.indexOf(importance);
+            const score = urgIdx + impIdx; // 0 = urgent+important, 4 = not_urgent+not_important
+            if (score <= 1) return 'border-error/40 bg-error-container/20';
+            if (score <= 3) return 'border-secondary/30 bg-secondary-container/20';
+            return 'border-outline-variant bg-surface-container';
+        },
+
+        // ── Explanations ──────────────────────────────────────────────────────
+
+        startEditExplanation(activityId, currentText) {
+            this.explanationDraft = { ...this.explanationDraft, [activityId]: currentText || '' };
+            this.editingExplanation = { ...this.editingExplanation, [activityId]: true };
+        },
+
+        async saveExplanation(activityId) {
+            const text = (this.explanationDraft[activityId] || '').trim();
+            try {
+                await db.collection('people').doc(this.personId)
+                    .collection('shepherding_activity').doc(activityId)
+                    .update({ explanation: text });
+                const idx = this.activity.findIndex(a => a.id === activityId);
+                if (idx !== -1) this.activity[idx].explanation = text;
+                this.editingExplanation = { ...this.editingExplanation, [activityId]: false };
+                this.showToast('Explanation saved');
+            } catch (e) {
+                console.error('Error saving explanation:', e);
+                this.showToast('Error saving explanation', 'error');
+            }
+        },
+
+        cancelEditExplanation(activityId) {
+            this.editingExplanation = { ...this.editingExplanation, [activityId]: false };
+        },
+
         // ── Helpers ───────────────────────────────────────────────────────────
+
+        renderMiniMatrix(status) {
+            if (!status) return '';
+            const URGENCY    = ['urgent', 'somewhat_urgent', 'not_urgent'];
+            const IMPORTANCE = ['important', 'somewhat_important', 'not_important'];
+            const ACTIVE_COLOR  = { 0: '#ba1a1a', 1: '#ba1a1a', 2: '#436082', 3: '#436082', 4: '#75777f' };
+            const PASSIVE_COLOR = { 0: '#ffdad6', 1: '#ffdad6', 2: '#d1e4ff', 3: '#d1e4ff', 4: '#f0eee8' };
+            let html = '<div style="display:grid;grid-template-columns:repeat(3,20px);gap:2px;">';
+            IMPORTANCE.forEach(imp => {
+                URGENCY.forEach(urg => {
+                    const active = status.urgency === urg && status.importance === imp;
+                    const score  = URGENCY.indexOf(urg) + IMPORTANCE.indexOf(imp);
+                    const bg     = active ? (ACTIVE_COLOR[score] || '#75777f') : (PASSIVE_COLOR[score] || '#f0eee8');
+                    html += `<div style="width:20px;height:20px;border-radius:3px;background:${bg};border:${active ? 'none' : '1px solid #c5c6d0'};display:flex;align-items:center;justify-content:center;">`;
+                    if (active) html += '<span style="width:5px;height:5px;border-radius:50%;background:#fff;display:block;"></span>';
+                    html += '</div>';
+                });
+            });
+            html += '</div>';
+            return html;
+        },
 
         formatDate(val) {
             if (!val) return '';

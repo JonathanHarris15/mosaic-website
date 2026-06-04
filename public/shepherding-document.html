@@ -64,7 +64,6 @@
         .ProseMirror li p { margin: 0; }
         .mention-chip { display:inline; background:#d8e2ff; color:#001a42; border-radius:3px; padding:0 4px; font-weight:500; text-decoration:none; cursor:pointer; }
         a.mention-chip:hover { background:#b2c6f8; }
-        .ProseMirror .mention-chip { cursor:default; }
         .ProseMirror table { border-collapse:collapse; width:100%; margin-bottom:0.5em; table-layout:fixed; }
         .ProseMirror th, .ProseMirror td { border:1px solid #c5c6d0; padding:4px 8px; min-width:50px; position:relative; vertical-align:top; }
         .ProseMirror th { background:#f0eee8; font-weight:600; }
@@ -77,12 +76,15 @@
         .person-panel-name { font-family:'Work Sans',sans-serif; font-size:13px; font-weight:600; color:#001a43; background:transparent; border:none; cursor:pointer; padding:2px 6px; border-radius:4px; white-space:nowrap; }
         .person-panel-name:hover { background:#dcdad4; }
         .person-panel-type { font-family:'Work Sans',sans-serif; font-size:12px; color:#44474e; background:transparent; border:1px solid #c5c6d0; border-radius:4px; padding:2px 4px; cursor:pointer; }
+        .person-panel-status { font-family:'Work Sans',sans-serif; font-size:12px; color:#75777f; background:transparent; border:1px solid #c5c6d0; border-radius:4px; padding:2px 6px; cursor:pointer; white-space:nowrap; }
+        .person-panel-status:hover { border-color:#436082; color:#436082; }
         .person-panel-view-link { font-family:'Work Sans',sans-serif; font-size:12px; color:#436082; text-decoration:none; margin-left:auto; white-space:nowrap; }
         .person-panel-view-link:hover { text-decoration:underline; }
         .person-panel-delete { background:transparent; border:none; cursor:pointer; color:#75777f; padding:2px; display:flex; align-items:center; line-height:1; flex-shrink:0; }
         .person-panel-delete:hover { color:#ba1a1a; }
         .person-panel-body { background:#f0f4ff; min-height:80px; }
         .person-panel-body .ProseMirror { min-height:80px; padding:12px; box-sizing:border-box; }
+        .ProseMirror-selectednode[data-action-chip] { outline: 2px solid #001a43; outline-offset: 1px; border-radius: 3px; }
     </style>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
@@ -391,6 +393,7 @@
         <span x-text="toast.message"></span>
     </div>
 
+    <script src="shepherding-inline-triggers.js"></script>
     <script src="shepherding-document.js"></script>
 </body>
 </html>

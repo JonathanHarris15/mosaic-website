@@ -26,6 +26,14 @@ document.addEventListener('alpine:init', () => {
         movingItem: null,
         moveTargetId: '__root__',
 
+        showCreateModal: false,
+        createDocType: 'note',
+        createFilterMode: 'preset', // 'preset' | 'custom'
+        customFilter: { filterTags: [], filterMode: 'any', statusZoneFilters: [] },
+        views: [],
+        selectedViewId: null,
+        shepherdingTags: [],
+
         showDeleteConfirm: false,
         deletingItem: null,
         deleteDocCount: 0,
@@ -78,9 +86,11 @@ document.addEventListener('alpine:init', () => {
 
         async loadData() {
             try {
-                const [structSnap, docsSnap] = await Promise.all([
+                const [structSnap, docsSnap, viewsSnap, tagsSnap] = await Promise.all([
                     db.collection('elder_document_structure').doc('root').get(),
                     db.collection('elder_documents').orderBy('createdAt', 'desc').get(),
+                    db.collection('shepherding_views').orderBy('title', 'asc').get(),
+                    db.collection('people_tags').orderBy('name', 'asc').get(),
                 ]);
 
                 if (structSnap.exists) {
@@ -94,10 +104,50 @@ document.addEventListener('alpine:init', () => {
                 docsSnap.docs.forEach(doc => {
                     this.allDocs[doc.id] = { id: doc.id, ...doc.data() };
                 });
+
+                this.views = viewsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                this.shepherdingTags = tagsSnap.docs.map(doc => ({
+                    id: doc.id,
+                    name: doc.data().name || doc.id
+                }));
             } catch (e) {
                 console.error('Error loading data:', e);
                 this.showToast('Error loading documents', 'error');
             }
+        },
+
+        // ── Custom Filter Helpers ─────────────────────────────────────────────
+
+        toggleCustomFilterTag(tagId) {
+            const idx = this.customFilter.filterTags.indexOf(tagId);
+            if (idx === -1) {
+                this.customFilter.filterTags.push(tagId);
+            } else {
+                this.customFilter.filterTags.splice(idx, 1);
+            }
+        },
+
+        toggleCustomFilterZone(urg, imp) {
+            const key = `${urg}__${imp}`;
+            const idx = this.customFilter.statusZoneFilters.indexOf(key);
+            if (idx === -1) {
+                this.customFilter.statusZoneFilters = [...this.customFilter.statusZoneFilters, key];
+            } else {
+                this.customFilter.statusZoneFilters = this.customFilter.statusZoneFilters.filter(z => z !== key);
+            }
+        },
+
+        isCustomZoneSelected(urg, imp) {
+            return this.customFilter.statusZoneFilters.includes(`${urg}__${imp}`);
+        },
+
+        customZoneCellColor(urg, imp) {
+            const urgencies = ['urgent', 'somewhat_urgent', 'not_urgent'];
+            const importances = ['important', 'somewhat_important', 'not_important'];
+            const score = urgencies.indexOf(urg) + importances.indexOf(imp);
+            if (score <= 1) return 'border-error/40 bg-error-container/20';
+            if (score <= 3) return 'border-secondary/30 bg-secondary-container/20';
+            return 'border-outline-variant bg-surface-container';
         },
 
         // ── Navigation ────────────────────────────────────────────────────────
@@ -144,6 +194,10 @@ document.addEventListener('alpine:init', () => {
 
         getDocTitle(id) {
             return this.allDocs[id]?.title || 'Untitled Document';
+        },
+
+        getDocType(id) {
+            return this.allDocs[id]?.docType || 'note';
         },
 
         getDocCreated(id) {
@@ -215,18 +269,42 @@ document.addEventListener('alpine:init', () => {
 
         // ── Create ────────────────────────────────────────────────────────────
 
+        openCreateModal() {
+            this.createDocType = 'note';
+            this.createFilterMode = 'preset';
+            this.customFilter = { filterTags: [], filterMode: 'any', statusZoneFilters: [] };
+            this.selectedViewId = this.views.length > 0 ? this.views[0].id : null;
+            this.showCreateModal = true;
+        },
+
         async createDocument() {
+            this.showCreateModal = false;
+            const type = this.createDocType;
+            const title = type === 'care-list' ? 'New Care List' : 'New Document';
             try {
-                const docRef = await db.collection('elder_documents').add({
-                    title: 'New Document',
-                    contentJson: null,
+                const docData = {
+                    title: title,
+                    docType: type,
                     authorName: this.currentUserName,
                     authorUid: this.currentUser.uid,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                     updatedByName: this.currentUserName,
-                });
-                this.allDocs[docRef.id] = { id: docRef.id, title: 'New Document', authorName: this.currentUserName };
+                };
+
+                if (type === 'care-list') {
+                    if (this.createFilterMode === 'preset') {
+                        docData.filterId = this.selectedViewId;
+                    } else {
+                        docData.filterConfig = { ...this.customFilter };
+                    }
+                    docData.careListData = {}; // Map of personId -> TipTap JSON
+                } else {
+                    docData.contentJson = null;
+                }
+
+                const docRef = await db.collection('elder_documents').add(docData);
+                this.allDocs[docRef.id] = { id: docRef.id, title: title, docType: type, authorName: this.currentUserName };
 
                 const currentFolder = this.currentFolder;
                 if (!currentFolder.children) currentFolder.children = [];
@@ -234,7 +312,7 @@ document.addEventListener('alpine:init', () => {
                 await this.saveStructure();
 
                 this.renamingItemId = docRef.id;
-                this.renameValue = 'New Document';
+                this.renameValue = title;
                 this.$nextTick(() => {
                     const el = document.getElementById(`rename-${docRef.id}`);
                     if (el) { el.focus(); el.select(); }
@@ -338,7 +416,12 @@ document.addEventListener('alpine:init', () => {
         // ── Open Document ─────────────────────────────────────────────────────
 
         openDocument(docId) {
-            window.location.href = `shepherding-document.html?id=${docId}`;
+            const doc = this.allDocs[docId];
+            if (doc && doc.docType === 'care-list') {
+                window.location.href = `shepherding-care-list.html?id=${docId}`;
+            } else {
+                window.location.href = `shepherding-document.html?id=${docId}`;
+            }
         },
 
         handleItemDblClick(item) {
