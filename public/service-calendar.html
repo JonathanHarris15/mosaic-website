@@ -359,7 +359,111 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- Inject Service Modal -->
+    <div x-data="injectServiceModal()"
+         @open-inject-modal.window="openModal()"
+         x-show="show"
+         class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-primary/20 backdrop-blur-sm"
+         x-transition x-cloak>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl max-w-md w-full p-6"
+             @click.away="close()">
+
+            <div class="flex items-center gap-3 mb-4 text-primary">
+                <span class="material-symbols-outlined text-2xl">playlist_add</span>
+                <h2 class="font-headline-md text-lg">Inject a Service</h2>
+            </div>
+
+            <!-- Step: choose -->
+            <template x-if="step === 'choose'">
+                <div>
+                    <p class="font-body-md text-on-surface-variant mb-4 text-sm">
+                        Pick the Sunday to open up. That Sunday becomes a fresh blank service, and every
+                        service on or after it moves one week later.
+                    </p>
+
+                    <label class="block text-xs font-label-md uppercase tracking-wider text-on-surface-variant mb-1">Inject on</label>
+                    <select x-model="selectedDate" @change="updateCount()"
+                            class="w-full bg-surface-container border border-outline-variant rounded-xl px-3 py-2 font-body-md text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-primary mb-4">
+                        <template x-for="s in sundays" :key="s.value">
+                            <option :value="s.value" x-text="s.label"></option>
+                        </template>
+                    </select>
+
+                    <div class="p-4 rounded-xl bg-surface-container text-sm text-on-surface-variant flex items-start gap-3 mb-6">
+                        <span class="material-symbols-outlined text-[20px] shrink-0 text-secondary">move_down</span>
+                        <p x-show="shiftCount > 0">
+                            <strong class="text-on-surface" x-text="shiftCount"></strong>
+                            existing service<span x-show="shiftCount !== 1">s</span> (this Sunday and later) will shift down one week.
+                            Linked roles and pastoral-prayer records move with them.
+                        </p>
+                        <p x-show="shiftCount === 0">
+                            No existing services on or after this Sunday — nothing to shift. A blank service slot opens here.
+                        </p>
+                    </div>
+
+                    <div class="flex justify-end gap-3">
+                        <button @click="close()" class="px-4 py-2 rounded-full font-label-md text-sm text-secondary hover:bg-surface-container transition-colors">Cancel</button>
+                        <button @click="confirm()" :disabled="!selectedDate"
+                                class="px-6 py-2 rounded-full font-label-md text-sm bg-primary text-on-primary hover:bg-primary-container transition-colors disabled:opacity-40">
+                            Inject &amp; Shift
+                        </button>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Step: working -->
+            <template x-if="step === 'working'">
+                <div class="py-6 flex flex-col items-center text-center gap-3">
+                    <span class="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
+                    <p class="font-body-md text-on-surface-variant text-sm">Shifting services… please don't close this window.</p>
+                </div>
+            </template>
+
+            <!-- Step: done -->
+            <template x-if="step === 'done'">
+                <div>
+                    <div class="mb-6 p-4 bg-primary-fixed/30 text-on-surface rounded-xl flex items-start gap-3">
+                        <span class="material-symbols-outlined text-[20px] shrink-0 text-primary">check_circle</span>
+                        <div class="text-sm">
+                            <p class="font-bold mb-1 text-on-surface">Done.</p>
+                            <p x-show="result && result.services > 0">
+                                Shifted <strong x-text="result.services"></strong> service<span x-show="result.services !== 1">s</span> down a week<span
+                                    x-show="result && (result.involvements > 0 || result.prayers > 0)">, along with
+                                    <strong x-text="result.involvements"></strong> role assignment<span x-show="result.involvements !== 1">s</span>
+                                    and <strong x-text="result.prayers"></strong> pastoral-prayer record<span x-show="result.prayers !== 1">s</span></span>.
+                                A blank service is ready on the chosen Sunday.
+                            </p>
+                            <p x-show="result && result.services === 0">A blank service slot is ready on the chosen Sunday.</p>
+                        </div>
+                    </div>
+                    <div class="flex justify-end">
+                        <button @click="finish()" class="px-6 py-2 rounded-full font-label-md text-sm bg-primary text-on-primary hover:bg-primary-container transition-colors">Refresh Calendar</button>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Step: error -->
+            <template x-if="step === 'error'">
+                <div>
+                    <div class="mb-6 p-4 bg-error-container text-on-error-container rounded-xl flex items-start gap-3">
+                        <span class="material-symbols-outlined text-[20px] shrink-0">error</span>
+                        <div class="text-sm">
+                            <p class="font-bold mb-1">Injection failed</p>
+                            <p x-text="errorMsg"></p>
+                            <p class="mt-1 opacity-80">Some changes may have been applied — refresh and check the calendar before retrying.</p>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-3">
+                        <button @click="show = false" class="px-4 py-2 rounded-full font-label-md text-sm text-secondary hover:bg-surface-container transition-colors">Close</button>
+                        <button @click="finish()" class="px-6 py-2 rounded-full font-label-md text-sm bg-primary text-on-primary hover:bg-primary-container transition-colors">Refresh</button>
+                    </div>
+                </div>
+            </template>
+
+        </div>
+    </div>
+
     <!-- Hidden File Input -->
     <input type="file" id="docx-file-input" accept=".docx" multiple class="hidden" />
 
@@ -377,6 +481,12 @@
                 <button id="import-docx-btn" class="hidden shrink-0 border border-outline text-secondary px-4 py-1.5 rounded-full font-label-md text-xs hover:bg-secondary hover:text-on-secondary transition-colors flex items-center gap-2 group/btn ml-2" title="Import from docx">
                     <span class="material-symbols-outlined text-[18px]">upload_file</span>
                     <span class="hidden md:inline">Import</span>
+                </button>
+
+                <!-- Inject Service Button — opens up a chosen Sunday and shifts later services down -->
+                <button id="inject-service-btn" onclick="window.openInjectModal()" class="hidden shrink-0 border border-outline text-secondary px-4 py-1.5 rounded-full font-label-md text-xs hover:bg-secondary hover:text-on-secondary transition-colors flex items-center gap-2 group/btn" title="Insert a service on a Sunday and shift later services down a week">
+                    <span class="material-symbols-outlined text-[18px]">playlist_add</span>
+                    <span class="hidden md:inline">Inject</span>
                 </button>
             </div>
 

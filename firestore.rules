@@ -61,6 +61,12 @@ service cloud.firestore {
       allow read: if true;
     }
 
+    // Allow collection group queries for involvement (used by service injection
+    // to re-key role assignments when services are shifted to a later Sunday)
+    match /{path=**}/involvement/{involvementId} {
+      allow read: if true;
+    }
+
     match /people_tags/{tagId} {
       allow read: if true;
       allow create, update, delete: if isEditor();

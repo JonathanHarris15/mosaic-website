@@ -410,6 +410,214 @@ function scrollToClosestSunday(sundays) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Service Injection — insert a blank service at a chosen upcoming Sunday and
+// push every service on or after that Sunday one week later. Doc IDs in the
+// `services` collection ARE the date (YYYY-MM-DD), so "shifting" means copying
+// each affected doc to date+7 and freeing the chosen slot. People records that
+// reference the moved dates (involvement entries + pastoral_prayer_history,
+// both keyed/stamped by serviceDate) are re-keyed in the same pass so analytics
+// and "last prayed for" stay correct.
+// ---------------------------------------------------------------------------
+
+function dateStrToDate(s) {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d);
+}
+
+function dateToStr(dt) {
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
+// Add one week to a YYYY-MM-DD string, returning the same format.
+function addWeek(dateStr) {
+    const dt = dateStrToDate(dateStr);
+    dt.setDate(dt.getDate() + 7);
+    return dateToStr(dt);
+}
+
+// Upcoming Sundays (today or later) as { value: 'YYYY-MM-DD', label: 'June 14, 2026' }.
+window.getUpcomingSundays = function () {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return allSundays
+        .filter(d => {
+            const x = new Date(d);
+            x.setHours(0, 0, 0, 0);
+            return x >= today;
+        })
+        .map(d => ({
+            value: dateToStr(d),
+            label: d.toLocaleDateString('default', { month: 'long', day: 'numeric', year: 'numeric' })
+        }));
+};
+
+// How many existing services sit on or after the given Sunday (from the
+// in-memory map already loaded for the calendar). Drives the modal preview.
+window.countServicesFromDate = function (dateStr) {
+    if (!dateStr) return 0;
+    return Object.keys(serviceDataMap).filter(k => k >= dateStr).length;
+};
+
+// Perform the shift. Returns a summary { services, involvements, prayers, people }.
+window.injectServiceAtDate = async function (fromDate) {
+    if (typeof db === 'undefined') throw new Error('Database is not available.');
+    if (!fromDate) throw new Error('No date selected.');
+
+    // --- Gather everything that needs to move -----------------------------
+    const svcSnap = await db.collection('services').get();
+    const affectedServices = [];
+    svcSnap.forEach(doc => {
+        if (doc.id >= fromDate) affectedServices.push({ id: doc.id, data: doc.data() });
+    });
+
+    // collectionGroup .get() with no filter needs no custom index (mirrors analytics.js).
+    const invSnap = await db.collectionGroup('involvement').get();
+    const affectedInv = [];
+    invSnap.forEach(doc => {
+        const sd = doc.data().serviceDate;
+        if (sd && sd >= fromDate) affectedInv.push(doc);
+    });
+
+    const prayerSnap = await db.collectionGroup('pastoral_prayer_history').get();
+    const affectedPrayers = [];
+    prayerSnap.forEach(doc => {
+        const sd = doc.data().serviceDate || doc.id;
+        if (sd && sd >= fromDate) affectedPrayers.push(doc);
+    });
+
+    // --- Build write operations -------------------------------------------
+    // Sets/updates are applied before any delete so that an aborted run can
+    // only ever leave a stale duplicate behind, never lose data.
+    const setsAndUpdates = [];
+    const deletes = [];
+
+    // Services: keyed by date. Copy each to date+7, then free any slot that
+    // nothing moved into (gaps are preserved as shifted gaps). Process from the
+    // latest date down so every doc is copied forward (to date+7) before the
+    // copy of its predecessor overwrites it — keeps a partial failure across
+    // batch boundaries non-destructive.
+    const servicesDesc = [...affectedServices].sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+    const svcNewIds = new Set(servicesDesc.map(s => addWeek(s.id)));
+    servicesDesc.forEach(s => {
+        setsAndUpdates.push({ kind: 'set', ref: db.collection('services').doc(addWeek(s.id)), data: s.data });
+    });
+    servicesDesc.forEach(s => {
+        if (!svcNewIds.has(s.id)) deletes.push({ kind: 'delete', ref: db.collection('services').doc(s.id) });
+    });
+
+    // Involvement: auto-id docs — re-stamp the serviceDate field in place.
+    affectedInv.forEach(doc => {
+        setsAndUpdates.push({ kind: 'update', ref: doc.ref, data: { serviceDate: addWeek(doc.data().serviceDate) } });
+    });
+
+    // Pastoral prayer history: doc ID is the date — copy to the date+7 doc and
+    // free any vacated slot (collision-safe per person). Latest-first for the
+    // same copy-before-overwrite safety as services.
+    const prayerDate = doc => doc.data().serviceDate || doc.id;
+    const prayersDesc = [...affectedPrayers].sort((a, b) => {
+        const da = prayerDate(a), db2 = prayerDate(b);
+        return da < db2 ? 1 : da > db2 ? -1 : 0;
+    });
+    const prayerNewPaths = new Set();
+    prayersDesc.forEach(doc => {
+        const oldDate = prayerDate(doc);
+        const newRef = doc.ref.parent.doc(addWeek(oldDate));
+        prayerNewPaths.add(newRef.path);
+        setsAndUpdates.push({ kind: 'set', ref: newRef, data: { ...doc.data(), serviceDate: addWeek(oldDate) } });
+    });
+    prayersDesc.forEach(doc => {
+        if (!prayerNewPaths.has(doc.ref.path)) deletes.push({ kind: 'delete', ref: doc.ref });
+    });
+
+    // --- Commit in <=450-op batches (Firestore caps at 500) ----------------
+    const writes = [...setsAndUpdates, ...deletes];
+    for (let i = 0; i < writes.length; i += 450) {
+        const batch = db.batch();
+        writes.slice(i, i + 450).forEach(w => {
+            if (w.kind === 'set') batch.set(w.ref, w.data);
+            else if (w.kind === 'update') batch.update(w.ref, w.data);
+            else if (w.kind === 'delete') batch.delete(w.ref);
+        });
+        await batch.commit();
+    }
+
+    // --- Recompute lastPastoralPrayerDate for affected people --------------
+    const affectedPeopleIds = new Set(affectedPrayers.map(doc => doc.ref.parent.parent.id));
+    for (const pid of affectedPeopleIds) {
+        const pRef = db.collection('people').doc(pid);
+        const histSnap = await pRef.collection('pastoral_prayer_history').orderBy('serviceDate', 'desc').limit(1).get();
+        const latestDate = histSnap.empty ? '0000-00-00' : histSnap.docs[0].data().serviceDate;
+        await pRef.update({ lastPastoralPrayerDate: latestDate });
+    }
+
+    return {
+        services: affectedServices.length,
+        involvements: affectedInv.length,
+        prayers: affectedPrayers.length,
+        people: affectedPeopleIds.size
+    };
+};
+
+window.openInjectModal = function () {
+    window.dispatchEvent(new CustomEvent('open-inject-modal'));
+};
+
+// Alpine component backing the injection modal.
+function injectServiceModal() {
+    return {
+        show: false,
+        step: 'choose', // 'choose' | 'working' | 'done' | 'error'
+        selectedDate: '',
+        sundays: [],
+        shiftCount: 0,
+        result: null,
+        errorMsg: '',
+
+        openModal() {
+            this.sundays = window.getUpcomingSundays();
+            this.selectedDate = this.sundays.length ? this.sundays[0].value : '';
+            this.step = 'choose';
+            this.result = null;
+            this.errorMsg = '';
+            this.updateCount();
+            this.show = true;
+        },
+
+        updateCount() {
+            this.shiftCount = this.selectedDate ? window.countServicesFromDate(this.selectedDate) : 0;
+        },
+
+        get selectedLabel() {
+            const s = this.sundays.find(x => x.value === this.selectedDate);
+            return s ? s.label : '';
+        },
+
+        close() {
+            if (this.step !== 'working') this.show = false;
+        },
+
+        async confirm() {
+            if (!this.selectedDate) return;
+            this.step = 'working';
+            try {
+                this.result = await window.injectServiceAtDate(this.selectedDate);
+                this.step = 'done';
+            } catch (e) {
+                console.error('Service injection failed:', e);
+                this.errorMsg = (e && e.message) || 'Something went wrong.';
+                this.step = 'error';
+            }
+        },
+
+        finish() {
+            // Full reload guarantees every view is in sync with Firestore,
+            // matching the docx-import flow.
+            location.reload();
+        }
+    };
+}
+
 function scrollToSection(year, month = null) {
     const view = localStorage.getItem('calendarView') || 'list';
     const prefix = view === 'table' ? 'table-' : '';
@@ -1350,10 +1558,12 @@ auth.onAuthStateChanged(async (user) => {
                     importBtn.classList.remove('hidden');
                     if (window.initDocxImporter) {
                         window.initDocxImporter(() => {
-                            location.reload(); 
+                            location.reload();
                         });
                     }
                 }
+                const injectBtn = document.getElementById('inject-service-btn');
+                if (injectBtn) injectBtn.classList.remove('hidden');
                 // Re-inject data to enable edit handlers
                 if (Object.keys(serviceDataMap).length > 0) {
                     injectServiceData(serviceDataMap);
