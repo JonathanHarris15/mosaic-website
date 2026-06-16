@@ -272,14 +272,14 @@
             
             <div class="flex items-center gap-3 mb-6 text-primary">
                 <span class="material-symbols-outlined text-2xl">person_search</span>
-                <h2 class="font-headline-md text-lg" x-text="'Select ' + selectorRoleName"></h2>
+                <h2 id="person-selector-title" class="font-headline-md text-lg" x-text="'Select ' + selectorRoleName"></h2>
             </div>
 
-            <div x-data="personPicker(selectedPersonRef, 'activeSuggestionsKey')" 
+            <div x-data="personPicker(selectedPersonRef, $data, 'activeSuggestionsKey')" 
                  @click.away="open = false"
                  class="relative mb-8">
                 <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
-                    <input type="text" placeholder="Search people..." x-model="query" @focus="open = true" @mousedown.stop @input.debounce="onInput()" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
+                    <input type="text" id="person-selector-input" name="person-selector-search" aria-labelledby="person-selector-title" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @mousedown.stop @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
                     <div class="flex items-center gap-1">
                         <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer">
                             <span class="material-symbols-outlined text-[18px]">close</span>
@@ -382,8 +382,8 @@
                         service on or after it moves one week later.
                     </p>
 
-                    <label class="block text-xs font-label-md uppercase tracking-wider text-on-surface-variant mb-1">Inject on</label>
-                    <select x-model="selectedDate" @change="updateCount()"
+                    <label for="inject-date-select" class="block text-xs font-label-md uppercase tracking-wider text-on-surface-variant mb-1">Inject on</label>
+                    <select id="inject-date-select" name="inject-date" x-model="selectedDate" @change="updateCount()"
                             class="w-full bg-surface-container border border-outline-variant rounded-xl px-3 py-2 font-body-md text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-primary mb-4">
                         <template x-for="s in sundays" :key="s.value">
                             <option :value="s.value" x-text="s.label"></option>
@@ -493,10 +493,10 @@
             <!-- Persistent Controls -->
             <div class="hidden lg:flex items-center gap-lg">
                 <!-- History Toggle -->
-                <label class="flex items-center gap-3 cursor-pointer group">
+                <label class="flex items-center gap-3 cursor-pointer group" for="show-historic-checkbox">
                     <span class="font-label-md text-xs uppercase tracking-wider text-on-surface-variant group-hover:text-primary transition-colors">Show Historic</span>
                     <div class="relative inline-flex items-center">
-                        <input type="checkbox" x-model="showHistory" class="sr-only peer">
+                        <input type="checkbox" id="show-historic-checkbox" name="show-historic" x-model="showHistory" class="sr-only peer">
                         <div class="w-11 h-6 bg-surface-container border border-outline-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary transition-colors"></div>
                     </div>
                 </label>
@@ -553,10 +553,10 @@
             <!-- Mobile/Small Controls (Hidden in layout) -->
             <div class="lg:hidden mb-md flex flex-wrap items-center justify-between gap-md p-md bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm flex-shrink-0">
                 <!-- History Toggle -->
-                <label class="flex items-center gap-3 cursor-pointer group">
+                <label class="flex items-center gap-3 cursor-pointer group" for="show-historic-mobile-checkbox">
                     <span class="font-label-md text-xs uppercase tracking-wider text-on-surface-variant group-hover:text-primary transition-colors">Show History</span>
                     <div class="relative inline-flex items-center">
-                        <input type="checkbox" x-model="showHistory" class="sr-only peer">
+                        <input type="checkbox" id="show-historic-mobile-checkbox" name="show-historic-mobile" x-model="showHistory" class="sr-only peer">
                         <div class="w-11 h-6 bg-surface-container border border-outline-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary transition-colors"></div>
                     </div>
                 </label>

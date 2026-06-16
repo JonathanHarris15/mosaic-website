@@ -11,6 +11,8 @@ function guideEditor() {
             isIrregular: false
         },
         elements: [],
+        previousAnnouncements: [],
+        previousAnnouncementsDate: '',
         hymnDetails: {},
         keyVerseText: '',
         schedule: [],
@@ -46,6 +48,7 @@ function guideEditor() {
                 await self.loadService();
                 await self.fetchHymnDetails();
                 await self.fetchSchedule();
+                await self.fetchPreviousAnnouncements();
                 
                 // Construct initial elements if not already saved
                 if (self.elements.length === 0) {
@@ -302,6 +305,51 @@ function guideEditor() {
             this.hymnDetails = { ...this.hymnDetails, ...details };
         },
 
+        async fetchPreviousAnnouncements() {
+            // Find the most recent service BEFORE this.date that has filled-in
+            // announcements, and surface its items as reusable suggestions.
+            try {
+                // Bounded range query (no orderBy => no composite index needed),
+                // then sort newest-first client-side.
+                const startDate = new Date(this.date + 'T00:00:00');
+                startDate.setDate(startDate.getDate() - 120);
+                const startStr = startDate.toISOString().split('T')[0];
+                const snap = await db.collection('services')
+                    .where(firebase.firestore.FieldPath.documentId(), '>=', startStr)
+                    .where(firebase.firestore.FieldPath.documentId(), '<', this.date)
+                    .get();
+                const docs = snap.docs.sort((a, b) => b.id.localeCompare(a.id));
+                for (const doc of docs) {
+                    const data = this.normalizeServiceData(doc.data());
+                    const ann = data.guide && data.guide.elements
+                        ? data.guide.elements.find(el => el.type === 'announcements')
+                        : null;
+                    const items = (ann && ann.items || []).filter(it => it && (it.title || it.content));
+                    if (items.length > 0) {
+                        this.previousAnnouncements = JSON.parse(JSON.stringify(items));
+                        this.previousAnnouncementsDate = doc.id;
+                        return;
+                    }
+                }
+            } catch (error) { console.error("Error fetching previous announcements:", error); }
+        },
+
+        addSuggestedAnnouncement(item) {
+            const el = this.elements.find(e => e.type === 'announcements');
+            if (!el) return;
+            if (!Array.isArray(el.items)) el.items = [];
+            // Avoid adding an exact duplicate that's already present.
+            const exists = el.items.some(it => it.title === item.title && it.content === item.content);
+            if (exists) return;
+            // If the only existing announcement is a blank placeholder, fill it.
+            if (el.items.length === 1 && !el.items[0].title && !el.items[0].content) {
+                el.items[0].title = item.title || '';
+                el.items[0].content = item.content || '';
+            } else {
+                el.items.push({ title: item.title || '', content: item.content || '' });
+            }
+        },
+
         async fetchSchedule() {
             const startDate = new Date(this.date);
             const endDate = new Date(startDate);
@@ -381,6 +429,59 @@ function guideEditor() {
             } catch (error) { console.error("Error saving guide config:", error); }
         },
 
+        // Build the print booklet by cloning the live-preview pages into
+        // imposition order, so the PDF is identical to what's on screen.
+        // (Previously the print layer had its own hand-duplicated templates
+        // that drifted out of sync with the preview.)
+        printGuide() {
+            const layer = document.getElementById('booklet-print-layer');
+            const spreads = this.bookletSpreads;
+
+            if (!layer || spreads.length === 0) {
+                alert(`The print booklet needs exactly 16 pages — the guide currently has ${this.visibleElements.length}. Adjust your elements so it totals 16 pages, then print again.`);
+                return;
+            }
+
+            const clonePage = (el) => {
+                if (el) {
+                    const src = document.getElementById('preview-' + el.id);
+                    if (src) {
+                        const clone = src.cloneNode(true);
+                        clone.removeAttribute('id');
+                        return clone;
+                    }
+                }
+                const blank = document.createElement('div');
+                blank.className = 'preview-page';
+                return blank;
+            };
+
+            layer.innerHTML = '';
+            for (const spread of spreads) {
+                const container = document.createElement('div');
+                container.className = 'spread-container';
+                // Stop Alpine's mutation observer from re-initialising the
+                // clones (which would re-run their x-for/x-if and duplicate
+                // content). x-ignore on the appended node is the reliable
+                // guard; an ancestor's x-ignore does not cover mutation-added
+                // nodes because Alpine walks from the added node itself.
+                container.setAttribute('x-ignore', '');
+                container.appendChild(clonePage(spread.left));
+                container.appendChild(clonePage(spread.right));
+                layer.appendChild(container);
+            }
+
+            const cleanup = () => {
+                layer.innerHTML = '';
+                window.removeEventListener('afterprint', cleanup);
+            };
+            window.addEventListener('afterprint', cleanup);
+
+            // Let cloned images settle (they're already cached from the
+            // preview) before opening the print dialog.
+            setTimeout(() => window.print(), 150);
+        },
+
         getHymnImages(hymnId) {
             if (!hymnId) return [];
             const details = this.hymnDetails[hymnId];
@@ -397,6 +498,14 @@ function guideEditor() {
             if (!dateStr) return '';
             const [y, m, d] = dateStr.split('-');
             return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        },
+
+        // The Baptism Candidates rendered as a display string. Handles the
+        // person-ref array and any legacy free-text value still in the data.
+        baptismNames() {
+            const bap = this.service?.liturgy?.baptism;
+            if (Array.isArray(bap)) return bap.map(c => c && c.name).filter(Boolean).join(', ');
+            return typeof bap === 'string' ? bap : '';
         },
 
         formatLongDate(dateStr) {

@@ -244,6 +244,12 @@
                                 <span class="font-body-md text-sm" x-text="formatDate(person.birthday)"></span>
                             </div>
                         </template>
+                        <template x-if="person?.baptismDate">
+                            <div class="flex items-center gap-3 text-blue-700 font-medium">
+                                <span class="material-symbols-outlined text-[20px]">water_drop</span>
+                                <span class="font-body-md text-sm">Baptized <span x-text="formatDate(person.baptismDate)"></span></span>
+                            </div>
+                        </template>
                         <template x-if="!person?.contact?.email && !person?.contact?.phone && !person?.contact?.address && !person?.birthday">
                             <p class="text-on-surface-variant italic text-sm">No contact details provided.</p>
                         </template>

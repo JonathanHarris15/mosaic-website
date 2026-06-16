@@ -82,6 +82,10 @@ _Avoid_: Label, category, attribute
 A Shepherding Tag (not a built-in field) used as the canonical example of elder-defined tagging. No special UI treatment beyond being a tag.
 _Avoid_: Alert, priority, built-in status
 
+**Baptism Candidate**:
+A Person who is baptized at a Service. A Service with `hasBaptism: true` carries a list of Baptism Candidates (Person references), replacing the former free-text baptism value. Being recorded as a Baptism Candidate sets that Person's `baptismDate` to the Service date. A candidate need not pre-exist as a Person — naming a new one creates the Person record.
+_Avoid_: Baptizee, baptism name, candidate (unqualified)
+
 ## Core Entities
 
 ### Person
@@ -98,6 +102,7 @@ An individual whose involvement with the church is tracked. This is the primary 
     - `status`: 'member', 'regular_attender', 'visitor', or 'inactive'.
     - `joinedAt`: Date they became a member.
   - `lastPastoralPrayerDate`: The date (YYYY-MM-DD) of the last time this person was prayed for in the pastoral prayer.
+  - `baptismDate`: The date (YYYY-MM-DD) this person was baptized, derived from the Service at which they were a Baptism Candidate. Absent if they have not been recorded as baptized.
   - `createdAt`: Timestamp when the record was created.
   - `updatedAt`: Timestamp of the last modification.
 - **Sub-collections**:
@@ -160,7 +165,7 @@ Canonical names for types of involvement.
 - `worship_leader`: The person leading the musical worship. Surfaces in the UI as the "Music Leader."
 - `worship_helper`: A person who accompanies the Music Leader (e.g. an accompanist or additional musician). A Service may have several. Surfaces in the UI as a "Music Helper." Distinct from `worship_leader` so helpers are separable in participation history and analytics.
 - `sermonette`: The person delivering a shorter message. In the calendar view, this is displayed as a badge and is editable inline by admins.
-- `baptism`: A liturgical event marked by `hasBaptism: true`. Displayed as a read-only badge in the calendar views.
+- `baptism`: A liturgical event marked by `hasBaptism: true`. The people being baptized are the Service's Baptism Candidates. Displayed as a read-only badge in the calendar views.
 - `prayer`: The person leading a specific prayer (praise or confession).
 - `pastoral_prayer`: The person being prayed for in the weekly pastoral prayer (subject). Note: These are tracked in the `pastoral_prayer_history` collection, not the `involvement` collection.
 
@@ -238,12 +243,12 @@ An `@`-prefixed inline reference inside a TipTap editor. The mention system span
 ### Service Calendar
 - **Baptism Indicator**: 
   - **List View**: A blue status badge with a `water_drop` icon.
-  - **Table View**: A dedicated "Baptism" column showing the candidate's name or notes.
-  - **Editing**: Editable inline as a free-text field (not linked to a Person record). Setting a value automatically sets `hasBaptism: true`; clearing it sets `hasBaptism: false`.
+  - **Table View**: A dedicated "Baptism" column showing the Baptism Candidates' names.
+  - **Editing**: Read-only in the calendar; Baptism Candidates are managed in the Order of Service Builder (linked to Person records). The "Include Baptism?" toggle in the Builder sets `hasBaptism`.
 - **Sermonette Indicator**: 
   - **List View**: A purple status badge with a `mic` icon.
   - **Table View**: Displayed within the "Preacher" column as a secondary entry (e.g., "Jane Doe (Sermonette)").
   - **Editing**: Editable inline by admins, linked to a Person record.
 - **Editing Summary**: 
   - Sermonette leaders are linked to People and editable from list/table.
-  - Baptism is free-text and editable from the table view.
+  - Baptism Candidates are linked to People and editable from the Order of Service Builder (read-only in the calendar).

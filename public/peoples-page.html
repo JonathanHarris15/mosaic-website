@@ -505,6 +505,12 @@
                         <div>
                             <h2 class="font-headline-md text-2xl text-primary" x-text="selectedPerson.name"></h2>
                             <p class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Profile & Involvement History</p>
+                            <template x-if="selectedPerson.baptismDate">
+                                <span class="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider">
+                                    <span class="material-symbols-outlined text-[14px]">water_drop</span>
+                                    Baptized <span x-text="selectedPerson.baptismDate"></span>
+                                </span>
+                            </template>
                         </div>
                         <button @click="showInvolvementModal = false" class="text-on-surface-variant hover:text-primary p-2 hover:bg-surface-container rounded-full transition-all">
                             <span class="material-symbols-outlined text-2xl">close</span>

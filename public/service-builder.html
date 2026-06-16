@@ -1287,10 +1287,41 @@
                 <div class="field-group !mb-2">
                     <div class="flex flex-row-reverse items-center gap-2">
                         <span class="material-symbols-outlined text-primary text-sm">water_drop</span>
-                        <label class="field-label !mb-0 text-primary" for="baptism-notes">Baptism</label>
+                        <label class="field-label !mb-0 text-primary">Baptism Candidates</label>
                     </div>
                 </div>
-                <textarea id="baptism-notes" name="baptism" x-model="service.liturgy.baptism" :readonly="!canEdit" class="field-input !max-w-none" rows="2" placeholder="Candidate names or notes..."></textarea>
+                <template x-for="(cand, idx) in service.liturgy.baptism" :key="idx">
+                    <div class="mb-2">
+                        <div x-data="personPicker(cand, $data)" @click.away="open = false" class="input-container relative !max-w-none">
+                            <div class="flex items-center bg-surface-container-lowest rounded-lg border border-outline-variant px-3 py-2">
+                                <input type="text" placeholder="Search or add a person..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
+                                <div class="flex items-center gap-1">
+                                    <button @click="removeBaptismCandidate(idx)" class="text-secondary hover:text-red-500 transition-colors cursor-pointer" :disabled="!canEdit" title="Remove candidate">
+                                        <span class="material-symbols-outlined text-[18px]">close</span>
+                                    </button>
+                                    <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
+                                </div>
+                            </div>
+                            <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                                <template x-for="p in results" :key="p.id">
+                                    <button @click="select(p)"
+                                            :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'"
+                                            class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
+                                        <div class="flex items-center justify-between">
+                                            <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
+                                            <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
+                                        </div>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <div class="flex justify-start" x-show="canEdit">
+                    <button @click="addBaptismCandidate()" class="text-[11px] font-label-md uppercase tracking-wider text-primary/70 hover:text-primary transition-colors flex items-center gap-1">
+                        <span class="material-symbols-outlined text-[16px]">add</span> Add Baptism Candidate
+                    </button>
+                </div>
                 <!-- Note controls -->
                 <button x-show="canEdit && !(service.notes && service.notes['baptism'])" @click="openNote('baptism')" class="note-add-btn" title="Add note" aria-label="Add note" data-note-key="baptism"><span class="material-symbols-outlined" style="font-size:15px">add</span></button>
                 <button x-show="service.notes && service.notes['baptism']" @click="openNote('baptism')" class="note-bubble-btn" title="View/edit note" aria-label="Edit note" data-note-key="baptism"><span class="material-symbols-outlined" style="font-size:13px">sticky_note_2</span></button>

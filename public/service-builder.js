@@ -27,18 +27,57 @@ const CANONICAL_MAPPING = {
     'Benediction': { field: 'benediction', type: 'text', liturgy: true }
 };
 
-// Compares the previously-saved Music Helpers against the current helpers and
-// reports which Persons gain a worship_helper involvement and which lose one.
-// Helpers are a SET keyed by Person id; rows without a selected Person (no id)
-// carry no involvement, and the same Person listed twice counts once.
-function worshipHelperInvolvementChanges(originalHelpers, currentHelpers) {
-    const idSet = (list) => new Set((list || []).map(h => h && h.id).filter(Boolean));
-    const oldIds = idSet(originalHelpers);
-    const newIds = idSet(currentHelpers);
+// Diffs two lists of Person references as SETS keyed by Person id, reporting
+// which ids were added and which were removed. Entries without an id (no
+// selected Person) are ignored, and a Person listed twice counts once.
+// Shared by features that treat a list of people as a set across a save
+// (Music Helpers, Baptism Candidates).
+function personRefSetChanges(originalRefs, currentRefs) {
+    const idSet = (list) => new Set((Array.isArray(list) ? list : []).map(r => r && r.id).filter(Boolean));
+    const oldIds = idSet(originalRefs);
+    const newIds = idSet(currentRefs);
     return {
         added: [...newIds].filter(id => !oldIds.has(id)),
         removed: [...oldIds].filter(id => !newIds.has(id))
     };
+}
+
+// Compares the previously-saved Music Helpers against the current helpers and
+// reports which Persons gain a worship_helper involvement and which lose one.
+function worshipHelperInvolvementChanges(originalHelpers, currentHelpers) {
+    return personRefSetChanges(originalHelpers, currentHelpers);
+}
+
+// Parses a free-text baptism value into Baptism Candidate names. Splits on
+// commas, ampersands, and the word "and". A segment is a confident candidate
+// only when it reads as a First-Last name (two or more word tokens with no
+// digits); anything else (a lone first name, digits, junk) sets needsReview so
+// the migration's dry-run can flag it for a human rather than guessing.
+function parseBaptismNames(value) {
+    if (typeof value !== 'string') return { candidates: [], needsReview: false };
+    const cleaned = value.trim();
+    if (!cleaned || cleaned === '—' || /^(n\/?a|tbd|tba|none)$/i.test(cleaned)) {
+        return { candidates: [], needsReview: false };
+    }
+    const segments = cleaned
+        .split(/\s*,\s*|\s*&\s*|\s+and\s+/i)
+        .map(s => s.replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+
+    const candidates = [];
+    const reasons = [];
+    for (const seg of segments) {
+        if (/\d/.test(seg)) {
+            reasons.push(`"${seg}" contains digits`);
+        } else if (seg.split(' ').length >= 2) {
+            candidates.push(seg);
+        } else {
+            reasons.push(`"${seg}" has no surname`);
+        }
+    }
+    const result = { candidates, needsReview: reasons.length > 0 };
+    if (reasons.length) result.reason = reasons.join('; ');
+    return result;
 }
 
 function serviceForm() {
@@ -91,7 +130,7 @@ function serviceForm() {
                 prayerFemale: { id: null, name: '' },
                 prayerLabel: 'Pastoral Prayer',
                 sermon: '',
-                baptism: '',
+                baptism: [],
                 hymnEnd1: { id: null, name: '' },
                 hymnEnd2: { id: null, name: '' },
                 benediction: ''
@@ -415,6 +454,17 @@ function serviceForm() {
                         }
                     }
                 }
+                // Normalize Baptism Candidates to an array of Person refs. A legacy
+                // free-text value (pre-migration) is wrapped as a single literal
+                // candidate so it still displays; the migration resolves it properly.
+                const bap = this.service.liturgy.baptism;
+                if (Array.isArray(bap)) {
+                    this.service.liturgy.baptism = bap.map(c => ({ name: c.name || '', id: c.id || null }));
+                } else if (typeof bap === 'string' && bap.trim()) {
+                    this.service.liturgy.baptism = [{ name: bap.trim(), id: null }];
+                } else {
+                    this.service.liturgy.baptism = [];
+                }
                 // Store guide data to preserve/update it during save
                 this.service.guide = data.guide || null;
             }
@@ -571,6 +621,14 @@ function serviceForm() {
 
                 // 2. Check Liturgy
                 for (const key of liturgyFields) {
+                    if (key === 'baptism') {
+                        // Baptism Candidates: incomplete if there are none, or any
+                        // candidate is a literal name not yet linked to a Person.
+                        const candidates = this.service.liturgy.baptism || [];
+                        const incomplete = candidates.length === 0 || candidates.some(c => c.name && !c.id);
+                        if (incomplete && highlight(key)) return;
+                        continue;
+                    }
                     const val = this.service.liturgy[key];
                     const isEmpty = (val && typeof val === 'object') ? !val.name : !val;
                     const isLiteral = (val && typeof val === 'object' && val.name && !val.id);
@@ -639,6 +697,19 @@ function serviceForm() {
                 }
                 for (const personId of helperChanges.added) {
                     await this._addInvolvement(batch, personId, 'worship_helper');
+                }
+
+                // 1c. Process Baptism Candidates: each baptized Person's baptismDate is
+                // this service's date. The effective set is empty when baptism is toggled
+                // off, so clearing "Include Baptism?" also clears the dates it set.
+                const oldCandidates = (original.hasBaptism && Array.isArray(original.liturgy.baptism)) ? original.liturgy.baptism : [];
+                const newCandidates = (this.service.hasBaptism && Array.isArray(this.service.liturgy.baptism)) ? this.service.liturgy.baptism : [];
+                const baptismChanges = personRefSetChanges(oldCandidates, newCandidates);
+                for (const personId of baptismChanges.added) {
+                    batch.update(db.collection('people').doc(personId), { baptismDate: this.date });
+                }
+                for (const personId of baptismChanges.removed) {
+                    await this._clearBaptismDateIfThisService(batch, personId);
                 }
 
                 // 2. Process Pastoral Prayer Roles (Liturgy)
@@ -818,6 +889,16 @@ function serviceForm() {
             this.service.musicHelpers.splice(index, 1);
         },
 
+        // ── Baptism Candidates ───────────────────────────────────────────────
+        addBaptismCandidate() {
+            if (!Array.isArray(this.service.liturgy.baptism)) this.service.liturgy.baptism = [];
+            this.service.liturgy.baptism.push({ name: '', id: null });
+        },
+
+        removeBaptismCandidate(index) {
+            this.service.liturgy.baptism.splice(index, 1);
+        },
+
         // ── Utility ────────────────────────────────────────────────────────────
         clearService() {
             if (!confirm('Are you sure you want to clear the current service? This will reset all liturgy fields.')) return;
@@ -848,7 +929,7 @@ function serviceForm() {
                 prayerFemale: { id: null, name: '' },
                 prayerLabel: 'Pastoral Prayer',
                 sermon: '',
-                baptism: '',
+                baptism: [],
                 hymnEnd1: { id: null, name: '' },
                 hymnEnd2: { id: null, name: '' },
                 benediction: ''
@@ -1021,7 +1102,10 @@ function serviceForm() {
                 { label: 'Sermon',                         value: liturgy.sermon || '' },
             );
             if (hasBaptism) {
-                items.push({ label: 'Sacrament of Baptism', value: liturgy.baptism || '' });
+                const baptismNames = Array.isArray(liturgy.baptism)
+                    ? liturgy.baptism.map(c => c.name).filter(Boolean).join(', ')
+                    : (liturgy.baptism || '');
+                items.push({ label: 'Sacrament of Baptism', value: baptismNames });
             }
             items.push(
                 { label: 'Hymn',                           value: liturgy.hymnEnd1?.name || '',        italic: true },
@@ -1099,6 +1183,16 @@ function serviceForm() {
                 batch.update(personRef, {
                     totalInvolvements: firebase.firestore.FieldValue.increment(-snap.size)
                 });
+            }
+        },
+
+        async _clearBaptismDateIfThisService(batch, personId) {
+            // Only clear when the recorded baptismDate is this service's date, so a
+            // baptism recorded at a different service is never wiped by this edit.
+            const personRef = db.collection('people').doc(personId);
+            const snap = await personRef.get();
+            if (snap.exists && snap.data().baptismDate === this.date) {
+                batch.update(personRef, { baptismDate: firebase.firestore.FieldValue.delete() });
             }
         },
 
@@ -1418,5 +1512,5 @@ function hymnPicker(hymnRef, parent = null) {
 
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges };
+    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames };
 }

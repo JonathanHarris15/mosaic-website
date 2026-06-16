@@ -3,6 +3,8 @@ function calendarPage() {
         view: localStorage.getItem('calendarView') || 'list',
         showHistory: false,
         showDirectory: false,
+        peopleRegistry: [],
+        peopleFuse: null,
 
         // --- Person Selector Modal ---
         showPersonSelector: false,
@@ -290,6 +292,12 @@ function calendarPage() {
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 const newPerson = { id: docRef.id, name: this.personToAdd.name };
+                if (this.peopleRegistry) {
+                    this.peopleRegistry.push(newPerson);
+                    if (this.peopleFuse) {
+                        this.peopleFuse.setCollection(this.peopleRegistry);
+                    }
+                }
                 if (this.personToAdd.callback) this.personToAdd.callback(newPerson);
                 this.showPersonAddModal = false;
             } catch (err) {
@@ -300,7 +308,7 @@ function calendarPage() {
             }
         },
 
-        init() {
+        async init() {
             this.$watch('view', val => {
                 localStorage.setItem('calendarView', val);
                 if (window.refreshCalendar) window.refreshCalendar(this.showHistory);
@@ -308,6 +316,22 @@ function calendarPage() {
             this.$watch('showHistory', val => {
                 if (window.refreshCalendar) window.refreshCalendar(val);
             });
+            await this.loadPeopleRegistry();
+        },
+
+        async loadPeopleRegistry() {
+            try {
+                const snap = await db.collection('people').get();
+                this.peopleRegistry = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                this.peopleFuse = new Fuse(this.peopleRegistry, {
+                    keys: ['name'],
+                    threshold: 0.4,
+                    distance: 100,
+                    minMatchCharLength: 1
+                });
+            } catch (error) {
+                console.error("Error loading people registry:", error);
+            }
         }
     };
 }
@@ -419,6 +443,14 @@ function scrollToClosestSunday(sundays) {
 // both keyed/stamped by serviceDate) are re-keyed in the same pass so analytics
 // and "last prayed for" stay correct.
 // ---------------------------------------------------------------------------
+
+// Renders a Service's Baptism Candidates as a display string. Handles the
+// person-ref array and any legacy free-text value still present in the data.
+function baptismCandidateNames(svc) {
+    const bap = svc && (svc.liturgy && svc.liturgy.baptism !== undefined ? svc.liturgy.baptism : svc.baptism);
+    if (Array.isArray(bap)) return bap.map(c => c && c.name).filter(Boolean).join(', ');
+    return typeof bap === 'string' ? bap : '';
+}
 
 function dateStrToDate(s) {
     const [y, m, d] = s.split('-').map(Number);
@@ -971,7 +1003,7 @@ function injectServiceData(serviceMap) {
                         </span>`;
                 }
                 if (svc.hasBaptism) {
-                    const baptismName = svc.liturgy?.baptism || svc.baptism || '';
+                    const baptismName = baptismCandidateNames(svc);
                     html += `
                         <span class="group/baptism relative inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider cursor-help">
                             <span class="material-symbols-outlined text-[14px]">water_drop</span>
@@ -1103,9 +1135,9 @@ function injectServiceData(serviceMap) {
 
         const baptismCell = el.querySelector('.baptism-cell');
         if (baptismCell) {
-            const baptismVal = svc.liturgy?.baptism || svc.baptism || ''; // Fallback for various schema versions
-            baptismCell.textContent = baptismVal || '—';
-            if (canEdit) setupInlineEdit(baptismCell, dateKey, 'baptism');
+            // Baptism Candidates are linked to People and managed in the Order of
+            // Service Builder, so the calendar shows them read-only.
+            baptismCell.textContent = baptismCandidateNames(svc) || '—';
         }
 
         const musicCell = el.querySelector('.music-cell');
@@ -1450,26 +1482,29 @@ window.openPersonSelector = (dateKey, field, current) => {
 /**
  * Shared Person Picker component logic (Alpine.js)
  */
-function personPicker(personRef, suggestionsKey = null) {
+function personPicker(personRef, parent = null, suggestionsKey = null) {
     if (!personRef) personRef = { name: '', id: null };
     return {
         personRef: personRef,
+        parent: parent,
         suggestionsKey: suggestionsKey,
         get suggestions() {
-            // Resolve the key. If it's 'activeSuggestionsKey', look it up on the parent scope (proxied via this)
             let key = this.suggestionsKey;
-            if (key === 'activeSuggestionsKey') {
-                key = this.activeSuggestionsKey; 
+            if (key === 'activeSuggestionsKey' && this.parent) {
+                key = this.parent.activeSuggestionsKey; 
             }
             
-            if (key === 'males' || key === 'females') {
-                return (this.prayerSuggestions && this.prayerSuggestions[key]) || [];
+            if ((key === 'males' || key === 'females') && this.parent && this.parent.prayerSuggestions) {
+                return this.parent.prayerSuggestions[key] || [];
             }
             return [];
         },
         open: false,
         query: personRef.name || '',
         results: [],
+        keepOpenInterval: null,
+        lastFirestoreQuery: '',
+        hadFuse: false,
         
         init() {
             this.$watch('personRef.name', (val) => {
@@ -1478,16 +1513,78 @@ function personPicker(personRef, suggestionsKey = null) {
             // Auto-open suggestions when modal is shown (watch parent prop proxied via this)
             this.$watch('showPersonSelector', (val) => {
                 if (val && this.suggestionsKey) {
-                    this.open = true;
+                    // Try to grab the input element inside the selector modal
+                    const inputEl = document.getElementById('person-selector-input');
+                    this.onFocus(inputEl);
                 }
             });
         },
 
+        ensureInterval(el) {
+            if (this.keepOpenInterval) return;
+            if (el && document.activeElement === el) {
+                this.keepOpenInterval = setInterval(() => {
+                    if (document.activeElement === el) {
+                        this.open = true;
+                        // Periodically call search to check if lazy-loaded fuse registry has arrived
+                        this.search();
+                    } else {
+                        clearInterval(this.keepOpenInterval);
+                        this.keepOpenInterval = null;
+                    }
+                }, 250);
+            }
+        },
+
+        onFocus(el) {
+            this.open = true;
+            this.search();
+            this.ensureInterval(el);
+        },
+
         async search() {
-            if (this.query.length < 2) {
+            const fuse = this.parent && this.parent.peopleFuse;
+            const registry = this.parent && this.parent.peopleRegistry;
+            const hasFuse = !!(fuse && registry);
+
+            if (hasFuse) {
+                this.hadFuse = true;
+                let found = [];
+                let key = this.suggestionsKey;
+                if (key === 'activeSuggestionsKey' && this.parent) {
+                    key = this.parent.activeSuggestionsKey; 
+                }
+
+                if (!this.query || this.query.trim().length === 0) {
+                    if (key === 'males' || key === 'females') {
+                        found = [];
+                    } else {
+                        found = registry.slice(0, 5);
+                    }
+                } else {
+                    found = fuse.search(this.query).slice(0, 5).map(r => r.item);
+                }
+
+                if (this.query && this.query.trim().length >= 2) {
+                    const exactMatch = found.find(p => p.name.toLowerCase() === this.query.trim().toLowerCase());
+                    if (!exactMatch) {
+                        found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
+                    }
+                }
+                this.results = found;
+                return;
+            }
+
+            if (!this.query || this.query.length < 2) {
                 this.results = [];
                 return;
             }
+
+            // Prevent duplicate Firestore requests while focused/typing
+            if (this.lastFirestoreQuery === this.query) {
+                return;
+            }
+            this.lastFirestoreQuery = this.query;
 
             try {
                 const snap = await db.collection('people')
@@ -1509,6 +1606,10 @@ function personPicker(personRef, suggestionsKey = null) {
         },
 
         select(p) {
+            if (this.keepOpenInterval) {
+                clearInterval(this.keepOpenInterval);
+                this.keepOpenInterval = null;
+            }
             if (p.isNew) {
                 this.$dispatch('prompt-add-person', { 
                     name: p.name, 
@@ -1520,6 +1621,8 @@ function personPicker(personRef, suggestionsKey = null) {
                 });
                 this.results = [];
                 this.open = false;
+                this.lastFirestoreQuery = '';
+                this.hadFuse = false;
                 return;
             }
             this.personRef.id = p.id;
@@ -1527,18 +1630,28 @@ function personPicker(personRef, suggestionsKey = null) {
             this.query = p.name;
             this.results = [];
             this.open = false;
+            this.lastFirestoreQuery = '';
+            this.hadFuse = false;
         },
 
         clear() {
+            if (this.keepOpenInterval) {
+                clearInterval(this.keepOpenInterval);
+                this.keepOpenInterval = null;
+            }
             this.personRef.id = null;
             this.personRef.name = '';
             this.query = '';
             this.results = [];
             this.open = false;
+            this.lastFirestoreQuery = '';
+            this.hadFuse = false;
         },
 
-        onInput() {
+        onInput(el) {
             this.personRef.id = null; 
+            this.open = true;
+            this.ensureInterval(el);
             this.search();
         }
     };
