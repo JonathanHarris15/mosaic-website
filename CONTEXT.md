@@ -112,6 +112,7 @@ A liturgical event (usually a Sunday service), identified by its date (YYYY-MM-D
   - `serviceLeader`: Reference to a Person (historically a string).
   - `preacher`: Reference to a Person (historically a string).
   - `musicLeader`: Reference to a Person (historically a string).
+  - `musicHelpers`: An ordered list of Person references who accompany the Music Leader (the Worship Helpers for this Service).
   ... (other liturgy fields)
 
 ### Service Guide
@@ -156,7 +157,8 @@ A record of a Person's participation in a Service in a specific Role.
 Canonical names for types of involvement.
 - `service_leader`: The primary facilitator of the service.
 - `preacher`: The person delivering the sermon.
-- `worship_leader`: The person leading the musical worship.
+- `worship_leader`: The person leading the musical worship. Surfaces in the UI as the "Music Leader."
+- `worship_helper`: A person who accompanies the Music Leader (e.g. an accompanist or additional musician). A Service may have several. Surfaces in the UI as a "Music Helper." Distinct from `worship_leader` so helpers are separable in participation history and analytics.
 - `sermonette`: The person delivering a shorter message. In the calendar view, this is displayed as a badge and is editable inline by admins.
 - `baptism`: A liturgical event marked by `hasBaptism: true`. Displayed as a read-only badge in the calendar views.
 - `prayer`: The person leading a specific prayer (praise or confession).

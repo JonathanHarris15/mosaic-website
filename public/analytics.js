@@ -204,6 +204,11 @@ export function analyticsPage() {
                 }
             });
 
+            // Music Helpers are stored as a list; each accrues a worship_helper involvement.
+            if (Array.isArray(data.musicHelpers)) {
+                data.musicHelpers.forEach(h => addInvolvement(h, 'worship_helper'));
+            }
+
             // Handle irregular elements
             if (data.isIrregular && Array.isArray(data.irregularElements)) {
                 data.irregularElements.forEach(el => {

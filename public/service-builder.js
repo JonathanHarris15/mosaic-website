@@ -27,6 +27,20 @@ const CANONICAL_MAPPING = {
     'Benediction': { field: 'benediction', type: 'text', liturgy: true }
 };
 
+// Compares the previously-saved Music Helpers against the current helpers and
+// reports which Persons gain a worship_helper involvement and which lose one.
+// Helpers are a SET keyed by Person id; rows without a selected Person (no id)
+// carry no involvement, and the same Person listed twice counts once.
+function worshipHelperInvolvementChanges(originalHelpers, currentHelpers) {
+    const idSet = (list) => new Set((list || []).map(h => h && h.id).filter(Boolean));
+    const oldIds = idSet(originalHelpers);
+    const newIds = idSet(currentHelpers);
+    return {
+        added: [...newIds].filter(id => !oldIds.has(id)),
+        removed: [...oldIds].filter(id => !newIds.has(id))
+    };
+}
+
 function serviceForm() {
     return {
         date: '',
@@ -45,11 +59,14 @@ function serviceForm() {
         _sortable: null,
         hymnRegistry: [],
         fuse: null,
+        peopleRegistry: [],
+        peopleFuse: null,
         service: {
             theme: '',
             keyVerse: '',
             serviceLeader: { name: '', id: null },
             musicLeader: { name: '', id: null },
+            musicHelpers: [],
             preacher: { name: '', id: null },
             sermonette: { name: '', id: null },
             prayerPraise: { name: '', id: null },
@@ -155,6 +172,12 @@ function serviceForm() {
                 });
                 
                 const newPerson = { id: docRef.id, name: this.personToAdd.name };
+                if (this.peopleRegistry) {
+                    this.peopleRegistry.push(newPerson);
+                    if (this.peopleFuse) {
+                        this.peopleFuse.setCollection(this.peopleRegistry);
+                    }
+                }
                 if (this.personToAdd.callback) {
                     this.personToAdd.callback(newPerson);
                 }
@@ -196,6 +219,7 @@ function serviceForm() {
             }
             await this.load();
             await this.loadHymnRegistry();
+            await this.loadPeopleRegistry();
             await this.autoLinkHymns();
             await this.fetchPrayerSuggestions();
 
@@ -220,17 +244,62 @@ function serviceForm() {
                 const getHymnIndex = firebase.app().functions('us-central1').httpsCallable('getHymnIndex');
                 const result = await getHymnIndex();
                 this.hymnRegistry = result.data;
-                
-                // Initialize Fuse.js for fuzzy searching
-                this.fuse = new Fuse(this.hymnRegistry, {
-                    keys: ['hymn_name', 'lyrics_writer', 'music_writer'],
-                    threshold: 0.3, // Lower is stricter, higher is fuzzier
-                    distance: 100,
-                    minMatchCharLength: 2,
-                    includeScore: true
-                });
             } catch (error) {
-                console.error("Error loading hymn registry:", error);
+                console.warn("getHymnIndex failed, falling back to direct Firestore fetch:", error);
+                try {
+                    const snap = await db.collection('hymns').get();
+                    this.hymnRegistry = snap.docs.map(doc => {
+                        const data = doc.data();
+                        return {
+                            id: doc.id,
+                            hymn_name: data.hymn_name || "Unknown",
+                            variations: data.versions ? data.versions.length : 0,
+                            music_writer: data.music_writer || "Unknown",
+                            lyrics_writer: data.lyrics_writer || "Unknown",
+                            last_played_date: data.last_played_date || null,
+                            tags: data.tags || [],
+                            database_url: `/hymns/${doc.id}`
+                        };
+                    });
+                } catch (fsError) {
+                    console.error("Error loading hymn registry from Firestore:", fsError);
+                }
+            }
+
+            if (typeof Fuse !== 'undefined' && this.hymnRegistry && this.hymnRegistry.length > 0) {
+                try {
+                    // Initialize Fuse.js for fuzzy searching
+                    this.fuse = new Fuse(this.hymnRegistry, {
+                        keys: ['id', 'hymn_name', 'lyrics_writer', 'music_writer'],
+                        threshold: 0.4, // Lenient threshold for matching prefixes/typos
+                        distance: 100,
+                        minMatchCharLength: 1, // Allow 1-character queries
+                        includeScore: true
+                    });
+                } catch (fuseErr) {
+                    console.error("Error creating Fuse instance for hymns:", fuseErr);
+                }
+            }
+        },
+
+        async loadPeopleRegistry() {
+            try {
+                const snap = await db.collection('people').get();
+                this.peopleRegistry = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                if (typeof Fuse !== 'undefined') {
+                    try {
+                        this.peopleFuse = new Fuse(this.peopleRegistry, {
+                            keys: ['name'],
+                            threshold: 0.4,
+                            distance: 100,
+                            minMatchCharLength: 1
+                        });
+                    } catch (fuseErr) {
+                        console.error("Error creating Fuse instance for people:", fuseErr);
+                    }
+                }
+            } catch (error) {
+                console.error("Error loading people registry:", error);
             }
         },
 
@@ -307,6 +376,9 @@ function serviceForm() {
                 this.service.serviceLeader.id = data.serviceLeaderId || null;
                 this.service.musicLeader.name = data.musicLeader || '';
                 this.service.musicLeader.id = data.musicLeaderId || null;
+                this.service.musicHelpers = Array.isArray(data.musicHelpers)
+                    ? data.musicHelpers.map(h => ({ name: h.name || '', id: h.id || null }))
+                    : [];
                 this.service.preacher.name = data.preacher || '';
                 this.service.preacher.id = data.preacherId || null;
                 this.service.sermonette.name = data.sermonette || '';
@@ -560,6 +632,15 @@ function serviceForm() {
                     }
                 }
 
+                // 1b. Process Music Helpers (a set of worship_helper involvements)
+                const helperChanges = worshipHelperInvolvementChanges(original.musicHelpers, this.service.musicHelpers);
+                for (const personId of helperChanges.removed) {
+                    await this._removeInvolvement(batch, personId, 'worship_helper');
+                }
+                for (const personId of helperChanges.added) {
+                    await this._addInvolvement(batch, personId, 'worship_helper');
+                }
+
                 // 2. Process Pastoral Prayer Roles (Liturgy)
                 for (const { field, role } of liturgyRoles) {
                     const oldId = original.liturgy[field] ? original.liturgy[field].id : null;
@@ -592,6 +673,7 @@ function serviceForm() {
                     serviceLeaderId: this.service.serviceLeader.id,
                     musicLeader: this.service.musicLeader.name,
                     musicLeaderId: this.service.musicLeader.id,
+                    musicHelpers: this.service.musicHelpers.map(h => ({ name: h.name || '', id: h.id || null })),
                     preacher: this.service.preacher.name,
                     preacherId: this.service.preacher.id,
                     sermonette: this.service.sermonette.name,
@@ -727,6 +809,15 @@ function serviceForm() {
             this.activeNoteKey = null;
         },
 
+        // ── Music Helpers ────────────────────────────────────────────────────
+        addMusicHelper() {
+            this.service.musicHelpers.push({ name: '', id: null });
+        },
+
+        removeMusicHelper(index) {
+            this.service.musicHelpers.splice(index, 1);
+        },
+
         // ── Utility ────────────────────────────────────────────────────────────
         clearService() {
             if (!confirm('Are you sure you want to clear the current service? This will reset all liturgy fields.')) return;
@@ -734,6 +825,7 @@ function serviceForm() {
             this.service.keyVerse = '';
             this.service.serviceLeader = { name: '', id: null };
             this.service.musicLeader = { name: '', id: null };
+            this.service.musicHelpers = [];
             this.service.preacher = { name: '', id: null };
             this.service.sermonette = { name: '', id: null };
             this.service.prayerPraise = { name: '', id: null };
@@ -1038,20 +1130,24 @@ function serviceForm() {
     };
 }
 
-function personPicker(personRef, suggestionsKey = null) {
+function personPicker(personRef, parent = null, suggestionsKey = null) {
     if (!personRef) personRef = { name: '', id: null };
     return {
         personRef: personRef,
+        parent: parent,
         suggestionsKey: suggestionsKey,
         get suggestions() {
-            if (typeof this.suggestionsKey === 'string' && this.prayerSuggestions) {
-                return this.prayerSuggestions[this.suggestionsKey] || [];
+            if (typeof this.suggestionsKey === 'string' && this.parent && this.parent.prayerSuggestions) {
+                return this.parent.prayerSuggestions[this.suggestionsKey] || [];
             }
             return Array.isArray(this.suggestionsKey) ? this.suggestionsKey : [];
         },
         open: false,
         query: personRef.name || '',
         results: [],
+        keepOpenInterval: null,
+        lastFirestoreQuery: '',
+        hadFuse: false,
         
         init() {
             // Keep local query in sync with incoming name
@@ -1060,14 +1156,69 @@ function personPicker(personRef, suggestionsKey = null) {
             });
         },
 
+        ensureInterval(el) {
+            if (this.keepOpenInterval) return;
+            if (el && document.activeElement === el) {
+                this.keepOpenInterval = setInterval(() => {
+                    if (document.activeElement === el) {
+                        this.open = true;
+                        // Periodically call search to check if lazy-loaded fuse registry has arrived
+                        this.search();
+                    } else {
+                        clearInterval(this.keepOpenInterval);
+                        this.keepOpenInterval = null;
+                    }
+                }, 250);
+            }
+        },
+
+        onFocus(el) {
+            this.open = true;
+            this.search();
+            this.ensureInterval(el);
+        },
+
         async search() {
-            if (this.query.length < 2) {
+            const fuse = this.parent && this.parent.peopleFuse;
+            const registry = this.parent && this.parent.peopleRegistry;
+            const hasFuse = !!(fuse && registry);
+
+            if (hasFuse) {
+                this.hadFuse = true;
+                let found = [];
+                if (!this.query || this.query.trim().length === 0) {
+                    if (this.suggestionsKey) {
+                        found = [];
+                    } else {
+                        found = registry.slice(0, 5);
+                    }
+                } else {
+                    found = fuse.search(this.query).slice(0, 5).map(r => r.item);
+                }
+
+                if (this.query && this.query.trim().length >= 2) {
+                    const exactMatch = found.find(p => p.name.toLowerCase() === this.query.trim().toLowerCase());
+                    if (!exactMatch) {
+                        found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
+                    }
+                }
+                this.results = found;
+                return;
+            }
+
+            if (!this.query || this.query.length < 2) {
                 this.results = [];
                 return;
             }
 
+            // Prevent duplicate Firestore requests while focused/typing
+            if (this.lastFirestoreQuery === this.query) {
+                return;
+            }
+            this.lastFirestoreQuery = this.query;
+
             try {
-                // Search Firestore people collection
+                // Search Firestore people collection (fallback)
                 const snap = await db.collection('people')
                     .where('name', '>=', this.query)
                     .where('name', '<=', this.query + '\uf8ff')
@@ -1075,7 +1226,6 @@ function personPicker(personRef, suggestionsKey = null) {
                 
                 let found = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-                // Add virtual "Add New" result if exact match not found
                 const exactMatch = found.find(p => p.name.toLowerCase() === this.query.trim().toLowerCase());
                 if (!exactMatch && this.query.trim().length >= 2) {
                     found.push({ id: 'NEW', name: this.query.trim(), isNew: true });
@@ -1088,6 +1238,10 @@ function personPicker(personRef, suggestionsKey = null) {
         },
 
         select(p) {
+            if (this.keepOpenInterval) {
+                clearInterval(this.keepOpenInterval);
+                this.keepOpenInterval = null;
+            }
             if (p.isNew) {
                 this.$dispatch('prompt-add-person', { 
                     name: p.name, 
@@ -1099,6 +1253,8 @@ function personPicker(personRef, suggestionsKey = null) {
                 });
                 this.results = [];
                 this.open = false;
+                this.lastFirestoreQuery = '';
+                this.hadFuse = false;
                 return;
             }
             this.personRef.id = p.id;
@@ -1106,30 +1262,43 @@ function personPicker(personRef, suggestionsKey = null) {
             this.query = p.name;
             this.results = [];
             this.open = false;
+            this.lastFirestoreQuery = '';
+            this.hadFuse = false;
         },
 
         clear() {
+            if (this.keepOpenInterval) {
+                clearInterval(this.keepOpenInterval);
+                this.keepOpenInterval = null;
+            }
             this.personRef.id = null;
             this.personRef.name = '';
             this.query = '';
             this.results = [];
             this.open = false;
+            this.lastFirestoreQuery = '';
+            this.hadFuse = false;
         },
 
-        onInput() {
-            // Clear ID if they are typing, but don't update name yet to enforce selection/creation
+        onInput(el) {
             this.personRef.id = null; 
+            this.open = true;
+            this.ensureInterval(el);
             this.search();
         }
     };
 }
 
-function hymnPicker(hymnRef) {
+function hymnPicker(hymnRef, parent = null) {
     return {
         hymnRef: hymnRef,
+        parent: parent,
         open: false,
         query: hymnRef.name || '',
         results: [],
+        keepOpenInterval: null,
+        lastFirestoreQuery: '',
+        hadFuse: false,
         
         get isCanonical() {
             return !!this.hymnRef.id;
@@ -1145,38 +1314,109 @@ function hymnPicker(hymnRef) {
                 this.query = val || '';
             });
         },
+        
+        ensureInterval(el) {
+            if (this.keepOpenInterval) return;
+            if (el && document.activeElement === el) {
+                this.keepOpenInterval = setInterval(() => {
+                    if (document.activeElement === el) {
+                        this.open = true;
+                        // Periodically call search to check if lazy-loaded fuse registry has arrived
+                        this.search();
+                    } else {
+                        clearInterval(this.keepOpenInterval);
+                        this.keepOpenInterval = null;
+                    }
+                }, 250);
+            }
+        },
+
+        onFocus(el) {
+            this.open = true;
+            this.search();
+            this.ensureInterval(el);
+        },
+
         async search() {
-            if (this.query.length < 2) {
+            const hasFuse = !!(this.parent && this.parent.fuse);
+            
+            // Use Fuse.js if available (pre-loaded registry)
+            if (hasFuse) {
+                this.hadFuse = true;
+                if (!this.query || this.query.trim().length === 0) {
+                    this.results = this.parent.hymnRegistry.slice(0, 5);
+                } else {
+                    const lowerQuery = this.query.trim().toLowerCase();
+                    // Check for exact/case-insensitive ID match first
+                    const exactIdMatch = this.parent.hymnRegistry.find(h => h.id.toLowerCase() === lowerQuery);
+                    
+                    let fuseResults = this.parent.fuse.search(this.query).map(r => r.item);
+                    if (exactIdMatch) {
+                        fuseResults = [exactIdMatch, ...fuseResults.filter(h => h.id !== exactIdMatch.id)];
+                    }
+                    this.results = fuseResults.slice(0, 5);        
+                }
+                return;
+            }
+
+            if (!this.query || this.query.length < 2) {
                 this.results = [];
                 return;
             }
 
-            // Use Fuse.js if available (pre-loaded registry)
-            if (this.$parent && this.$parent.fuse) {
-                this.results = this.$parent.fuse.search(this.query).slice(0, 5).map(r => r.item);        
+            // Prevent duplicate Firestore requests while focused/typing
+            if (this.lastFirestoreQuery === this.query) {
                 return;
             }
+            this.lastFirestoreQuery = this.query;
 
-            // Fallback to Firestore live search if registry hasn't loaded yet
-            const snap = await db.collection('hymns')
-                .where('hymn_name', '>=', this.query)
-                .where('hymn_name', '<=', this.query + '\uf8ff')
-                .limit(5).get();
-            this.results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            try {
+                // Fallback to Firestore live search if registry hasn't loaded yet
+                const snap = await db.collection('hymns')
+                    .where('hymn_name', '>=', this.query)
+                    .where('hymn_name', '<=', this.query + '\uf8ff')
+                    .limit(5).get();
+                this.results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            } catch (error) {
+                console.error("Error searching hymns fallback:", error);
+            }
         },
         select(h) {
+            if (this.keepOpenInterval) {
+                clearInterval(this.keepOpenInterval);
+                this.keepOpenInterval = null;
+            }
             this.hymnRef.id = h.id;
             this.hymnRef.name = h.hymn_name;
             this.query = h.hymn_name;
             this.results = [];
             this.open = false;
+            this.lastFirestoreQuery = '';
+            this.hadFuse = false;
         },
         clear() {
+            if (this.keepOpenInterval) {
+                clearInterval(this.keepOpenInterval);
+                this.keepOpenInterval = null;
+            }
             this.hymnRef.id = null;
             this.hymnRef.name = '';
             this.query = '';
             this.results = [];
             this.open = false;
+            this.lastFirestoreQuery = '';
+            this.hadFuse = false;
+        },
+        onInput(el) {
+            this.hymnRef.id = null;
+            this.open = true;
+            this.ensureInterval(el);
+            this.search();
         }
     };
+}
+
+// Expose pure helpers for Node-based unit tests; ignored in the browser.
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges };
 }
