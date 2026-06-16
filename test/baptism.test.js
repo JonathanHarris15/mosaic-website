@@ -15,9 +15,10 @@ test('a single full name yields one candidate, no review', () => {
     assert.strictEqual(r.needsReview, false);
 });
 
-test('multiple full names split on "and", comma, and ampersand', () => {
+test('multiple full names split on "and", comma, semicolon, and ampersand', () => {
     assert.deepStrictEqual(parseBaptismNames('John Smith and Jane Doe').candidates, ['John Smith', 'Jane Doe']);
     assert.deepStrictEqual(parseBaptismNames('John Smith, Jane Doe & Bob Lee').candidates, ['John Smith', 'Jane Doe', 'Bob Lee']);
+    assert.deepStrictEqual(parseBaptismNames('Christian Buchanan; Karley Buchanan').candidates, ['Christian Buchanan', 'Karley Buchanan']);
 });
 
 test('extra whitespace is collapsed and trimmed', () => {

@@ -60,7 +60,7 @@ function parseBaptismNames(value) {
         return { candidates: [], needsReview: false };
     }
     const segments = cleaned
-        .split(/\s*,\s*|\s*&\s*|\s+and\s+/i)
+        .split(/\s*[,;]\s*|\s*&\s*|\s+and\s+/i)
         .map(s => s.replace(/\s+/g, ' ').trim())
         .filter(Boolean);
 
