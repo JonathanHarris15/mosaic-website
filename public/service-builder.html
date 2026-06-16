@@ -210,6 +210,133 @@
                                 <input type="text" id="service-theme" name="theme" x-model="service.theme" class="field-input" :disabled="!canEdit">
                             </div>
                         </div>
+                            <!-- Service Roles: who is leading this service -->
+                            <div class="form-section">
+            <div class="field-group" data-field-key="serviceLeader">
+                <label class="field-label" for="service-leader-search">Service Leader</label>
+                <div x-data="personPicker(service.serviceLeader, $data)" 
+                     @click.away="open = false"
+                     class="input-container relative">
+                    <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                        <input type="text" id="service-leader-search" name="service-leader" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
+                        <div class="flex items-center gap-1">
+                            <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
+                                <span class="material-symbols-outlined text-[18px]">close</span>
+                            </button>
+                            <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
+                        </div>
+                    </div>
+                    <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                        <template x-for="p in results" :key="p.id">
+                            <button @click="select(p)" 
+                                    :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'"
+                                    class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
+                                <div class="flex items-center justify-between">
+                                    <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
+                                    <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
+                                </div>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            <div class="border-t border-outline-variant/20 my-5"></div>
+            <div class="field-group" data-field-key="musicLeader">
+                <label class="field-label" for="music-leader-search">Music Leader</label>
+                <div x-data="personPicker(service.musicLeader, $data)" 
+                     @click.away="open = false"
+                     class="input-container relative">
+                    <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                        <input type="text" id="music-leader-search" name="music-leader" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
+                        <div class="flex items-center gap-1">
+                            <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
+                                <span class="material-symbols-outlined text-[18px]">close</span>
+                            </button>
+                            <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
+                        </div>
+                    </div>
+                    <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                        <template x-for="p in results" :key="p.id">
+                            <button @click="select(p)" 
+                                    :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'"
+                                    class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
+                                <div class="flex items-center justify-between">
+                                    <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
+                                    <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
+                                </div>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Music Helpers: accompanists beneath the Music Leader -->
+            <template x-for="(hlp, idx) in service.musicHelpers" :key="idx">
+                <div class="mt-3 pl-4 border-l-2 border-outline-variant/40">
+                    <div class="field-group">
+                        <label class="field-label text-[10px]">Music Helper</label>
+                        <div x-data="personPicker(hlp, $data)" @click.away="open = false" class="input-container relative">
+                            <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-1.5">
+                                <input type="text" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-xs" :disabled="!canEdit">
+                                <div class="flex items-center gap-1">
+                                    <button @click="removeMusicHelper(idx)" class="text-secondary hover:text-red-500 transition-colors cursor-pointer" :disabled="!canEdit" title="Remove helper">
+                                        <span class="material-symbols-outlined text-[16px]">close</span>
+                                    </button>
+                                    <span class="material-symbols-outlined text-[16px] text-secondary">person</span>
+                                </div>
+                            </div>
+                            <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                                <template x-for="p in results" :key="p.id">
+                                    <button @click="select(p)"
+                                            :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'"
+                                            class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
+                                        <div class="flex items-center justify-between">
+                                            <p class="font-label-md text-xs" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
+                                            <span x-show="p.isNew" class="material-symbols-outlined text-[14px] text-primary">person_add</span>
+                                        </div>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            <div class="flex justify-end mt-2" x-show="canEdit">
+                <button @click="addMusicHelper()" class="text-[10px] font-label-md uppercase tracking-wider text-secondary/40 hover:text-primary transition-colors flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[14px]">add</span> Add Music Helper
+                </button>
+            </div>
+            <div class="border-t border-outline-variant/20 my-5"></div>
+            <div class="field-group" data-field-key="preacher">
+                <label class="field-label" for="preacher-search">Preacher</label>
+                <div x-data="personPicker(service.preacher, $data)" 
+                     @click.away="open = false"
+                     class="input-container relative">
+                    <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
+                        <input type="text" id="preacher-search" name="preacher" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
+                        <div class="flex items-center gap-1">
+                            <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
+                                <span class="material-symbols-outlined text-[18px]">close</span>
+                            </button>
+                            <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
+                        </div>
+                    </div>
+                    <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                        <template x-for="p in results" :key="p.id">
+                            <button @click="select(p)" 
+                                    :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'"
+                                    class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
+                                <div class="flex items-center justify-between">
+                                    <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
+                                    <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
+                                </div>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+
                         <!-- Key Verse -->
                         <div class="form-section" data-field-key="keyVerse">
             <div class="field-group">
@@ -282,134 +409,6 @@
                             </div>
                             </div>
                             </div>
-
-                            <div class="form-section" data-field-key="serviceLeader">
-            <div class="field-group">
-                <label class="field-label" for="service-leader-search">Service Leader</label>
-                <div x-data="personPicker(service.serviceLeader, $data)" 
-                     @click.away="open = false"
-                     class="input-container relative">
-                    <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
-                        <input type="text" id="service-leader-search" name="service-leader" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
-                        <div class="flex items-center gap-1">
-                            <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
-                                <span class="material-symbols-outlined text-[18px]">close</span>
-                            </button>
-                            <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
-                        </div>
-                    </div>
-                    <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
-                        <template x-for="p in results" :key="p.id">
-                            <button @click="select(p)" 
-                                    :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'"
-                                    class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
-                                <div class="flex items-center justify-between">
-                                    <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
-                                    <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
-                                </div>
-                            </button>
-                        </template>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="form-section" data-field-key="musicLeader">
-            <div class="field-group">
-                <label class="field-label" for="music-leader-search">Music Leader</label>
-                <div x-data="personPicker(service.musicLeader, $data)" 
-                     @click.away="open = false"
-                     class="input-container relative">
-                    <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
-                        <input type="text" id="music-leader-search" name="music-leader" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
-                        <div class="flex items-center gap-1">
-                            <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
-                                <span class="material-symbols-outlined text-[18px]">close</span>
-                            </button>
-                            <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
-                        </div>
-                    </div>
-                    <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
-                        <template x-for="p in results" :key="p.id">
-                            <button @click="select(p)" 
-                                    :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'"
-                                    class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
-                                <div class="flex items-center justify-between">
-                                    <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
-                                    <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
-                                </div>
-                            </button>
-                        </template>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Music Helpers: accompanists beneath the Music Leader -->
-            <template x-for="(hlp, idx) in service.musicHelpers" :key="idx">
-                <div class="mt-3 pl-4 border-l-2 border-outline-variant/40">
-                    <div class="field-group">
-                        <label class="field-label text-[10px]">Music Helper</label>
-                        <div x-data="personPicker(hlp, $data)" @click.away="open = false" class="input-container relative">
-                            <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-1.5">
-                                <input type="text" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-xs" :disabled="!canEdit">
-                                <div class="flex items-center gap-1">
-                                    <button @click="removeMusicHelper(idx)" class="text-secondary hover:text-red-500 transition-colors cursor-pointer" :disabled="!canEdit" title="Remove helper">
-                                        <span class="material-symbols-outlined text-[16px]">close</span>
-                                    </button>
-                                    <span class="material-symbols-outlined text-[16px] text-secondary">person</span>
-                                </div>
-                            </div>
-                            <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
-                                <template x-for="p in results" :key="p.id">
-                                    <button @click="select(p)"
-                                            :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'"
-                                            class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
-                                        <div class="flex items-center justify-between">
-                                            <p class="font-label-md text-xs" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
-                                            <span x-show="p.isNew" class="material-symbols-outlined text-[14px] text-primary">person_add</span>
-                                        </div>
-                                    </button>
-                                </template>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </template>
-            <div class="flex justify-end mt-2" x-show="canEdit">
-                <button @click="addMusicHelper()" class="text-[10px] font-label-md uppercase tracking-wider text-secondary/40 hover:text-primary transition-colors flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">add</span> Add Music Helper
-                </button>
-            </div>
-        </div>
-        <div class="form-section" data-field-key="preacher">
-            <div class="field-group">
-                <label class="field-label" for="preacher-search">Preacher</label>
-                <div x-data="personPicker(service.preacher, $data)" 
-                     @click.away="open = false"
-                     class="input-container relative">
-                    <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
-                        <input type="text" id="preacher-search" name="preacher" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
-                        <div class="flex items-center gap-1">
-                            <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
-                                <span class="material-symbols-outlined text-[18px]">close</span>
-                            </button>
-                            <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
-                        </div>
-                    </div>
-                    <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
-                        <template x-for="p in results" :key="p.id">
-                            <button @click="select(p)" 
-                                    :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'"
-                                    class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
-                                <div class="flex items-center justify-between">
-                                    <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
-                                    <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
-                                </div>
-                            </button>
-                        </template>
-                    </div>
-                </div>
-            </div>
-        </div>
 
         <!-- Liturgy Flow -->
         <!-- 1. Preparatory Hymn -->
