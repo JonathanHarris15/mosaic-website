@@ -394,7 +394,10 @@
                     }
 
                     if (svc.hasBaptism) {
-                        const baptismName = svc.liturgy?.baptism || 'Name not specified';
+                        const bap = svc.liturgy?.baptism;
+                        const baptismName = (Array.isArray(bap)
+                            ? bap.map(c => c && c.name).filter(Boolean).join(', ')
+                            : (typeof bap === 'string' ? bap : '')) || 'Name not specified';
                         glanceHtml += `
                             <div class="mt-xs flex flex-col gap-xs">
                                 <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Baptism</span>
@@ -431,12 +434,17 @@
                         { val: liturgy.sermon, label: 'Sermon' },
                         { val: liturgy.benediction, label: 'Benediction' }
                     ];
-                    if (svc.hasBaptism) {
-                        textFields.push({ val: liturgy.baptism, label: 'Baptism' });
-                    }
                     textFields.forEach(f => {
                         if (!f.val || f.val.trim() === '') missingFields.push(f.label);
                     });
+                    // Baptism Candidates are a Person-ref list, not text: missing when none are set.
+                    if (svc.hasBaptism) {
+                        const bap = liturgy.baptism;
+                        const candidateCount = Array.isArray(bap)
+                            ? bap.filter(c => c && c.name).length
+                            : (typeof bap === 'string' && bap.trim() ? 1 : 0);
+                        if (candidateCount === 0) missingFields.push('Baptism');
+                    }
 
                     // Check Hymn Fields
                     const hymnFields = [
