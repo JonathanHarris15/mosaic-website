@@ -1,4 +1,4 @@
-const NOTE_TYPES = ['Elder Check-in', 'Elder Interview', 'Elder Meeting', 'Life Update', 'Other'];
+const NOTE_TYPES = ['Elder Check-in', 'Elder Interview', 'Elder Meeting', 'Life Update', 'Prayer Request', 'Other'];
 
 const URGENCY_LEVELS = ['urgent', 'somewhat_urgent', 'not_urgent'];
 const IMPORTANCE_LEVELS = ['important', 'somewhat_important', 'not_important'];

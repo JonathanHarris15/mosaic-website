@@ -369,6 +369,25 @@ window.refreshCalendar = function(showHistory) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // Capture the element currently in the center of the viewport to preserve scroll position
+    let centerElementId = null;
+    const view = localStorage.getItem('calendarView') || 'list';
+    const prefix = view === 'table' ? 'table-date-' : 'date-';
+    
+    // Find the date card closest to the vertical center of the screen
+    const centerY = window.innerHeight / 2;
+    const dateElements = document.querySelectorAll(`[id^="${prefix}"]`);
+    let closestDist = Infinity;
+    
+    dateElements.forEach(el => {
+        const rect = el.getBoundingClientRect();
+        const dist = Math.abs((rect.top + rect.height / 2) - centerY);
+        if (dist < closestDist) {
+            closestDist = dist;
+            centerElementId = el.id;
+        }
+    });
+
     const filteredSundays = showHistory 
         ? allSundays 
         : allSundays.filter(d => {
@@ -393,6 +412,14 @@ window.refreshCalendar = function(showHistory) {
     // Re-apply loaded service data if it exists
     if (Object.keys(serviceDataMap).length > 0) {
         injectServiceData(serviceDataMap);
+    }
+
+    // Restore scroll position to the captured element
+    if (centerElementId) {
+        const targetElement = document.getElementById(centerElementId);
+        if (targetElement) {
+            targetElement.scrollIntoView({ behavior: 'auto', block: 'center' });
+        }
     }
 };
 

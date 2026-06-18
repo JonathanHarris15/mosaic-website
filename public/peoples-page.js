@@ -51,7 +51,7 @@ document.addEventListener('alpine:init', () => {
                 }
                 const userData = await getUserData(user.uid);
                 this.currentUserRole = (userData && userData.role) || 'viewer';
-                if (!['editor', 'elder', 'admin', 'super_admin'].includes(this.currentUserRole)) {
+                if (!['member', 'editor', 'elder', 'admin', 'super_admin'].includes(this.currentUserRole)) {
                     alert('Permission denied.');
                     window.location.href = 'index.html';
                     return;
@@ -63,6 +63,11 @@ document.addEventListener('alpine:init', () => {
 
         get isAdmin() {
             return ['elder', 'super_admin'].includes(this.currentUserRole);
+        },
+
+        // Members get a read-only view of the directory; editors and above can modify records.
+        get canEdit() {
+            return ['editor', 'elder', 'admin', 'super_admin'].includes(this.currentUserRole);
         },
 
         async loadTags() {

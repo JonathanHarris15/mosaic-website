@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Peoples Page - Mosaic Church</title>
+    <title>People's Directory - Mosaic Church</title>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400..700;1,400..700&amp;family=Work+Sans:wght@400..700&amp;display=swap" rel="stylesheet"/>
@@ -136,7 +136,7 @@
                     <img alt="Mosaic Church Logo" class="h-10 w-10 object-contain" src="assets/mosaic-logo.png"/>
                     <div class="flex gap-4 mt-1">
                         <a href="manager.html" class="font-label-md text-[10px] text-secondary hover:text-primary transition-colors uppercase tracking-widest">Hymns</a>
-                        <a href="peoples-page.html" class="font-label-md text-[10px] text-primary font-bold uppercase tracking-widest border-b-2 border-primary">Peoples</a>
+                        <a href="peoples-page.html" class="font-label-md text-[10px] text-primary font-bold uppercase tracking-widest border-b-2 border-primary">Directory</a>
                     </div>
                 </div>
             </div>
@@ -154,8 +154,8 @@
                     <h2 class="font-headline-md text-sm uppercase tracking-wider text-primary flex items-center gap-2 flex-shrink-0">
                         <span class="material-symbols-outlined text-[18px]">sell</span> Tags Manager
                     </h2>
-                    <div x-data="{ open: false, newTagName: '' }" class="relative">
-                        <button @click="open = true; $nextTick(() => $refs.newTagInput.focus())" 
+                    <div x-show="canEdit" x-data="{ open: false, newTagName: '' }" class="relative">
+                        <button @click="open = true; $nextTick(() => $refs.newTagInput.focus())"
                                 class="text-primary hover:bg-primary/10 p-1 rounded-full transition-all"
                                 title="Create New Tag">
                             <span class="material-symbols-outlined text-sm">add</span>
@@ -222,9 +222,9 @@
             <div class="p-md border-b border-surface-variant/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface-container-low/50 flex-shrink-0">
                 <div class="flex items-center gap-4">
                     <h2 class="font-headline-md text-sm uppercase tracking-wider text-primary flex items-center gap-2">
-                        <span class="material-symbols-outlined text-[18px]">group</span> People Directory <span class="text-[8px] font-mono opacity-20">v2.1</span>
+                        <span class="material-symbols-outlined text-[18px]">group</span> People's Directory <span class="text-[8px] font-mono opacity-20">v2.1</span>
                     </h2>
-                    <button @click="showAddPersonModal = true" class="bg-primary text-on-primary text-[10px] uppercase tracking-widest px-4 py-1.5 rounded-full hover:bg-primary-container transition-all flex items-center gap-1.5 font-label-md shadow-sm">
+                    <button x-show="canEdit" @click="showAddPersonModal = true" class="bg-primary text-on-primary text-[10px] uppercase tracking-widest px-4 py-1.5 rounded-full hover:bg-primary-container transition-all flex items-center gap-1.5 font-label-md shadow-sm">
                         <span class="material-symbols-outlined text-sm">person_add</span> Add Person
                     </button>
                 </div>
@@ -267,6 +267,11 @@
                                 <div class="flex-grow">
                                     <div class="flex items-center gap-2 mb-1">
                                         <h3 class="font-headline-md text-lg text-primary" x-text="person.name"></h3>
+                                        <span x-show="canEdit && person.userId"
+                                              class="inline-flex items-center gap-1 bg-primary/10 text-primary text-[9px] px-2 py-0.5 rounded-full font-label-md uppercase tracking-widest"
+                                              title="Linked to a website account">
+                                            <span class="material-symbols-outlined text-[12px]">link</span> Account
+                                        </span>
                                     </div>
                                     <div class="space-y-1">
                                         <div x-show="person.contact?.email" class="flex items-center gap-1.5 text-on-surface-variant text-xs">
@@ -299,15 +304,15 @@
                                             <template x-for="tag in (person.tags || [])" :key="tag">
                                                 <span class="inline-flex items-center gap-1 bg-surface-container-high text-on-surface text-[10px] px-2 py-0.5 rounded-full border border-outline-variant/30 group/tag">
                                                     <span x-text="tag"></span>
-                                                    <button @click="removeTag(person, tag)" class="hover:text-error transition-colors">
+                                                    <button x-show="canEdit" @click="removeTag(person, tag)" class="hover:text-error transition-colors">
                                                         <span class="material-symbols-outlined text-[12px] align-middle">close</span>
                                                     </button>
                                                 </span>
                                             </template>
                                             
                                             <!-- Add Tag Input -->
-                                            <div class="relative" x-data="{ open: false, tagQuery: '' }">
-                                                <button x-show="!open" @click="open = true; $nextTick(() => $refs.tagInput.focus())" 
+                                            <div x-show="canEdit" class="relative" x-data="{ open: false, tagQuery: '' }">
+                                                <button x-show="!open" @click="open = true; $nextTick(() => $refs.tagInput.focus())"
                                                         class="inline-flex items-center gap-1 bg-surface-container-lowest text-primary text-[10px] px-2 py-0.5 rounded-full border border-primary/20 hover:bg-primary-fixed transition-colors font-medium">
                                                     <span class="material-symbols-outlined text-[12px]">add</span> Add Tag
                                                 </button>
@@ -336,12 +341,12 @@
                                         </div>
                                     </div>
                                 </div>
-                                <button @click="deletePerson(person.id)" 
+                                <button x-show="canEdit" @click="deletePerson(person.id)"
                                         class="text-error/40 hover:text-error hover:bg-error-container/30 p-1.5 rounded-full transition-all opacity-0 group-hover:opacity-100">
                                     <span class="material-symbols-outlined text-[18px]">delete</span>
                                 </button>
                             </div>
-                            <div class="flex gap-2 mt-4">
+                            <div x-show="canEdit" class="flex gap-2 mt-4">
                                 <button @click="editPerson(person)" 
                                         class="text-[11px] bg-primary text-on-primary px-4 py-1.5 rounded-full hover:bg-primary-container transition-all flex items-center gap-1.5 font-label-md uppercase tracking-widest shadow-sm">
                                     <span class="material-symbols-outlined text-[14px]">edit</span> Edit Person

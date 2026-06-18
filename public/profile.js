@@ -7,6 +7,24 @@ let currentUserUid = null;
 
 let isInitialAuthCheck = true;
 
+// Cache of directory people, used to display and pick person links in the admin panel.
+let peopleCache = [];
+
+async function loadPeopleCache() {
+    try {
+        const snap = await db.collection('people').orderBy('name').get();
+        peopleCache = snap.docs.map(doc => ({
+            id: doc.id,
+            name: doc.data().name || '(Unnamed)',
+            email: doc.data().contact?.email || '',
+            userId: doc.data().userId || null
+        }));
+    } catch (error) {
+        console.error('Error loading people for linking:', error);
+        peopleCache = [];
+    }
+}
+
 async function initProfile() {
     auth.onAuthStateChanged(async (user) => {
         if (!user || user.isAnonymous) {
@@ -30,6 +48,7 @@ async function initProfile() {
                 'super_admin': 'Super Admin',
                 'elder': 'Elder',
                 'editor': 'Editor',
+                'member': 'Member',
                 'viewer': 'Viewer'
             };
             const roleText = roleLabels[role] || role.charAt(0).toUpperCase() + role.slice(1);
@@ -40,7 +59,10 @@ async function initProfile() {
             if (['editor', 'elder', 'admin', 'super_admin'].includes(role)) {
                 const managerBtn = document.getElementById('hymn-manager-btn');
                 if (managerBtn) managerBtn.classList.remove('hidden');
-                
+            }
+
+            // Show People's Directory button for members and above (members get a read-only view)
+            if (['member', 'editor', 'elder', 'admin', 'super_admin'].includes(role)) {
                 const peoplesBtn = document.getElementById('peoples-manager-btn');
                 if (peoplesBtn) peoplesBtn.classList.remove('hidden');
             }
@@ -131,9 +153,10 @@ async function loadUsersList() {
     if (!usersList) return;
 
     try {
+        await loadPeopleCache();
         const snapshot = await db.collection('users').orderBy('email').get();
         usersList.innerHTML = '';
-        
+
         if (userCount) userCount.textContent = `${snapshot.size} Active Accounts`;
 
         if (snapshot.empty) {
@@ -149,15 +172,23 @@ async function loadUsersList() {
                 'super_admin': 'Super Admin',
                 'elder': 'Elder',
                 'editor': 'Editor',
+                'member': 'Member',
                 'viewer': 'Viewer'
             };
             const roleLabel = roleLabels[role] || role.charAt(0).toUpperCase() + role.slice(1);
             const isSelf = doc.id === currentUserUid;
-            
+
+            // Linked directory person (if any)
+            const linkedPerson = data.personId ? peopleCache.find(p => p.id === data.personId) : null;
+            const linkedLabel = linkedPerson ? linkedPerson.name :
+                (data.personId ? 'Linked record missing' : 'Not linked');
+            const safeEmail = (data.email || '').replace(/'/g, "\\'");
+
             // Status color logic
             let statusColor = 'bg-outline-variant';
             if (role === 'admin' || role === 'super_admin') statusColor = 'bg-primary';
             else if (role === 'editor' || role === 'elder') statusColor = 'bg-secondary';
+            else if (role === 'member') statusColor = 'bg-tertiary';
 
             const userItem = document.createElement('div');
             userItem.className = 'flex flex-col p-md bg-surface-container-lowest hover:bg-surface-container-low transition-colors group border-b border-surface-container';
@@ -175,6 +206,7 @@ async function loadUsersList() {
                             <select onchange="updateUserRole('${doc.id}', this.value)" 
                                     class="text-[11px] font-label-md uppercase tracking-wider py-1.5 pl-3 pr-8 bg-surface-container-low border border-outline-variant/30 rounded focus:ring-1 focus:ring-primary outline-none appearance-none cursor-pointer">
                                 <option value="viewer" ${role === 'viewer' ? 'selected' : ''}>Viewer</option>
+                                <option value="member" ${role === 'member' ? 'selected' : ''}>Member</option>
                                 <option value="editor" ${role === 'editor' ? 'selected' : ''}>Editor</option>
                                 <option value="elder" ${role === 'elder' ? 'selected' : ''}>Elder</option>
                                 <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
@@ -183,13 +215,22 @@ async function loadUsersList() {
                             <span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-xs pointer-events-none text-outline">expand_more</span>
                         </div>
                         ${!isSelf ? `
-                            <button onclick="deleteUser('${doc.id}', '${data.email}')" class="text-error hover:bg-error-container/20 p-1 rounded transition-colors" title="Delete User">
+                            <button onclick="deleteUser('${doc.id}', '${safeEmail}')" class="text-error hover:bg-error-container/20 p-1 rounded transition-colors" title="Delete User">
                                 <span class="material-symbols-outlined text-sm">delete</span>
                             </button>
                         ` : '<span class="text-[10px] font-label-md text-outline italic">Self</span>'}
                     </div>
                 </div>
-                <div class="mt-3 flex items-center gap-4 pt-3 border-t border-surface-container/50">
+                <div class="mt-3 flex flex-wrap items-center gap-4 pt-3 border-t border-surface-container/50">
+                    <div class="flex flex-col gap-1">
+                        <span class="text-[9px] font-label-md text-on-surface-variant uppercase tracking-widest">Linked Person</span>
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-sm ${linkedPerson ? 'text-primary' : 'text-outline'}">${linkedPerson ? 'link' : 'link_off'}</span>
+                            <span class="text-[11px] font-body-md ${linkedPerson ? 'text-on-surface' : 'text-on-surface-variant italic'}">${linkedLabel}</span>
+                            <button onclick="openLinkModal('${doc.id}', '${safeEmail}')" class="bg-primary/10 text-primary hover:bg-primary hover:text-on-primary text-[9px] font-label-md uppercase tracking-widest px-2 py-1.5 rounded transition-all">${linkedPerson ? 'Change' : 'Link'}</button>
+                            ${linkedPerson ? `<button onclick="unlinkPerson('${doc.id}')" class="text-error/70 hover:text-error text-[9px] font-label-md uppercase tracking-widest px-2 py-1.5 rounded transition-all" title="Unlink">Unlink</button>` : ''}
+                        </div>
+                    </div>
                     <div class="flex flex-col gap-1">
                         <span class="text-[9px] font-label-md text-on-surface-variant uppercase tracking-widest">Password Visibility</span>
                         <div class="flex items-center gap-2">
@@ -230,6 +271,120 @@ async function updateUserRole(uid, newRole) {
     } catch (error) {
         alert('Error updating role: ' + error.message);
     }
+}
+
+// --- ADMIN: LINK USER <-> DIRECTORY PERSON ---
+let linkTargetUid = null;
+
+function openLinkModal(uid, email) {
+    linkTargetUid = uid;
+    const modal = document.getElementById('link-modal');
+    const subtitle = document.getElementById('link-modal-subtitle');
+    const search = document.getElementById('link-search');
+    if (subtitle) subtitle.textContent = email || '';
+    if (search) search.value = '';
+    renderLinkPeopleList('');
+    if (modal) modal.classList.remove('hidden');
+    if (search) search.focus();
+}
+
+function closeLinkModal() {
+    linkTargetUid = null;
+    const modal = document.getElementById('link-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function renderLinkPeopleList(query) {
+    const list = document.getElementById('link-people-list');
+    if (!list) return;
+    const q = (query || '').toLowerCase().trim();
+    const matches = peopleCache.filter(p =>
+        !q || p.name.toLowerCase().includes(q) || (p.email && p.email.toLowerCase().includes(q))
+    );
+
+    if (matches.length === 0) {
+        list.innerHTML = '<div class="p-4 text-sm text-on-surface-variant italic text-center">No matching people.</div>';
+        return;
+    }
+
+    list.innerHTML = matches.map(p => {
+        const takenByOther = p.userId && p.userId !== linkTargetUid;
+        return `
+            <button onclick="selectPersonForLink('${p.id}')"
+                    class="w-full text-left px-4 py-2.5 hover:bg-primary-fixed transition-colors flex items-center justify-between gap-2 border-b border-surface-container/50">
+                <span class="flex flex-col">
+                    <span class="text-sm text-on-surface">${p.name}</span>
+                    ${p.email ? `<span class="text-[10px] text-on-surface-variant">${p.email}</span>` : ''}
+                </span>
+                ${takenByOther ? '<span class="text-[9px] font-label-md uppercase tracking-widest text-error/70 whitespace-nowrap">Linked elsewhere</span>' : ''}
+            </button>
+        `;
+    }).join('');
+}
+
+async function selectPersonForLink(personId) {
+    if (!linkTargetUid) return;
+    const uid = linkTargetUid;
+    try {
+        await setUserPersonLink(uid, personId);
+        closeLinkModal();
+        await loadUsersList();
+    } catch (error) {
+        console.error('Error linking person:', error);
+        alert('Error linking person: ' + error.message);
+    }
+}
+
+async function unlinkPerson(uid) {
+    if (!confirm('Unlink this account from its directory person? Existing member tags/roles are left as-is.')) return;
+    try {
+        await setUserPersonLink(uid, '');
+        await loadUsersList();
+    } catch (error) {
+        console.error('Error unlinking person:', error);
+        alert('Error unlinking person: ' + error.message);
+    }
+}
+
+/**
+ * Writes the reciprocal users/{uid}.personId <-> people/{personId}.userId link,
+ * clearing any prior link on either side first. The Cloud Functions triggers
+ * then reconcile the member tag / role from these writes.
+ */
+async function setUserPersonLink(uid, personId) {
+    const del = firebase.firestore.FieldValue.delete();
+    const userRef = db.collection('users').doc(uid);
+    const userSnap = await userRef.get();
+    const oldPersonId = userSnap.exists ? (userSnap.data().personId || null) : null;
+
+    const batch = db.batch();
+
+    // Clear the back-reference on the person this user used to point at.
+    if (oldPersonId && oldPersonId !== personId) {
+        const oldPersonSnap = await db.collection('people').doc(oldPersonId).get();
+        if (oldPersonSnap.exists) {
+            batch.update(db.collection('people').doc(oldPersonId), { userId: del });
+        }
+    }
+
+    if (personId) {
+        const personRef = db.collection('people').doc(personId);
+        const personSnap = await personRef.get();
+        if (!personSnap.exists) throw new Error('Selected person no longer exists.');
+
+        // If that person was already linked to a different user, clear that user's link.
+        const priorUserId = personSnap.data().userId || null;
+        if (priorUserId && priorUserId !== uid) {
+            batch.update(db.collection('users').doc(priorUserId), { personId: del });
+        }
+
+        batch.update(userRef, { personId });
+        batch.update(personRef, { userId: uid });
+    } else {
+        batch.update(userRef, { personId: del });
+    }
+
+    await batch.commit();
 }
 
 async function deleteUser(uid, email) {
@@ -287,6 +442,11 @@ function togglePasswordVisibility(elementId, btn) {
 
 // Global scope for handlers
 window.updateUserRole = updateUserRole;
+window.openLinkModal = openLinkModal;
+window.closeLinkModal = closeLinkModal;
+window.renderLinkPeopleList = renderLinkPeopleList;
+window.selectPersonForLink = selectPersonForLink;
+window.unlinkPerson = unlinkPerson;
 window.deleteUser = deleteUser;
 window.updateUserPasswordAdmin = updateUserPasswordAdmin;
 window.copyToClipboard = copyToClipboard;

@@ -85,6 +85,13 @@ function serviceForm() {
         date: '',
         saving: false,
         canEdit: false,
+        isShepherd: false,
+        currentUserRole: 'viewer',
+        // Prayer Request per pastoral-prayer subject, visible to elders only.
+        prayerRequests: {
+            male: { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false },
+            female: { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false },
+        },
         user: null,
         originalService: '',
         activeNoteKey: null,
@@ -141,6 +148,36 @@ function serviceForm() {
         showPersonAddModal: false,
         personToAdd: { name: '', callback: null },
         duplicateWarning: false,
+
+        // --- Hymn Preview ---
+        showHymnPreview: false,
+        previewHymnData: null,
+        previewLoading: false,
+
+        async previewHymn(id) {
+            if (!id) return;
+            this.previewLoading = true;
+            this.showHymnPreview = true;
+            try {
+                const doc = await db.collection('hymns').doc(id).get();
+                if (doc.exists) {
+                    this.previewHymnData = doc.data();
+                } else {
+                    console.error("Hymn not found:", id);
+                    this.showHymnPreview = false;
+                }
+            } catch (err) {
+                console.error("Error fetching hymn for preview:", err);
+                this.showHymnPreview = false;
+            } finally {
+                this.previewLoading = false;
+            }
+        },
+
+        closeHymnPreview() {
+            this.showHymnPreview = false;
+            this.previewHymnData = null;
+        },
 
         // --- Pastoral Prayer Suggestions ---
         prayerSuggestions: { males: [], females: [] },
@@ -240,7 +277,10 @@ function serviceForm() {
                     try {
                         const userData = await getUserData(user.uid);
                         const role = (userData && userData.role) || 'viewer';
+                        this.currentUserRole = role;
                         this.canEdit = (['editor', 'elder', 'admin', 'super_admin'].includes(role));
+                        this.isShepherd = ['elder', 'super_admin'].includes(role);
+                        this.loadPrayerRequests();
                     } catch (error) {
                         console.error("Error checking user permissions:", error);
                         this.canEdit = false;
@@ -259,6 +299,7 @@ function serviceForm() {
             await this.load();
             await this.loadHymnRegistry();
             await this.loadPeopleRegistry();
+            await this.loadPrayerRequests();
             await this.autoLinkHymns();
             await this.fetchPrayerSuggestions();
 
@@ -469,6 +510,93 @@ function serviceForm() {
                 this.service.guide = data.guide || null;
             }
             this.originalService = JSON.stringify(this.service);
+        },
+
+        // ── Prayer Requests (pastoral-prayer subjects) ─────────────────────────
+        // Elder/super-admin only. Each subject's Prayer Request and send-state
+        // live on people/{id}/pastoral_prayer_history/{serviceDate}.
+
+        subjectFor(which) {
+            return which === 'male' ?
+                this.service.liturgy.prayerMale : this.service.liturgy.prayerFemale;
+        },
+
+        async loadPrayerRequests() {
+            if (!this.isShepherd || !this.date) return;
+            for (const which of ['male', 'female']) {
+                const subject = this.subjectFor(which);
+                const blank = { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false };
+                if (!subject || !subject.id) { this.prayerRequests[which] = blank; continue; }
+                try {
+                    const snap = await db.collection('people').doc(subject.id)
+                        .collection('prayer_requests').doc(this.date).get();
+                    const d = snap.exists ? snap.data() : {};
+                    this.prayerRequests[which] = {
+                        text: d.prayerRequest || '',
+                        initialSentDate: d.initialSentDate || null,
+                        reminderSent: !!d.reminderSent,
+                        source: d.prayerRequestSource || null,
+                        noteGenerated: !!d.noteGenerated,
+                    };
+                } catch (e) {
+                    console.error('Error loading prayer request:', e);
+                }
+            }
+        },
+
+        prayerRequestStatus(which) {
+            const subject = this.subjectFor(which);
+            if (!subject || !subject.id) return '';
+            const s = this.prayerRequests[which];
+            if ((s.text || '').trim()) return s.source === 'reply' ? 'Replied' : 'Filled in';
+            const person = this.peopleRegistry.find(p => p.id === subject.id);
+            const phone = person && person.contact ? (person.contact.phone || '') : '';
+            if (phone.replace(/\D/g, '').length < 10) return 'No phone on file';
+            if (s.reminderSent) return 'Reminder sent — awaiting reply';
+            if (s.initialSentDate) return 'Text sent — awaiting reply';
+            return 'Not sent yet';
+        },
+
+        async savePrayerRequest(which) {
+            if (!this.isShepherd) return;
+            const subject = this.subjectFor(which);
+            if (!subject || !subject.id) {
+                alert('Save the service with this person selected before adding a prayer request.');
+                return;
+            }
+            const state = this.prayerRequests[which];
+            const text = (state.text || '').trim();
+            const personRef = db.collection('people').doc(subject.id);
+            const reqRef = personRef.collection('prayer_requests').doc(this.date);
+            const now = firebase.firestore.FieldValue.serverTimestamp();
+
+            try {
+                await reqRef.set({
+                    serviceDate: this.date,
+                    prayerRequest: text,
+                    prayerRequestSource: state.source === 'reply' ? 'reply' : 'elder',
+                    requestFilledAt: now,
+                }, { merge: true });
+
+                // Generate the Shepherding Note once, on the first non-empty save.
+                if (text && !state.noteGenerated) {
+                    await personRef.collection('shepherding_notes').add({
+                        type: 'Prayer Request',
+                        subject: `Prayer Request — ${this.date}`,
+                        content: text,
+                        contentJson: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] },
+                        authorName: (this.user && this.user.email) || 'Elder',
+                        authorUid: (this.user && this.user.uid) || null,
+                        createdAt: now,
+                    });
+                    await reqRef.update({ noteGenerated: true });
+                    state.noteGenerated = true;
+                }
+                alert('Prayer request saved.');
+            } catch (e) {
+                console.error('Error saving prayer request:', e);
+                alert('Error saving prayer request. Check console.');
+            }
         },
 
         toggleIrregular() {

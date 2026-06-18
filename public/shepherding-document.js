@@ -427,7 +427,7 @@ function createInlinePickerPlugin() {
 
 // ── Person Panel NodeView ─────────────────────────────────────────────────────
 
-let NOTE_TYPES_ALL = ['Elder Check-in', 'Elder Interview', 'Elder Meeting', 'Life Update', 'Other', 'Create New Note Type'];
+let NOTE_TYPES_ALL = ['Elder Check-in', 'Elder Interview', 'Elder Meeting', 'Life Update', 'Prayer Request', 'Other', 'Create New Note Type'];
 
 function makePersonPanelNodeView({ node, getPos, editor }) {
     let currentAttrs = { ...node.attrs };

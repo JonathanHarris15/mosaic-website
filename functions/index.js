@@ -1,4 +1,5 @@
 const {onCall} = require("firebase-functions/v2/https");
+const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 const {log} = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 
@@ -254,4 +255,84 @@ exports.updateUserPasswordSelf = onCall({cors: true, region: "us-central1"}, asy
     throw new Error(error.message);
   }
 });
+
+/**
+ * Member-status synchronisation between user accounts and directory people.
+ *
+ * A user account (`users/{uid}`) can be linked to a directory person
+ * (`people/{personId}`) via reciprocal `personId` / `userId` fields. When the
+ * link exists, "member" status is kept in sync in an ADD-ONLY fashion:
+ *
+ *   • A user whose role is member-or-higher marks their person with the
+ *     "member" tag.
+ *   • A person carrying the "member" tag promotes their user from viewer to
+ *     member — but never demotes a user who already holds a higher role.
+ *
+ * Removing the role or the tag never strips the other side; that is cleared
+ * manually. Both triggers read the target before writing and skip the write
+ * when no change is needed, which keeps the two triggers from looping into
+ * each other.
+ */
+const MEMBER_OR_HIGHER = ["member", "editor", "elder", "admin", "super_admin"];
+const MEMBER_TAG = "member";
+
+/**
+ * Direction A: a user's role grants the linked person the "member" tag.
+ */
+exports.syncRoleToMemberTag = onDocumentWritten(
+    {document: "users/{uid}", region: "us-central1"},
+    async (event) => {
+      const after = event.data && event.data.after && event.data.after.exists ?
+        event.data.after.data() : null;
+      if (!after) return; // Deleted — add-only, nothing to mirror.
+
+      const personId = after.personId;
+      if (!personId) return; // Not linked to a person.
+      if (!MEMBER_OR_HIGHER.includes(after.role)) return; // Viewer/unknown: never tag, never untag.
+
+      const db = admin.firestore();
+      const personRef = db.collection("people").doc(personId);
+      const personSnap = await personRef.get();
+      if (!personSnap.exists) return;
+
+      const tags = personSnap.data().tags || [];
+      if (tags.includes(MEMBER_TAG)) return; // Already tagged — skip write to avoid a trigger loop.
+
+      // Make sure the tag exists in the directory's tag registry so it shows in the Tags Manager.
+      await db.collection("people_tags").doc(MEMBER_TAG).set({name: MEMBER_TAG}, {merge: true});
+      await personRef.update({
+        tags: admin.firestore.FieldValue.arrayUnion(MEMBER_TAG),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      log(`Tagged person ${personId} as '${MEMBER_TAG}' (linked user role: ${after.role}).`);
+    },
+);
+
+/**
+ * Direction B: a person's "member" tag promotes the linked user to member.
+ */
+exports.syncMemberTagToRole = onDocumentWritten(
+    {document: "people/{personId}", region: "us-central1"},
+    async (event) => {
+      const after = event.data && event.data.after && event.data.after.exists ?
+        event.data.after.data() : null;
+      if (!after) return; // Deleted — add-only, nothing to mirror.
+
+      const userId = after.userId;
+      if (!userId) return; // Not linked to a user.
+      const tags = after.tags || [];
+      if (!tags.includes(MEMBER_TAG)) return; // No member tag: never promote, never demote.
+
+      const db = admin.firestore();
+      const userRef = db.collection("users").doc(userId);
+      const userSnap = await userRef.get();
+      if (!userSnap.exists) return;
+
+      const role = userSnap.data().role || "viewer";
+      if (MEMBER_OR_HIGHER.includes(role)) return; // Already member+ — never demote, and skip write to avoid a loop.
+
+      await userRef.update({role: MEMBER_TAG});
+      log(`Promoted user ${userId} from '${role}' to '${MEMBER_TAG}' (linked person has the member tag).`);
+    },
+);
 

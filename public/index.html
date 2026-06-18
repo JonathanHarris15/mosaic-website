@@ -148,7 +148,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-md shrink-0" id="nav-cards-grid">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-md shrink-0" id="nav-cards-grid">
                     <!-- Hymn Directory Button -->
                     <a href="hymn-directory.html"
                         class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
@@ -245,29 +245,60 @@
                             name = userData.email.split('@')[0];
                             name = name.charAt(0).toUpperCase() + name.slice(1);
                         }
+                        // Prefer the linked directory person's first name, if one is linked.
+                        if (userData.personId) {
+                            try {
+                                const personDoc = await db.collection('people').doc(userData.personId).get();
+                                const personName = personDoc.exists ? (personDoc.data().name || '').trim() : '';
+                                if (personName) {
+                                    name = personName.split(/\s+/)[0];
+                                }
+                            } catch (pe) {
+                                console.error("Error fetching linked person:", pe);
+                            }
+                        }
                     }
                 } catch (e) {
                     console.error("Error fetching user data:", e);
                 }
                 greetingEl.textContent = `${baseGreeting}, ${name}`;
 
-                if (['elder', 'super_admin'].includes(userRole)) {
-                    const grid = document.getElementById('nav-cards-grid');
-                    if (grid && !document.getElementById('shepherding-card')) {
-                        grid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-md shrink-0';
-                        const card = document.createElement('a');
-                        card.id = 'shepherding-card';
-                        card.href = 'shepherding-dashboard.html';
-                        card.className = 'bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300';
-                        card.innerHTML = `
-                            <div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
-                                <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>shield_person</span>
-                            </div>
-                            <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Shepherd Dashboard</h2>
-                            <p class="font-body-md text-body-md text-on-surface-variant">Elder tools &amp; member care.</p>
-                        `;
-                        grid.appendChild(card);
-                    }
+                const cardClass = 'bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300';
+                const grid = document.getElementById('nav-cards-grid');
+
+                // People's Directory — members and above (members get a read-only view)
+                if (grid && !document.getElementById('directory-card') &&
+                    ['member', 'editor', 'elder', 'admin', 'super_admin'].includes(userRole)) {
+                    const dirCard = document.createElement('a');
+                    dirCard.id = 'directory-card';
+                    dirCard.href = 'peoples-page.html';
+                    dirCard.className = cardClass;
+                    dirCard.innerHTML = `
+                        <div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
+                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>groups</span>
+                        </div>
+                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">People's Directory</h2>
+                        <p class="font-body-md text-body-md text-on-surface-variant">Browse the church directory.</p>
+                    `;
+                    // Place it right after the Hymn Directory card
+                    grid.insertBefore(dirCard, grid.children[1] || null);
+                }
+
+                // Shepherd Dashboard — elders and super_admins
+                if (grid && !document.getElementById('shepherding-card') &&
+                    ['elder', 'super_admin'].includes(userRole)) {
+                    const card = document.createElement('a');
+                    card.id = 'shepherding-card';
+                    card.href = 'shepherding-dashboard.html';
+                    card.className = cardClass;
+                    card.innerHTML = `
+                        <div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
+                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>shield_person</span>
+                        </div>
+                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Shepherd Dashboard</h2>
+                        <p class="font-body-md text-body-md text-on-surface-variant">Elder tools &amp; member care.</p>
+                    `;
+                    grid.appendChild(card);
                 }
             } else {
                 greetingEl.textContent = baseGreeting;
