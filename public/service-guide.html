@@ -309,9 +309,9 @@
                                         </div>
 
                                         <template x-if="service.hasBaptism">
-                                            <div class="flex justify-between text-primary font-bold">
-                                                <span>Sacrament of Baptism</span>
-                                                <span x-text="baptismNames()"></span>
+                                            <div class="flex justify-between">
+                                                <span class="font-bold">Baptism</span>
+                                                <span class="text-right whitespace-nowrap" :class="baptismNamesClass()" x-text="baptismNames()"></span>
                                             </div>
                                         </template>
 

@@ -86,10 +86,17 @@ function guideEditor() {
             const removedHymns = Array.isArray(this.service.removedHymns) ? this.service.removedHymns : [];
             const shouldHaveHymn2 = !hasBaptism && liturgy.hymn2?.name && !removedHymns.includes('hymn2');
             const hasHymn2 = this.elements.some(el => el.id.startsWith('hymn-h2'));
+            const missingHymn2 = shouldHaveHymn2 && !hasHymn2;
 
-            if (!shouldHaveHymn2 || hasHymn2) return;
+            // hymnMid1 is independent of baptism; only a manual removal pulls it.
+            const shouldHaveHymnMid1 = liturgy.hymnMid1?.name && !removedHymns.includes('hymnMid1');
+            const hasHymnMid1 = this.elements.some(el => el.id.startsWith('hymn-m1'));
+            const missingHymnMid1 = shouldHaveHymnMid1 && !hasHymnMid1;
 
-            // Saved guide is missing hymn2 — regenerate from scratch,
+            if (!missingHymn2 && !missingHymnMid1) return;
+
+            // Saved guide is missing a hymn page that the order of service calls for —
+            // regenerate from scratch,
             // preserving any content already filled in for prayer, kids, and announcements.
             const savedPrayer = JSON.parse(JSON.stringify(
                 this.elements.find(el => el.type === 'pastoral_prayer') || null
@@ -208,8 +215,8 @@ function guideEditor() {
             addHymnPages(liturgy.hymn1, 'hymn-h1', 'hymn1');
             if (!this.service.hasBaptism) {
                 addHymnPages(liturgy.hymn2, 'hymn-h2', 'hymn2');
-                addHymnPages(liturgy.hymnMid1, 'hymn-m1', 'hymnMid1');
             }
+            addHymnPages(liturgy.hymnMid1, 'hymn-m1', 'hymnMid1');
             addHymnPages(liturgy.hymnMid2, 'hymn-m2', 'hymnMid2');
 
             // Pastoral Prayer (Pre-initialized with demographic fields)
@@ -548,6 +555,18 @@ function guideEditor() {
             const bap = this.service?.liturgy?.baptism;
             if (Array.isArray(bap)) return bap.map(c => c && c.name).filter(Boolean).join(', ');
             return typeof bap === 'string' ? bap : '';
+        },
+
+        // Shrink the candidate names rather than wrapping to a second line as
+        // the count grows, so the Baptism row stays on a single line.
+        baptismNamesClass() {
+            const bap = this.service?.liturgy?.baptism;
+            const count = Array.isArray(bap)
+                ? bap.filter(c => c && c.name).length
+                : (typeof bap === 'string' && bap.trim() ? bap.split(',').length : 0);
+            if (count >= 4) return 'text-xs';
+            if (count === 3) return 'text-sm';
+            return '';
         },
 
         formatLongDate(dateStr) {

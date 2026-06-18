@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "mosaic-hymn-database"
-  }
+  },
+  "targets": {
+    "mosaic-hymn-database": {
+      "hosting": {
+        "test-site": [
+          "mosaic-hymn-test-shifting-1"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
