@@ -83,7 +83,8 @@ function guideEditor() {
         fixBrokenElements() {
             const liturgy = this.service.liturgy || {};
             const hasBaptism = this.service.hasBaptism;
-            const shouldHaveHymn2 = !hasBaptism && liturgy.hymn2?.name;
+            const removedHymns = Array.isArray(this.service.removedHymns) ? this.service.removedHymns : [];
+            const shouldHaveHymn2 = !hasBaptism && liturgy.hymn2?.name && !removedHymns.includes('hymn2');
             const hasHymn2 = this.elements.some(el => el.id.startsWith('hymn-h2'));
 
             if (!shouldHaveHymn2 || hasHymn2) return;
@@ -118,6 +119,42 @@ function guideEditor() {
             this.hasChanges = true;
         },
 
+        // Rebuild the guide from the current order of service so hymn changes made in
+        // the builder (added, swapped, or removed hymns) take effect. Hand-entered
+        // content — pastoral prayer, Mosaic Kids, announcements, and custom pages — is
+        // preserved; only the auto-generated structure (hymn pages, sermon notes) is
+        // recreated.
+        regenerateGuide() {
+            if (!confirm('Rebuild the guide from the current order of service? Hymn pages will be recreated to match the builder, including any hymns you removed. Your pastoral prayer, Mosaic Kids, announcements, and custom pages are kept.')) return;
+
+            const clone = (el) => el ? JSON.parse(JSON.stringify(el)) : null;
+            const savedPrayer = clone(this.elements.find(el => el.type === 'pastoral_prayer'));
+            const savedKids = clone(this.elements.find(el => el.type === 'kids_section'));
+            const savedAnnouncements = clone(this.elements.find(el => el.type === 'announcements'));
+            const savedCustom = this.elements.filter(el => el.type === 'custom_page').map(clone);
+
+            this.selectedElement = null;
+            this.generateDefaultElements();
+
+            if (savedPrayer) {
+                const el = this.elements.find(e => e.type === 'pastoral_prayer');
+                if (el) Object.assign(el, savedPrayer);
+            }
+            if (savedKids) {
+                const el = this.elements.find(e => e.type === 'kids_section');
+                if (el) Object.assign(el, savedKids);
+            }
+            if (savedAnnouncements) {
+                const el = this.elements.find(e => e.type === 'announcements');
+                if (el) Object.assign(el, savedAnnouncements);
+            }
+            // Re-append custom pages, then re-pad sermon notes so the booklet still totals 16.
+            savedCustom.forEach(c => this.elements.push(c));
+            this.recalculateSermonNotes();
+
+            this.hasChanges = true;
+        },
+
         generateDefaultElements() {
             const base = [
                 { id: 'title', label: 'Title Page', type: 'title_page', enabled: true },
@@ -125,10 +162,14 @@ function guideEditor() {
             ];
 
             const liturgy = this.service.liturgy || {};
+            const removedHymns = Array.isArray(this.service.removedHymns) ? this.service.removedHymns : [];
 
-            const addHymnPages = (hymnRef, idPrefix) => {
+            const addHymnPages = (hymnRef, idPrefix, fieldKey) => {
+                // A hymn the user pulled out of the order of service contributes no pages;
+                // recalculateSermonNotes() fills the freed slots with sermon-notes pages.
+                if (fieldKey && removedHymns.includes(fieldKey)) return;
                 if (!hymnRef || !hymnRef.name) return;
-                
+
                 // If it's a literal hymn (no ID), add 1 page
                 if (!hymnRef.id) {
                     base.push({
@@ -163,13 +204,13 @@ function guideEditor() {
             };
 
             // Sequential Flow: Title -> OOS -> Preparatory -> Hymn 1 -> [Hymn 2 + Mid 1 if no baptism] -> Mid 2 -> Pastoral Prayer
-            addHymnPages(liturgy.preparatoryHymn, 'hymn-prep');
-            addHymnPages(liturgy.hymn1, 'hymn-h1');
+            addHymnPages(liturgy.preparatoryHymn, 'hymn-prep', 'preparatoryHymn');
+            addHymnPages(liturgy.hymn1, 'hymn-h1', 'hymn1');
             if (!this.service.hasBaptism) {
-                addHymnPages(liturgy.hymn2, 'hymn-h2');
-                addHymnPages(liturgy.hymnMid1, 'hymn-m1');
+                addHymnPages(liturgy.hymn2, 'hymn-h2', 'hymn2');
+                addHymnPages(liturgy.hymnMid1, 'hymn-m1', 'hymnMid1');
             }
-            addHymnPages(liturgy.hymnMid2, 'hymn-m2');
+            addHymnPages(liturgy.hymnMid2, 'hymn-m2', 'hymnMid2');
 
             // Pastoral Prayer (Pre-initialized with demographic fields)
             base.push({ 
@@ -185,8 +226,8 @@ function guideEditor() {
             });
 
             // Response Hymns (End 1/2) - Recalculate will put these after notes
-            addHymnPages(liturgy.hymnEnd1, 'hymn-e1');
-            addHymnPages(liturgy.hymnEnd2, 'hymn-e2');
+            addHymnPages(liturgy.hymnEnd1, 'hymn-e1', 'hymnEnd1');
+            addHymnPages(liturgy.hymnEnd2, 'hymn-e2', 'hymnEnd2');
 
             // Mosaic Kids (Pre-initialized)
             base.push({ 
@@ -394,7 +435,8 @@ function guideEditor() {
         getHymns() {
             if (!this.service.liturgy) return [];
             let fields = ['preparatoryHymn', 'hymn1', 'hymn2', 'hymnMid1', 'hymnMid2', 'hymnEnd1', 'hymnEnd2'];
-            return fields.map(f => this.service.liturgy[f]).filter(h => h && h.name);
+            const removedHymns = Array.isArray(this.service.removedHymns) ? this.service.removedHymns : [];
+            return fields.filter(f => !removedHymns.includes(f)).map(f => this.service.liturgy[f]).filter(h => h && h.name);
         },
 
         addCustomPage() {

@@ -122,6 +122,11 @@ function serviceForm() {
             isIrregular: false,
             irregularElements: [],
             hasBaptism: false,
+            // Hymn slots the user has pulled out of the order of service. Each entry
+            // is a liturgy field key (e.g. 'hymn2'). Removed hymns are kept in the
+            // liturgy data but skipped by the service guide generator, which pads the
+            // freed pages with extra sermon-notes pages instead.
+            removedHymns: [],
             notes: {},
             liturgy: {
                 preparatoryHymn: { id: null, name: '' },
@@ -479,6 +484,7 @@ function serviceForm() {
                 if (this.service.prayerConfession.id) this.showPrayerConfession = true;
 
                 this.service.hasBaptism = data.hasBaptism || false;
+                this.service.removedHymns = Array.isArray(data.removedHymns) ? data.removedHymns : [];
                 this.service.notes = data.notes || {};
                 
                 // Update liturgy properties
@@ -749,6 +755,8 @@ function serviceForm() {
 
                 // 2. Check Liturgy
                 for (const key of liturgyFields) {
+                    // A hymn pulled out of the order of service is intentionally blank.
+                    if (this.isHymnRemoved(key)) continue;
                     if (key === 'baptism') {
                         // Baptism Candidates: incomplete if there are none, or any
                         // candidate is a literal name not yet linked to a Person.
@@ -886,6 +894,7 @@ function serviceForm() {
                     otherName: this.service.other.name,
                     otherId: this.service.other.id,
                     hasBaptism: this.service.hasBaptism,
+                    removedHymns: this.service.removedHymns || [],
                     isIrregular: this.service.isIrregular,
                     irregularElements: this.service.irregularElements,
                     notes: this.service.notes,
@@ -1017,6 +1026,26 @@ function serviceForm() {
             this.service.musicHelpers.splice(index, 1);
         },
 
+        // ── Removed Hymns ─────────────────────────────────────────────────────
+        // Pull a hymn slot out of the order of service. The hymn's data is kept so
+        // it can be added back, but the slot collapses to a thin bar and the service
+        // guide generator skips it (filling the freed pages with sermon notes).
+        isHymnRemoved(field) {
+            return Array.isArray(this.service.removedHymns) && this.service.removedHymns.includes(field);
+        },
+
+        removeHymn(field) {
+            if (!Array.isArray(this.service.removedHymns)) this.service.removedHymns = [];
+            if (!this.service.removedHymns.includes(field)) {
+                this.service.removedHymns.push(field);
+            }
+        },
+
+        restoreHymn(field) {
+            if (!Array.isArray(this.service.removedHymns)) return;
+            this.service.removedHymns = this.service.removedHymns.filter(f => f !== field);
+        },
+
         // ── Baptism Candidates ───────────────────────────────────────────────
         addBaptismCandidate() {
             if (!Array.isArray(this.service.liturgy.baptism)) this.service.liturgy.baptism = [];
@@ -1042,6 +1071,7 @@ function serviceForm() {
             this.service.elements = { name: '', id: null };
             this.service.other = { name: '', id: null };
             this.service.hasBaptism = false;
+            this.service.removedHymns = [];
             this.service.notes = {};
             this.service.liturgy = {
                 preparatoryHymn: { id: null, name: '' },
@@ -1079,7 +1109,9 @@ function serviceForm() {
             const hymnFields = [
                 'preparatoryHymn', 'hymn1', 'hymn2', 'hymnMid1', 'hymnMid2', 'hymnEnd1', 'hymnEnd2'
             ];
+            const removedHymns = Array.isArray(this.service.removedHymns) ? this.service.removedHymns : [];
             const hymnIds = hymnFields
+                .filter(field => !removedHymns.includes(field))
                 .map(field => this.service.liturgy[field]?.id)
                 .filter(id => !!id);
 
@@ -1170,6 +1202,7 @@ function serviceForm() {
         _renderOOSPage(pdf) {
             const liturgy = this.service.liturgy || {};
             const hasBaptism = this.service.hasBaptism;
+            const removedHymns = Array.isArray(this.service.removedHymns) ? this.service.removedHymns : [];
             const prayerLabel = liturgy.prayerLabel || 'Pastoral Prayer';
             const pageW = pdf.internal.pageSize.getWidth();
             const pageH = pdf.internal.pageSize.getHeight();
@@ -1205,14 +1238,14 @@ function serviceForm() {
 
             // Build item list (mirrors the OOS page in the service guide)
             const items = [
-                { label: 'Preparatory',                    value: liturgy.preparatoryHymn?.name || '', italic: true },
+                { label: 'Preparatory',                    value: liturgy.preparatoryHymn?.name || '', italic: true, field: 'preparatoryHymn' },
                 { label: 'Welcome' },
                 { label: 'Moment of Silent Preparation' },
                 { label: 'Scriptural Call to Worship',     value: liturgy.callToWorship || '' },
-                { label: 'Hymn',                           value: liturgy.hymn1?.name || '',           italic: true },
+                { label: 'Hymn',                           value: liturgy.hymn1?.name || '',           italic: true, field: 'hymn1' },
             ];
             if (!hasBaptism) {
-                items.push({ label: 'Hymn',                value: liturgy.hymn2?.name || '',           italic: true });
+                items.push({ label: 'Hymn',                value: liturgy.hymn2?.name || '',           italic: true, field: 'hymn2' });
             }
             items.push(
                 { label: 'Prayer of Praise' },
@@ -1221,10 +1254,10 @@ function serviceForm() {
                 { label: 'Scriptural Assurance of Pardon', value: liturgy.assuranceOfPardon || '' },
             );
             if (!hasBaptism) {
-                items.push({ label: 'Hymn',                value: liturgy.hymnMid1?.name || '',        italic: true });
+                items.push({ label: 'Hymn',                value: liturgy.hymnMid1?.name || '',        italic: true, field: 'hymnMid1' });
             }
             items.push(
-                { label: 'Hymn',                           value: liturgy.hymnMid2?.name || '',        italic: true },
+                { label: 'Hymn',                           value: liturgy.hymnMid2?.name || '',        italic: true, field: 'hymnMid2' },
                 { label: 'Scripture Reading',              value: liturgy.scriptureReading || '' },
                 { label: prayerLabel },
                 { label: 'Sermon',                         value: liturgy.sermon || '' },
@@ -1236,17 +1269,20 @@ function serviceForm() {
                 items.push({ label: 'Sacrament of Baptism', value: baptismNames });
             }
             items.push(
-                { label: 'Hymn',                           value: liturgy.hymnEnd1?.name || '',        italic: true },
-                { label: 'Hymn',                           value: liturgy.hymnEnd2?.name || '',        italic: true },
+                { label: 'Hymn',                           value: liturgy.hymnEnd1?.name || '',        italic: true, field: 'hymnEnd1' },
+                { label: 'Hymn',                           value: liturgy.hymnEnd2?.name || '',        italic: true, field: 'hymnEnd2' },
                 { label: "The Lord's Supper" },
                 { label: 'Moment of Silent Reflection' },
                 { label: 'Benediction',                    value: liturgy.benediction || '' },
             );
 
+            // Drop hymn rows the user pulled out of the order of service.
+            const visibleItems = items.filter(it => !it.field || !removedHymns.includes(it.field));
+
             // Distribute items evenly in available space
-            const lineH = (footerY - y) / items.length;
+            const lineH = (footerY - y) / visibleItems.length;
             pdf.setFontSize(10);
-            items.forEach((item, i) => {
+            visibleItems.forEach((item, i) => {
                 const itemY = y + (i + 0.72) * lineH;
                 pdf.setFont('helvetica', 'bold');
                 pdf.text(item.label, margin, itemY);

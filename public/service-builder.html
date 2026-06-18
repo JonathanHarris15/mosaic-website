@@ -65,6 +65,13 @@
             .note-add-btn, .note-bubble-btn { right: -0.7rem; }
         }
 
+        /* Remove-hymn control (top-right corner of a hymn card) */
+        .remove-hymn-btn { @apply absolute flex items-center justify-center w-6 h-6 rounded-full bg-surface-container-low text-secondary/50 hover:bg-red-100 hover:text-red-600 transition-all duration-200 cursor-pointer; top: 0.5rem; right: 0.5rem; z-index: 5; }
+        /* Collapsed state: the card shrinks to a thin gray bar with an "add back" button */
+        .form-section--removed { @apply p-0 bg-surface-container-low/50 border-dashed shadow-none mb-2; }
+        .hymn-removed-bar { @apply flex items-center gap-2 px-4 py-2; }
+        .hymn-restore-btn { @apply inline-flex items-center gap-1 text-xs font-label-md text-primary hover:text-primary/80 bg-primary-fixed/60 hover:bg-primary-fixed rounded-full px-2.5 py-1 transition-all cursor-pointer; }
+
         /* Margin note card (collapsed) */
         .note-margin { position: absolute; left: calc(100% + 2rem); top: 0.25rem; width: 180px; max-height: 6rem; overflow: hidden; }
         @media (max-width: 1100px) {
@@ -418,7 +425,14 @@
 
         <!-- Liturgy Flow -->
         <!-- 1. Preparatory Hymn -->
-            <div class="form-section" data-field-key="preparatoryHymn">
+            <div class="form-section" :class="{ 'form-section--removed': isHymnRemoved('preparatoryHymn') }" data-field-key="preparatoryHymn">
+                <button x-show="canEdit && !isHymnRemoved('preparatoryHymn')" @click="removeHymn('preparatoryHymn')" class="remove-hymn-btn" title="Remove this hymn from the order of service" aria-label="Remove hymn"><span class="material-symbols-outlined" style="font-size:16px">close</span></button>
+                <div x-show="isHymnRemoved('preparatoryHymn')" class="hymn-removed-bar">
+                    <span class="material-symbols-outlined text-[18px] text-secondary/40">music_off</span>
+                    <span class="flex-1 text-xs text-secondary/70 italic">Preparatory Hymn removed from the order of service</span>
+                    <button x-show="canEdit" @click="restoreHymn('preparatoryHymn')" class="hymn-restore-btn"><span class="material-symbols-outlined text-[14px]">add</span><span>Add hymn back</span></button>
+                </div>
+                <div x-show="!isHymnRemoved('preparatoryHymn')">
                 <div class="field-group">
                     <label class="field-label" for="preparatory-hymn-search">Preparatory Hymn</label>
                     <div x-data="hymnPicker(service.liturgy.preparatoryHymn, $data)" @click.away="open = false" class="input-container relative">
@@ -472,6 +486,7 @@
                         <div class="note-content" x-html="service.notes && service.notes['preparatoryHymn']"></div>
                         <div class="note-edit-hint">Click to edit</div>
                     </div>
+                </div>
                 </div>
             </div>
 
@@ -597,7 +612,14 @@
             </div>
 
             <!-- 3. Hymn 1 -->
-            <div class="form-section" data-field-key="hymn1">
+            <div class="form-section" :class="{ 'form-section--removed': isHymnRemoved('hymn1') }" data-field-key="hymn1">
+                <button x-show="canEdit && !isHymnRemoved('hymn1')" @click="removeHymn('hymn1')" class="remove-hymn-btn" title="Remove this hymn from the order of service" aria-label="Remove hymn"><span class="material-symbols-outlined" style="font-size:16px">close</span></button>
+                <div x-show="isHymnRemoved('hymn1')" class="hymn-removed-bar">
+                    <span class="material-symbols-outlined text-[18px] text-secondary/40">music_off</span>
+                    <span class="flex-1 text-xs text-secondary/70 italic">Hymn removed from the order of service</span>
+                    <button x-show="canEdit" @click="restoreHymn('hymn1')" class="hymn-restore-btn"><span class="material-symbols-outlined text-[14px]">add</span><span>Add hymn back</span></button>
+                </div>
+                <div x-show="!isHymnRemoved('hymn1')">
                 <div class="field-group">
                     <label class="field-label" for="hymn1-search">Hymn</label>
                     <div x-data="hymnPicker(service.liturgy.hymn1, $data)" @click.away="open = false" class="input-container relative">
@@ -652,10 +674,18 @@
                         <div class="note-edit-hint">Click to edit</div>
                     </div>
                 </div>
+                </div>
             </div>
 
             <!-- 4. Hymn 2 -->
-            <div class="form-section" x-show="!service.hasBaptism" x-transition data-field-key="hymn2">
+            <div class="form-section" :class="{ 'form-section--removed': isHymnRemoved('hymn2') }" x-show="!service.hasBaptism" x-transition data-field-key="hymn2">
+                <button x-show="canEdit && !isHymnRemoved('hymn2')" @click="removeHymn('hymn2')" class="remove-hymn-btn" title="Remove this hymn from the order of service" aria-label="Remove hymn"><span class="material-symbols-outlined" style="font-size:16px">close</span></button>
+                <div x-show="isHymnRemoved('hymn2')" class="hymn-removed-bar">
+                    <span class="material-symbols-outlined text-[18px] text-secondary/40">music_off</span>
+                    <span class="flex-1 text-xs text-secondary/70 italic">Hymn removed from the order of service</span>
+                    <button x-show="canEdit" @click="restoreHymn('hymn2')" class="hymn-restore-btn"><span class="material-symbols-outlined text-[14px]">add</span><span>Add hymn back</span></button>
+                </div>
+                <div x-show="!isHymnRemoved('hymn2')">
                 <div class="field-group">
                     <label class="field-label" for="hymn2-search">Hymn</label>
                     <div x-data="hymnPicker(service.liturgy.hymn2, $data)" @click.away="open = false" class="input-container relative">
@@ -709,6 +739,7 @@
                         <div class="note-content" x-html="service.notes && service.notes['hymn2']"></div>
                         <div class="note-edit-hint">Click to edit</div>
                     </div>
+                </div>
                 </div>
             </div>
 
@@ -917,7 +948,14 @@
             </div>
 
             <!-- 7. Hymn Mid 1 -->
-            <div class="form-section" data-field-key="hymnMid1">
+            <div class="form-section" :class="{ 'form-section--removed': isHymnRemoved('hymnMid1') }" data-field-key="hymnMid1">
+                <button x-show="canEdit && !isHymnRemoved('hymnMid1')" @click="removeHymn('hymnMid1')" class="remove-hymn-btn" title="Remove this hymn from the order of service" aria-label="Remove hymn"><span class="material-symbols-outlined" style="font-size:16px">close</span></button>
+                <div x-show="isHymnRemoved('hymnMid1')" class="hymn-removed-bar">
+                    <span class="material-symbols-outlined text-[18px] text-secondary/40">music_off</span>
+                    <span class="flex-1 text-xs text-secondary/70 italic">Hymn removed from the order of service</span>
+                    <button x-show="canEdit" @click="restoreHymn('hymnMid1')" class="hymn-restore-btn"><span class="material-symbols-outlined text-[14px]">add</span><span>Add hymn back</span></button>
+                </div>
+                <div x-show="!isHymnRemoved('hymnMid1')">
                 <div class="field-group">
                     <label class="field-label" for="hymn-mid1-search">Hymn</label>
                     <div x-data="hymnPicker(service.liturgy.hymnMid1, $data)" @click.away="open = false" class="input-container relative">
@@ -972,10 +1010,18 @@
                         <div class="note-edit-hint">Click to edit</div>
                     </div>
                 </div>
+                </div>
             </div>
 
             <!-- 8. Hymn Mid 2 -->
-            <div class="form-section" data-field-key="hymnMid2">
+            <div class="form-section" :class="{ 'form-section--removed': isHymnRemoved('hymnMid2') }" data-field-key="hymnMid2">
+                <button x-show="canEdit && !isHymnRemoved('hymnMid2')" @click="removeHymn('hymnMid2')" class="remove-hymn-btn" title="Remove this hymn from the order of service" aria-label="Remove hymn"><span class="material-symbols-outlined" style="font-size:16px">close</span></button>
+                <div x-show="isHymnRemoved('hymnMid2')" class="hymn-removed-bar">
+                    <span class="material-symbols-outlined text-[18px] text-secondary/40">music_off</span>
+                    <span class="flex-1 text-xs text-secondary/70 italic">Hymn removed from the order of service</span>
+                    <button x-show="canEdit" @click="restoreHymn('hymnMid2')" class="hymn-restore-btn"><span class="material-symbols-outlined text-[14px]">add</span><span>Add hymn back</span></button>
+                </div>
+                <div x-show="!isHymnRemoved('hymnMid2')">
                 <div class="field-group">
                     <label class="field-label" for="hymn-mid2-search">Hymn</label>
                     <div x-data="hymnPicker(service.liturgy.hymnMid2, $data)" @click.away="open = false" class="input-container relative">
@@ -1029,6 +1075,7 @@
                         <div class="note-content" x-html="service.notes && service.notes['hymnMid2']"></div>
                         <div class="note-edit-hint">Click to edit</div>
                     </div>
+                </div>
                 </div>
             </div>
 
@@ -1391,7 +1438,14 @@
             </div>
 
             <!-- 12. Hymn End 1 -->
-            <div class="form-section" data-field-key="hymnEnd1">
+            <div class="form-section" :class="{ 'form-section--removed': isHymnRemoved('hymnEnd1') }" data-field-key="hymnEnd1">
+                <button x-show="canEdit && !isHymnRemoved('hymnEnd1')" @click="removeHymn('hymnEnd1')" class="remove-hymn-btn" title="Remove this hymn from the order of service" aria-label="Remove hymn"><span class="material-symbols-outlined" style="font-size:16px">close</span></button>
+                <div x-show="isHymnRemoved('hymnEnd1')" class="hymn-removed-bar">
+                    <span class="material-symbols-outlined text-[18px] text-secondary/40">music_off</span>
+                    <span class="flex-1 text-xs text-secondary/70 italic">Hymn removed from the order of service</span>
+                    <button x-show="canEdit" @click="restoreHymn('hymnEnd1')" class="hymn-restore-btn"><span class="material-symbols-outlined text-[14px]">add</span><span>Add hymn back</span></button>
+                </div>
+                <div x-show="!isHymnRemoved('hymnEnd1')">
                 <div class="field-group">
                     <label class="field-label" for="hymn-end1-search">Hymn</label>
                     <div x-data="hymnPicker(service.liturgy.hymnEnd1, $data)" @click.away="open = false" class="input-container relative">
@@ -1446,10 +1500,18 @@
                         <div class="note-edit-hint">Click to edit</div>
                     </div>
                 </div>
+                </div>
             </div>
 
             <!-- 13. Hymn End 2 -->
-            <div class="form-section" data-field-key="hymnEnd2">
+            <div class="form-section" :class="{ 'form-section--removed': isHymnRemoved('hymnEnd2') }" data-field-key="hymnEnd2">
+                <button x-show="canEdit && !isHymnRemoved('hymnEnd2')" @click="removeHymn('hymnEnd2')" class="remove-hymn-btn" title="Remove this hymn from the order of service" aria-label="Remove hymn"><span class="material-symbols-outlined" style="font-size:16px">close</span></button>
+                <div x-show="isHymnRemoved('hymnEnd2')" class="hymn-removed-bar">
+                    <span class="material-symbols-outlined text-[18px] text-secondary/40">music_off</span>
+                    <span class="flex-1 text-xs text-secondary/70 italic">Hymn removed from the order of service</span>
+                    <button x-show="canEdit" @click="restoreHymn('hymnEnd2')" class="hymn-restore-btn"><span class="material-symbols-outlined text-[14px]">add</span><span>Add hymn back</span></button>
+                </div>
+                <div x-show="!isHymnRemoved('hymnEnd2')">
                 <div class="field-group">
                     <label class="field-label" for="hymn-end2-search">Hymn</label>
                     <div x-data="hymnPicker(service.liturgy.hymnEnd2, $data)" @click.away="open = false" class="input-container relative">
@@ -1503,6 +1565,7 @@
                         <div class="note-content" x-html="service.notes && service.notes['hymnEnd2']"></div>
                         <div class="note-edit-hint">Click to edit</div>
                     </div>
+                </div>
                 </div>
             </div>
 

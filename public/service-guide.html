@@ -207,6 +207,11 @@
                     <span class="material-symbols-outlined text-[16px]">add_circle</span>
                     <span>Add Page</span>
                 </button>
+
+                <button x-show="userRole !== 'viewer'" @click="regenerateGuide()" title="Rebuild hymn pages from the current order of service" class="w-full py-2 border border-dashed border-outline-variant rounded text-secondary text-[10px] font-bold uppercase flex items-center justify-center gap-2 hover:border-amber-500 hover:text-amber-600 transition-all mt-2">
+                    <span class="material-symbols-outlined text-[16px]">autorenew</span>
+                    <span>Regenerate Guide</span>
+                </button>
             </div>
             
             <div class="p-3 border-t border-outline-variant bg-surface text-[9px] text-gray-400">
@@ -252,7 +257,7 @@
                                     </div>
 
                                     <div class="latex-spacing-2 flex-grow flex flex-col justify-between overflow-hidden">
-                                        <div class="flex justify-between">
+                                        <div class="flex justify-between" x-show="!(service.removedHymns || []).includes('preparatoryHymn')">
                                             <span class="font-bold">Preparatory</span>
                                             <span class="italic" x-text="service.liturgy?.preparatoryHymn?.name || ''"></span>
                                         </div>
@@ -262,11 +267,11 @@
                                             <span class="font-bold">Scriptural Call to Worship</span>
                                             <span x-text="service.liturgy?.callToWorship || ''"></span>
                                         </div>
-                                        <div class="flex justify-between">
+                                        <div class="flex justify-between" x-show="!(service.removedHymns || []).includes('hymn1')">
                                             <span class="font-bold">Hymn</span>
                                             <span class="italic" x-text="service.liturgy?.hymn1?.name || ''"></span>
                                         </div>
-                                        <template x-if="!service.hasBaptism">
+                                        <template x-if="!service.hasBaptism && !(service.removedHymns || []).includes('hymn2')">
                                             <div class="flex justify-between">
                                                 <span class="font-bold">Hymn</span>
                                                 <span class="italic" x-text="service.liturgy?.hymn2?.name || ''"></span>
@@ -284,11 +289,11 @@
                                             <span x-text="service.liturgy?.assuranceOfPardon || ''"></span>
                                         </div>
 
-                                        <div class="flex justify-between">
+                                        <div class="flex justify-between" x-show="!(service.removedHymns || []).includes('hymnMid1')">
                                             <span class="font-bold">Hymn</span>
                                             <span class="italic" x-text="service.liturgy?.hymnMid1?.name || ''"></span>
                                         </div>
-                                        <div class="flex justify-between">
+                                        <div class="flex justify-between" x-show="!(service.removedHymns || []).includes('hymnMid2')">
                                             <span class="font-bold">Hymn</span>
                                             <span class="italic" x-text="service.liturgy?.hymnMid2?.name || ''"></span>
                                         </div>
@@ -310,11 +315,11 @@
                                             </div>
                                         </template>
 
-                                        <div class="flex justify-between">
+                                        <div class="flex justify-between" x-show="!(service.removedHymns || []).includes('hymnEnd1')">
                                             <span class="font-bold">Hymn</span>
                                             <span class="italic" x-text="service.liturgy?.hymnEnd1?.name || ''"></span>
                                         </div>
-                                        <div class="flex justify-between">
+                                        <div class="flex justify-between" x-show="!(service.removedHymns || []).includes('hymnEnd2')">
                                             <span class="font-bold">Hymn</span>
                                             <span class="italic" x-text="service.liturgy?.hymnEnd2?.name || ''"></span>
                                         </div>
