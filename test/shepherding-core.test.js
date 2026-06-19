@@ -134,6 +134,57 @@ test('builders normalise missing author/source-doc to null, never undefined', ()
 // its batching contract can be verified with a tiny fake Firestore: one batch,
 // one person update, one activity set, committed exactly once.
 
+// The Pastoral Record is the merged, reverse-chronological feed of a Person's
+// Shepherding Notes and Status/Tag Changes. Assembly and the "collapse a run of
+// changes" display rule used to be inline getters on the profile; now pure.
+
+const ts = (ms) => ({ toDate: () => new Date(ms) }); // stand-in for a Firestore Timestamp
+
+test('assemblePastoralRecord merges notes and activity newest-first', () => {
+    const notes = [{ id: 'n1', createdAt: ts(1000) }];
+    const activity = [
+        { id: 'a1', kind: 'status_change', createdAt: ts(3000) },
+        { id: 'a2', kind: 'tag_change', createdAt: ts(2000) },
+    ];
+    const feed = Core.assemblePastoralRecord(notes, activity, {});
+    assert.deepStrictEqual(feed.map(e => e.id), ['a1', 'a2', 'n1']);
+    assert.deepStrictEqual(feed.map(e => e._entryKind), ['status_change', 'tag_change', 'note']);
+});
+
+test('assemblePastoralRecord omits the note currently being edited', () => {
+    const notes = [{ id: 'n1', createdAt: ts(1000) }, { id: 'n2', createdAt: ts(2000) }];
+    const feed = Core.assemblePastoralRecord(notes, [], { editingNoteId: 'n1' });
+    assert.deepStrictEqual(feed.map(e => e.id), ['n2']);
+});
+
+test('assemblePastoralRecord tolerates empty/missing inputs and undated entries', () => {
+    assert.deepStrictEqual(Core.assemblePastoralRecord(null, null, {}), []);
+    const feed = Core.assemblePastoralRecord(
+        [{ id: 'n1' }],                                   // no createdAt → time 0
+        [{ id: 'a1', kind: 'status_change', createdAt: ts(5000) }],
+        {});
+    assert.deepStrictEqual(feed.map(e => e.id), ['a1', 'n1']); // dated entry first
+});
+
+test('collapsePastoralRecord folds consecutive changes into one status_group', () => {
+    const record = [
+        { id: 'a1', _entryKind: 'status_change' },
+        { id: 'a2', _entryKind: 'tag_change' },
+        { id: 'n1', _entryKind: 'note' },
+        { id: 'a3', _entryKind: 'status_change' },
+    ];
+    const collapsed = Core.collapsePastoralRecord(record);
+    assert.strictEqual(collapsed.length, 3);
+    assert.deepStrictEqual(collapsed[0], { _entryKind: 'status_group', count: 2, id: 'sg_0' });
+    assert.strictEqual(collapsed[1].id, 'n1');
+    assert.deepStrictEqual(collapsed[2], { _entryKind: 'status_group', count: 1, id: 'sg_1' });
+});
+
+test('collapsePastoralRecord leaves a note-only feed untouched', () => {
+    const record = [{ id: 'n1', _entryKind: 'note' }, { id: 'n2', _entryKind: 'note' }];
+    assert.deepStrictEqual(Core.collapsePastoralRecord(record), record);
+});
+
 test('commitPastoralChange writes both halves in a single committed batch', () => {
     const calls = { update: [], set: [], commit: 0 };
     const batch = {

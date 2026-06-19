@@ -117,6 +117,55 @@
         return batch.commit();
     }
 
+    // ── Pastoral Record assembly (pure) ──────────────────────────────────────
+    // The Pastoral Record is the single reverse-chronological feed of a Person's
+    // shepherding activity: Shepherding Notes interleaved with Status Changes and
+    // Tag Changes. Assembling and collapsing it was inline, untestable getter
+    // logic on the profile; it is pure and lives here now.
+
+    // Newest-first sort key. Entries carry a Firestore Timestamp in createdAt;
+    // anything without one sorts to the bottom (time 0).
+    function pastoralEntryTime(entry) {
+        return entry && entry.createdAt && entry.createdAt.toDate
+            ? entry.createdAt.toDate().getTime() : 0;
+    }
+
+    // Merge Shepherding Notes and activity (Status/Tag Changes) into one feed,
+    // tagged with _entryKind and sorted newest-first. A note being edited
+    // (options.editingNoteId) is omitted so its live editor isn't duplicated.
+    function assemblePastoralRecord(notes, activity, options) {
+        const editingNoteId = (options && options.editingNoteId) || null;
+        const items = [
+            ...(notes || [])
+                .filter(n => !editingNoteId || n.id !== editingNoteId)
+                .map(n => ({ ...n, _entryKind: 'note' })),
+            ...(activity || []).map(a => ({ ...a, _entryKind: a.kind })),
+        ];
+        return items.sort((a, b) => pastoralEntryTime(b) - pastoralEntryTime(a));
+    }
+
+    // Collapse each run of consecutive Status/Tag Changes into one summary
+    // entry ({ _entryKind: 'status_group', count }) so a burst of changes reads
+    // as one collapsible row. Notes break a run and pass through unchanged.
+    function collapsePastoralRecord(record) {
+        const result = [];
+        let count = 0;
+        let groupIdx = 0;
+        for (const entry of record) {
+            if (entry._entryKind === 'status_change' || entry._entryKind === 'tag_change') {
+                count++;
+            } else {
+                if (count > 0) {
+                    result.push({ _entryKind: 'status_group', count, id: 'sg_' + groupIdx++ });
+                    count = 0;
+                }
+                result.push(entry);
+            }
+        }
+        if (count > 0) result.push({ _entryKind: 'status_group', count, id: 'sg_' + groupIdx });
+        return result;
+    }
+
     const ShepherdingCore = {
         URGENCY_LEVELS,
         IMPORTANCE_LEVELS,
@@ -132,6 +181,9 @@
         buildStatusChange,
         buildTagChange,
         commitPastoralChange,
+        pastoralEntryTime,
+        assemblePastoralRecord,
+        collapsePastoralRecord,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

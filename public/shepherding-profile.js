@@ -467,36 +467,14 @@ document.addEventListener('alpine:init', () => {
         },
 
         get pastoralRecord() {
-            const items = [
-                ...this.notes
-                    .filter(n => !this.editingNote || n.id !== this.editingNote.id)
-                    .map(n => ({ ...n, _entryKind: 'note' })),
-                ...this.activity.map(a => ({ ...a, _entryKind: a.kind })),
-            ];
-            return items.sort((a, b) => {
-                const ts = v => v?.createdAt?.toDate ? v.createdAt.toDate().getTime() : 0;
-                return ts(b) - ts(a);
+            return ShepherdingCore.assemblePastoralRecord(this.notes, this.activity, {
+                editingNoteId: this.editingNote ? this.editingNote.id : null,
             });
         },
 
         get displayRecord() {
             if (!this.collapseStatusChanges) return this.pastoralRecord;
-            const result = [];
-            let count = 0;
-            let groupIdx = 0;
-            for (const entry of this.pastoralRecord) {
-                if (entry._entryKind === 'status_change' || entry._entryKind === 'tag_change') {
-                    count++;
-                } else {
-                    if (count > 0) {
-                        result.push({ _entryKind: 'status_group', count, id: 'sg_' + groupIdx++ });
-                        count = 0;
-                    }
-                    result.push(entry);
-                }
-            }
-            if (count > 0) result.push({ _entryKind: 'status_group', count, id: 'sg_' + groupIdx });
-            return result;
+            return ShepherdingCore.collapsePastoralRecord(this.pastoralRecord);
         },
 
         async loadTags() {
