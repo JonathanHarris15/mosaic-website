@@ -242,18 +242,7 @@ function serviceForm() {
                 
                 const members = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-                const getTop3 = (sex) => {
-                    return members
-                        .filter(m => m.sex === sex)
-                        // Filter out those scheduled for today or future
-                        .filter(m => !m.lastPastoralPrayerDate || m.lastPastoralPrayerDate < todayStr)
-                        .sort((a, b) => {
-                            const dateA = a.lastPastoralPrayerDate || '0000-00-00';
-                            const dateB = b.lastPastoralPrayerDate || '0000-00-00';
-                            return dateA.localeCompare(dateB);
-                        })
-                        .slice(0, 3);
-                };
+                const getTop3 = (sex) => PrayerSuggestions.topPrayerCandidates(members, sex, todayStr, 3);
 
                 this.prayerSuggestions = {
                     males: getTop3('male'),
