@@ -190,7 +190,7 @@ function serviceForm() {
         async fetchPrayerSuggestions() {
             try {
                 const now = new Date();
-                const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                const todayStr = DateUtils.toDateStr(now);
 
                 // Fetch all members and sort locally to avoid composite index requirements
                 const snap = await db.collection('people')
@@ -1095,11 +1095,7 @@ function serviceForm() {
         },
 
         formatDate(dateStr) {
-            if (!dateStr) return '';
-            const [y, m, d] = dateStr.split('-');
-            return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-            });
+            return DateUtils.formatDateLong(dateStr);
         },
 
         async downloadMusicSheets() {

@@ -44,7 +44,7 @@ function calendarPage() {
         async fetchPrayerSuggestions() {
             try {
                 const now = new Date();
-                const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                const todayStr = DateUtils.toDateStr(now);
 
                 const snap = await db.collection('people')
                     .where('tags', 'array-contains', 'Member')
@@ -479,21 +479,15 @@ function baptismCandidateNames(svc) {
     return typeof bap === 'string' ? bap : '';
 }
 
-function dateStrToDate(s) {
-    const [y, m, d] = s.split('-').map(Number);
-    return new Date(y, m - 1, d);
-}
+// Service-date helpers delegate to DateUtils (date-utils.js) — the single home
+// for local-time YYYY-MM-DD handling. Kept as named locals so the many call
+// sites below are unchanged.
+function dateStrToDate(s) { return DateUtils.parseDateStr(s); }
 
-function dateToStr(dt) {
-    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-}
+function dateToStr(dt) { return DateUtils.toDateStr(dt); }
 
 // Add one week to a YYYY-MM-DD string, returning the same format.
-function addWeek(dateStr) {
-    const dt = dateStrToDate(dateStr);
-    dt.setDate(dt.getDate() + 7);
-    return dateToStr(dt);
-}
+function addWeek(dateStr) { return DateUtils.addWeek(dateStr); }
 
 // Upcoming Sundays (today or later) as { value: 'YYYY-MM-DD', label: 'June 14, 2026' }.
 window.getUpcomingSundays = function () {
@@ -784,7 +778,7 @@ function renderList(grouped) {
                 grid.className = 'grid grid-cols-1 gap-sm';
 
                 grouped[year][month].forEach(date => {
-                    const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                    const formattedDate = DateUtils.toDateStr(date);
 
                     const dateRow = document.createElement('div');
                     dateRow.id = `date-${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
@@ -887,8 +881,8 @@ function renderTable(grouped) {
                 tbody.appendChild(separatorRow);
 
                 grouped[year][month].forEach(date => {
-                    const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-                    
+                    const formattedDate = DateUtils.toDateStr(date);
+
                     const row = document.createElement('tr');
                     row.id = `table-date-${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
                     row.dataset.serviceDate = formattedDate;
