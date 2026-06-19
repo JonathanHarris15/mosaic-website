@@ -173,59 +173,10 @@ function createDocMentionSuggestion() {
 
 // ── TipTap JSON → HTML ────────────────────────────────────────────────────────
 
-function docTiptapJsonToHtml(doc) {
-    if (!doc || !doc.content) return '';
-    return docRenderNodes(doc.content);
-}
-
-function docRenderNodes(nodes) {
-    if (!nodes) return '';
-    return nodes.map(docRenderNode).join('');
-}
-
-function docRenderNode(node) {
-    switch (node.type) {
-        case 'paragraph': { const inner = node.content ? docRenderNodes(node.content) : ''; return inner ? `<p>${inner}</p>` : '<p></p>'; }
-        case 'text': {
-            let t = (node.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            if (node.marks) {
-                for (const m of node.marks) {
-                    if (m.type === 'bold')      t = `<strong>${t}</strong>`;
-                    if (m.type === 'italic')    t = `<em>${t}</em>`;
-                    if (m.type === 'underline') t = `<u>${t}</u>`;
-                    if (m.type === 'highlight') t = `<mark style="background-color:${m.attrs?.color || '#fef08a'};padding:0 2px;border-radius:2px;">${t}</mark>`;
-                    if (m.type === 'textStyle') {
-                        const styles = [];
-                        if (m.attrs?.fontSize) styles.push(`font-size:${m.attrs.fontSize}`);
-                        if (m.attrs?.fontFamily) styles.push(`font-family:${m.attrs.fontFamily}`);
-                        if (styles.length) t = `<span style="${styles.join(';')}">${t}</span>`;
-                    }
-                }
-            }
-            return t;
-        }
-        case 'mention': {
-            const rawId = node.attrs?.id || '';
-            const label = (node.attrs?.label || '?').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            let parsed = null;
-            try { parsed = JSON.parse(rawId); } catch {}
-            if (parsed?.kind === 'person') return `<a class="mention-chip" href="shepherding-profile.html?id=${encodeURIComponent(parsed.id)}&fromPage=document&fromId=${encodeURIComponent(_currentDocId||'')}&fromTitle=${encodeURIComponent(_currentDocTitle||'')}">@${label}</a>`;
-            if (parsed?.kind === 'note' && parsed.personId) return `<a class="mention-chip" href="shepherding-profile.html?id=${encodeURIComponent(parsed.personId)}&fromPage=document&fromId=${encodeURIComponent(_currentDocId||'')}&fromTitle=${encodeURIComponent(_currentDocTitle||'')}">@${label}</a>`;
-            if (parsed?.kind === 'elder_document') return `<a class="mention-chip" href="shepherding-document.html?id=${encodeURIComponent(parsed.id)}">@${label}</a>`;
-            if (parsed?.kind === 'elder_folder') return `<a class="mention-chip" href="shepherding-documents.html?folder=${encodeURIComponent(parsed.id)}">@${label}</a>`;
-            return `<span class="mention-chip" style="opacity:.5">@${label}</span>`;
-        }
-        case 'bulletList':  return `<ul>${docRenderNodes(node.content)}</ul>`;
-        case 'orderedList': return `<ol>${docRenderNodes(node.content)}</ol>`;
-        case 'listItem':    return `<li>${docRenderNodes(node.content)}</li>`;
-        case 'hardBreak':   return '<br>';
-        case 'table':       return `<table class="note-table">${docRenderNodes(node.content)}</table>`;
-        case 'tableRow':    return `<tr>${docRenderNodes(node.content)}</tr>`;
-        case 'tableHeader': return `<th>${node.content ? docRenderNodes(node.content) : ''}</th>`;
-        case 'tableCell':   return `<td>${node.content ? docRenderNodes(node.content) : ''}</td>`;
-        default:            return node.content ? docRenderNodes(node.content) : (node.text || '');
-    }
-}
+// (The document-side TipTap→HTML renderer was dead code — never called — and is
+// removed. The shared renderer in tiptap-render.js carries its breadcrumb
+// behaviour via the `breadcrumb` option for whenever a document back-link is
+// wired up.)
 
 // ── Inline three-step slash picker ───────────────────────────────────────────
 // Phase 1 (command): type / → shows command list

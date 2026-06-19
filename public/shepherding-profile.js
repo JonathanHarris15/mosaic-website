@@ -203,74 +203,10 @@ function createMentionSuggestion() {
 
 // ── TipTap JSON → HTML ────────────────────────────────────────────────────────
 
+// Delegates to the shared renderer in tiptap-render.js. The profile shows notes
+// without a back-link, so no breadcrumb option is passed.
 function tiptapJsonToHtml(doc) {
-    if (!doc || !doc.content) return '';
-    return renderNodes(doc.content);
-}
-
-function renderNodes(nodes) {
-    if (!nodes) return '';
-    return nodes.map(renderNode).join('');
-}
-
-function renderNode(node) {
-    switch (node.type) {
-        case 'paragraph': {
-            const inner = node.content ? renderNodes(node.content) : '';
-            return inner ? `<p>${inner}</p>` : '<p></p>';
-        }
-        case 'text': {
-            let t = (node.text || '')
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            if (node.marks) {
-                for (const m of node.marks) {
-                    if (m.type === 'bold')      t = `<strong>${t}</strong>`;
-                    if (m.type === 'italic')    t = `<em>${t}</em>`;
-                    if (m.type === 'underline') t = `<u>${t}</u>`;
-                    if (m.type === 'highlight') {
-                        const color = m.attrs?.color || '#fef08a';
-                        t = `<mark style="background-color:${color};padding:0 2px;border-radius:2px;">${t}</mark>`;
-                    }
-                    if (m.type === 'textStyle') {
-                        const styles = [];
-                        if (m.attrs?.fontSize) styles.push(`font-size:${m.attrs.fontSize}`);
-                        if (m.attrs?.fontFamily) styles.push(`font-family:${m.attrs.fontFamily}`);
-                        if (styles.length) t = `<span style="${styles.join(';')}">${t}</span>`;
-                    }
-                }
-            }
-            return t;
-        }
-        case 'mention': {
-            const rawId = node.attrs?.id || '';
-            const label = (node.attrs?.label || '?')
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            let parsed = null;
-            try { parsed = JSON.parse(rawId); } catch {}
-            if (parsed?.kind === 'person') {
-                return `<a class="mention-chip" href="shepherding-profile.html?id=${encodeURIComponent(parsed.id)}">@${label}</a>`;
-            }
-            if (parsed?.kind === 'note' && parsed.personId) {
-                return `<a class="mention-chip" href="shepherding-profile.html?id=${encodeURIComponent(parsed.personId)}">@${label}</a>`;
-            }
-            if (parsed?.kind === 'elder_document') {
-                return `<a class="mention-chip" href="shepherding-document.html?id=${encodeURIComponent(parsed.id)}">@${label}</a>`;
-            }
-            if (parsed?.kind === 'elder_folder') {
-                return `<a class="mention-chip" href="shepherding-documents.html?folder=${encodeURIComponent(parsed.id)}">@${label}</a>`;
-            }
-            return `<span class="mention-chip" style="opacity:.5">@${label}</span>`;
-        }
-        case 'bulletList':  return `<ul>${renderNodes(node.content)}</ul>`;
-        case 'orderedList': return `<ol>${renderNodes(node.content)}</ol>`;
-        case 'listItem':    return `<li>${renderNodes(node.content)}</li>`;
-        case 'hardBreak':   return '<br>';
-        case 'table':       return `<table class="note-table">${renderNodes(node.content)}</table>`;
-        case 'tableRow':    return `<tr>${renderNodes(node.content)}</tr>`;
-        case 'tableHeader': return `<th>${node.content ? renderNodes(node.content) : ''}</th>`;
-        case 'tableCell':   return `<td>${node.content ? renderNodes(node.content) : ''}</td>`;
-        default:            return node.content ? renderNodes(node.content) : (node.text || '');
-    }
+    return TiptapRender.renderTiptapJson(doc);
 }
 
 document.addEventListener('alpine:init', () => {
