@@ -27,6 +27,33 @@ const CANONICAL_MAPPING = {
     'Benediction': { field: 'benediction', type: 'text', liturgy: true }
 };
 
+// Normalize literal dotted-key fields (e.g. 'liturgy.sermon') created by older
+// saves that used set() with merge, which stored them as top-level field names
+// containing a dot rather than as nested paths. Returns a new object with such
+// keys folded into nested objects. An already-nested value wins over a
+// dotted-key value for the same leaf (the dotted key is the legacy fallback).
+function normalizeDottedKeys(raw) {
+    const data = {};
+    for (const [key, val] of Object.entries(raw || {})) {
+        if (!key.includes('.')) data[key] = val;
+    }
+    for (const [key, val] of Object.entries(raw || {})) {
+        if (key.includes('.')) {
+            const parts = key.split('.');
+            let obj = data;
+            for (let i = 0; i < parts.length - 1; i++) {
+                if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) {
+                    obj[parts[i]] = {};
+                }
+                obj = obj[parts[i]];
+            }
+            const leaf = parts[parts.length - 1];
+            if (!obj[leaf]) obj[leaf] = val;
+        }
+    }
+    return data;
+}
+
 // Diffs two lists of Person references as SETS keyed by Person id, reporting
 // which ids were added and which were removed. Entries without an id (no
 // selected Person) are ignored, and a Person listed twice counts once.
@@ -430,27 +457,9 @@ function serviceForm() {
             if (doc.exists) {
                 const raw = doc.data();
 
-                // Normalize literal dotted-key fields (e.g. 'liturgy.sermon') created by
-                // older saves that used set() with merge, which stores them as top-level
-                // field names containing a dot rather than as nested paths.
-                const data = {};
-                for (const [key, val] of Object.entries(raw)) {
-                    if (!key.includes('.')) data[key] = val;
-                }
-                for (const [key, val] of Object.entries(raw)) {
-                    if (key.includes('.')) {
-                        const parts = key.split('.');
-                        let obj = data;
-                        for (let i = 0; i < parts.length - 1; i++) {
-                            if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) {
-                                obj[parts[i]] = {};
-                            }
-                            obj = obj[parts[i]];
-                        }
-                        const leaf = parts[parts.length - 1];
-                        if (!obj[leaf]) obj[leaf] = val;
-                    }
-                }
+                // Fold legacy dotted-key fields (e.g. 'liturgy.sermon') back into
+                // nested objects. See normalizeDottedKeys.
+                const data = normalizeDottedKeys(raw);
                 // Update top-level properties
                 this.service.theme = data.theme || '';
                 this.service.keyVerse = data.keyVerse || '';
@@ -1672,5 +1681,5 @@ function hymnPicker(hymnRef, parent = null) {
 
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames };
+    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys };
 }
