@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 
-const { parseBaptismNames, personRefSetChanges } = require('../public/service-builder.js');
+const { parseBaptismNames, personRefSetChanges, coerceBaptismCandidates } = require('../public/service-builder.js');
 
 // The migration turns a free-text baptism value into Baptism Candidates.
 // parseBaptismNames splits a value into confident full-name candidates and
@@ -82,4 +82,27 @@ test('candidates without an id (not yet a Person) carry no date change', () => {
     const { added, removed } = personRefSetChanges([], [{ name: 'Unsaved', id: null }]);
     assert.deepStrictEqual(added, []);
     assert.deepStrictEqual(removed, []);
+});
+
+// ADR-0006: liturgy.baptism is polymorphic during the migration. coerceBaptismCandidates
+// is the single reader that turns whatever shape is on disk into a clean
+// array of { name, id } candidates for the Builder's load path.
+
+test('an array of candidates is normalised, defaulting missing name/id', () => {
+    const out = coerceBaptismCandidates([{ name: 'John Smith', id: 'p1' }, { name: 'Jane' }, { id: 'p3' }]);
+    assert.deepStrictEqual(out, [
+        { name: 'John Smith', id: 'p1' },
+        { name: 'Jane', id: null },
+        { name: '', id: 'p3' },
+    ]);
+});
+
+test('a legacy free-text string becomes one literal candidate (id null)', () => {
+    assert.deepStrictEqual(coerceBaptismCandidates('  John Smith  '), [{ name: 'John Smith', id: null }]);
+});
+
+test('empty, blank, or absent values become an empty array', () => {
+    for (const v of ['', '   ', null, undefined, 0, false]) {
+        assert.deepStrictEqual(coerceBaptismCandidates(v), [], `value: ${JSON.stringify(v)}`);
+    }
 });

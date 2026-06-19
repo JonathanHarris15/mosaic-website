@@ -107,6 +107,22 @@ function parseBaptismNames(value) {
     return result;
 }
 
+// ADR-0006: liturgy.baptism is polymorphic during the migration — an array of
+// Person refs post-migration, possibly a legacy free-text string until the
+// migration runs. Coerce either shape to a clean array of { name, id } Baptism
+// Candidates: array entries are normalised (name/id defaulted), a non-empty
+// legacy string becomes a single literal candidate (id null) so it still
+// displays, and anything else (empty, absent, blank) becomes [].
+function coerceBaptismCandidates(bap) {
+    if (Array.isArray(bap)) {
+        return bap.map(c => ({ name: c.name || '', id: c.id || null }));
+    }
+    if (typeof bap === 'string' && bap.trim()) {
+        return [{ name: bap.trim(), id: null }];
+    }
+    return [];
+}
+
 function serviceForm() {
     return {
         date: '',
@@ -513,14 +529,7 @@ function serviceForm() {
                 // Normalize Baptism Candidates to an array of Person refs. A legacy
                 // free-text value (pre-migration) is wrapped as a single literal
                 // candidate so it still displays; the migration resolves it properly.
-                const bap = this.service.liturgy.baptism;
-                if (Array.isArray(bap)) {
-                    this.service.liturgy.baptism = bap.map(c => ({ name: c.name || '', id: c.id || null }));
-                } else if (typeof bap === 'string' && bap.trim()) {
-                    this.service.liturgy.baptism = [{ name: bap.trim(), id: null }];
-                } else {
-                    this.service.liturgy.baptism = [];
-                }
+                this.service.liturgy.baptism = coerceBaptismCandidates(this.service.liturgy.baptism);
                 // Store guide data to preserve/update it during save
                 this.service.guide = data.guide || null;
             }
@@ -1681,5 +1690,5 @@ function hymnPicker(hymnRef, parent = null) {
 
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys };
+    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates };
 }
