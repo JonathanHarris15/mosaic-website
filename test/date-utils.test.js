@@ -56,3 +56,20 @@ test('formatDateLong renders a long label and tolerates empty input', () => {
     assert.match(label, /2026/);
     assert.match(label, /14/);
 });
+
+test('upcomingSundays keeps today-or-later, drops past, preserves order', () => {
+    const sundays = [
+        new Date(2026, 5, 7),   // past
+        new Date(2026, 5, 14),  // == fromDate day
+        new Date(2026, 5, 21),  // future
+    ];
+    const from = new Date(2026, 5, 14, 9, 30); // time-of-day ignored
+    const out = D.upcomingSundays(sundays, from);
+    assert.deepStrictEqual(out.map(s => s.value), ['2026-06-14', '2026-06-21']);
+    assert.ok(out.every(s => typeof s.label === 'string' && s.label.length > 0));
+});
+
+test('upcomingSundays tolerates an empty list', () => {
+    assert.deepStrictEqual(D.upcomingSundays([], new Date(2026, 0, 1)), []);
+    assert.deepStrictEqual(D.upcomingSundays(null, new Date(2026, 0, 1)), []);
+});

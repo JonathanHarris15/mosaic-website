@@ -481,18 +481,7 @@ function addWeek(dateStr) { return DateUtils.addWeek(dateStr); }
 
 // Upcoming Sundays (today or later) as { value: 'YYYY-MM-DD', label: 'June 14, 2026' }.
 window.getUpcomingSundays = function () {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return allSundays
-        .filter(d => {
-            const x = new Date(d);
-            x.setHours(0, 0, 0, 0);
-            return x >= today;
-        })
-        .map(d => ({
-            value: dateToStr(d),
-            label: d.toLocaleDateString('default', { month: 'long', day: 'numeric', year: 'numeric' })
-        }));
+    return DateUtils.upcomingSundays(allSundays);
 };
 
 // How many existing services sit on or after the given Sunday (from the
