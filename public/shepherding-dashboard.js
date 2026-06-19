@@ -1,6 +1,7 @@
-const DASH_URGENCY_LEVELS = ['urgent', 'somewhat_urgent', 'not_urgent'];
-const DASH_IMPORTANCE_LEVELS = ['important', 'somewhat_important', 'not_important'];
-function dashZoneKey(u, i) { return `${u}__${i}`; }
+// Shepherding Status value model — single source of truth in shepherding-core.js.
+const DASH_URGENCY_LEVELS = ShepherdingCore.URGENCY_LEVELS;
+const DASH_IMPORTANCE_LEVELS = ShepherdingCore.IMPORTANCE_LEVELS;
+const dashZoneKey = ShepherdingCore.statusZoneKey;
 
 document.addEventListener('alpine:init', () => {
     Alpine.data('shepherdingDashboard', () => ({
@@ -341,12 +342,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         viewStatusCellColor(urg, imp) {
-            const urgIdx = DASH_URGENCY_LEVELS.indexOf(urg);
-            const impIdx = DASH_IMPORTANCE_LEVELS.indexOf(imp);
-            const score = urgIdx + impIdx;
-            if (score <= 1) return 'border-error/40 bg-error-container/20';
-            if (score <= 3) return 'border-secondary/30 bg-secondary-container/20';
-            return 'border-outline-variant bg-surface-container';
+            return ShepherdingCore.statusCellColor(urg, imp);
         },
 
         getTagName(tagId) {

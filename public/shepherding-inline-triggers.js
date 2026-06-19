@@ -2,10 +2,12 @@
 // Requires window._TipTap before calling createInlineTriggersExtension.
 
 function _buildStatusMatrixPopup({ anchorCoords, currentStatus, onSelect }) {
-    const UL = ['urgent','somewhat_urgent','not_urgent'];
-    const IL = ['important','somewhat_important','not_important'];
-    const ULbl = { urgent:'Urg', somewhat_urgent:'Swt', not_urgent:'Not' };
-    const ILbl = { important:'Imp', somewhat_important:'Swt', not_important:'Not' };
+    // Status value model from shepherding-core.js; the inline `$$` matrix uses
+    // the tiny label variant.
+    const UL = ShepherdingCore.URGENCY_LEVELS;
+    const IL = ShepherdingCore.IMPORTANCE_LEVELS;
+    const ULbl = ShepherdingCore.URGENCY_LABEL_TINY;
+    const ILbl = ShepherdingCore.IMPORTANCE_LABEL_TINY;
 
     const popup = document.createElement('div');
     popup.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px;font-family:"Work Sans",sans-serif;font-size:12px;';

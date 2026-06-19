@@ -1,8 +1,10 @@
-const URGENCY_LEVELS = ['urgent', 'somewhat_urgent', 'not_urgent'];
-const IMPORTANCE_LEVELS = ['important', 'somewhat_important', 'not_important'];
-const URGENCY_LABEL = { urgent: 'Urgent', somewhat_urgent: 'Somewhat', not_urgent: 'Not Urgent' };
-const IMPORTANCE_LABEL = { important: 'Important', somewhat_important: 'Somewhat', not_important: 'Not Imp.' };
-function statusZoneKey(u, i) { return `${u}__${i}`; }
+// Shepherding Status value model — single source of truth in shepherding-core.js.
+// The People list uses the short label variant (narrow table cells).
+const URGENCY_LEVELS = ShepherdingCore.URGENCY_LEVELS;
+const IMPORTANCE_LEVELS = ShepherdingCore.IMPORTANCE_LEVELS;
+const URGENCY_LABEL = ShepherdingCore.URGENCY_LABEL_SHORT;
+const IMPORTANCE_LABEL = ShepherdingCore.IMPORTANCE_LABEL_SHORT;
+const statusZoneKey = ShepherdingCore.statusZoneKey;
 
 document.addEventListener('alpine:init', () => {
     Alpine.data('shepherdingPeople', () => ({
@@ -191,12 +193,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         statusCellColor(urgency, importance) {
-            const urgIdx = URGENCY_LEVELS.indexOf(urgency);
-            const impIdx = IMPORTANCE_LEVELS.indexOf(importance);
-            const score = urgIdx + impIdx;
-            if (score <= 1) return 'border-error/40 bg-error-container/20';
-            if (score <= 3) return 'border-secondary/30 bg-secondary-container/20';
-            return 'border-outline-variant bg-surface-container';
+            return ShepherdingCore.statusCellColor(urgency, importance);
         },
 
         formatStatus(status) {
@@ -323,25 +320,18 @@ document.addEventListener('alpine:init', () => {
             const authorName = this.currentUser?.email ? this.currentUser.email.split('@')[0] : 'Elder';
 
             try {
-                await db.collection('people').doc(this.tagPerson.id).update({
+                await ShepherdingCore.commitPastoralChange(db, this.tagPerson.id, {
                     tags: hasIt
                         ? firebase.firestore.FieldValue.arrayRemove(tagId)
                         : firebase.firestore.FieldValue.arrayUnion(tagId),
                     shepherdingHidden
-                });
-                await db.collection('people').doc(this.tagPerson.id)
-                    .collection('shepherding_activity').add({
-                        kind: 'tag_change',
-                        tagId,
-                        tagName,
-                        action: hasIt ? 'removed' : 'added',
-                        authorUid: this.currentUser.uid,
-                        authorName,
-                        source: 'people_list',
-                        sourceDocumentId: null,
-                        explanation: '',
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    });
+                }, ShepherdingCore.buildTagChange({
+                    tagId, tagName,
+                    action: hasIt ? 'removed' : 'added',
+                    authorUid: this.currentUser.uid,
+                    authorName,
+                    source: 'people_list',
+                }));
 
                 this.tagPerson.tags = newTags;
 

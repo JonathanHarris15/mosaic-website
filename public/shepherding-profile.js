@@ -1,9 +1,11 @@
 const NOTE_TYPES = ['Elder Check-in', 'Elder Interview', 'Elder Meeting', 'Life Update', 'Prayer Request', 'Other'];
 
-const URGENCY_LEVELS = ['urgent', 'somewhat_urgent', 'not_urgent'];
-const IMPORTANCE_LEVELS = ['important', 'somewhat_important', 'not_important'];
-const URGENCY_LABEL = { urgent: 'Urgent', somewhat_urgent: 'Somewhat Urgent', not_urgent: 'Not Urgent' };
-const IMPORTANCE_LABEL = { important: 'Important', somewhat_important: 'Somewhat Important', not_important: 'Not Important' };
+// Shepherding Status value model — single source of truth in shepherding-core.js.
+// The Profile uses the full label variant.
+const URGENCY_LEVELS = ShepherdingCore.URGENCY_LEVELS;
+const IMPORTANCE_LEVELS = ShepherdingCore.IMPORTANCE_LEVELS;
+const URGENCY_LABEL = ShepherdingCore.URGENCY_LABEL;
+const IMPORTANCE_LABEL = ShepherdingCore.IMPORTANCE_LABEL;
 
 // Kept outside Alpine to avoid reactive proxying of the TipTap editor object
 let _noteEditor = null;
@@ -820,25 +822,18 @@ document.addEventListener('alpine:init', () => {
             const shepherdingHidden = newTags.some(id => hidePeopleIds.has(id));
             const tagName = this.getTagName(tagId);
             try {
-                await db.collection('people').doc(this.personId).update({
+                await ShepherdingCore.commitPastoralChange(db, this.personId, {
                     tags: hasIt
                         ? firebase.firestore.FieldValue.arrayRemove(tagId)
                         : firebase.firestore.FieldValue.arrayUnion(tagId),
                     shepherdingHidden,
-                });
-                await db.collection('people').doc(this.personId)
-                    .collection('shepherding_activity').add({
-                        kind: 'tag_change',
-                        tagId,
-                        tagName,
-                        action: hasIt ? 'removed' : 'added',
-                        authorUid: this.currentUser.uid,
-                        authorName: this.currentUserName,
-                        source: 'profile',
-                        sourceDocumentId: null,
-                        explanation: '',
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    });
+                }, ShepherdingCore.buildTagChange({
+                    tagId, tagName,
+                    action: hasIt ? 'removed' : 'added',
+                    authorUid: this.currentUser.uid,
+                    authorName: this.currentUserName,
+                    source: 'profile',
+                }));
                 this.person.tags = newTags;
                 await this.loadActivity();
             } catch (e) {
@@ -996,22 +991,15 @@ document.addEventListener('alpine:init', () => {
             const previousStatus = this.person?.shepherdingStatus || null;
             const newStatus = clearing ? null : { urgency, importance };
             try {
-                await db.collection('people').doc(this.personId).update({
+                await ShepherdingCore.commitPastoralChange(db, this.personId, {
                     shepherdingStatus: newStatus,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                });
-                await db.collection('people').doc(this.personId)
-                    .collection('shepherding_activity').add({
-                        kind: 'status_change',
-                        previousStatus,
-                        newStatus,
-                        authorUid: this.currentUser.uid,
-                        authorName: this.currentUserName,
-                        source: 'profile',
-                        sourceDocumentId: null,
-                        explanation: '',
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    });
+                }, ShepherdingCore.buildStatusChange({
+                    previousStatus, newStatus,
+                    authorUid: this.currentUser.uid,
+                    authorName: this.currentUserName,
+                    source: 'profile',
+                }));
                 this.person.shepherdingStatus = newStatus;
                 await this.loadActivity();
                 this.showToast(clearing ? 'Status cleared' : 'Status updated');
@@ -1027,12 +1015,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         statusCellColor(urgency, importance) {
-            const urgIdx = URGENCY_LEVELS.indexOf(urgency);
-            const impIdx = IMPORTANCE_LEVELS.indexOf(importance);
-            const score = urgIdx + impIdx; // 0 = urgent+important, 4 = not_urgent+not_important
-            if (score <= 1) return 'border-error/40 bg-error-container/20';
-            if (score <= 3) return 'border-secondary/30 bg-secondary-container/20';
-            return 'border-outline-variant bg-surface-container';
+            return ShepherdingCore.statusCellColor(urgency, importance);
         },
 
         // ── Explanations ──────────────────────────────────────────────────────
@@ -1066,15 +1049,15 @@ document.addEventListener('alpine:init', () => {
 
         renderMiniMatrix(status) {
             if (!status) return '';
-            const URGENCY    = ['urgent', 'somewhat_urgent', 'not_urgent'];
-            const IMPORTANCE = ['important', 'somewhat_important', 'not_important'];
+            const URGENCY    = ShepherdingCore.URGENCY_LEVELS;
+            const IMPORTANCE = ShepherdingCore.IMPORTANCE_LEVELS;
             const ACTIVE_COLOR  = { 0: '#ba1a1a', 1: '#ba1a1a', 2: '#436082', 3: '#436082', 4: '#75777f' };
             const PASSIVE_COLOR = { 0: '#ffdad6', 1: '#ffdad6', 2: '#d1e4ff', 3: '#d1e4ff', 4: '#f0eee8' };
             let html = '<div style="display:grid;grid-template-columns:repeat(3,20px);gap:2px;">';
             IMPORTANCE.forEach(imp => {
                 URGENCY.forEach(urg => {
                     const active = status.urgency === urg && status.importance === imp;
-                    const score  = URGENCY.indexOf(urg) + IMPORTANCE.indexOf(imp);
+                    const score  = ShepherdingCore.statusScore(urg, imp);
                     const bg     = active ? (ACTIVE_COLOR[score] || '#75777f') : (PASSIVE_COLOR[score] || '#f0eee8');
                     html += `<div style="width:20px;height:20px;border-radius:3px;background:${bg};border:${active ? 'none' : '1px solid #c5c6d0'};display:flex;align-items:center;justify-content:center;">`;
                     if (active) html += '<span style="width:5px;height:5px;border-radius:50%;background:#fff;display:block;"></span>';

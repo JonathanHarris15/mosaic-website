@@ -142,12 +142,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         customZoneCellColor(urg, imp) {
-            const urgencies = ['urgent', 'somewhat_urgent', 'not_urgent'];
-            const importances = ['important', 'somewhat_important', 'not_important'];
-            const score = urgencies.indexOf(urg) + importances.indexOf(imp);
-            if (score <= 1) return 'border-error/40 bg-error-container/20';
-            if (score <= 3) return 'border-secondary/30 bg-secondary-container/20';
-            return 'border-outline-variant bg-surface-container';
+            return ShepherdingCore.statusCellColor(urg, imp);
         },
 
         // ── Navigation ────────────────────────────────────────────────────────

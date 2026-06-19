@@ -537,13 +537,13 @@ document.addEventListener('alpine:init', () => {
                 const newTags = [...current, tagId];
                 const hidePeopleIds = new Set(this.shepherdingTags.filter(t => t.hidePeople).map(t => t.id));
                 const shepherdingHidden = newTags.some(id => hidePeopleIds.has(id));
-                await db.collection('people').doc(personId).update({ tags: firebase.firestore.FieldValue.arrayUnion(tagId), shepherdingHidden });
-                await db.collection('people').doc(personId).collection('shepherding_activity').add({
-                    kind: 'tag_change', tagId, tagName, action: 'added',
-                    authorUid: this.currentUser.uid, authorName: this.currentUserName,
-                    source: 'document', sourceDocumentId: this.docId,
-                    explanation: '', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                });
+                await ShepherdingCore.commitPastoralChange(db, personId,
+                    { tags: firebase.firestore.FieldValue.arrayUnion(tagId), shepherdingHidden },
+                    ShepherdingCore.buildTagChange({
+                        tagId, tagName, action: 'added',
+                        authorUid: this.currentUser.uid, authorName: this.currentUserName,
+                        source: 'document', sourceDocumentId: this.docId,
+                    }));
                 if (idx !== -1) {
                     this.people = this.people.map((p, i) => i === idx ? { ...p, tags: newTags, shepherdingHidden } : p);
                 }
@@ -558,13 +558,13 @@ document.addEventListener('alpine:init', () => {
                 const newTags = current.filter(t => t !== tagId);
                 const hidePeopleIds = new Set(this.shepherdingTags.filter(t => t.hidePeople).map(t => t.id));
                 const shepherdingHidden = newTags.some(id => hidePeopleIds.has(id));
-                await db.collection('people').doc(personId).update({ tags: firebase.firestore.FieldValue.arrayRemove(tagId), shepherdingHidden });
-                await db.collection('people').doc(personId).collection('shepherding_activity').add({
-                    kind: 'tag_change', tagId, tagName, action: 'removed',
-                    authorUid: this.currentUser.uid, authorName: this.currentUserName,
-                    source: 'document', sourceDocumentId: this.docId,
-                    explanation: '', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                });
+                await ShepherdingCore.commitPastoralChange(db, personId,
+                    { tags: firebase.firestore.FieldValue.arrayRemove(tagId), shepherdingHidden },
+                    ShepherdingCore.buildTagChange({
+                        tagId, tagName, action: 'removed',
+                        authorUid: this.currentUser.uid, authorName: this.currentUserName,
+                        source: 'document', sourceDocumentId: this.docId,
+                    }));
                 if (idx !== -1) {
                     this.people = this.people.map((p, i) => i === idx ? { ...p, tags: newTags, shepherdingHidden } : p);
                 }
@@ -577,16 +577,14 @@ document.addEventListener('alpine:init', () => {
                 const idx = this.people.findIndex(p => p.id === personId);
                 const previousStatus = this.people[idx]?.shepherdingStatus || null;
                 const newStatus = (urgency && importance) ? { urgency, importance } : null;
-                await db.collection('people').doc(personId).update({
+                await ShepherdingCore.commitPastoralChange(db, personId, {
                     shepherdingStatus: newStatus,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                });
-                await db.collection('people').doc(personId).collection('shepherding_activity').add({
-                    kind: 'status_change', previousStatus, newStatus,
+                }, ShepherdingCore.buildStatusChange({
+                    previousStatus, newStatus,
                     authorUid: this.currentUser.uid, authorName: this.currentUserName,
                     source: 'document', sourceDocumentId: this.docId,
-                    explanation: '', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                });
+                }));
                 if (idx !== -1) {
                     this.people = this.people.map((p, i) => i === idx ? { ...p, shepherdingStatus: newStatus } : p);
                 }

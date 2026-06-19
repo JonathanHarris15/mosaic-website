@@ -498,10 +498,12 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
     let panelPersonTags = [];
     let statusMatrixPopup = null;
 
-    const PANEL_URGENCY_LEVELS    = ['urgent', 'somewhat_urgent', 'not_urgent'];
-    const PANEL_IMPORTANCE_LEVELS = ['important', 'somewhat_important', 'not_important'];
-    const PANEL_URGENCY_LABEL     = { urgent: 'Urgent', somewhat_urgent: 'Somewhat', not_urgent: 'Not Urgent' };
-    const PANEL_IMPORTANCE_LABEL  = { important: 'Important', somewhat_important: 'Somewhat', not_important: 'Not Imp.' };
+    // Status value model from shepherding-core.js; the Person Panel matrix uses
+    // the short label variant.
+    const PANEL_URGENCY_LEVELS    = ShepherdingCore.URGENCY_LEVELS;
+    const PANEL_IMPORTANCE_LEVELS = ShepherdingCore.IMPORTANCE_LEVELS;
+    const PANEL_URGENCY_LABEL     = ShepherdingCore.URGENCY_LABEL_SHORT;
+    const PANEL_IMPORTANCE_LABEL  = ShepherdingCore.IMPORTANCE_LABEL_SHORT;
 
     const statusBtn = document.createElement('button');
     statusBtn.type = 'button';
@@ -534,17 +536,14 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
         if (!previousStatus) return;
         destroyStatusPopup();
         try {
-            await db.collection('people').doc(currentAttrs.personId).update({
+            await ShepherdingCore.commitPastoralChange(db, currentAttrs.personId, {
                 shepherdingStatus: null,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            });
-            await db.collection('people').doc(currentAttrs.personId)
-                .collection('shepherding_activity').add({
-                    kind: 'status_change', previousStatus, newStatus: null,
-                    authorUid: _currentUserId, authorName: _currentUserName,
-                    source: 'document', sourceDocumentId: _currentDocId,
-                    explanation: '', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                });
+            }, ShepherdingCore.buildStatusChange({
+                previousStatus, newStatus: null,
+                authorUid: _currentUserId, authorName: _currentUserName,
+                source: 'document', sourceDocumentId: _currentDocId,
+            }));
             panelCurrentStatus = null;
             updatePanelStatusDisplay();
         } catch (e) { console.error('Error clearing panel status:', e); }
@@ -561,22 +560,16 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
         const newStatus = clearing ? null : { urgency, importance };
         destroyStatusPopup();
         try {
-            await db.collection('people').doc(currentAttrs.personId).update({
+            await ShepherdingCore.commitPastoralChange(db, currentAttrs.personId, {
                 shepherdingStatus: newStatus,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            });
-            await db.collection('people').doc(currentAttrs.personId)
-                .collection('shepherding_activity').add({
-                    kind: 'status_change',
-                    previousStatus,
-                    newStatus,
-                    authorUid: _currentUserId,
-                    authorName: _currentUserName,
-                    source: 'document',
-                    sourceDocumentId: _currentDocId,
-                    explanation: '',
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                });
+            }, ShepherdingCore.buildStatusChange({
+                previousStatus, newStatus,
+                authorUid: _currentUserId,
+                authorName: _currentUserName,
+                source: 'document',
+                sourceDocumentId: _currentDocId,
+            }));
             panelCurrentStatus = newStatus;
             updatePanelStatusDisplay();
         } catch (e) { console.error('Error setting panel status:', e); }
@@ -737,23 +730,23 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
                     return { id: trimmed, name: trimmed };
                 },
                 onTagAdd: async (tagId, tagName) => {
-                    await db.collection('people').doc(attrs.personId).update({ tags: firebase.firestore.FieldValue.arrayUnion(tagId) });
-                    await db.collection('people').doc(attrs.personId).collection('shepherding_activity').add({
-                        kind: 'tag_change', tagId, tagName, action: 'added',
-                        authorUid: _currentUserId, authorName: _currentUserName,
-                        source: 'document', sourceDocumentId: _currentDocId,
-                        explanation: '', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    });
+                    await ShepherdingCore.commitPastoralChange(db, attrs.personId,
+                        { tags: firebase.firestore.FieldValue.arrayUnion(tagId) },
+                        ShepherdingCore.buildTagChange({
+                            tagId, tagName, action: 'added',
+                            authorUid: _currentUserId, authorName: _currentUserName,
+                            source: 'document', sourceDocumentId: _currentDocId,
+                        }));
                     if (!panelPersonTags.includes(tagId)) panelPersonTags = [...panelPersonTags, tagId];
                 },
                 onTagRemove: async (tagId, tagName) => {
-                    await db.collection('people').doc(attrs.personId).update({ tags: firebase.firestore.FieldValue.arrayRemove(tagId) });
-                    await db.collection('people').doc(attrs.personId).collection('shepherding_activity').add({
-                        kind: 'tag_change', tagId, tagName, action: 'removed',
-                        authorUid: _currentUserId, authorName: _currentUserName,
-                        source: 'document', sourceDocumentId: _currentDocId,
-                        explanation: '', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    });
+                    await ShepherdingCore.commitPastoralChange(db, attrs.personId,
+                        { tags: firebase.firestore.FieldValue.arrayRemove(tagId) },
+                        ShepherdingCore.buildTagChange({
+                            tagId, tagName, action: 'removed',
+                            authorUid: _currentUserId, authorName: _currentUserName,
+                            source: 'document', sourceDocumentId: _currentDocId,
+                        }));
                     panelPersonTags = panelPersonTags.filter(t => t !== tagId);
                 },
                 onStatusChange: async (urg, imp) => {
