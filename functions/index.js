@@ -273,8 +273,12 @@ exports.updateUserPasswordSelf = onCall({cors: true, region: "us-central1"}, asy
  * when no change is needed, which keeps the two triggers from looping into
  * each other.
  */
-const MEMBER_OR_HIGHER = ["member", "editor", "elder", "admin", "super_admin"];
-const MEMBER_TAG = "member";
+const {
+  MEMBER_TAG,
+  isMemberOrHigher,
+  shouldAddMemberTag,
+  shouldPromoteToMember,
+} = require("./member-sync");
 
 /**
  * Direction A: a user's role grants the linked person the "member" tag.
@@ -288,7 +292,7 @@ exports.syncRoleToMemberTag = onDocumentWritten(
 
       const personId = after.personId;
       if (!personId) return; // Not linked to a person.
-      if (!MEMBER_OR_HIGHER.includes(after.role)) return; // Viewer/unknown: never tag, never untag.
+      if (!isMemberOrHigher(after.role)) return; // Viewer/unknown: never tag, never untag (skip the read).
 
       const db = admin.firestore();
       const personRef = db.collection("people").doc(personId);
@@ -296,7 +300,7 @@ exports.syncRoleToMemberTag = onDocumentWritten(
       if (!personSnap.exists) return;
 
       const tags = personSnap.data().tags || [];
-      if (tags.includes(MEMBER_TAG)) return; // Already tagged — skip write to avoid a trigger loop.
+      if (!shouldAddMemberTag(after.role, tags)) return; // Already tagged — skip write to avoid a trigger loop.
 
       // Make sure the tag exists in the directory's tag registry so it shows in the Tags Manager.
       await db.collection("people_tags").doc(MEMBER_TAG).set({name: MEMBER_TAG}, {merge: true});
@@ -329,7 +333,7 @@ exports.syncMemberTagToRole = onDocumentWritten(
       if (!userSnap.exists) return;
 
       const role = userSnap.data().role || "viewer";
-      if (MEMBER_OR_HIGHER.includes(role)) return; // Already member+ — never demote, and skip write to avoid a loop.
+      if (!shouldPromoteToMember(role)) return; // Already member+ — never demote, and skip write to avoid a loop.
 
       await userRef.update({role: MEMBER_TAG});
       log(`Promoted user ${userId} from '${role}' to '${MEMBER_TAG}' (linked person has the member tag).`);
