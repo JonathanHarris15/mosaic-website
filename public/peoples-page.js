@@ -569,6 +569,13 @@ document.addEventListener('alpine:init', () => {
                     return !personTags.some(tag => this.tagMetadata[tag]?.hidePeople) && !p.shepherdingHidden;
                 });
             }
+
+            // Non-editors see a directory of members only — people without the Member
+            // tag (visitors, prayer contacts, etc.) are hidden from them. Editors and
+            // above see everyone so they can manage and tag non-members.
+            if (!this.canEdit) {
+                list = list.filter(p => (p.tags || []).includes('Member'));
+            }
             
             if (this.searchTerm) {
                 const term = this.searchTerm.toLowerCase();
