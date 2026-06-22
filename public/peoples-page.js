@@ -42,6 +42,9 @@ document.addEventListener('alpine:init', () => {
         tagMetadata: {}, // { tagName: { hiddenFromOthers: bool, hidePeople: bool } }
         selectedTags: [],
         currentUserRole: 'viewer',
+        // Super-admin debug: when true, the page behaves as if the user were a plain
+        // member (see effectiveRole). Never affects what a non-super-admin sees.
+        viewAsMember: false,
 
         async init() {
             auth.onAuthStateChanged(async (user) => {
@@ -61,13 +64,35 @@ document.addEventListener('alpine:init', () => {
             });
         },
 
-        get isAdmin() {
-            return ['elder', 'super_admin'].includes(this.currentUserRole);
+        // The real account role — used only to decide who gets the debug toggle.
+        // All page gating goes through effectiveRole so "View as Member" is honoured.
+        get isSuperAdmin() {
+            return this.currentUserRole === 'super_admin';
         },
 
-        // Members get a read-only view of the directory; editors and above can modify records.
+        // The role the page should behave as. A super admin previewing as a member
+        // collapses to 'member'; everyone else is just their real role.
+        get effectiveRole() {
+            return (this.isSuperAdmin && this.viewAsMember) ? 'member' : this.currentUserRole;
+        },
+
+        get isAdmin() {
+            return ['elder', 'super_admin'].includes(this.effectiveRole);
+        },
+
+        // Members get a read-only view of the directory; editors and above can modify
+        // records and see the Tags Manager.
         get canEdit() {
-            return ['editor', 'elder', 'admin', 'super_admin'].includes(this.currentUserRole);
+            return ['editor', 'elder', 'admin', 'super_admin'].includes(this.effectiveRole);
+        },
+
+        // Super-admin only: flip the page between the real super-admin view and a
+        // preview of what a plain member sees. Reloads tags so hidden-from-others
+        // visibility matches the previewed role.
+        toggleViewAsMember() {
+            if (!this.isSuperAdmin) return;
+            this.viewAsMember = !this.viewAsMember;
+            this.loadTags();
         },
 
         async loadTags() {

@@ -147,8 +147,8 @@
     </header>
 
     <main class="flex-grow flex flex-col md:flex-row gap-margin px-margin pb-md pt-base max-w-[1600px] w-full mx-auto relative z-10">
-        <!-- Sidebar: Tags Manager -->
-        <aside class="w-full md:w-80 flex-shrink-0 flex flex-col gap-4">
+        <!-- Sidebar: Tags Manager — editors and above only -->
+        <aside x-show="canEdit" class="w-full md:w-80 flex-shrink-0 flex flex-col gap-4">
             <section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col shadow-sm">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="font-headline-md text-sm uppercase tracking-wider text-primary flex items-center gap-2 flex-shrink-0">
@@ -654,6 +654,17 @@
                 </div>
             </template>
         </div>
+    </div>
+
+    <!-- Super-admin debug: preview the page as a plain Member -->
+    <div x-show="isSuperAdmin" class="fixed bottom-4 left-4 z-50" x-cloak>
+        <button @click="toggleViewAsMember()"
+                :class="viewAsMember ? 'bg-amber-500 text-white border-amber-600 shadow-lg' : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant shadow-md'"
+                class="flex items-center gap-2 px-3 py-2 rounded-full border text-[10px] uppercase tracking-widest font-label-md transition-all hover:shadow-xl"
+                :title="viewAsMember ? 'Previewing as Member — click to return to Super Admin' : 'Preview this page as a Member'">
+            <span class="material-symbols-outlined text-sm" x-text="viewAsMember ? 'visibility' : 'admin_panel_settings'"></span>
+            <span x-text="viewAsMember ? 'Viewing as Member' : 'View as Member'"></span>
+        </button>
     </div>
 
     <script src="peoples-page.js"></script>
