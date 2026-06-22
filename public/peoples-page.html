@@ -282,6 +282,14 @@
                                             <span class="material-symbols-outlined text-[14px]">call</span>
                                             <span x-text="person.contact.phone"></span>
                                         </div>
+                                        <div x-show="person.contact?.address" class="flex items-center gap-1.5 text-on-surface-variant text-xs">
+                                            <span class="material-symbols-outlined text-[14px]">home</span>
+                                            <span x-text="person.contact.address"></span>
+                                        </div>
+                                        <div x-show="person.birthday" class="flex items-center gap-1.5 text-on-surface-variant text-xs">
+                                            <span class="material-symbols-outlined text-[14px]">cake</span>
+                                            <span x-text="person.birthday"></span>
+                                        </div>
                                         <div class="flex items-center flex-wrap gap-x-3 gap-y-1 pt-1.5">
                                             <!-- Last Prayed For & Involvements Row -->
                                             <div class="flex items-center gap-2">
@@ -296,8 +304,8 @@
                                     </div>
                                     <!-- Cache Bust: 2024-05-15 18:42 -->
 
-                                    <!-- Tag Management -->
-                                    <div class="mt-4 border-t border-surface-variant/30 pt-3">
+                                    <!-- Tag Management — editors and above only; members see contact details instead -->
+                                    <div x-show="canEdit" class="mt-4 border-t border-surface-variant/30 pt-3">
                                         <p class="font-label-md text-[9px] uppercase tracking-widest text-on-surface-variant mb-2">Tags</p>
                                         <div class="flex flex-wrap gap-1.5">
                                             <!-- Existing Tags -->
