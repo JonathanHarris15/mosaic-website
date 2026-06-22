@@ -45,6 +45,10 @@ document.addEventListener('alpine:init', () => {
         // Super-admin debug: when true, the page behaves as if the user were a plain
         // member (see effectiveRole). Never affects what a non-super-admin sees.
         viewAsMember: false,
+        // Page content stays hidden until the role check passes, so a viewer who
+        // navigates straight to the URL never sees the directory shell flash before
+        // the redirect. Only member-or-higher ever flips this true.
+        authorized: false,
 
         async init() {
             auth.onAuthStateChanged(async (user) => {
@@ -59,6 +63,7 @@ document.addEventListener('alpine:init', () => {
                     window.location.href = 'index.html';
                     return;
                 }
+                this.authorized = true;
                 this.loadPeople();
                 this.loadTags();
             });

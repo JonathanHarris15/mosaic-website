@@ -146,7 +146,7 @@
         </div>
     </header>
 
-    <main class="flex-grow flex flex-col md:flex-row gap-margin px-margin pb-md pt-base max-w-[1600px] w-full mx-auto relative z-10">
+    <main x-show="authorized" class="flex-grow flex flex-col md:flex-row gap-margin px-margin pb-md pt-base max-w-[1600px] w-full mx-auto relative z-10">
         <!-- Sidebar: Tags Manager — editors and above only -->
         <aside x-show="canEdit" class="w-full md:w-80 flex-shrink-0 flex flex-col gap-4">
             <section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col shadow-sm">
