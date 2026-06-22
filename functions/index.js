@@ -275,7 +275,9 @@ exports.updateUserPasswordSelf = onCall({cors: true, region: "us-central1"}, asy
  */
 const {
   MEMBER_TAG,
+  MEMBER_ROLE,
   isMemberOrHigher,
+  hasMemberTag,
   shouldAddMemberTag,
   shouldPromoteToMember,
 } = require("./member-sync");
@@ -325,7 +327,7 @@ exports.syncMemberTagToRole = onDocumentWritten(
       const userId = after.userId;
       if (!userId) return; // Not linked to a user.
       const tags = after.tags || [];
-      if (!tags.includes(MEMBER_TAG)) return; // No member tag: never promote, never demote.
+      if (!hasMemberTag(tags)) return; // No member tag (any casing): never promote, never demote.
 
       const db = admin.firestore();
       const userRef = db.collection("users").doc(userId);
@@ -335,8 +337,8 @@ exports.syncMemberTagToRole = onDocumentWritten(
       const role = userSnap.data().role || "viewer";
       if (!shouldPromoteToMember(role)) return; // Already member+ — never demote, and skip write to avoid a loop.
 
-      await userRef.update({role: MEMBER_TAG});
-      log(`Promoted user ${userId} from '${role}' to '${MEMBER_TAG}' (linked person has the member tag).`);
+      await userRef.update({role: MEMBER_ROLE});
+      log(`Promoted user ${userId} from '${role}' to '${MEMBER_ROLE}' (linked person has the member tag).`);
     },
 );
 
