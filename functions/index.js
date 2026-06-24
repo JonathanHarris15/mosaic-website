@@ -1,7 +1,34 @@
-const {onCall} = require("firebase-functions/v2/https");
+const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
 const {onDocumentWritten} = require("firebase-functions/v2/firestore");
+const {defineSecret} = require("firebase-functions/params");
 const {log} = require("firebase-functions/logger");
 const admin = require("firebase-admin");
+const {
+  toE164US,
+  isAdminRole,
+  interpretQuota,
+  interpretSend,
+  parseInboundReply,
+  verifyTextbeltSignature,
+} = require("./sms");
+
+/**
+ * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
+ *   firebase functions:secrets:set TEXTBELT_KEY
+ * Functions that send or check SMS declare this in their `secrets` option.
+ */
+const TEXTBELT_KEY = defineSecret("TEXTBELT_KEY");
+
+/**
+ * Public URL of the smsInbound HTTP function. Textbelt POSTs reply webhooks
+ * here so test-text replies land in the sms_test_replies stack. This is the
+ * stable cloudfunctions.net alias for the deployed function.
+ */
+const SMS_REPLY_WEBHOOK_URL =
+  "https://us-central1-mosaic-hymn-database.cloudfunctions.net/smsInbound";
+
+/** Firestore collection holding inbound replies to test texts. */
+const SMS_REPLIES_COLLECTION = "sms_test_replies";
 
 /**
  * @fileoverview Firebase Cloud Functions for the Mosaic Website.
@@ -339,6 +366,148 @@ exports.syncMemberTagToRole = onDocumentWritten(
 
       await userRef.update({role: MEMBER_ROLE});
       log(`Promoted user ${userId} from '${role}' to '${MEMBER_ROLE}' (linked person has the member tag).`);
+    },
+);
+
+/* ------------------------------------------------------------------ *
+ * SMS admin tools (Textbelt) — backing the Admin Dashboard.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Throws unless the authenticated caller is an admin/super_admin. The Admin
+ * Dashboard is admin-only, but callable functions are reachable directly, so the
+ * SMS tools re-check the role server-side rather than trusting the UI gate.
+ * @param {import("firebase-admin").firestore.Firestore} db
+ * @param {Object|undefined} authCtx - request.auth
+ * @return {Promise<void>}
+ */
+async function assertAdmin(db, authCtx) {
+  if (!authCtx) {
+    throw new HttpsError("unauthenticated", "Sign in to use the SMS tools.");
+  }
+  const callerDoc = await db.collection("users").doc(authCtx.uid).get();
+  if (!callerDoc.exists || !isAdminRole(callerDoc.data().role)) {
+    throw new HttpsError("permission-denied", "Admins only.");
+  }
+}
+
+/**
+ * Reports whether a Textbelt key is configured and how many texts remain.
+ * Admin-gated. Returns {configured, quotaRemaining, error}.
+ */
+exports.smsCheckQuota = onCall(
+    {cors: true, region: "us-central1", secrets: [TEXTBELT_KEY]},
+    async (request) => {
+      await assertAdmin(admin.firestore(), request.auth);
+
+      const key = TEXTBELT_KEY.value();
+      if (!key) return interpretQuota(null, false);
+
+      try {
+        const resp = await fetch(`https://textbelt.com/quota/${key}`);
+        const json = await resp.json();
+        const result = interpretQuota(json, true);
+        log(`smsCheckQuota: configured, quotaRemaining=${result.quotaRemaining}.`);
+        return result;
+      } catch (err) {
+        log(`smsCheckQuota: Textbelt request failed: ${err.message}`);
+        throw new HttpsError("unavailable", "Could not reach Textbelt to check quota.");
+      }
+    },
+);
+
+/**
+ * Sends a one-off test SMS so admins can verify outbound delivery (and, if a
+ * reply webhook is wired later, two-way messaging). Admin-gated; spends one
+ * credit per send. Accepts {phone, message?} and returns the send result.
+ */
+exports.smsSendTest = onCall(
+    {cors: true, region: "us-central1", secrets: [TEXTBELT_KEY]},
+    async (request) => {
+      await assertAdmin(admin.firestore(), request.auth);
+
+      const key = TEXTBELT_KEY.value();
+      if (!key) {
+        throw new HttpsError(
+            "failed-precondition",
+            "No Textbelt key is configured. Set TEXTBELT_KEY first.");
+      }
+
+      const to = toE164US(request.data && request.data.phone);
+      if (!to) {
+        throw new HttpsError("invalid-argument", "Enter a valid US phone number.");
+      }
+
+      const message = (request.data && request.data.message || "").trim() ||
+        "Mosaic Church SMS test — outbound texting works.";
+
+      try {
+        const resp = await fetch("https://textbelt.com/text", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            phone: to,
+            message,
+            key,
+            // Textbelt's parameter is replyWebhookUrl (not replyWebhook); with
+            // the wrong name it is silently ignored and no replies are forwarded.
+            replyWebhookUrl: SMS_REPLY_WEBHOOK_URL,
+          }),
+        });
+        const json = await resp.json();
+        const result = interpretSend(json);
+        log(`smsSendTest: to=${to} success=${result.success} ` +
+          `textId=${result.textId} quotaRemaining=${result.quotaRemaining}.`);
+        return result;
+      } catch (err) {
+        log(`smsSendTest: Textbelt request failed: ${err.message}`);
+        throw new HttpsError("unavailable", "Could not reach Textbelt to send the test.");
+      }
+    },
+);
+
+/**
+ * Public webhook that Textbelt POSTs to when someone replies to a test text.
+ * Replies are appended to the sms_test_replies stack for an admin to review and
+ * clear from the Admin Dashboard. Always returns 200 so Textbelt does not retry;
+ * unparseable/empty bodies are acknowledged and ignored.
+ *
+ * Forged POSTs are rejected by verifying Textbelt's HMAC-SHA256 signature over
+ * the raw body using the API key as the secret, so only Textbelt can write here.
+ */
+exports.smsInbound = onRequest(
+    {cors: false, region: "us-central1", secrets: [TEXTBELT_KEY]},
+    async (req, res) => {
+      const ok = verifyTextbeltSignature({
+        apiKey: TEXTBELT_KEY.value(),
+        timestamp: req.get("X-textbelt-timestamp"),
+        signature: req.get("X-textbelt-signature"),
+        rawBody: req.rawBody ? req.rawBody.toString("utf8") : "",
+        nowMs: Date.now(),
+      });
+      if (!ok) {
+        log("smsInbound: rejected POST with missing/invalid signature.");
+        res.status(401).send("unauthorized");
+        return;
+      }
+
+      const reply = parseInboundReply(req.body);
+      if (!reply) {
+        res.status(200).send("ignored");
+        return;
+      }
+      try {
+        await admin.firestore().collection(SMS_REPLIES_COLLECTION).add({
+          ...reply,
+          receivedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        log(`smsInbound: stored reply from ${reply.fromNumber} ` +
+          `(textId=${reply.textId}).`);
+        res.status(200).send("ok");
+      } catch (err) {
+        log(`smsInbound: failed to store reply: ${err.message}`);
+        res.status(200).send("error-logged");
+      }
     },
 );
 

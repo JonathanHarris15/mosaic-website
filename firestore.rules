@@ -115,5 +115,18 @@ service cloud.firestore {
     match /{path=**}/shepherding_notes/{noteId} {
       allow read: if isElder();
     }
+
+    // Inbound replies to SMS test texts. Written only by the smsInbound webhook
+    // (admin SDK, bypasses rules); admins read and clear them from the Admin
+    // Dashboard. No client writes.
+    match /sms_test_replies/{replyId} {
+      allow read, delete: if isAdmin();
+    }
+
+    // App-wide config edited from the Admin Dashboard (e.g. the prayer-request
+    // SMS message templates). The server reads these via the admin SDK.
+    match /app_config/{configId} {
+      allow read, write: if isAdmin();
+    }
   }
 }

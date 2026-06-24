@@ -300,6 +300,23 @@
                     `;
                     grid.appendChild(card);
                 }
+
+                // Admin Dashboard — admins and super_admins. Hosts the admin tools (SMS, etc.).
+                if (grid && !document.getElementById('admin-dashboard-card') &&
+                    ['admin', 'super_admin'].includes(userRole)) {
+                    const card = document.createElement('a');
+                    card.id = 'admin-dashboard-card';
+                    card.href = 'admin-dashboard.html';
+                    card.className = cardClass;
+                    card.innerHTML = `
+                        <div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
+                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>admin_panel_settings</span>
+                        </div>
+                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Admin Dashboard</h2>
+                        <p class="font-body-md text-body-md text-on-surface-variant">SMS &amp; system admin tools.</p>
+                    `;
+                    grid.appendChild(card);
+                }
             } else {
                 greetingEl.textContent = baseGreeting;
             }
