@@ -38,6 +38,7 @@ const DEFAULT_PRAYER_MESSAGES = {
     "here whenever you're ready.",
   thankyou: "Thank you, {name}. We'll be lifting this up in prayer this " +
     "Sunday. — Mosaic Church",
+  elderDigest: "Mosaic prayer requests for {date}:\n{requests}",
 };
 
 /**
@@ -69,6 +70,7 @@ function resolveTemplates(config) {
     initial: pick("initial"),
     reminder: pick("reminder"),
     thankyou: pick("thankyou"),
+    elderDigest: pick("elderDigest"),
   };
 }
 
@@ -221,6 +223,64 @@ function buildPrayerRequestNote(args) {
   };
 }
 
+/**
+ * Decides whether the elder digest should be sent after a Prayer Request write.
+ * Fires only when every designated subject is now filled, the write that
+ * completed the set came by text reply, and the set was not already complete
+ * before this write (so manual fills and later edits never trigger it).
+ * @param {Object} args
+ * @param {Array<{filled: boolean}>} args.subjectStates - one per designated subject
+ * @param {?string} args.changedSource - prayerRequestSource of the just-written doc
+ * @param {boolean} args.wasCompleteBefore - all subjects filled before this write
+ * @return {boolean}
+ */
+function elderDigestDecision({subjectStates, changedSource, wasCompleteBefore}) {
+  if (!Array.isArray(subjectStates) || subjectStates.length === 0) return false;
+  if (!subjectStates.every((s) => s && s.filled)) return false;
+  if (wasCompleteBefore) return false;
+  return changedSource === "reply";
+}
+
+const DIGEST_MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const DIGEST_WEEKDAYS = [
+  "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+];
+
+/**
+ * Renders a YYYY-MM-DD service date as a friendly "Weekday, Month D, YYYY".
+ * Computed in UTC so it is deterministic regardless of host timezone.
+ * @param {string} serviceDate
+ * @return {string}
+ */
+function formatServiceDate(serviceDate) {
+  const [y, m, d] = String(serviceDate || "").split("-").map(Number);
+  if (!y || !m || !d) return String(serviceDate || "");
+  const weekday = DIGEST_WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${weekday}, ${DIGEST_MONTHS[m - 1]} ${d}, ${y}`;
+}
+
+/**
+ * Renders the elder digest: substitutes {date} with the friendly service date
+ * and {requests} with one "Name — request" line per filled subject.
+ * @param {string} [template]
+ * @param {{serviceDate: string, subjects: Array<{name: string, request: string}>}} data
+ * @return {string}
+ */
+function renderElderDigest(template, data) {
+  const tpl = (typeof template === "string" && template) ?
+    template : DEFAULT_PRAYER_MESSAGES.elderDigest;
+  const {serviceDate, subjects} = data;
+  const requests = (subjects || [])
+      .map((s) => `${s.name} — ${s.request}`)
+      .join("\n");
+  return tpl
+      .split("{date}").join(formatServiceDate(serviceDate))
+      .split("{requests}").join(requests);
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     CHURCH_TIMEZONE,
@@ -238,5 +298,8 @@ if (typeof module !== "undefined" && module.exports) {
     manualPrayerRequestKind,
     tiptapFromText,
     buildPrayerRequestNote,
+    elderDigestDecision,
+    formatServiceDate,
+    renderElderDigest,
   };
 }

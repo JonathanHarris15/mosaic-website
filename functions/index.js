@@ -863,3 +863,126 @@ exports.sendPrayerRequestNow = onCall(
     },
 );
 
+/**
+ * Elder digest. When every designated pastoral-prayer subject for a service has
+ * a filled Prayer Request — and the fill that completed the set came by text
+ * reply — text everyone with the "Elder" tag a summary (who, the date, each
+ * request). A set completed manually (an elder already in the system) sends
+ * nothing. Fires at most once per service via a deterministic marker doc.
+ *
+ * This trigger catches both fill paths because both write the same
+ * prayer_requests doc — the texted reply (applyPrayerRequestReply) and the
+ * manual save (the Service Builder client). It is independent of the automatic-
+ * send kill switch, which governs only the outbound request texts.
+ */
+exports.notifyEldersOnPrayerComplete = onDocumentWritten(
+    {
+      document: "people/{personId}/prayer_requests/{serviceDate}",
+      region: "us-central1",
+      secrets: [TEXTBELT_KEY],
+    },
+    async (event) => {
+      const after = event.data && event.data.after && event.data.after.exists ?
+        event.data.after.data() : null;
+      if (!after) return; // Deleted — nothing to do.
+      // Only a fill (non-empty request) can complete the set.
+      if (!(after.prayerRequest || "").trim()) return;
+
+      const {personId, serviceDate} = event.params;
+      const before = event.data.before && event.data.before.exists ?
+        event.data.before.data() : null;
+      const db = admin.firestore();
+
+      // Designated subjects for this service.
+      const svcSnap = await db.collection("services").doc(serviceDate).get();
+      if (!svcSnap.exists) return;
+      const liturgy = svcSnap.data().liturgy || {};
+      const subjects = [liturgy.prayerMale, liturgy.prayerFemale]
+          .filter((s) => s && s.id);
+      if (subjects.length === 0) return;
+
+      // Current request docs for each subject (the changed one uses the write's
+      // after-state; the others are unchanged by this event).
+      const reqSnaps = await Promise.all(subjects.map((s) =>
+        db.collection("people").doc(s.id)
+            .collection("prayer_requests").doc(serviceDate).get()));
+      const filledText = (i) => {
+        if (subjects[i].id === personId) return (after.prayerRequest || "").trim();
+        const snap = reqSnaps[i];
+        return ((snap.exists && snap.data().prayerRequest) || "").trim();
+      };
+
+      const subjectStates = subjects.map((s, i) => ({filled: !!filledText(i)}));
+      const wasCompleteBefore = subjects.every((s, i) =>
+        s.id === personId ?
+          !!(before && (before.prayerRequest || "").trim()) :
+          !!filledText(i));
+
+      if (!pr.elderDigestDecision({
+        subjectStates,
+        changedSource: after.prayerRequestSource || null,
+        wasCompleteBefore,
+      })) {
+        return;
+      }
+
+      // Idempotency lock: a deterministic marker doc, created atomically. If it
+      // already exists, another invocation has the digest.
+      const markerRef = db.collection(SMS_MESSAGES_COLLECTION)
+          .doc(`elder_digest_${serviceDate}`);
+      try {
+        await markerRef.create({
+          direction: "outbound",
+          purpose: "elder_digest",
+          serviceDate,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        log(`Elder digest already handled for ${serviceDate}; skipping.`);
+        return;
+      }
+
+      // Render the digest from each subject's name + request.
+      const subjectLines = subjects.map((s, i) => ({
+        name: s.name || "", request: filledText(i),
+      }));
+      const {templates} = await loadPrayerConfig(db);
+      const body = pr.renderElderDigest(templates.elderDigest, {
+        serviceDate, subjects: subjectLines,
+      });
+
+      // Recipients: everyone with the "Elder" tag and a phone, deduped.
+      const eldersSnap = await db.collection("people")
+          .where("tags", "array-contains", "Elder").get();
+      const seen = new Set();
+      const recipients = [];
+      for (const doc of eldersSnap.docs) {
+        const to = toE164US(doc.data().contact && doc.data().contact.phone);
+        if (!to || seen.has(to)) continue;
+        seen.add(to);
+        recipients.push({personId: doc.id, to});
+      }
+      if (recipients.length === 0) {
+        log(`Elder digest ${serviceDate}: no Elder-tagged recipients with a phone.`);
+        return;
+      }
+
+      for (const r of recipients) {
+        try {
+          const result = await sendViaTextbelt({to: r.to, body, withReplyWebhook: false});
+          if (result.success) {
+            await recordOutbound(db, {
+              to: r.to, body, textId: result.textId,
+              purpose: "elder_digest", personId: r.personId, serviceDate,
+            });
+          } else {
+            log(`Elder digest send failed for ${r.to}: ${result.error}`);
+          }
+        } catch (e) {
+          log(`Elder digest send error for ${r.to}: ${e.message}`);
+        }
+      }
+      log(`Elder digest sent for ${serviceDate} to ${recipients.length} elder(s).`);
+    },
+);
+

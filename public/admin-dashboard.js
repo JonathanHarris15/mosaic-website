@@ -17,6 +17,10 @@ const PRAYER_MESSAGE_DEFAULTS = {
         "here whenever you're ready.",
     thankyou: "Thank you, {name}. We'll be lifting this up in prayer this " +
         "Sunday. — Mosaic Church",
+    // Sent to Elder-tagged people once a service's requests are all in by text.
+    // Uses {date} and {requests} (not {name}); {requests} auto-builds one
+    // "Name — request" line per subject.
+    elderDigest: "Mosaic prayer requests for {date}:\n{requests}",
 };
 
 document.addEventListener('alpine:init', () => {
@@ -44,9 +48,10 @@ document.addEventListener('alpine:init', () => {
         // Prayer-request message templates
         prayerMessages: { ...PRAYER_MESSAGE_DEFAULTS },
         prayerFields: [
-            { key: 'initial', label: 'Initial request', help: 'Sent first, a few days before the service.' },
-            { key: 'reminder', label: 'Reminder', help: 'Sent closer to the service if no reply yet.' },
-            { key: 'thankyou', label: 'Thank-you reply', help: 'Auto-reply after someone sends their request.' },
+            { key: 'initial', label: 'Initial request', help: 'Sent first, a few days before the service. Uses {name}.' },
+            { key: 'reminder', label: 'Reminder', help: 'Sent closer to the service if no reply yet. Uses {name}.' },
+            { key: 'thankyou', label: 'Thank-you reply', help: 'Auto-reply after someone sends their request. Uses {name}.' },
+            { key: 'elderDigest', label: 'Elder digest', help: 'Texted to Elder-tagged people once all of a service\'s requests are in by reply. Uses {date} and {requests}.' },
         ],
         prayerSaving: false,
         autoSendEnabled: false,
@@ -179,6 +184,7 @@ document.addEventListener('alpine:init', () => {
                     initial: saved.initial || PRAYER_MESSAGE_DEFAULTS.initial,
                     reminder: saved.reminder || PRAYER_MESSAGE_DEFAULTS.reminder,
                     thankyou: saved.thankyou || PRAYER_MESSAGE_DEFAULTS.thankyou,
+                    elderDigest: saved.elderDigest || PRAYER_MESSAGE_DEFAULTS.elderDigest,
                 };
                 this.autoSendEnabled = !!saved.autoSendEnabled;
             } catch (e) {
@@ -194,6 +200,7 @@ document.addEventListener('alpine:init', () => {
                     initial: this.prayerMessages.initial.trim(),
                     reminder: this.prayerMessages.reminder.trim(),
                     thankyou: this.prayerMessages.thankyou.trim(),
+                    elderDigest: this.prayerMessages.elderDigest.trim(),
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                     updatedBy: this.currentUser.uid,
                 }, { merge: true });

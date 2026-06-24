@@ -200,3 +200,90 @@ test('buildPrayerRequestNote shapes a "Prayer Request" Shepherding Note', () => 
     assert.strictEqual(
         note.contentJson.content[0].content[0].text, 'Please pray for my mother.');
 });
+
+// ── Elder digest decision ──────────────────────────────────────────────────
+// The digest fires the moment all designated subjects are filled AND the fill
+// that completed the set came by text reply. It never fires when the completing
+// fill was manual (an elder in the system already sees it), nor on edits to an
+// already-complete set.
+
+const allFilled = [{ filled: true }, { filled: true }];
+
+test('digest: text reply completes the pair → send', () => {
+    assert.strictEqual(pr.elderDigestDecision({
+        subjectStates: allFilled, changedSource: 'reply', wasCompleteBefore: false,
+    }), true);
+});
+
+test('digest: manual fill completes the pair → no send', () => {
+    assert.strictEqual(pr.elderDigestDecision({
+        subjectStates: allFilled, changedSource: 'elder', wasCompleteBefore: false,
+    }), false);
+});
+
+test('digest: pair already complete before this write → no send (edit)', () => {
+    assert.strictEqual(pr.elderDigestDecision({
+        subjectStates: allFilled, changedSource: 'reply', wasCompleteBefore: true,
+    }), false);
+});
+
+test('digest: not all subjects filled yet → no send', () => {
+    assert.strictEqual(pr.elderDigestDecision({
+        subjectStates: [{ filled: true }, { filled: false }],
+        changedSource: 'reply', wasCompleteBefore: false,
+    }), false);
+});
+
+test('digest: a single-subject service fires when that one is texted', () => {
+    assert.strictEqual(pr.elderDigestDecision({
+        subjectStates: [{ filled: true }], changedSource: 'reply', wasCompleteBefore: false,
+    }), true);
+});
+
+test('digest: no designated subjects → never', () => {
+    assert.strictEqual(pr.elderDigestDecision({
+        subjectStates: [], changedSource: 'reply', wasCompleteBefore: false,
+    }), false);
+});
+
+// ── Elder digest rendering ─────────────────────────────────────────────────
+test('formatServiceDate renders a friendly Sunday date', () => {
+    assert.strictEqual(pr.formatServiceDate('2026-06-28'), 'Sunday, June 28, 2026');
+});
+
+test('renderElderDigest substitutes {date} and builds {requests} lines', () => {
+    const msg = pr.renderElderDigest('Prayer requests for {date}:\n{requests}', {
+        serviceDate: '2026-06-28',
+        subjects: [
+            { name: 'Jane Doe', request: 'Pray for my mom.' },
+            { name: 'John Smith', request: 'Safe travels.' },
+        ],
+    });
+    assert.strictEqual(msg,
+        'Prayer requests for Sunday, June 28, 2026:\n' +
+        'Jane Doe — Pray for my mom.\n' +
+        'John Smith — Safe travels.');
+});
+
+test('renderElderDigest falls back to the default template', () => {
+    const msg = pr.renderElderDigest(undefined, {
+        serviceDate: '2026-06-28',
+        subjects: [{ name: 'Jane Doe', request: 'Pray for my mom.' }],
+    });
+    assert.ok(msg.includes('Sunday, June 28, 2026'));
+    assert.ok(msg.includes('Jane Doe — Pray for my mom.'));
+    assert.ok(!msg.includes('{date}') && !msg.includes('{requests}'));
+});
+
+test('DEFAULT_PRAYER_MESSAGES.elderDigest carries {date} and {requests}', () => {
+    assert.ok(pr.DEFAULT_PRAYER_MESSAGES.elderDigest.includes('{date}'));
+    assert.ok(pr.DEFAULT_PRAYER_MESSAGES.elderDigest.includes('{requests}'));
+});
+
+test('resolveTemplates includes elderDigest (default and override)', () => {
+    assert.strictEqual(
+        pr.resolveTemplates({}).elderDigest, pr.DEFAULT_PRAYER_MESSAGES.elderDigest);
+    assert.strictEqual(
+        pr.resolveTemplates({ elderDigest: 'Custom {date} {requests}' }).elderDigest,
+        'Custom {date} {requests}');
+});
