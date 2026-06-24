@@ -285,6 +285,29 @@
                 <h2 class="font-headline-md text-headline-md text-primary">Prayer Request Messages</h2>
             </div>
 
+            <!-- Automatic sending kill switch -->
+            <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex items-center justify-between gap-md">
+                <div class="flex flex-col gap-xs min-w-0">
+                    <div class="flex items-center gap-sm">
+                        <span class="material-symbols-outlined text-[20px]"
+                              :class="autoSendEnabled ? 'text-primary' : 'text-on-surface-variant'">schedule_send</span>
+                        <h3 class="font-headline-md text-headline-md text-on-surface">Automatic sending</h3>
+                        <span class="px-sm py-[2px] rounded-full font-label-md text-xs"
+                              :class="autoSendEnabled ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container text-on-surface-variant'"
+                              x-text="autoSendEnabled ? 'ON' : 'OFF'"></span>
+                    </div>
+                    <p class="font-body-md text-sm text-on-surface-variant">
+                        When on, the hourly scheduler texts each upcoming service's pastoral-prayer subjects automatically (5 days out, with a 3-day reminder, 8am–8pm Central). When off, only the manual "Send now" button in the Service Builder sends.
+                    </p>
+                </div>
+                <button @click="toggleAutoSend()" :disabled="autoSendSaving" role="switch" :aria-checked="autoSendEnabled"
+                    class="relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50"
+                    :class="autoSendEnabled ? 'bg-primary' : 'bg-surface-container-highest'">
+                    <span class="inline-block h-5 w-5 transform rounded-full bg-surface-container-lowest shadow transition-transform"
+                          :class="autoSendEnabled ? 'translate-x-6' : 'translate-x-1'"></span>
+                </button>
+            </div>
+
             <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-md">
                 <p class="font-body-md text-sm text-on-surface-variant">
                     These are the texts sent when we ask people for a prayer request before a service.

@@ -49,6 +49,8 @@ document.addEventListener('alpine:init', () => {
             { key: 'thankyou', label: 'Thank-you reply', help: 'Auto-reply after someone sends their request.' },
         ],
         prayerSaving: false,
+        autoSendEnabled: false,
+        autoSendSaving: false,
 
         toast: { show: false, message: '', type: 'success' },
 
@@ -178,6 +180,7 @@ document.addEventListener('alpine:init', () => {
                     reminder: saved.reminder || PRAYER_MESSAGE_DEFAULTS.reminder,
                     thankyou: saved.thankyou || PRAYER_MESSAGE_DEFAULTS.thankyou,
                 };
+                this.autoSendEnabled = !!saved.autoSendEnabled;
             } catch (e) {
                 console.error('Error loading prayer messages:', e);
                 this.showToast('Could not load prayer messages', 'error');
@@ -206,6 +209,27 @@ document.addEventListener('alpine:init', () => {
         resetPrayerMessages() {
             this.prayerMessages = { ...PRAYER_MESSAGE_DEFAULTS };
             this.showToast('Reset to defaults — Save to apply');
+        },
+
+        // Kill switch — writes immediately so turning automation off takes effect
+        // without waiting for a Save.
+        async toggleAutoSend() {
+            const next = !this.autoSendEnabled;
+            this.autoSendSaving = true;
+            try {
+                await db.collection('app_config').doc('prayer_request_sms').set({
+                    autoSendEnabled: next,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    updatedBy: this.currentUser.uid,
+                }, { merge: true });
+                this.autoSendEnabled = next;
+                this.showToast(next ? 'Automatic sending ON' : 'Automatic sending OFF');
+            } catch (e) {
+                console.error('Error toggling automation:', e);
+                this.showToast('Could not change automation', 'error');
+            } finally {
+                this.autoSendSaving = false;
+            }
         },
 
         formatDatetime(timestamp) {
