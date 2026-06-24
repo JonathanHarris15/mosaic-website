@@ -124,9 +124,16 @@ service cloud.firestore {
     }
 
     // App-wide config edited from the Admin Dashboard (e.g. the prayer-request
-    // SMS message templates). The server reads these via the admin SDK.
+    // SMS message templates and the automation kill switch). The server reads
+    // these via the admin SDK.
     match /app_config/{configId} {
       allow read, write: if isAdmin();
+    }
+
+    // Outbound SMS log — written only by the server (admin SDK) and read by
+    // admins for the audit/status readout. No client writes.
+    match /sms_messages/{messageId} {
+      allow read: if isAdmin();
     }
   }
 }

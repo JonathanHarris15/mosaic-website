@@ -1283,7 +1283,14 @@
                                 <textarea x-model="prayerRequests[which].text" :disabled="!canEdit" rows="2"
                                     placeholder="What they'd like prayer about. Texted replies fill this in automatically."
                                     class="w-full text-sm rounded-lg border border-outline-variant bg-white px-3 py-2 focus:ring-1 focus:ring-primary outline-none"></textarea>
-                                <div x-show="canEdit" class="flex justify-end mt-1">
+                                <div x-show="canEdit" class="flex justify-end items-center gap-2 mt-1">
+                                    <button @click="sendPrayerRequestNow(which)"
+                                        :disabled="!canSendPrayerText(which) || prayerSending[which]"
+                                        :title="prayerSendTitle(which)"
+                                        class="text-[10px] uppercase tracking-widest border border-primary text-primary px-3 py-1 rounded-full hover:bg-primary/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[12px]" :class="prayerSending[which] ? 'animate-spin' : ''" x-text="prayerSending[which] ? 'progress_activity' : 'sms'"></span>
+                                        <span x-text="prayerSending[which] ? 'Sending…' : 'Send Now'"></span>
+                                    </button>
                                     <button @click="savePrayerRequest(which)"
                                         class="text-[10px] uppercase tracking-widest bg-primary text-on-primary px-3 py-1 rounded-full hover:bg-primary-container transition-all">Save Request</button>
                                 </div>

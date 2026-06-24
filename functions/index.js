@@ -1,5 +1,6 @@
 const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
 const {onDocumentWritten} = require("firebase-functions/v2/firestore");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {defineSecret} = require("firebase-functions/params");
 const {log} = require("firebase-functions/logger");
 const admin = require("firebase-admin");
@@ -11,6 +12,7 @@ const {
   parseInboundReply,
   verifyTextbeltSignature,
 } = require("./sms");
+const pr = require("./prayer-request");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -29,6 +31,12 @@ const SMS_REPLY_WEBHOOK_URL =
 
 /** Firestore collection holding inbound replies to test texts. */
 const SMS_REPLIES_COLLECTION = "sms_test_replies";
+
+/** Outbound message log — maps a sent text's textId to who/what it was for. */
+const SMS_MESSAGES_COLLECTION = "sms_messages";
+
+/** Config doc holding the editable templates and the automation kill switch. */
+const PRAYER_CONFIG_DOC = "app_config/prayer_request_sms";
 
 /**
  * @fileoverview Firebase Cloud Functions for the Mosaic Website.
@@ -392,6 +400,82 @@ async function assertAdmin(db, authCtx) {
 }
 
 /**
+ * Throws unless the caller is an elder/super_admin — the roles that manage
+ * pastoral-prayer subjects and their Prayer Requests (matches isShepherd in the
+ * Service Builder and the prayer_requests Firestore rule).
+ * @param {import("firebase-admin").firestore.Firestore} db
+ * @param {Object|undefined} authCtx
+ * @return {Promise<void>}
+ */
+async function assertElder(db, authCtx) {
+  if (!authCtx) {
+    throw new HttpsError("unauthenticated", "Sign in first.");
+  }
+  const callerDoc = await db.collection("users").doc(authCtx.uid).get();
+  const role = callerDoc.exists ? callerDoc.data().role : null;
+  if (!["elder", "super_admin"].includes(role)) {
+    throw new HttpsError("permission-denied", "Elders only.");
+  }
+}
+
+/**
+ * Sends one SMS via Textbelt and returns the shaped result. Prayer-request and
+ * test sends share this so reply routing and signature verification behave
+ * identically. Outbound texts that expect a reply attach the reply webhook.
+ * @param {{to: string, body: string, withReplyWebhook?: boolean}} args
+ * @return {Promise<{success: boolean, textId: string|null,
+ *   quotaRemaining: number|null, error: string|null}>}
+ */
+async function sendViaTextbelt({to, body, withReplyWebhook = true}) {
+  const payload = {phone: to, message: body, key: TEXTBELT_KEY.value()};
+  if (withReplyWebhook) payload.replyWebhookUrl = SMS_REPLY_WEBHOOK_URL;
+  const resp = await fetch("https://textbelt.com/text", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(payload),
+  });
+  return interpretSend(await resp.json());
+}
+
+/**
+ * Records an outbound text in the message log so an inbound reply's textId can
+ * be resolved back to its purpose/person/service.
+ * @param {import("firebase-admin").firestore.Firestore} db
+ * @param {Object} entry - {to, body, textId, purpose, personId?, serviceDate?,
+ *   kind?}
+ * @return {Promise<void>}
+ */
+async function recordOutbound(db, entry) {
+  if (!entry.textId) return;
+  await db.collection(SMS_MESSAGES_COLLECTION).add({
+    direction: "outbound",
+    to: entry.to,
+    body: entry.body,
+    textId: String(entry.textId),
+    purpose: entry.purpose,
+    personId: entry.personId || null,
+    serviceDate: entry.serviceDate || null,
+    kind: entry.kind || null,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+/**
+ * Loads the prayer-request config: the resolved message templates (saved values
+ * over built-in defaults) and whether automatic sending is enabled.
+ * @param {import("firebase-admin").firestore.Firestore} db
+ * @return {Promise<{templates: Object, autoSendEnabled: boolean}>}
+ */
+async function loadPrayerConfig(db) {
+  const snap = await db.doc(PRAYER_CONFIG_DOC).get();
+  const data = snap.exists ? snap.data() : {};
+  return {
+    templates: pr.resolveTemplates(data),
+    autoSendEnabled: !!data.autoSendEnabled,
+  };
+}
+
+/**
  * Reports whether a Textbelt key is configured and how many texts remain.
  * Admin-gated. Returns {configured, quotaRemaining, error}.
  */
@@ -442,20 +526,14 @@ exports.smsSendTest = onCall(
         "Mosaic Church SMS test — outbound texting works.";
 
       try {
-        const resp = await fetch("https://textbelt.com/text", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({
-            phone: to,
-            message,
-            key,
-            // Textbelt's parameter is replyWebhookUrl (not replyWebhook); with
-            // the wrong name it is silently ignored and no replies are forwarded.
-            replyWebhookUrl: SMS_REPLY_WEBHOOK_URL,
-          }),
-        });
-        const json = await resp.json();
-        const result = interpretSend(json);
+        const result = await sendViaTextbelt({to, body: message});
+        if (result.success) {
+          // Log as a 'test' send so a reply routes to the test stack, not the
+          // prayer-request flow.
+          await recordOutbound(admin.firestore(), {
+            to, body: message, textId: result.textId, purpose: "test",
+          });
+        }
         log(`smsSendTest: to=${to} success=${result.success} ` +
           `textId=${result.textId} quotaRemaining=${result.quotaRemaining}.`);
         return result;
@@ -467,10 +545,11 @@ exports.smsSendTest = onCall(
 );
 
 /**
- * Public webhook that Textbelt POSTs to when someone replies to a test text.
- * Replies are appended to the sms_test_replies stack for an admin to review and
- * clear from the Admin Dashboard. Always returns 200 so Textbelt does not retry;
- * unparseable/empty bodies are acknowledged and ignored.
+ * Public webhook Textbelt POSTs to when someone replies to a text we sent. The
+ * reply's textId is looked up in the outbound log: a 'prayer_request' reply
+ * fills that Sunday's Prayer Request (and is thanked); anything else (a test
+ * send, or an unrecognized id) lands in the sms_test_replies stack the Admin
+ * Dashboard shows. Always returns 200 (besides auth) so Textbelt does not retry.
  *
  * Forged POSTs are rejected by verifying Textbelt's HMAC-SHA256 signature over
  * the raw body using the API key as the secret, so only Textbelt can write here.
@@ -496,18 +575,291 @@ exports.smsInbound = onRequest(
         res.status(200).send("ignored");
         return;
       }
+
+      const db = admin.firestore();
       try {
-        await admin.firestore().collection(SMS_REPLIES_COLLECTION).add({
-          ...reply,
-          receivedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        log(`smsInbound: stored reply from ${reply.fromNumber} ` +
-          `(textId=${reply.textId}).`);
+        // Resolve what this reply was a reply to.
+        const originSnap = await db.collection(SMS_MESSAGES_COLLECTION)
+            .where("textId", "==", reply.textId)
+            .where("direction", "==", "outbound")
+            .limit(1)
+            .get();
+        const origin = originSnap.empty ? null : originSnap.docs[0].data();
+
+        if (origin && origin.purpose === "prayer_request" &&
+            origin.personId && origin.serviceDate) {
+          await applyPrayerRequestReply(db, {
+            personId: origin.personId,
+            serviceDate: origin.serviceDate,
+            replyText: reply.text,
+          });
+          log(`smsInbound: prayer reply from ${reply.fromNumber} → ` +
+            `person ${origin.personId} (service ${origin.serviceDate}).`);
+        } else {
+          // Test send or unrecognized — keep it in the admin test stack.
+          await db.collection(SMS_REPLIES_COLLECTION).add({
+            ...reply,
+            receivedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          log(`smsInbound: stored test/unmatched reply from ` +
+            `${reply.fromNumber} (textId=${reply.textId}).`);
+        }
         res.status(200).send("ok");
       } catch (err) {
-        log(`smsInbound: failed to store reply: ${err.message}`);
+        log(`smsInbound: failed to handle reply: ${err.message}`);
         res.status(200).send("error-logged");
       }
+    },
+);
+
+/**
+ * Applies a pastoral-prayer subject's texted reply: fills that Sunday's Prayer
+ * Request (once), generates a "Prayer Request" Shepherding Note, and sends the
+ * thank-you. No date cutoff — a reply is accepted whenever it arrives, as long
+ * as the request is still empty. A reply for an already-filled request is
+ * ignored so a second reply can't duplicate the note.
+ * @param {import("firebase-admin").firestore.Firestore} db
+ * @param {{personId: string, serviceDate: string, replyText: string}} args
+ * @return {Promise<void>}
+ */
+async function applyPrayerRequestReply(db, {personId, serviceDate, replyText}) {
+  const text = (replyText || "").trim();
+  if (!serviceDate || !text) return;
+
+  const personRef = db.collection("people").doc(personId);
+  const reqRef = personRef.collection("prayer_requests").doc(serviceDate);
+  const [personSnap, reqSnap] = await Promise.all([personRef.get(), reqRef.get()]);
+  // Already filled (manually or by an earlier reply) — don't duplicate.
+  if (reqSnap.exists && (reqSnap.data().prayerRequest || "").trim()) return;
+
+  const personName = personSnap.exists ? (personSnap.data().name || "") : "";
+  const note = pr.buildPrayerRequestNote({personName, serviceDate, requestText: text});
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
+  await reqRef.set({
+    serviceDate,
+    prayerRequest: text,
+    prayerRequestSource: "reply",
+    requestFilledAt: now,
+    noteGenerated: true,
+  }, {merge: true});
+
+  await personRef.collection("shepherding_notes").add({
+    type: note.type,
+    subject: note.subject,
+    content: note.content,
+    contentJson: note.contentJson,
+    authorName: "Prayer Request (texted)",
+    authorUid: null,
+    createdAt: now,
+  });
+
+  // Thank the subject. Best-effort: a failed thank-you must not fail the reply.
+  try {
+    const phone = personSnap.exists && personSnap.data().contact &&
+      personSnap.data().contact.phone;
+    const to = toE164US(phone);
+    if (to) {
+      const {templates} = await loadPrayerConfig(db);
+      const body = pr.renderPrayerRequestMessage(
+          "thankyou", pr.firstNameOf(personName), templates);
+      const result = await sendViaTextbelt({to, body, withReplyWebhook: false});
+      if (result.success) {
+        await recordOutbound(db, {
+          to, body, textId: result.textId,
+          purpose: "prayer_request_thankyou", personId, serviceDate,
+        });
+      }
+    }
+  } catch (e) {
+    log(`Thank-you send failed for ${personId}: ${e.message}`);
+  }
+  log(`Filled prayer request for ${personId} (service ${serviceDate}).`);
+}
+
+/**
+ * Loads a subject's person record and that Sunday's prayer-request state.
+ * @param {import("firebase-admin").firestore.Firestore} db
+ * @param {string} personId
+ * @param {string} serviceDate
+ * @return {Promise<{personSnap: Object, reqSnap: Object, reqRef: Object}>}
+ */
+async function loadSubjectState(db, personId, serviceDate) {
+  const reqRef = db.collection("people").doc(personId)
+      .collection("prayer_requests").doc(serviceDate);
+  const personRef = db.collection("people").doc(personId);
+  const [personSnap, reqSnap] = await Promise.all([personRef.get(), reqRef.get()]);
+  return {personSnap, reqSnap, reqRef};
+}
+
+/**
+ * Sends a resolved prayer-request text (initial or reminder) to a subject,
+ * records the send-state on the request and the linkage in the outbound log.
+ * Shared by the scheduler and the manual button.
+ * @param {import("firebase-admin").firestore.Firestore} db
+ * @param {Object} args - {serviceDate, personId, kind, templates, personSnap,
+ *   reqRef}
+ * @return {Promise<Object>} the Textbelt send result.
+ */
+async function dispatchPrayerText(db, args) {
+  const {serviceDate, personId, kind, templates, personSnap, reqRef} = args;
+  const person = personSnap.data();
+  const to = toE164US(person.contact && person.contact.phone);
+  const body = pr.renderPrayerRequestMessage(
+      kind, pr.firstNameOf(person.name), templates);
+
+  const result = await sendViaTextbelt({to, body, withReplyWebhook: true});
+  if (!result.success) return result;
+
+  const today = pr.churchDateParts(new Date()).date;
+  const update = kind === "initial" ?
+    {serviceDate, initialSentDate: today} :
+    {serviceDate, reminderSent: true, reminderSentDate: today};
+  await reqRef.set(update, {merge: true});
+  await recordOutbound(db, {
+    to, body, textId: result.textId,
+    purpose: "prayer_request", personId, serviceDate, kind,
+  });
+  return result;
+}
+
+/**
+ * Evaluates one pastoral-prayer subject for the scheduler and sends the initial
+ * or reminder when due.
+ * @param {import("firebase-admin").firestore.Firestore} db
+ * @param {Object} args - {serviceDate, personId, today, localHour, templates}
+ * @return {Promise<void>}
+ */
+async function processPrayerSubject(db, args) {
+  const {serviceDate, personId, today, localHour, templates} = args;
+  const {personSnap, reqSnap, reqRef} = await loadSubjectState(db, personId, serviceDate);
+  if (!personSnap.exists) return;
+
+  const person = personSnap.data();
+  const req = reqSnap.exists ? reqSnap.data() : {};
+  const to = toE164US(person.contact && person.contact.phone);
+
+  const action = pr.prayerRequestAction({
+    daysUntilService: pr.daysUntil(serviceDate, today),
+    localHour,
+    hasPhone: !!to,
+    requestFilled: !!(req.prayerRequest || "").trim(),
+    initialSentDate: req.initialSentDate || null,
+    reminderSent: !!req.reminderSent,
+    today,
+  });
+  if (action === "none") return;
+
+  const result = await dispatchPrayerText(db, {
+    serviceDate, personId, kind: action, templates, personSnap, reqRef,
+  });
+  if (!result.success) {
+    log(`Prayer-request ${action} send failed for ${personId}: ${result.error}`);
+  } else {
+    log(`Sent prayer-request ${action} to ${personId} (service ${serviceDate}).`);
+  }
+}
+
+/**
+ * Hourly scheduled sender for pastoral-prayer Prayer Request texts. Gated by the
+ * autoSendEnabled kill switch (default off). For each upcoming Service within
+ * the initial-send window, each pastoral-prayer subject (prayerMale/prayerFemale)
+ * with an empty request is texted per the 5-day/3-day, 8am-8pm-Central rules.
+ */
+exports.sendPrayerRequestTexts = onSchedule(
+    {
+      schedule: "every 60 minutes",
+      timeZone: pr.CHURCH_TIMEZONE,
+      region: "us-central1",
+      secrets: [TEXTBELT_KEY],
+    },
+    async () => {
+      const db = admin.firestore();
+      const {templates, autoSendEnabled} = await loadPrayerConfig(db);
+      if (!autoSendEnabled) {
+        log("sendPrayerRequestTexts: automation disabled — skipping.");
+        return;
+      }
+
+      const {date: today, hour: localHour} = pr.churchDateParts(new Date());
+      if (localHour < pr.WINDOW_OPEN_HOUR || localHour >= pr.WINDOW_CLOSE_HOUR) {
+        return;
+      }
+
+      const snap = await db.collection("services")
+          .where(admin.firestore.FieldPath.documentId(), ">=", today)
+          .get();
+
+      for (const doc of snap.docs) {
+        const serviceDate = doc.id;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(serviceDate)) continue;
+        if (pr.daysUntil(serviceDate, today) > pr.INITIAL_DAYS_OUT) continue;
+
+        const liturgy = doc.data().liturgy || {};
+        const subjects = [liturgy.prayerMale, liturgy.prayerFemale]
+            .filter((s) => s && s.id);
+        for (const subject of subjects) {
+          await processPrayerSubject(db, {
+            serviceDate, personId: subject.id, today, localHour, templates,
+          });
+        }
+      }
+    },
+);
+
+/**
+ * Manual "Send Prayer Request Text Now" — the Service Builder button. Elder-gated.
+ * Bypasses the timing/quiet-hours guards (a human is choosing to send now) but
+ * keeps the phone/already-filled guards. Sends initial then reminder, re-sending
+ * the reminder on repeat calls.
+ */
+exports.sendPrayerRequestNow = onCall(
+    {cors: true, region: "us-central1", secrets: [TEXTBELT_KEY]},
+    async (request) => {
+      const db = admin.firestore();
+      await assertElder(db, request.auth);
+
+      const serviceDate = request.data && request.data.serviceDate;
+      const personId = request.data && request.data.personId;
+      if (!serviceDate || !personId) {
+        throw new HttpsError("invalid-argument",
+            "serviceDate and personId are required.");
+      }
+      if (!TEXTBELT_KEY.value()) {
+        throw new HttpsError("failed-precondition",
+            "No Textbelt key is configured.");
+      }
+
+      const {personSnap, reqSnap, reqRef} = await loadSubjectState(db, personId, serviceDate);
+      if (!personSnap.exists) {
+        throw new HttpsError("not-found", "That person was not found.");
+      }
+      const person = personSnap.data();
+      const req = reqSnap.exists ? reqSnap.data() : {};
+      const to = toE164US(person.contact && person.contact.phone);
+
+      const kind = pr.manualPrayerRequestKind({
+        hasPhone: !!to,
+        requestFilled: !!(req.prayerRequest || "").trim(),
+        initialSentDate: req.initialSentDate || null,
+        reminderSent: !!req.reminderSent,
+      });
+      if (kind === "none") {
+        throw new HttpsError("failed-precondition", to ?
+          "This prayer request is already filled." :
+          "This person has no phone number on file.");
+      }
+
+      const {templates} = await loadPrayerConfig(db);
+      const result = await dispatchPrayerText(db, {
+        serviceDate, personId, kind, templates, personSnap, reqRef,
+      });
+      if (!result.success) {
+        throw new HttpsError("unavailable", result.error || "Send failed.");
+      }
+      log(`Manual prayer-request ${kind} sent to ${personId} (${serviceDate}).`);
+      return {success: true, kind, textId: result.textId,
+        quotaRemaining: result.quotaRemaining};
     },
 );
 

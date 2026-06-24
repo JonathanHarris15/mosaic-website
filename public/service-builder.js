@@ -135,6 +135,7 @@ function serviceForm() {
             male: { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false },
             female: { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false },
         },
+        prayerSending: { male: false, female: false },
         user: null,
         originalService: '',
         activeNoteKey: null,
@@ -609,6 +610,48 @@ function serviceForm() {
             } catch (e) {
                 console.error('Error saving prayer request:', e);
                 alert('Error saving prayer request. Check console.');
+            }
+        },
+
+        // Whether the manual "Send Now" button can fire: a subject with a phone
+        // whose request isn't filled yet (mirrors the server's hard guards).
+        canSendPrayerText(which) {
+            const subject = this.subjectFor(which);
+            if (!subject || !subject.id) return false;
+            if ((this.prayerRequests[which].text || '').trim()) return false;
+            const person = this.peopleRegistry.find(p => p.id === subject.id);
+            const phone = person && person.contact ? (person.contact.phone || '') : '';
+            return phone.replace(/\D/g, '').length >= 10;
+        },
+
+        prayerSendTitle(which) {
+            const subject = this.subjectFor(which);
+            if (!subject || !subject.id) return 'Select this person and save first';
+            if ((this.prayerRequests[which].text || '').trim()) return 'Already filled — nothing to send';
+            if (!this.canSendPrayerText(which)) return 'No phone number on file';
+            return 'Text this person to ask for their prayer request';
+        },
+
+        async sendPrayerRequestNow(which) {
+            const subject = this.subjectFor(which);
+            if (!subject || !subject.id || !this.canSendPrayerText(which)) return;
+            if (!this.date) { alert('Save the service first.'); return; }
+            this.prayerSending[which] = true;
+            try {
+                const fn = firebase.app().functions('us-central1').httpsCallable('sendPrayerRequestNow');
+                const { data } = await fn({ serviceDate: this.date, personId: subject.id });
+                // Reflect the new send-state without a full reload.
+                if (data.kind === 'initial') {
+                    this.prayerRequests[which].initialSentDate = this.date;
+                } else if (data.kind === 'reminder') {
+                    this.prayerRequests[which].reminderSent = true;
+                }
+                alert(`${data.kind === 'reminder' ? 'Reminder' : 'Initial request'} text sent to ${subject.name}.`);
+            } catch (e) {
+                console.error('Error sending prayer request text:', e);
+                alert(e.message || 'Could not send the text.');
+            } finally {
+                this.prayerSending[which] = false;
             }
         },
 
