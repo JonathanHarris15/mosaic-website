@@ -36,6 +36,39 @@
         return out;
     }
 
+    // Fold legacy dotted-key fields (e.g. 'liturgy.sermon') back into nested
+    // objects — older saves with set({merge}) stored some paths as top-level keys
+    // containing a dot. A nested value wins over a dotted-key value for the same
+    // leaf. Ported from the old service-guide.js so the new resolver reads the
+    // same Service shape; pure and exported for tests.
+    function normalizeServiceData(raw) {
+        const data = {};
+        for (const [key, val] of Object.entries(raw || {})) {
+            if (!key.includes('.')) data[key] = val;
+        }
+        for (const [key, val] of Object.entries(raw || {})) {
+            if (key.includes('.')) {
+                const parts = key.split('.');
+                let obj = data;
+                for (let i = 0; i < parts.length - 1; i++) {
+                    if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) obj[parts[i]] = {};
+                    obj = obj[parts[i]];
+                }
+                const leaf = parts[parts.length - 1];
+                if (!obj[leaf]) obj[leaf] = val;
+            }
+        }
+        return data;
+    }
+
+    // The Baptism Candidate display string (ports baptismNames): array of Person
+    // refs post-migration, possibly a legacy free-text string.
+    function baptismNamesOf(liturgy) {
+        const bap = liturgy && liturgy.baptism;
+        if (Array.isArray(bap)) return bap.map(c => c && c.name).filter(Boolean).join(', ');
+        return typeof bap === 'string' ? bap : '';
+    }
+
     // Resolve a Service Guide Template into a FROZEN snapshot: each placement is
     // flattened with its Page Template's html/css, the inherited Style Preset CSS,
     // its derived Entry Fields, and the placement's role/params. This is the
@@ -146,6 +179,83 @@
     // Thin: each function composes the pure builders above with a Firestore read
     // or write. Never invoked under Node (the tests exercise the pure builders).
 
+    const HYMN_FIELDS = ['preparatoryHymn', 'hymn1', 'hymn2', 'hymnMid1', 'hymnMid2', 'hymnEnd1', 'hymnEnd2'];
+
+    // Resolve a week's Service into the serviceContext the engine/Components read
+    // (ADR-0008 §4 step 1): names, ESV key-verse text, per-slot hymn sheet images,
+    // and the upcoming preaching schedule. Ports loadService/fetchHymnDetails/
+    // fetchSchedule/getESVPlainText from the old service-guide.js. The ESV fetch
+    // is injected (opts.esvFetch) so this stays free of the API key.
+    async function resolveServiceContext(db, date, opts) {
+        opts = opts || {};
+        const doc = await db.collection('services').doc(date).get();
+        const data = normalizeServiceData(doc.exists ? doc.data() : {});
+        const liturgy = data.liturgy || {};
+        const removedHymns = Array.isArray(data.removedHymns) ? data.removedHymns : [];
+
+        const hymnsByField = {};
+        for (const f of HYMN_FIELDS) {
+            const h = liturgy[f];
+            if (!h || !h.name) continue;
+            const entry = { name: h.name, id: h.id || null, pages: [], attribution: '' };
+            if (h.id) {
+                try {
+                    const hd = await db.collection('hymns').doc(h.id).get();
+                    if (hd.exists) {
+                        const d = hd.data();
+                        entry.pages = (d.versions && d.versions[0] && d.versions[0].pages) || [];
+                        entry.attribution = d.attribution || '';
+                        entry.name = d.hymn_name || h.name;
+                    }
+                } catch (e) { /* leave as literal */ }
+            }
+            hymnsByField[f] = entry;
+        }
+
+        let schedule = [];
+        try {
+            const endStr = addDaysStr(date, 35);
+            const snap = await db.collection('services')
+                .where(firebase.firestore.FieldPath.documentId(), '>=', date)
+                .where(firebase.firestore.FieldPath.documentId(), '<=', endStr)
+                .get();
+            schedule = snap.docs
+                .map(d => { const sd = normalizeServiceData(d.data()); return { id: d.id, preacher: sd.preacher || '', sermon: (sd.liturgy && sd.liturgy.sermon) || '' }; })
+                .sort((a, b) => a.id.localeCompare(b.id));
+        } catch (e) { /* schedule optional */ }
+
+        let keyVerseText = '';
+        if (data.keyVerse && typeof opts.esvFetch === 'function') {
+            try { keyVerseText = await opts.esvFetch(data.keyVerse); } catch (e) { keyVerseText = ''; }
+        }
+
+        const DU = globalThis.DateUtils;
+        const context = {
+            date,
+            longDate: DU ? DU.formatDateLong(date) : date,
+            shortDate: (globalThis.GuideComponents ? globalThis.GuideComponents.shortDate(date) : date),
+            theme: data.theme || '',
+            keyVerse: data.keyVerse || '',
+            keyVerseText,
+            preacher: data.preacher || '',
+            musicLeader: data.musicLeader || '',
+            serviceLeader: data.serviceLeader || '',
+            hasBaptism: !!data.hasBaptism,
+            removedHymns,
+            baptismNames: baptismNamesOf(liturgy),
+            liturgy,
+            hymnsByField,
+            schedule,
+        };
+        return { context, service: data };
+    }
+
+    function addDaysStr(dateStr, n) {
+        const [y, m, d] = String(dateStr).split('-').map(Number);
+        const dt = new Date(y, m - 1, d + n);
+        return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    }
+
     async function loadCatalog(db) {
         const [sp, pt, gt] = await Promise.all([
             db.collection(COLLECTIONS.stylePresets).get(),
@@ -193,7 +303,7 @@
     async function savePageTemplate(db, doc, catalog) {
         const id = doc.id || db.collection(COLLECTIONS.pageTemplates).doc().id;
         // Re-derive Entry Fields on every save so the cached set never drifts.
-        const cat = catalog || (global.GuideComponents && global.GuideComponents.defaultCatalog);
+        const cat = catalog || (globalThis.GuideComponents && globalThis.GuideComponents.defaultCatalog);
         const derived = Engine.deriveEntryFields(doc.html || '', cat);
         const toSave = Object.assign({}, doc, { id, entryFields: derived.fields });
         await db.collection(COLLECTIONS.pageTemplates).doc(id).set(stamped(toSave), { merge: true });
@@ -239,11 +349,12 @@
     const GuideStore = {
         COLLECTIONS, GUIDE_FORMAT,
         // pure
-        indexById, buildSnapshot, buildGuideRecord, preserveValues,
-        isV2Guide, isLegacyGuide, isEntryFieldFilled, tasksRemaining, nextTaskPageIndex,
+        indexById, normalizeServiceData, baptismNamesOf, buildSnapshot,
+        buildGuideRecord, preserveValues, isV2Guide, isLegacyGuide,
+        isEntryFieldFilled, tasksRemaining, nextTaskPageIndex,
         // adapter
-        loadCatalog, seedAll, seedIfEmpty, saveStylePreset, savePageTemplate,
-        saveGuideTemplate, setDefaultGuideTemplate, deletePageTemplate,
+        resolveServiceContext, loadCatalog, seedAll, seedIfEmpty, saveStylePreset,
+        savePageTemplate, saveGuideTemplate, setDefaultGuideTemplate, deletePageTemplate,
         deleteStylePreset, deleteGuideTemplate, saveWeekGuide,
     };
 

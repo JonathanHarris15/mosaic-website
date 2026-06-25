@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Service Guide Manager - Mosaic Services</title>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&family=Work+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+    <script id="tailwind-config">
+        tailwind.config = { theme: { extend: {
+            colors: { "primary": "#001a43", "secondary": "#436082", "surface": "#fcf9f3", "outline-variant": "#c5c6d0", "error": "#b3261e", "success": "#2e7d32" },
+            fontFamily: { "serif": ["Noto Serif", "serif"], "sans": ["Work Sans", "sans-serif"] }
+        } } }
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="auth.js"></script>
+    <script src="date-utils.js"></script>
+    <script src="guide-engine.js"></script>
+    <script src="guide-components.js"></script>
+    <script src="guide-seed.js"></script>
+    <script src="guide-store.js"></script>
+    <script src="service-guide-manager.js"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+        [x-cloak] { display: none !important; }
+        .preview-page {
+            @apply bg-white shadow-lg mx-auto mb-6 relative text-black overflow-hidden;
+            width: 5.5in; height: 8.5in; padding: 0.2in; box-sizing: border-box;
+            font-family: 'Times New Roman', Times, serif; font-size: 10pt; line-height: 1.2;
+        }
+        .latex-h1 { @apply text-[1.1rem] font-normal block; }
+        .latex-hr { @apply border-t border-black my-1 w-full; }
+        .latex-spacing-2 { line-height: 2.2; }
+        .preview-page ul, .preview-page ol { list-style-type: disc !important; @apply pl-8; }
+        .tab-btn { @apply px-4 py-2 text-sm font-semibold rounded-lg transition-colors; }
+        .tab-active { @apply bg-primary text-white; }
+        .tab-idle { @apply text-secondary hover:bg-surface; }
+        .card { @apply bg-white border border-outline-variant rounded-xl p-4 shadow-sm; }
+        .btn-primary { @apply px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-secondary transition-colors flex items-center gap-2; }
+        .btn-ghost { @apply px-3 py-2 border border-outline-variant rounded-lg text-primary hover:bg-surface transition-colors flex items-center gap-2; }
+        .code-editor { @apply w-full text-[11px] font-mono rounded border-outline-variant px-3 py-2 bg-gray-50; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+    <style id="manager-dynamic-style"></style>
+</head>
+<body class="bg-[#f0f2f5] font-sans antialiased text-black min-h-screen" x-data="guideManager()" x-init="init()">
+
+    <header class="h-16 bg-primary text-white flex items-center justify-between px-6 sticky top-0 z-50 shadow-md">
+        <div class="flex items-center gap-4">
+            <a href="service-calendar.html" class="hover:opacity-80"><span class="material-symbols-outlined">arrow_back</span></a>
+            <h1 class="text-lg font-semibold">Service Guide Manager</h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <button @click="resetSeed()" class="px-3 py-2 hover:bg-white/10 rounded-lg flex items-center gap-2 text-sm" title="Restore the shipped seeded templates">
+                <span class="material-symbols-outlined text-[18px]">restart_alt</span><span class="hidden md:inline">Reset seeded</span>
+            </button>
+        </div>
+    </header>
+
+    <div x-show="loading" class="flex items-center justify-center h-[60vh] text-secondary">
+        <span class="material-symbols-outlined animate-spin text-3xl mr-2">progress_activity</span> Loading…
+    </div>
+
+    <main x-show="!loading" x-cloak class="max-w-7xl mx-auto p-6">
+        <!-- tabs -->
+        <div class="flex gap-2 mb-6">
+            <button class="tab-btn" :class="tab === 'pages' ? 'tab-active' : 'tab-idle'" @click="tab='pages'">Page Library</button>
+            <button class="tab-btn" :class="tab === 'presets' ? 'tab-active' : 'tab-idle'" @click="tab='presets'">Style Presets</button>
+            <button class="tab-btn" :class="tab === 'templates' ? 'tab-active' : 'tab-idle'" @click="tab='templates'">Service Guide Templates</button>
+        </div>
+
+        <!-- toast -->
+        <div x-show="toast" x-cloak x-transition class="fixed bottom-6 right-6 z-50 bg-success text-white px-4 py-2 rounded-lg shadow-lg text-sm" x-text="toast"></div>
+
+        <!-- ===================== PAGE LIBRARY ===================== -->
+        <section x-show="tab === 'pages'">
+            <div x-show="!editingPage">
+                <div class="flex justify-between items-center mb-4">
+                    <p class="text-sm text-gray-500">Reusable page definitions. Editing one opens the split authoring editor.</p>
+                    <button class="btn-primary" @click="newPage()"><span class="material-symbols-outlined text-[18px]">add</span> New Page</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <template x-for="pt in pageTemplates" :key="pt.id">
+                        <div class="card flex flex-col">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="font-bold text-primary" x-text="pt.name"></div>
+                                    <div class="text-[10px] text-gray-400 uppercase tracking-wide mt-0.5">
+                                        <span x-text="pt.emitsPages === 'component' ? 'multi-page' : 'single page'"></span>
+                                        <span x-show="pt.isFiller"> · filler-capable</span>
+                                        <span x-show="isSeed(pt.id)"> · seeded</span>
+                                    </div>
+                                </div>
+                                <span class="material-symbols-outlined text-gray-300" x-text="pt.emitsPages === 'component' ? 'music_note' : 'description'"></span>
+                            </div>
+                            <div class="text-[11px] text-gray-500 mt-2" x-text="(pt.entryFields && pt.entryFields.length) ? (pt.entryFields.length + ' entry field(s): ' + pt.entryFields.map(f=>f.key).join(', ')) : 'No entry fields (auto)'"></div>
+                            <div class="flex gap-2 mt-3">
+                                <button class="btn-ghost text-xs flex-1 justify-center" @click="editPage(pt)"><span class="material-symbols-outlined text-[16px]">edit</span> Edit</button>
+                                <button class="text-error hover:bg-error/5 px-3 rounded-lg" @click="deletePage(pt)" title="Delete"><span class="material-symbols-outlined text-[18px]">delete</span></button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- split authoring editor -->
+            <div x-show="editingPage" x-cloak class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <button class="btn-ghost text-xs" @click="closePage()"><span class="material-symbols-outlined text-[16px]">arrow_back</span> Back</button>
+                        <div class="flex gap-2">
+                            <button class="btn-primary text-sm" @click="savePage()"><span class="material-symbols-outlined text-[18px]">save</span> Save</button>
+                        </div>
+                    </div>
+
+                    <div class="card space-y-3">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Name</label>
+                                <input type="text" x-model="editingPage.name" class="w-full text-sm rounded border-outline-variant px-3 py-2" />
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Style Preset</label>
+                                <select x-model="editingPage.stylePresetId" @change="refreshPagePreview()" class="w-full text-sm rounded border-outline-variant px-3 py-2">
+                                    <option value="">(none)</option>
+                                    <template x-for="sp in stylePresets" :key="sp.id"><option :value="sp.id" x-text="sp.name"></option></template>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="flex gap-6 items-center">
+                            <label class="flex items-center gap-2 text-xs text-gray-600">
+                                <input type="checkbox" :checked="editingPage.emitsPages === 'component'" @change="editingPage.emitsPages = $event.target.checked ? 'component' : 'single'; refreshPagePreview()" />
+                                Multi-page (a Bound Component drives the page count)
+                            </label>
+                            <label class="flex items-center gap-2 text-xs text-gray-600">
+                                <input type="checkbox" x-model="editingPage.isFiller" />
+                                Can act as Filler Page
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- palette -->
+                    <div class="card">
+                        <div class="text-[10px] font-bold uppercase text-gray-500 mb-2">Component Palette — click to insert</div>
+                        <div class="text-[9px] font-bold uppercase text-secondary mb-1">Bound (auto data)</div>
+                        <div class="flex flex-wrap gap-1.5 mb-3">
+                            <template x-for="c in palette.bound" :key="c.tag">
+                                <button @click="insertTag(c.tag, 'bound')" class="px-2 py-1 bg-secondary/10 text-secondary text-[11px] rounded hover:bg-secondary/20" x-text="c.label"></button>
+                            </template>
+                        </div>
+                        <div class="text-[9px] font-bold uppercase text-primary mb-1">Input (weekly fields)</div>
+                        <div class="flex flex-wrap gap-1.5">
+                            <template x-for="c in palette.input" :key="c.tag">
+                                <button @click="insertTag(c.tag, 'input')" class="px-2 py-1 bg-primary/10 text-primary text-[11px] rounded hover:bg-primary/20" x-text="c.label"></button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">HTML</label>
+                        <textarea id="page-html-editor" x-model="editingPage.html" @input="refreshPagePreview()" rows="14" class="code-editor"></textarea>
+                        <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1 mt-3">Page CSS (optional)</label>
+                        <textarea x-model="editingPage.css" @input="refreshPagePreview()" rows="5" class="code-editor"></textarea>
+                    </div>
+
+                    <!-- validation -->
+                    <div class="card" :class="pageValidation.ok ? 'border-success/40' : 'border-error/40'">
+                        <div class="flex items-center gap-2 text-sm font-semibold" :class="pageValidation.ok ? 'text-success' : 'text-error'">
+                            <span class="material-symbols-outlined text-[18px]" x-text="pageValidation.ok ? 'check_circle' : 'error'"></span>
+                            <span x-text="pageValidation.ok ? 'No problems' : 'Validation problems'"></span>
+                        </div>
+                        <ul class="mt-2 text-xs text-error space-y-1" x-show="!pageValidation.ok">
+                            <template x-for="(p, i) in pageValidation.problems" :key="i">
+                                <li x-text="p.kind === 'unknown_tag' ? ('Unknown component tag: <' + p.tag + '>') : ('Duplicate entry field key: ' + p.key)"></li>
+                            </template>
+                        </ul>
+                        <div class="mt-2 text-[11px] text-gray-500" x-show="pageValidation.entryFields && pageValidation.entryFields.length">
+                            Entry fields: <span x-text="pageValidation.entryFields.map(f => f.key + (f.required ? '*' : '')).join(', ')"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- preview -->
+                <div>
+                    <div class="text-[10px] font-bold uppercase text-gray-500 mb-2">Live preview (sample data)</div>
+                    <div class="bg-gray-200 rounded-xl p-6 flex flex-col items-center max-h-[80vh] overflow-y-auto custom-scrollbar">
+                        <template x-for="(pg, i) in pagePreviewPages" :key="i">
+                            <div class="preview-page"><div class="h-full" x-html="pg.html"></div></div>
+                        </template>
+                        <div x-show="pagePreviewPages.length === 0" class="text-gray-400 text-sm py-10">No preview — a multi-page component emits nothing for the sample data.</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================== STYLE PRESETS ===================== -->
+        <section x-show="tab === 'presets'">
+            <div x-show="!editingPreset">
+                <div class="flex justify-between items-center mb-4">
+                    <p class="text-sm text-gray-500">Reusable master CSS a Page Template can inherit.</p>
+                    <button class="btn-primary" @click="newPreset()"><span class="material-symbols-outlined text-[18px]">add</span> New Style Preset</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <template x-for="sp in stylePresets" :key="sp.id">
+                        <div class="card">
+                            <div class="flex justify-between items-start">
+                                <div class="font-bold text-primary" x-text="sp.name"></div>
+                                <span x-show="isSeed(sp.id)" class="text-[9px] text-gray-400 uppercase">seeded</span>
+                            </div>
+                            <pre class="text-[10px] text-gray-500 mt-2 max-h-24 overflow-hidden whitespace-pre-wrap" x-text="(sp.css || '').slice(0, 200)"></pre>
+                            <div class="flex gap-2 mt-3">
+                                <button class="btn-ghost text-xs flex-1 justify-center" @click="editPreset(sp)"><span class="material-symbols-outlined text-[16px]">edit</span> Edit</button>
+                                <button class="text-error hover:bg-error/5 px-3 rounded-lg" @click="deletePreset(sp)"><span class="material-symbols-outlined text-[18px]">delete</span></button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            <div x-show="editingPreset" x-cloak class="max-w-2xl">
+                <button class="btn-ghost text-xs mb-4" @click="closePreset()"><span class="material-symbols-outlined text-[16px]">arrow_back</span> Back</button>
+                <div class="card space-y-3">
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Name</label>
+                        <input type="text" x-model="editingPreset.name" class="w-full text-sm rounded border-outline-variant px-3 py-2" />
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">CSS</label>
+                        <textarea x-model="editingPreset.css" rows="16" class="code-editor"></textarea>
+                    </div>
+                    <div class="flex justify-end"><button class="btn-primary text-sm" @click="savePreset()"><span class="material-symbols-outlined text-[18px]">save</span> Save</button></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================== GUIDE TEMPLATES ===================== -->
+        <section x-show="tab === 'templates'">
+            <div x-show="!editingTemplate">
+                <div class="flex justify-between items-center mb-4">
+                    <p class="text-sm text-gray-500">Assemble ordered Page Templates into a booklet. One template is the church default.</p>
+                    <button class="btn-primary" @click="newTemplate()"><span class="material-symbols-outlined text-[18px]">add</span> New Template</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <template x-for="gt in guideTemplates" :key="gt.id">
+                        <div class="card">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="font-bold text-primary flex items-center gap-2">
+                                        <span x-text="gt.name"></span>
+                                        <span x-show="gt.isDefault" class="text-[9px] bg-success/15 text-success px-2 py-0.5 rounded-full uppercase font-bold">Default</span>
+                                    </div>
+                                    <div class="text-[10px] text-gray-400 uppercase tracking-wide mt-0.5" x-text="(gt.pages ? gt.pages.length : 0) + ' pages · target ' + (gt.targetPageCount || 16)"></div>
+                                </div>
+                                <span x-show="isSeed(gt.id)" class="text-[9px] text-gray-400 uppercase">seeded</span>
+                            </div>
+                            <div class="text-[11px] text-gray-500 mt-2 truncate" x-text="(gt.pages || []).map(p => pageTemplateName(p.pageTemplateId)).join(' → ')"></div>
+                            <div class="flex gap-2 mt-3">
+                                <button class="btn-ghost text-xs flex-1 justify-center" @click="editTemplate(gt)"><span class="material-symbols-outlined text-[16px]">edit</span> Edit</button>
+                                <button x-show="!gt.isDefault" class="btn-ghost text-xs" @click="makeDefault(gt.id)" title="Make church default"><span class="material-symbols-outlined text-[16px]">star</span></button>
+                                <button class="text-error hover:bg-error/5 px-3 rounded-lg" @click="deleteTemplate(gt)"><span class="material-symbols-outlined text-[18px]">delete</span></button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- template assembly editor -->
+            <div x-show="editingTemplate" x-cloak class="max-w-3xl">
+                <div class="flex justify-between items-center mb-4">
+                    <button class="btn-ghost text-xs" @click="closeTemplate()"><span class="material-symbols-outlined text-[16px]">arrow_back</span> Back</button>
+                    <button class="btn-primary text-sm" @click="saveTemplate()"><span class="material-symbols-outlined text-[18px]">save</span> Save</button>
+                </div>
+                <div class="card space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div class="md:col-span-2">
+                            <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Name</label>
+                            <input type="text" x-model="editingTemplate.name" class="w-full text-sm rounded border-outline-variant px-3 py-2" />
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Target pages (×4)</label>
+                            <input type="number" min="4" step="4" x-model.number="editingTemplate.targetPageCount" class="w-full text-sm rounded border-outline-variant px-3 py-2"
+                                   :class="templatePageCountValid() ? '' : 'border-error'" />
+                        </div>
+                    </div>
+                    <label class="flex items-center gap-2 text-xs text-gray-600">
+                        <input type="checkbox" x-model="editingTemplate.isDefault" /> Make this the church-wide default
+                    </label>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-[10px] font-bold uppercase text-gray-500">Pages (in booklet order)</label>
+                            <button class="btn-ghost text-xs" @click="addTemplatePage()"><span class="material-symbols-outlined text-[16px]">add</span> Add page</button>
+                        </div>
+                        <div class="space-y-2">
+                            <template x-for="(pl, i) in editingTemplate.pages" :key="i">
+                                <div class="flex items-center gap-2 p-2 border border-outline-variant rounded-lg">
+                                    <span class="text-[10px] text-gray-400 w-5 text-center" x-text="i+1"></span>
+                                    <select x-model="pl.pageTemplateId" class="flex-1 text-sm rounded border-outline-variant px-2 py-1">
+                                        <template x-for="pt in pageTemplates" :key="pt.id"><option :value="pt.id" x-text="pt.name"></option></template>
+                                    </select>
+                                    <template x-if="pageEmitsComponent(pl.pageTemplateId)">
+                                        <input type="text" x-model="pl.params.field" placeholder="hymn slot (e.g. hymn1)" class="w-40 text-xs rounded border-outline-variant px-2 py-1" />
+                                    </template>
+                                    <label class="flex items-center gap-1 text-[10px] text-gray-500" title="Filler Page">
+                                        <input type="radio" :checked="pl.role === 'filler'" @change="setFiller(i)" name="filler" /> filler
+                                    </label>
+                                    <button @click="moveTemplatePage(i, -1)" class="text-gray-400 hover:text-primary"><span class="material-symbols-outlined text-[18px]">arrow_upward</span></button>
+                                    <button @click="moveTemplatePage(i, 1)" class="text-gray-400 hover:text-primary"><span class="material-symbols-outlined text-[18px]">arrow_downward</span></button>
+                                    <button @click="removeTemplatePage(i)" class="text-error"><span class="material-symbols-outlined text-[18px]">delete</span></button>
+                                </div>
+                            </template>
+                            <div x-show="editingTemplate.pages.length === 0" class="text-gray-400 text-sm py-4 text-center">No pages yet — add some.</div>
+                        </div>
+                        <p class="text-[11px] text-gray-400 mt-2">Mark exactly one page as the Filler — it expands or contracts to hit the target page count.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

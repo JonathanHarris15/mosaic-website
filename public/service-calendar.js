@@ -707,15 +707,30 @@ function renderSidebar(grouped) {
 
 window.navigateToGuide = function(date) {
     const svc = serviceDataMap[date];
+    const guide = svc && svc.guide;
     const isViewer = !['editor', 'elder', 'admin', 'super_admin'].includes(window.currentUserRole);
-    
+
+    // Weeks created before the Service Guide Template System (ADR-0008) keep an
+    // `elements` blob and open in the classic editor; v2 guides and brand-new
+    // weeks open in the unified template-based editor.
+    const isLegacy = guide && guide.format !== 'v2' && Array.isArray(guide.elements);
+    const target = isLegacy
+        ? `service-guide.html?date=${date}`
+        : `service-guide-editor.html?date=${date}`;
+
     if (!isViewer && svc) {
         let incomplete = false;
-        if (svc.guide && svc.guide.elements) {
-            const prayer = svc.guide.elements.find(el => el.type === 'pastoral_prayer');
-            const kids = svc.guide.elements.find(el => el.type === 'kids_section');
-            const announcements = svc.guide.elements.find(el => el.type === 'announcements');
-            
+        if (guide && guide.format === 'v2') {
+            const v = guide.values || {};
+            const annFilled = Array.isArray(v.announcements) && v.announcements.some(a => a && a.title);
+            if (!v.pp_nation || !v.pp_capital) incomplete = true;
+            if (!v.kids_lesson_title || !v.kids_lesson_verse) incomplete = true;
+            if (!annFilled) incomplete = true;
+        } else if (guide && guide.elements) {
+            const prayer = guide.elements.find(el => el.type === 'pastoral_prayer');
+            const kids = guide.elements.find(el => el.type === 'kids_section');
+            const announcements = guide.elements.find(el => el.type === 'announcements');
+
             if (prayer && prayer.enabled && (!prayer.nation || !prayer.capital)) incomplete = true;
             if (kids && kids.enabled && (!kids.lessonTitle || !kids.lessonVerse)) incomplete = true;
             if (announcements && announcements.enabled && (!announcements.items || announcements.items.length === 0 || !announcements.items[0].title)) incomplete = true;
@@ -729,7 +744,7 @@ window.navigateToGuide = function(date) {
             if (!proceed) return;
         }
     }
-    window.location.href = `service-guide.html?date=${date}`;
+    window.location.href = target;
 };
 
 function renderList(grouped) {

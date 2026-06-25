@@ -101,7 +101,7 @@ A reusable definition of a single printable page, authored by an editor in the P
 _Avoid_: Page type, element, layout
 
 **Component**:
-A developer-authored preset embedded in a Page Template via a custom HTML tag. Two kinds: an **Input Component** declares an Entry Field that the OOS Editor prompts for each week; a **Bound Component** auto-pulls existing data (Service fields, the Order of Service, the `hymns` collection, the ESV API) and never prompts. All Components ship with the application — editors place them but do not author them. Casual synonym: "dynamic component."
+A developer-authored preset embedded in a Page Template via a custom HTML tag. Two kinds: an **Input Component** declares an Entry Field that the OOS Editor prompts for each week; a **Bound Component** auto-pulls existing data (Service fields, the Order of Service, the `hymns` collection, the ESV API) and never prompts. All Components ship with the application — editors place them but do not author them. Casual synonym: "dynamic component." Components are placed as **hyphenated custom tags** (e.g. `<oos-list>`, `<input-text>`, `<hymn-sheet>`, `<preaching-schedule>`) — the hyphen is required so the engine can find them without a full HTML parser. One Bound Component (`hymn-sheet`) is **multi-page**: on a Page Template marked `emitsPages: 'component'` it emits its own ordered list of physical pages.
 _Avoid_: Service Element (that is a liturgy sub-element), widget, control
 
 **Input Component**:
@@ -125,12 +125,20 @@ A reusable stylesheet (master CSS) that a Page Template can inherit application-
 _Avoid_: Theme, master CSS (use only as descriptive prose)
 
 **Service Guide Template**:
-An ordered, counted selection of Page Templates from the Page Library that defines the structure of a Service Guide. Specifies page order, repetition, and which page is the Filler Page. One Service Guide Template is the church-wide default; any week's OOS Editor can override it for that week only.
+An ordered, counted selection of Page Templates from the Page Library that defines the structure of a Service Guide. Each entry is a **page placement** — `{ pageTemplateId, role, params }` — so the same Page Template can appear several times bound to different data: the single Hymn page is placed once per liturgy slot, each placement's `params.field` naming the slot (e.g. `hymn1`). Specifies page order, repetition, and which placement is the Filler Page (`role: 'filler'`). One Service Guide Template is the church-wide default; any week's OOS Editor can override it for that week only. Stored in `guide_templates`.
 _Avoid_: SG Template (use only as shorthand), guide layout
 
 **Filler Page**:
-The Page Template within a Service Guide Template designated to expand or contract in count to hit the booklet's target page total. Generalises today's sermon-notes padding behaviour.
+The Page Template placement within a Service Guide Template designated to expand or contract in count to hit the booklet's target page total. Generalises today's sermon-notes padding behaviour; it keeps at least one page (matching today's "always one sermon-notes page") and the booklet warns rather than dropping content when real pages exceed the target.
 _Avoid_: Padding page, blank page, spacer
+
+**Service Guide Manager**:
+The editor+ authoring surface (`service-guide-manager.html`) for the Page Library, Style Presets, and Service Guide Templates. Carries the authoring guardrails — live validation, preview-before-save, and "reset to seeded default."
+_Avoid_: Template editor (ambiguous), admin page
+
+**OOS Editor**:
+The unified weekly surface (`service-guide-editor.html`) launched from the Service Calendar: it applies a Service Guide Template to a week, prompts for the snapshot's Entry Fields, renders the live booklet, and prints. Liturgy itself (preacher/hymn/person pickers) is still edited in the Order of Service Builder (`service-builder.html`), which this page links to; the structured Service stays canonical and feeds the Bound Components. Weeks created before this system (guide without `format: 'v2'`) open in the kept legacy generator (`service-guide.html`).
+_Avoid_: Guide generator (the legacy page), builder
 
 ## Core Entities
 

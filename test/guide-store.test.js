@@ -13,6 +13,21 @@ function seedSnapshot() {
     return Store.buildSnapshot(seed.guideTemplate, Store.indexById(seed.pageTemplates), Store.indexById(seed.stylePresets));
 }
 
+// ── normalizeServiceData folds legacy dotted keys ─────────────────────────────
+
+test('normalizeServiceData folds dotted keys, nested value wins', () => {
+    const out = Store.normalizeServiceData({ theme: 'T', 'liturgy.sermon': 'Rom 8', liturgy: { callToWorship: 'Ps 100' } });
+    assert.strictEqual(out.theme, 'T');
+    assert.strictEqual(out.liturgy.callToWorship, 'Ps 100');
+    assert.strictEqual(out.liturgy.sermon, 'Rom 8');
+});
+
+test('baptismNamesOf reads the candidate array or a legacy string', () => {
+    assert.strictEqual(Store.baptismNamesOf({ baptism: [{ name: 'A' }, { name: 'B' }] }), 'A, B');
+    assert.strictEqual(Store.baptismNamesOf({ baptism: 'Legacy Name' }), 'Legacy Name');
+    assert.strictEqual(Store.baptismNamesOf({}), '');
+});
+
 // ── buildSnapshot freezes the template into a self-contained structure ─────────
 
 test('buildSnapshot flattens placements with html, css, preset css, params, role', () => {

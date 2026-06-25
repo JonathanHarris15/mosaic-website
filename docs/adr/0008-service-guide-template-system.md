@@ -87,3 +87,29 @@ extra UI for no v1 need.)
 - This mirrors the denormalization trade-off in [ADR 0005](./0005-pastoral-record-status-denormalization.md)
   and [ADR 0007](./0007-prayer-request-one-time-generation.md): a frozen per-record snapshot is kept
   alongside the live source because the historical view needs its own stable record.
+
+## Implementation notes (v1)
+
+What shipped, including small refinements to the plan made during the build:
+
+- **The engine is a pure module.** `guide-engine.js` (expand → filler → imposition),
+  `guide-components.js` (the Component catalog), `guide-seed.js` (the eight page types reborn +
+  the default template), and `guide-store.js` (snapshot/freeze/override + thin Firestore adapter)
+  are dual-export IIFE modules with no DOM/Firestore/Alpine, tested under `node --test`
+  (`test/guide-*.test.js`). The Phase-1 golden test pins the 16-page reproduction.
+- **Components are hyphenated custom tags.** A hyphen is required so the engine finds Components
+  without a full HTML parser. Two plan names changed accordingly: `theme` → `service-theme`,
+  `schedule` → `preaching-schedule`.
+- **Page placements carry `params`.** A `guide_templates` page entry is
+  `{ pageTemplateId, role, params }`; the single Hymn page is placed seven times, each
+  `params.field` binding a liturgy slot, with `params['omit-on-baptism']` on hymn2. This kept the
+  "eight Page Templates" count rather than seeding one per slot.
+- **Filler keeps ≥ 1 page** (`minFiller` default 1), matching today's always-one-sermon-notes-page
+  behaviour; overflow warns rather than dropping content, and imposition pads to a multiple of 4.
+- **Legacy is kept, not migrated.** `service-builder.html` and `service-guide.html` remain. The
+  Service Calendar routes v2/new weeks to the new `service-guide-editor.html` and legacy weeks to
+  the old generator. Removing the dead hardcoded code (plan Phase 5) is deferred until the seeded
+  templates are confirmed in production.
+- **Liturgy editing was not absorbed** into the unified editor in v1: the structured pickers stay
+  in the Builder (which the editor links to) to avoid destabilising the involvement-sync code. The
+  single-page merge of liturgy editing remains the plan's eventual target.

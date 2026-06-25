@@ -234,15 +234,22 @@
 
         const pages = [];
         let fillerTemplate = null;
+        let fillerTemplateIndex = -1;
         let fillerSlot = -1;
+        const snapPages = (snapshot && snapshot.pages) || [];
 
-        for (const page of (snapshot && snapshot.pages) || []) {
+        for (let i = 0; i < snapPages.length; i++) {
+            const page = snapPages[i];
             if (page.role === 'filler' && fillerTemplate === null) {
                 fillerTemplate = page;
+                fillerTemplateIndex = i;
                 fillerSlot = pages.length; // fillers splice in at the filler page's position
                 continue;
             }
+            // snapshotIndex lets the editor map a physical page back to the
+            // Page Template (and its Entry Fields) it came from.
             for (const physical of expandPage(page, values, serviceContext, catalog)) {
+                physical.snapshotIndex = i;
                 pages.push(physical);
             }
         }
@@ -255,7 +262,7 @@
             const base = fillerPhysical[0] || makePhysical(fillerTemplate, '', {});
             const clones = [];
             for (let i = 0; i < fillerCount; i++) {
-                clones.push(Object.assign({}, base, { role: 'filler', fillerIndex: i }));
+                clones.push(Object.assign({}, base, { role: 'filler', fillerIndex: i, snapshotIndex: fillerTemplateIndex }));
             }
             pages.splice(fillerSlot, 0, ...clones);
         }

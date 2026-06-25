@@ -119,6 +119,14 @@ test('filler expands to hit the target page count exactly', () => {
     assert.strictEqual(r.overflow, false);
 });
 
+test('every physical page is tagged with the snapshot page it came from', () => {
+    const s = snap([plain('a'), plain('notes', 'filler'), plain('z')], 6);
+    const r = Engine.resolveGuide(s, {}, {}, catalog);
+    assert.strictEqual(r.pages[0].snapshotIndex, 0);          // 'a'
+    assert.strictEqual(r.pages[1].snapshotIndex, 1);          // filler clone -> the filler page
+    assert.strictEqual(r.pages[r.pages.length - 1].snapshotIndex, 2); // 'z'
+});
+
 test('filler is inserted at its template position in reading order', () => {
     const s = snap([plain('a'), plain('notes', 'filler'), plain('z')], 6);
     const r = Engine.resolveGuide(s, {}, {}, catalog);
