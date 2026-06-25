@@ -182,6 +182,34 @@ test('the resolved 16 pages impose to the same saddle-stitch table as today', ()
     ]);
 });
 
+test('every seeded Page Template previews against sample data without error (Manager path)', () => {
+    // Mirrors service-guide-manager.js refreshPagePreview: derive fields, build
+    // sample values, expandPage with a sample context + (for component pages) a
+    // sample hymn slot. Guards the authoring preview for the shipped pages.
+    const seed = Seed.buildSeed(catalog);
+    const sampleCtx = Object.assign({}, fixtureContext(), { hymnsByField: { hymn1: { name: 'Sample', pages: ['s.png'], attribution: 'X' } } });
+    for (const pt of seed.pageTemplates) {
+        const fields = Engine.deriveEntryFields(pt.html, catalog).fields;
+        const values = {};
+        for (const f of fields) {
+            values[f.key] = f.type === 'list'
+                ? (f.renderAs === 'announcements' ? [{ title: 'A', content: 'B' }] : ['x'])
+                : (f.type === 'image' ? null : 'sample');
+        }
+        const snapPage = {
+            pageTemplateId: pt.id, role: 'normal', html: pt.html, css: pt.css,
+            resolvedStylePresetCss: '', entryFields: fields,
+            emitsPages: pt.emitsPages, params: pt.emitsPages === 'component' ? { field: 'hymn1' } : {},
+        };
+        const out = Engine.expandPage(snapPage, values, sampleCtx, catalog);
+        assert.ok(Array.isArray(out), `${pt.id} returns pages`);
+        if (pt.emitsPages !== 'component') {
+            assert.strictEqual(out.length, 1, `${pt.id} renders one page`);
+            assert.ok(out[0].html.length > 0, `${pt.id} renders non-empty html`);
+        }
+    }
+});
+
 test('seeded Page Templates cache the Entry Fields their HTML declares', () => {
     const seed = Seed.buildSeed(catalog);
     const prayer = seed.pageTemplates.find(p => p.id === 'seed_prayer');
