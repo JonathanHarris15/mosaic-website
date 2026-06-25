@@ -132,7 +132,7 @@
         <aside class="no-print w-64 bg-white border-r border-outline-variant flex flex-col shadow-sm">
             <div class="p-4 border-b border-outline-variant bg-surface">
                 <label class="font-semibold text-secondary uppercase tracking-wider text-[10px]">Service Guide Template</label>
-                <select x-model="selectedTemplateId" @change="changeTemplate($event.target.value)" :disabled="!canEdit"
+                <select :value="selectedTemplateId" @change="changeTemplate($event.target.value, $event.target)" :disabled="!canEdit"
                         class="mt-1 w-full text-xs rounded border-outline-variant px-2 py-1.5">
                     <template x-for="t in templates" :key="t.id">
                         <option :value="t.id" x-text="t.name + (t.isDefault ? ' (default)' : '')"></option>
@@ -158,7 +158,14 @@
 
         <!-- Middle: live preview -->
         <section class="flex-1 bg-gray-200 relative flex flex-col overflow-hidden shadow-inner">
-            <div class="flex-1 overflow-y-auto p-8 flex flex-col items-center custom-scrollbar">
+            <div x-show="hasNoTemplate" x-cloak class="flex-1 flex items-center justify-center text-center px-8">
+                <div class="max-w-md text-gray-400">
+                    <span class="material-symbols-outlined text-5xl mb-3">auto_stories</span>
+                    <p class="text-sm" x-text="canEdit ? 'No Service Guide Template is configured yet. Open the Service Guide Manager to set one up.' : 'No Service Guide Template has been configured for this church yet. Ask an editor to set one up.'"></p>
+                    <a x-show="canEdit" href="service-guide-manager.html" class="inline-block mt-4 px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold">Open Manager</a>
+                </div>
+            </div>
+            <div x-show="!hasNoTemplate" class="flex-1 overflow-y-auto p-8 flex flex-col items-center custom-scrollbar">
                 <div class="transition-transform duration-200 origin-top" :style="`transform: scale(${zoomLevel});`">
                     <template x-for="(page, index) in resolved.pages" :key="index">
                         <div class="preview-page" :id="'vp-page-' + index" @click="selectPageByPhysical(page)">

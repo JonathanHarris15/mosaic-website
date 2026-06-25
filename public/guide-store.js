@@ -44,7 +44,12 @@
     function normalizeServiceData(raw) {
         const data = {};
         for (const [key, val] of Object.entries(raw || {})) {
-            if (!key.includes('.')) data[key] = val;
+            // Copy plain object values, not their reference, so the dotted-key
+            // loop below writes only into store-owned objects and never mutates
+            // the caller's input (keeps this pure).
+            if (!key.includes('.')) {
+                data[key] = (val && typeof val === 'object' && !Array.isArray(val)) ? Object.assign({}, val) : val;
+            }
         }
         for (const [key, val] of Object.entries(raw || {})) {
             if (key.includes('.')) {
@@ -55,7 +60,10 @@
                     obj = obj[parts[i]];
                 }
                 const leaf = parts[parts.length - 1];
-                if (!obj[leaf]) obj[leaf] = val;
+                // Presence check, not truthiness: an existing nested value wins
+                // even when it is intentionally empty/false/0 (the dotted key is
+                // only a legacy fallback).
+                if (!(leaf in obj)) obj[leaf] = val;
             }
         }
         return data;

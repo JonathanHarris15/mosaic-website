@@ -24,9 +24,10 @@ function guideEditorV2() {
         userRole: 'viewer',
         loading: true,
         saving: false,
-        hasChanges: false,
         legacy: false,
         legacyGuideUrl: '',
+        _baseline: null,      // JSON of the saved state; drives hasChanges by diff
+        _resolveTimer: null,
 
         service: null,
         context: null,
@@ -47,6 +48,17 @@ function guideEditorV2() {
         previousAnnouncementsDate: '',
 
         get canEdit() { return ['editor', 'elder', 'admin', 'super_admin'].includes(this.userRole); },
+
+        // Dirty by diff against the last saved state (template + values), so
+        // merely opening or clicking around never shows "Unsaved". A new week
+        // (no baseline) is dirty for editors until first save.
+        _stateKey() { return JSON.stringify({ t: this.selectedTemplateId, v: this.values }); },
+        markBaseline() { this._baseline = this._stateKey(); },
+        get hasChanges() {
+            if (!this.snapshot || !this.canEdit) return false;
+            return this._baseline == null ? true : this._baseline !== this._stateKey();
+        },
+        get hasNoTemplate() { return !this.legacy && (!this.snapshot || !this.snapshot.pages.length); },
 
         async init() {
             const self = this;
@@ -88,23 +100,48 @@ function guideEditorV2() {
                 return;
             }
 
+            let savedWeek = false;
             if (GuideStore.isV2Guide(guide)) {
                 this.snapshot = guide.snapshot;
                 this.values = guide.values || {};
                 this.selectedTemplateId = guide.guideTemplateId || this.defaultTemplateId();
+                savedWeek = true;
             } else {
                 // First open of this week: snapshot from the church default.
                 this.selectedTemplateId = this.defaultTemplateId();
                 this.snapshot = this.buildSnapshotFor(this.selectedTemplateId);
-                this.hasChanges = this.canEdit; // unsaved until they save
             }
 
+            this.primeRequiredLists();
             this.applyPreviewStyles();
             this.resolve();
+            // A saved week starts clean; a new week is dirty until first save.
+            if (savedWeek) this.markBaseline();
             await this.fetchPreviousAnnouncements();
 
             if (this.canEdit) {
-                this.$watch('values', () => { if (!this.loading) { this.hasChanges = true; this.resolve(); } }, { deep: true });
+                // Re-render on edits (debounced — resolveGuide re-expands the
+                // whole booklet); hasChanges is a diff getter, not set here.
+                this.$watch('values', () => { if (!this.loading) this.scheduleResolve(); }, { deep: true });
+            }
+        },
+
+        scheduleResolve() {
+            clearTimeout(this._resolveTimer);
+            this._resolveTimer = setTimeout(() => this.resolve(), 150);
+        },
+
+        // Give required list Entry Fields one starter row at load (e.g. the blank
+        // announcement the old editor showed), folded into the baseline so it is
+        // not counted as an unsaved change.
+        primeRequiredLists() {
+            if (!this.snapshot) return;
+            for (const page of this.snapshot.pages) {
+                for (const f of (page.entryFields || [])) {
+                    if (f.type === 'list' && f.required && !Array.isArray(this.values[f.key])) {
+                        this.values[f.key] = [f.renderAs === 'announcements' ? { title: '', content: '' } : ''];
+                    }
+                }
             }
         },
 
@@ -131,11 +168,11 @@ function guideEditorV2() {
             if (!gt) return { targetPageCount: 16, pages: [] };
             return GuideStore.buildSnapshot(gt, this.pageTemplatesById, this.stylePresetsById);
         },
-        changeTemplate(id) {
+        changeTemplate(id, selectEl) {
             if (!id || id === this.selectedTemplateId) return;
             if (!confirm('Switch this week to a different Service Guide Template? Filled-in fields that exist in the new template are kept; the rest are cleared.')) {
-                // revert the <select> to the current value
-                this.$nextTick(() => { this.selectedTemplateId = this.selectedTemplateId; });
+                // revert the <select> back to the still-current template
+                if (selectEl) selectEl.value = this.selectedTemplateId;
                 return;
             }
             const newSnap = this.buildSnapshotFor(id);
@@ -143,7 +180,7 @@ function guideEditorV2() {
             this.snapshot = newSnap;
             this.selectedTemplateId = id;
             this.selectedPageIndex = null;
-            this.hasChanges = true;
+            this.primeRequiredLists();
             this.applyPreviewStyles();
             this.resolve();
         },
@@ -156,7 +193,7 @@ function guideEditorV2() {
             this.selectedTemplateId = this.defaultTemplateId();
             this.snapshot = this.buildSnapshotFor(this.selectedTemplateId);
             this.values = {};
-            this.hasChanges = true;
+            this.primeRequiredLists();
             this.applyPreviewStyles();
             this.resolve();
         },
@@ -193,13 +230,6 @@ function guideEditorV2() {
             this.selectedPageIndex = snapshotIndex;
             const page = this.snapshot.pages[snapshotIndex];
             if (!page) return;
-            // Make sure list-valued Entry Fields have an array to bind to.
-            for (const f of (page.entryFields || [])) {
-                if (f.type === 'list') {
-                    if (!Array.isArray(this.values[f.key])) this.values[f.key] = [];
-                    if (f.required && this.values[f.key].length === 0) this.addListItem(f);
-                }
-            }
             // scroll the first physical page from this snapshot page into view
             const idx = this.resolved.pages.findIndex(p => p.snapshotIndex === snapshotIndex);
             if (idx >= 0) {
@@ -317,7 +347,7 @@ function guideEditorV2() {
                 const template = this.templates.find(t => t.id === this.selectedTemplateId) || { id: this.selectedTemplateId };
                 const record = GuideStore.buildGuideRecord(template, this.snapshot, JSON.parse(JSON.stringify(this.values)));
                 await GuideStore.saveWeekGuide(db, this.date, record);
-                this.hasChanges = false;
+                this.markBaseline();
             } catch (e) {
                 console.error('Error saving guide:', e);
                 alert('Error saving. Check the console for details.');

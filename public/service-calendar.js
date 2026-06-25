@@ -721,11 +721,17 @@ window.navigateToGuide = function(date) {
     if (!isViewer && svc) {
         let incomplete = false;
         if (guide && guide.format === 'v2') {
-            const v = guide.values || {};
-            const annFilled = Array.isArray(v.announcements) && v.announcements.some(a => a && a.title);
-            if (!v.pp_nation || !v.pp_capital) incomplete = true;
-            if (!v.kids_lesson_title || !v.kids_lesson_verse) incomplete = true;
-            if (!annFilled) incomplete = true;
+            // Compute completeness from the frozen snapshot's required Entry
+            // Fields — the single source of truth the editor uses — so this never
+            // drifts as templates are customised. Fall back to a field heuristic
+            // if the guide modules aren't available for some reason.
+            if (window.GuideStore && guide.snapshot) {
+                incomplete = window.GuideStore.tasksRemaining(guide.snapshot, guide.values || {}) > 0;
+            } else {
+                const v = guide.values || {};
+                const annFilled = Array.isArray(v.announcements) && v.announcements.some(a => a && (a.title || a.content));
+                incomplete = (!v.pp_nation || !v.pp_capital) || (!v.kids_lesson_title || !v.kids_lesson_verse) || !annFilled;
+            }
         } else if (guide && guide.elements) {
             const prayer = guide.elements.find(el => el.type === 'pastoral_prayer');
             const kids = guide.elements.find(el => el.type === 'kids_section');

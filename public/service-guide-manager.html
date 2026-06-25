@@ -297,7 +297,7 @@
                             <button class="btn-ghost text-xs" @click="addTemplatePage()"><span class="material-symbols-outlined text-[16px]">add</span> Add page</button>
                         </div>
                         <div class="space-y-2">
-                            <template x-for="(pl, i) in editingTemplate.pages" :key="i">
+                            <template x-for="(pl, i) in editingTemplate.pages" :key="pl._uid">
                                 <div class="flex items-center gap-2 p-2 border border-outline-variant rounded-lg">
                                     <span class="text-[10px] text-gray-400 w-5 text-center" x-text="i+1"></span>
                                     <select x-model="pl.pageTemplateId" class="flex-1 text-sm rounded border-outline-variant px-2 py-1">

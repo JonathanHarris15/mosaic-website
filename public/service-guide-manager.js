@@ -36,6 +36,7 @@ function guideManager() {
         editingTemplate: null,     // { id?, name, targetPageCount, isDefault, pages:[] }
 
         toast: '',
+        _uidCounter: 0,
 
         get canEdit() { return ['editor', 'elder', 'admin', 'super_admin'].includes(this.userRole); },
 
@@ -97,7 +98,7 @@ function guideManager() {
             this.pageValidation = GuideEngine.validatePageHtml(p.html || '', this.catalog);
             const fields = this.pageValidation.entryFields || [];
             const snapshotPage = {
-                pageTemplateId: p.id || 'preview', role: p.isFiller ? 'normal' : 'normal',
+                pageTemplateId: p.id || 'preview', role: 'normal',
                 html: p.html || '', css: p.css || '',
                 resolvedStylePresetCss: this.presetCss(p.stylePresetId),
                 entryFields: fields, emitsPages: p.emitsPages || 'single', params: this.samplePageParams(p),
@@ -186,18 +187,22 @@ function guideManager() {
         },
 
         // ── Service Guide Templates ──────────────────────────────────────────────
+        // Stable client id for each placement row, so the reorder/remove x-for is
+        // keyed by identity (not array index) and native control state follows
+        // the moved row. Stripped before save.
+        _uid() { return 'row' + (this._uidCounter++); },
         newTemplate() {
             this.editingTemplate = { name: 'New Service Guide Template', targetPageCount: 16, isDefault: false, pages: [] };
         },
         editTemplate(gt) {
             const copy = JSON.parse(JSON.stringify(gt));
-            copy.pages = (copy.pages || []).map(p => ({ pageTemplateId: p.pageTemplateId, role: p.role || 'normal', params: p.params || {} }));
+            copy.pages = (copy.pages || []).map(p => ({ pageTemplateId: p.pageTemplateId, role: p.role || 'normal', params: p.params || {}, _uid: this._uid() }));
             this.editingTemplate = copy;
         },
         closeTemplate() { this.editingTemplate = null; },
         addTemplatePage() {
             const first = this.pageTemplates[0];
-            this.editingTemplate.pages.push({ pageTemplateId: first ? first.id : '', role: 'normal', params: {} });
+            this.editingTemplate.pages.push({ pageTemplateId: first ? first.id : '', role: 'normal', params: {}, _uid: this._uid() });
         },
         removeTemplatePage(i) { this.editingTemplate.pages.splice(i, 1); },
         moveTemplatePage(i, delta) {
@@ -208,8 +213,10 @@ function guideManager() {
             arr.splice(j, 0, item);
         },
         setFiller(i) {
-            // Exactly one Filler Page per template.
-            this.editingTemplate.pages.forEach((p, idx) => { p.role = (idx === i && p.role !== 'filler') ? 'filler' : 'normal'; });
+            // Exactly one Filler Page per template. The control is a radio, so it
+            // can only move the filler, never clear it (cleared only by removing
+            // the row); saveTemplate enforces exactly-one.
+            this.editingTemplate.pages.forEach((p, idx) => { p.role = (idx === i) ? 'filler' : 'normal'; });
         },
         pageEmitsComponent(pageTemplateId) {
             const pt = this.pageTemplate(pageTemplateId);
@@ -223,11 +230,25 @@ function guideManager() {
             const t = this.editingTemplate;
             if (!t.name || !t.name.trim()) { alert('Give the template a name.'); return; }
             if (!this.templatePageCountValid()) { alert('Target page count must be a positive multiple of 4.'); return; }
-            t.targetPageCount = Number(t.targetPageCount);
+            // Exactly one Filler Page (it absorbs page-count variance to hit the target).
+            if (t.pages.filter(p => p.role === 'filler').length !== 1) { alert('Mark exactly one page as the Filler Page.'); return; }
+            // Never orphan the church default: a default template can't be demoted
+            // without promoting another first (mirrors the delete guard).
+            const prior = this.guideTemplates.find(g => g.id === t.id);
+            if (prior && prior.isDefault && !t.isDefault) {
+                alert('A church default is required. Make another template the default before removing it from this one.');
+                return;
+            }
+            // Persist a clean copy: strip the client-only _uid from placements.
+            const clean = {
+                id: t.id, name: t.name, isDefault: !!t.isDefault,
+                targetPageCount: Number(t.targetPageCount),
+                pages: t.pages.map(p => ({ pageTemplateId: p.pageTemplateId, role: p.role || 'normal', params: p.params || {} })),
+            };
             try {
-                const id = await GuideStore.saveGuideTemplate(db, t);
+                const id = await GuideStore.saveGuideTemplate(db, clean);
                 await this.reload();
-                if (t.isDefault) await this.makeDefault(id, true);
+                if (clean.isDefault) await this.makeDefault(id, true);
                 await this.reload();
                 this.editingTemplate = null;
                 this.flash('Template saved');

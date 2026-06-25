@@ -22,6 +22,19 @@ test('normalizeServiceData folds dotted keys, nested value wins', () => {
     assert.strictEqual(out.liturgy.sermon, 'Rom 8');
 });
 
+test('normalizeServiceData does not mutate its input (stays pure)', () => {
+    const raw = { liturgy: { callToWorship: 'Ps 100' }, 'liturgy.sermon': 'Rom 8' };
+    const out = Store.normalizeServiceData(raw);
+    assert.strictEqual(out.liturgy.sermon, 'Rom 8');
+    assert.ok(!('sermon' in raw.liturgy), 'input liturgy was not mutated');
+    assert.notStrictEqual(out.liturgy, raw.liturgy, 'output nested object is a copy');
+});
+
+test('normalizeServiceData: a present-but-empty nested value wins over a dotted key', () => {
+    assert.strictEqual(Store.normalizeServiceData({ liturgy: { sermon: '' }, 'liturgy.sermon': 'FromDotted' }).liturgy.sermon, '');
+    assert.strictEqual(Store.normalizeServiceData({ liturgy: { flag: false }, 'liturgy.flag': true }).liturgy.flag, false);
+});
+
 test('baptismNamesOf reads the candidate array or a legacy string', () => {
     assert.strictEqual(Store.baptismNamesOf({ baptism: [{ name: 'A' }, { name: 'B' }] }), 'A, B');
     assert.strictEqual(Store.baptismNamesOf({ baptism: 'Legacy Name' }), 'Legacy Name');

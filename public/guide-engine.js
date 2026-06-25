@@ -76,6 +76,12 @@
                 const rest = html.slice(openEnd);
                 const cm = close.exec(rest);
                 if (cm) elementEnd = openEnd + cm.index + cm[0].length;
+                // Components are leaf placeholders: skip the whole element so the
+                // scanner never re-visits a Component nested in the body. Without
+                // this the visited spans overlap, which corrupts replaceInlineTags
+                // (it assumes ascending, non-overlapping edits) and makes
+                // deriveEntryFields double-count nested Input fields.
+                if (elementEnd > openEnd) TAG_OPEN_RE.lastIndex = elementEnd;
             }
             visit(name, attrs, { openStart, openEnd, elementEnd });
         }

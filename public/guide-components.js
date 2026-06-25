@@ -184,7 +184,10 @@
             const hymn = byField[field] || {};
             const ref = lit(ctx)[field] || {};
             const name = hymn.name || ref.name || '';
-            if (!name && !ref.id && !hymn.id) return [];
+            // Gate purely on the hymn name, matching the old generator's
+            // addHymnPages (`if (!hymnRef.name) return`): an unnamed slot
+            // contributes no pages and the Filler absorbs the freed slot.
+            if (!name) return [];
 
             const pages = Array.isArray(hymn.pages) ? hymn.pages : [];
             const attribution = hymn.attribution || '';
@@ -194,7 +197,9 @@
     </div>
     <div class="latex-hr mb-2"></div>`;
 
-            // Literal hymn or no images on file -> single placeholder page.
+            // Literal hymn or no images on file -> single placeholder page. The
+            // footer div is kept (matching the old page, which always rendered
+            // it) and carries the attribution — '' for a literal hymn.
             if (!pages.length) {
                 return [`<div class="h-full flex flex-col pb-8">
     ${header(name)}
@@ -204,6 +209,7 @@
         <p class="text-sm font-sans text-center">No music sheet found for:<br/><b>${esc(name)}</b></p>
       </div>
     </div>
+    <div class="text-center text-[7pt] italic mt-2"><span>${esc(attribution)}</span></div>
   </div>`];
             }
 

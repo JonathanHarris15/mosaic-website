@@ -24,6 +24,28 @@ test('forEachTag finds only hyphenated custom tags, in document order', () => {
 
 // ── Entry Field derivation ────────────────────────────────────────────────────
 
+test('forEachTag treats Components as leaf placeholders (no double-visit of nested tags)', () => {
+    const seen = [];
+    Engine.forEachTag('<oos-list><input-text key="k"></input-text></oos-list><service-theme></service-theme>',
+        (name) => seen.push(name));
+    // The inner input-text is inside oos-list's body and must NOT be visited again.
+    assert.deepStrictEqual(seen, ['oos-list', 'service-theme']);
+});
+
+test('a Component nested in another tag body is discarded cleanly (no duplicate, no leaked close tag)', () => {
+    const page = { html: '<oos-list><input-text key="k"></input-text></oos-list>' };
+    const out = Engine.expandPage(page, { k: 'FILL' }, { liturgy: {} }, catalog);
+    assert.match(out[0].html, /Order of Service/);                 // oos-list rendered
+    assert.ok(!/<\/oos-list>/.test(out[0].html), 'no leaked literal close tag');
+    assert.ok(!/FILL/.test(out[0].html), 'nested input not separately rendered');
+});
+
+test('deriveEntryFields does not false-duplicate an Input nested in another tag', () => {
+    const res = Engine.deriveEntryFields('<input-text key="k"><input-text key="k"></input-text></input-text>', catalog);
+    assert.deepStrictEqual(res.fields.map(f => f.key), ['k']);
+    assert.deepStrictEqual(res.duplicates, []);                  // inner tag skipped, not counted
+});
+
 test('deriveEntryFields collects Input Component fields and ignores Bound ones', () => {
     const html = '<oos-list></oos-list><input-text key="a" label="A"></input-text><input-list key="b" render-as="bullets"></input-list>';
     const { fields } = Engine.deriveEntryFields(html, catalog);
