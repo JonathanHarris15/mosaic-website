@@ -94,6 +94,44 @@ _Avoid_: elder alert, prayer summary, notification (unqualified)
 A Person who is baptized at a Service. A Service with `hasBaptism: true` carries a list of Baptism Candidates (Person references), replacing the former free-text baptism value. Being recorded as a Baptism Candidate sets that Person's `baptismDate` to the Service date. A candidate need not pre-exist as a Person — naming a new one creates the Person record.
 _Avoid_: Baptizee, baptism name, candidate (unqualified)
 
+## Service Guide Template System
+
+**Page Template**:
+A reusable definition of a single printable page, authored by an editor in the Page Library. Consists of user-written HTML/CSS (optionally inheriting a Style Preset) with embedded Components. Pages are composed into Service Guide Templates. The current special pages (title page, hymn sheet, pastoral prayer, Mosaic Kids, announcements, sermon notes, the Order of Service list) are reborn as developer-seeded Page Templates rather than hardcoded element types.
+_Avoid_: Page type, element, layout
+
+**Component**:
+A developer-authored preset embedded in a Page Template via a custom HTML tag. Two kinds: an **Input Component** declares an Entry Field that the OOS Editor prompts for each week; a **Bound Component** auto-pulls existing data (Service fields, the Order of Service, the `hymns` collection, the ESV API) and never prompts. All Components ship with the application — editors place them but do not author them. Casual synonym: "dynamic component."
+_Avoid_: Service Element (that is a liturgy sub-element), widget, control
+
+**Input Component**:
+A Component that declares one or more Entry Fields — the weekly fill-in-the-blanks (text, rich text, image, etc.). Surfaces as a prompt in the OOS Editor.
+_Avoid_: Field component, blank
+
+**Bound Component**:
+A Component that renders data already held by the Service or its sources (hymn sheet music, key verse text, the Order of Service list, the upcoming schedule, baptism candidate names). Carries no Entry Field and never prompts.
+_Avoid_: Auto component, data component
+
+**Entry Field**:
+The per-week input an Input Component declares. The full set of Entry Fields across a Service Guide Template's pages defines what the OOS Editor asks the editor to fill in for a given week.
+_Avoid_: Custom field, blank, prompt
+
+**Page Library**:
+The collection of all Page Templates available to compose into Service Guide Templates.
+_Avoid_: Template library, page store
+
+**Style Preset**:
+A reusable stylesheet (master CSS) that a Page Template can inherit application-wide styling from. Editors author Style Presets; a Page Template chooses which one to inherit.
+_Avoid_: Theme, master CSS (use only as descriptive prose)
+
+**Service Guide Template**:
+An ordered, counted selection of Page Templates from the Page Library that defines the structure of a Service Guide. Specifies page order, repetition, and which page is the Filler Page. One Service Guide Template is the church-wide default; any week's OOS Editor can override it for that week only.
+_Avoid_: SG Template (use only as shorthand), guide layout
+
+**Filler Page**:
+The Page Template within a Service Guide Template designated to expand or contract in count to hit the booklet's target page total. Generalises today's sermon-notes padding behaviour.
+_Avoid_: Padding page, blank page, spacer
+
 ## Core Entities
 
 ### Person
@@ -146,7 +184,7 @@ The sequence of liturgical elements for a specific Service.
 - **Purpose**: Defines the sequence of events for the Sunday gathering. It is a core part of the Service Guide.
 
 ### Service Element (Irregular Only)
-A dynamic component of an Irregular Service.
+A sub-element of an Irregular Service's liturgy. (Distinct from a **Component**, which belongs to the Service Guide Template System.)
 - **Fields**:
   - `key`: The label for the element (e.g., "Preacher", "Historic Confession").
   - `value`: The content or Person reference.
