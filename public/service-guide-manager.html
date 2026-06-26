@@ -8,6 +8,10 @@
     <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&family=Work+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <!-- CodeMirror: real line-numbered, syntax-highlighted HTML/CSS editing -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css" />
     <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
     <script id="tailwind-config">
         tailwind.config = { theme: { extend: {
@@ -25,6 +29,14 @@
     <script src="guide-seed.js"></script>
     <script src="guide-store.js"></script>
     <script src="service-guide-manager.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style type="text/tailwindcss">
         [x-cloak] { display: none !important; }
@@ -44,8 +56,17 @@
         .btn-primary { @apply px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-secondary transition-colors flex items-center gap-2; }
         .btn-ghost { @apply px-3 py-2 border border-outline-variant rounded-lg text-primary hover:bg-surface transition-colors flex items-center gap-2; }
         .code-editor { @apply w-full text-[11px] font-mono rounded border-outline-variant px-3 py-2 bg-gray-50; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3a3f4b; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4b515f; }
+        /* CodeMirror fills its pane and reads like a real editor */
+        .CodeMirror {
+            height: 100%; font-size: 13px; line-height: 1.6;
+            font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+        .CodeMirror-gutters { border-right: 1px solid rgba(255,255,255,0.06); background: #181b24; }
+        .cm-s-material-darker.CodeMirror { background: #1b1e27; }
+        .cm-s-material-darker .CodeMirror-gutters { background: #181b24; }
     </style>
     <style id="manager-dynamic-style"></style>
 </head>
@@ -109,92 +130,124 @@
                 </div>
             </div>
 
-            <!-- split authoring editor -->
-            <div x-show="editingPage" x-cloak class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="space-y-4">
-                    <div class="flex justify-between items-center">
-                        <button class="btn-ghost text-xs" @click="closePage()"><span class="material-symbols-outlined text-[16px]">arrow_back</span> Back</button>
-                        <div class="flex gap-2">
-                            <button class="btn-primary text-sm" @click="savePage()"><span class="material-symbols-outlined text-[18px]">save</span> Save</button>
-                        </div>
-                    </div>
+            <!-- IDE-style split authoring editor -->
+            <div x-show="editingPage" x-cloak class="fixed inset-x-0 top-16 bottom-0 z-40 flex flex-col bg-[#0f1117] text-gray-200">
 
-                    <div class="card space-y-3">
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Name</label>
-                                <input type="text" x-model="editingPage.name" class="w-full text-sm rounded border-outline-variant px-3 py-2" />
+                <!-- toolbar -->
+                <div class="h-11 flex items-center justify-between px-3 bg-[#15171f] border-b border-black/50 shrink-0">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <button class="px-2 py-1 rounded hover:bg-white/10 flex items-center gap-1 text-sm text-gray-400" @click="closePage()">
+                            <span class="material-symbols-outlined text-[18px]">arrow_back</span> Library
+                        </button>
+                        <span class="text-gray-600">/</span>
+                        <span class="material-symbols-outlined text-[16px] text-secondary" x-text="editingPage && editingPage.emitsPages === 'component' ? 'music_note' : 'description'"></span>
+                        <input x-model="editingPage.name" placeholder="Page name" class="bg-transparent text-sm font-medium text-gray-100 px-1.5 py-0.5 rounded hover:bg-white/5 focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-secondary/60 min-w-0 w-56" />
+                        <span x-show="editingPage && isSeed(editingPage.id)" class="text-[9px] uppercase tracking-wide text-gray-500 border border-gray-700 rounded px-1.5 py-0.5">seeded</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-1 text-xs px-2 py-1 rounded-full" :class="pageValidation.ok ? 'bg-success/15 text-success' : 'bg-error/20 text-red-300'">
+                            <span class="material-symbols-outlined text-[15px]" x-text="pageValidation.ok ? 'check_circle' : 'error'"></span>
+                            <span x-text="pageValidation.ok ? 'Valid' : (pageValidation.problems.length + ' problem' + (pageValidation.problems.length === 1 ? '' : 's'))"></span>
+                        </div>
+                        <button class="px-3 py-1.5 bg-primary text-white rounded-md text-sm font-semibold hover:bg-secondary transition-colors flex items-center gap-1.5" @click="savePage()">
+                            <span class="material-symbols-outlined text-[17px]">save</span> Save
+                        </button>
+                    </div>
+                </div>
+
+                <!-- body -->
+                <div class="flex-1 flex min-h-0">
+
+                    <!-- LEFT: editor column -->
+                    <div class="flex flex-col min-w-0 min-h-0" style="flex:1 1 56%">
+
+                        <!-- meta + palette strip -->
+                        <div class="bg-[#13151c] border-b border-black/40 shrink-0">
+                            <div class="flex items-center gap-3 px-3 py-2 text-xs flex-wrap">
+                                <label class="flex items-center gap-1.5 text-gray-400">
+                                    <span class="material-symbols-outlined text-[15px]">palette</span>
+                                    <select x-model="editingPage.stylePresetId" @change="refreshPagePreview()" class="bg-[#1d2029] border border-black/40 rounded px-2 py-1 text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-secondary/60">
+                                        <option value="">(no preset)</option>
+                                        <template x-for="sp in stylePresets" :key="sp.id"><option :value="sp.id" x-text="sp.name"></option></template>
+                                    </select>
+                                </label>
+                                <label class="flex items-center gap-1.5 text-gray-400 cursor-pointer" title="A Bound Component drives the page count">
+                                    <input type="checkbox" class="accent-primary" :checked="editingPage.emitsPages === 'component'" @change="editingPage.emitsPages = $event.target.checked ? 'component' : 'single'; refreshPagePreview()" />
+                                    Multi-page
+                                </label>
+                                <label class="flex items-center gap-1.5 text-gray-400 cursor-pointer" title="Can expand/contract to hit the booklet's target page count">
+                                    <input type="checkbox" class="accent-primary" x-model="editingPage.isFiller" /> Filler-capable
+                                </label>
                             </div>
-                            <div>
-                                <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Style Preset</label>
-                                <select x-model="editingPage.stylePresetId" @change="refreshPagePreview()" class="w-full text-sm rounded border-outline-variant px-3 py-2">
-                                    <option value="">(none)</option>
-                                    <template x-for="sp in stylePresets" :key="sp.id"><option :value="sp.id" x-text="sp.name"></option></template>
-                                </select>
+                            <div class="flex items-center gap-1.5 px-3 pb-2 flex-wrap">
+                                <span class="text-[10px] uppercase tracking-wider text-gray-500 mr-1">Insert</span>
+                                <template x-for="c in palette.bound" :key="c.tag">
+                                    <button @click="insertTag(c.tag, 'bound')" class="px-2 py-0.5 rounded text-[11px] bg-secondary/20 text-sky-200 hover:bg-secondary/40 transition-colors" x-text="c.label" :title="'<' + c.tag + '> — auto data'"></button>
+                                </template>
+                                <template x-for="c in palette.input" :key="c.tag">
+                                    <button @click="insertTag(c.tag, 'input')" class="px-2 py-0.5 rounded text-[11px] bg-amber-500/20 text-amber-200 hover:bg-amber-500/40 transition-colors" x-text="c.label" :title="'<' + c.tag + '> — weekly entry field'"></button>
+                                </template>
                             </div>
                         </div>
-                        <div class="flex gap-6 items-center">
-                            <label class="flex items-center gap-2 text-xs text-gray-600">
-                                <input type="checkbox" :checked="editingPage.emitsPages === 'component'" @change="editingPage.emitsPages = $event.target.checked ? 'component' : 'single'; refreshPagePreview()" />
-                                Multi-page (a Bound Component drives the page count)
-                            </label>
-                            <label class="flex items-center gap-2 text-xs text-gray-600">
-                                <input type="checkbox" x-model="editingPage.isFiller" />
-                                Can act as Filler Page
-                            </label>
+
+                        <!-- file tabs -->
+                        <div class="flex items-stretch bg-[#0f1117] border-b border-black/50 shrink-0 text-xs">
+                            <button class="px-4 py-2 flex items-center gap-1.5 border-r border-black/40 transition-colors" :class="editorTab === 'html' ? 'bg-[#1b1e27] text-gray-100' : 'text-gray-500 hover:text-gray-300'" @click="setEditorTab('html')">
+                                <span class="material-symbols-outlined text-[15px] text-orange-400">html</span> page.html
+                            </button>
+                            <button class="px-4 py-2 flex items-center gap-1.5 border-r border-black/40 transition-colors" :class="editorTab === 'css' ? 'bg-[#1b1e27] text-gray-100' : 'text-gray-500 hover:text-gray-300'" @click="setEditorTab('css')">
+                                <span class="material-symbols-outlined text-[15px] text-blue-400">style</span> styles.css
+                            </button>
+                        </div>
+
+                        <!-- code editors (CodeMirror enhances these textareas) -->
+                        <div class="flex-1 min-h-0 relative bg-[#1b1e27]">
+                            <div x-show="editorTab === 'html'" class="absolute inset-0 overflow-hidden">
+                                <textarea id="page-html-editor" x-model="editingPage.html" @input="refreshPagePreview()" class="w-full h-full p-3 bg-[#1b1e27] text-gray-200 font-mono text-[13px] resize-none focus:outline-none"></textarea>
+                            </div>
+                            <div x-show="editorTab === 'css'" class="absolute inset-0 overflow-hidden">
+                                <textarea id="page-css-editor" x-model="editingPage.css" @input="refreshPagePreview()" class="w-full h-full p-3 bg-[#1b1e27] text-gray-200 font-mono text-[13px] resize-none focus:outline-none"></textarea>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- palette -->
-                    <div class="card">
-                        <div class="text-[10px] font-bold uppercase text-gray-500 mb-2">Component Palette — click to insert</div>
-                        <div class="text-[9px] font-bold uppercase text-secondary mb-1">Bound (auto data)</div>
-                        <div class="flex flex-wrap gap-1.5 mb-3">
-                            <template x-for="c in palette.bound" :key="c.tag">
-                                <button @click="insertTag(c.tag, 'bound')" class="px-2 py-1 bg-secondary/10 text-secondary text-[11px] rounded hover:bg-secondary/20" x-text="c.label"></button>
-                            </template>
+                    <!-- RIGHT: live preview -->
+                    <div class="flex flex-col min-h-0 border-l border-black/50 bg-[#202430]" style="flex:1 1 44%">
+                        <div class="h-9 flex items-center justify-between px-3 bg-[#13151c] border-b border-black/40 shrink-0 text-xs text-gray-400">
+                            <div class="flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[15px]">visibility</span> Live preview
+                                <span class="text-gray-600" x-show="pagePreviewPages.length">· <span x-text="pagePreviewPages.length"></span> pg</span>
+                            </div>
+                            <div class="flex items-center gap-0.5">
+                                <button class="p-1 rounded hover:bg-white/10" @click="zoomPreview(-0.1)" title="Zoom out"><span class="material-symbols-outlined text-[16px]">remove</span></button>
+                                <span class="w-10 text-center tabular-nums" x-text="Math.round(previewZoom * 100) + '%'"></span>
+                                <button class="p-1 rounded hover:bg-white/10" @click="zoomPreview(0.1)" title="Zoom in"><span class="material-symbols-outlined text-[16px]">add</span></button>
+                                <button class="ml-1 px-2 py-0.5 rounded hover:bg-white/10 text-[11px] border border-white/10" @click="fitPreview()" title="Fit to width">Fit</button>
+                            </div>
                         </div>
-                        <div class="text-[9px] font-bold uppercase text-primary mb-1">Input (weekly fields)</div>
-                        <div class="flex flex-wrap gap-1.5">
-                            <template x-for="c in palette.input" :key="c.tag">
-                                <button @click="insertTag(c.tag, 'input')" class="px-2 py-1 bg-primary/10 text-primary text-[11px] rounded hover:bg-primary/20" x-text="c.label"></button>
+                        <div id="preview-scroll" class="flex-1 min-h-0 overflow-auto p-6 custom-scrollbar">
+                            <template x-for="(pg, i) in pagePreviewPages" :key="i">
+                                <div class="mx-auto mb-6" :style="`width:${5.5 * previewZoom}in; height:${8.5 * previewZoom}in`">
+                                    <div class="preview-page !mx-0 !mb-0 ring-1 ring-black/30" style="transform-origin:top left" :style="`transform:scale(${previewZoom})`">
+                                        <div class="h-full" x-html="pg.html"></div>
+                                    </div>
+                                </div>
                             </template>
-                        </div>
-                    </div>
-
-                    <div class="card">
-                        <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">HTML</label>
-                        <textarea id="page-html-editor" x-model="editingPage.html" @input="refreshPagePreview()" rows="14" class="code-editor"></textarea>
-                        <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1 mt-3">Page CSS (optional)</label>
-                        <textarea x-model="editingPage.css" @input="refreshPagePreview()" rows="5" class="code-editor"></textarea>
-                    </div>
-
-                    <!-- validation -->
-                    <div class="card" :class="pageValidation.ok ? 'border-success/40' : 'border-error/40'">
-                        <div class="flex items-center gap-2 text-sm font-semibold" :class="pageValidation.ok ? 'text-success' : 'text-error'">
-                            <span class="material-symbols-outlined text-[18px]" x-text="pageValidation.ok ? 'check_circle' : 'error'"></span>
-                            <span x-text="pageValidation.ok ? 'No problems' : 'Validation problems'"></span>
-                        </div>
-                        <ul class="mt-2 text-xs text-error space-y-1" x-show="!pageValidation.ok">
-                            <template x-for="(p, i) in pageValidation.problems" :key="i">
-                                <li x-text="p.kind === 'unknown_tag' ? ('Unknown component tag: <' + p.tag + '>') : ('Duplicate entry field key: ' + p.key)"></li>
-                            </template>
-                        </ul>
-                        <div class="mt-2 text-[11px] text-gray-500" x-show="pageValidation.entryFields && pageValidation.entryFields.length">
-                            Entry fields: <span x-text="pageValidation.entryFields.map(f => f.key + (f.required ? '*' : '')).join(', ')"></span>
+                            <div x-show="pagePreviewPages.length === 0" class="text-gray-500 text-sm py-16 text-center">No preview — a multi-page component emits nothing for the sample data.</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- preview -->
-                <div>
-                    <div class="text-[10px] font-bold uppercase text-gray-500 mb-2">Live preview (sample data)</div>
-                    <div class="bg-gray-200 rounded-xl p-6 flex flex-col items-center max-h-[80vh] overflow-y-auto custom-scrollbar">
-                        <template x-for="(pg, i) in pagePreviewPages" :key="i">
-                            <div class="preview-page"><div class="h-full" x-html="pg.html"></div></div>
-                        </template>
-                        <div x-show="pagePreviewPages.length === 0" class="text-gray-400 text-sm py-10">No preview — a multi-page component emits nothing for the sample data.</div>
-                    </div>
+                <!-- status bar -->
+                <div class="h-7 flex items-center gap-4 px-3 bg-primary text-white/90 text-[11px] shrink-0 overflow-hidden">
+                    <span class="flex items-center gap-1 shrink-0" :class="pageValidation.ok ? '' : 'text-red-200'">
+                        <span class="material-symbols-outlined text-[14px]" x-text="pageValidation.ok ? 'check' : 'priority_high'"></span>
+                        <span class="truncate max-w-[40vw]" x-text="pageValidation.ok ? 'No problems' : pageValidation.problems.map(p => p.kind === 'unknown_tag' ? ('unknown <' + p.tag + '>') : ('duplicate ' + p.key)).join(', ')"></span>
+                    </span>
+                    <span class="opacity-80 truncate" x-show="pageValidation.entryFields && pageValidation.entryFields.length">
+                        fields: <span x-text="pageValidation.entryFields.map(f => f.key + (f.required ? '*' : '')).join(', ')"></span>
+                    </span>
+                    <span class="ml-auto opacity-70 shrink-0" x-text="editingPage && editingPage.emitsPages === 'component' ? 'multi-page' : 'single page'"></span>
                 </div>
             </div>
         </section>

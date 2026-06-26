@@ -32,6 +32,13 @@ function guideManager() {
         editingPage: null,         // { id?, name, html, css, stylePresetId, emitsPages, isFiller }
         pageValidation: { ok: true, problems: [] },
         pagePreviewPages: [],
+        // IDE editor state (Page Library split editor)
+        editorTab: 'html',         // 'html' | 'css'
+        previewZoom: 0.75,
+        _cmHtml: null,
+        _cmCss: null,
+        _cmSuppress: false,        // ignore CodeMirror change events while we set values
+        _previewTimer: null,
         editingPreset: null,       // { id?, name, css }
         editingTemplate: null,     // { id?, name, targetPageCount, isDefault, pages:[] }
 
@@ -82,14 +89,97 @@ function guideManager() {
         newPage() {
             this.editingPage = { name: 'New Page', html: '<div class="h-full"></div>', css: '',
                 stylePresetId: (this.stylePresets[0] && this.stylePresets[0].id) || '', emitsPages: 'single', isFiller: false };
+            this.editorTab = 'html';
             this.refreshPagePreview();
+            this.openEditorUI();
         },
         editPage(pt) {
             this.editingPage = JSON.parse(JSON.stringify(pt));
             if (this.editingPage.emitsPages == null) this.editingPage.emitsPages = 'single';
+            this.editorTab = 'html';
             this.refreshPagePreview();
+            this.openEditorUI();
         },
         closePage() { this.editingPage = null; this.pagePreviewPages = []; },
+
+        // ── code editor (CodeMirror) ───────────────────────────────────────────
+        // Enhance the two textareas into line-numbered, syntax-highlighted editors.
+        // Created once (lazily) and reused; falls back to the plain textareas when
+        // the CodeMirror CDN is unavailable.
+        initCodeEditors() {
+            if (typeof CodeMirror === 'undefined') return;
+            const self = this;
+            const common = {
+                theme: 'material-darker', lineNumbers: true, lineWrapping: false,
+                autoCloseBrackets: true, matchBrackets: true, styleActiveLine: true,
+                tabSize: 2, indentUnit: 2,
+            };
+            if (!this._cmHtml) {
+                const ta = document.getElementById('page-html-editor');
+                if (ta) {
+                    this._cmHtml = CodeMirror.fromTextArea(ta, Object.assign({ mode: 'htmlmixed' }, common));
+                    this._cmHtml.on('change', (cm) => {
+                        if (self._cmSuppress || !self.editingPage) return;
+                        self.editingPage.html = cm.getValue();
+                        self.schedulePreview();
+                    });
+                }
+            }
+            if (!this._cmCss) {
+                const ta = document.getElementById('page-css-editor');
+                if (ta) {
+                    this._cmCss = CodeMirror.fromTextArea(ta, Object.assign({ mode: 'css' }, common));
+                    this._cmCss.on('change', (cm) => {
+                        if (self._cmSuppress || !self.editingPage) return;
+                        self.editingPage.css = cm.getValue();
+                        self.schedulePreview();
+                    });
+                }
+            }
+        },
+        // Push the current editingPage buffer into the editors without retriggering
+        // the change handlers, then refresh layout (CodeMirror mis-sizes if it was
+        // initialised while hidden).
+        syncEditorsFromState() {
+            if (!this.editingPage) return;
+            this._cmSuppress = true;
+            if (this._cmHtml) this._cmHtml.setValue(this.editingPage.html || '');
+            if (this._cmCss) this._cmCss.setValue(this.editingPage.css || '');
+            this._cmSuppress = false;
+            this.$nextTick(() => {
+                if (this._cmHtml) this._cmHtml.refresh();
+                if (this._cmCss) this._cmCss.refresh();
+            });
+        },
+        openEditorUI() {
+            this.$nextTick(() => {
+                this.initCodeEditors();
+                this.syncEditorsFromState();
+                this.fitPreview();
+            });
+        },
+        setEditorTab(tab) {
+            this.editorTab = tab;
+            this.$nextTick(() => {
+                const cm = tab === 'html' ? this._cmHtml : this._cmCss;
+                if (cm) cm.refresh();
+            });
+        },
+        schedulePreview() {
+            clearTimeout(this._previewTimer);
+            this._previewTimer = setTimeout(() => this.refreshPagePreview(), 200);
+        },
+        zoomPreview(delta) {
+            this.previewZoom = Math.min(2, Math.max(0.3, Math.round((this.previewZoom + delta) * 100) / 100));
+        },
+        // Scale the 5.5in-wide page to the preview pane's width.
+        fitPreview() {
+            const el = document.getElementById('preview-scroll');
+            if (!el) return;
+            const avail = el.clientWidth - 48; // minus the p-6 padding
+            const pageW = 5.5 * 96;
+            if (avail > 0) this.previewZoom = Math.min(1.5, Math.max(0.3, Math.round((avail / pageW) * 100) / 100));
+        },
 
         // Live validation + preview against sample data.
         refreshPagePreview() {
@@ -124,8 +214,6 @@ function guideManager() {
         },
 
         insertTag(tag, kind) {
-            const ta = document.getElementById('page-html-editor');
-            if (!ta) return;
             let snippet;
             if (kind === 'input') {
                 const key = (tag === 'input-list') ? 'my_list' : 'my_field';
@@ -134,6 +222,21 @@ function guideManager() {
             } else {
                 snippet = `<${tag}></${tag}>`;
             }
+            // Components live in the HTML, so always target the HTML editor.
+            if (this._cmHtml) {
+                if (this.editorTab !== 'html') this.setEditorTab('html');
+                const cm = this._cmHtml;
+                this.$nextTick(() => {
+                    cm.replaceSelection(snippet);
+                    this.editingPage.html = cm.getValue();
+                    cm.focus();
+                    this.refreshPagePreview();
+                });
+                return;
+            }
+            // Fallback: plain textarea (CodeMirror unavailable).
+            const ta = document.getElementById('page-html-editor');
+            if (!ta) return;
             const start = ta.selectionStart || 0;
             const end = ta.selectionEnd || 0;
             const v = this.editingPage.html || '';
@@ -149,6 +252,7 @@ function guideManager() {
                 const id = await GuideStore.savePageTemplate(db, this.editingPage, this.catalog);
                 await this.reload();
                 this.editingPage = JSON.parse(JSON.stringify(this.pageTemplate(id)));
+                this.syncEditorsFromState();
                 this.flash('Page saved');
             } catch (e) { console.error(e); alert('Error saving page. Check the console.'); }
         },
