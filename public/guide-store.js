@@ -139,6 +139,81 @@
         return !!(guide && !isV2Guide(guide) && Array.isArray(guide.elements));
     }
 
+    // ── Builder/Generator surfaces (ADR-0010) ─────────────────────────────────
+    // The Service Guide is filled by two parties on two surfaces: the Order of
+    // Service editor (builder) and the Service Guide generator (generator). These
+    // pure helpers split one frozen snapshot between them.
+
+    // Partition a snapshot's Entry Fields by the surface that informs them, so the
+    // Builder shows only its prompts and the generator shows only its own. A field
+    // with no surface defaults to generator (Party 2's fill-in-the-blanks).
+    function partitionEntryFields(snapshot) {
+        const builder = [];
+        const generator = [];
+        for (const f of Engine.snapshotEntryFields(snapshot)) {
+            (f && f.surface === 'builder' ? builder : generator).push(f);
+        }
+        return { builder, generator };
+    }
+
+    function catalogOf(catalog) {
+        return catalog || (globalThis.GuideComponents && globalThis.GuideComponents.defaultCatalog) || null;
+    }
+
+    // The bespoke Builder sections a template requests — the `section` id of every
+    // non-static builder-surface Component placed in the snapshot (e.g. 'baptism',
+    // 'pastoral-prayer-subjects', 'congregational-prayer'). Drives which extra
+    // prompts the Order of Service editor renders for the chosen template.
+    function builderSections(snapshot, catalog) {
+        const cat = catalogOf(catalog);
+        const out = [];
+        const seen = new Set();
+        for (const page of (snapshot && snapshot.pages) || []) {
+            for (const tag of Engine.componentTagsIn(page && page.html)) {
+                const comp = cat && cat.get(tag);
+                if (comp && comp.surface === 'builder' && comp.section && !seen.has(comp.section)) {
+                    seen.add(comp.section);
+                    out.push(comp.section);
+                }
+            }
+        }
+        return out;
+    }
+
+    // A week has a baptism in the new system iff its template places the baptism
+    // component — so `hasBaptism` is derived from the chosen template, not a
+    // separate checkbox (ADR-0010; legacy weeks keep the checkbox).
+    function templateIncludesBaptism(snapshot, catalog) {
+        return builderSections(snapshot, catalog).includes('baptism');
+    }
+
+    // Which Service Guide system a week uses. An explicit per-week `guideSystem`
+    // wins; otherwise a pre-existing legacy `elements` blob falls back to legacy;
+    // everything else (incl. a brand-new week) defaults to the new v2 system.
+    function guideSystemOf(service) {
+        const s = service || {};
+        if (s.guideSystem === 'legacy') return 'legacy';
+        if (s.guideSystem === 'v2') return 'v2';
+        if (isLegacyGuide(s.guide)) return 'legacy';
+        return 'v2';
+    }
+
+    // The single routing rule shared by the Service Calendar and the Order of
+    // Service editor's "Generate Service Guide" action, so the two never drift.
+    function guideHref(service, date) {
+        const enc = encodeURIComponent(date);
+        return guideSystemOf(service) === 'legacy'
+            ? `service-guide.html?date=${enc}`
+            : `service-guide-editor.html?date=${enc}`;
+    }
+
+    // Merge a surface's filled values into the week's shared values map without
+    // clobbering the other surface's keys (the two parties write at different
+    // times — ADR-0010). Pure: neither argument is mutated.
+    function mergeValues(existing, incoming) {
+        return Object.assign({}, existing || {}, incoming || {});
+    }
+
     // ── tasks-remaining (generic, ADR-0008 §6) ────────────────────────────────
     // Computed from required Entry Fields rather than the three hardcoded pages.
     // A field marked `required` in its Component tag is unfilled when blank; a
@@ -360,6 +435,8 @@
         indexById, normalizeServiceData, baptismNamesOf, buildSnapshot,
         buildGuideRecord, preserveValues, isV2Guide, isLegacyGuide,
         isEntryFieldFilled, tasksRemaining, nextTaskPageIndex,
+        partitionEntryFields, builderSections, templateIncludesBaptism,
+        guideSystemOf, guideHref, mergeValues,
         // adapter
         resolveServiceContext, loadCatalog, seedAll, seedIfEmpty, saveStylePreset,
         savePageTemplate, saveGuideTemplate, setDefaultGuideTemplate, deletePageTemplate,

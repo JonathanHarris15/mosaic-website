@@ -206,10 +206,31 @@
                 <h1 class="font-display-lg text-4xl text-primary mb-2" x-text="formatDate(date)"></h1>
                 <p class="font-body-md text-secondary">Order of Service Builder</p>
             </div>
-            <label class="flex items-center justify-end gap-2 cursor-pointer group mb-1" x-show="canEdit" for="has-baptism-checkbox">
-                <span class="font-label-md text-secondary group-hover:text-primary transition-colors">Include Baptism?</span>
-                <input type="checkbox" id="has-baptism-checkbox" name="has-baptism" x-model="service.hasBaptism" :disabled="!canEdit" class="rounded border-outline-variant text-primary focus:ring-primary disabled:opacity-50">
-            </label>
+            <!-- Service Guide system (ADR-0010): toggle legacy, or pick the week's
+                 Service Guide Template. The template drives which template-driven
+                 sections (baptism, prayer subjects) this editor prompts. -->
+            <div class="flex flex-col items-end gap-2 mb-1" x-show="canEdit">
+                <label class="flex items-center justify-end gap-2 cursor-pointer group" for="use-legacy-checkbox">
+                    <span class="font-label-md text-secondary group-hover:text-primary transition-colors">Use legacy system</span>
+                    <input type="checkbox" id="use-legacy-checkbox" :checked="useLegacySystem" @change="setUseLegacy($event.target.checked)" :disabled="!canEdit" class="rounded border-outline-variant text-primary focus:ring-primary disabled:opacity-50">
+                </label>
+                <template x-if="useLegacySystem">
+                    <label class="flex items-center justify-end gap-2 cursor-pointer group" for="has-baptism-checkbox">
+                        <span class="font-label-md text-secondary group-hover:text-primary transition-colors">Include Baptism?</span>
+                        <input type="checkbox" id="has-baptism-checkbox" name="has-baptism" x-model="service.hasBaptism" :disabled="!canEdit" class="rounded border-outline-variant text-primary focus:ring-primary disabled:opacity-50">
+                    </label>
+                </template>
+                <template x-if="!useLegacySystem">
+                    <label class="flex items-center justify-end gap-2" for="guide-template-select">
+                        <span class="font-label-md text-secondary">Service Guide Template</span>
+                        <select id="guide-template-select" :value="selectedTemplateId" @change="changeGuideTemplate($event.target.value)" :disabled="!canEdit || !guideCatalogLoaded" class="rounded-lg border-outline-variant bg-surface-container-low text-sm py-1.5 pl-3 pr-8 disabled:opacity-50">
+                            <template x-for="t in guideTemplates" :key="t.id">
+                                <option :value="t.id" x-text="t.name + (t.isDefault ? ' (default)' : '')"></option>
+                            </template>
+                        </select>
+                    </label>
+                </template>
+            </div>
         </div>
 
         <template x-if="!service.isIrregular">
@@ -1161,7 +1182,7 @@
                             <option value="Congregational Prayer">Congregational Prayer</option>
                         </select>
                     </div>
-                    <div x-show="service.liturgy.prayerLabel !== 'Congregational Prayer'" class="field-group !mb-0 md:flex-row md:items-center md:justify-between md:gap-8">
+                    <div x-show="showPrayerSubjects && service.liturgy.prayerLabel !== 'Congregational Prayer'" class="field-group !mb-0 md:flex-row md:items-center md:justify-between md:gap-8">
                         <label class="field-label !text-[10px]" for="prayer-male-search">Male Being Prayed For</label>
                         <div x-data="personPicker(service.liturgy.prayerMale, $data, 'males')" 
                              @click.away="open = false"
@@ -1213,7 +1234,7 @@
                         </div>
                     </div>
 
-                    <div x-show="service.liturgy.prayerLabel !== 'Congregational Prayer'" class="field-group !mb-0 md:flex-row md:items-center md:justify-between md:gap-8">
+                    <div x-show="showPrayerSubjects && service.liturgy.prayerLabel !== 'Congregational Prayer'" class="field-group !mb-0 md:flex-row md:items-center md:justify-between md:gap-8">
                         <label class="field-label !text-[10px]" for="prayer-female-search">Female Being Prayed For</label>
                         <div x-data="personPicker(service.liturgy.prayerFemale, $data, 'females')" 
                              @click.away="open = false"
@@ -1266,8 +1287,10 @@
                     </div>
                 </div>
 
-                <!-- Prayer Requests (pastoral-prayer subjects) — Elders/super admins only -->
-                <template x-if="isShepherd && (service.liturgy.prayerMale.id || service.liturgy.prayerFemale.id)">
+                <!-- Prayer Requests (pastoral-prayer subjects) — Elders/super admins only.
+                     In the new system these are gated by the template requesting the
+                     pastoral-prayer-subjects section (ADR-0010); always shown in legacy. -->
+                <template x-if="showPrayerSubjects && isShepherd && (service.liturgy.prayerMale.id || service.liturgy.prayerFemale.id)">
                     <div class="mt-2 mb-4 rounded-xl border border-secondary/30 bg-secondary-container/15 p-4" x-cloak>
                         <div class="flex items-center gap-1.5 mb-3">
                             <span class="material-symbols-outlined text-[16px] text-secondary">lock</span>
@@ -1394,7 +1417,7 @@
             </div>
 
             <!-- 11. Baptism -->
-            <div x-show="service.hasBaptism" x-transition class="form-section border-primary bg-primary-fixed/10" data-field-key="baptism">
+            <div x-show="showBaptismSection" x-transition class="form-section border-primary bg-primary-fixed/10" data-field-key="baptism">
                 <div class="field-group !mb-2">
                     <div class="flex flex-row-reverse items-center gap-2">
                         <span class="material-symbols-outlined text-primary text-sm">water_drop</span>
@@ -1760,10 +1783,10 @@
         <!-- Service Actions -->
         <div class="mt-12 flex flex-col items-center gap-6" x-show="canEdit">
             <div class="flex justify-center gap-4">
-                 <a :href="'service-guide.html?date=' + date"
+                 <a :href="guideGenerateHref()"
                      class="bg-secondary text-on-secondary hover:bg-primary transition-colors duration-200 flex items-center gap-1.5 px-6 py-2 rounded-lg text-[10px] font-label-md uppercase tracking-widest shadow-sm">
                      <span class="material-symbols-outlined text-[16px]">auto_stories</span>
-                     Generate Service Guide
+                     <span x-text="useLegacySystem ? 'Generate Service Guide (Legacy)' : 'Generate Service Guide'"></span>
                  </a>                <button id="download-music-btn" @click="downloadMusicSheets()"
                     class="bg-secondary text-on-secondary hover:bg-primary transition-colors duration-200 flex items-center gap-1.5 px-6 py-2 rounded-lg text-[10px] font-label-md uppercase tracking-widest shadow-sm">
                     <span class="material-symbols-outlined text-[16px]">picture_as_pdf</span>
@@ -1914,6 +1937,13 @@
 
     <script src="date-utils.js"></script>
     <script src="prayer-suggestions.js"></script>
+    <!-- Service Guide engine/catalog/seed/store: the Order of Service editor picks
+         the week's Service Guide Template (or toggles legacy) and gates its
+         template-driven Builder sections (ADR-0010). -->
+    <script src="guide-engine.js"></script>
+    <script src="guide-components.js"></script>
+    <script src="guide-seed.js"></script>
+    <script src="guide-store.js"></script>
     <script src="service-builder.js"></script>
 </body>
 

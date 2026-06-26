@@ -198,6 +198,100 @@ function serviceForm() {
         personToAdd: { name: '', callback: null },
         duplicateWarning: false,
 
+        // ── Service Guide system (ADR-0010) ────────────────────────────────────
+        // The Order of Service editor chooses the week's Service Guide Template, or
+        // toggles back to the legacy generator. The chosen template's builder-
+        // surface section components (baptism, pastoral-prayer subjects) decide
+        // which template-driven sections this page prompts.
+        guideSystem: 'v2',                  // 'v2' | 'legacy'
+        guideCatalogLoaded: false,
+        guideTemplates: [],
+        _pageTemplatesById: {},
+        _stylePresetsById: {},
+        selectedTemplateId: '',
+        guideSnapshot: null,
+
+        get useLegacySystem() { return this.guideSystem === 'legacy'; },
+        get _guideCatalog() { return (window.GuideComponents && window.GuideComponents.defaultCatalog) || null; },
+        // The bespoke Builder sections the chosen template requests (null in legacy
+        // mode, where the static form shows everything).
+        get _builderSections() {
+            if (this.guideSystem === 'legacy' || !this.guideSnapshot || !window.GuideStore) return null;
+            return GuideStore.builderSections(this.guideSnapshot, this._guideCatalog);
+        },
+        // Baptism: legacy uses the "Include Baptism?" checkbox; v2 derives presence
+        // from whether the template places the baptism component.
+        get showBaptismSection() {
+            if (this.guideSystem === 'legacy') return !!this.service.hasBaptism;
+            return !!(this._builderSections && this._builderSections.includes('baptism'));
+        },
+        // Pastoral-prayer subjects (the two prayed-for members + their request
+        // texts): always in legacy. In v2 they show unless the chosen template uses
+        // congregational prayer, which omits them (ADR-0010). Stated as "not
+        // congregational" rather than "has pastoral-prayer-subjects" so a template
+        // seeded before this system still shows subjects rather than hiding them.
+        get showPrayerSubjects() {
+            if (this.guideSystem === 'legacy') return true;
+            const sections = this._builderSections;
+            if (!sections) return true;
+            return !sections.includes('congregational-prayer');
+        },
+
+        async loadGuideCatalog() {
+            if (!window.GuideStore) return;
+            try {
+                let data = await GuideStore.loadCatalog(db);
+                if (!data.guideTemplates.length && this.canEdit) {
+                    await GuideStore.seedAll(db, this._guideCatalog);
+                    data = await GuideStore.loadCatalog(db);
+                }
+                this.guideTemplates = data.guideTemplates;
+                this._pageTemplatesById = GuideStore.indexById(data.pageTemplates);
+                this._stylePresetsById = GuideStore.indexById(data.stylePresets);
+                this.guideCatalogLoaded = true;
+                const savedId = (this.service.guide && this.service.guide.guideTemplateId) || '';
+                this.selectedTemplateId = savedId || this._defaultTemplateId();
+                this._rebuildSnapshot(false);
+            } catch (e) {
+                console.error('Failed to load the Service Guide catalog:', e);
+            }
+        },
+        _defaultTemplateId() {
+            const d = this.guideTemplates.find(t => t.isDefault) || this.guideTemplates[0];
+            return d ? d.id : '';
+        },
+        // Build the snapshot of the selected template (gates the template-driven
+        // sections). On a user action (deriveBaptism=true) it also reflects the
+        // template's baptism presence into service.hasBaptism so the section and the
+        // OOS list update immediately; on initial load it leaves stored data alone.
+        _rebuildSnapshot(deriveBaptism) {
+            const gt = this.guideTemplates.find(t => t.id === this.selectedTemplateId);
+            this.guideSnapshot = gt
+                ? GuideStore.buildSnapshot(gt, this._pageTemplatesById, this._stylePresetsById)
+                : null;
+            if (deriveBaptism && this.guideSystem === 'v2') {
+                this.service.hasBaptism = !!(this.guideSnapshot &&
+                    GuideStore.templateIncludesBaptism(this.guideSnapshot, this._guideCatalog));
+            }
+        },
+        changeGuideTemplate(id) {
+            if (!id || id === this.selectedTemplateId) return;
+            this.selectedTemplateId = id;
+            this._rebuildSnapshot(true);
+        },
+        setUseLegacy(useLegacy) {
+            this.guideSystem = useLegacy ? 'legacy' : 'v2';
+            if (this.guideSystem === 'v2') {
+                if (!this.selectedTemplateId) this.selectedTemplateId = this._defaultTemplateId();
+                this._rebuildSnapshot(true);
+            }
+        },
+        // The single shared routing rule (calendar + this page never drift).
+        guideGenerateHref() {
+            if (!window.GuideStore) return 'service-guide.html?date=' + encodeURIComponent(this.date);
+            return GuideStore.guideHref({ guideSystem: this.guideSystem, guide: this.service.guide }, this.date);
+        },
+
         // --- Hymn Preview ---
         showHymnPreview: false,
         previewHymnData: null,
@@ -335,6 +429,7 @@ function serviceForm() {
                 return;
             }
             await this.load();
+            await this.loadGuideCatalog();
             await this.loadHymnRegistry();
             await this.loadPeopleRegistry();
             await this.loadPrayerRequests();
@@ -522,6 +617,9 @@ function serviceForm() {
                 this.service.liturgy.baptism = coerceBaptismCandidates(this.service.liturgy.baptism);
                 // Store guide data to preserve/update it during save
                 this.service.guide = data.guide || null;
+                // Which Service Guide system this week is on (ADR-0010): explicit
+                // toggle, else legacy for a pre-existing elements blob, else v2.
+                if (window.GuideStore) this.guideSystem = GuideStore.guideSystemOf(data);
             }
             this.originalService = JSON.stringify(this.service);
         },
@@ -885,6 +983,14 @@ function serviceForm() {
                     await this._addInvolvement(batch, personId, 'worship_helper');
                 }
 
+                // In the new system baptism presence is derived from the chosen
+                // template (ADR-0010), not the "Include Baptism?" checkbox; reconcile
+                // hasBaptism here so the candidate sync below and the saved flag match
+                // the template. Legacy weeks keep the checkbox value as-is.
+                if (this.guideSystem === 'v2' && this.guideSnapshot && window.GuideStore) {
+                    this.service.hasBaptism = GuideStore.templateIncludesBaptism(this.guideSnapshot, this._guideCatalog);
+                }
+
                 // 1c. Process Baptism Candidates: each baptized Person's baptismDate is
                 // this service's date. The effective set is empty when baptism is toggled
                 // off, so clearing "Include Baptism?" also clears the dates it set.
@@ -949,6 +1055,7 @@ function serviceForm() {
                     irregularElements: this.service.irregularElements,
                     notes: this.service.notes,
                     liturgy: this.service.liturgy,
+                    guideSystem: this.guideSystem,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
@@ -968,6 +1075,22 @@ function serviceForm() {
                             toSave.guide = this.service.guide;
                         }
                     }
+                }
+
+                // In the new system the Order of Service editor applies the chosen
+                // Service Guide Template first (ADR-0010), freezing the per-week v2
+                // guide record so the Service Guide generator opens on that template.
+                // Existing generator-surface values are preserved (and, on a template
+                // switch, pruned to the surviving Entry Field keys).
+                if (this.guideSystem === 'v2' && this.guideSnapshot && window.GuideStore) {
+                    const existing = (this.service.guide && this.service.guide.format === 'v2') ? this.service.guide : null;
+                    let values = (existing && existing.values) || {};
+                    if (existing && existing.guideTemplateId !== this.selectedTemplateId) {
+                        values = GuideStore.preserveValues(values, this.guideSnapshot);
+                    }
+                    const gt = this.guideTemplates.find(t => t.id === this.selectedTemplateId) || { id: this.selectedTemplateId };
+                    toSave.guide = GuideStore.buildGuideRecord(gt, this.guideSnapshot, values);
+                    this.service.guide = toSave.guide;
                 }
 
                 const serviceRef = db.collection('services').doc(this.date);

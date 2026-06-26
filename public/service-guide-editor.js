@@ -242,7 +242,10 @@ function guideEditorV2() {
         },
         get selectedFields() {
             const p = this.selectedPage;
-            return (p && p.entryFields) || [];
+            // The Service Guide generator prompts only generator-surface Entry Fields
+            // (ADR-0010); builder-surface fields are informed in the Order of Service
+            // editor. Fields without a surface default to generator (back-compat).
+            return ((p && p.entryFields) || []).filter(f => (f.surface || 'generator') === 'generator');
         },
         pageLabel(snapshotIndex) {
             const p = this.snapshot && this.snapshot.pages[snapshotIndex];

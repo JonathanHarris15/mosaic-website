@@ -710,13 +710,17 @@ window.navigateToGuide = function(date) {
     const guide = svc && svc.guide;
     const isViewer = !['editor', 'elder', 'admin', 'super_admin'].includes(window.currentUserRole);
 
-    // Weeks created before the Service Guide Template System (ADR-0008) keep an
-    // `elements` blob and open in the classic editor; v2 guides and brand-new
-    // weeks open in the unified template-based editor.
-    const isLegacy = guide && guide.format !== 'v2' && Array.isArray(guide.elements);
-    const target = isLegacy
-        ? `service-guide.html?date=${date}`
-        : `service-guide-editor.html?date=${date}`;
+    // Which Service Guide system this week uses — the explicit per-week toggle set
+    // in the Order of Service editor, else a legacy `elements` blob, else v2
+    // (ADR-0010). One shared rule (GuideStore) so the calendar and the editor's
+    // "Generate" button never drift.
+    const system = window.GuideStore
+        ? GuideStore.guideSystemOf(svc || {})
+        : ((guide && guide.format !== 'v2' && Array.isArray(guide.elements)) ? 'legacy' : 'v2');
+    const isLegacy = system === 'legacy';
+    const target = window.GuideStore
+        ? GuideStore.guideHref(svc || {}, date)
+        : (isLegacy ? `service-guide.html?date=${date}` : `service-guide-editor.html?date=${date}`);
 
     if (!isViewer && svc) {
         let incomplete = false;

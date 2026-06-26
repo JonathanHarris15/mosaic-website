@@ -48,7 +48,7 @@
   <div class="latex-hr mb-4"></div>
   <div class="space-y-[8.5em] mb-4 flex-shrink-0">
     <div>&nbsp;</div>
-    <div><span class="font-bold">Church:</span></div>
+    <div><span class="font-bold">Church:</span><pastoral-prayer-subjects></pastoral-prayer-subjects></div>
     <div><span class="font-bold">Nation/Country:</span> <span class="italic"><input-text key="pp_nation" label="Nation" required></input-text></span></div>
   </div>
   <div class="mt-4 pl-6 space-y-1 text-[9.5pt]">

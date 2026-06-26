@@ -101,11 +101,16 @@
             const comp = catalog && catalog.get(name);
             if (!comp) { unknownTags.push(name); return; }
             if (comp.kind === 'input' && typeof comp.fields === 'function') {
+                // Stamp the declaring Component's surface onto each Entry Field so
+                // the snapshot can be partitioned into what the Order of Service
+                // editor prompts (builder) vs. what the Service Guide generator
+                // prompts (generator) — ADR-0010. Defaults to generator.
+                const surface = comp.surface || 'generator';
                 for (const f of comp.fields(attrs)) {
                     if (!f || !f.key) continue;
                     if (seen.has(f.key)) { duplicates.push(f.key); continue; }
                     seen.add(f.key);
-                    fields.push(f);
+                    fields.push(Object.assign({}, f, { surface }));
                 }
             }
         });
@@ -114,6 +119,16 @@
             duplicates: Array.from(new Set(duplicates)),
             unknownTags: Array.from(new Set(unknownTags)),
         };
+    }
+
+    // The distinct Component tags placed in a page's HTML, in document order.
+    // Lets the store discover which Components (e.g. builder-surface section
+    // components) a snapshot page contains without a full HTML parser (ADR-0010).
+    function componentTagsIn(html) {
+        const tags = [];
+        const seen = new Set();
+        forEachTag(html, (name) => { if (!seen.has(name)) { seen.add(name); tags.push(name); } });
+        return tags;
     }
 
     // The set of Entry Field keys a whole snapshot asks for (across all pages).
@@ -336,6 +351,7 @@
     const GuideEngine = {
         parseAttrs,
         forEachTag,
+        componentTagsIn,
         deriveEntryFields,
         snapshotEntryFields,
         expandPage,

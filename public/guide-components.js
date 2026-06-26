@@ -54,7 +54,7 @@
     // ── Bound Components ───────────────────────────────────────────────────────
 
     const serviceDate = {
-        tag: 'service-date', kind: 'bound', label: 'Service Date',
+        tag: 'service-date', kind: 'bound', surface: 'builder', label: 'Service Date',
         render(ctx) {
             const s = svc(ctx);
             const fmt = (ctx.attrs && ctx.attrs.format) || 'long';
@@ -63,32 +63,32 @@
     };
 
     const serviceTheme = {
-        tag: 'service-theme', kind: 'bound', label: 'Theme',
+        tag: 'service-theme', kind: 'bound', surface: 'builder', label: 'Theme',
         render(ctx) { return esc(svc(ctx).theme || ''); },
     };
 
     const keyVerseRef = {
-        tag: 'key-verse-ref', kind: 'bound', label: 'Key Verse Reference',
+        tag: 'key-verse-ref', kind: 'bound', surface: 'builder', label: 'Key Verse Reference',
         render(ctx) { return esc(svc(ctx).keyVerse || ''); },
     };
 
     const keyVerseText = {
-        tag: 'key-verse-text', kind: 'bound', label: 'Key Verse Text (ESV)',
+        tag: 'key-verse-text', kind: 'bound', surface: 'builder', label: 'Key Verse Text (ESV)',
         render(ctx) { return esc(svc(ctx).keyVerseText || ''); },
     };
 
     const pastoralPrayerLabel = {
-        tag: 'pastoral-prayer-label', kind: 'bound', label: 'Pastoral Prayer Heading',
+        tag: 'pastoral-prayer-label', kind: 'bound', surface: 'builder', label: 'Pastoral Prayer Heading',
         render(ctx) { return esc(lit(ctx).prayerLabel || 'Pastoral Prayer'); },
     };
 
     const baptismNames = {
-        tag: 'baptism-names', kind: 'bound', label: 'Baptism Candidate Names',
+        tag: 'baptism-names', kind: 'bound', surface: 'builder', label: 'Baptism Candidate Names',
         render(ctx) { return esc(svc(ctx).baptismNames || ''); },
     };
 
     const pastoralPrayerSubject = {
-        tag: 'pastoral-prayer-subject', kind: 'bound', label: 'Pastoral Prayer Subject',
+        tag: 'pastoral-prayer-subject', kind: 'bound', surface: 'builder', label: 'Pastoral Prayer Subject',
         render(ctx) {
             const which = (ctx.attrs && ctx.attrs.which) === 'female' ? 'prayerFemale' : 'prayerMale';
             const ref = lit(ctx)[which];
@@ -101,7 +101,7 @@
     // fields stay canonical; ADR-0008 §6) so liturgy editing is never dissolved
     // into generic blanks.
     const oosList = {
-        tag: 'oos-list', kind: 'bound', label: 'Order of Service',
+        tag: 'oos-list', kind: 'bound', surface: 'builder', label: 'Order of Service',
         render(ctx) {
             const s = svc(ctx);
             const l = lit(ctx);
@@ -170,7 +170,7 @@
     // removed slot — or hymn2 when `omit-on-baptism` and the Service has a baptism
     // — emits nothing, letting the Filler Page absorb the freed pages.
     const hymnSheet = {
-        tag: 'hymn-sheet', kind: 'bound', label: 'Hymn Sheet Music', multiPage: true,
+        tag: 'hymn-sheet', kind: 'bound', surface: 'builder', label: 'Hymn Sheet Music', multiPage: true,
         render(ctx) { return (this.renderPages(ctx) || []).join(''); },
         renderPages(ctx) {
             const field = ctx.params.field || ctx.attrs.field;
@@ -231,7 +231,7 @@
     // The upcoming preaching schedule table (port of the announcements page's
     // schedule block). Reads serviceContext.schedule (next ~5 services).
     const schedule = {
-        tag: 'preaching-schedule', kind: 'bound', label: 'Preaching Schedule',
+        tag: 'preaching-schedule', kind: 'bound', surface: 'builder', label: 'Preaching Schedule',
         render(ctx) {
             const items = (svc(ctx).schedule || []).slice(0, 5);
             const rows = items.map(it => {
@@ -254,20 +254,20 @@
     }
 
     const inputText = {
-        tag: 'input-text', kind: 'input', label: 'Text',
+        tag: 'input-text', kind: 'input', surface: 'generator', label: 'Text',
         fields(attrs) { return [{ key: attrs.key, type: 'text', label: attrs.label || attrs.key, required: isRequired(attrs) }]; },
         render(ctx) { return esc(ctx.values[ctx.attrs.key] || ''); },
     };
 
     const inputRichtext = {
-        tag: 'input-richtext', kind: 'input', label: 'Rich Text',
+        tag: 'input-richtext', kind: 'input', surface: 'generator', label: 'Rich Text',
         fields(attrs) { return [{ key: attrs.key, type: 'richtext', label: attrs.label || attrs.key, required: isRequired(attrs) }]; },
         // Rich text is trusted HTML (TipTap/docx output) — emitted unescaped.
         render(ctx) { return ctx.values[ctx.attrs.key] || ''; },
     };
 
     const inputImage = {
-        tag: 'input-image', kind: 'input', label: 'Image',
+        tag: 'input-image', kind: 'input', surface: 'generator', label: 'Image',
         fields(attrs) { return [{ key: attrs.key, type: 'image', label: attrs.label || attrs.key, required: isRequired(attrs) }]; },
         render(ctx) {
             const val = ctx.values[ctx.attrs.key];
@@ -282,7 +282,7 @@
     // picks the print layout. Powers announcements, Mosaic Kids summary/questions
     // and pastoral-prayer prompts (ADR-0008 §3.1).
     const inputList = {
-        tag: 'input-list', kind: 'input', label: 'List',
+        tag: 'input-list', kind: 'input', surface: 'generator', label: 'List',
         fields(attrs) {
             return [{
                 key: attrs.key, type: 'list', label: attrs.label || attrs.key,
@@ -307,11 +307,45 @@
         },
     };
 
+    // ── Builder section Components (ADR-0010) ──────────────────────────────────
+    // Non-static Builder Components: present on a week only when the chosen Service
+    // Guide Template places them. Each names the bespoke `section` the Order of
+    // Service editor renders (Person pickers, prayer-request SMS controls) and
+    // gates by template presence. In the booklet they are presence markers — the
+    // page-template layout carries any visible content — so their render output is
+    // minimal; their real job is to tell the Builder what to prompt.
+
+    const baptismCandidates = {
+        tag: 'baptism-candidates', kind: 'bound', surface: 'builder', section: 'baptism',
+        label: 'Baptism Candidates',
+        // Candidate names come from liturgy.baptism (the existing synced store,
+        // ADR-0006) via serviceContext.baptismNames.
+        render(ctx) { return esc(svc(ctx).baptismNames || ''); },
+    };
+
+    const pastoralPrayerSubjects = {
+        tag: 'pastoral-prayer-subjects', kind: 'bound', surface: 'builder', section: 'pastoral-prayer-subjects',
+        label: 'Pastoral Prayer Subjects',
+        // The two prayed-for members + their prayer-request texts are informed in
+        // the Builder; nothing extra prints here (the prayer page layout is
+        // unchanged), so this renders empty.
+        render() { return ''; },
+    };
+
+    const congregationalPrayer = {
+        tag: 'congregational-prayer', kind: 'bound', surface: 'builder', section: 'congregational-prayer',
+        label: 'Congregational Prayer',
+        // The pastor-absent variant: carries no prompted fields and no specific
+        // prayer subjects, so no prayer-request texts are sent. Presence marker.
+        render() { return ''; },
+    };
+
     // ── catalog assembly ──────────────────────────────────────────────────────
     const V1_COMPONENTS = [
         serviceDate, serviceTheme, keyVerseRef, keyVerseText, pastoralPrayerLabel,
         baptismNames, pastoralPrayerSubject, oosList, hymnSheet, schedule,
         inputText, inputRichtext, inputImage, inputList,
+        baptismCandidates, pastoralPrayerSubjects, congregationalPrayer,
     ];
 
     // Build a catalog (the lookup the engine takes) from a list of Components.
