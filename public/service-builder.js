@@ -204,6 +204,13 @@ function serviceForm() {
         // surface section components (baptism, pastoral-prayer subjects) decide
         // which template-driven sections this page prompts.
         guideSystem: 'v2',                  // 'v2' | 'legacy'
+        // Whether this week has opted into the new guide controls. False for a week
+        // that predates ADR-0010 (no stored guideSystem, no v2 guide) and hasn't been
+        // touched this session — so opening + re-saving such a week never silently
+        // flips guideSystem, derives hasBaptism, or freezes a v2 guide record (which
+        // would, e.g., clear an existing baptism's baptismDate). Set true on load for
+        // an already-v2 week, and when the editor toggles legacy or picks a template.
+        _guideEngaged: false,
         guideCatalogLoaded: false,
         guideTemplates: [],
         _pageTemplatesById: {},
@@ -276,10 +283,12 @@ function serviceForm() {
         },
         changeGuideTemplate(id) {
             if (!id || id === this.selectedTemplateId) return;
+            this._guideEngaged = true;
             this.selectedTemplateId = id;
             this._rebuildSnapshot(true);
         },
         setUseLegacy(useLegacy) {
+            this._guideEngaged = true;
             this.guideSystem = useLegacy ? 'legacy' : 'v2';
             if (this.guideSystem === 'v2') {
                 if (!this.selectedTemplateId) this.selectedTemplateId = this._defaultTemplateId();
@@ -619,7 +628,14 @@ function serviceForm() {
                 this.service.guide = data.guide || null;
                 // Which Service Guide system this week is on (ADR-0010): explicit
                 // toggle, else legacy for a pre-existing elements blob, else v2.
-                if (window.GuideStore) this.guideSystem = GuideStore.guideSystemOf(data);
+                if (window.GuideStore) {
+                    this.guideSystem = GuideStore.guideSystemOf(data);
+                    // A week is already "engaged" only if it explicitly stored a
+                    // guideSystem or already carries a v2 guide; a pre-ADR-0010 week
+                    // that merely defaults to v2 stays un-engaged until the editor
+                    // touches the new controls (guards the destructive save paths).
+                    this._guideEngaged = (typeof data.guideSystem === 'string') || GuideStore.isV2Guide(data.guide);
+                }
             }
             this.originalService = JSON.stringify(this.service);
         },
@@ -987,7 +1003,7 @@ function serviceForm() {
                 // template (ADR-0010), not the "Include Baptism?" checkbox; reconcile
                 // hasBaptism here so the candidate sync below and the saved flag match
                 // the template. Legacy weeks keep the checkbox value as-is.
-                if (this.guideSystem === 'v2' && this.guideSnapshot && window.GuideStore) {
+                if (this._guideEngaged && this.guideSystem === 'v2' && this.guideSnapshot && window.GuideStore) {
                     this.service.hasBaptism = GuideStore.templateIncludesBaptism(this.guideSnapshot, this._guideCatalog);
                 }
 
@@ -1055,9 +1071,11 @@ function serviceForm() {
                     irregularElements: this.service.irregularElements,
                     notes: this.service.notes,
                     liturgy: this.service.liturgy,
-                    guideSystem: this.guideSystem,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
+                // Only persist the guide system once the editor has engaged the new
+                // controls, so untouched pre-ADR-0010 weeks are never silently flipped.
+                if (this._guideEngaged) toSave.guideSystem = this.guideSystem;
 
                 // Sync Pastoral Prayer names to Guide elements if they exist.
                 // Skip re-saving if the guide is missing hymn2 when it should have it —
@@ -1082,7 +1100,7 @@ function serviceForm() {
                 // guide record so the Service Guide generator opens on that template.
                 // Existing generator-surface values are preserved (and, on a template
                 // switch, pruned to the surviving Entry Field keys).
-                if (this.guideSystem === 'v2' && this.guideSnapshot && window.GuideStore) {
+                if (this._guideEngaged && this.guideSystem === 'v2' && this.guideSnapshot && window.GuideStore) {
                     const existing = (this.service.guide && this.service.guide.format === 'v2') ? this.service.guide : null;
                     let values = (existing && existing.values) || {};
                     if (existing && existing.guideTemplateId !== this.selectedTemplateId) {
