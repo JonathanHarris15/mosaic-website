@@ -19,6 +19,7 @@ const CANONICAL_MAPPING = {
     'Hymn Mid 1': { field: 'hymnMid1', type: 'hymn', liturgy: true },
     'Hymn Mid 2': { field: 'hymnMid2', type: 'hymn', liturgy: true },
     'Scripture Reading': { field: 'scriptureReading', type: 'text', liturgy: true },
+    'Pastoral Prayer': { field: 'scriptureReading', type: 'text', liturgy: true },
     'Prayer Male': { field: 'prayerMale', type: 'person', liturgy: true },
     'Prayer Female': { field: 'prayerFemale', type: 'person', liturgy: true },
     'Sermon': { field: 'sermon', type: 'text', liturgy: true },
@@ -138,14 +139,12 @@ function serviceForm() {
         prayerSending: { male: false, female: false },
         user: null,
         originalService: '',
-        activeNoteKey: null,
+        // The liturgy element whose station row is currently expanded (one at a
+        // time). null = every row collapsed. Drives the inline picker + note editor.
+        openKey: null,
         showPrayerPraise: false,
         showPrayerConfession: false,
-        noteEditorTop: 100,
-        noteEditorLeft: 0,
-        noteEditorWidth: 200,
         _quill: null,
-        _scrollHandler: null,
         _sortable: null,
         hymnRegistry: [],
         fuse: null,
@@ -197,6 +196,109 @@ function serviceForm() {
         showPersonAddModal: false,
         personToAdd: { name: '', callback: null },
         duplicateWarning: false,
+
+        // ── Service Guide system (ADR-0010) ────────────────────────────────────
+        // The Order of Service editor chooses the week's Service Guide Template, or
+        // toggles back to the legacy generator. The chosen template's builder-
+        // surface section components (baptism, pastoral-prayer subjects) decide
+        // which template-driven sections this page prompts.
+        guideSystem: 'v2',                  // 'v2' | 'legacy'
+        // Whether this week has opted into the new guide controls. False for a week
+        // that predates ADR-0010 (no stored guideSystem, no v2 guide) and hasn't been
+        // touched this session — so opening + re-saving such a week never silently
+        // flips guideSystem, derives hasBaptism, or freezes a v2 guide record (which
+        // would, e.g., clear an existing baptism's baptismDate). Set true on load for
+        // an already-v2 week, and when the editor toggles legacy or picks a template.
+        _guideEngaged: false,
+        guideCatalogLoaded: false,
+        guideTemplates: [],
+        _pageTemplatesById: {},
+        _stylePresetsById: {},
+        selectedTemplateId: '',
+        guideSnapshot: null,
+
+        get useLegacySystem() { return this.guideSystem === 'legacy'; },
+        get _guideCatalog() { return (window.GuideComponents && window.GuideComponents.defaultCatalog) || null; },
+        // The bespoke Builder sections the chosen template requests (null in legacy
+        // mode, where the static form shows everything).
+        get _builderSections() {
+            if (this.guideSystem === 'legacy' || !this.guideSnapshot || !window.GuideStore) return null;
+            return GuideStore.builderSections(this.guideSnapshot, this._guideCatalog);
+        },
+        // Baptism: legacy uses the "Include Baptism?" checkbox; v2 derives presence
+        // from whether the template places the baptism component.
+        get showBaptismSection() {
+            if (this.guideSystem === 'legacy') return !!this.service.hasBaptism;
+            return !!(this._builderSections && this._builderSections.includes('baptism'));
+        },
+        // Pastoral-prayer subjects (the two prayed-for members + their request
+        // texts): always in legacy. In v2 they show unless the chosen template uses
+        // congregational prayer, which omits them (ADR-0010). Stated as "not
+        // congregational" rather than "has pastoral-prayer-subjects" so a template
+        // seeded before this system still shows subjects rather than hiding them.
+        get showPrayerSubjects() {
+            if (this.guideSystem === 'legacy') return true;
+            const sections = this._builderSections;
+            if (!sections) return true;
+            return !sections.includes('congregational-prayer');
+        },
+
+        async loadGuideCatalog() {
+            if (!window.GuideStore) return;
+            try {
+                let data = await GuideStore.loadCatalog(db);
+                if (!data.guideTemplates.length && this.canEdit) {
+                    await GuideStore.seedAll(db, this._guideCatalog);
+                    data = await GuideStore.loadCatalog(db);
+                }
+                this.guideTemplates = data.guideTemplates;
+                this._pageTemplatesById = GuideStore.indexById(data.pageTemplates);
+                this._stylePresetsById = GuideStore.indexById(data.stylePresets);
+                this.guideCatalogLoaded = true;
+                const savedId = (this.service.guide && this.service.guide.guideTemplateId) || '';
+                this.selectedTemplateId = savedId || this._defaultTemplateId();
+                this._rebuildSnapshot(false);
+            } catch (e) {
+                console.error('Failed to load the Service Guide catalog:', e);
+            }
+        },
+        _defaultTemplateId() {
+            const d = this.guideTemplates.find(t => t.isDefault) || this.guideTemplates[0];
+            return d ? d.id : '';
+        },
+        // Build the snapshot of the selected template (gates the template-driven
+        // sections). On a user action (deriveBaptism=true) it also reflects the
+        // template's baptism presence into service.hasBaptism so the section and the
+        // OOS list update immediately; on initial load it leaves stored data alone.
+        _rebuildSnapshot(deriveBaptism) {
+            const gt = this.guideTemplates.find(t => t.id === this.selectedTemplateId);
+            this.guideSnapshot = gt
+                ? GuideStore.buildSnapshot(gt, this._pageTemplatesById, this._stylePresetsById)
+                : null;
+            if (deriveBaptism && this.guideSystem === 'v2') {
+                this.service.hasBaptism = !!(this.guideSnapshot &&
+                    GuideStore.templateIncludesBaptism(this.guideSnapshot, this._guideCatalog));
+            }
+        },
+        changeGuideTemplate(id) {
+            if (!id || id === this.selectedTemplateId) return;
+            this._guideEngaged = true;
+            this.selectedTemplateId = id;
+            this._rebuildSnapshot(true);
+        },
+        setUseLegacy(useLegacy) {
+            this._guideEngaged = true;
+            this.guideSystem = useLegacy ? 'legacy' : 'v2';
+            if (this.guideSystem === 'v2') {
+                if (!this.selectedTemplateId) this.selectedTemplateId = this._defaultTemplateId();
+                this._rebuildSnapshot(true);
+            }
+        },
+        // The single shared routing rule (calendar + this page never drift).
+        guideGenerateHref() {
+            if (!window.GuideStore) return 'service-guide.html?date=' + encodeURIComponent(this.date);
+            return GuideStore.guideHref({ guideSystem: this.guideSystem, guide: this.service.guide }, this.date);
+        },
 
         // --- Hymn Preview ---
         showHymnPreview: false,
@@ -335,6 +437,7 @@ function serviceForm() {
                 return;
             }
             await this.load();
+            await this.loadGuideCatalog();
             await this.loadHymnRegistry();
             await this.loadPeopleRegistry();
             await this.loadPrayerRequests();
@@ -522,6 +625,16 @@ function serviceForm() {
                 this.service.liturgy.baptism = coerceBaptismCandidates(this.service.liturgy.baptism);
                 // Store guide data to preserve/update it during save
                 this.service.guide = data.guide || null;
+                // Which Service Guide system this week is on (ADR-0010): explicit
+                // toggle, else legacy for a pre-existing elements blob, else v2.
+                if (window.GuideStore) {
+                    this.guideSystem = GuideStore.guideSystemOf(data);
+                    // A week is already "engaged" only if it explicitly stored a
+                    // guideSystem or already carries a v2 guide; a pre-ADR-0010 week
+                    // that merely defaults to v2 stays un-engaged until the editor
+                    // touches the new controls (guards the destructive save paths).
+                    this._guideEngaged = (typeof data.guideSystem === 'string') || GuideStore.isV2Guide(data.guide);
+                }
             }
             this.originalService = JSON.stringify(this.service);
         },
@@ -664,7 +777,7 @@ function serviceForm() {
                     'Theme', 'Key Verse', 'Service Leader', 'Music Leader', 'Preacher', 'Sermonette',
                     'Prayer (Praise)', 'Prayer (Confession)', 'Baptism', 'Preparatory Hymn', 'Call to Worship',
                     'Hymn 1', 'Hymn 2', 'Call to Confession', 'Assurance of Pardon', 'Hymn Mid 1', 'Hymn Mid 2',
-                    'Scripture Reading', 'Sermon', 'Hymn End 1', 'Hymn End 2', 'Benediction'
+                    'Pastoral Prayer', 'Sermon', 'Hymn End 1', 'Hymn End 2', 'Benediction'
                 ];
 
                 for (const key of orderedKeys) {
@@ -885,6 +998,14 @@ function serviceForm() {
                     await this._addInvolvement(batch, personId, 'worship_helper');
                 }
 
+                // In the new system baptism presence is derived from the chosen
+                // template (ADR-0010), not the "Include Baptism?" checkbox; reconcile
+                // hasBaptism here so the candidate sync below and the saved flag match
+                // the template. Legacy weeks keep the checkbox value as-is.
+                if (this._guideEngaged && this.guideSystem === 'v2' && this.guideSnapshot && window.GuideStore) {
+                    this.service.hasBaptism = GuideStore.templateIncludesBaptism(this.guideSnapshot, this._guideCatalog);
+                }
+
                 // 1c. Process Baptism Candidates: each baptized Person's baptismDate is
                 // this service's date. The effective set is empty when baptism is toggled
                 // off, so clearing "Include Baptism?" also clears the dates it set.
@@ -951,6 +1072,9 @@ function serviceForm() {
                     liturgy: this.service.liturgy,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
+                // Only persist the guide system once the editor has engaged the new
+                // controls, so untouched pre-ADR-0010 weeks are never silently flipped.
+                if (this._guideEngaged) toSave.guideSystem = this.guideSystem;
 
                 // Sync Pastoral Prayer names to Guide elements if they exist.
                 // Skip re-saving if the guide is missing hymn2 when it should have it —
@@ -968,6 +1092,22 @@ function serviceForm() {
                             toSave.guide = this.service.guide;
                         }
                     }
+                }
+
+                // In the new system the Order of Service editor applies the chosen
+                // Service Guide Template first (ADR-0010), freezing the per-week v2
+                // guide record so the Service Guide generator opens on that template.
+                // Existing generator-surface values are preserved (and, on a template
+                // switch, pruned to the surviving Entry Field keys).
+                if (this._guideEngaged && this.guideSystem === 'v2' && this.guideSnapshot && window.GuideStore) {
+                    const existing = (this.service.guide && this.service.guide.format === 'v2') ? this.service.guide : null;
+                    let values = (existing && existing.values) || {};
+                    if (existing && existing.guideTemplateId !== this.selectedTemplateId) {
+                        values = GuideStore.preserveValues(values, this.guideSnapshot);
+                    }
+                    const gt = this.guideTemplates.find(t => t.id === this.selectedTemplateId) || { id: this.selectedTemplateId };
+                    toSave.guide = GuideStore.buildGuideRecord(gt, this.guideSnapshot, values);
+                    this.service.guide = toSave.guide;
                 }
 
                 const serviceRef = db.collection('services').doc(this.date);
@@ -989,82 +1129,191 @@ function serviceForm() {
             }
         },
 
-        // ── Note panel ─────────────────────────────────────────────────────────
-        openNote(key) {
-            this.activeNoteKey = key;
-            this._positionEditor(key);
-            this.$nextTick(() => {
-                if (!this.canEdit) return; // viewers get read-only HTML panel; no Quill needed
-                const el = document.getElementById('note-quill-inline');
-                if (!el) return;
+        // ── Order of Service model (movement-grouped station rows) ──────────────
+        // The liturgy laid out as the three movements of a Mosaic service. Each
+        // entry is [fieldKey, displayLabel, type]. The `movements` getter turns this
+        // into display rows; the HTML renders one generic template per type, so the
+        // pickers below stay wired to the same service.liturgy field objects.
+        _MOVEMENTS: [
+            { num: 'I', name: 'Service Leading', keys: [
+                ['preparatoryHymn', 'Preparatory Hymn', 'hymn'],
+                ['callToWorship', 'Call to Worship', 'verse'],
+                ['hymn1', 'Hymn', 'hymn'],
+                ['hymn2', 'Hymn', 'hymn'],
+                ['callToConfession', 'Call to Confession', 'verse'],
+                ['assuranceOfPardon', 'Assurance of Pardon', 'verse'],
+                ['hymnMid1', 'Hymn', 'hymn'],
+                ['hymnMid2', 'Hymn', 'hymn'],
+            ]},
+            { num: 'II', name: 'Preaching', keys: [
+                ['scriptureReading', 'Pastoral Prayer', 'verse'],
+                ['sermon', 'Sermon', 'verse'],
+            ]},
+            { num: 'III', name: 'Closing', keys: [
+                ['baptism', 'Baptism', 'baptism'],
+                ['hymnEnd1', 'Hymn', 'hymn'],
+                ['hymnEnd2', 'Hymn', 'hymn'],
+                ['benediction', 'Benediction', 'verse'],
+            ]},
+        ],
 
-                if (!this._quill) {
-                    this._quill = new Quill(el, {
-                        theme: 'snow',
-                        modules: { toolbar: [['bold', 'italic'], [{ list: 'bullet' }]] },
-                        placeholder: 'Add a note explaining your reasoning...'
-                    });
+        // Dot colour by element status (canonical/literal hymns, set references,
+        // baptism, or empty) — kept within the brand palette.
+        _dotColor(status) {
+            return status === 'canonical' ? '#2e7d52'
+                : status === 'literal' ? '#b8862e'
+                : status === 'set' ? '#436082'
+                : status === 'baptism' ? '#182F57'
+                : '#cdd0d8';
+        },
 
-                    this._scrollHandler = () => {
-                        if (this.activeNoteKey) this._positionEditor(this.activeNoteKey);
-                    };
-                    window.addEventListener('scroll', this._scrollHandler, { passive: true });
-                    window.addEventListener('resize', this._scrollHandler, { passive: true });
+        _stripHtml(html) {
+            if (!html) return '';
+            const d = document.createElement('div');
+            d.innerHTML = html;
+            return d.textContent || d.innerText || '';
+        },
+
+        _buildItem(key, label, type, lit) {
+            const removed = type === 'hymn' && this.isHymnRemoved(key);
+            let value = '', status = 'empty', emptyLabel = '';
+            if (type === 'hymn') {
+                const ref = lit[key] || {};
+                value = ref.name || '';
+                status = ref.id ? 'canonical' : (ref.name ? 'literal' : 'empty');
+                emptyLabel = 'Choose a hymn…';
+            } else if (type === 'baptism') {
+                const arr = Array.isArray(lit.baptism) ? lit.baptism : [];
+                const names = arr.map(c => (c && c.name) || '').filter(Boolean);
+                value = names.join(', ');
+                status = names.length ? 'baptism' : 'empty';
+                emptyLabel = 'Add candidates…';
+            } else { // verse / text reference
+                value = lit[key] || '';
+                status = value ? 'set' : 'empty';
+                emptyLabel = 'Add a reference…';
+            }
+            const note = (this.service.notes && this.service.notes[key]) || '';
+            return {
+                key, label, type, value, status, emptyLabel, removed,
+                dotColor: this._dotColor(status),
+                hasNote: !!this._stripHtml(note).trim(),
+            };
+        },
+
+        // The three movements, each with its visible station rows. hymn2 hides when
+        // a baptism takes its place; the baptism row only appears when the template
+        // (or the legacy checkbox) calls for it (ADR-0010).
+        get movements() {
+            const lit = this.service.liturgy;
+            return this._MOVEMENTS.map(mv => ({
+                num: mv.num,
+                name: mv.name,
+                items: mv.keys
+                    .filter(([key]) => {
+                        if (key === 'hymn2' && this.service.hasBaptism) return false;
+                        if (key === 'baptism' && !this.showBaptismSection) return false;
+                        return true;
+                    })
+                    .map(([key, label, type]) => this._buildItem(key, label, type, lit)),
+            }));
+        },
+
+        // "X of Y set" — counts filled rows over the rows currently in the order
+        // (removed hymns are intentionally blank, so they sit out of the tally).
+        get filledLabel() {
+            let filled = 0, total = 0;
+            for (const mv of this.movements) {
+                for (const it of mv.items) {
+                    if (it.removed) continue;
+                    total++;
+                    if (it.value) filled++;
                 }
+            }
+            return `${filled} of ${total} set`;
+        },
 
-                // Set editor content
-                const existing = (this.service.notes && this.service.notes[key]) || '';
-                // Ensure the content is wrapped in paragraphs if it's plain text for Quill
-                this._quill.root.innerHTML = existing.includes('<p>') ? existing : `<p>${existing}</p>`;
+        // Service notes surfaced for the leader, in service order, one card each.
+        get notesList() {
+            const out = [];
+            const notes = this.service.notes || {};
+            for (const mv of this.movements) {
+                for (const it of mv.items) {
+                    const html = notes[it.key];
+                    if (html && this._stripHtml(html).trim()) {
+                        out.push({ key: it.key, label: it.label, value: it.value, dotColor: it.dotColor, html });
+                    }
+                }
+            }
+            return out;
+        },
+        get noteCount() { return this.notesList.length; },
 
-                this.$nextTick(() => this._quill.focus());
+        // ── Station rows + inline notes ─────────────────────────────────────────
+        // Expanding a row reveals its picker and a rich-text Service Note. The note
+        // is a single Quill instance mounted into whichever row is open; switching
+        // rows commits the current note first, so service.notes stays in sync (and
+        // the Service Notes sidebar updates live).
+        toggleRow(key) {
+            if (this.openKey === key) { this.commitNote(); this.openKey = null; return; }
+            this.commitNote();
+            this.openKey = key;
+            this.$nextTick(() => this.mountNote(key));
+        },
+
+        // Open a specific row (from the Service Notes sidebar) and scroll to it.
+        openRow(key) {
+            if (this.openKey !== key) {
+                this.commitNote();
+                this.openKey = key;
+                this.$nextTick(() => this.mountNote(key));
+            }
+            this.$nextTick(() => this.scrollToRow(key));
+        },
+
+        scrollToRow(key) {
+            const row = document.querySelector(`[data-field-key="${key}"]`);
+            if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        },
+
+        mountNote(key) {
+            if (!this.canEdit) return; // viewers read the note as HTML; no editor
+            const el = document.getElementById('note-quill-inline');
+            if (!el) return;
+            this._quill = new Quill(el, {
+                theme: 'snow',
+                modules: { toolbar: [['bold', 'italic'], [{ list: 'bullet' }]] },
+                placeholder: 'Add a note for whoever leads the service — context, reminders, reasoning…'
             });
+            const existing = (this.service.notes && this.service.notes[key]) || '';
+            this._quill.root.innerHTML = existing
+                ? (existing.includes('<') ? existing : `<p>${existing}</p>`)
+                : '';
+            this._quill.on('text-change', () => this._syncNote(key));
         },
 
-        _positionEditor(key) {
-            const btn = document.querySelector(`[data-note-key="${key}"]`);
-            if (!btn) return;
-            const section = btn.closest('.form-section');
-            if (!section) return;
-            const rect = section.getBoundingClientRect();
-            
-            // Check if we are on mobile/small screen
-            if (window.innerWidth < 1024) {
-                // Fixed centered modal for mobile
-                this.noteEditorWidth = Math.min(window.innerWidth - 48, 500);
-                this.noteEditorLeft = (window.innerWidth - this.noteEditorWidth) / 2;
-                this.noteEditorTop = 100; // Fixed top offset
-            } else {
-                // Anchor to the right of the form-section card for desktop
-                const editorLeft  = rect.right + 28;
-                const editorRight = window.innerWidth - 40;
-                this.noteEditorLeft  = Math.round(editorLeft);
-                this.noteEditorWidth = Math.max(160, Math.round(editorRight - editorLeft));
-                this.noteEditorTop   = Math.max(70, Math.round(rect.top));
-            }
-        },
-
-        saveNote() {
+        // Write the live editor contents through to service.notes (empty → delete),
+        // so the sidebar and the dirty indicator track every keystroke.
+        _syncNote(key) {
             if (!this._quill) return;
-            const html  = this._quill.root.innerHTML;
-            const empty = this._quill.getText().trim() === '';
             if (!this.service.notes) this.service.notes = {};
-            if (empty) {
-                delete this.service.notes[this.activeNoteKey];
+            if (this._quill.getText().trim() === '') {
+                delete this.service.notes[key];
             } else {
-                this.service.notes[this.activeNoteKey] = html;
+                this.service.notes[key] = this._quill.root.innerHTML;
             }
-            this.activeNoteKey = null;
         },
 
-        deleteNote() {
+        // Persist and tear down the open row's editor before it is unmounted.
+        commitNote() {
+            if (this._quill && this.openKey) this._syncNote(this.openKey);
+            this._quill = null;
+        },
+
+        deleteNote(key) {
             if (!confirm('Delete this note?')) return;
-            if (this.service.notes) delete this.service.notes[this.activeNoteKey];
-            this.activeNoteKey = null;
-        },
-
-        closeNote() {
-            this.activeNoteKey = null;
+            if (this.service.notes) delete this.service.notes[key];
+            if (this._quill) this._quill.root.innerHTML = '';
         },
 
         // ── Music Helpers ────────────────────────────────────────────────────

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Service Guide Editor - Mosaic Services</title>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&family=Work+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- Mosaic Print brand fonts (designed booklet Style Preset) -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Libre+Franklin:wght@300;400;500;600;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=UnifrakturCook:wght@700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+    <script src="mosaic-theme.js"></script>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
+    <script src="auth.js"></script>
+    <!-- Engine + catalog + seed + store (pure, dual-export modules) -->
+    <script src="date-utils.js"></script>
+    <script src="guide-engine.js"></script>
+    <script src="guide-components.js"></script>
+    <script src="guide-seed.js"></script>
+    <script src="guide-store.js"></script>
+    <!-- Page logic -->
+    <script src="service-guide-editor.js"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+        [x-cloak] { display: none !important; }
+
+        @media print {
+            @page { size: letter landscape; margin: 0; }
+            body { background: white !important; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .no-print { display: none !important; }
+            #main-layout { display: none !important; }
+            .booklet-print-layer { display: block !important; width: 11in; }
+            .spread-container { width: 11in; height: 8.5in; display: flex; page-break-after: always; overflow: hidden; }
+            .booklet-print-layer .preview-page {
+                width: 5.5in; height: 8.5in; padding: 0.2in; box-sizing: border-box;
+                font-family: 'Times New Roman', Times, serif; font-size: 10pt; line-height: 1.2;
+                position: relative; overflow: hidden; display: block; margin: 0; background: white; box-shadow: none; color: black;
+            }
+        }
+
+        @media screen {
+            .booklet-print-layer { display: none !important; }
+            .preview-page {
+                @apply bg-white shadow-lg mx-auto mb-8 relative text-black overflow-hidden;
+                width: 5.5in; height: 8.5in; padding: 0.2in; box-sizing: border-box;
+                font-family: 'Times New Roman', Times, serif; font-size: 10pt; line-height: 1.2;
+            }
+        }
+
+        /* Booklet base styles (the seeded "Mosaic Booklet" Style Preset; also
+           injected dynamically for custom templates via #guide-dynamic-style). */
+        .latex-h1 { @apply text-[1.1rem] font-normal block; }
+        .latex-hr { @apply border-t border-black my-1 w-full; }
+        .latex-spacing-2 { line-height: 2.2; }
+        .preview-page ul, .preview-page ol { list-style-type: disc !important; @apply pl-8; }
+
+        .toc-item { @apply flex items-center gap-2 p-2 bg-white border border-outline-variant rounded mb-1 cursor-pointer hover:bg-surface transition-colors; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .zoom-controls { @apply absolute bottom-8 right-8 z-[100] flex flex-col gap-2 no-print; }
+        .zoom-btn { @apply w-12 h-12 bg-white shadow-xl rounded-full flex items-center justify-center text-primary hover:bg-surface active:scale-95 transition-all border border-outline-variant; }
+    </style>
+    <style id="guide-dynamic-style"></style>
+</head>
+<body class="bg-[#f0f2f5] font-sans antialiased text-black" x-data="guideEditorV2()" x-init="init()">
+
+    <!-- Header -->
+    <header class="no-print h-16 bg-primary text-white flex items-center justify-between px-6 sticky top-0 z-50 shadow-md">
+        <div class="flex items-center gap-4">
+            <a href="service-calendar.html" class="hover:opacity-80"><span class="material-symbols-outlined">arrow_back</span></a>
+            <h1 class="text-lg font-semibold" x-text="(canEdit ? 'Service Guide Editor: ' : 'Service Guide: ') + formatDate(date)"></h1>
+        </div>
+        <div class="flex items-center gap-3" x-show="!legacy">
+            <div x-show="resolved.overflow" x-cloak class="flex items-center gap-2 px-3 py-1 bg-red-400/10 border border-red-400/30 rounded-full mr-1">
+                <span class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
+                <span class="text-[9px] font-bold uppercase tracking-widest text-red-400" x-text="resolved.total + ' Pages (target ' + resolved.target + ')'"></span>
+            </div>
+            <div x-show="hasChanges" x-cloak class="flex items-center gap-2 px-3 py-1 bg-yellow-400/10 border border-yellow-400/30 rounded-full mr-1">
+                <span class="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse"></span>
+                <span class="text-[9px] font-bold uppercase tracking-widest text-yellow-400">Unsaved</span>
+            </div>
+            <a :href="'service-builder.html?date=' + date" class="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-2 transition-colors" title="Edit the Order of Service (liturgy, hymns, people)">
+                <span class="material-symbols-outlined text-[20px]">edit_note</span><span class="hidden md:inline">Order of Service</span>
+            </a>
+            <button x-show="canEdit" @click="save()" :disabled="saving" class="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-2 transition-colors">
+                <span class="material-symbols-outlined text-[20px]">save</span><span x-text="saving ? 'Saving…' : 'Save'"></span>
+            </button>
+            <button @click="printGuide()" class="px-4 py-2 bg-white text-primary font-semibold rounded-lg flex items-center gap-2 hover:bg-surface transition-colors">
+                <span class="material-symbols-outlined text-[20px]">print</span><span>Print PDF</span>
+            </button>
+            <a href="service-guide-manager.html" x-show="canEdit" class="px-3 py-2 hover:bg-white/10 rounded-lg flex items-center gap-2 transition-colors" title="Manage Page Templates & Service Guide Templates">
+                <span class="material-symbols-outlined text-[20px]">dashboard_customize</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Print booklet layer (populated at print time) -->
+    <div id="booklet-print-layer" class="booklet-print-layer hidden" x-ignore></div>
+
+    <!-- Loading -->
+    <div x-show="loading" class="flex items-center justify-center h-[calc(100vh-64px)] text-secondary">
+        <span class="material-symbols-outlined animate-spin text-3xl mr-2">progress_activity</span> Loading…
+    </div>
+
+    <!-- Legacy week notice -->
+    <div x-show="!loading && legacy" x-cloak class="max-w-2xl mx-auto mt-16 p-8 bg-white rounded-2xl shadow text-center">
+        <span class="material-symbols-outlined text-5xl text-secondary mb-3">history</span>
+        <h2 class="text-xl font-bold text-primary mb-2">This week uses the legacy guide format</h2>
+        <p class="text-gray-500 mb-6">It was created before the template system. You can keep printing it from the classic editor, or rebuild it on the new template system.</p>
+        <div class="flex items-center justify-center gap-3">
+            <a :href="legacyGuideUrl" class="px-5 py-2.5 border border-outline-variant rounded-lg text-primary font-semibold hover:bg-surface">Open classic editor</a>
+            <button x-show="canEdit" @click="rebuildOnTemplateSystem()" class="px-5 py-2.5 bg-primary text-white rounded-lg font-semibold hover:bg-secondary">Rebuild on template system</button>
+        </div>
+    </div>
+
+    <main id="main-layout" x-show="!loading && !legacy" x-cloak class="flex h-[calc(100vh-64px)] overflow-hidden">
+
+        <!-- Left: template picker + page list -->
+        <aside class="no-print w-64 bg-white border-r border-outline-variant flex flex-col shadow-sm">
+            <div class="p-4 border-b border-outline-variant bg-surface">
+                <label class="font-semibold text-secondary uppercase tracking-wider text-[10px]">Service Guide Template</label>
+                <select :value="selectedTemplateId" @change="changeTemplate($event.target.value, $event.target)" :disabled="!canEdit"
+                        class="mt-1 w-full text-xs rounded border-outline-variant px-2 py-1.5">
+                    <template x-for="t in templates" :key="t.id">
+                        <option :value="t.id" x-text="t.name + (t.isDefault ? ' (default)' : '')"></option>
+                    </template>
+                </select>
+            </div>
+            <div class="flex-1 overflow-y-auto p-3 custom-scrollbar">
+                <div class="text-[10px] font-bold uppercase text-gray-400 mb-2 px-1">Pages</div>
+                <template x-for="(page, idx) in (snapshot ? snapshot.pages : [])" :key="idx">
+                    <div class="toc-item" :class="{'ring-2 ring-primary bg-surface': selectedPageIndex === idx}" @click="selectPage(idx)">
+                        <span class="material-symbols-outlined text-gray-300 text-[16px]" x-text="page.role === 'filler' ? 'unfold_more' : (page.emitsPages === 'component' ? 'music_note' : 'description')"></span>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-[11px] font-medium text-primary truncate" x-text="pageLabel(idx)"></div>
+                            <div class="text-[8px] text-gray-400 uppercase tracking-tight" x-text="(page.entryFields && page.entryFields.length) ? (page.entryFields.length + ' field' + (page.entryFields.length>1?'s':'')) : (page.role==='filler' ? 'filler' : 'auto')"></div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <div class="p-3 border-t border-outline-variant bg-surface text-[9px] text-gray-400">
+                <span x-text="resolved.total"></span>-page booklet · <span x-text="resolved.fillerCount"></span> filler
+            </div>
+        </aside>
+
+        <!-- Middle: live preview -->
+        <section class="flex-1 bg-gray-200 relative flex flex-col overflow-hidden shadow-inner">
+            <div x-show="hasNoTemplate" x-cloak class="flex-1 flex items-center justify-center text-center px-8">
+                <div class="max-w-md text-gray-400">
+                    <span class="material-symbols-outlined text-5xl mb-3">auto_stories</span>
+                    <p class="text-sm" x-text="canEdit ? 'No Service Guide Template is configured yet. Open the Service Guide Manager to set one up.' : 'No Service Guide Template has been configured for this church yet. Ask an editor to set one up.'"></p>
+                    <a x-show="canEdit" href="service-guide-manager.html" class="inline-block mt-4 px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold">Open Manager</a>
+                </div>
+            </div>
+            <div x-show="!hasNoTemplate" class="flex-1 overflow-y-auto p-8 flex flex-col items-center custom-scrollbar">
+                <div class="transition-transform duration-200 origin-top" :style="`transform: scale(${zoomLevel});`">
+                    <template x-for="(page, index) in resolved.pages" :key="index">
+                        <div class="preview-page" :id="'vp-page-' + index" @click="selectPageByPhysical(page)">
+                            <template x-if="pageNum(index)">
+                                <div class="absolute bottom-4 text-[10pt] font-serif select-none"
+                                     :class="pageNum(index).side === 'left' ? 'left-6' : 'right-6'"
+                                     x-text="pageNum(index).number"></div>
+                            </template>
+                            <div class="h-full" x-html="page.html"></div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            <div class="zoom-controls">
+                <button @click="zoomLevel = Math.min(zoomLevel + 0.1, 1.5)" class="zoom-btn"><span class="material-symbols-outlined">add</span></button>
+                <div class="bg-white px-2 py-1 rounded-lg shadow border border-outline-variant text-[10px] font-bold text-center" x-text="Math.round(zoomLevel * 100) + '%'"></div>
+                <button @click="zoomLevel = Math.max(zoomLevel - 0.1, 0.5)" class="zoom-btn"><span class="material-symbols-outlined">remove</span></button>
+            </div>
+        </section>
+
+        <!-- Right: Entry Field inspector -->
+        <aside x-show="canEdit" class="no-print w-96 bg-white border-l border-outline-variant flex flex-col shadow-sm">
+            <div class="p-4 border-b border-outline-variant bg-surface">
+                <h2 class="font-semibold text-secondary uppercase tracking-wider text-[10px]">This Week's Inputs</h2>
+                <p class="text-[10px] text-gray-400 mt-0.5" x-text="selectedPage ? ('Editing: ' + pageLabel(selectedPageIndex)) : 'Select a page to fill in'"></p>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-5 custom-scrollbar">
+                <!-- no page selected -->
+                <template x-if="!selectedPage">
+                    <div class="text-center text-gray-400 text-sm mt-10">
+                        <span class="material-symbols-outlined text-4xl mb-2">touch_app</span>
+                        <p>Click a page in the list or preview to edit its weekly content.</p>
+                    </div>
+                </template>
+
+                <!-- page with no inputs -->
+                <template x-if="selectedPage && selectedFields.length === 0">
+                    <div class="text-center text-gray-400 text-sm mt-10">
+                        <span class="material-symbols-outlined text-4xl mb-2">bolt</span>
+                        <p>This page is built automatically from the Order of Service — nothing to fill in.</p>
+                    </div>
+                </template>
+
+                <!-- inputs -->
+                <div class="space-y-5" x-show="selectedFields.length > 0">
+                    <template x-for="field in selectedFields" :key="field.key">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">
+                                <span x-text="field.label"></span>
+                                <span x-show="field.required" class="text-error">*</span>
+                            </label>
+
+                            <!-- text -->
+                            <template x-if="field.type === 'text'">
+                                <textarea rows="1" x-model="values[field.key]" x-init="autoResize($el)" @input="autoResize($el)"
+                                          class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea>
+                            </template>
+
+                            <!-- rich text (with docx import) -->
+                            <template x-if="field.type === 'richtext'">
+                                <div>
+                                    <textarea rows="6" x-model="values[field.key]"
+                                              class="w-full text-[11px] font-mono rounded border-outline-variant px-3 py-2 bg-gray-50" placeholder="HTML content…"></textarea>
+                                    <label class="mt-2 inline-flex items-center gap-1 text-[10px] font-bold uppercase text-primary cursor-pointer hover:underline">
+                                        <span class="material-symbols-outlined text-[16px]">upload_file</span> Import .docx
+                                        <input type="file" class="hidden" accept=".docx" @change="handleDocx(field, $event)" />
+                                    </label>
+                                </div>
+                            </template>
+
+                            <!-- image -->
+                            <template x-if="field.type === 'image'">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-16 h-16 bg-white rounded border border-outline-variant flex items-center justify-center overflow-hidden flex-shrink-0">
+                                        <template x-if="values[field.key]"><img :src="values[field.key]" class="w-full h-full object-contain" /></template>
+                                        <template x-if="!values[field.key]"><span class="material-symbols-outlined text-gray-300">image</span></template>
+                                    </div>
+                                    <label class="flex-1">
+                                        <span class="inline-block px-3 py-2 bg-white border border-outline-variant rounded-lg text-xs font-bold text-primary cursor-pointer hover:bg-surface text-center w-full">Select image</span>
+                                        <input type="file" class="hidden" accept="image/*" @change="handleImage(field, $event)" />
+                                    </label>
+                                    <button x-show="values[field.key]" @click="values[field.key] = null" class="text-error"><span class="material-symbols-outlined text-sm">delete</span></button>
+                                </div>
+                            </template>
+
+                            <!-- list -->
+                            <template x-if="field.type === 'list'">
+                                <div class="space-y-2">
+                                    <template x-for="(item, i) in (values[field.key] || [])" :key="i">
+                                        <div>
+                                            <!-- announcements: title + content -->
+                                            <template x-if="field.renderAs === 'announcements'">
+                                                <div class="p-3 bg-gray-50 rounded-lg border border-outline-variant space-y-2">
+                                                    <div class="flex justify-between items-center">
+                                                        <span class="text-[10px] font-bold text-gray-400 uppercase" x-text="'#' + (i+1)"></span>
+                                                        <button @click="removeListItem(field, i)" class="text-error"><span class="material-symbols-outlined text-sm">delete</span></button>
+                                                    </div>
+                                                    <input type="text" x-model="item.title" placeholder="Title" class="w-full text-sm rounded border-outline-variant px-2 py-1" />
+                                                    <textarea rows="2" x-model="item.content" x-init="autoResize($el)" @input="autoResize($el)" placeholder="Details (HTML allowed)" class="w-full text-sm rounded border-outline-variant px-2 py-1 resize-none overflow-hidden"></textarea>
+                                                </div>
+                                            </template>
+                                            <!-- bullets: plain strings -->
+                                            <template x-if="field.renderAs !== 'announcements'">
+                                                <div class="flex gap-2">
+                                                    <textarea rows="1" x-model="values[field.key][i]" x-init="autoResize($el)" @input="autoResize($el)" class="flex-1 text-sm rounded border-outline-variant px-3 py-1 resize-none overflow-hidden"></textarea>
+                                                    <button @click="removeListItem(field, i)" class="text-error"><span class="material-symbols-outlined text-sm">delete</span></button>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    <button @click="addListItem(field)" class="text-[10px] text-primary font-bold uppercase flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-sm">add_circle</span> Add
+                                    </button>
+
+                                    <!-- previous-week announcement suggestions -->
+                                    <template x-if="field.key === 'announcements' && previousAnnouncements.length > 0">
+                                        <div class="mt-4 pt-3 border-t border-outline-variant">
+                                            <div class="flex items-center gap-1.5 mb-2">
+                                                <span class="material-symbols-outlined text-[16px] text-gray-400">history</span>
+                                                <span class="text-[10px] font-bold uppercase text-gray-500">Reuse from <span x-text="new Date(previousAnnouncementsDate + 'T00:00:00').toLocaleDateString(undefined, { month:'short', day:'numeric' })"></span></span>
+                                            </div>
+                                            <div class="space-y-2">
+                                                <template x-for="(sugg, si) in previousAnnouncements" :key="si">
+                                                    <button @click="addSuggestedAnnouncement(field, sugg)" class="w-full text-left p-2.5 bg-primary/5 hover:bg-primary/10 rounded-lg border border-primary/20 transition-colors">
+                                                        <div class="text-[11px] font-bold text-gray-700 truncate" x-text="sugg.title || '(Untitled)'"></div>
+                                                        <div class="text-[10px] text-gray-400 truncate" x-html="sugg.content || ''"></div>
+                                                    </button>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- tasks footer -->
+            <div class="p-4 border-t border-outline-variant bg-surface">
+                <button @click="goToNextTask()" class="w-full py-3 rounded-xl flex items-center justify-center gap-3 shadow-md transition-all active:scale-95"
+                        :class="tasksRemaining > 0 ? 'bg-primary text-white' : 'bg-success text-white'">
+                    <template x-if="tasksRemaining > 0">
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center text-xs font-bold" x-text="tasksRemaining"></span>
+                            <span class="font-bold uppercase tracking-tight text-sm">Tasks Left</span>
+                        </div>
+                    </template>
+                    <template x-if="tasksRemaining === 0">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined">check_circle</span>
+                            <span class="font-bold uppercase tracking-tight text-sm">All Tasks Complete</span>
+                        </div>
+                    </template>
+                </button>
+                <div class="mt-2 text-center">
+                    <button @click="save()" class="text-[10px] text-gray-400 hover:text-primary underline">Save Progress</button>
+                </div>
+            </div>
+        </aside>
+    </main>
+</body>
+</html>

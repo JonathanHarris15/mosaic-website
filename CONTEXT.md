@@ -94,6 +94,60 @@ _Avoid_: elder alert, prayer summary, notification (unqualified)
 A Person who is baptized at a Service. A Service with `hasBaptism: true` carries a list of Baptism Candidates (Person references), replacing the former free-text baptism value. Being recorded as a Baptism Candidate sets that Person's `baptismDate` to the Service date. A candidate need not pre-exist as a Person — naming a new one creates the Person record.
 _Avoid_: Baptizee, baptism name, candidate (unqualified)
 
+## Service Guide Template System
+
+**Page Template**:
+A reusable definition of a single printable page, authored by an editor in the Page Library. Consists of user-written HTML/CSS (optionally inheriting a Style Preset) with embedded Components. Pages are composed into Service Guide Templates. The current special pages (title page, hymn sheet, pastoral prayer, Mosaic Kids, announcements, sermon notes, the Order of Service list) are reborn as developer-seeded Page Templates rather than hardcoded element types.
+_Avoid_: Page type, element, layout
+
+**Component**:
+A developer-authored preset embedded in a Page Template via a custom HTML tag. Every Component is ultimately informed by a person; the distinction that matters is **which party informs it, on which surface** — because two parties produce a Service Guide (Party 1 builds the Order of Service; Party 2 assembles and prints the guide). So a Component is either a **Builder Component** (informed on the Order of Service editor) or a **Generator Component** (informed on the Service Guide generator). All Components ship with the application — editors place them but do not author them. Casual synonym: "dynamic component." Components are placed as **hyphenated custom tags** (e.g. `<oos-list>`, `<input-text>`, `<hymn-sheet>`, `<preaching-schedule>`) — the hyphen is required so the engine can find them without a full HTML parser. One Component (`hymn-sheet`) is **multi-page**: on a Page Template marked `emitsPages: 'component'` it emits its own ordered list of physical pages.
+_Avoid_: Bound Component, Input Component (both superseded by Builder/Generator Component), Service Element (that is a liturgy sub-element), widget, control
+
+**Order of Service value Component**:
+A family of fine-grained **Builder Components** that each render exactly **one** liturgy value — a single hymn name (`<hymn-1>`, `<hymn-preparatory>`…), one scripture reference (`<ref-call-to-worship>`, `<ref-sermon>`…), or one service role (`<preacher-name>`…). They let an editor lay out the Order of Service page **by hand** — static labels typed as page HTML on the left, these value tags dropped in on the right — instead of relying on the single `<oos-list>` master Component. This works without a template loop because the liturgy is a **fixed, named set of slots**, not a variable list; a tag's **presence on a page is itself the request** to the Order of Service editor, and structural variation between Sundays (a missing hymn, a baptism) is expressed as a **different Page/Template**, never a conditional inside one page. `<oos-list>` is kept as a one-drop convenience. Introduced with the designed booklet ([ADR 0008](docs/adr/0008-service-guide-template-system.md) implementation notes; the loop question is discussed there).
+_Avoid_: liturgy field tag, OOS row component
+
+**Builder Component**:
+A Component informed on the Order of Service editor by Party 1. Two presence kinds: a **static** Builder Component is prompted on every week regardless of template (the legacy Order of Service editor *is* exactly this fixed prompt set — service leader, hymns, preacher, theme…); a **non-static** Builder Component is prompted **only when the selected Service Guide Template requests it** (e.g. **Baptism** candidates, or a **Congregational prayer** when a member leads in the pastor's absence). A Builder Component may be **prompted** (the user types the value directly) or **derived** (the user types a *key* — a hymn name, an ESV reference — and the Component populates richer content from it, e.g. sheet-music images or verse text); either way the Order of Service editor is its source.
+_Avoid_: Bound Component, liturgy field
+
+**Generator Component**:
+A Component informed on the Service Guide generator by Party 2 — the weekly fill-in-the-blanks the person assembling the printed guide supplies (e.g. the Pastoral Prayer's **Nation** and **Capital**). Always prompted (it has no derived form).
+_Avoid_: Input Component, manual component
+
+**Entry Field**:
+The per-week input a Component declares so a person can inform it — a hymn name or ESV reference for a derived Builder Component, the candidate list for a Baptism, the Nation/Capital for a Generator Component. Which surface an Entry Field appears on is fixed by its Component: Generator Components surface on the Service Guide generator; Builder Components surface on the Order of Service editor, and non-static ones only when the chosen Service Guide Template requests them.
+_Avoid_: Custom field, blank, prompt
+
+**Page Library**:
+The collection of all Page Templates available to compose into Service Guide Templates.
+_Avoid_: Template library, page store
+
+**Style Preset**:
+A reusable stylesheet (master CSS) that a Page Template can inherit application-wide styling from. Editors author Style Presets; a Page Template chooses which one to inherit.
+_Avoid_: Theme, master CSS (use only as descriptive prose)
+
+**Service Guide Template**:
+An ordered, counted selection of Page Templates from the Page Library that defines the structure of a Service Guide. Each entry is a **page placement** — `{ pageTemplateId, role, params }` — so the same Page Template can appear several times bound to different data: the single Hymn page is placed once per liturgy slot, each placement's `params.field` naming the slot (e.g. `hymn1`). Specifies page order, repetition, and which placement is the Filler Page (`role: 'filler'`). Because a template fixes which Components its pages contain, it also fixes which **non-static Builder Components** the Order of Service editor prompts that week — e.g. a template whose pages include the baptism component prompts Party 1 for Baptism candidates. This is why distinct templates exist for the combinations of non-static components (e.g. {with, without} Baptism × {pastoral, congregational} prayer). One Service Guide Template is the church-wide default; any week's Order of Service editor can override it for that week only. Stored in `guide_templates`.
+_Avoid_: SG Template (use only as shorthand), guide layout
+
+**Filler Page**:
+The Page Template placement within a Service Guide Template designated to expand or contract in count to balance the booklet. It keeps at least one page and **auto-sizes the booklet to the next multiple of 4**: the booklet is the smallest multiple of 4 that holds every real page plus at least one filler, never below a floor (default 16). Extra content — e.g. a multi-page hymn — simply bumps the booklet up by four; it never overflows or drops content (the old "warn past target" behaviour was replaced, and the manual target-page control retired). For the designed booklet the Filler is the **blank continuation Sermon Notes page** (the "Main Idea of the Sermon" notes page is a separate, non-filler page so it always appears exactly once).
+_Avoid_: Padding page, blank page, spacer, target page count
+
+**Service Guide Manager**:
+The editor+ authoring surface (`service-guide-manager.html`) for the Page Library, Style Presets, and Service Guide Templates. Carries the authoring guardrails — live validation, preview-before-save, and "reset to seeded default."
+_Avoid_: Template editor (ambiguous), admin page
+
+**Order of Service editor**:
+The structured liturgy surface (`service-builder.html`) launched from the Service Calendar. The editor fills it out **first**: preacher/hymn/person pickers and the Service Theme. It is the **first source** — the canonical structured Service that **Builder Components** are informed from. It is also where the week's Service Guide Template is chosen (or the legacy system toggled on) for the booklet that follows; in the new system the chosen template decides which non-static Builder Components (e.g. baptism, congregational prayer) it prompts, while the legacy system keeps the old "Include Baptism?" checkbox.
+_Avoid_: OOS Editor (ambiguous — historically pointed at the generator), Order of Service Builder, builder
+
+**Service Guide generator**:
+The weekly surface the editor fills out **second**, after the Order of Service editor, to produce the printable Service Guide. It is the **second source** — it prompts for the snapshot's Entry Fields (the manual fill-in-the-blanks the Input Components declare), renders the live booklet, and prints. Two implementations both pull from the Order of Service editor: the **new generator** (`service-guide-editor.html`), driven by the chosen Service Guide Template; and the **legacy generator** (`service-guide.html`), the kept hardcoded eight-page system used when the week's Order of Service editor has "Use legacy system" toggled on (or for weeks created before this system, whose guide lacks `format: 'v2'`).
+_Avoid_: OOS Editor, Service Guide Editor, guide builder
+
 ## Core Entities
 
 ### Person
@@ -146,7 +200,7 @@ The sequence of liturgical elements for a specific Service.
 - **Purpose**: Defines the sequence of events for the Sunday gathering. It is a core part of the Service Guide.
 
 ### Service Element (Irregular Only)
-A dynamic component of an Irregular Service.
+A sub-element of an Irregular Service's liturgy. (Distinct from a **Component**, which belongs to the Service Guide Template System.)
 - **Fields**:
   - `key`: The label for the element (e.g., "Preacher", "Historic Confession").
   - `value`: The content or Person reference.
@@ -252,11 +306,11 @@ An `@`-prefixed inline reference inside a TipTap editor. The mention system span
 - **Baptism Indicator**: 
   - **List View**: A blue status badge with a `water_drop` icon.
   - **Table View**: A dedicated "Baptism" column showing the Baptism Candidates' names.
-  - **Editing**: Read-only in the calendar; Baptism Candidates are managed in the Order of Service Builder (linked to Person records). The "Include Baptism?" toggle in the Builder sets `hasBaptism`.
+  - **Editing**: Read-only in the calendar; Baptism Candidates are managed in the Order of Service editor (linked to Person records). In the legacy system the "Include Baptism?" toggle sets `hasBaptism`; in the new system `hasBaptism` is derived from whether the week's Service Guide Template requests the baptism component (ADR-0010).
 - **Sermonette Indicator**: 
   - **List View**: A purple status badge with a `mic` icon.
   - **Table View**: Displayed within the "Preacher" column as a secondary entry (e.g., "Jane Doe (Sermonette)").
   - **Editing**: Editable inline by admins, linked to a Person record.
 - **Editing Summary**: 
   - Sermonette leaders are linked to People and editable from list/table.
-  - Baptism Candidates are linked to People and editable from the Order of Service Builder (read-only in the calendar).
+  - Baptism Candidates are linked to People and editable from the Order of Service editor (read-only in the calendar).

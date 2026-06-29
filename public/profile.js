@@ -55,18 +55,6 @@ async function initProfile() {
             document.getElementById('user-role-badge').textContent = `${roleText} Access`;
             document.getElementById('user-role-display').textContent = roleText;
 
-            // Show Hymn Manager button if editor, elder, admin, or super_admin
-            if (['editor', 'elder', 'admin', 'super_admin'].includes(role)) {
-                const managerBtn = document.getElementById('hymn-manager-btn');
-                if (managerBtn) managerBtn.classList.remove('hidden');
-            }
-
-            // Show People's Directory button for members and above (members get a read-only view)
-            if (['member', 'editor', 'elder', 'admin', 'super_admin'].includes(role)) {
-                const peoplesBtn = document.getElementById('peoples-manager-btn');
-                if (peoplesBtn) peoplesBtn.classList.remove('hidden');
-            }
-
             // Show Admin Panel if admin or super_admin
             if (['admin', 'super_admin'].includes(role)) {
                 const adminPanel = document.getElementById('admin-panel');

@@ -707,15 +707,40 @@ function renderSidebar(grouped) {
 
 window.navigateToGuide = function(date) {
     const svc = serviceDataMap[date];
+    const guide = svc && svc.guide;
     const isViewer = !['editor', 'elder', 'admin', 'super_admin'].includes(window.currentUserRole);
-    
+
+    // Which Service Guide system this week uses — the explicit per-week toggle set
+    // in the Order of Service editor, else a legacy `elements` blob, else v2
+    // (ADR-0010). One shared rule (GuideStore) so the calendar and the editor's
+    // "Generate" button never drift.
+    const system = window.GuideStore
+        ? GuideStore.guideSystemOf(svc || {})
+        : ((guide && guide.format !== 'v2' && Array.isArray(guide.elements)) ? 'legacy' : 'v2');
+    const isLegacy = system === 'legacy';
+    const target = window.GuideStore
+        ? GuideStore.guideHref(svc || {}, date)
+        : (isLegacy ? `service-guide.html?date=${date}` : `service-guide-editor.html?date=${date}`);
+
     if (!isViewer && svc) {
         let incomplete = false;
-        if (svc.guide && svc.guide.elements) {
-            const prayer = svc.guide.elements.find(el => el.type === 'pastoral_prayer');
-            const kids = svc.guide.elements.find(el => el.type === 'kids_section');
-            const announcements = svc.guide.elements.find(el => el.type === 'announcements');
-            
+        if (guide && guide.format === 'v2') {
+            // Compute completeness from the frozen snapshot's required Entry
+            // Fields — the single source of truth the editor uses — so this never
+            // drifts as templates are customised. Fall back to a field heuristic
+            // if the guide modules aren't available for some reason.
+            if (window.GuideStore && guide.snapshot) {
+                incomplete = window.GuideStore.tasksRemaining(guide.snapshot, guide.values || {}) > 0;
+            } else {
+                const v = guide.values || {};
+                const annFilled = Array.isArray(v.announcements) && v.announcements.some(a => a && (a.title || a.content));
+                incomplete = (!v.pp_nation || !v.pp_capital) || (!v.kids_lesson_title || !v.kids_lesson_verse) || !annFilled;
+            }
+        } else if (guide && guide.elements) {
+            const prayer = guide.elements.find(el => el.type === 'pastoral_prayer');
+            const kids = guide.elements.find(el => el.type === 'kids_section');
+            const announcements = guide.elements.find(el => el.type === 'announcements');
+
             if (prayer && prayer.enabled && (!prayer.nation || !prayer.capital)) incomplete = true;
             if (kids && kids.enabled && (!kids.lessonTitle || !kids.lessonVerse)) incomplete = true;
             if (announcements && announcements.enabled && (!announcements.items || announcements.items.length === 0 || !announcements.items[0].title)) incomplete = true;
@@ -729,7 +754,7 @@ window.navigateToGuide = function(date) {
             if (!proceed) return;
         }
     }
-    window.location.href = `service-guide.html?date=${date}`;
+    window.location.href = target;
 };
 
 function renderList(grouped) {

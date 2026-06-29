@@ -41,6 +41,30 @@ service cloud.firestore {
       allow create, update, delete: if isEditor();
     }
 
+    // Service Guide Template System (ADR-0008). The Page Library, Style Presets,
+    // and Service Guide Templates are global, editor-authored content — public
+    // read (the booklet is congregant-facing), editor+ write (same as weekly
+    // editing). The frozen per-week snapshot lives on services/{date}.guide and
+    // is covered by the services rule above. Components ship in code, not here.
+    match /style_presets/{presetId} {
+      allow read: if true;
+      allow create, update, delete: if isEditor();
+    }
+    match /page_templates/{templateId} {
+      allow read: if true;
+      allow create, update, delete: if isEditor();
+    }
+    match /guide_templates/{templateId} {
+      allow read: if true;
+      allow create, update, delete: if isEditor();
+    }
+    // Asset Library — reusable images (logos, QR codes) referenced by URL in pages.
+    // Bytes live in Storage; this holds metadata + the public download URL.
+    match /guide_assets/{assetId} {
+      allow read: if true;
+      allow create, update, delete: if isEditor();
+    }
+
     match /people/{personId} {
       allow read: if true;
       allow create, update, delete: if isEditor();
