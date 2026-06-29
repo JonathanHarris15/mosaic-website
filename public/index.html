@@ -23,7 +23,9 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
-    
+    <!-- SortableJS — drag-to-reorder dashboard cards -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
     <script src="auth.js"></script>
 </head>
 
@@ -60,7 +62,7 @@
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-md content-start md:flex-1 md:min-h-0 md:overflow-y-auto md:pr-1 md:pb-1" id="nav-cards-grid">
                     <!-- Hymn Directory Button -->
-                    <a href="hymn-directory.html"
+                    <a href="hymn-directory.html" data-card-key="hymn-directory"
                         class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
                         <div
                             class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
@@ -73,7 +75,7 @@
                     </a>
 
                     <!-- Service Calendar -->
-                    <a href="service-calendar.html"
+                    <a href="service-calendar.html" data-card-key="service-calendar"
                         class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
                         <div
                             class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
@@ -85,7 +87,7 @@
                     </a>
 
                     <!-- Service Analytics -->
-                    <a href="analytics.html"
+                    <a href="analytics.html" data-card-key="service-analytics"
                         class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
                         <div
                             class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
@@ -120,6 +122,74 @@
             return "Good night";
         }
 
+        // ---- Dashboard card reordering -------------------------------------
+        // Each feature card carries a stable data-card-key. The user's preferred
+        // order is stored on /users/{uid}.dashboardCardOrder as an array of those
+        // keys. Cards not present in the saved order (e.g. unlocked by a role
+        // promotion) are appended to the end so they're never lost.
+
+        function applyDashboardOrder(grid, savedOrder) {
+            if (!grid) return;
+            const cards = Array.from(grid.children).filter(c => c.dataset.cardKey);
+            const order = Array.isArray(savedOrder) ? savedOrder : [];
+            // Cards listed in the saved order, in that order...
+            const ordered = order
+                .map(key => cards.find(c => c.dataset.cardKey === key))
+                .filter(Boolean);
+            const placed = new Set(ordered.map(c => c.dataset.cardKey));
+            // ...followed by any remaining cards in their current (default) order.
+            const remaining = cards.filter(c => !placed.has(c.dataset.cardKey));
+            [...ordered, ...remaining].forEach(c => grid.appendChild(c));
+        }
+
+        function decorateCardsWithHandles(grid) {
+            Array.from(grid.children).forEach(card => {
+                if (!card.dataset.cardKey || card.querySelector('.drag-handle')) return;
+                // The handle is positioned absolutely within the card.
+                card.classList.add('relative');
+                // The cards are <a> elements, which the browser tries to drag
+                // natively (dragging the link/URL). Disable that so SortableJS's
+                // fallback drag of the whole card is the only thing that runs.
+                card.setAttribute('draggable', 'false');
+                card.addEventListener('dragstart', e => e.preventDefault());
+                const handle = document.createElement('button');
+                handle.type = 'button';
+                handle.className = 'drag-handle absolute top-2 right-2 p-1 rounded-md text-on-surface-variant opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:bg-surface-container transition-all duration-200 cursor-grab active:cursor-grabbing touch-none';
+                handle.title = 'Drag to reorder';
+                handle.setAttribute('aria-label', 'Drag to reorder this card');
+                handle.innerHTML = '<span class="material-symbols-outlined text-[20px] pointer-events-none">drag_indicator</span>';
+                // The card is an <a>; keep a click on the handle from navigating.
+                handle.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); });
+                card.appendChild(handle);
+            });
+        }
+
+        async function saveDashboardOrder(uid, grid) {
+            const order = Array.from(grid.children)
+                .map(c => c.dataset.cardKey)
+                .filter(Boolean);
+            try {
+                await db.collection('users').doc(uid).set({ dashboardCardOrder: order }, { merge: true });
+            } catch (e) {
+                console.error('Failed to save dashboard card order:', e);
+            }
+        }
+
+        function setupCardReordering(uid, grid) {
+            if (!grid) return;
+            decorateCardsWithHandles(grid);
+            if (typeof Sortable === 'undefined' || grid._sortable) return;
+            grid._sortable = Sortable.create(grid, {
+                handle: '.drag-handle',
+                animation: 150,
+                // Anchors are natively draggable; the fallback path drives the
+                // drag from mouse/touch events instead and avoids that conflict.
+                forceFallback: true,
+                ghostClass: 'opacity-40',
+                onEnd: () => saveDashboardOrder(uid, grid)
+            });
+        }
+
         async function updateDashboard() {
             const greetingEl = document.getElementById('greeting');
             const upcomingBox = document.getElementById('upcoming-box');
@@ -145,12 +215,14 @@
             });
 
             let userRole = 'viewer';
+            let savedCardOrder = null;
             if (user) {
                 let name = 'Friend';
                 try {
                     const userData = await getUserData(user.uid);
                     if (userData) {
                         userRole = userData.role || 'viewer';
+                        savedCardOrder = Array.isArray(userData.dashboardCardOrder) ? userData.dashboardCardOrder : null;
                         if (userData.email) {
                             name = userData.email.split('@')[0];
                             name = name.charAt(0).toUpperCase() + name.slice(1);
@@ -181,6 +253,7 @@
                     ['member', 'editor', 'elder', 'admin', 'super_admin'].includes(userRole)) {
                     const dirCard = document.createElement('a');
                     dirCard.id = 'directory-card';
+                    dirCard.dataset.cardKey = 'directory';
                     dirCard.href = 'peoples-page.html';
                     dirCard.className = cardClass;
                     dirCard.innerHTML = `
@@ -199,6 +272,7 @@
                     ['editor', 'elder', 'admin', 'super_admin'].includes(userRole)) {
                     const card = document.createElement('a');
                     card.id = 'hymn-manager-card';
+                    card.dataset.cardKey = 'hymn-manager';
                     card.href = 'manager.html';
                     card.className = cardClass;
                     card.innerHTML = `
@@ -217,6 +291,7 @@
                     ['elder', 'super_admin'].includes(userRole)) {
                     const card = document.createElement('a');
                     card.id = 'shepherding-card';
+                    card.dataset.cardKey = 'shepherding';
                     card.href = 'shepherding-dashboard.html';
                     card.className = cardClass;
                     card.innerHTML = `
@@ -234,6 +309,7 @@
                     ['admin', 'super_admin'].includes(userRole)) {
                     const card = document.createElement('a');
                     card.id = 'admin-dashboard-card';
+                    card.dataset.cardKey = 'admin-dashboard';
                     card.href = 'admin-dashboard.html';
                     card.className = cardClass;
                     card.innerHTML = `
@@ -245,6 +321,12 @@
                     `;
                     grid.appendChild(card);
                 }
+
+                // Apply the user's saved card arrangement, then make the cards
+                // drag-to-reorder. Cards the user hasn't ordered yet (e.g. ones
+                // newly unlocked by a promotion) fall to the end automatically.
+                applyDashboardOrder(grid, savedCardOrder);
+                setupCardReordering(user.uid, grid);
             } else {
                 greetingEl.textContent = baseGreeting;
             }

@@ -22,6 +22,11 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid == userId;
       // Allow users to create their own document as 'viewer'
       allow create: if request.auth != null && request.auth.uid == userId && request.resource.data.role == 'viewer';
+      // Allow users to update ONLY their own dashboard card arrangement.
+      // Restricting the affected keys prevents self role-escalation or tampering
+      // with any other field (email, personId, etc.).
+      allow update: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dashboardCardOrder']);
       // Allow admins to read and write any user document
       allow read, write: if isAdmin();
     }
