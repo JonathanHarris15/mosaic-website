@@ -152,22 +152,33 @@ test('every physical page is tagged with the snapshot page it came from', () => 
 test('filler is inserted at its template position in reading order', () => {
     const s = snap([plain('a'), plain('notes', 'filler'), plain('z')], 6);
     const r = Engine.resolveGuide(s, {}, {}, catalog);
-    // a, [fillers...], z
+    // a, [fillers...], z — booklet rounds up to a multiple of 4 (floor 6 → 8).
     assert.strictEqual(r.pages[0].pageTemplateId, 'a');
     assert.strictEqual(r.pages[r.pages.length - 1].pageTemplateId, 'z');
     assert.strictEqual(r.pages[1].role, 'filler');
-    assert.strictEqual(r.total, 6);
+    assert.strictEqual(r.total, 8);
+    assert.strictEqual(r.total % 4, 0);
 });
 
-test('filler keeps at least one page and flags overflow past the target', () => {
+test('past the floor the booklet auto-grows to the next multiple of 4 (no overflow)', () => {
     const many = [];
     for (let i = 0; i < 16; i++) many.push(plain('p' + i));
     many.push(plain('notes', 'filler'));
     const r = Engine.resolveGuide(snap(many, 16), {}, {}, catalog);
     assert.strictEqual(r.realCount, 16);
-    assert.strictEqual(r.fillerCount, 1);      // minimum one filler, never zero
-    assert.strictEqual(r.total, 17);
-    assert.strictEqual(r.overflow, true);
+    // 16 real + at least one filler → smallest multiple of 4 ≥ 17 is 20.
+    assert.strictEqual(r.total, 20);
+    assert.strictEqual(r.fillerCount, 4);
+    assert.strictEqual(r.total % 4, 0);
+    assert.strictEqual(r.overflow, false);     // never overflows — it grows
+});
+
+test('auto-grow still respects the floor and minFiller for small booklets', () => {
+    const few = [plain('a'), plain('b'), plain('c'), plain('notes', 'filler')];
+    const r = Engine.resolveGuide(snap(few, 16), {}, {}, catalog);
+    assert.strictEqual(r.realCount, 3);
+    assert.strictEqual(r.total, 16);           // floor holds for small content
+    assert.strictEqual(r.fillerCount, 13);
 });
 
 // ── imposition ────────────────────────────────────────────────────────────────
@@ -204,4 +215,17 @@ test('pageNumber: outer pages unnumbered, interior numbered by reading position'
     assert.deepStrictEqual(Engine.pageNumber(1, 16), { number: 1, side: 'left' });
     assert.deepStrictEqual(Engine.pageNumber(2, 16), { number: 2, side: 'right' });
     assert.deepStrictEqual(Engine.pageNumber(14, 16), { number: 14, side: 'right' });
+});
+
+test('pageNumber: numberStartPage moves where numbering begins, first numbered page is "1"', () => {
+    // Default (2) is unchanged by passing it explicitly.
+    assert.deepStrictEqual(Engine.pageNumber(1, 16, 2), { number: 1, side: 'left' });
+    // Start on page 3 (the Mosaic booklet): page 2 (index 1) is now front matter.
+    assert.strictEqual(Engine.pageNumber(1, 16, 3), null);
+    assert.deepStrictEqual(Engine.pageNumber(2, 16, 3), { number: 1, side: 'right' });
+    assert.deepStrictEqual(Engine.pageNumber(3, 16, 3), { number: 2, side: 'left' });
+    // The back page is still unnumbered regardless of start.
+    assert.strictEqual(Engine.pageNumber(15, 16, 3), null);
+    // 0/undefined falls back to the default of 2.
+    assert.deepStrictEqual(Engine.pageNumber(1, 16, 0), { number: 1, side: 'left' });
 });

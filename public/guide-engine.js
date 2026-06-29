@@ -248,9 +248,13 @@
     // kept at least one notes page (minFiller default 1).
     const DEFAULT_MIN_FILLER = 1;
 
+    const ceil4 = (n) => Math.ceil(n / 4) * 4;
+
     function resolveGuide(snapshot, values, serviceContext, catalog, options) {
         options = options || {};
-        const target = (snapshot && snapshot.targetPageCount) || 16;
+        // The floor — the smallest booklet a template ever produces (default 16).
+        // The booklet auto-grows in multiples of 4 above this as content requires.
+        const floor = (snapshot && snapshot.targetPageCount) || 16;
         const minFiller = options.minFiller != null ? options.minFiller : DEFAULT_MIN_FILLER;
 
         const pages = [];
@@ -278,7 +282,12 @@
         const realCount = pages.length;
         let fillerCount = 0;
         if (fillerTemplate) {
-            fillerCount = Math.max(minFiller, target - realCount);
+            // Auto-grow: the booklet is the smallest multiple of 4 that holds every
+            // real page plus at least minFiller filler page(s), never below the
+            // floor. Extra content (e.g. a multi-page hymn) simply bumps the
+            // booklet up by four — it never overflows or drops content.
+            const sized = ceil4(Math.max(floor, realCount + minFiller));
+            fillerCount = sized - realCount;
             const fillerPhysical = expandPage(fillerTemplate, values, serviceContext, catalog);
             const base = fillerPhysical[0] || makePhysical(fillerTemplate, '', {});
             const clones = [];
@@ -291,13 +300,15 @@
         const total = pages.length;
         return {
             pages,
-            target,
+            target: floor,
             realCount,
             fillerCount,
             total,
-            // Over the target — print still works (imposition pads to a multiple
-            // of 4) but the editor warns rather than silently dropping content.
-            overflow: total > target,
+            // 1-based physical page where numbering begins (per template; default 2).
+            numberStartPage: (snapshot && snapshot.numberStartPage) || 2,
+            // The booklet auto-sizes to a multiple of 4, so it never overflows. The
+            // field is kept (always false) for back-compat with the editor banner.
+            overflow: false,
         };
     }
 
@@ -326,12 +337,18 @@
         return spreads;
     }
 
-    // The page number shown on a physical page, matching today's booklet: the
-    // outer pages (cover/title and the back) carry none; interior pages are
-    // numbered by reading position. Returns { number, side } or null.
-    function pageNumber(index, total) {
-        if (index >= 1 && index <= total - 2) {
-            return { number: index, side: index % 2 === 1 ? 'left' : 'right' };
+    // The page number shown on a physical page. The back (last) page carries
+    // none, and so does any front matter before `numberStartPage` (a 1-based
+    // physical page, per Service Guide Template — e.g. 2 to leave only the cover
+    // unnumbered, 3 to also skip an explainer page). The first numbered page
+    // always shows "1"; `side` follows the physical fold position so the number
+    // sits in the outer margin. Returns { number, side } or null.
+    // Default numberStartPage = 2 reproduces the original booklet exactly.
+    function pageNumber(index, total, numberStartPage) {
+        const start = (numberStartPage && numberStartPage > 0) ? numberStartPage : 2;
+        const startIndex = start - 1; // 0-based index of the first numbered page
+        if (index >= startIndex && index <= total - 2) {
+            return { number: index - startIndex + 1, side: index % 2 === 1 ? 'left' : 'right' };
         }
         return null;
     }

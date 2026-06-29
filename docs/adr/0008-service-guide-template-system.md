@@ -113,3 +113,73 @@ What shipped, including small refinements to the plan made during the build:
 - **Liturgy editing was not absorbed** into the unified editor in v1: the structured pickers stay
   in the Builder (which the editor links to) to avoid destabilising the involvement-sync code. The
   single-page merge of liturgy editing remains the plan's eventual target.
+
+## Designed booklet + granular Order-of-Service Components (2026-06-26)
+
+A complete visual redesign of the booklet (imported from a Claude Design project, "Church service
+guide redesign") was implemented as a **second seeded Service Guide Template, `seed_mosaic`
+("Mosaic Booklet (Designed)"), made the church default**; the original 16-page booklet is **kept
+but demoted** to `isDefault: false` ("…(Legacy)"). The change is purely additive — new Style Preset
+(`seed_mosaic_print`, carrying the design's color/type/layout tokens), new page templates
+(`seed_m_*`), new Components — so every existing golden test still pins the legacy booklet 1:1.
+`buildSeed` now returns `guideTemplates` (plural); `seedAll` seeds them all; the editor already
+picked the default by the `isDefault` flag.
+
+The redesign forced a decision the original engine left open: **how does an editor author the Order
+of Service page?** Its `<oos-list>` is one line and the engine has **no loop/repeat construct**, so
+the liturgy list could not be laid out by hand. Three options were weighed: (a) keep `<oos-list>` as
+a code Component (place-only, not authorable); (b) add a row-level **loop primitive** to the engine;
+(c) **decompose the liturgy into granular, fixed-slot value Components**. We chose **(c)**. The
+insight: the liturgy is a *fixed, named set of slots* (`preparatoryHymn`, `callToWorship`, `sermon`,
+…), **not a variable-length array**, so iteration is never required — only ~16 named values the
+editor arranges by hand (static labels in page HTML on the left, value tags on the right). A tag's
+**presence on the page is the request** to the Order of Service editor (consistent with
+[ADR 0010](./0010-builder-generator-component-surfaces.md)); a slot a template omits is simply never
+placed, so it can never render an empty/dangling row, and structural variation between Sundays
+(baptism, fewer hymns) is a **different Page/Template**, not a conditional inside one page. The
+dynamic per-week hiding (`removedHymns`, `omit-on-baptism`) therefore lives **only in the legacy
+path / `<oos-list>`**, which is retained as a one-drop convenience.
+
+Consequences / what shipped:
+- New granular Builder Components (all `surface: 'builder'`, auto-filled from the Service):
+  `<hymn-preparatory|hymn-1|hymn-2|hymn-mid-1|hymn-mid-2|hymn-end-1|hymn-end-2>` (names),
+  `<ref-call-to-worship|ref-call-to-confession|ref-assurance|ref-scripture-reading|ref-sermon|ref-benediction>`
+  (references), `<preacher-name|music-leader-name|service-leader-name>` (roles), plus
+  `<hymn-name>/<hymn-image>/<hymn-attribution>` (bind to a page's `params.field`) and
+  `<mosaic-schedule>` (the genuinely variable preaching-schedule list — still a Component, as a list
+  must be). Tested in `test/guide-designed-components.test.js` and `test/guide-mosaic-template.test.js`.
+- **Per-slot scripture *text* is deferred**: only the theme key verse has ESV text today, and no page
+  in the design shows per-slot text, so only `*-ref` Components were built; a matching `*-text`
+  family waits for a data source.
+- **Hymn-page pagination is deferred** (the one real loop case left): the designed Hymn page
+  (`seed_m_hymn`) is `emitsPages: 'single'` and renders the *first* sheet image only via
+  `<hymn-image>`; multi-image hymns still need the multi-page `<hymn-sheet>` mechanism, to be
+  redesigned in a later pass.
+- Brand fonts (Cinzel / EB Garamond / Libre Franklin / UnifrakturCook) were added to the editor and
+  Manager heads; the Mosaic Print preset resets `.preview-page` padding to 0 (incl. the print layer)
+  so the designed pages own their margins.
+
+### Follow-on refinements (2026-06-26)
+
+- **Per-template page numbering.** A Service Guide Template carries `numberStartPage` (1-based; the
+  physical page where numbering begins, default 2 = only the cover unnumbered). The Mosaic booklet
+  uses 3 so the cover + explainer are front matter and the Order of Service is page "1". Threaded
+  through `pageNumber(index,total,numberStartPage)` → `buildSnapshot` (frozen per week) →
+  `resolveGuide` → the editor; the Manager template editor exposes a "Start numbering on page" field.
+- **Auto-grow replaces overflow-warn (supersedes decision #2's "warn").** `resolveGuide` now sizes the
+  booklet to `ceil4(max(floor, realCount + minFiller))` — the smallest multiple of 4 holding all real
+  pages plus the filler, never below the floor. It never overflows; extra content bumps it up by four
+  and the filler re-balances. `overflow` is retained (always `false`) for back-compat. The manual
+  **Target-pages control was removed** from the Manager (`targetPageCount` survives only as the
+  internal floor, default 16). This keeps editor preview == print (the old warn-path let the editor
+  show N pages while imposition silently padded to a multiple of 4).
+- **Sermon Notes split.** The "Main Idea of the Sermon" notes page (`seed_m_notes`, with the sermon
+  reference) is now a **non-filler** page so it appears exactly once and is always present; a new blank
+  `seed_m_notes_blank` is the **Filler**. Guarantees ≥1 notes page regardless of booklet size.
+- **Hymn pagination (the one true loop case).** Hymns are the only content that paginates. A new
+  multi-page Component `mosaic-hymn-sheet` emits one physical page per sheet image; the Page Template
+  `seed_m_hymn` is `emitsPages:'component'` with the header in the (repeated) wrapper and the Component
+  supplying the big title on the **first** page only, the image on every page, and the attribution on
+  the **last** page only. Extra hymn pages flow through the auto-grow above. Design refresh also
+  landed: PT Serif cover wordmark, icon-only cover seal, and the ✦ star replaced by a hexagon
+  ornament (`.m-hex`) throughout.

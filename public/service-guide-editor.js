@@ -220,7 +220,7 @@ function guideEditorV2() {
             if (el) el.textContent = css;
         },
 
-        pageNum(index) { return GuideEngine.pageNumber(index, this.resolved.pages.length); },
+        pageNum(index) { return GuideEngine.pageNumber(index, this.resolved.pages.length, this.resolved.numberStartPage); },
 
         // ── Entry Field inputs ─────────────────────────────────────────────────
         selectPageByPhysical(physicalPage) {

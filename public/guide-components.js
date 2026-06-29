@@ -245,6 +245,160 @@
         },
     };
 
+    // ── Granular Order-of-Service value Components (designed booklet) ──────────
+    // Each renders exactly ONE liturgy value, so a page author lays out the Order
+    // of Service by hand in the editor: static labels on the left, these dropped
+    // in on the right. The liturgy is a FIXED, named set of slots (not a dynamic
+    // array), so no loop primitive is needed — the engine's single-pass tag
+    // replacement is enough. A tag's PRESENCE on a page is itself the request to
+    // the Order of Service editor (ADR-0010): a slot a template omits is simply
+    // never placed, so it can never render an empty/dangling row. Structural
+    // variation between Sundays (baptism, fewer hymns) is a different Page/Template
+    // choice, not a conditional inside one page. All bound, surface:'builder' —
+    // auto-filled from the structured Service, never prompted in the generator.
+
+    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    // "Jul 27" from a YYYY-MM-DD key (the designed schedule's date format).
+    function monthDay(dateStr) {
+        if (!dateStr) return '';
+        const [, m, d] = String(dateStr).split('-');
+        return `${MONTHS[parseInt(m, 10) - 1] || m} ${parseInt(d, 10)}`;
+    }
+
+    // A bound Component that renders one escaped value from (ctx) via get().
+    function boundValue(tag, label, get) {
+        return {
+            tag, kind: 'bound', surface: 'builder', group: 'Order of Service', label,
+            render(ctx) { let v; try { v = get(ctx); } catch (e) { v = ''; } return esc(v || ''); },
+        };
+    }
+
+    // Hymn-name value per fixed liturgy slot (italic title on the OOS page).
+    const HYMN_SLOTS = [
+        ['hymn-preparatory', 'Preparatory Hymn', 'preparatoryHymn'],
+        ['hymn-1', 'Hymn 1', 'hymn1'],
+        ['hymn-2', 'Hymn 2', 'hymn2'],
+        ['hymn-mid-1', 'Hymn — Middle 1', 'hymnMid1'],
+        ['hymn-mid-2', 'Hymn — Middle 2', 'hymnMid2'],
+        ['hymn-end-1', 'Hymn — Closing 1', 'hymnEnd1'],
+        ['hymn-end-2', 'Hymn — Closing 2', 'hymnEnd2'],
+    ];
+    const hymnNameComponents = HYMN_SLOTS.map(([tag, label, field]) =>
+        boundValue(tag, label, (ctx) => hymnName(ctx, field)));
+
+    // Scripture reference per fixed liturgy slot (the reference string only; full
+    // ESV text per slot is not fetched today — only the theme key verse is — so a
+    // matching *-text Component is deferred until there is a data source for it).
+    const REF_SLOTS = [
+        ['ref-call-to-worship', 'Call to Worship — Reference', 'callToWorship'],
+        ['ref-call-to-confession', 'Call to Confession — Reference', 'callToConfession'],
+        ['ref-assurance', 'Assurance of Pardon — Reference', 'assuranceOfPardon'],
+        ['ref-scripture-reading', 'Scripture Reading — Reference', 'scriptureReading'],
+        ['ref-sermon', 'Sermon — Reference', 'sermon'],
+        ['ref-benediction', 'Benediction — Reference', 'benediction'],
+    ];
+    const refComponents = REF_SLOTS.map(([tag, label, field]) =>
+        boundValue(tag, label, (ctx) => lit(ctx)[field]));
+
+    // The three service roles (tags hyphenated so the engine's scanner finds them).
+    const PERSON_SLOTS = [
+        ['preacher-name', 'Preacher', 'preacher'],
+        ['music-leader-name', 'Music Leader', 'musicLeader'],
+        ['service-leader-name', 'Service Leader', 'serviceLeader'],
+    ];
+    const personComponents = PERSON_SLOTS.map(([tag, label, key]) =>
+        boundValue(tag, label, (ctx) => svc(ctx)[key]));
+
+    // The hymn slot a Hymn PAGE binds (placement param wins; in-tag attr is a
+    // manual override). Lets <hymn-name>/<hymn-image> work with no attribute on a
+    // page placed per-slot, exactly like the legacy hymn-sheet page.
+    function hymnField(ctx) { return (ctx.params && ctx.params.field) || (ctx.attrs && ctx.attrs.field) || ''; }
+
+    // Hymn name bound to the PAGE's slot (for the Hymn page title). Distinct from
+    // the fixed <hymn-1>… used on the OOS page.
+    const hymnNameBySlot = {
+        tag: 'hymn-name', kind: 'bound', surface: 'builder', group: 'Hymn', label: 'Hymn Name (page slot)',
+        render(ctx) { const f = hymnField(ctx); return esc((f && hymnName(ctx, f)) || ''); },
+    };
+
+    // One hymn sheet-music image for the page's slot. v1 renders the FIRST image
+    // only; multi-image hymns (the variable page-count problem) remain the job of
+    // the multi-page <hymn-sheet> Component until pagination is redesigned.
+    const hymnImage = {
+        tag: 'hymn-image', kind: 'bound', surface: 'builder', group: 'Hymn', label: 'Hymn Sheet Image',
+        render(ctx) {
+            const f = hymnField(ctx);
+            if (!f) return '';
+            const hymn = (svc(ctx).hymnsByField || {})[f] || {};
+            const pages = Array.isArray(hymn.pages) ? hymn.pages : [];
+            const cls = (ctx.attrs && ctx.attrs.class) || 'm-hymn-img';
+            if (pages.length) return `<img src="${attrEsc(pages[0])}" class="${attrEsc(cls)}" alt="${attrEsc(hymn.name || '')}" />`;
+            const name = hymn.name || (lit(ctx)[f] || {}).name || '';
+            return `<div class="m-hymn-missing"><span>No music sheet found for:</span><br/><b>${esc(name)}</b></div>`;
+        },
+    };
+
+    // CCLI / attribution line for the page's hymn slot.
+    const hymnAttribution = {
+        tag: 'hymn-attribution', kind: 'bound', surface: 'builder', group: 'Hymn', label: 'Hymn Attribution',
+        render(ctx) { const f = hymnField(ctx); const hymn = (svc(ctx).hymnsByField || {})[f] || {}; return esc(hymn.attribution || ''); },
+    };
+
+    // Paginated hymn sheet for the designed booklet — the one Component that drives
+    // its page's count. One physical page per sheet-music image; the FIRST page
+    // carries the big hymn title + hexagon divider, every continuation page is just
+    // the image (no big title), and the attribution prints on the LAST page only.
+    // Hymns are the only content that paginates: a Page Template marked
+    // emitsPages:'component' hands this Component the slot (via params.field) and it
+    // returns as many whole pages as the hymn needs; the Filler then re-balances
+    // the booklet to a multiple of 4. An unnamed slot emits nothing.
+    const mosaicHymnSheet = {
+        tag: 'mosaic-hymn-sheet', kind: 'bound', surface: 'builder', group: 'Hymn',
+        label: 'Hymn Sheet — paginated', multiPage: true,
+        render(ctx) { return (this.renderPages(ctx) || []).join(''); },
+        renderPages(ctx) {
+            const field = hymnField(ctx);
+            if (!field) return [];
+            const hymn = (svc(ctx).hymnsByField || {})[field] || {};
+            const name = hymn.name || (lit(ctx)[field] || {}).name || '';
+            if (!name) return []; // unnamed slot contributes no pages; Filler absorbs it
+            const imgs = Array.isArray(hymn.pages) ? hymn.pages : [];
+            const titleBlock = `<div style="text-align:center;">
+      <h1 class="m-hymn-title" style="padding-top:8px;">${esc(name)}</h1>
+      <div class="m-star" style="width:136px; margin:16px auto 2px;"><span class="m-hex" style="color:var(--gold);"></span></div>
+    </div>`;
+            const credit = `<div class="m-rule" style="margin:10px 0 8px;"></div>
+    <div class="m-hymn-credit">${esc(hymn.attribution || '')}</div>`;
+            if (!imgs.length) {
+                // No images on file → one titled placeholder page.
+                return [`${titleBlock}
+    <div class="m-hymn-stage"><div class="m-hymn-missing"><span>No music sheet found for:</span><br/><b>${esc(name)}</b></div></div>
+    ${credit}`];
+            }
+            return imgs.map((url, i) => {
+                const stageStyle = i === 0 ? '' : ' style="padding-top:0;"';
+                return `${i === 0 ? titleBlock : ''}
+    <div class="m-hymn-stage"${stageStyle}><img class="m-hymn-img" src="${attrEsc(url)}" alt="${attrEsc(name)}" /></div>
+    ${i === imgs.length - 1 ? credit : ''}`;
+            });
+        },
+    };
+
+    // Preaching schedule rendered as the designed three-column grid (Date /
+    // Preacher / Text). A genuinely variable-length list, so it stays a bound
+    // Component; the legacy <preaching-schedule> table is left untouched.
+    const mosaicSchedule = {
+        tag: 'mosaic-schedule', kind: 'bound', surface: 'builder', group: 'Announcements', label: 'Preaching Schedule (designed)',
+        render(ctx) {
+            const items = (svc(ctx).schedule || []).slice(0, 5);
+            const rows = items.map(it => {
+                const sermon = it.sermon || (it.liturgy && it.liturgy.sermon) || 'TBA';
+                return `<div class="m-sched-row"><span class="m-sched-date">${esc(monthDay(it.id))}</span><span class="m-sched-preacher">${esc(it.preacher || 'TBA')}</span><span class="m-sched-text">${esc(sermon)}</span></div>`;
+            }).join('');
+            return `<div class="m-sched"><div class="m-sched-row m-sched-head"><span>Date</span><span class="m-sched-preacher">Preacher</span><span class="m-sched-text">Text</span></div>${rows}</div>`;
+        },
+    };
+
     // ── Input Components ───────────────────────────────────────────────────────
 
     // A bare `required` attr (no value, or anything but the string "false")
@@ -346,6 +500,9 @@
         baptismNames, pastoralPrayerSubject, oosList, hymnSheet, schedule,
         inputText, inputRichtext, inputImage, inputList,
         baptismCandidates, pastoralPrayerSubjects, congregationalPrayer,
+        // Designed-booklet granular value Components (additive; ADR-0010).
+        ...hymnNameComponents, ...refComponents, ...personComponents,
+        hymnNameBySlot, hymnImage, hymnAttribution, mosaicHymnSheet, mosaicSchedule,
     ];
 
     // Build a catalog (the lookup the engine takes) from a list of Components.
@@ -359,8 +516,8 @@
             // The palette the Manager shows, split by kind.
             palette() {
                 return {
-                    bound: this.all().filter(c => c.kind === 'bound').map(c => ({ tag: c.tag, label: c.label, multiPage: !!c.multiPage })),
-                    input: this.all().filter(c => c.kind === 'input').map(c => ({ tag: c.tag, label: c.label })),
+                    bound: this.all().filter(c => c.kind === 'bound').map(c => ({ tag: c.tag, label: c.label, group: c.group || null, multiPage: !!c.multiPage })),
+                    input: this.all().filter(c => c.kind === 'input').map(c => ({ tag: c.tag, label: c.label, group: c.group || null })),
                 };
             },
         };

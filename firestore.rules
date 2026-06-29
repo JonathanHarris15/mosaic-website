@@ -58,6 +58,12 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if isEditor();
     }
+    // Asset Library — reusable images (logos, QR codes) referenced by URL in pages.
+    // Bytes live in Storage; this holds metadata + the public download URL.
+    match /guide_assets/{assetId} {
+      allow read: if true;
+      allow create, update, delete: if isEditor();
+    }
 
     match /people/{personId} {
       allow read: if true;

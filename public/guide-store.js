@@ -25,6 +25,7 @@
         stylePresets: 'style_presets',
         pageTemplates: 'page_templates',
         guideTemplates: 'guide_templates',
+        assets: 'guide_assets',
     };
     const GUIDE_FORMAT = 'v2';
 
@@ -102,6 +103,9 @@
         return {
             guideTemplateId: (guideTemplate && guideTemplate.id) || null,
             targetPageCount: (guideTemplate && guideTemplate.targetPageCount) || 16,
+            // 1-based physical page where page numbering begins (default 2 — only
+            // the cover is unnumbered, matching the original booklet).
+            numberStartPage: (guideTemplate && guideTemplate.numberStartPage) || 2,
             pages,
         };
     }
@@ -360,7 +364,12 @@
         for (const pt of seed.pageTemplates) {
             batch.set(db.collection(COLLECTIONS.pageTemplates).doc(pt.id), stamped(pt), { merge: true });
         }
-        batch.set(db.collection(COLLECTIONS.guideTemplates).doc(seed.guideTemplate.id), stamped(seed.guideTemplate), { merge: true });
+        // Seed every developer template (default chosen by isDefault); fall back
+        // to the singular for older seeds.
+        const guideTemplates = (seed.guideTemplates && seed.guideTemplates.length) ? seed.guideTemplates : [seed.guideTemplate];
+        for (const gt of guideTemplates) {
+            batch.set(db.collection(COLLECTIONS.guideTemplates).doc(gt.id), stamped(gt), { merge: true });
+        }
         await batch.commit();
         return seed;
     }
@@ -421,6 +430,52 @@
         await db.collection(COLLECTIONS.guideTemplates).doc(id).delete();
     }
 
+    // ── Asset Library ──────────────────────────────────────────────────────────
+    // Reusable images (logos, QR codes) referenced by URL inside page HTML. Bytes
+    // live in Firebase Storage under guide-assets/<id>/<file>; this collection holds
+    // the metadata + public download URL. Browser-only (uses firebase.storage()).
+
+    async function loadAssets(db) {
+        const snap = await db.collection(COLLECTIONS.assets).get();
+        return snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+    }
+
+    // Upload one File to Storage and persist its metadata. `meta` may carry a
+    // display name and image width/height (read by the caller from an Image).
+    async function saveAsset(db, file, meta) {
+        meta = meta || {};
+        const id = db.collection(COLLECTIONS.assets).doc().id;
+        const safeName = String(file.name || 'asset').replace(/[^\w.\-]+/g, '_');
+        const storagePath = `guide-assets/${id}/${safeName}`;
+        const ref = firebase.storage().ref().child(storagePath);
+        const snap = await ref.put(file);
+        const url = await snap.ref.getDownloadURL();
+        const doc = {
+            id,
+            name: meta.name || file.name || 'Asset',
+            url,
+            storagePath,
+            contentType: file.type || '',
+            size: file.size || 0,
+            width: meta.width || null,
+            height: meta.height || null,
+        };
+        await db.collection(COLLECTIONS.assets).doc(id).set(stamped(doc), { merge: true });
+        return doc;
+    }
+
+    async function renameAsset(db, id, name) {
+        await db.collection(COLLECTIONS.assets).doc(id).set(stamped({ name }), { merge: true });
+    }
+
+    // Delete the Firestore record and its Storage object (best-effort on the blob).
+    async function deleteAsset(db, asset) {
+        if (asset && asset.storagePath) {
+            try { await firebase.storage().ref().child(asset.storagePath).delete(); } catch (e) { /* blob may already be gone */ }
+        }
+        await db.collection(COLLECTIONS.assets).doc(asset.id).delete();
+    }
+
     async function saveWeekGuide(db, date, guideRecord) {
         await db.collection('services').doc(date).set({
             guide: Object.assign({}, guideRecord, {
@@ -441,6 +496,7 @@
         resolveServiceContext, loadCatalog, seedAll, seedIfEmpty, saveStylePreset,
         savePageTemplate, saveGuideTemplate, setDefaultGuideTemplate, deletePageTemplate,
         deleteStylePreset, deleteGuideTemplate, saveWeekGuide,
+        loadAssets, saveAsset, renameAsset, deleteAsset,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
