@@ -12,45 +12,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        "primary": "#001a43",
-                        "on-primary": "#ffffff",
-                        "secondary": "#436082",
-                        "on-secondary": "#ffffff",
-                        "surface": "#fcf9f3",
-                        "background": "#fcf9f3",
-                        "outline-variant": "#c5c6d0",
-                        "surface-container-low": "#f6f3ed",
-                        "surface-container-lowest": "#ffffff",
-                        "on-surface": "#1c1c18",
-                        "on-surface-variant": "#44474e",
-                        "error": "#ba1a1a"
-                    },
-                    fontFamily: {
-                        "headline": ["Noto Serif", "serif"],
-                        "body": ["Work Sans", "sans-serif"]
-                    },
-                    spacing: {
-                        "gutter": "24px",
-                        "md": "24px",
-                        "lg": "48px",
-                        "margin": "32px"
-                    }
-                }
-            }
-        }
-    </script>
+    <script src="mosaic-theme.js"></script>
     <style type="text/tailwindcss">
         [x-cloak] { display: none !important; }
         .tab-active { @apply border-b-2 border-primary text-primary font-semibold; }
         .card { @apply bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm transition-all duration-200; }
         .heat-cell { @apply w-3 h-3 md:w-4 md:h-4 rounded-[2px] cursor-pointer transition-transform hover:scale-125 hover:z-10; }
-        .label-xs { @apply font-body text-[10px] md:text-xs font-medium uppercase tracking-wider text-on-surface-variant; }
+        .label-xs { @apply font-body-md text-[10px] md:text-xs font-medium uppercase tracking-wider text-on-surface-variant; }
     </style>
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>

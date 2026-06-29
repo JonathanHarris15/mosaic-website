@@ -55,7 +55,7 @@
 
 .verse-picker-btn:hover {
     background-color: #d8e2ff; /* primary-fixed */
-    color: #001a43; /* primary */
+    color: #182F57; /* primary */
 }
 
 .verse-picker-btn-book {
@@ -69,9 +69,9 @@
 }
 
 .verse-picker-btn-active {
-    background-color: #001a43 !important; /* primary */
+    background-color: #182F57 !important; /* primary */
     color: #ffffff !important;
-    border-color: #001a43 !important;
+    border-color: #182F57 !important;
 }
 
 .verse-picker-range-btn {
@@ -92,8 +92,8 @@
 }
 
 .verse-picker-range-btn:hover {
-    color: #001a43;
-    border-color: #001a43;
+    color: #182F57;
+    border-color: #182F57;
     background-color: rgba(216, 226, 255, 0.2);
 }
 
@@ -108,7 +108,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #001a43;
+    color: #182F57;
     background-color: rgba(216, 226, 255, 0.3);
     border: 1px solid rgba(216, 226, 255, 0.5);
     border-radius: 8px;

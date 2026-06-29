@@ -34,7 +34,7 @@ function _buildStatusMatrixPopup({ anchorCoords, currentStatus, onSelect }) {
             const active = currentStatus?.urgency === urg && currentStatus?.importance === imp;
             const cell = document.createElement('button');
             cell.type = 'button';
-            cell.style.cssText = `width:44px;height:44px;border-radius:6px;border:2px solid ${active ? '#001a43' : '#c5c6d0'};background:${active ? '#001a43' : 'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;`;
+            cell.style.cssText = `width:44px;height:44px;border-radius:6px;border:2px solid ${active ? '#182F57' : '#c5c6d0'};background:${active ? '#182F57' : 'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;`;
             if (active) {
                 const dot = document.createElement('span');
                 dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#fff;display:block;';

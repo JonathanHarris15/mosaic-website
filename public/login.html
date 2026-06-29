@@ -5,6 +5,7 @@
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Log In - Mosaic Church</title>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="mosaic-theme.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&amp;family=Work+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet" />
     
@@ -17,28 +18,6 @@
     <!-- Alpine JS -->
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
-    <script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    "colors": {
-                        "primary": "#001a43",
-                        "on-primary": "#ffffff",
-                        "surface-container-lowest": "#ffffff",
-                        "outline": "#75777f",
-                        "error": "#ba1a1a",
-                        "background": "#fcf9f3"
-                    },
-                    "fontFamily": {
-                        "display-lg": ["Noto Serif"],
-                        "body-md": ["Work Sans"],
-                        "label-md": ["Work Sans"]
-                    }
-                }
-            }
-        }
-    </script>
     <style>
         [x-cloak] { display: none !important; }
     </style>

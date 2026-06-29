@@ -13,7 +13,8 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('hymnManager', () => ({
         hymns: [],
         allTags: [],
-        
+        searchQuery: '',
+
         isEditing: false,
         showFormModal: false,
         selectedHymnId: null,
@@ -84,6 +85,19 @@ document.addEventListener('alpine:init', () => {
             db.collection('hymns').orderBy('hymn_name').get().then(snapshot => {
                 this.hymns = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             });
+        },
+
+        /**
+         * Hymns filtered by the search box — matches title, lyrics/music writer,
+         * attribution, or any theological tag (case-insensitive).
+         */
+        get filteredHymns() {
+            const q = this.searchQuery.trim().toLowerCase();
+            if (!q) return this.hymns;
+            return this.hymns.filter(h => [
+                h.hymn_name, h.music_writer, h.lyrics_writer, h.attribution,
+                ...(Array.isArray(h.tags) ? h.tags : [])
+            ].filter(Boolean).join(' ').toLowerCase().includes(q));
         },
 
         /**

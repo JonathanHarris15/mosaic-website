@@ -556,7 +556,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
                 const isActive = panelCurrentStatus?.urgency === urg && panelCurrentStatus?.importance === imp;
                 const cell = document.createElement('button');
                 cell.type = 'button';
-                cell.style.cssText = `width:44px;height:44px;border-radius:6px;border:2px solid ${isActive ? '#001a43' : '#c5c6d0'};background:${isActive ? '#001a43' : 'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;`;
+                cell.style.cssText = `width:44px;height:44px;border-radius:6px;border:2px solid ${isActive ? '#182F57' : '#c5c6d0'};background:${isActive ? '#182F57' : 'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;`;
                 if (isActive) {
                     const dot = document.createElement('span');
                     dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#fff;display:block;';

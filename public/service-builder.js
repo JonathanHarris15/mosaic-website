@@ -19,6 +19,7 @@ const CANONICAL_MAPPING = {
     'Hymn Mid 1': { field: 'hymnMid1', type: 'hymn', liturgy: true },
     'Hymn Mid 2': { field: 'hymnMid2', type: 'hymn', liturgy: true },
     'Scripture Reading': { field: 'scriptureReading', type: 'text', liturgy: true },
+    'Pastoral Prayer': { field: 'scriptureReading', type: 'text', liturgy: true },
     'Prayer Male': { field: 'prayerMale', type: 'person', liturgy: true },
     'Prayer Female': { field: 'prayerFemale', type: 'person', liturgy: true },
     'Sermon': { field: 'sermon', type: 'text', liturgy: true },
@@ -138,14 +139,12 @@ function serviceForm() {
         prayerSending: { male: false, female: false },
         user: null,
         originalService: '',
-        activeNoteKey: null,
+        // The liturgy element whose station row is currently expanded (one at a
+        // time). null = every row collapsed. Drives the inline picker + note editor.
+        openKey: null,
         showPrayerPraise: false,
         showPrayerConfession: false,
-        noteEditorTop: 100,
-        noteEditorLeft: 0,
-        noteEditorWidth: 200,
         _quill: null,
-        _scrollHandler: null,
         _sortable: null,
         hymnRegistry: [],
         fuse: null,
@@ -778,7 +777,7 @@ function serviceForm() {
                     'Theme', 'Key Verse', 'Service Leader', 'Music Leader', 'Preacher', 'Sermonette',
                     'Prayer (Praise)', 'Prayer (Confession)', 'Baptism', 'Preparatory Hymn', 'Call to Worship',
                     'Hymn 1', 'Hymn 2', 'Call to Confession', 'Assurance of Pardon', 'Hymn Mid 1', 'Hymn Mid 2',
-                    'Scripture Reading', 'Sermon', 'Hymn End 1', 'Hymn End 2', 'Benediction'
+                    'Pastoral Prayer', 'Sermon', 'Hymn End 1', 'Hymn End 2', 'Benediction'
                 ];
 
                 for (const key of orderedKeys) {
@@ -1130,82 +1129,191 @@ function serviceForm() {
             }
         },
 
-        // ── Note panel ─────────────────────────────────────────────────────────
-        openNote(key) {
-            this.activeNoteKey = key;
-            this._positionEditor(key);
-            this.$nextTick(() => {
-                if (!this.canEdit) return; // viewers get read-only HTML panel; no Quill needed
-                const el = document.getElementById('note-quill-inline');
-                if (!el) return;
+        // ── Order of Service model (movement-grouped station rows) ──────────────
+        // The liturgy laid out as the three movements of a Mosaic service. Each
+        // entry is [fieldKey, displayLabel, type]. The `movements` getter turns this
+        // into display rows; the HTML renders one generic template per type, so the
+        // pickers below stay wired to the same service.liturgy field objects.
+        _MOVEMENTS: [
+            { num: 'I', name: 'Service Leading', keys: [
+                ['preparatoryHymn', 'Preparatory Hymn', 'hymn'],
+                ['callToWorship', 'Call to Worship', 'verse'],
+                ['hymn1', 'Hymn', 'hymn'],
+                ['hymn2', 'Hymn', 'hymn'],
+                ['callToConfession', 'Call to Confession', 'verse'],
+                ['assuranceOfPardon', 'Assurance of Pardon', 'verse'],
+                ['hymnMid1', 'Hymn', 'hymn'],
+                ['hymnMid2', 'Hymn', 'hymn'],
+            ]},
+            { num: 'II', name: 'Preaching', keys: [
+                ['scriptureReading', 'Pastoral Prayer', 'verse'],
+                ['sermon', 'Sermon', 'verse'],
+            ]},
+            { num: 'III', name: 'Closing', keys: [
+                ['baptism', 'Baptism', 'baptism'],
+                ['hymnEnd1', 'Hymn', 'hymn'],
+                ['hymnEnd2', 'Hymn', 'hymn'],
+                ['benediction', 'Benediction', 'verse'],
+            ]},
+        ],
 
-                if (!this._quill) {
-                    this._quill = new Quill(el, {
-                        theme: 'snow',
-                        modules: { toolbar: [['bold', 'italic'], [{ list: 'bullet' }]] },
-                        placeholder: 'Add a note explaining your reasoning...'
-                    });
+        // Dot colour by element status (canonical/literal hymns, set references,
+        // baptism, or empty) — kept within the brand palette.
+        _dotColor(status) {
+            return status === 'canonical' ? '#2e7d52'
+                : status === 'literal' ? '#b8862e'
+                : status === 'set' ? '#436082'
+                : status === 'baptism' ? '#182F57'
+                : '#cdd0d8';
+        },
 
-                    this._scrollHandler = () => {
-                        if (this.activeNoteKey) this._positionEditor(this.activeNoteKey);
-                    };
-                    window.addEventListener('scroll', this._scrollHandler, { passive: true });
-                    window.addEventListener('resize', this._scrollHandler, { passive: true });
+        _stripHtml(html) {
+            if (!html) return '';
+            const d = document.createElement('div');
+            d.innerHTML = html;
+            return d.textContent || d.innerText || '';
+        },
+
+        _buildItem(key, label, type, lit) {
+            const removed = type === 'hymn' && this.isHymnRemoved(key);
+            let value = '', status = 'empty', emptyLabel = '';
+            if (type === 'hymn') {
+                const ref = lit[key] || {};
+                value = ref.name || '';
+                status = ref.id ? 'canonical' : (ref.name ? 'literal' : 'empty');
+                emptyLabel = 'Choose a hymn…';
+            } else if (type === 'baptism') {
+                const arr = Array.isArray(lit.baptism) ? lit.baptism : [];
+                const names = arr.map(c => (c && c.name) || '').filter(Boolean);
+                value = names.join(', ');
+                status = names.length ? 'baptism' : 'empty';
+                emptyLabel = 'Add candidates…';
+            } else { // verse / text reference
+                value = lit[key] || '';
+                status = value ? 'set' : 'empty';
+                emptyLabel = 'Add a reference…';
+            }
+            const note = (this.service.notes && this.service.notes[key]) || '';
+            return {
+                key, label, type, value, status, emptyLabel, removed,
+                dotColor: this._dotColor(status),
+                hasNote: !!this._stripHtml(note).trim(),
+            };
+        },
+
+        // The three movements, each with its visible station rows. hymn2 hides when
+        // a baptism takes its place; the baptism row only appears when the template
+        // (or the legacy checkbox) calls for it (ADR-0010).
+        get movements() {
+            const lit = this.service.liturgy;
+            return this._MOVEMENTS.map(mv => ({
+                num: mv.num,
+                name: mv.name,
+                items: mv.keys
+                    .filter(([key]) => {
+                        if (key === 'hymn2' && this.service.hasBaptism) return false;
+                        if (key === 'baptism' && !this.showBaptismSection) return false;
+                        return true;
+                    })
+                    .map(([key, label, type]) => this._buildItem(key, label, type, lit)),
+            }));
+        },
+
+        // "X of Y set" — counts filled rows over the rows currently in the order
+        // (removed hymns are intentionally blank, so they sit out of the tally).
+        get filledLabel() {
+            let filled = 0, total = 0;
+            for (const mv of this.movements) {
+                for (const it of mv.items) {
+                    if (it.removed) continue;
+                    total++;
+                    if (it.value) filled++;
                 }
+            }
+            return `${filled} of ${total} set`;
+        },
 
-                // Set editor content
-                const existing = (this.service.notes && this.service.notes[key]) || '';
-                // Ensure the content is wrapped in paragraphs if it's plain text for Quill
-                this._quill.root.innerHTML = existing.includes('<p>') ? existing : `<p>${existing}</p>`;
+        // Service notes surfaced for the leader, in service order, one card each.
+        get notesList() {
+            const out = [];
+            const notes = this.service.notes || {};
+            for (const mv of this.movements) {
+                for (const it of mv.items) {
+                    const html = notes[it.key];
+                    if (html && this._stripHtml(html).trim()) {
+                        out.push({ key: it.key, label: it.label, value: it.value, dotColor: it.dotColor, html });
+                    }
+                }
+            }
+            return out;
+        },
+        get noteCount() { return this.notesList.length; },
 
-                this.$nextTick(() => this._quill.focus());
+        // ── Station rows + inline notes ─────────────────────────────────────────
+        // Expanding a row reveals its picker and a rich-text Service Note. The note
+        // is a single Quill instance mounted into whichever row is open; switching
+        // rows commits the current note first, so service.notes stays in sync (and
+        // the Service Notes sidebar updates live).
+        toggleRow(key) {
+            if (this.openKey === key) { this.commitNote(); this.openKey = null; return; }
+            this.commitNote();
+            this.openKey = key;
+            this.$nextTick(() => this.mountNote(key));
+        },
+
+        // Open a specific row (from the Service Notes sidebar) and scroll to it.
+        openRow(key) {
+            if (this.openKey !== key) {
+                this.commitNote();
+                this.openKey = key;
+                this.$nextTick(() => this.mountNote(key));
+            }
+            this.$nextTick(() => this.scrollToRow(key));
+        },
+
+        scrollToRow(key) {
+            const row = document.querySelector(`[data-field-key="${key}"]`);
+            if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        },
+
+        mountNote(key) {
+            if (!this.canEdit) return; // viewers read the note as HTML; no editor
+            const el = document.getElementById('note-quill-inline');
+            if (!el) return;
+            this._quill = new Quill(el, {
+                theme: 'snow',
+                modules: { toolbar: [['bold', 'italic'], [{ list: 'bullet' }]] },
+                placeholder: 'Add a note for whoever leads the service — context, reminders, reasoning…'
             });
+            const existing = (this.service.notes && this.service.notes[key]) || '';
+            this._quill.root.innerHTML = existing
+                ? (existing.includes('<') ? existing : `<p>${existing}</p>`)
+                : '';
+            this._quill.on('text-change', () => this._syncNote(key));
         },
 
-        _positionEditor(key) {
-            const btn = document.querySelector(`[data-note-key="${key}"]`);
-            if (!btn) return;
-            const section = btn.closest('.form-section');
-            if (!section) return;
-            const rect = section.getBoundingClientRect();
-            
-            // Check if we are on mobile/small screen
-            if (window.innerWidth < 1024) {
-                // Fixed centered modal for mobile
-                this.noteEditorWidth = Math.min(window.innerWidth - 48, 500);
-                this.noteEditorLeft = (window.innerWidth - this.noteEditorWidth) / 2;
-                this.noteEditorTop = 100; // Fixed top offset
-            } else {
-                // Anchor to the right of the form-section card for desktop
-                const editorLeft  = rect.right + 28;
-                const editorRight = window.innerWidth - 40;
-                this.noteEditorLeft  = Math.round(editorLeft);
-                this.noteEditorWidth = Math.max(160, Math.round(editorRight - editorLeft));
-                this.noteEditorTop   = Math.max(70, Math.round(rect.top));
-            }
-        },
-
-        saveNote() {
+        // Write the live editor contents through to service.notes (empty → delete),
+        // so the sidebar and the dirty indicator track every keystroke.
+        _syncNote(key) {
             if (!this._quill) return;
-            const html  = this._quill.root.innerHTML;
-            const empty = this._quill.getText().trim() === '';
             if (!this.service.notes) this.service.notes = {};
-            if (empty) {
-                delete this.service.notes[this.activeNoteKey];
+            if (this._quill.getText().trim() === '') {
+                delete this.service.notes[key];
             } else {
-                this.service.notes[this.activeNoteKey] = html;
+                this.service.notes[key] = this._quill.root.innerHTML;
             }
-            this.activeNoteKey = null;
         },
 
-        deleteNote() {
+        // Persist and tear down the open row's editor before it is unmounted.
+        commitNote() {
+            if (this._quill && this.openKey) this._syncNote(this.openKey);
+            this._quill = null;
+        },
+
+        deleteNote(key) {
             if (!confirm('Delete this note?')) return;
-            if (this.service.notes) delete this.service.notes[this.activeNoteKey];
-            this.activeNoteKey = null;
-        },
-
-        closeNote() {
-            this.activeNoteKey = null;
+            if (this.service.notes) delete this.service.notes[key];
+            if (this._quill) this._quill.root.innerHTML = '';
         },
 
         // ── Music Helpers ────────────────────────────────────────────────────
