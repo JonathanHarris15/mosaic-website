@@ -83,6 +83,7 @@ function _createActionChipNode(onChipDeleted) {
                 importance:     { default: null },
                 prevUrgency:    { default: null },
                 prevImportance: { default: null },
+                activityId:     { default: null },   // status: the logged record this chip created
                 label:          { default: '' },
                 chipColor:      { default: '#d8e2ff' },
             };
@@ -103,6 +104,7 @@ function _createActionChipNode(onChipDeleted) {
                 'data-importance':     a.importance     || '',
                 'data-prev-urgency':   a.prevUrgency    || '',
                 'data-prev-importance':a.prevImportance || '',
+                'data-activity-id':    a.activityId     || '',
                 style: `display:inline;background:${a.chipColor};padding:0 4px;border-radius:3px;font-weight:600;font-size:0.9em;`,
             }, a.label];
         },
@@ -161,8 +163,17 @@ function createInlineTriggersExtension(config) {
                     config.onTagAdd(attrs.tagId, attrs.tagName).catch(e => console.error('Revert tag remove:', e));
                 }
             } else if (attrs.chipKind === 'status') {
-                config.onStatusChange(attrs.prevUrgency || null, attrs.prevImportance || null)
-                    .catch(e => console.error('Revert status:', e));
+                // Removing a status chip takes the change back entirely: revert the
+                // status to what it was and delete the record this chip logged, so
+                // nothing about it survives in the timeline. (Falls back to a logged
+                // revert for legacy chips saved before they tracked their record id.)
+                if (config.onStatusUndo) {
+                    config.onStatusUndo(attrs.activityId || null, attrs.prevUrgency || null, attrs.prevImportance || null)
+                        .catch(e => console.error('Undo status:', e));
+                } else {
+                    config.onStatusChange(attrs.prevUrgency || null, attrs.prevImportance || null)
+                        .catch(e => console.error('Revert status:', e));
+                }
             }
         } catch (e) { console.error('onChipDeleted error:', e); }
     }
@@ -268,7 +279,7 @@ function createInlineTriggersExtension(config) {
         } catch (e) { console.error('Insert tag chip:', e); }
     }
 
-    function _insertStatusChip(view, urgency, importance, prevUrgency, prevImportance) {
+    function _insertStatusChip(view, urgency, importance, prevUrgency, prevImportance, activityId) {
         try {
             const chipType = view.state.schema.nodes.actionChip;
             if (!chipType) return;
@@ -282,6 +293,7 @@ function createInlineTriggersExtension(config) {
                 importance:    importance || null,
                 prevUrgency:   prevUrgency    || null,
                 prevImportance:prevImportance || null,
+                activityId:    activityId || null,
                 label,
                 chipColor: '#fef9c3',
             });
@@ -326,8 +338,8 @@ function createInlineTriggersExtension(config) {
             currentStatus: previousStatus,
             onSelect: async (urg, imp) => {
                 statusPopup = null;
-                await config.onStatusChange(urg, imp);
-                _insertStatusChip(capturedView, urg, imp, previousStatus?.urgency, previousStatus?.importance);
+                const activityId = await config.onStatusChange(urg, imp);
+                _insertStatusChip(capturedView, urg, imp, previousStatus?.urgency, previousStatus?.importance, activityId);
             },
         });
 

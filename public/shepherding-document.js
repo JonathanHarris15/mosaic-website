@@ -10,6 +10,7 @@ let _mentionPeople   = [];
 let _mentionNotes    = [];
 let _mentionDocs     = [];
 let _mentionFolders  = [];
+let _docTypeById     = {}; // elder_document id → docType (e.g. 'care-list')
 let _mentionDataLoaded = false;
 let _allTagsList = []; // [{ id, name }] — for inline # trigger
 
@@ -51,6 +52,7 @@ async function loadDocMentionData() {
         if (docsResult.status === 'fulfilled') {
             _mentionDocs = docsResult.value.docs.map(doc => {
                 const d = doc.data();
+                _docTypeById[doc.id] = d.docType || 'note';
                 return { id: JSON.stringify({ kind: 'elder_document', id: doc.id }), label: d.title || 'Untitled Document' };
             });
         }
@@ -487,7 +489,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
         if (!previousStatus) return;
         destroyStatusPopup();
         try {
-            await ShepherdingCore.commitPastoralChange(db, currentAttrs.personId, {
+            const activityId = await ShepherdingCore.commitPastoralChange(db, currentAttrs.personId, {
                 shepherdingStatus: null,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             }, ShepherdingCore.buildStatusChange({
@@ -497,7 +499,22 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
             }));
             panelCurrentStatus = null;
             updatePanelStatusDisplay();
+            return activityId;
         } catch (e) { console.error('Error clearing panel status:', e); }
+    }
+
+    // Take a status change back entirely (its chip was backspaced out): restore
+    // the previous status and delete the logged record, leaving no timeline trace.
+    async function handlePanelStatusUndo(activityId, prevUrgency, prevImportance) {
+        const prevStatus = (prevUrgency && prevImportance) ? { urgency: prevUrgency, importance: prevImportance } : null;
+        try {
+            await ShepherdingCore.revertPastoralChange(db, currentAttrs.personId, {
+                shepherdingStatus: prevStatus,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            }, activityId);
+            panelCurrentStatus = prevStatus;
+            updatePanelStatusDisplay();
+        } catch (e) { console.error('Error undoing panel status:', e); }
     }
 
     function destroyStatusPopup() {
@@ -511,7 +528,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
         const newStatus = clearing ? null : { urgency, importance };
         destroyStatusPopup();
         try {
-            await ShepherdingCore.commitPastoralChange(db, currentAttrs.personId, {
+            const activityId = await ShepherdingCore.commitPastoralChange(db, currentAttrs.personId, {
                 shepherdingStatus: newStatus,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             }, ShepherdingCore.buildStatusChange({
@@ -523,6 +540,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
             }));
             panelCurrentStatus = newStatus;
             updatePanelStatusDisplay();
+            return activityId;
         } catch (e) { console.error('Error setting panel status:', e); }
     }
 
@@ -701,9 +719,10 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
                     panelPersonTags = panelPersonTags.filter(t => t !== tagId);
                 },
                 onStatusChange: async (urg, imp) => {
-                    if (!urg) await handlePanelStatusClear();
-                    else await handlePanelStatusSet(urg, imp);
+                    if (!urg) return await handlePanelStatusClear();
+                    return await handlePanelStatusSet(urg, imp);
                 },
+                onStatusUndo: (activityId, urg, imp) => handlePanelStatusUndo(activityId, urg, imp),
             });
             bodyEditor = new Editor({
                 element: bodyMount,
@@ -1027,7 +1046,8 @@ document.addEventListener('alpine:init', () => {
                             } else if (parsed.kind === 'note' && parsed.personId) {
                                 window.location.href = `shepherding-profile.html?id=${encodeURIComponent(parsed.personId)}&fromPage=document&fromId=${encodeURIComponent(_currentDocId||'')}&fromTitle=${encodeURIComponent(_currentDocTitle||'')}`;
                             } else if (parsed.kind === 'elder_document') {
-                                window.location.href = `shepherding-document.html?id=${encodeURIComponent(parsed.id)}`;
+                                const page = _docTypeById[parsed.id] === 'care-list' ? 'shepherding-care-list.html' : 'shepherding-document.html';
+                                window.location.href = `${page}?id=${encodeURIComponent(parsed.id)}`;
                             } else if (parsed.kind === 'elder_folder') {
                                 window.location.href = `shepherding-documents.html?folder=${encodeURIComponent(parsed.id)}`;
                             }
