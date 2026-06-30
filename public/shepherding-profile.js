@@ -13,6 +13,7 @@ let _mentionPeople   = [];
 let _mentionNotes    = [];
 let _mentionDocs     = [];
 let _mentionFolders  = [];
+let _docTypeById     = {}; // elder_document id → docType (e.g. 'care-list')
 let _mentionDataLoaded = false;
 
 // ── Mention data ─────────────────────────────────────────────────────────────
@@ -49,6 +50,7 @@ async function loadMentionData() {
         if (docsResult.status === 'fulfilled') {
             _mentionDocs = docsResult.value.docs.map(doc => {
                 const d = doc.data();
+                _docTypeById[doc.id] = d.docType || 'note';
                 return { id: JSON.stringify({ kind: 'elder_document', id: doc.id }), label: d.title || 'Untitled Document' };
             });
         }
@@ -206,7 +208,7 @@ function createMentionSuggestion() {
 // Delegates to the shared renderer in tiptap-render.js. The profile shows notes
 // without a back-link, so no breadcrumb option is passed.
 function tiptapJsonToHtml(doc) {
-    return TiptapRender.renderTiptapJson(doc);
+    return TiptapRender.renderTiptapJson(doc, { docTypeById: _docTypeById });
 }
 
 document.addEventListener('alpine:init', () => {
@@ -868,16 +870,16 @@ document.addEventListener('alpine:init', () => {
         },
 
         async deleteStatusHistory() {
-            if (!confirm('Are you sure you want to delete all status change history for this person? This cannot be undone.')) return;
-            
+            if (!confirm('Are you sure you want to delete all status and tag change history for this person? This cannot be undone.')) return;
+
             try {
                 const snap = await db.collection('people').doc(this.personId)
                     .collection('shepherding_activity')
-                    .where('kind', '==', 'status_change')
+                    .where('kind', 'in', ['status_change', 'tag_change'])
                     .get();
-                
+
                 if (snap.empty) {
-                    this.showToast('No status history to delete.');
+                    this.showToast('No status or tag history to delete.');
                     return;
                 }
 
@@ -886,10 +888,10 @@ document.addEventListener('alpine:init', () => {
                 await batch.commit();
 
                 await this.loadActivity();
-                this.showToast('Status history deleted.');
+                this.showToast('Status and tag history deleted.');
             } catch (e) {
-                console.error('Error deleting status history:', e);
-                this.showToast('Error deleting status history', 'error');
+                console.error('Error deleting status/tag history:', e);
+                this.showToast('Error deleting history', 'error');
             }
         },
 

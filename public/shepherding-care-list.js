@@ -368,6 +368,7 @@ document.addEventListener('alpine:init', () => {
                 onTagAdd:       (tagId, tagName) => self.handleTagAdd(person.id, tagId, tagName),
                 onTagRemove:    (tagId, tagName) => self.handleTagRemove(person.id, tagId, tagName),
                 onStatusChange: (urg, imp) => self.handleStatusChange(person.id, urg, imp),
+                onStatusUndo: (activityId, urg, imp) => self.handleStatusUndo(person.id, activityId, urg, imp),
             });
         },
 
@@ -577,7 +578,7 @@ document.addEventListener('alpine:init', () => {
                 const idx = this.people.findIndex(p => p.id === personId);
                 const previousStatus = this.people[idx]?.shepherdingStatus || null;
                 const newStatus = (urgency && importance) ? { urgency, importance } : null;
-                await ShepherdingCore.commitPastoralChange(db, personId, {
+                const activityId = await ShepherdingCore.commitPastoralChange(db, personId, {
                     shepherdingStatus: newStatus,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                 }, ShepherdingCore.buildStatusChange({
@@ -589,7 +590,24 @@ document.addEventListener('alpine:init', () => {
                     this.people = this.people.map((p, i) => i === idx ? { ...p, shepherdingStatus: newStatus } : p);
                 }
                 this.showToast(newStatus ? 'Status updated' : 'Status cleared');
+                return activityId;
             } catch (e) { console.error('Error updating status:', e); this.showToast('Error updating status', 'error'); }
+        },
+
+        // Take a status change back entirely (chip backspaced out): restore the
+        // previous status and delete the record it logged — no timeline trace.
+        async handleStatusUndo(personId, activityId, prevUrgency, prevImportance) {
+            try {
+                const idx = this.people.findIndex(p => p.id === personId);
+                const prevStatus = (prevUrgency && prevImportance) ? { urgency: prevUrgency, importance: prevImportance } : null;
+                await ShepherdingCore.revertPastoralChange(db, personId, {
+                    shepherdingStatus: prevStatus,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                }, activityId);
+                if (idx !== -1) {
+                    this.people = this.people.map((p, i) => i === idx ? { ...p, shepherdingStatus: prevStatus } : p);
+                }
+            } catch (e) { console.error('Error undoing status change:', e); this.showToast('Error undoing status', 'error'); }
         },
 
         formatDate(ts) {

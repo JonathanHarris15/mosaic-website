@@ -216,3 +216,50 @@ test('commitPastoralChange writes both halves in a single committed batch', () =
     assert.strictEqual(calls.set[0].data.createdAt, '__ts__', 'activity is stamped at write time');
     assert.strictEqual(calls.set[0].data.kind, 'status_change');
 });
+
+// revertPastoralChange is the mirror used when a change is taken back (e.g. a
+// status chip backspaced out of a care-list cell): it reverts the Person field
+// and DELETES the activity record that logged the change, in one batch, so the
+// timeline keeps no "changed back" trace.
+
+function fakeDbFor(batch, activityIds) {
+    return {
+        batch: () => batch,
+        collection: () => ({
+            doc: () => ({
+                collection: () => ({ doc: (id) => { activityIds.push(id); return { __activity: true, id }; } }),
+                __person: true,
+            }),
+        }),
+    };
+}
+
+test('revertPastoralChange reverts the person and deletes the logged record in one batch', () => {
+    const calls = { update: [], delete: [], commit: 0 };
+    const batch = {
+        update: (ref, data) => calls.update.push({ ref, data }),
+        delete: (ref) => calls.delete.push(ref),
+        commit: () => { calls.commit++; return Promise.resolve(); },
+    };
+    const ids = [];
+    Core.revertPastoralChange(fakeDbFor(batch, ids), 'p1',
+        { shepherdingStatus: { urgency: 'urgent', importance: 'important' }, updatedAt: '__ts__' },
+        'act_123');
+    assert.strictEqual(calls.update.length, 1, 'one person update (the revert)');
+    assert.strictEqual(calls.delete.length, 1, 'one activity delete');
+    assert.strictEqual(calls.commit, 1, 'committed exactly once');
+    assert.deepStrictEqual(ids, ['act_123'], 'deletes the activity record by id');
+});
+
+test('revertPastoralChange skips the delete when there is no record id (legacy chip)', () => {
+    const calls = { update: 0, delete: 0, commit: 0 };
+    const batch = {
+        update: () => { calls.update++; },
+        delete: () => { calls.delete++; },
+        commit: () => { calls.commit++; return Promise.resolve(); },
+    };
+    Core.revertPastoralChange(fakeDbFor(batch, []), 'p1', { shepherdingStatus: null }, null);
+    assert.strictEqual(calls.update, 1, 'still reverts the person');
+    assert.strictEqual(calls.delete, 0, 'no activity delete without an id');
+    assert.strictEqual(calls.commit, 1, 'committed exactly once');
+});

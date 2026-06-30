@@ -13,7 +13,19 @@
       "Bash(pkill -f \"http.server 8911\")",
       "Bash(npx firebase-tools *)",
       "Bash(firebase projects:list)",
-      "Bash(firebase hosting:channel:deploy washed-bg --expires 7d)"
+      "Bash(firebase hosting:channel:deploy washed-bg --expires 7d)",
+      "Bash(node --test test/tiptap-render.test.js)",
+      "Bash(cat firebase.json)",
+      "Bash(cat .firebaserc)",
+      "Bash(firebase --version)",
+      "Bash(firebase hosting:channel:deploy carelist-fix --expires 7d)",
+      "Bash(node --check public/shepherding-key-legend.js)",
+      "Bash(node --check public/shepherding-profile.js)",
+      "Bash(node --check public/shepherding-core.js)",
+      "Bash(node --check public/shepherding-inline-triggers.js)",
+      "Bash(node --check public/shepherding-care-list.js)",
+      "Bash(node --check public/shepherding-document.js)",
+      "Bash(node --test test/shepherding-core.test.js)"
     ]
   }
 }

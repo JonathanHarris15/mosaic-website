@@ -114,6 +114,26 @@
             ...activityRecord,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
+        // Resolve to the new activity record's id so callers can later undo this
+        // exact entry (e.g. a status chip remembers it and deletes it on removal).
+        return batch.commit().then(() => activityRef.id);
+    }
+
+    // ── Atomic Pastoral Record undo (browser only) ────────────────────────────
+    // The mirror of commitPastoralChange: revert the denormalized Person field(s)
+    // and DELETE the activity record that logged the change — in one batch — so a
+    // change that is taken back (e.g. a status chip backspaced straight out of a
+    // care-list cell) leaves no trace in the Pastoral Record timeline, rather than
+    // logging a second "changed back" entry.
+    function revertPastoralChange(db, personId, personUpdate, activityId) {
+        const personRef = db.collection('people').doc(personId);
+        const batch = db.batch();
+        if (personUpdate && Object.keys(personUpdate).length) {
+            batch.update(personRef, personUpdate);
+        }
+        if (activityId) {
+            batch.delete(personRef.collection('shepherding_activity').doc(activityId));
+        }
         return batch.commit();
     }
 
@@ -181,6 +201,7 @@
         buildStatusChange,
         buildTagChange,
         commitPastoralChange,
+        revertPastoralChange,
         pastoralEntryTime,
         assemblePastoralRecord,
         collapsePastoralRecord,

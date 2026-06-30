@@ -56,6 +56,16 @@ test('note mention links to the owning person; document/folder to their pages', 
     assert.match(renderTiptapJson(doc(para(folder))), /shepherding-documents\.html\?folder=f2/);
 });
 
+test('an elder_document of docType care-list links to the care-list page', () => {
+    const ed = { type: 'mention', attrs: { id: JSON.stringify({ kind: 'elder_document', id: 'd7' }), label: 'CL' } };
+    // Without docType info it defaults to the notes-document page…
+    assert.match(renderTiptapJson(doc(para(ed))), /shepherding-document\.html\?id=d7/);
+    // …but a care-list target routes to the care-list page instead.
+    const html = renderTiptapJson(doc(para(ed)), { docTypeById: { d7: 'care-list' } });
+    assert.match(html, /shepherding-care-list\.html\?id=d7/);
+    assert.ok(!html.includes('shepherding-document.html'));
+});
+
 test('an unparseable or unknown mention renders a dimmed span, not a link', () => {
     const bad = { type: 'mention', attrs: { id: 'not json', label: 'X' } };
     assert.strictEqual(renderTiptapJson(doc(para(bad))), '<p><span class="mention-chip" style="opacity:.5">@X</span></p>');
