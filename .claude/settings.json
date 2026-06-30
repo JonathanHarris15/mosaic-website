@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(npx --no-install playwright --version)",
+      "Bash(python -m http.server 8911)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8911/index.html)",
+      "Bash(ls \"/c/Program Files \\(x86\\)/Microsoft/Edge/Application/msedge.exe\" \"/c/Program Files/Microsoft/Edge/Application/msedge.exe\")",
+      "Bash(ls \"/c/Program Files/Google/Chrome/Application/chrome.exe\" \"/c/Program Files \\(x86\\)/Google/Chrome/Application/chrome.exe\")",
+      "Bash('/c/Program Files/Google/Chrome/Application/chrome.exe' --headless=new --disable-gpu --hide-scrollbars --window-size=1440,900 --screenshot=C:/Users/jono1/AppData/Local/Temp/claude/c--Users-jono1-Professional-Projects-Mosaic-Project-main/1d7eb9f6-b0d8-456a-b139-569b6959c55c/scratchpad/index.png http://localhost:8911/index.html)",
+      "Bash('/c/Program Files/Google/Chrome/Application/chrome.exe' --headless=new --disable-gpu --hide-scrollbars --window-size=1440,900 --screenshot=C:/Users/jono1/AppData/Local/Temp/claude/c--Users-jono1-Professional-Projects-Mosaic-Project-main/1d7eb9f6-b0d8-456a-b139-569b6959c55c/scratchpad/login.png http://localhost:8911/login.html)",
+      "Bash(pkill -f \"http.server 8911\")",
+      "Bash(npx firebase-tools *)",
+      "Bash(firebase projects:list)",
+      "Bash(firebase hosting:channel:deploy washed-bg --expires 7d)"
+    ]
+  }
+}

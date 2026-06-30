@@ -63,7 +63,7 @@
           "on-tertiary-container":  "#2D4F5B",
 
           /* ---- Warm neutral surfaces (cream → parchment → white) ---- */
-          "background":               cream,       // ← FIX  was #fcf9f3
+          "background":               "#F7F3ED",   // washed-out warm white (was cream #F2EAE2)
           "on-background":            navy900,      // ← FIX  navy ink, not #1c1c18
           "surface":                  parchment,    // ← FIX
           "surface-bright":           parchment,
