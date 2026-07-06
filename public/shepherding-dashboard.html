@@ -17,7 +17,7 @@
         /* Per-tag Hold-Duration slider: a dot on the bottom edge of a selected tag. */
         .tag-hold-slider {
             -webkit-appearance: none; appearance: none;
-            position: absolute; left: 10px; right: 10px; bottom: 3px;
+            position: absolute; left: 10px; right: 10px; bottom: 6px;
             width: auto; height: 10px; margin: 0; background: transparent; cursor: pointer;
         }
         .tag-hold-slider:focus { outline: none; }
@@ -290,10 +290,10 @@
                             <div class="relative">
                                 <button @click="toggleViewTag(tag.id)"
                                     :class="newView.filterTags.includes(tag.id)
-                                        ? 'bg-primary text-on-primary pb-2.5'
+                                        ? 'bg-primary text-on-primary pb-5'
                                         : 'bg-surface-container text-on-surface hover:bg-surface-container-high'"
                                     :style="newView.filterTags.includes(tag.id) ? 'min-width: 74px' : ''"
-                                    class="px-sm py-xs font-label-md text-label-md rounded-2xl transition-colors flex items-center gap-1">
+                                    class="px-sm py-xs font-label-md text-label-md rounded-2xl transition-all duration-300 ease-out flex items-center gap-1">
                                     <span x-text="tag.name"></span>
                                     <span x-show="newView.filterTags.includes(tag.id) && (newView.tagHoldFilters[tag.id] || 0) > 0"
                                           class="inline-flex items-center gap-0.5 text-[10px] font-bold">
@@ -305,7 +305,10 @@
                                     </span>
                                 </button>
                                 <!-- Hold-Duration dot, slidable along the tag's bottom edge -->
-                                <input x-show="newView.filterTags.includes(tag.id)" type="range"
+                                <input x-show="newView.filterTags.includes(tag.id)"
+                                       x-transition:enter="transition ease-out duration-300 delay-100"
+                                       x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+                                       type="range"
                                        min="0" :max="holdStops().length - 1" step="1"
                                        :value="viewTagHoldStopIndex(tag.id)"
                                        @input="setViewTagHoldStop(tag.id, $event.target.value)"

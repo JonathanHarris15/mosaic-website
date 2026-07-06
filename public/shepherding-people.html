@@ -17,7 +17,7 @@
         /* Per-tag Hold-Duration slider: a dot on the bottom edge of a selected tag. */
         .tag-hold-slider {
             -webkit-appearance: none; appearance: none;
-            position: absolute; left: 10px; right: 10px; bottom: 3px;
+            position: absolute; left: 10px; right: 10px; bottom: 6px;
             width: auto; height: 10px; margin: 0; background: transparent; cursor: pointer;
         }
         .tag-hold-slider:focus { outline: none; }
@@ -157,10 +157,10 @@
                         <div class="relative">
                             <button @click="toggleTagFilter(tag.id)"
                                 :class="tagFilters.includes(tag.id)
-                                    ? 'bg-primary text-on-primary ring-2 ring-primary-fixed shadow-sm pb-2.5'
+                                    ? 'bg-primary text-on-primary ring-2 ring-primary-fixed shadow-sm pb-5'
                                     : 'bg-surface-container text-on-surface hover:bg-surface-container-high border border-outline-variant/30'"
                                 :style="tagFilters.includes(tag.id) ? 'min-width: 74px' : ''"
-                                class="px-3 py-1 font-label-md text-xs rounded-2xl transition-all duration-200 active:scale-95 flex items-center gap-1">
+                                class="px-3 py-1 font-label-md text-xs rounded-2xl transition-all duration-300 ease-out active:scale-95 flex items-center gap-1">
                                 <span x-text="tag.name"></span>
                                 <span x-show="tagFilters.includes(tag.id) && (tagHoldFilters[tag.id] || 0) > 0"
                                       class="inline-flex items-center gap-0.5 text-[10px] font-bold">
@@ -172,7 +172,10 @@
                                 </span>
                             </button>
                             <!-- Hold-Duration dot, slidable along the tag's bottom edge -->
-                            <input x-show="tagFilters.includes(tag.id)" type="range"
+                            <input x-show="tagFilters.includes(tag.id)"
+                                   x-transition:enter="transition ease-out duration-300 delay-100"
+                                   x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+                                   type="range"
                                    min="0" :max="holdStops().length - 1" step="1"
                                    :value="tagHoldStopIndex(tag.id)"
                                    @input="setTagHoldStop(tag.id, $event.target.value)"
