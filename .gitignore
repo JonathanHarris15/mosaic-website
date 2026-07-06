@@ -15,3 +15,8 @@ docs/.venv/
 
 # Misc
 examples/
+
+# Logs
+*.log
+firebase-debug.log
+firestore-debug.log
