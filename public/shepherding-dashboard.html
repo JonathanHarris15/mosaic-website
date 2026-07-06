@@ -4,13 +4,14 @@
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Shepherd Dashboard | Mosaic</title>
-    <link href="https://fonts.googleapis.com" rel="preconnect" />
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script src="mosaic-theme.js"></script>
-    <style type="text/tailwindcss">
+
+
+
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <style>
         [x-cloak] { display: none !important; }
     </style>
     <style>
@@ -26,12 +27,12 @@
         .tag-hold-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; margin-top: -4px; width: 10px; height: 10px; border-radius: 9999px; background: currentColor; }
         .tag-hold-slider::-moz-range-thumb { width: 10px; height: 10px; border: none; border-radius: 9999px; background: currentColor; }
     </style>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-functions-compat.js"></script>
     <script src="auth.js"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
 <body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"

@@ -4,20 +4,21 @@
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Service Guide Editor - Mosaic Services</title>
-    <link href="https://fonts.googleapis.com" rel="preconnect" />
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&family=Work+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+
+
     <!-- Mosaic Print brand fonts (designed booklet Style Preset) -->
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Libre+Franklin:wght@300;400;500;600;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=UnifrakturCook:wght@700&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
-    <script src="mosaic-theme.js"></script>
+
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
     <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-functions-compat.js"></script>
+    <script src="vendor/mammoth-1.4.21.browser.min.js"></script>
     <script src="auth.js"></script>
     <!-- Engine + catalog + seed + store (pure, dual-export modules) -->
     <script src="date-utils.js"></script>
@@ -27,9 +28,9 @@
     <script src="guide-store.js"></script>
     <!-- Page logic -->
     <script src="service-guide-editor.js"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <style type="text/tailwindcss">
-        [x-cloak] { display: none !important; }
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+    <style>
+[x-cloak] { display: none !important; }
 
         @media print {
             @page { size: letter landscape; margin: 0; }
@@ -47,26 +48,31 @@
 
         @media screen {
             .booklet-print-layer { display: none !important; }
-            .preview-page {
-                @apply bg-white shadow-lg mx-auto mb-8 relative text-black overflow-hidden;
+            .preview-page { position: relative; margin-left: auto; margin-right: auto; margin-bottom: 2rem; overflow: hidden; --tw-bg-opacity: 1; background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1)); --tw-text-opacity: 1; color: rgb(0 0 0 / var(--tw-text-opacity, 1)); --tw-shadow: 0 18px 48px rgba(14,28,54,.14); --tw-shadow-colored: 0 18px 48px var(--tw-shadow-color); box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
                 width: 5.5in; height: 8.5in; padding: 0.2in; box-sizing: border-box;
-                font-family: 'Times New Roman', Times, serif; font-size: 10pt; line-height: 1.2;
-            }
+                font-family: 'Times New Roman', Times, serif; font-size: 10pt; line-height: 1.2; }
         }
 
         /* Booklet base styles (the seeded "Mosaic Booklet" Style Preset; also
            injected dynamically for custom templates via #guide-dynamic-style). */
-        .latex-h1 { @apply text-[1.1rem] font-normal block; }
-        .latex-hr { @apply border-t border-black my-1 w-full; }
+        .latex-h1 { display: block; font-size: 1.1rem; font-weight: 400; }
+        .latex-hr { margin-top: 0.25rem; margin-bottom: 0.25rem; width: 100%; border-top-width: 1px; --tw-border-opacity: 1; border-color: rgb(0 0 0 / var(--tw-border-opacity, 1)); }
         .latex-spacing-2 { line-height: 2.2; }
-        .preview-page ul, .preview-page ol { list-style-type: disc !important; @apply pl-8; }
+        .preview-page ul, .preview-page ol { list-style-type: disc !important; padding-left: 2rem; }
 
-        .toc-item { @apply flex items-center gap-2 p-2 bg-white border border-outline-variant rounded mb-1 cursor-pointer hover:bg-surface transition-colors; }
+        .toc-item { margin-bottom: 0.25rem; display: flex; cursor: pointer; align-items: center; gap: 0.5rem; border-radius: 10px; border-width: 1px; --tw-border-opacity: 1; border-color: rgb(218 208 192 / var(--tw-border-opacity, 1)); --tw-bg-opacity: 1; background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1)); padding: 0.5rem; transition-property: color, background-color, border-color, text-decoration-color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+
+        .toc-item:hover { --tw-bg-opacity: 1; background-color: rgb(251 247 240 / var(--tw-bg-opacity, 1)); }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .zoom-controls { @apply absolute bottom-8 right-8 z-[100] flex flex-col gap-2 no-print; }
-        .zoom-btn { @apply w-12 h-12 bg-white shadow-xl rounded-full flex items-center justify-center text-primary hover:bg-surface active:scale-95 transition-all border border-outline-variant; }
+        .zoom-controls { position: absolute; bottom: 2rem; right: 2rem; z-index: 100; display: flex; flex-direction: column; gap: 0.5rem; }
+        @media print {
+            .zoom-controls { display: none; }
+        }
+        .zoom-btn { display: flex; height: 3rem; width: 3rem; align-items: center; justify-content: center; border-radius: 9999px; border-width: 1px; --tw-border-opacity: 1; border-color: rgb(218 208 192 / var(--tw-border-opacity, 1)); --tw-bg-opacity: 1; background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1)); --tw-text-opacity: 1; color: rgb(24 47 87 / var(--tw-text-opacity, 1)); --tw-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1); --tw-shadow-colored: 0 20px 25px -5px var(--tw-shadow-color), 0 8px 10px -6px var(--tw-shadow-color); box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow); transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+        .zoom-btn:hover { --tw-bg-opacity: 1; background-color: rgb(251 247 240 / var(--tw-bg-opacity, 1)); }
+        .zoom-btn:active { --tw-scale-x: .95; --tw-scale-y: .95; transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y)); }
     </style>
     <style id="guide-dynamic-style"></style>
 </head>

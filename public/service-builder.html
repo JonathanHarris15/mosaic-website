@@ -6,29 +6,36 @@
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Order of Service - Mosaic Services</title>
     <!-- Google Fonts: Noto Serif & Work Sans -->
-    <link href="https://fonts.googleapis.com" rel="preconnect" />
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-    <link
-        href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&amp;family=Work+Sans:wght@400;500;600;700&amp;display=swap"
-        rel="stylesheet" />
+
+
+
     <!-- Material Symbols -->
-    <link
-        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
-        rel="stylesheet" />
+
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script src="mosaic-theme.js"></script>
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
     <!-- Alpine JS -->
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
     <!-- Sortable JS -->
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <style type="text/tailwindcss">
-        [x-cloak] { display: none !important; }
-        .form-section { @apply bg-white border border-outline-variant rounded-xl p-6 shadow-sm mb-4 relative; overflow: visible !important; }
-        .field-group { @apply flex flex-col items-start gap-2 mb-4 last:mb-0 md:flex-row md:items-center md:justify-between md:gap-8; }
-        .field-label { @apply font-label-md text-secondary uppercase tracking-wider text-[10px] md:text-xs whitespace-nowrap; }
-        .field-input { @apply w-full bg-surface-container-low border-outline-variant rounded-lg focus:ring-primary focus:border-primary font-body-md transition-all md:ml-auto md:max-w-md; }
-        .input-container { @apply w-full md:ml-auto md:max-w-md; }
+    <script src="vendor/sortable-1.15.0.min.js"></script>
+    <style>
+[x-cloak] { display: none !important; }
+        .form-section { position: relative; margin-bottom: 1rem; border-radius: 16px; border-width: 1px; --tw-border-opacity: 1; border-color: rgb(218 208 192 / var(--tw-border-opacity, 1)); --tw-bg-opacity: 1; background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1)); padding: 1.5rem; --tw-shadow: 0 2px 6px rgba(14,28,54,.08); --tw-shadow-colored: 0 2px 6px var(--tw-shadow-color); box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow); overflow: visible !important; }
+        .field-group { margin-bottom: 1rem; display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+        .field-group:last-child { margin-bottom: 0px; }
+        @media (min-width: 768px) {
+ .field-group { flex-direction: row; align-items: center; justify-content: space-between; gap: 2rem; } }
+        .field-label { white-space: nowrap; font-family: Libre Franklin, system-ui, sans-serif; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; --tw-text-opacity: 1; color: rgb(62 97 129 / var(--tw-text-opacity, 1)); }
+        @media (min-width: 768px) {
+ .field-label { font-size: 0.75rem; line-height: 1rem; } }
+        .field-input { width: 100%; border-radius: 10px; --tw-border-opacity: 1; border-color: rgb(218 208 192 / var(--tw-border-opacity, 1)); --tw-bg-opacity: 1; background-color: rgb(250 245 238 / var(--tw-bg-opacity, 1)); font-family: Libre Franklin, system-ui, sans-serif; transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+        .field-input:focus { --tw-border-opacity: 1; border-color: rgb(24 47 87 / var(--tw-border-opacity, 1)); --tw-ring-opacity: 1; --tw-ring-color: rgb(24 47 87 / var(--tw-ring-opacity, 1)); }
+        @media (min-width: 768px) {
+ .field-input { margin-left: auto; max-width: 28rem; } }
+        .input-container { width: 100%; }
+        @media (min-width: 768px) {
+ .input-container { margin-left: auto; max-width: 28rem; } }
 
         /* Quill overrides */
         .ql-toolbar.ql-snow { border-radius: 0.5rem 0.5rem 0 0; border-color: #ecdfc0; background: #fbf6ea; }
@@ -55,20 +62,20 @@
         .theme-input:focus { outline: none; background: #fff; border-bottom-color: transparent; box-shadow: 0 0 0 2px rgba(67,96,130,.45); }
     </style>
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-functions-compat.js"></script>
     <script src="auth.js"></script>
     <script src="bible-data.js"></script>
     <script src="verse-picker.js"></script>
     <link href="verse-picker.css" rel="stylesheet" />
     <!-- Quill Rich Text Editor -->
-    <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
-    <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="vendor/quill-1.3.7.snow.css" rel="stylesheet">
+    <script src="vendor/quill-1.3.7.min.js"></script>
+    <script src="vendor/jspdf-2.5.1.umd.min.js"></script>
     <!-- Fuse.js for fuzzy search -->
-    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
+    <script src="vendor/fuse-7.0.0.js"></script>
 </head>
 
 <body
