@@ -295,13 +295,13 @@
                                     :style="newView.filterTags.includes(tag.id) ? 'min-width: 74px' : ''"
                                     class="px-sm py-xs font-label-md text-label-md rounded-2xl transition-all duration-300 ease-out flex items-center gap-1">
                                     <span x-text="tag.name"></span>
-                                    <span x-show="newView.filterTags.includes(tag.id) && (newView.tagHoldFilters[tag.id] || 0) > 0"
+                                    <span x-show="newView.filterTags.includes(tag.id)"
                                           class="inline-flex items-center gap-0.5 text-[10px] font-bold">
                                         <span @click.stop="toggleViewNewCmp(tag.id)" role="button"
                                               :title="newView.tagHoldCmp[tag.id] === 'lt' ? 'Held less than — click for at least' : 'Held at least — click for less than'"
                                               class="px-1 rounded bg-on-primary/25 hover:bg-on-primary/40 transition-colors leading-none cursor-pointer"
                                               x-text="viewNewCmpSymbol(tag.id)"></span>
-                                        <span class="opacity-80" x-text="viewTagHoldShort(tag.id)"></span>
+                                        <span class="opacity-80 inline-block min-w-[24px] text-left" x-text="viewTagHoldShort(tag.id) || 'any'"></span>
                                     </span>
                                 </button>
                                 <!-- Hold-Duration dot, slidable along the tag's bottom edge -->

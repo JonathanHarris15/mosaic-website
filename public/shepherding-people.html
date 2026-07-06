@@ -162,13 +162,13 @@
                                 :style="tagFilters.includes(tag.id) ? 'min-width: 74px' : ''"
                                 class="px-3 py-1 font-label-md text-xs rounded-2xl transition-all duration-300 ease-out active:scale-95 flex items-center gap-1">
                                 <span x-text="tag.name"></span>
-                                <span x-show="tagFilters.includes(tag.id) && (tagHoldFilters[tag.id] || 0) > 0"
+                                <span x-show="tagFilters.includes(tag.id)"
                                       class="inline-flex items-center gap-0.5 text-[10px] font-bold">
                                     <span @click.stop="toggleHoldCmp(tag.id)" role="button"
                                           :title="tagHoldCmp[tag.id] === 'lt' ? 'Held less than — click for at least' : 'Held at least — click for less than'"
                                           class="px-1 rounded bg-on-primary/25 hover:bg-on-primary/40 transition-colors leading-none cursor-pointer"
                                           x-text="holdCmpSymbol(tag.id)"></span>
-                                    <span class="opacity-80" x-text="holdShort(tag.id)"></span>
+                                    <span class="opacity-80 inline-block min-w-[24px] text-left" x-text="holdShort(tag.id) || 'any'"></span>
                                 </span>
                             </button>
                             <!-- Hold-Duration dot, slidable along the tag's bottom edge -->
