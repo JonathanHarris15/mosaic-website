@@ -14,6 +14,18 @@
     <style>
         [x-cloak] { display: none !important; }
 
+        /* Per-tag Hold-Duration slider: a dot on the bottom edge of a selected tag. */
+        .tag-hold-slider {
+            -webkit-appearance: none; appearance: none;
+            position: absolute; left: 10px; right: 10px; bottom: 3px;
+            width: auto; height: 10px; margin: 0; background: transparent; cursor: pointer;
+        }
+        .tag-hold-slider:focus { outline: none; }
+        .tag-hold-slider::-webkit-slider-runnable-track { height: 2px; border-radius: 9999px; background: currentColor; opacity: 0.35; }
+        .tag-hold-slider::-moz-range-track { height: 2px; border-radius: 9999px; background: currentColor; opacity: 0.35; }
+        .tag-hold-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; margin-top: -4px; width: 10px; height: 10px; border-radius: 9999px; background: currentColor; }
+        .tag-hold-slider::-moz-range-thumb { width: 10px; height: 10px; border: none; border-radius: 9999px; background: currentColor; }
+
         /* Lock the page — no body scroll */
         html, body {
             overflow: hidden;
@@ -140,40 +152,31 @@
                         </button>
                     </div>
                 </div>
-                <div class="flex flex-wrap gap-1.5">
+                <div class="flex flex-wrap gap-x-1.5 gap-y-3">
                     <template x-for="tag in shepherdingTags" :key="tag.id">
-                        <button @click="toggleTagFilter(tag.id)"
-                            :class="tagFilters.includes(tag.id)
-                                ? 'bg-primary text-on-primary ring-2 ring-primary-fixed shadow-sm'
-                                : 'bg-surface-container text-on-surface hover:bg-surface-container-high border border-outline-variant/30'"
-                            class="px-3 py-1 font-label-md text-xs rounded-full transition-all duration-200 active:scale-95"
-                            x-text="tag.name">
-                        </button>
+                        <div class="relative">
+                            <button @click="toggleTagFilter(tag.id)"
+                                :class="tagFilters.includes(tag.id)
+                                    ? 'bg-primary text-on-primary ring-2 ring-primary-fixed shadow-sm pb-2.5'
+                                    : 'bg-surface-container text-on-surface hover:bg-surface-container-high border border-outline-variant/30'"
+                                :style="tagFilters.includes(tag.id) ? 'min-width: 74px' : ''"
+                                class="px-3 py-1 font-label-md text-xs rounded-2xl transition-all duration-200 active:scale-95 flex items-center gap-1">
+                                <span x-text="tag.name"></span>
+                                <span x-show="tagFilters.includes(tag.id) && (tagHoldFilters[tag.id] || 0) > 0"
+                                      class="text-[10px] font-bold opacity-80" x-text="holdShort(tag.id)"></span>
+                            </button>
+                            <!-- Hold-Duration dot, slidable along the tag's bottom edge -->
+                            <input x-show="tagFilters.includes(tag.id)" type="range"
+                                   min="0" :max="holdStops().length - 1" step="1"
+                                   :value="tagHoldStopIndex(tag.id)"
+                                   @input="setTagHoldStop(tag.id, $event.target.value)"
+                                   @click.stop @mousedown.stop
+                                   :title="(tagHoldFilters[tag.id] || 0) > 0 ? 'Held at least ' + holdShort(tag.id) : 'Held for any length — slide right to require longer'"
+                                   class="tag-hold-slider text-on-primary" />
+                        </div>
                     </template>
                 </div>
-
-                <!-- Filter by Hold Duration -->
-                <div class="flex flex-col gap-2 pt-2 border-t border-outline-variant/30">
-                    <div class="flex items-center justify-between">
-                        <span class="font-label-md text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Held For At Least</span>
-                        <button x-show="minHoldDays > 0"
-                            @click="minHoldValue = 0; minHoldDays = 0"
-                            class="text-[9px] font-label-md text-on-surface-variant hover:text-error transition-colors uppercase tracking-wider font-bold">
-                            Clear
-                        </button>
-                    </div>
-                    <p x-show="tagFilters.length === 0" class="text-xs text-on-surface-variant italic">Select a tag above to filter by how long it's been held.</p>
-                    <div class="flex items-center gap-2" x-show="tagFilters.length > 0">
-                        <input type="number" min="0" x-model.number="minHoldValue" @input="syncMinHold()"
-                               class="w-20 border border-outline-variant rounded-lg px-3 py-1.5 font-body-md text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                        <select x-model="minHoldUnit" @change="syncMinHold()"
-                                class="border border-outline-variant rounded-lg px-2 py-1.5 font-body-md text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
-                            <option value="days">days</option>
-                            <option value="months">months</option>
-                            <option value="years">years</option>
-                        </select>
-                    </div>
-                </div>
+                <p x-show="tagFilters.length > 0" class="text-[10px] text-on-surface-variant italic">Slide the dot under a selected tag to require a minimum time held.</p>
             </div>
 
             <!-- Filter by Status -->

@@ -21,12 +21,10 @@ document.addEventListener('alpine:init', () => {
         statusZoneFilters: [],
         sortBy: 'name',
 
-        // Hold-Duration filter (ADR-0011): keep people who have held the filter
-        // tag(s) at least minHoldDays. minHoldValue/Unit are the UI split of it.
-        // Tag Hold is derived from Tag Change history, loaded lazily on first use.
-        minHoldDays: 0,
-        minHoldValue: 0,
-        minHoldUnit: 'days',
+        // Hold-Duration filter (ADR-0011): each selected tag carries its own
+        // minimum hold in days (0 = anyone carrying it), keyed by tagId. Tag Hold
+        // is derived from Tag Change history, loaded lazily on first use.
+        tagHoldFilters: {},
         tagHolds: {},
         holdsLoaded: false,
 
@@ -62,23 +60,18 @@ document.addEventListener('alpine:init', () => {
                 if (savedMode) this.tagFilterMode = savedMode;
                 const savedZones = sessionStorage.getItem('shepherding_statusZoneFilters');
                 if (savedZones) this.statusZoneFilters = JSON.parse(savedZones);
-                const savedHold = sessionStorage.getItem('shepherding_minHoldDays');
-                if (savedHold) {
-                    this.minHoldDays = Number(savedHold) || 0;
-                    const hold = this.holdValueUnit(this.minHoldDays);
-                    this.minHoldValue = hold.value;
-                    this.minHoldUnit = hold.unit;
-                }
+                const savedHoldFilters = sessionStorage.getItem('shepherding_tagHoldFilters');
+                if (savedHoldFilters) this.tagHoldFilters = JSON.parse(savedHoldFilters);
             } catch {}
 
             this.$watch('tagFilters', val => sessionStorage.setItem('shepherding_tagFilters', JSON.stringify(val)));
             this.$watch('tagFilterMode', val => sessionStorage.setItem('shepherding_tagFilterMode', val));
             this.$watch('statusZoneFilters', val => sessionStorage.setItem('shepherding_statusZoneFilters', JSON.stringify(val)));
-            // Persist the Hold-Duration threshold, and load Tag Hold history the
-            // first time the filter is actually switched on.
-            this.$watch('minHoldDays', val => {
-                sessionStorage.setItem('shepherding_minHoldDays', String(val || 0));
-                if (val > 0 && !this.holdsLoaded) this.loadTagHolds();
+            // Persist the per-tag Hold-Duration thresholds, and load Tag Hold
+            // history the first time any threshold is raised above zero.
+            this.$watch('tagHoldFilters', val => {
+                sessionStorage.setItem('shepherding_tagHoldFilters', JSON.stringify(val));
+                if (this.anyHoldActive() && !this.holdsLoaded) this.loadTagHolds();
             });
 
             auth.onAuthStateChanged(async (user) => {
@@ -100,7 +93,7 @@ document.addEventListener('alpine:init', () => {
                     this.loadFilterViews(),
                 ]);
                 // A restored Hold-Duration filter needs its history up front.
-                if (this.minHoldDays > 0) await this.loadTagHolds();
+                if (this.anyHoldActive()) await this.loadTagHolds();
                 this.loading = false;
             });
         },
@@ -149,13 +142,19 @@ document.addEventListener('alpine:init', () => {
             let result = this.people;
 
             if (this.tagFilters.length > 0) {
-                result = result.filter(p => {
-                    const personTags = p.tags || [];
-                    if (this.tagFilterMode === 'all') {
-                        return this.tagFilters.every(t => personTags.includes(t));
-                    }
-                    return this.tagFilters.some(t => personTags.includes(t));
-                });
+                // A person "matches" a filter tag when they carry it AND (if that
+                // tag's slider is above 0) have held it at least that long. any/all
+                // mode then combines the per-tag matches.
+                const matches = (p, t) => {
+                    if (!(p.tags || []).includes(t)) return false;
+                    const min = this.tagHoldFilters[t] || 0;
+                    if (min <= 0) return true;
+                    const h = (this.tagHolds[p.id] || {})[t];
+                    return ShepherdingCore.holdMeetsMinimum(h && h.durationMs, min);
+                };
+                result = result.filter(p => this.tagFilterMode === 'all'
+                    ? this.tagFilters.every(t => matches(p, t))
+                    : this.tagFilters.some(t => matches(p, t)));
             }
 
             if (this.statusZoneFilters.length > 0) {
@@ -164,19 +163,6 @@ document.addEventListener('alpine:init', () => {
                     return this.statusZoneFilters.includes(
                         statusZoneKey(p.shepherdingStatus.urgency, p.shepherdingStatus.importance)
                     );
-                });
-            }
-
-            // Hold-Duration filter (ADR-0011): among the tag(s) being filtered on,
-            // keep only people who have held them for at least minHoldDays. Unknown
-            // holds never qualify. Needs tag filters to have something to measure.
-            if (this.minHoldDays > 0 && this.tagFilters.length > 0) {
-                result = result.filter(p => {
-                    const holds = this.tagHolds[p.id] || {};
-                    const held = t => ShepherdingCore.holdMeetsMinimum(holds[t] && holds[t].durationMs, this.minHoldDays);
-                    return this.tagFilterMode === 'all'
-                        ? this.tagFilters.every(held)
-                        : this.tagFilters.some(held);
                 });
             }
 
@@ -204,6 +190,12 @@ document.addEventListener('alpine:init', () => {
         toggleTagFilter(tagId) {
             if (this.tagFilters.includes(tagId)) {
                 this.tagFilters = this.tagFilters.filter(t => t !== tagId);
+                // Deselecting a tag drops its Hold-Duration slider.
+                if (tagId in this.tagHoldFilters) {
+                    const next = { ...this.tagHoldFilters };
+                    delete next[tagId];
+                    this.tagHoldFilters = next;
+                }
             } else {
                 this.tagFilters = [...this.tagFilters, tagId];
             }
@@ -242,18 +234,15 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // Keep minHoldDays in sync when the value or unit input changes.
-        syncMinHold() {
-            const mult = this.minHoldUnit === 'months' ? 30 : this.minHoldUnit === 'years' ? 365 : 1;
-            this.minHoldDays = (Number(this.minHoldValue) || 0) * mult;
+        // ── Per-tag Hold-Duration slider ──────────────────────────────────────
+        holdStops() { return ShepherdingCore.HOLD_FILTER_STOPS; },
+        tagHoldStopIndex(tagId) { return ShepherdingCore.holdStopIndex(this.tagHoldFilters[tagId] || 0); },
+        setTagHoldStop(tagId, idx) {
+            const days = ShepherdingCore.HOLD_FILTER_STOPS[Number(idx)] || 0;
+            this.tagHoldFilters = { ...this.tagHoldFilters, [tagId]: days };
         },
-
-        // Split a stored day count back into the largest whole UI unit.
-        holdValueUnit(days) {
-            if (days > 0 && days % 365 === 0) return { value: days / 365, unit: 'years' };
-            if (days > 0 && days % 30 === 0) return { value: days / 30, unit: 'months' };
-            return { value: days || 0, unit: 'days' };
-        },
+        holdShort(tagId) { return ShepherdingCore.formatHoldShort(this.tagHoldFilters[tagId] || 0); },
+        anyHoldActive() { return Object.values(this.tagHoldFilters).some(d => d > 0); },
 
         // ── Status matrix ─────────────────────────────────────────────────────
 

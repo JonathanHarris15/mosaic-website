@@ -13,6 +13,19 @@
     <style type="text/tailwindcss">
         [x-cloak] { display: none !important; }
     </style>
+    <style>
+        /* Per-tag Hold-Duration slider: a dot on the bottom edge of a selected tag. */
+        .tag-hold-slider {
+            -webkit-appearance: none; appearance: none;
+            position: absolute; left: 10px; right: 10px; bottom: 3px;
+            width: auto; height: 10px; margin: 0; background: transparent; cursor: pointer;
+        }
+        .tag-hold-slider:focus { outline: none; }
+        .tag-hold-slider::-webkit-slider-runnable-track { height: 2px; border-radius: 9999px; background: currentColor; opacity: 0.35; }
+        .tag-hold-slider::-moz-range-track { height: 2px; border-radius: 9999px; background: currentColor; opacity: 0.35; }
+        .tag-hold-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; margin-top: -4px; width: 10px; height: 10px; border-radius: 9999px; background: currentColor; }
+        .tag-hold-slider::-moz-range-thumb { width: 10px; height: 10px; border: none; border-radius: 9999px; background: currentColor; }
+    </style>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -118,8 +131,9 @@
                                 <div class="flex flex-wrap gap-xs" x-show="view.filterTags && view.filterTags.length > 0">
                                     <span class="font-label-md text-label-md text-on-surface-variant">Tags:</span>
                                     <template x-for="tagId in view.filterTags" :key="tagId">
-                                        <span class="px-xs py-[2px] bg-secondary-container text-on-secondary-container rounded font-label-md text-label-md"
-                                              x-text="getTagName(tagId)"></span>
+                                        <span class="px-xs py-[2px] bg-secondary-container text-on-secondary-container rounded font-label-md text-label-md">
+                                            <span x-text="getTagName(tagId)"></span><span x-show="viewTagHoldDays(view, tagId) > 0" class="opacity-70" x-text="' · ≥' + ShepherdingCore.formatHoldShort(viewTagHoldDays(view, tagId))"></span>
+                                        </span>
                                     </template>
                                     <span class="font-label-md text-label-md text-on-surface-variant"
                                           x-text="view.filterMode === 'all' ? '(match all)' : '(match any)'"></span>
@@ -128,11 +142,6 @@
                                     <span class="font-label-md text-label-md text-on-surface-variant">Status:</span>
                                     <span class="px-xs py-[2px] bg-primary-fixed text-on-primary-fixed rounded font-label-md text-label-md"
                                           x-text="view.statusZoneFilters.length + ' zone' + (view.statusZoneFilters.length === 1 ? '' : 's') + ' selected'"></span>
-                                </div>
-                                <div class="flex items-center gap-xs" x-show="view.minHoldDays > 0 && view.filterTags && view.filterTags.length > 0">
-                                    <span class="font-label-md text-label-md text-on-surface-variant">Held:</span>
-                                    <span class="px-xs py-[2px] bg-tertiary-container text-on-tertiary-container rounded font-label-md text-label-md"
-                                          x-text="'at least ' + formatHoldDuration(view.minHoldDays * 86400000)"></span>
                                 </div>
                                 <span x-show="(!view.filterTags || view.filterTags.length === 0) && (!view.statusZoneFilters || view.statusZoneFilters.length === 0)"
                                       class="font-label-md text-label-md text-on-surface-variant">Showing all active members</span>
@@ -275,16 +284,29 @@
                 <!-- Filter by Tags -->
                 <div class="flex flex-col gap-xs">
                     <span class="font-label-md text-label-md text-on-surface-variant">Filter by tags</span>
-                    <p class="text-xs text-on-surface-variant">Leave empty to show all active members.</p>
-                    <div class="flex flex-wrap gap-xs mt-xs">
+                    <p class="text-xs text-on-surface-variant">Leave empty to show all active members. Slide the dot under a selected tag to require a minimum time held.</p>
+                    <div class="flex flex-wrap gap-x-xs gap-y-3 mt-xs">
                         <template x-for="tag in shepherdingTags" :key="tag.id">
-                            <button @click="toggleViewTag(tag.id)"
-                                :class="newView.filterTags.includes(tag.id)
-                                    ? 'bg-primary text-on-primary'
-                                    : 'bg-surface-container text-on-surface hover:bg-surface-container-high'"
-                                class="px-sm py-xs font-label-md text-label-md rounded-full transition-colors"
-                                x-text="tag.name">
-                            </button>
+                            <div class="relative">
+                                <button @click="toggleViewTag(tag.id)"
+                                    :class="newView.filterTags.includes(tag.id)
+                                        ? 'bg-primary text-on-primary pb-2.5'
+                                        : 'bg-surface-container text-on-surface hover:bg-surface-container-high'"
+                                    :style="newView.filterTags.includes(tag.id) ? 'min-width: 74px' : ''"
+                                    class="px-sm py-xs font-label-md text-label-md rounded-2xl transition-colors flex items-center gap-1">
+                                    <span x-text="tag.name"></span>
+                                    <span x-show="newView.filterTags.includes(tag.id) && (newView.tagHoldFilters[tag.id] || 0) > 0"
+                                          class="text-[10px] font-bold opacity-80" x-text="viewTagHoldShort(tag.id)"></span>
+                                </button>
+                                <!-- Hold-Duration dot, slidable along the tag's bottom edge -->
+                                <input x-show="newView.filterTags.includes(tag.id)" type="range"
+                                       min="0" :max="holdStops().length - 1" step="1"
+                                       :value="viewTagHoldStopIndex(tag.id)"
+                                       @input="setViewTagHoldStop(tag.id, $event.target.value)"
+                                       @click.stop @mousedown.stop
+                                       :title="(newView.tagHoldFilters[tag.id] || 0) > 0 ? 'Held at least ' + viewTagHoldShort(tag.id) : 'Held for any length — slide right to require longer'"
+                                       class="tag-hold-slider text-on-primary" />
+                            </div>
                         </template>
                         <span x-show="shepherdingTags.length === 0" class="text-on-surface-variant italic text-sm">No tags yet. Create some first.</span>
                     </div>
@@ -301,25 +323,6 @@
                             <input type="radio" x-model="newView.filterMode" value="all" class="accent-primary" />
                             <span class="font-body-md text-on-surface">Match all tags</span>
                         </label>
-                    </div>
-                </div>
-
-                <!-- Filter by Hold Duration -->
-                <div class="flex flex-col gap-xs border-t border-outline-variant/50 pt-md">
-                    <span class="font-label-md text-label-md text-on-surface-variant">Filter by how long held</span>
-                    <p class="text-xs text-on-surface-variant">Only include people who have held the selected tag(s) for at least this long. Leave at 0 for no limit.</p>
-                    <p x-show="newView.filterTags.length === 0" class="text-xs italic text-on-surface-variant">Select a tag above to use this filter.</p>
-                    <div class="flex items-center gap-sm mt-xs" x-show="newView.filterTags.length > 0">
-                        <input type="number" min="0" x-model.number="newView.minHoldValue"
-                               @input="newView.minHoldDays = (Number(newView.minHoldValue) || 0) * (newView.minHoldUnit === 'months' ? 30 : newView.minHoldUnit === 'years' ? 365 : 1)"
-                               class="w-24 border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                        <select x-model="newView.minHoldUnit"
-                                @change="newView.minHoldDays = (Number(newView.minHoldValue) || 0) * (newView.minHoldUnit === 'months' ? 30 : newView.minHoldUnit === 'years' ? 365 : 1)"
-                                class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
-                            <option value="days">days</option>
-                            <option value="months">months</option>
-                            <option value="years">years</option>
-                        </select>
                     </div>
                 </div>
 

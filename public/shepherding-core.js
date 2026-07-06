@@ -249,6 +249,33 @@
         return durationMs >= minDays * MS_PER_DAY;
     }
 
+    // Discrete stops (in days) for the per-tag Hold-Duration slider: 0 (anyone
+    // carrying the tag) up to a year, in widening increments. Each selected tag
+    // filter chip carries its own stop.
+    const HOLD_FILTER_STOPS = [0, 7, 14, 30, 60, 90, 180, 270, 365];
+
+    // Nearest slider stop index for a stored day count, so a persisted threshold
+    // re-seeds the slider thumb.
+    function holdStopIndex(days) {
+        const target = days || 0;
+        let best = 0;
+        let bestDelta = Infinity;
+        for (let i = 0; i < HOLD_FILTER_STOPS.length; i++) {
+            const delta = Math.abs(HOLD_FILTER_STOPS[i] - target);
+            if (delta < bestDelta) { bestDelta = delta; best = i; }
+        }
+        return best;
+    }
+
+    // Compact label for a slider stop ('' at 0, else '1w' / '3mo' / '1y') — the
+    // minimal caption shown on a selected tag chip.
+    function formatHoldShort(days) {
+        if (!days || days <= 0) return '';
+        if (days < 30) return `${Math.round(days / 7)}w`;
+        if (days < 365) return `${Math.round(days / 30)}mo`;
+        return `${Math.round(days / 365)}y`;
+    }
+
     // ── Tag Merge planning (pure) — ADR-0011 ─────────────────────────────────
     // Fold one or more merged tags into a surviving tag. For each affected Person:
     // rewrite the `tags` array (merged ids → survivor, deduped) and re-point their
@@ -302,6 +329,9 @@
         deriveTagHolds,
         formatHoldDuration,
         holdMeetsMinimum,
+        HOLD_FILTER_STOPS,
+        holdStopIndex,
+        formatHoldShort,
         planTagMerge,
     };
 

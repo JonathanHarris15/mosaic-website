@@ -97,6 +97,30 @@ test('holdMeetsMinimum fails a shorter or unknown hold', () => {
     assert.strictEqual(Core.holdMeetsMinimum(undefined, 30), false);
 });
 
+// ── per-tag slider helpers ────────────────────────────────────────────────────
+// Each selected tag filter chip carries its own Hold-Duration stop.
+
+test('HOLD_FILTER_STOPS starts at 0 and ends at a year', () => {
+    assert.strictEqual(Core.HOLD_FILTER_STOPS[0], 0);
+    assert.strictEqual(Core.HOLD_FILTER_STOPS[Core.HOLD_FILTER_STOPS.length - 1], 365);
+});
+
+test('holdStopIndex snaps a stored day count to the nearest slider stop', () => {
+    assert.strictEqual(Core.holdStopIndex(0), 0);
+    assert.strictEqual(Core.holdStopIndex(30), Core.HOLD_FILTER_STOPS.indexOf(30));
+    assert.strictEqual(Core.holdStopIndex(365), Core.HOLD_FILTER_STOPS.length - 1);
+    assert.strictEqual(Core.holdStopIndex(33), Core.HOLD_FILTER_STOPS.indexOf(30)); // nearest
+});
+
+test('formatHoldShort gives a compact caption, empty at zero', () => {
+    assert.strictEqual(Core.formatHoldShort(0), '');
+    assert.strictEqual(Core.formatHoldShort(7), '1w');
+    assert.strictEqual(Core.formatHoldShort(14), '2w');
+    assert.strictEqual(Core.formatHoldShort(30), '1mo');
+    assert.strictEqual(Core.formatHoldShort(90), '3mo');
+    assert.strictEqual(Core.formatHoldShort(365), '1y');
+});
+
 // ── planTagMerge ──────────────────────────────────────────────────────────────
 // A Merge folds merged tags into a surviving tag: rewrite each carrier's tags
 // array, re-point their Tag Changes at the survivor (so the survivor inherits the

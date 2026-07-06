@@ -17,9 +17,9 @@ document.addEventListener('alpine:init', () => {
         selectedViewId: null,
         editingViewId: null,
         showViewModal: false,
-        // minHoldDays is the persisted Hold-Duration threshold; minHoldValue/Unit
-        // are the UI's split of it (e.g. 3 + 'months' → 90 days).
-        newView: { title: '', filterTags: [], filterMode: 'any', statusZoneFilters: [], minHoldDays: 0, minHoldValue: 0, minHoldUnit: 'days' },
+        // tagHoldFilters: per-tag minimum hold in days, keyed by tagId (0 = any) —
+        // each selected filter tag carries its own slider.
+        newView: { title: '', filterTags: [], filterMode: 'any', statusZoneFilters: [], tagHoldFilters: {} },
 
         people: [],
 
@@ -57,7 +57,7 @@ document.addEventListener('alpine:init', () => {
                 ]);
                 // Tag Hold history is only needed to satisfy a Hold-Duration
                 // filter — fetch it lazily, not on every dashboard load (ADR-0011).
-                if (this.views.some(v => v.minHoldDays > 0)) {
+                if (this.views.some(v => this.viewHasHoldFilter(v))) {
                     await this.loadTagHolds();
                 }
                 this.loading = false;
@@ -153,7 +153,7 @@ document.addEventListener('alpine:init', () => {
                     filterTags: [...this.newView.filterTags],
                     filterMode: this.newView.filterMode,
                     statusZoneFilters: [...this.newView.statusZoneFilters],
-                    minHoldDays: Number(this.newView.minHoldDays) || 0,
+                    tagHoldFilters: this.cleanHoldFilters(),
                     sortBy: 'name',
                     createdBy: this.currentUser.uid,
                     createdByName: this.currentUserName,
@@ -162,7 +162,7 @@ document.addEventListener('alpine:init', () => {
                 this.newView = this.blankView();
                 this.showViewModal = false;
                 await this.loadViews();
-                if (this.views.some(v => v.minHoldDays > 0)) await this.loadTagHolds();
+                if (this.views.some(v => this.viewHasHoldFilter(v))) await this.loadTagHolds();
                 this.selectedViewId = docRef.id;
                 this.showToast('Filtered view created');
             } catch (e) {
@@ -172,27 +172,48 @@ document.addEventListener('alpine:init', () => {
         },
 
         blankView() {
-            return { title: '', filterTags: [], filterMode: 'any', statusZoneFilters: [], minHoldDays: 0, minHoldValue: 0, minHoldUnit: 'days' };
+            return { title: '', filterTags: [], filterMode: 'any', statusZoneFilters: [], tagHoldFilters: {} };
         },
 
-        // Split a stored day count back into the largest whole UI unit for editing.
-        holdValueUnit(days) {
-            if (days > 0 && days % 365 === 0) return { value: days / 365, unit: 'years' };
-            if (days > 0 && days % 30 === 0) return { value: days / 30, unit: 'months' };
-            return { value: days || 0, unit: 'days' };
+        // Does a saved view use any Hold-Duration threshold? Falls back to the old
+        // single minHoldDays field so views saved before per-tag sliders still work.
+        viewHasHoldFilter(view) {
+            if (view.minHoldDays > 0) return true;
+            const f = view.tagHoldFilters;
+            return !!f && Object.values(f).some(d => d > 0);
+        },
+
+        // The threshold (days) a view requires for one of its filter tags, honouring
+        // the legacy single minHoldDays as a fallback for every tag.
+        viewTagHoldDays(view, tagId) {
+            if (view.tagHoldFilters && view.tagHoldFilters[tagId] != null) return view.tagHoldFilters[tagId];
+            return view.minHoldDays || 0;
+        },
+
+        // Drop zero entries so a view stores only the tags that actually constrain.
+        cleanHoldFilters() {
+            const out = {};
+            for (const [tagId, days] of Object.entries(this.newView.tagHoldFilters || {})) {
+                if (days > 0 && this.newView.filterTags.includes(tagId)) out[tagId] = days;
+            }
+            return out;
         },
 
         openEditView(view) {
             this.editingViewId = view.id;
-            const hold = this.holdValueUnit(view.minHoldDays || 0);
+            // Seed per-tag sliders, expanding a legacy single minHoldDays across
+            // all of the view's filter tags.
+            const seeded = {};
+            (view.filterTags || []).forEach(t => {
+                const days = this.viewTagHoldDays(view, t);
+                if (days > 0) seeded[t] = days;
+            });
             this.newView = {
                 title: view.title,
                 filterTags: [...(view.filterTags || [])],
                 filterMode: view.filterMode || 'any',
                 statusZoneFilters: [...(view.statusZoneFilters || [])],
-                minHoldDays: view.minHoldDays || 0,
-                minHoldValue: hold.value,
-                minHoldUnit: hold.unit,
+                tagHoldFilters: seeded,
             };
             this.showViewModal = true;
         },
@@ -205,7 +226,8 @@ document.addEventListener('alpine:init', () => {
                     filterTags: [...this.newView.filterTags],
                     filterMode: this.newView.filterMode,
                     statusZoneFilters: [...this.newView.statusZoneFilters],
-                    minHoldDays: Number(this.newView.minHoldDays) || 0,
+                    tagHoldFilters: this.cleanHoldFilters(),
+                    minHoldDays: firebase.firestore.FieldValue.delete(),
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                 });
                 this.newView = this.blankView();
@@ -213,7 +235,7 @@ document.addEventListener('alpine:init', () => {
                 const updatedId = this.editingViewId;
                 this.editingViewId = null;
                 await this.loadViews();
-                if (this.views.some(v => v.minHoldDays > 0)) await this.loadTagHolds();
+                if (this.views.some(v => this.viewHasHoldFilter(v))) await this.loadTagHolds();
                 this.selectedViewId = updatedId;
                 this.showToast('View updated');
             } catch (e) {
@@ -266,13 +288,20 @@ document.addEventListener('alpine:init', () => {
             let result = this.people.filter(p => p.membership?.status !== 'inactive');
 
             if (view.filterTags && view.filterTags.length > 0) {
-                result = result.filter(p => {
-                    const personTags = p.tags || [];
-                    if (view.filterMode === 'all') {
-                        return view.filterTags.every(t => personTags.includes(t));
-                    }
-                    return view.filterTags.some(t => personTags.includes(t));
-                });
+                // A person "matches" a filter tag when they carry it AND (if that
+                // tag's slider is above 0) have held it at least that long. The
+                // view's any/all mode then combines the per-tag matches. Unknown
+                // holds never qualify (ADR-0011).
+                const matches = (p, t) => {
+                    if (!(p.tags || []).includes(t)) return false;
+                    const min = this.viewTagHoldDays(view, t);
+                    if (min <= 0) return true;
+                    const h = (this.tagHolds[p.id] || {})[t];
+                    return ShepherdingCore.holdMeetsMinimum(h && h.durationMs, min);
+                };
+                result = result.filter(p => view.filterMode === 'all'
+                    ? view.filterTags.every(t => matches(p, t))
+                    : view.filterTags.some(t => matches(p, t)));
             }
 
             if (view.statusZoneFilters && view.statusZoneFilters.length > 0) {
@@ -281,20 +310,6 @@ document.addEventListener('alpine:init', () => {
                     return view.statusZoneFilters.includes(
                         dashZoneKey(p.shepherdingStatus.urgency, p.shepherdingStatus.importance)
                     );
-                });
-            }
-
-            // Hold-Duration filter (ADR-0011): keep only Persons who have held the
-            // view's filter tag(s) for at least minHoldDays. An unknown hold never
-            // qualifies. Applies to the same tags as the tag filter, so it needs
-            // filterTags to have something to measure against.
-            if (view.minHoldDays > 0 && view.filterTags && view.filterTags.length > 0) {
-                result = result.filter(p => {
-                    const holds = this.tagHolds[p.id] || {};
-                    const held = t => ShepherdingCore.holdMeetsMinimum(holds[t] && holds[t].durationMs, view.minHoldDays);
-                    return view.filterMode === 'all'
-                        ? view.filterTags.every(held)
-                        : view.filterTags.some(held);
                 });
             }
 
@@ -334,8 +349,21 @@ document.addEventListener('alpine:init', () => {
                 this.newView.filterTags.push(tagId);
             } else {
                 this.newView.filterTags.splice(idx, 1);
+                // Deselecting a tag drops its Hold-Duration slider.
+                if (tagId in this.newView.tagHoldFilters) {
+                    delete this.newView.tagHoldFilters[tagId];
+                }
             }
         },
+
+        // ── Per-tag Hold-Duration slider (edit modal) ─────────────────────────
+        holdStops() { return ShepherdingCore.HOLD_FILTER_STOPS; },
+        viewTagHoldStopIndex(tagId) { return ShepherdingCore.holdStopIndex(this.newView.tagHoldFilters[tagId] || 0); },
+        setViewTagHoldStop(tagId, idx) {
+            const days = ShepherdingCore.HOLD_FILTER_STOPS[Number(idx)] || 0;
+            this.newView.tagHoldFilters = { ...this.newView.tagHoldFilters, [tagId]: days };
+        },
+        viewTagHoldShort(tagId) { return ShepherdingCore.formatHoldShort(this.newView.tagHoldFilters[tagId] || 0); },
 
         formatDatetime(timestamp) {
             if (!timestamp) return '';

@@ -95,7 +95,7 @@ The span of time a Person has continuously carried a Shepherding Tag: from the T
 _Avoid_: Tag age, tag duration, held-since
 
 **Hold Duration**:
-The length of a Tag Hold, expressed as a human-readable span (e.g. "3 months", "12 days"). The basis of the Hold-Duration filter on a Filtered View, which narrows the view to Persons who have held its filter tag(s) for at least a chosen span.
+The length of a Tag Hold, expressed as a human-readable span (e.g. "3 months", "12 days"). The basis of the Hold-Duration filter, which narrows a Filtered View or the People list to Persons who have held a tag long enough. Each selected filter tag carries its own minimum, set by a slider on the tag chip — a dot on the chip's lower edge that slides from 0 (anyone carrying the tag) up to a year.
 _Avoid_: Tenure, elapsed time
 
 **Prayer Request**:
