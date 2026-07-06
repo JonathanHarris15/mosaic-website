@@ -3,6 +3,20 @@
 
 <head>
     <meta charset="utf-8" />
+    <!-- Native app only: launch the mobile shell when running inside Capacitor.
+         Runs before any resources load. Web browsers (any width) fall through
+         to the desktop app — a narrow desktop window is still the desktop app. -->
+    <script>
+        (function () {
+            var C = window.Capacitor;
+            var native = !!(C && (typeof C.isNativePlatform === "function"
+                ? C.isNativePlatform()
+                : (C.platform && C.platform !== "web")));
+            if (native && location.pathname.indexOf("mobile.html") === -1) {
+                location.replace("mobile.html");
+            }
+        })();
+    </script>
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Mosaic Services</title>
     <!-- Google Fonts: Noto Serif & Work Sans -->
