@@ -348,6 +348,103 @@
       </${Screen}>`;
   }
 
+  // ── Shepherd Dashboard ───────────────────────────────────
+  var TONE_COLOR = { error: "var(--error)", secondary: "var(--secondary)", warning: "var(--warning)" };
+  function ShepherdScreen(props) {
+    var viewsSt = useAsync(data.getShepherdViews, []);
+    var remSt = useAsync(data.getReminders, []);
+    var views = viewsSt.data || [], reminders = remSt.data || [];
+    return html`
+      <${Screen}>
+        <${TopBar} title="Shepherd" onMenu=${props.openMenu} right=${html`<${BarAction} icon="bell" label="Reminders" badge=${reminders.length || null} />`} />
+        <${Body} style=${{ padding: "18px 16px calc(90px + env(safe-area-inset-bottom,0px))" }}>
+          <${Overline} style=${{ marginBottom: 10 }}>Filtered Views<//>
+          ${viewsSt.loading ? html`<${Loading} label="Loading views…" />` : html`
+            <div style=${{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
+              ${views.map(function (v) {
+                var col = TONE_COLOR[v.tone] || "var(--secondary)";
+                return html`<button key=${v.id} onClick=${function () { props.nav("people"); }} style=${{ display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", padding: "14px 16px", cursor: "pointer", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)" }}>
+                  <span style=${{ width: 44, height: 44, borderRadius: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--surface-container)", color: col }}>${Ic(v.tone === "error" ? "flag" : v.tone === "warning" ? "clock" : "user-plus", 20)}</span>
+                  <div style=${{ flex: 1 }}>
+                    <div style=${{ fontFamily: "var(--font-serif)", fontSize: 16.5, fontWeight: 600, color: "var(--on-surface)" }}>${v.name}</div>
+                    ${v.count != null ? html`<div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 1 }}>${v.count} people</div>` : null}
+                  </div>
+                  ${v.count != null ? html`<span style=${{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 600, color: col }}>${v.count}</span>` : null}
+                </button>`;
+              })}
+              ${views.length === 0 ? html`<${Empty}>No saved views yet.<//>` : null}
+            </div>`}
+
+          <${Overline} style=${{ marginBottom: 10 }}>Follow-up Reminders<//>
+          <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", overflow: "hidden", marginBottom: 22 }}>
+            ${reminders.map(function (r, i) {
+              return html`<div key=${r.id} style=${{ display: "flex", gap: 12, padding: "13px 16px", borderBottom: i === reminders.length - 1 ? "none" : "1px solid var(--outline-variant)" }}>
+                <span style=${{ color: "var(--secondary)", marginTop: 1 }}>${Ic("calendar-check", 18)}</span>
+                <div style=${{ flex: 1 }}>
+                  <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14.5, color: "var(--on-surface)" }}>${r.text}</div>
+                  ${(r.due || r.people.length) ? html`<div style=${{ fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)", marginTop: 3 }}>${r.due ? "Due " + r.due : ""}${r.due && r.people.length ? " · " : ""}${r.people.join(", ")}</div>` : null}
+                </div>
+              </div>`;
+            })}
+            ${reminders.length === 0 ? html`<div style=${{ padding: 20 }}><${Empty}>No reminders.<//></div>` : null}
+          </div>
+
+          <${Overline} style=${{ marginBottom: 10 }}>Quick Access<//>
+          <div style=${{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            ${[["folder", "Document Library", "documents"], ["users", "All People", "people"]].map(function (t) {
+              return html`<button key=${t[2]} onClick=${function () { props.nav(t[2]); }} style=${{ display: "flex", flexDirection: "column", gap: 8, padding: 16, background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", cursor: "pointer" }}>
+                <span style=${{ color: "var(--primary)" }}>${Ic(t[0], 22)}</span>
+                <span style=${{ fontFamily: "var(--font-serif)", fontSize: 15, fontWeight: 600, color: "var(--on-surface)", textAlign: "left" }}>${t[1]}</span>
+              </button>`;
+            })}
+          </div>
+        </${Body}>
+        <${FAB} icon="plus" label="New note" onClick=${function () { props.nav("documentEditor", {}); }} />
+      </${Screen}>`;
+  }
+
+  // ── Document Library ─────────────────────────────────────
+  function DocumentsScreen(props) {
+    var st = useAsync(data.getDocuments, []);
+    var tree = st.data || { folders: [], docs: [] };
+    var typeIcon = function (t) { return t === "care-list" ? "table" : "file-text"; };
+    return html`
+      <${Screen}>
+        <${TopBar} title="Document Library" onMenu=${props.openMenu} />
+        <${Body} style=${{ paddingBottom: "calc(90px + env(safe-area-inset-bottom,0px))" }}>
+          <div style=${{ display: "flex", alignItems: "center", gap: 6, padding: "12px 16px", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)" }}>${Ic("folder-open", 15)}<span style=${{ color: "var(--on-surface)", fontWeight: 600 }}>Library</span></div>
+          ${st.loading ? html`<${Loading} label="Loading documents…" />` : html`
+            ${tree.folders.length ? html`
+              <${Overline} style=${{ padding: "0 16px 8px" }}>Folders<//>
+              <div style=${{ padding: "0 16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+                ${tree.folders.map(function (f) {
+                  return html`<button key=${f.id} style=${{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", padding: "13px 14px", cursor: "pointer", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)" }}>
+                    <span style=${{ color: "var(--secondary)" }}>${Ic("folder", 22)}</span>
+                    <span style=${{ flex: 1, fontFamily: "var(--font-serif)", fontSize: 16, fontWeight: 600, color: "var(--on-surface)" }}>${f.name}</span>
+                    ${f.count != null ? html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)" }}>${f.count}</span>` : null}
+                    <span style=${{ color: "var(--outline)" }}>${Ic("chevron-right", 18)}</span>
+                  </button>`;
+                })}
+              </div>` : null}
+            <${Overline} style=${{ padding: "0 16px 8px" }}>Documents<//>
+            <div style=${{ padding: "0 16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+              ${tree.docs.map(function (d) {
+                return html`<button key=${d.id} onClick=${function () { props.nav("documentEditor", { doc: d }); }} style=${{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", padding: "13px 14px", cursor: "pointer", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)" }}>
+                  <span style=${{ width: 38, height: 38, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--surface-container)", color: "var(--primary)" }}>${Ic(typeIcon(d.type), 18)}</span>
+                  <div style=${{ flex: 1, minWidth: 0 }}>
+                    <div style=${{ fontFamily: "var(--font-serif)", fontSize: 15.5, fontWeight: 600, color: "var(--on-surface)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>${d.title}</div>
+                    ${(d.author || d.updated) ? html`<div style=${{ fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)", marginTop: 2 }}>${[d.author, d.updated].filter(Boolean).join(" · ")}</div>` : null}
+                  </div>
+                  <span style=${{ color: "var(--outline)" }}>${Ic("chevron-right", 18)}</span>
+                </button>`;
+              })}
+              ${tree.docs.length === 0 ? html`<${Empty}>No documents yet.<//>` : null}
+            </div>`}
+        </${Body}>
+        <${FAB} icon="plus" label="New document" onClick=${function () { props.nav("documentEditor", {}); }} />
+      </${Screen}>`;
+  }
+
   // ── In-shell placeholder for routes not yet ported ───────
   function ComingSoon(props) {
     var title = (props.params && props.params.title) || "Coming soon";
@@ -372,6 +469,8 @@
     personDetail: PersonDetailScreen,
     calendar: CalendarScreen,
     analytics: AnalyticsScreen,
+    shepherd: ShepherdScreen,
+    documents: DocumentsScreen,
     comingSoon: ComingSoon,
   });
 })();

@@ -137,6 +137,55 @@
     });
   }
 
+  // Format a Firestore value that may be a Timestamp, ISO string, or Date.
+  function fmtDate(v) {
+    if (!v) return "";
+    if (typeof v === "string") return v.length > 10 ? v.slice(0, 10) : v;
+    var d = v.toDate ? v.toDate() : (typeof v.seconds === "number" ? new Date(v.seconds * 1000) : (v instanceof Date ? v : null));
+    return d ? d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "";
+  }
+
+  function getShepherdViews() {
+    return db.collection("shepherding_views").get().then(function (snap) {
+      var out = [];
+      snap.forEach(function (doc) {
+        var d = doc.data() || {};
+        out.push({ id: doc.id, name: d.name || d.label || d.title || "(view)", count: typeof d.count === "number" ? d.count : null, tone: d.tone || "secondary" });
+      });
+      return out;
+    }).catch(function () { return []; });
+  }
+
+  function getReminders() {
+    return db.collection("shepherding_reminders").get().then(function (snap) {
+      var out = [];
+      snap.forEach(function (doc) {
+        var d = doc.data() || {};
+        var people = Array.isArray(d.people) ? d.people : (Array.isArray(d.personNames) ? d.personNames : []);
+        out.push({ id: doc.id, text: d.text || d.title || d.note || "(reminder)", due: fmtDate(d.due || d.dueDate), people: people });
+      });
+      return out;
+    }).catch(function () { return []; });
+  }
+
+  function getDocuments() {
+    return Promise.all([
+      db.collection("elder_documents").get().catch(function () { return { forEach: function () {} }; }),
+      db.collection("elder_document_structure").get().catch(function () { return { forEach: function () {} }; }),
+    ]).then(function (r) {
+      var docs = [], folders = [];
+      r[0].forEach(function (doc) {
+        var d = doc.data() || {};
+        docs.push({ id: doc.id, title: d.title || d.name || "(untitled)", type: d.type || "note", author: d.author || d.createdBy || d.owner || "", updated: fmtDate(d.updated || d.updatedAt || d.modified) });
+      });
+      r[1].forEach(function (doc) {
+        var d = doc.data() || {};
+        if (d.name || d.label) folders.push({ id: doc.id, name: d.name || d.label, count: typeof d.count === "number" ? d.count : (Array.isArray(d.documentIds) ? d.documentIds.length : null) });
+      });
+      return { folders: folders, docs: docs };
+    });
+  }
+
   function todayStr() { return new Date().toISOString().slice(0, 10); }
 
   // The service to feature on Home: nearest upcoming (date >= today), else most recent.
@@ -187,6 +236,7 @@
     DESTINATIONS: DESTINATIONS,
     getHymns: getHymns, getPeople: getPeople, getServices: getServices,
     getNextService: getNextService, getAnalytics: getAnalytics,
-    lc: lc,
+    getShepherdViews: getShepherdViews, getReminders: getReminders, getDocuments: getDocuments,
+    lc: lc, fmtDate: fmtDate,
   };
 })();

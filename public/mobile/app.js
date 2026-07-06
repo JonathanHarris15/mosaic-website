@@ -17,9 +17,10 @@
   // Routes not yet ported render the in-shell ComingSoon screen, offering the
   // desktop page as "open full page" — no jarring bounce out of the shell.
   var ROUTE_META = {
-    shepherd: { title: "Shepherd Dashboard", page: "shepherding-dashboard.html" },
-    documents: { title: "Document Library", page: "shepherding-documents.html" },
     serviceBuilder: { title: "Service Editor", page: "service-builder.html" },
+    serviceGuide: { title: "Service Guide", page: "service-guide.html" },
+    documentEditor: { title: "Document", page: "shepherding-documents.html" },
+    shepherdProfile: { title: "Shepherding Profile", page: "shepherding-profile.html" },
   };
 
   function currentRoute() {
