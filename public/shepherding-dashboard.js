@@ -466,7 +466,7 @@ document.addEventListener('alpine:init', () => {
                             if (newVal) {
                                 batch.update(doc.ref, { shepherdingHidden: true });
                             } else {
-                                const personTags = doc.data().shepherding_tags || [];
+                                const personTags = doc.data().tags || [];
                                 batch.update(doc.ref, {
                                     shepherdingHidden: personTags.some(tid => otherHidePeopleTagIds.includes(tid))
                                 });
