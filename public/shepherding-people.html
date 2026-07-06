@@ -151,6 +151,29 @@
                         </button>
                     </template>
                 </div>
+
+                <!-- Filter by Hold Duration -->
+                <div class="flex flex-col gap-2 pt-2 border-t border-outline-variant/30">
+                    <div class="flex items-center justify-between">
+                        <span class="font-label-md text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Held For At Least</span>
+                        <button x-show="minHoldDays > 0"
+                            @click="minHoldValue = 0; minHoldDays = 0"
+                            class="text-[9px] font-label-md text-on-surface-variant hover:text-error transition-colors uppercase tracking-wider font-bold">
+                            Clear
+                        </button>
+                    </div>
+                    <p x-show="tagFilters.length === 0" class="text-xs text-on-surface-variant italic">Select a tag above to filter by how long it's been held.</p>
+                    <div class="flex items-center gap-2" x-show="tagFilters.length > 0">
+                        <input type="number" min="0" x-model.number="minHoldValue" @input="syncMinHold()"
+                               class="w-20 border border-outline-variant rounded-lg px-3 py-1.5 font-body-md text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                        <select x-model="minHoldUnit" @change="syncMinHold()"
+                                class="border border-outline-variant rounded-lg px-2 py-1.5 font-body-md text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                            <option value="days">days</option>
+                            <option value="months">months</option>
+                            <option value="years">years</option>
+                        </select>
+                    </div>
+                </div>
             </div>
 
             <!-- Filter by Status -->

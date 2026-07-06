@@ -305,10 +305,11 @@
                 </div>
 
                 <!-- Filter by Hold Duration -->
-                <div class="flex flex-col gap-xs border-t border-outline-variant/50 pt-md" x-show="newView.filterTags.length > 0">
+                <div class="flex flex-col gap-xs border-t border-outline-variant/50 pt-md">
                     <span class="font-label-md text-label-md text-on-surface-variant">Filter by how long held</span>
                     <p class="text-xs text-on-surface-variant">Only include people who have held the selected tag(s) for at least this long. Leave at 0 for no limit.</p>
-                    <div class="flex items-center gap-sm mt-xs">
+                    <p x-show="newView.filterTags.length === 0" class="text-xs italic text-on-surface-variant">Select a tag above to use this filter.</p>
+                    <div class="flex items-center gap-sm mt-xs" x-show="newView.filterTags.length > 0">
                         <input type="number" min="0" x-model.number="newView.minHoldValue"
                                @input="newView.minHoldDays = (Number(newView.minHoldValue) || 0) * (newView.minHoldUnit === 'months' ? 30 : newView.minHoldUnit === 'years' ? 365 : 1)"
                                class="w-24 border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />

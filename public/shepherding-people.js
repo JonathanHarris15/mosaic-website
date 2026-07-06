@@ -21,6 +21,15 @@ document.addEventListener('alpine:init', () => {
         statusZoneFilters: [],
         sortBy: 'name',
 
+        // Hold-Duration filter (ADR-0011): keep people who have held the filter
+        // tag(s) at least minHoldDays. minHoldValue/Unit are the UI split of it.
+        // Tag Hold is derived from Tag Change history, loaded lazily on first use.
+        minHoldDays: 0,
+        minHoldValue: 0,
+        minHoldUnit: 'days',
+        tagHolds: {},
+        holdsLoaded: false,
+
         filterViews: [],
         showSaveViewModal: false,
         newFilterViewName: '',
@@ -53,11 +62,24 @@ document.addEventListener('alpine:init', () => {
                 if (savedMode) this.tagFilterMode = savedMode;
                 const savedZones = sessionStorage.getItem('shepherding_statusZoneFilters');
                 if (savedZones) this.statusZoneFilters = JSON.parse(savedZones);
+                const savedHold = sessionStorage.getItem('shepherding_minHoldDays');
+                if (savedHold) {
+                    this.minHoldDays = Number(savedHold) || 0;
+                    const hold = this.holdValueUnit(this.minHoldDays);
+                    this.minHoldValue = hold.value;
+                    this.minHoldUnit = hold.unit;
+                }
             } catch {}
 
             this.$watch('tagFilters', val => sessionStorage.setItem('shepherding_tagFilters', JSON.stringify(val)));
             this.$watch('tagFilterMode', val => sessionStorage.setItem('shepherding_tagFilterMode', val));
             this.$watch('statusZoneFilters', val => sessionStorage.setItem('shepherding_statusZoneFilters', JSON.stringify(val)));
+            // Persist the Hold-Duration threshold, and load Tag Hold history the
+            // first time the filter is actually switched on.
+            this.$watch('minHoldDays', val => {
+                sessionStorage.setItem('shepherding_minHoldDays', String(val || 0));
+                if (val > 0 && !this.holdsLoaded) this.loadTagHolds();
+            });
 
             auth.onAuthStateChanged(async (user) => {
                 if (!user) {
@@ -77,6 +99,8 @@ document.addEventListener('alpine:init', () => {
                     this.loadTags(),
                     this.loadFilterViews(),
                 ]);
+                // A restored Hold-Duration filter needs its history up front.
+                if (this.minHoldDays > 0) await this.loadTagHolds();
                 this.loading = false;
             });
         },
@@ -143,6 +167,19 @@ document.addEventListener('alpine:init', () => {
                 });
             }
 
+            // Hold-Duration filter (ADR-0011): among the tag(s) being filtered on,
+            // keep only people who have held them for at least minHoldDays. Unknown
+            // holds never qualify. Needs tag filters to have something to measure.
+            if (this.minHoldDays > 0 && this.tagFilters.length > 0) {
+                result = result.filter(p => {
+                    const holds = this.tagHolds[p.id] || {};
+                    const held = t => ShepherdingCore.holdMeetsMinimum(holds[t] && holds[t].durationMs, this.minHoldDays);
+                    return this.tagFilterMode === 'all'
+                        ? this.tagFilters.every(held)
+                        : this.tagFilters.some(held);
+                });
+            }
+
             if (this.search.trim()) {
                 const q = this.search.trim().toLowerCase();
                 result = result.filter(p => p.name?.toLowerCase().includes(q));
@@ -175,6 +212,47 @@ document.addEventListener('alpine:init', () => {
         getTagName(tagId) {
             const tag = this.shepherdingTags.find(t => t.id === tagId);
             return tag ? tag.name : tagId;
+        },
+
+        // ── Hold-Duration filter (ADR-0011) ───────────────────────────────────
+
+        // One collection-group pass over Tag Changes, grouped by person, derived
+        // into current holds via the core. Loaded lazily the first time the filter
+        // is switched on.
+        async loadTagHolds() {
+            try {
+                const snap = await db.collectionGroup('shepherding_activity')
+                    .where('kind', '==', 'tag_change')
+                    .get();
+                const byPerson = {};
+                snap.docs.forEach(doc => {
+                    const personId = doc.ref.parent.parent && doc.ref.parent.parent.id;
+                    if (!personId) return;
+                    (byPerson[personId] || (byPerson[personId] = [])).push(doc.data());
+                });
+                const now = Date.now();
+                const holds = {};
+                this.people.forEach(p => {
+                    holds[p.id] = ShepherdingCore.deriveTagHolds(byPerson[p.id] || [], p.tags || [], now);
+                });
+                this.tagHolds = holds;
+                this.holdsLoaded = true;
+            } catch (e) {
+                console.error('Error loading tag holds:', e);
+            }
+        },
+
+        // Keep minHoldDays in sync when the value or unit input changes.
+        syncMinHold() {
+            const mult = this.minHoldUnit === 'months' ? 30 : this.minHoldUnit === 'years' ? 365 : 1;
+            this.minHoldDays = (Number(this.minHoldValue) || 0) * mult;
+        },
+
+        // Split a stored day count back into the largest whole UI unit.
+        holdValueUnit(days) {
+            if (days > 0 && days % 365 === 0) return { value: days / 365, unit: 'years' };
+            if (days > 0 && days % 30 === 0) return { value: days / 30, unit: 'months' };
+            return { value: days || 0, unit: 'days' };
         },
 
         // ── Status matrix ─────────────────────────────────────────────────────
