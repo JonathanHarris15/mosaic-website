@@ -188,6 +188,9 @@
                         <template x-for="tagId in [...new Set(person?.tags || [])]" :key="tagId">
                             <span class="flex items-center gap-xs px-sm py-xs bg-primary text-on-primary rounded-full font-label-md text-label-md">
                                 <span x-text="getTagName(tagId)"></span>
+                                <span x-show="tagHoldLabel(tagId)" class="opacity-70 text-[11px]"
+                                      :title="'Held for ' + tagHoldLabel(tagId)"
+                                      x-text="'· ' + tagHoldLabel(tagId)"></span>
                                 <button @click="toggleTag(tagId)" class="hover:opacity-70 transition-opacity">
                                     <span class="material-symbols-outlined text-[14px]">close</span>
                                 </button>

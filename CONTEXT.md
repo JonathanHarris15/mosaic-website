@@ -75,12 +75,28 @@ A standalone dated reminder visible to all elders on the Shepherd Landing Page. 
 _Avoid_: Task, to-do, alert
 
 **Shepherding Tag**:
-An elder-defined label that can be applied to a Person within the Shepherding System. Tags are the primary filter criterion for Filtered Views. Any elder or super admin can create, delete, or apply/remove tags on a Person. Examples: "Red Flag", "New Member Follow-up", "Married".
+An elder-defined label that can be applied to a Person within the Shepherding System. Tags are the primary filter criterion for Filtered Views. Any elder or super admin can create, delete, Rename, Merge, or apply/remove tags on a Person. A tag has a stable identity that is independent of its name: renaming a tag changes only its display name, never which Persons carry it. Examples: "Red Flag", "New Member Follow-up", "Married".
 _Avoid_: Label, category, attribute
 
 **Red Flag**:
 A Shepherding Tag (not a built-in field) used as the canonical example of elder-defined tagging. No special UI treatment beyond being a tag.
 _Avoid_: Alert, priority, built-in status
+
+**Rename** (a Shepherding Tag):
+Changing a Shepherding Tag's display name while preserving its identity. Every Person who carried the tag still carries it, every Filtered View still targets it, and every Tag Change already recorded keeps referring to it. Distinct from deleting and recreating a tag, which would strip it from all Persons and lose its history.
+_Avoid_: Retitle, relabel, edit tag
+
+**Tag Merge**:
+Folding one or more Shepherding Tags (the merged tags) into a single surviving Shepherding Tag. Every Person carrying a merged tag is left carrying the surviving tag instead, the merged tags are deleted, and the surviving tag's own flags are kept. Used to consolidate duplicate or superseded tags. A Merge is directional — the elder chooses which tag survives.
+_Avoid_: Combine, collapse, deduplicate
+
+**Tag Hold**:
+The span of time a Person has continuously carried a Shepherding Tag: from the Tag Change that most recently added it (with no later removal) to now. Derived from the Pastoral Record, not stored as a field. A tag applied before Tag Changes were recorded has an unknown Tag Hold. When two tags a Person carries are merged, the surviving tag's Tag Hold reflects the earlier of the two applications (the longer hold).
+_Avoid_: Tag age, tag duration, held-since
+
+**Hold Duration**:
+The length of a Tag Hold, expressed as a human-readable span (e.g. "3 months", "12 days"). The basis of the Hold-Duration filter on a Filtered View, which narrows the view to Persons who have held its filter tag(s) for at least a chosen span.
+_Avoid_: Tenure, elapsed time
 
 **Prayer Request**:
 The specific thing a pastoral-prayer subject asks the church to pray about for a given Sunday. Captured against that Sunday's Pastoral Prayer (i.e. attached to the order of service) and, once captured, also recorded as a Shepherding Note of Note Type "Prayer Request" on the subject's Shepherding Profile (generated once, then independent). May be typed in by an Elder or super admin, or supplied by the subject themselves by replying to an automated text message. Visible only to Elders and super admins.

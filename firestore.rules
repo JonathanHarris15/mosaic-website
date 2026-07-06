@@ -145,6 +145,12 @@ service cloud.firestore {
       allow read: if isElder();
     }
 
+    // Collection group query for shepherding_activity (Tag Changes), used by the
+    // Shepherd Landing Page to derive Tag Hold for the Hold-Duration filter.
+    match /{path=**}/shepherding_activity/{activityId} {
+      allow read: if isElder();
+    }
+
     // Inbound replies to SMS test texts. Written only by the smsInbound webhook
     // (admin SDK, bypasses rules); admins read and clear them from the Admin
     // Dashboard. No client writes.

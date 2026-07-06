@@ -186,6 +186,100 @@
         return result;
     }
 
+    // ── Tag Hold derivation (pure) — ADR-0011 ────────────────────────────────
+    // A Shepherding Tag has a stable identity independent of its name, so Hold
+    // Duration (how long a Person has continuously carried a tag) is derived from
+    // the Tag Change history rather than stored. The current hold begins at the
+    // most recent `added` Tag Change with no later `removed`; the Person's current
+    // `tags` array is the source of truth for what is carried now.
+
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+    // Map of tagId → { heldSinceMs, durationMs } for every currently-carried tag
+    // whose start can be determined. A carried tag with no `added` entry (applied
+    // before Tag Changes were recorded), or one whose last change was a `removed`,
+    // has an unknown hold and is omitted rather than guessed.
+    function deriveTagHolds(activity, currentTags, nowMs) {
+        const carried = new Set(currentTags || []);
+        const byTag = {};
+        for (const e of (activity || [])) {
+            if (!e || (e.action !== 'added' && e.action !== 'removed')) continue;
+            if (!carried.has(e.tagId)) continue;
+            (byTag[e.tagId] || (byTag[e.tagId] = [])).push(e);
+        }
+        const holds = {};
+        for (const tagId of Object.keys(byTag)) {
+            const entries = byTag[tagId]
+                .slice()
+                .sort((a, b) => pastoralEntryTime(a) - pastoralEntryTime(b));
+            // Walk oldest-first; the current hold starts at the first `added` of
+            // the latest uninterrupted run of carrying the tag.
+            let holdStart = null;
+            for (const e of entries) {
+                if (e.action === 'added') {
+                    if (holdStart === null) holdStart = pastoralEntryTime(e);
+                } else {
+                    holdStart = null;
+                }
+            }
+            if (holdStart !== null) {
+                holds[tagId] = { heldSinceMs: holdStart, durationMs: Math.max(0, nowMs - holdStart) };
+            }
+        }
+        return holds;
+    }
+
+    // Render a Hold Duration as a single, largest-unit, human span. An unknown
+    // (null/undefined) duration renders empty so callers can show their own hint.
+    function formatHoldDuration(durationMs) {
+        if (durationMs === null || durationMs === undefined) return '';
+        const days = Math.floor(durationMs / MS_PER_DAY);
+        if (days <= 0) return 'today';
+        if (days < 30) return `${days} ${days === 1 ? 'day' : 'days'}`;
+        const months = Math.floor(days / 30);
+        if (months < 12) return `${months} ${months === 1 ? 'month' : 'months'}`;
+        const years = Math.floor(days / 365);
+        return `${years} ${years === 1 ? 'year' : 'years'}`;
+    }
+
+    // The Hold-Duration filter predicate: a Person passes when the hold is known
+    // and at least minDays old. An unknown hold never passes (ADR-0011).
+    function holdMeetsMinimum(durationMs, minDays) {
+        if (durationMs === null || durationMs === undefined) return false;
+        return durationMs >= minDays * MS_PER_DAY;
+    }
+
+    // ── Tag Merge planning (pure) — ADR-0011 ─────────────────────────────────
+    // Fold one or more merged tags into a surviving tag. For each affected Person:
+    // rewrite the `tags` array (merged ids → survivor, deduped) and re-point their
+    // Tag Changes at the survivor so it inherits the history — and, because
+    // deriveTagHolds then reads the earliest `added` of the run, the earlier (i.e.
+    // longer) hold. The survivor is never among the deleted tags. A browser writer
+    // applies personUpdates / activityRewrites / deleteTagIds in chunked batches.
+    function planTagMerge({ people, mergedTagIds, survivorTagId }) {
+        const mergedSet = new Set((mergedTagIds || []).filter(id => id !== survivorTagId));
+        const personUpdates = [];
+        const activityRewrites = [];
+        for (const p of (people || [])) {
+            const tags = p.tags || [];
+            if (tags.some(t => mergedSet.has(t))) {
+                const seen = new Set();
+                const newTags = [];
+                for (const t of tags) {
+                    const mapped = mergedSet.has(t) ? survivorTagId : t;
+                    if (!seen.has(mapped)) { seen.add(mapped); newTags.push(mapped); }
+                }
+                personUpdates.push({ personId: p.id, newTags });
+            }
+            for (const e of (p.activity || [])) {
+                if (e && mergedSet.has(e.tagId)) {
+                    activityRewrites.push({ personId: p.id, activityId: e.id, tagId: survivorTagId });
+                }
+            }
+        }
+        return { personUpdates, activityRewrites, deleteTagIds: [...mergedSet] };
+    }
+
     const ShepherdingCore = {
         URGENCY_LEVELS,
         IMPORTANCE_LEVELS,
@@ -205,6 +299,10 @@
         pastoralEntryTime,
         assemblePastoralRecord,
         collapsePastoralRecord,
+        deriveTagHolds,
+        formatHoldDuration,
+        holdMeetsMinimum,
+        planTagMerge,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

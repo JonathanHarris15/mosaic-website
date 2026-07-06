@@ -764,12 +764,13 @@ document.addEventListener('alpine:init', () => {
             const exists = this.shepherdingTags.some(t => t.name.toLowerCase() === name.toLowerCase());
             if (exists) { this.showToast('Tag already exists', 'error'); return; }
             try {
-                await db.collection('people_tags').doc(name).set({
+                // Stable auto-id identity, independent of the name (ADR-0011).
+                const ref = await db.collection('people_tags').add({
                     name,
                     hiddenFromOthers: false,
                     hidePeople: false,
                 });
-                this.shepherdingTags = [...this.shepherdingTags, { id: name, name, hiddenFromOthers: false, hidePeople: false }]
+                this.shepherdingTags = [...this.shepherdingTags, { id: ref.id, name, hiddenFromOthers: false, hidePeople: false }]
                     .sort((a, b) => a.name.localeCompare(b.name));
                 this.newTagName = '';
                 this.showToast(`Tag "${name}" created`);
@@ -782,6 +783,21 @@ document.addEventListener('alpine:init', () => {
         getTagName(tagId) {
             const tag = this.shepherdingTags.find(t => t.id === tagId);
             return tag ? tag.name : tagId;
+        },
+
+        // Tag Hold per carried tag, derived from the Pastoral Record (ADR-0011).
+        get tagHolds() {
+            return ShepherdingCore.deriveTagHolds(
+                this.activity,
+                (this.person && this.person.tags) || [],
+                Date.now()
+            );
+        },
+
+        // Human Hold Duration for a tag chip, or '' when the hold is unknown.
+        tagHoldLabel(tagId) {
+            const hold = this.tagHolds[tagId];
+            return hold ? ShepherdingCore.formatHoldDuration(hold.durationMs) : '';
         },
 
         // ── Profile Editing ──────────────────────────────────────────────────

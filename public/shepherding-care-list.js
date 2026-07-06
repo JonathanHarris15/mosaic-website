@@ -524,8 +524,9 @@ document.addEventListener('alpine:init', () => {
             if (!trimmed) throw new Error('Empty tag name');
             const existing = this.shepherdingTags.find(t => t.name.toLowerCase() === trimmed.toLowerCase());
             if (existing) return existing;
-            await db.collection('people_tags').doc(trimmed).set({ name: trimmed, hiddenFromOthers: false, hidePeople: false });
-            const newTag = { id: trimmed, name: trimmed, hidePeople: false };
+            // Stable auto-id identity, independent of the name (ADR-0011).
+            const ref = await db.collection('people_tags').add({ name: trimmed, hiddenFromOthers: false, hidePeople: false });
+            const newTag = { id: ref.id, name: trimmed, hidePeople: false };
             this.shepherdingTags = [...this.shepherdingTags, newTag].sort((a, b) => a.name.localeCompare(b.name));
             return newTag;
         },

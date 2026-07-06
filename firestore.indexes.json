@@ -10,6 +10,21 @@
       ]
     },
     {
+      "collectionGroup": "shepherding_activity",
+      "fieldPath": "kind",
+      "indexes": [
+        { "order": "ASCENDING",  "queryScope": "COLLECTION" },
+        { "order": "ASCENDING",  "queryScope": "COLLECTION_GROUP" }
+      ]
+    },
+    {
+      "collectionGroup": "shepherding_activity",
+      "fieldPath": "tagId",
+      "indexes": [
+        { "order": "ASCENDING",  "queryScope": "COLLECTION" }
+      ]
+    },
+    {
       "collectionGroup": "shepherding_notes",
       "fieldPath": "createdAt",
       "indexes": [

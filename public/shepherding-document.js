@@ -694,9 +694,10 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
                 getCurrentStatus: () => panelCurrentStatus,
                 createTag: async (name) => {
                     const trimmed = name.trim();
-                    await db.collection('people_tags').doc(trimmed).set({ name: trimmed, hiddenFromOthers: false, hidePeople: false });
-                    if (!_allTagsList.find(t => t.id === trimmed)) _allTagsList.push({ id: trimmed, name: trimmed });
-                    return { id: trimmed, name: trimmed };
+                    // Stable auto-id identity, independent of the name (ADR-0011).
+                    const ref = await db.collection('people_tags').add({ name: trimmed, hiddenFromOthers: false, hidePeople: false });
+                    if (!_allTagsList.find(t => t.id === ref.id)) _allTagsList.push({ id: ref.id, name: trimmed });
+                    return { id: ref.id, name: trimmed };
                 },
                 onTagAdd: async (tagId, tagName) => {
                     await ShepherdingCore.commitPastoralChange(db, attrs.personId,
