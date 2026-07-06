@@ -17,8 +17,6 @@
   // Routes not yet ported render the in-shell ComingSoon screen, offering the
   // desktop page as "open full page" — no jarring bounce out of the shell.
   var ROUTE_META = {
-    calendar: { title: "Service Calendar", page: "service-calendar.html" },
-    analytics: { title: "Service Analytics", page: "analytics.html" },
     shepherd: { title: "Shepherd Dashboard", page: "shepherding-dashboard.html" },
     documents: { title: "Document Library", page: "shepherding-documents.html" },
     serviceBuilder: { title: "Service Editor", page: "service-builder.html" },
@@ -72,6 +70,8 @@
   function HomeScreen(props) {
     var user = props.user;
     var first = (user && user.first) || "friend";
+    var svcState = M.useAsync(data.getNextService, []);
+    var svc = svcState.data;
     var tiles = [
       { icon: "book-open", label: "Hymn Directory", route: "hymnDirectory" },
       { icon: "calendar", label: "Service Calendar", route: "calendar" },
@@ -103,10 +103,26 @@
 
           <${Overline} style=${{ marginBottom: 10, paddingLeft: 2 }}>Sunday at a Glance<//>
           <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: 18 }}>
-            <div style=${{ display: "flex", alignItems: "center", gap: 10, color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 14 }}>${Ic("calendar-clock", 18)}<span>Upcoming service details load here.</span></div>
-            <div onClick=${function () { props.nav("calendar"); }} style=${{ marginTop: 14 }}>
-              <${Button} variant="secondary" size="md" style=${{ width: "100%" }} icon=${Ic("calendar", 17)}>Open Service Calendar<//>
-            </div>
+            ${svcState.loading ? html`<div style=${{ color: "var(--on-surface-variant)", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14 }}>Loading service…</div>`
+              : svc ? html`
+                <div style=${{ fontFamily: "var(--font-serif)", fontSize: 20, fontWeight: 600, color: "var(--primary)", lineHeight: 1.2 }}>${svc.theme}</div>
+                <div style=${{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+                  ${[["Preacher", svc.preacher], ["Service Leader", svc.serviceLeader], ["Music Leader", svc.musicLeader]].filter(function (kv) { return kv[1]; }).map(function (kv) {
+                    return html`<div key=${kv[0]} style=${{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+                      <span style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)" }}>${kv[0]}</span>
+                      <span style=${{ fontFamily: "var(--font-sans)", fontSize: 14.5, fontWeight: 500, color: "var(--on-surface)", textAlign: "right" }}>${kv[1]}</span>
+                    </div>`;
+                  })}
+                </div>
+                ${svc.hasBaptism ? html`<div style=${{ display: "flex", gap: 6, marginTop: 14 }}><${Badge} tone="tertiary" icon=${Ic("droplet", 13)}>Baptism<//></div>` : null}
+                <div onClick=${function () { props.nav("serviceBuilder", { date: svc.date }); }} style=${{ marginTop: 14 }}>
+                  <${Button} variant="primary" size="md" style=${{ width: "100%" }} icon=${Ic("square-pen", 17)}>Open in Service Editor<//>
+                </div>`
+              : html`
+                <div style=${{ color: "var(--on-surface-variant)", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14 }}>No upcoming service found.</div>
+                <div onClick=${function () { props.nav("calendar"); }} style=${{ marginTop: 14 }}>
+                  <${Button} variant="secondary" size="md" style=${{ width: "100%" }} icon=${Ic("calendar", 17)}>Open Service Calendar<//>
+                </div>`}
           </div>
         </${Body}>
       </${Screen}>`;

@@ -242,6 +242,112 @@
       </${Screen}>`;
   }
 
+  // ── Shared: segmented control + bar row ──────────────────
+  function Segmented(props) {
+    return html`<div style=${{ display: "flex", background: "var(--surface-container)", borderRadius: "var(--radius)", padding: 3, border: "1px solid var(--outline-variant)" }}>
+      ${props.options.map(function (o) {
+        var on = o === props.value;
+        return html`<button key=${o} onClick=${function () { props.onChange(o); }} style=${{ flex: 1, padding: "8px 6px", border: "none", borderRadius: 7, cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, letterSpacing: "0.02em", background: on ? "var(--surface-container-lowest)" : "transparent", color: on ? "var(--primary)" : "var(--on-surface-variant)", boxShadow: on ? "var(--shadow-xs)" : "none" }}>${o}</button>`;
+      })}
+    </div>`;
+  }
+  function BarRow(props) {
+    var pct = props.max ? Math.round((Number(props.count) / props.max) * 100) : 0;
+    return html`<div style=${{ marginBottom: 12 }}>
+      <div style=${{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+        <span style=${{ fontFamily: "var(--font-sans)", fontSize: 13.5, color: "var(--on-surface)" }}>${props.label}</span>
+        <span style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, color: "var(--on-surface-variant)" }}>${props.count}</span>
+      </div>
+      <div style=${{ height: 7, borderRadius: 4, background: "var(--surface-container-high)", overflow: "hidden" }}>
+        <div style=${{ height: "100%", width: pct + "%", background: props.tone || "var(--secondary)", borderRadius: 4 }}></div>
+      </div>
+    </div>`;
+  }
+
+  function svcLabel(dateStr) {
+    var d = new Date(String(dateStr) + "T00:00:00");
+    if (isNaN(d.getTime())) return { mon: "", day: String(dateStr) };
+    return { mon: d.toLocaleDateString(undefined, { month: "short" }).toUpperCase(), day: String(d.getDate()) };
+  }
+
+  // ── Service Calendar ─────────────────────────────────────
+  function CalendarScreen(props) {
+    var st = useAsync(data.getServices, []);
+    var tabS = useState("Upcoming");
+    var today = new Date().toISOString().slice(0, 10);
+    var all = st.data || [];
+    var list = all.filter(function (s) {
+      var upcoming = String(s.date) >= today;
+      return tabS[0] === "Upcoming" ? upcoming : !upcoming;
+    });
+    return html`
+      <${Screen}>
+        <${TopBar} title="Service Calendar" onMenu=${props.openMenu} />
+        <${Body} style=${{ paddingTop: 14 }}>
+          <div style=${{ padding: "0 16px 14px" }}><${Segmented} options=${["Upcoming", "Past"]} value=${tabS[0]} onChange=${function (o) { tabS[1](o); }} /></div>
+          ${st.loading ? html`<${Loading} label="Loading services…" />` : st.error ? html`<${ErrorNote}>Couldn't load services.<//>` : html`
+            <div style=${{ padding: "0 16px 90px", display: "flex", flexDirection: "column", gap: 12 }}>
+              ${list.map(function (s) {
+                var lab = svcLabel(s.date);
+                var complete = !!(s.theme && s.preacher && s.serviceLeader);
+                return html`<button key=${s.id} onClick=${function () { props.nav("serviceBuilder", { date: s.date }); }} style=${{ display: "flex", gap: 14, width: "100%", textAlign: "left", padding: 16, cursor: "pointer", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)" }}>
+                  <div style=${{ flexShrink: 0, width: 52, textAlign: "center" }}>
+                    <div style=${{ fontFamily: "var(--font-sans)", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.1em", color: "var(--secondary)" }}>${lab.mon}</div>
+                    <div style=${{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 600, color: "var(--primary)", lineHeight: 1 }}>${lab.day}</div>
+                  </div>
+                  <div style=${{ flex: 1, minWidth: 0, borderLeft: "1px solid var(--outline-variant)", paddingLeft: 14 }}>
+                    <div style=${{ fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--on-surface)", lineHeight: 1.25 }}>${s.theme}</div>
+                    ${s.preacher ? html`<div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 4 }}>Preaching · ${s.preacher}</div>` : null}
+                    <div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+                      ${s.hasBaptism ? html`<${Badge} tone="tertiary" icon=${Ic("droplet", 12)}>Baptism<//>` : null}
+                      ${s.sermonette ? html`<${Badge} tone="secondary" icon=${Ic("mic", 12)}>Sermonette<//>` : null}
+                      ${!complete ? html`<${Badge} tone="neutral" icon=${Ic("triangle-alert", 12)}>Incomplete<//>` : null}
+                    </div>
+                  </div>
+                </button>`;
+              })}
+              ${list.length === 0 ? html`<${Empty}>No ${tabS[0].toLowerCase()} services.<//>` : null}
+            </div>`}
+        </${Body}>
+        <${FAB} icon="plus" label="New service" onClick=${function () { props.nav("serviceBuilder", {}); }} />
+      </${Screen}>`;
+  }
+
+  // ── Analytics ────────────────────────────────────────────
+  function AnalyticsScreen(props) {
+    var st = useAsync(data.getAnalytics, []);
+    var rangeS = useState("All");
+    var a = st.data;
+    return html`
+      <${Screen}>
+        <${TopBar} title="Analytics" onMenu=${props.openMenu} />
+        <${Body} style=${{ padding: "14px 16px calc(40px + env(safe-area-inset-bottom,0px))" }}>
+          <div style=${{ marginBottom: 16 }}><${Segmented} options=${["3 mo", "12 mo", "All"]} value=${rangeS[0]} onChange=${function (o) { rangeS[1](o); }} /></div>
+          ${st.loading ? html`<${Loading} label="Crunching numbers…" />` : !a ? html`<${ErrorNote}>Couldn't compute analytics.<//>` : html`
+            <div style=${{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 22 }}>
+              ${[["Services", a.totalServices], ["People", a.uniqueParticipants], ["Baptisms", a.baptisms]].map(function (kv) {
+                return html`<div key=${kv[0]} style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: "16px 8px", textAlign: "center" }}>
+                  <div style=${{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 600, color: "var(--primary)" }}>${kv[1]}</div>
+                  <div style=${{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--on-surface-variant)", marginTop: 3 }}>${kv[0]}</div>
+                </div>`;
+              })}
+            </div>
+            ${a.topPreachers.length ? html`<${Overline} style=${{ marginBottom: 12 }}>Most Frequent Preachers<//>
+              <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: "16px 16px 6px", marginBottom: 22 }}>
+                ${a.topPreachers.map(function (p) { return html`<${BarRow} key=${p.name} label=${p.name} count=${p.count} max=${a.topPreachers[0].count} tone="var(--secondary)" />`; })}
+              </div>` : null}
+            ${a.topHymns.length ? html`<${Overline} style=${{ marginBottom: 12 }}>Most Sung Hymns<//>
+              <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: "16px 16px 6px", marginBottom: 22 }}>
+                ${a.topHymns.map(function (p) { return html`<${BarRow} key=${p.name} label=${p.name} count=${p.count} max=${a.topHymns[0].count} tone="var(--tertiary)" />`; })}
+              </div>` : null}
+            <${Overline} style=${{ marginBottom: 12 }}>Role Coverage<//>
+            <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: "16px 16px 6px" }}>
+              ${a.rolesCoverage.map(function (r) { return html`<${BarRow} key=${r.role} label=${r.role} count=${r.filled + "/" + r.total} max=${r.total} tone=${r.filled === r.total ? "var(--success)" : "var(--warning)"} />`; })}
+            </div>`}
+        </${Body}>
+      </${Screen}>`;
+  }
+
   // ── In-shell placeholder for routes not yet ported ───────
   function ComingSoon(props) {
     var title = (props.params && props.params.title) || "Coming soon";
@@ -264,6 +370,8 @@
     hymnManager: HymnManagerScreen,
     people: PeopleScreen,
     personDetail: PersonDetailScreen,
+    calendar: CalendarScreen,
+    analytics: AnalyticsScreen,
     comingSoon: ComingSoon,
   });
 })();

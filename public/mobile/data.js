@@ -137,12 +137,56 @@
     });
   }
 
+  function todayStr() { return new Date().toISOString().slice(0, 10); }
+
+  // The service to feature on Home: nearest upcoming (date >= today), else most recent.
+  function getNextService() {
+    return getServices().then(function (list) {
+      var t = todayStr();
+      var up = list.filter(function (s) { return String(s.date) >= t; });
+      if (up.length) { up.sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); }); return up[0]; }
+      return list[0] || null;
+    });
+  }
+
+  // Analytics computed from real services + hymns.
+  function getAnalytics() {
+    return Promise.all([getServices(), getHymns()]).then(function (r) {
+      var svcs = r[0], hymns = r[1];
+      function tally(field) {
+        var m = {};
+        svcs.forEach(function (s) { var v = s[field]; if (v) m[v] = (m[v] || 0) + 1; });
+        return Object.keys(m).map(function (k) { return { name: k, count: m[k] }; }).sort(function (a, b) { return b.count - a.count; });
+      }
+      function coverage(field) { return svcs.filter(function (s) { return !!s[field]; }).length; }
+      var people = {};
+      svcs.forEach(function (s) { [s.preacher, s.serviceLeader, s.musicLeader, s.sermonette].forEach(function (n) { if (n) people[n] = 1; }); });
+      var topHymns = hymns.filter(function (h) { return h.uses > 0; }).sort(function (a, b) { return b.uses - a.uses; })
+        .slice(0, 5).map(function (h) { return { name: h.name, count: h.uses }; });
+      var total = svcs.length;
+      return {
+        totalServices: total,
+        uniqueParticipants: Object.keys(people).length,
+        baptisms: svcs.filter(function (s) { return s.hasBaptism; }).length,
+        topPreachers: tally("preacher").slice(0, 5),
+        topHymns: topHymns,
+        rolesCoverage: [
+          { role: "Service Leader", filled: coverage("serviceLeader"), total: total },
+          { role: "Preacher", filled: coverage("preacher"), total: total },
+          { role: "Music Leader", filled: coverage("musicLeader"), total: total },
+          { role: "Sermonette", filled: coverage("sermonette"), total: total },
+        ],
+      };
+    });
+  }
+
   M.data = {
     auth: auth, db: db,
     onUser: onUser, loadProfile: loadProfile,
     signIn: signIn, signOut: signOut,
     DESTINATIONS: DESTINATIONS,
     getHymns: getHymns, getPeople: getPeople, getServices: getServices,
+    getNextService: getNextService, getAnalytics: getAnalytics,
     lc: lc,
   };
 })();
