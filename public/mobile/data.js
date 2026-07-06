@@ -76,16 +76,22 @@
       snap.forEach(function (doc) {
         var d = doc.data() || {};
         var versions = Array.isArray(d.versions) ? d.versions : [];
+        var pages = versions.reduce(function (acc, v) {
+          return acc.concat(Array.isArray(v && v.pages) ? v.pages : []);
+        }, []);
         out.push({
           id: doc.id,
-          name: d.name || d.title || "(untitled)",
-          author: d.attribution || d.author || "",   // real field is `attribution`
+          name: d.hymn_name || d.name || d.title || "(untitled)",
+          lyricsWriter: d.lyrics_writer || "",
+          musicWriter: d.music_writer || "",
+          author: d.lyrics_writer || d.music_writer || "",  // subtitle
+          attribution: d.attribution || "",
           tags: Array.isArray(d.tags) ? d.tags : [],
           keys: d.key ? [d.key] : (Array.isArray(d.keys) ? d.keys : []),
-          meter: d.meter || "",
+          pages: pages,               // flattened sheet-music image URLs
           versionCount: versions.length,
-          hasSheet: versions.length > 0,
-          hasLyrics: !!(d.lyrics && String(d.lyrics).trim()),
+          hasSheet: pages.length > 0,
+          lastPlayed: d.last_played_date || "",
         });
       });
       out.sort(function (a, b) { return a.name.localeCompare(b.name); });

@@ -67,7 +67,7 @@
                     ${h.tags.map(function (t) { return html`<${Badge} key=${t} tone="secondary">${t}<//>`; })}
                     <span style=${{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)" }}>
                       ${h.keys.length ? html`<span>${h.keys.join(", ")}</span>` : null}
-                      ${h.hasSheet ? html`<span style=${{ display: "flex", alignItems: "center", gap: 3 }}>${Ic("music", 13)} ${h.versionCount}</span>` : null}
+                      ${h.hasSheet ? html`<span style=${{ display: "flex", alignItems: "center", gap: 3 }}>${Ic("music", 13)} ${h.pages.length}</span>` : null}
                     </span>
                   </div>` : null}
                 </button>`;
@@ -80,15 +80,16 @@
 
   // ── Hymn Details ─────────────────────────────────────────
   function HymnDetailsScreen(props) {
-    var h = (props.params && props.params.hymn) || { name: "Hymn", author: "", tags: [], keys: [], versionCount: 0, hasSheet: false, hasLyrics: false };
-    var stats = [["Key", h.keys.length ? h.keys.join(", ") : "—"], ["Sheets", String(h.versionCount || 0)], ["Lyrics", h.hasLyrics ? "Yes" : "No"]];
+    var h = (props.params && props.params.hymn) || { name: "Hymn", lyricsWriter: "", musicWriter: "", tags: [], keys: [], pages: [], lastPlayed: "" };
+    var writers = [h.lyricsWriter ? "Words: " + h.lyricsWriter : "", h.musicWriter ? "Music: " + h.musicWriter : ""].filter(Boolean).join("  ·  ");
+    var stats = [["Sheets", String(h.pages.length)], ["Tags", String(h.tags.length)], ["Last sung", h.lastPlayed ? String(h.lastPlayed).slice(0, 10) : "—"]];
     return html`
       <${Screen}>
         <${TopBar} title="Hymn" onBack=${props.back} serif=${false} />
         <${Body} style=${{ padding: "20px 16px calc(40px + env(safe-area-inset-bottom,0px))" }}>
           ${h.tags.length ? html`<${Overline}>${h.tags.join(" · ")}<//>` : null}
           <div style=${{ fontFamily: "var(--font-serif)", fontSize: 28, fontWeight: 600, color: "var(--primary)", lineHeight: 1.2, marginTop: 8 }}>${h.name}</div>
-          ${h.author ? html`<div style=${{ fontFamily: "var(--font-serif)", fontSize: 16, fontStyle: "italic", color: "var(--on-surface-variant)", marginTop: 4 }}>${h.author}</div>` : null}
+          ${writers ? html`<div style=${{ fontFamily: "var(--font-serif)", fontSize: 15, fontStyle: "italic", color: "var(--on-surface-variant)", marginTop: 4 }}>${writers}</div>` : null}
           <div style=${{ display: "flex", gap: 10, marginTop: 18 }}>
             ${stats.map(function (kv) { return html`<div key=${kv[0]} style=${{ flex: 1, background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", padding: "12px 10px", textAlign: "center" }}>
               <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--on-surface)" }}>${kv[1]}</div>
@@ -96,10 +97,12 @@
             </div>`; })}
           </div>
           <${Overline} style=${{ margin: "22px 0 10px" }}>Sheet Music<//>
-          <div style=${{ position: "relative", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", height: 180, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, color: "var(--on-surface-variant)" }}>
-            <span>${Ic("music", 30)}</span>
-            <span style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5 }}>${h.hasSheet ? h.versionCount + " sheet version" + (h.versionCount === 1 ? "" : "s") + " available" : "No sheet music uploaded yet"}</span>
-          </div>
+          ${h.pages.length ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 12 }}>
+            ${h.pages.map(function (url, i) { return html`<img key=${i} src=${url} alt=${"Sheet page " + (i + 1)} loading="lazy" style=${{ width: "100%", display: "block", borderRadius: "var(--radius-xl)", border: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)" }} />`; })}
+          </div>` : html`<div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", height: 140, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, color: "var(--on-surface-variant)" }}>
+            <span>${Ic("music", 28)}</span>
+            <span style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5 }}>No sheet music uploaded yet</span>
+          </div>`}
           <div style=${{ display: "flex", gap: 10, marginTop: 20 }}>
             <div style=${{ flex: 1 }}><${Button} variant="primary" size="md" style=${{ width: "100%" }} icon=${Ic("plus", 17)}>Add to Service<//></div>
             <div style=${{ flex: 1 }}><${Button} variant="secondary" size="md" style=${{ width: "100%" }} icon=${Ic("file-down", 17)}>Download<//></div>
@@ -139,7 +142,7 @@
                     <div style=${{ fontFamily: "var(--font-serif)", fontSize: 16, fontWeight: 600, color: "var(--on-surface)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>${h.name}</div>
                     <div style=${{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
                       ${h.hasSheet
-                        ? html`<span style=${{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--success)" }}>${Ic("music", 13)} ${h.versionCount} sheet${h.versionCount === 1 ? "" : "s"}</span>`
+                        ? html`<span style=${{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--success)" }}>${Ic("music", 13)} ${h.pages.length} page${h.pages.length === 1 ? "" : "s"}</span>`
                         : html`<span style=${{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--on-surface-variant)" }}>${Ic("music-2", 13)} No sheet music</span>`}
                     </div>
                   </div>
