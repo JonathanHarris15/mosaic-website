@@ -216,6 +216,9 @@ document.addEventListener('alpine:init', () => {
         currentUser: null,
         currentUserRole: null,
         currentUserName: '',
+        // Dev-only blur (shepherding-blur.js): true when this profile is the
+        // current user's own Person record, so nothing on it is screened.
+        ownProfile: false,
 
         personId: null,
         person: null,
@@ -279,6 +282,15 @@ document.addEventListener('alpine:init', () => {
                 this.currentUserName = (userData && userData.email)
                     ? userData.email.split('@')[0]
                     : 'Elder';
+
+                // Dev-only privacy screen. Content on the current user's own
+                // profile is never blurred (it's about them).
+                this.ownProfile = !!(userData && userData.personId && userData.personId === this.personId);
+                ShepherdingBlur.configure({
+                    role: this.currentUserRole,
+                    uid: user.uid,
+                    personId: userData && userData.personId,
+                });
 
                 await Promise.all([
                     this.loadPerson(),

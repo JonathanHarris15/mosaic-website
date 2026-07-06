@@ -928,6 +928,13 @@ document.addEventListener('alpine:init', () => {
                 _currentUserName = this.currentUserName;
                 _currentUserId   = user.uid;
 
+                // Dev-only privacy screen (shepherding-blur.js).
+                ShepherdingBlur.configure({
+                    role: this.currentUserRole,
+                    uid: user.uid,
+                    personId: userData && userData.personId,
+                });
+
                 await this.loadDoc();
                 this.loading = false;
                 this.$nextTick(() => this.initEditor());

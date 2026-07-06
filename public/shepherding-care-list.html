@@ -217,15 +217,15 @@
                         <div class="w-56 flex-shrink-0 px-md py-sm flex flex-col gap-xs sticky left-0 z-10 border-r border-outline-variant"
                              :class="idx % 2 === 0 ? 'bg-surface-container-lowest' : 'bg-surface-container-low'">
                             <a :href="'shepherding-profile.html?id=' + person.id + '&fromPage=carelist&fromId=' + encodeURIComponent(docId) + '&fromTitle=' + encodeURIComponent(title)"
-                               class="font-semibold text-primary hover:underline text-sm leading-tight" x-text="person.name"></a>
-                            <div class="flex flex-wrap gap-1">
+                               class="font-semibold text-primary hover:underline text-sm leading-tight" :class="ShepherdingBlur.nameClass({filterContext: true})" x-text="person.name"></a>
+                            <div class="flex flex-wrap gap-1" :class="ShepherdingBlur.pastoralClass()">
                                 <template x-for="tagId in [...new Set(person.tags || [])]" :key="tagId">
                                     <span class="text-[10px] bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded-full"
                                           x-text="getTagName(tagId)"></span>
                                 </template>
                             </div>
                             <template x-if="person.shepherdingStatus">
-                                <span class="text-[10px] text-secondary font-medium" x-text="formatStatusShort(person.shepherdingStatus)"></span>
+                                <span class="text-[10px] text-secondary font-medium" :class="ShepherdingBlur.pastoralClass()" x-text="formatStatusShort(person.shepherdingStatus)"></span>
                             </template>
                         </div>
 
@@ -235,6 +235,7 @@
                                  :class="activePersonId === person.id && activeColId === col.id ? 'ring-2 ring-inset ring-primary/40' : ''">
                                 <div :id="'editor-' + person.id + '-' + col.id"
                                      class="h-full cursor-text min-h-[100px]"
+                                     :class="ShepherdingBlur.pastoralClass()"
                                      @focusin="activePersonId = person.id; activeColId = col.id"></div>
                             </div>
                         </template>
@@ -256,6 +257,7 @@
     </div>
 
     <script src="shepherding-core.js"></script>
+    <script src="shepherding-blur.js"></script>
     <script src="shepherding-inline-triggers.js"></script>
     <script src="shepherding-care-list.js"></script>
     <script src="shepherding-key-legend.js"></script>

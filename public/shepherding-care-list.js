@@ -199,6 +199,13 @@ document.addEventListener('alpine:init', () => {
                 this.currentUser = user;
                 this.currentUserName = (userData && userData.email) ? userData.email.split('@')[0] : 'Elder';
 
+                // Dev-only privacy screen (shepherding-blur.js).
+                ShepherdingBlur.configure({
+                    role: this.currentUserRole,
+                    uid: user.uid,
+                    personId: userData && userData.personId,
+                });
+
                 await Promise.all([this.loadDoc(), this.loadPeople(), this.loadTags()]);
                 this.applyFilter();
 

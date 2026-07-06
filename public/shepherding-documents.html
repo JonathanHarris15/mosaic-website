@@ -144,6 +144,7 @@
                         </template>
                         <template x-if="renamingItemId !== item.id">
                             <span class="font-body-md text-on-surface text-sm truncate"
+                                  :class="docItemBlurClass(item)"
                                   x-text="item.type === 'folder' ? item.name : getDocTitle(item.id)">
                             </span>
                         </template>
@@ -381,6 +382,7 @@
     </div>
 
     <script src="shepherding-core.js"></script>
+    <script src="shepherding-blur.js"></script>
     <script src="shepherding-documents.js"></script>
 </body>
 </html>

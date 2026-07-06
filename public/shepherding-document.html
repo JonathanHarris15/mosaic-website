@@ -98,6 +98,7 @@
                x-model="title"
                @input="onTitleInput()"
                placeholder="Document title…"
+               :class="ShepherdingBlur.contentClass(doc?.authorUid)"
                class="w-full font-headline-lg text-headline-lg text-primary bg-transparent border-0 border-b-2 border-transparent focus:border-outline-variant focus:outline-none pb-xs transition-colors placeholder-outline" />
 
         <!-- Metadata -->
@@ -231,6 +232,7 @@
             <!-- TipTap mount point -->
             <div id="tiptap-doc-editor"
                  class="font-body-md text-on-surface bg-surface-container-lowest flex-grow overflow-y-auto cursor-text rounded-b-xl"
+                 :class="ShepherdingBlur.contentClass(doc?.authorUid)"
                  @click="if (!$event.target.closest('.person-panel')) focusEditor()">
             </div>
         </div>
@@ -351,6 +353,7 @@
     </div>
 
     <script src="shepherding-core.js"></script>
+    <script src="shepherding-blur.js"></script>
     <script src="shepherding-inline-triggers.js"></script>
     <script src="shepherding-document.js"></script>
     <script src="shepherding-key-legend.js"></script>

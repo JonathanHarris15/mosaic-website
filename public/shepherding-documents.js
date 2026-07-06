@@ -71,6 +71,13 @@ document.addEventListener('alpine:init', () => {
                 this.currentUserName = (userData && userData.email)
                     ? userData.email.split('@')[0] : 'Elder';
 
+                // Dev-only privacy screen (shepherding-blur.js).
+                ShepherdingBlur.configure({
+                    role: this.currentUserRole,
+                    uid: user.uid,
+                    personId: userData && userData.personId,
+                });
+
                 await this.loadData();
 
                 const params = new URLSearchParams(window.location.search);
@@ -189,6 +196,14 @@ document.addEventListener('alpine:init', () => {
 
         getDocTitle(id) {
             return this.allDocs[id]?.title || 'Untitled Document';
+        },
+
+        // Dev-only blur class for a directory item: Elder Document titles are elder
+        // content, so they screen unless the current user authored them. Folders are
+        // structural navigation and never blur.
+        docItemBlurClass(item) {
+            if (!item || item.type === 'folder') return '';
+            return ShepherdingBlur.contentClass(this.allDocs[item.id]?.authorUid);
         },
 
         getDocType(id) {

@@ -92,6 +92,13 @@ document.addEventListener('alpine:init', () => {
                 }
                 this.currentUser = user;
 
+                // Dev-only privacy screen (shepherding-blur.js).
+                ShepherdingBlur.configure({
+                    role: this.currentUserRole,
+                    uid: user.uid,
+                    personId: userData && userData.personId,
+                });
+
                 await Promise.all([
                     this.loadPeople(),
                     this.loadTags(),
@@ -253,6 +260,16 @@ document.addEventListener('alpine:init', () => {
         },
         holdShort(tagId) { return ShepherdingCore.formatHoldShort(this.tagHoldFilters[tagId] || 0); },
         anyHoldActive() { return Object.values(this.tagHoldFilters).some(d => d > 0); },
+
+        // Dev-only blur: a shepherding filter is active when the list is narrowed
+        // by tag, status zone, or Hold Duration. In that case a person's presence
+        // reveals sensitive membership, so their name is screened for the super
+        // admin (shepherding-blur.js nameClass).
+        get shepherdingFilterActive() {
+            return this.tagFilters.length > 0
+                || this.statusZoneFilters.length > 0
+                || this.anyHoldActive();
+        },
         // Direction: '<' (held less than) or '>' (held at least, the default).
         holdCmpSymbol(tagId) { return this.tagHoldCmp[tagId] === 'lt' ? '<' : '>'; },
         toggleHoldCmp(tagId) {

@@ -33,6 +33,14 @@ document.addEventListener('alpine:init', () => {
                     return;
                 }
                 this.currentUser = user;
+                // Dev-only privacy screen (shepherding-blur.js). This page shows only
+                // tag vocabulary (no person associations), so nothing is blurred here;
+                // configure keeps the toggle available for consistency.
+                ShepherdingBlur.configure({
+                    role: this.currentUserRole,
+                    uid: user.uid,
+                    personId: userData && userData.personId,
+                });
                 await this.loadTags();
                 this.loading = false;
             });

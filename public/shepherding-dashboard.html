@@ -171,9 +171,9 @@
                                 <tbody>
                                     <template x-for="person in getPeopleForView(view)" :key="person.id">
                                         <tr class="border-t border-outline-variant hover:bg-surface-container-low transition-colors">
-                                            <td class="px-lg py-sm font-body-md text-on-surface" x-text="person.name"></td>
+                                            <td class="px-lg py-sm font-body-md text-on-surface" :class="ShepherdingBlur.nameClass({filterContext: true})" x-text="person.name"></td>
                                             <td class="px-lg py-sm hidden md:table-cell">
-                                                <div class="flex flex-wrap gap-xs">
+                                                <div class="flex flex-wrap gap-xs" :class="ShepherdingBlur.pastoralClass()">
                                                     <template x-for="tagId in (person.tags || [])" :key="tagId">
                                                         <span class="px-xs py-[2px] bg-primary-fixed text-on-primary-fixed rounded font-label-md text-label-md"
                                                               x-text="getTagName(tagId)"></span>
@@ -215,7 +215,7 @@
                     <template x-for="reminder in reminders" :key="reminder.id">
                         <li class="flex items-start justify-between gap-sm bg-surface-container rounded-lg px-md py-sm">
                             <div class="flex flex-col gap-xs min-w-0">
-                                <span class="font-body-md text-on-surface" x-text="reminder.title"></span>
+                                <span class="font-body-md text-on-surface" :class="ShepherdingBlur.contentClass(reminder.createdBy)" x-text="reminder.title"></span>
                                 <span class="font-label-md text-label-md text-on-surface-variant flex items-center gap-xs">
                                     <span class="material-symbols-outlined text-[14px]">schedule</span>
                                     <span x-text="formatDatetime(reminder.dueDatetime)"></span>
@@ -396,6 +396,7 @@
     </div>
 
     <script src="shepherding-core.js"></script>
+    <script src="shepherding-blur.js"></script>
     <script src="shepherding-dashboard.js"></script>
 </body>
 </html>

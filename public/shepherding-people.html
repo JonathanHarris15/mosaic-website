@@ -297,7 +297,7 @@
                             <tr class="hover:bg-primary/5 transition-colors group cursor-pointer"
                                 @click="window.location.href = `shepherding-profile.html?id=${person.id}`">
                                 <td class="px-6 py-4">
-                                    <div class="font-body-md text-on-surface font-bold group-hover:text-primary transition-colors" x-text="person.name"></div>
+                                    <div class="font-body-md text-on-surface font-bold group-hover:text-primary transition-colors" :class="ShepherdingBlur.nameClass({filterContext: shepherdingFilterActive})" x-text="person.name"></div>
                                 </td>
                                 <td class="px-6 py-4 hidden lg:table-cell">
                                     <div class="flex items-center gap-2">
@@ -305,7 +305,7 @@
                                                 class="w-7 h-7 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-primary-fixed/30 hover:text-primary transition-all shrink-0">
                                             <span class="material-symbols-outlined text-[18px]">edit</span>
                                         </button>
-                                        <div class="flex flex-wrap gap-1.5">
+                                        <div class="flex flex-wrap gap-1.5" :class="ShepherdingBlur.pastoralClass()">
                                             <template x-for="tagId in (person.tags || [])" :key="tagId">
                                                 <span class="px-2 py-0.5 bg-primary-fixed/50 text-on-primary-fixed rounded text-[10px] font-bold uppercase tracking-tighter border border-primary-fixed">
                                                     <span x-text="getTagName(tagId)"></span>
@@ -318,7 +318,7 @@
                                 </td>
                                 <td class="px-6 py-4 hidden md:table-cell">
                                     <template x-if="person.shepherdingStatus">
-                                        <div class="flex flex-col gap-0.5">
+                                        <div class="flex flex-col gap-0.5" :class="ShepherdingBlur.pastoralClass()">
                                             <span class="font-label-md text-[10px] uppercase tracking-wider font-bold"
                                                   :class="person.shepherdingStatus.urgency === 'urgent' && person.shepherdingStatus.importance === 'important' ? 'text-error' : 'text-secondary'"
                                                   x-text="urgencyLabel(person.shepherdingStatus.urgency)"></span>
@@ -333,7 +333,7 @@
                                 <td class="px-6 py-4">
                                     <div class="flex flex-col gap-0.5">
                                         <span class="font-label-md text-sm font-semibold"
-                                              :class="lastNoteColor(person.id)"
+                                              :class="lastNoteColor(person.id) + ' ' + ShepherdingBlur.pastoralClass()"
                                               x-text="formatLastNote(person.id)"></span>
                                         <span x-show="lastNoteDates[person.id]" class="text-[10px] text-on-surface-variant/60 uppercase font-bold tracking-tighter">Recorded Date</span>
                                     </div>
@@ -463,6 +463,7 @@
     </div>
 
     <script src="shepherding-core.js"></script>
+    <script src="shepherding-blur.js"></script>
     <script src="shepherding-people.js"></script>
 </body>
 </html>
