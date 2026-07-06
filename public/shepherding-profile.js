@@ -953,6 +953,40 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        // The id of the newest Status Change in the record. Only this change is
+        // undoable: undoing it reverts the Person's current status to what this
+        // change replaced, so it must be the one currently in force. Once it's
+        // undone (and deleted), the next-newest becomes the latest and, in turn,
+        // undoable — giving a natural step-back through the history.
+        get latestStatusChangeId() {
+            const latest = this.activity.find(a => a.kind === 'status_change');
+            return latest ? latest.id : null;
+        },
+
+        canUndoStatusChange(entry) {
+            return !!entry && entry.id === this.latestStatusChangeId;
+        },
+
+        // Undo an accidental status change straight from the timeline: restore
+        // the status this change replaced and delete the change's record, in one
+        // atomic batch (ADR-0005 mirror — revertPastoralChange).
+        async undoStatusChange(entry) {
+            if (!this.canUndoStatusChange(entry)) return;
+            const restored = entry.previousStatus || null;
+            try {
+                await ShepherdingCore.revertPastoralChange(db, this.personId, {
+                    shepherdingStatus: restored,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                }, entry.id);
+                this.person.shepherdingStatus = restored;
+                await this.loadActivity();
+                this.showToast('Status change undone');
+            } catch (e) {
+                console.error('Error undoing status change:', e);
+                this.showToast('Error undoing change', 'error');
+            }
+        },
+
         formatStatus(status) {
             if (!status) return '';
             return `${URGENCY_LABEL[status.urgency] || status.urgency} · ${IMPORTANCE_LABEL[status.importance] || status.importance}`;

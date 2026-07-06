@@ -206,7 +206,8 @@
                         <div class="flex flex-wrap gap-xs">
                             <template x-for="tag in shepherdingTags.filter(t => !hasTag(t.id))" :key="tag.id">
                                 <button @click="toggleTag(tag.id)"
-                                    class="px-sm py-xs bg-surface-container text-on-surface hover:bg-surface-container-high rounded-full font-label-md text-label-md transition-colors flex items-center gap-xs">
+                                    class="px-sm py-xs bg-surface-container text-on-surface hover:bg-surface-container-high rounded-full font-label-md text-label-md transition-colors flex items-center gap-xs"
+                                    :class="ShepherdingBlur.pastoralClass({ownProfile})">
                                     <span class="material-symbols-outlined text-[14px]">add</span>
                                     <span x-text="tag.name"></span>
                                 </button>
@@ -237,7 +238,7 @@
                     <h2 class="font-headline-md text-headline-md text-primary">Pastoral Status</h2>
 
                     <!-- Matrix grid -->
-                    <div class="flex flex-col gap-1">
+                    <div class="flex flex-col gap-1" :class="ShepherdingBlur.pastoralClass({ownProfile})">
                         <!-- Column headers -->
                         <div class="grid gap-1" style="grid-template-columns: 72px 52px 52px 52px">
                             <div></div>
@@ -252,11 +253,11 @@
                                      x-text="imp === 'important' ? 'Important' : imp === 'somewhat_important' ? 'Somewhat' : 'Not Imp.'"></div>
                                 <template x-for="urg in ['urgent', 'somewhat_urgent', 'not_urgent']" :key="urg">
                                     <button @click="setShepherdingStatus(urg, imp)"
-                                        :class="isCurrentStatus(urg, imp)
+                                        :class="isCurrentStatus(urg, imp) && !ShepherdingBlur.pastoralClass({ownProfile})
                                             ? 'bg-primary border-primary ring-2 ring-primary/30 shadow-md'
                                             : statusCellColor(urg, imp) + ' hover:border-outline hover:bg-surface-container-high'"
                                         class="w-[52px] h-[52px] border-2 rounded-lg flex items-center justify-center transition-all duration-150 cursor-pointer">
-                                        <span x-show="isCurrentStatus(urg, imp)"
+                                        <span x-show="isCurrentStatus(urg, imp) && !ShepherdingBlur.pastoralClass({ownProfile})"
                                               class="w-3 h-3 rounded-full bg-on-primary shadow-sm"></span>
                                     </button>
                                 </template>
@@ -564,6 +565,12 @@
                                         <template x-if="entry.source === 'people_list'">
                                             <span class="font-label-md text-label-md text-on-surface-variant italic">via People list</span>
                                         </template>
+                                        <button x-show="canUndoStatusChange(entry)" @click="undoStatusChange(entry)"
+                                            class="ml-auto flex items-center gap-xs text-xs text-on-surface-variant hover:text-error transition-colors font-label-md flex-shrink-0"
+                                            title="Undo this status change and restore the previous status">
+                                            <span class="material-symbols-outlined text-[14px]">undo</span>
+                                            <span>Undo</span>
+                                        </button>
                                     </div>
                                     <div class="flex items-center gap-md border-t border-outline-variant pt-sm" :class="ShepherdingBlur.contentClass(entry.authorUid, {ownProfile})">
                                         <!-- From -->
