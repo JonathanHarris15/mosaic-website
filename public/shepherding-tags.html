@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Manage Tags | Mosaic</title>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="mosaic-theme.js"></script>
+    <style type="text/tailwindcss">
+        [x-cloak] { display: none !important; }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="auth.js"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+
+<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+      x-data="shepherdingTags" x-cloak>
+
+    <!-- Header -->
+    <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
+        <a href="shepherding-dashboard.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
+            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+            <span class="font-label-md text-label-md">Shepherd Dashboard</span>
+        </a>
+        <div id="auth-container" class="flex items-center">
+            <div class="h-10"></div>
+        </div>
+    </header>
+
+    <!-- Loading state -->
+    <div x-show="loading" class="flex-grow flex items-center justify-center">
+        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    </div>
+
+    <!-- Main content -->
+    <main x-show="!loading" class="flex-grow max-w-3xl w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
+
+        <!-- Page Title -->
+        <div>
+            <h1 class="font-headline-lg text-headline-lg text-primary">Manage Tags</h1>
+            <p class="font-body-md text-body-md text-on-surface-variant mt-xs">Create, rename, merge, and delete shepherding tags. Hover a tag for its actions.</p>
+        </div>
+
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-md">
+
+            <!-- Create new tag -->
+            <div class="flex gap-sm">
+                <input type="text" x-model="newTagName" placeholder="New tag name"
+                       @keydown.enter="addTag()"
+                       class="flex-grow border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                <button @click="addTag()"
+                    :disabled="!newTagName.trim()"
+                    class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    Create
+                </button>
+            </div>
+
+            <!-- Tag list -->
+            <ul class="flex flex-col gap-xs">
+                <template x-for="tag in shepherdingTags" :key="tag.id">
+                    <li class="group flex flex-col gap-xs px-sm py-sm rounded-lg border border-transparent hover:border-outline-variant hover:bg-surface-container transition-colors">
+                        <div class="flex items-center justify-between gap-sm">
+                            <span x-show="editingTagId !== tag.id" class="font-body-md text-on-surface" x-text="tag.name"></span>
+                            <input x-show="editingTagId === tag.id" type="text" x-model="editingTagName"
+                                   @keydown.enter="renameTag(tag.id)" @keydown.escape="cancelRenameTag()"
+                                   class="flex-grow border border-outline-variant rounded px-sm py-[2px] font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                            <div class="flex items-center gap-sm flex-shrink-0"
+                                 :class="editingTagId === tag.id || mergingTagId === tag.id ? '' : 'opacity-0 group-hover:opacity-100 transition-opacity'">
+                                <button x-show="editingTagId === tag.id" @click="renameTag(tag.id)"
+                                    class="text-primary transition-colors" title="Save name">
+                                    <span class="material-symbols-outlined text-[20px]">check</span>
+                                </button>
+                                <button x-show="editingTagId !== tag.id" @click="startRenameTag(tag)"
+                                    class="text-outline-variant hover:text-primary transition-colors" title="Rename tag">
+                                    <span class="material-symbols-outlined text-[20px]">edit</span>
+                                </button>
+                                <button x-show="editingTagId !== tag.id" @click="startMergeTag(tag)"
+                                    :class="mergingTagId === tag.id ? 'text-primary' : 'text-outline-variant hover:text-primary'"
+                                    class="transition-colors" title="Merge into another tag">
+                                    <span class="material-symbols-outlined text-[20px]">merge</span>
+                                </button>
+                                <button @click="toggleTagFlag(tag.id, 'hiddenFromOthers')"
+                                    :class="tag.hiddenFromOthers ? 'text-primary' : 'text-outline-variant hover:text-primary'"
+                                    :title="tag.hiddenFromOthers ? 'Hidden from non-admins' : 'Visible to all'"
+                                    class="transition-colors">
+                                    <span class="material-symbols-outlined text-[20px]" x-text="tag.hiddenFromOthers ? 'visibility_off' : 'visibility'"></span>
+                                </button>
+                                <button @click="toggleTagFlag(tag.id, 'hidePeople')"
+                                    :class="tag.hidePeople ? 'text-primary' : 'text-outline-variant hover:text-primary'"
+                                    :title="tag.hidePeople ? 'People with this tag are hidden from non-admins' : 'People with this tag are visible'"
+                                    class="transition-colors">
+                                    <span class="material-symbols-outlined text-[20px]" x-text="tag.hidePeople ? 'person_off' : 'person'"></span>
+                                </button>
+                                <button @click="deleteTag(tag.id, tag.name)"
+                                    class="text-on-surface-variant hover:text-error transition-colors">
+                                    <span class="material-symbols-outlined text-[20px]">delete</span>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Merge survivor picker -->
+                        <div x-show="mergingTagId === tag.id" class="flex flex-col gap-xs bg-surface-container-low rounded-lg p-sm">
+                            <span class="text-xs text-on-surface-variant">Merge <span class="font-medium" x-text="tag.name"></span> into…</span>
+                            <div class="flex flex-wrap gap-xs">
+                                <template x-for="other in shepherdingTags.filter(t => t.id !== tag.id)" :key="other.id">
+                                    <button @click="mergeTagInto(other.id)"
+                                        class="px-sm py-[2px] bg-surface-container text-on-surface hover:bg-primary hover:text-on-primary rounded-full font-label-md text-label-md transition-colors"
+                                        x-text="other.name"></button>
+                                </template>
+                                <span x-show="shepherdingTags.length <= 1" class="text-xs italic text-on-surface-variant">No other tag to merge into.</span>
+                            </div>
+                            <button @click="cancelMergeTag()" class="self-start text-xs text-on-surface-variant hover:text-error transition-colors">Cancel</button>
+                        </div>
+                    </li>
+                </template>
+                <li x-show="shepherdingTags.length === 0" class="text-on-surface-variant italic text-sm px-sm py-md">
+                    No tags yet. Create one above.
+                </li>
+            </ul>
+        </div>
+    </main>
+
+    <!-- Toast -->
+    <div x-show="toast.show" x-cloak x-transition
+         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-lg py-sm rounded-lg shadow-lg font-label-md text-label-md"
+         :class="toast.type === 'error' ? 'bg-error text-on-error' : 'bg-inverse-surface text-inverse-on-surface'">
+        <span x-text="toast.message"></span>
+    </div>
+
+    <script src="shepherding-core.js"></script>
+    <script src="shepherding-tags.js"></script>
+</body>
+</html>

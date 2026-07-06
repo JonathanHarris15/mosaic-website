@@ -70,13 +70,13 @@
             </a>
 
             <!-- Manage Tags -->
-            <button @click="showTagModal = true" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300 w-full">
+            <a href="shepherding-tags.html" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
                 <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
                     <span class="material-symbols-outlined text-[28px] text-primary" style='font-variation-settings: "FILL" 1;'>label</span>
                 </div>
                 <h2 class="font-headline-md text-headline-md text-on-surface mb-xs">Manage Tags</h2>
-                <p class="font-body-md text-body-md text-on-surface-variant text-sm">Create &amp; delete shepherding tags.</p>
-            </button>
+                <p class="font-body-md text-body-md text-on-surface-variant text-sm">Create, rename &amp; merge shepherding tags.</p>
+            </a>
         </div>
 
         <!-- Content area: Filtered Views + Reminders side panel -->
@@ -86,7 +86,7 @@
             <section class="flex-1 min-w-0 flex flex-col gap-md">
                 <div class="flex items-center justify-between">
                     <h2 class="font-headline-md text-headline-md text-primary">Filtered Views</h2>
-                    <button @click="editingViewId = null; newView = { title: '', filterTags: [], filterMode: 'any' }; showViewModal = true"
+                    <button @click="editingViewId = null; newView = blankView(); showViewModal = true"
                         class="flex items-center gap-1 px-md py-xs bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary/90 transition-colors">
                         <span class="material-symbols-outlined text-[18px]">add</span>
                         New View
@@ -371,94 +371,6 @@
                     class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                     <span x-text="editingViewId ? 'Save Changes' : 'Create View'"></span>
                 </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Manage Tags Modal -->
-    <div x-show="showTagModal" x-cloak
-         class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
-         @click.self="showTagModal = false">
-        <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-md flex flex-col gap-md">
-            <h2 class="font-headline-md text-headline-md text-primary">Manage Tags</h2>
-
-            <!-- Create new tag -->
-            <div class="flex gap-sm">
-                <input type="text" x-model="newTagName" placeholder="New tag name"
-                       @keydown.enter="addTag()"
-                       class="flex-grow border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                <button @click="addTag()"
-                    :disabled="!newTagName.trim()"
-                    class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                    Create
-                </button>
-            </div>
-
-            <!-- Tag list -->
-            <ul class="flex flex-col gap-xs max-h-64 overflow-y-auto">
-                <template x-for="tag in shepherdingTags" :key="tag.id">
-                    <li class="group flex flex-col gap-xs px-sm py-xs rounded-lg hover:bg-surface-container transition-colors">
-                        <div class="flex items-center justify-between gap-sm">
-                            <span x-show="editingTagId !== tag.id" class="font-body-md text-on-surface" x-text="tag.name"></span>
-                            <input x-show="editingTagId === tag.id" type="text" x-model="editingTagName"
-                                   @keydown.enter="renameTag(tag.id)" @keydown.escape="cancelRenameTag()"
-                                   class="flex-grow border border-outline-variant rounded px-sm py-[2px] font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                            <div class="flex items-center gap-xs flex-shrink-0"
-                                 :class="editingTagId === tag.id || mergingTagId === tag.id ? '' : 'opacity-0 group-hover:opacity-100 transition-opacity'">
-                                <button x-show="editingTagId === tag.id" @click="renameTag(tag.id)"
-                                    class="text-primary transition-colors" title="Save name">
-                                    <span class="material-symbols-outlined text-[18px]">check</span>
-                                </button>
-                                <button x-show="editingTagId !== tag.id" @click="startRenameTag(tag)"
-                                    class="text-outline-variant hover:text-primary transition-colors" title="Rename tag">
-                                    <span class="material-symbols-outlined text-[18px]">edit</span>
-                                </button>
-                                <button x-show="editingTagId !== tag.id" @click="startMergeTag(tag)"
-                                    :class="mergingTagId === tag.id ? 'text-primary' : 'text-outline-variant hover:text-primary'"
-                                    class="transition-colors" title="Merge into another tag">
-                                    <span class="material-symbols-outlined text-[18px]">merge</span>
-                                </button>
-                                <button @click="toggleTagFlag(tag.id, 'hiddenFromOthers')"
-                                    :class="tag.hiddenFromOthers ? 'text-primary' : 'text-outline-variant hover:text-primary'"
-                                    :title="tag.hiddenFromOthers ? 'Hidden from non-admins' : 'Visible to all'"
-                                    class="transition-colors">
-                                    <span class="material-symbols-outlined text-[18px]" x-text="tag.hiddenFromOthers ? 'visibility_off' : 'visibility'"></span>
-                                </button>
-                                <button @click="toggleTagFlag(tag.id, 'hidePeople')"
-                                    :class="tag.hidePeople ? 'text-primary' : 'text-outline-variant hover:text-primary'"
-                                    :title="tag.hidePeople ? 'People with this tag are hidden from non-admins' : 'People with this tag are visible'"
-                                    class="transition-colors">
-                                    <span class="material-symbols-outlined text-[18px]" x-text="tag.hidePeople ? 'person_off' : 'person'"></span>
-                                </button>
-                                <button @click="deleteTag(tag.id, tag.name)"
-                                    class="text-on-surface-variant hover:text-error transition-colors">
-                                    <span class="material-symbols-outlined text-[18px]">delete</span>
-                                </button>
-                            </div>
-                        </div>
-                        <!-- Merge survivor picker -->
-                        <div x-show="mergingTagId === tag.id" class="flex flex-col gap-xs bg-surface-container-low rounded-lg p-sm">
-                            <span class="text-xs text-on-surface-variant">Merge <span class="font-medium" x-text="tag.name"></span> into…</span>
-                            <div class="flex flex-wrap gap-xs">
-                                <template x-for="other in shepherdingTags.filter(t => t.id !== tag.id)" :key="other.id">
-                                    <button @click="mergeTagInto(other.id)"
-                                        class="px-sm py-[2px] bg-surface-container text-on-surface hover:bg-primary hover:text-on-primary rounded-full font-label-md text-label-md transition-colors"
-                                        x-text="other.name"></button>
-                                </template>
-                                <span x-show="shepherdingTags.length <= 1" class="text-xs italic text-on-surface-variant">No other tag to merge into.</span>
-                            </div>
-                            <button @click="cancelMergeTag()" class="self-start text-xs text-on-surface-variant hover:text-error transition-colors">Cancel</button>
-                        </div>
-                    </li>
-                </template>
-                <li x-show="shepherdingTags.length === 0" class="text-on-surface-variant italic text-sm px-sm py-xs">
-                    No tags yet.
-                </li>
-            </ul>
-
-            <div class="flex justify-end">
-                <button @click="showTagModal = false"
-                    class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">Done</button>
             </div>
         </div>
     </div>
