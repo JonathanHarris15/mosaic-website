@@ -251,6 +251,24 @@
       return function () { window.removeEventListener("hashchange", onHash); };
     }, []);
 
+    // Android hardware back: close drawer → navigate back → exit at home.
+    // Refreshed each render so it always sees current state.
+    useEffect(function () {
+      M._back = function () {
+        if (menuState[0]) { menuState[1](false); return; }
+        if (routeState[0] !== "home" && routeState[0] !== "login") { history.back(); return; }
+        var CapApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+        if (CapApp && CapApp.exitApp) CapApp.exitApp();
+      };
+    });
+    // Register the native back-button listener once.
+    useEffect(function () {
+      var CapApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+      if (!CapApp || !CapApp.addListener) return;
+      var pending = CapApp.addListener("backButton", function () { if (M._back) M._back(); });
+      return function () { Promise.resolve(pending).then(function (h) { if (h && h.remove) h.remove(); }); };
+    }, []);
+
     var ScreenComp = SCREENS[routeState[0]] || SCREENS.comingSoon || HomeScreen;
     return html`
       <div style=${{ height: "100%", position: "relative", overflow: "hidden" }}>

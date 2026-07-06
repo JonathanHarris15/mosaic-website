@@ -75,15 +75,17 @@
       var out = [];
       snap.forEach(function (doc) {
         var d = doc.data() || {};
+        var versions = Array.isArray(d.versions) ? d.versions : [];
         out.push({
           id: doc.id,
           name: d.name || d.title || "(untitled)",
-          author: d.author || d.composer || "",
+          author: d.attribution || d.author || "",   // real field is `attribution`
           tags: Array.isArray(d.tags) ? d.tags : [],
+          keys: d.key ? [d.key] : (Array.isArray(d.keys) ? d.keys : []),
           meter: d.meter || "",
-          keys: Array.isArray(d.keys) ? d.keys : (d.key ? [d.key] : []),
-          uses: typeof d.uses === "number" ? d.uses : (typeof d.timesUsed === "number" ? d.timesUsed : 0),
-          canonical: d.canonical != null ? !!d.canonical : !!(d.lyrics || d.hymnNumber || d.number),
+          versionCount: versions.length,
+          hasSheet: versions.length > 0,
+          hasLyrics: !!(d.lyrics && String(d.lyrics).trim()),
         });
       });
       out.sort(function (a, b) { return a.name.localeCompare(b.name); });

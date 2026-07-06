@@ -61,14 +61,14 @@
             <div style=${{ padding: "8px 16px calc(40px + env(safe-area-inset-bottom,0px))", display: "flex", flexDirection: "column", gap: 12 }}>
               ${results.map(function (h) {
                 return html`<button key=${h.id} onClick=${function () { props.nav("hymnDetails", { hymn: h }); }} style=${{ display: "block", width: "100%", textAlign: "left", padding: 16, cursor: "pointer", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)" }}>
-                  <div style=${{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                    <div style=${{ fontFamily: "var(--font-serif)", fontSize: 18, fontWeight: 600, color: "var(--on-surface)", lineHeight: 1.25 }}>${h.name}</div>
-                    ${!h.canonical ? html`<span title="Unlinked" style=${{ color: "var(--warning)", flexShrink: 0 }}>${Ic("unlink", 16)}</span>` : null}
-                  </div>
+                  <div style=${{ fontFamily: "var(--font-serif)", fontSize: 18, fontWeight: 600, color: "var(--on-surface)", lineHeight: 1.25 }}>${h.name}</div>
                   ${h.author ? html`<div style=${{ fontFamily: "var(--font-serif)", fontSize: 14, fontStyle: "italic", color: "var(--on-surface-variant)", marginTop: 3 }}>${h.author}</div>` : null}
-                  ${(h.tags.length || h.uses) ? html`<div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12, alignItems: "center" }}>
+                  ${(h.tags.length || h.keys.length || h.hasSheet) ? html`<div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12, alignItems: "center" }}>
                     ${h.tags.map(function (t) { return html`<${Badge} key=${t} tone="secondary">${t}<//>`; })}
-                    ${h.uses ? html`<span style=${{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)" }}>${Ic("repeat", 13)} ${h.uses}</span>` : null}
+                    <span style=${{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)" }}>
+                      ${h.keys.length ? html`<span>${h.keys.join(", ")}</span>` : null}
+                      ${h.hasSheet ? html`<span style=${{ display: "flex", alignItems: "center", gap: 3 }}>${Ic("music", 13)} ${h.versionCount}</span>` : null}
+                    </span>
                   </div>` : null}
                 </button>`;
               })}
@@ -80,8 +80,8 @@
 
   // ── Hymn Details ─────────────────────────────────────────
   function HymnDetailsScreen(props) {
-    var h = (props.params && props.params.hymn) || { name: "Hymn", author: "", tags: [], keys: [], meter: "", uses: 0, canonical: false };
-    var stats = [["Meter", h.meter || "—"], ["Keys", h.keys.length ? h.keys.join(", ") : "—"], ["Times used", String(h.uses || 0)]];
+    var h = (props.params && props.params.hymn) || { name: "Hymn", author: "", tags: [], keys: [], versionCount: 0, hasSheet: false, hasLyrics: false };
+    var stats = [["Key", h.keys.length ? h.keys.join(", ") : "—"], ["Sheets", String(h.versionCount || 0)], ["Lyrics", h.hasLyrics ? "Yes" : "No"]];
     return html`
       <${Screen}>
         <${TopBar} title="Hymn" onBack=${props.back} serif=${false} />
@@ -98,7 +98,7 @@
           <${Overline} style=${{ margin: "22px 0 10px" }}>Sheet Music<//>
           <div style=${{ position: "relative", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", height: 180, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, color: "var(--on-surface-variant)" }}>
             <span>${Ic("music", 30)}</span>
-            <span style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5 }}>${h.canonical ? "Canonical sheet · tap to view" : "Not yet linked to a score"}</span>
+            <span style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5 }}>${h.hasSheet ? h.versionCount + " sheet version" + (h.versionCount === 1 ? "" : "s") + " available" : "No sheet music uploaded yet"}</span>
           </div>
           <div style=${{ display: "flex", gap: 10, marginTop: 20 }}>
             <div style=${{ flex: 1 }}><${Button} variant="primary" size="md" style=${{ width: "100%" }} icon=${Ic("plus", 17)}>Add to Service<//></div>
@@ -114,7 +114,7 @@
     var qS = useState("");
     var hymns = st.data || [];
     var results = hymns.filter(function (h) { return !qS[0] || data.lc(h.name).indexOf(data.lc(qS[0])) >= 0; });
-    var needLink = hymns.filter(function (h) { return !h.canonical; }).length;
+    var noSheet = hymns.filter(function (h) { return !h.hasSheet; }).length;
     return html`
       <${Screen}>
         <${TopBar} title="Hymn Manager" onMenu=${props.openMenu} />
@@ -126,8 +126,8 @@
               <div style=${{ fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--on-surface-variant)" }}>In catalog</div>
             </div>
             <div style=${{ flex: 1, background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", padding: "12px 14px" }}>
-              <div style=${{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 600, color: "var(--warning)" }}>${needLink}</div>
-              <div style=${{ fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--on-surface-variant)" }}>Need linking</div>
+              <div style=${{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 600, color: "var(--warning)" }}>${noSheet}</div>
+              <div style=${{ fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--on-surface-variant)" }}>No sheet music</div>
             </div>
           </div>
           ${st.loading ? html`<${Loading} label="Loading catalog…" />` : html`
@@ -138,9 +138,9 @@
                   <div style=${{ flex: 1, minWidth: 0 }}>
                     <div style=${{ fontFamily: "var(--font-serif)", fontSize: 16, fontWeight: 600, color: "var(--on-surface)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>${h.name}</div>
                     <div style=${{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
-                      ${h.canonical
-                        ? html`<span style=${{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--success)" }}>${Ic("circle-check", 13)} Linked</span>`
-                        : html`<span style=${{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--warning)" }}>${Ic("unlink", 13)} Literal</span>`}
+                      ${h.hasSheet
+                        ? html`<span style=${{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--success)" }}>${Ic("music", 13)} ${h.versionCount} sheet${h.versionCount === 1 ? "" : "s"}</span>`
+                        : html`<span style=${{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--on-surface-variant)" }}>${Ic("music-2", 13)} No sheet music</span>`}
                     </div>
                   </div>
                   <button aria-label="Edit hymn" style=${{ width: 40, height: 40, border: "1px solid var(--outline-variant)", background: "var(--surface-container-low)", borderRadius: "var(--radius)", color: "var(--on-surface-variant)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>${Ic("pencil", 17)}</button>
