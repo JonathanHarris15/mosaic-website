@@ -132,7 +132,7 @@
                                     <span class="font-label-md text-label-md text-on-surface-variant">Tags:</span>
                                     <template x-for="tagId in view.filterTags" :key="tagId">
                                         <span class="px-xs py-[2px] bg-secondary-container text-on-secondary-container rounded font-label-md text-label-md">
-                                            <span x-text="getTagName(tagId)"></span><span x-show="viewTagHoldDays(view, tagId) > 0" class="opacity-70" x-text="' · ≥' + ShepherdingCore.formatHoldShort(viewTagHoldDays(view, tagId))"></span>
+                                            <span x-text="getTagName(tagId)"></span><span x-show="viewTagHoldDays(view, tagId) > 0" class="opacity-70" x-text="' · ' + (viewTagCmp(view, tagId) === 'lt' ? '<' : '>') + ShepherdingCore.formatHoldShort(viewTagHoldDays(view, tagId))"></span>
                                         </span>
                                     </template>
                                     <span class="font-label-md text-label-md text-on-surface-variant"
@@ -296,7 +296,13 @@
                                     class="px-sm py-xs font-label-md text-label-md rounded-2xl transition-colors flex items-center gap-1">
                                     <span x-text="tag.name"></span>
                                     <span x-show="newView.filterTags.includes(tag.id) && (newView.tagHoldFilters[tag.id] || 0) > 0"
-                                          class="text-[10px] font-bold opacity-80" x-text="viewTagHoldShort(tag.id)"></span>
+                                          class="inline-flex items-center gap-0.5 text-[10px] font-bold">
+                                        <span @click.stop="toggleViewNewCmp(tag.id)" role="button"
+                                              :title="newView.tagHoldCmp[tag.id] === 'lt' ? 'Held less than — click for at least' : 'Held at least — click for less than'"
+                                              class="px-1 rounded bg-on-primary/25 hover:bg-on-primary/40 transition-colors leading-none cursor-pointer"
+                                              x-text="viewNewCmpSymbol(tag.id)"></span>
+                                        <span class="opacity-80" x-text="viewTagHoldShort(tag.id)"></span>
+                                    </span>
                                 </button>
                                 <!-- Hold-Duration dot, slidable along the tag's bottom edge -->
                                 <input x-show="newView.filterTags.includes(tag.id)" type="range"

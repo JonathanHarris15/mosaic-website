@@ -97,6 +97,28 @@ test('holdMeetsMinimum fails a shorter or unknown hold', () => {
     assert.strictEqual(Core.holdMeetsMinimum(undefined, 30), false);
 });
 
+// ── holdSatisfies (directional) ───────────────────────────────────────────────
+
+test('holdSatisfies with default direction means held at least days', () => {
+    assert.strictEqual(Core.holdSatisfies(30 * DAY, 30), true);
+    assert.strictEqual(Core.holdSatisfies(29 * DAY, 30), false);
+});
+
+test('holdSatisfies with lt means held less than days', () => {
+    assert.strictEqual(Core.holdSatisfies(29 * DAY, 30, 'lt'), true);
+    assert.strictEqual(Core.holdSatisfies(30 * DAY, 30, 'lt'), false);
+});
+
+test('holdSatisfies imposes no constraint at a zero threshold', () => {
+    assert.strictEqual(Core.holdSatisfies(5 * DAY, 0, 'lt'), true);
+    assert.strictEqual(Core.holdSatisfies(null, 0, 'lt'), true);
+});
+
+test('holdSatisfies never passes an unknown hold in either direction', () => {
+    assert.strictEqual(Core.holdSatisfies(null, 30), false);
+    assert.strictEqual(Core.holdSatisfies(undefined, 30, 'lt'), false);
+});
+
 // ── per-tag slider helpers ────────────────────────────────────────────────────
 // Each selected tag filter chip carries its own Hold-Duration stop.
 

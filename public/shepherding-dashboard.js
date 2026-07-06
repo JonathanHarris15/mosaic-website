@@ -17,9 +17,10 @@ document.addEventListener('alpine:init', () => {
         selectedViewId: null,
         editingViewId: null,
         showViewModal: false,
-        // tagHoldFilters: per-tag minimum hold in days, keyed by tagId (0 = any) —
-        // each selected filter tag carries its own slider.
-        newView: { title: '', filterTags: [], filterMode: 'any', statusZoneFilters: [], tagHoldFilters: {} },
+        // tagHoldFilters: per-tag hold threshold in days, keyed by tagId (0 = any).
+        // tagHoldCmp: per-tag direction, 'gte' (held at least, default) or 'lt'
+        // (held less than). Each selected filter tag carries its own slider + toggle.
+        newView: { title: '', filterTags: [], filterMode: 'any', statusZoneFilters: [], tagHoldFilters: {}, tagHoldCmp: {} },
 
         people: [],
 
@@ -154,6 +155,7 @@ document.addEventListener('alpine:init', () => {
                     filterMode: this.newView.filterMode,
                     statusZoneFilters: [...this.newView.statusZoneFilters],
                     tagHoldFilters: this.cleanHoldFilters(),
+                    tagHoldCmp: this.cleanHoldCmp(),
                     sortBy: 'name',
                     createdBy: this.currentUser.uid,
                     createdByName: this.currentUserName,
@@ -172,7 +174,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         blankView() {
-            return { title: '', filterTags: [], filterMode: 'any', statusZoneFilters: [], tagHoldFilters: {} };
+            return { title: '', filterTags: [], filterMode: 'any', statusZoneFilters: [], tagHoldFilters: {}, tagHoldCmp: {} };
         },
 
         // Does a saved view use any Hold-Duration threshold? Falls back to the old
@@ -190,6 +192,11 @@ document.addEventListener('alpine:init', () => {
             return view.minHoldDays || 0;
         },
 
+        // The direction a view requires for a filter tag ('gte' default | 'lt').
+        viewTagCmp(view, tagId) {
+            return (view.tagHoldCmp && view.tagHoldCmp[tagId]) || 'gte';
+        },
+
         // Drop zero entries so a view stores only the tags that actually constrain.
         cleanHoldFilters() {
             const out = {};
@@ -199,14 +206,28 @@ document.addEventListener('alpine:init', () => {
             return out;
         },
 
+        // Keep only the directions of tags that actually constrain (days > 0).
+        cleanHoldCmp() {
+            const days = this.cleanHoldFilters();
+            const out = {};
+            for (const tagId of Object.keys(days)) {
+                if (this.newView.tagHoldCmp[tagId] === 'lt') out[tagId] = 'lt';
+            }
+            return out;
+        },
+
         openEditView(view) {
             this.editingViewId = view.id;
             // Seed per-tag sliders, expanding a legacy single minHoldDays across
             // all of the view's filter tags.
             const seeded = {};
+            const seededCmp = {};
             (view.filterTags || []).forEach(t => {
                 const days = this.viewTagHoldDays(view, t);
-                if (days > 0) seeded[t] = days;
+                if (days > 0) {
+                    seeded[t] = days;
+                    if (this.viewTagCmp(view, t) === 'lt') seededCmp[t] = 'lt';
+                }
             });
             this.newView = {
                 title: view.title,
@@ -214,6 +235,7 @@ document.addEventListener('alpine:init', () => {
                 filterMode: view.filterMode || 'any',
                 statusZoneFilters: [...(view.statusZoneFilters || [])],
                 tagHoldFilters: seeded,
+                tagHoldCmp: seededCmp,
             };
             this.showViewModal = true;
         },
@@ -227,6 +249,7 @@ document.addEventListener('alpine:init', () => {
                     filterMode: this.newView.filterMode,
                     statusZoneFilters: [...this.newView.statusZoneFilters],
                     tagHoldFilters: this.cleanHoldFilters(),
+                    tagHoldCmp: this.cleanHoldCmp(),
                     minHoldDays: firebase.firestore.FieldValue.delete(),
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                 });
@@ -297,7 +320,7 @@ document.addEventListener('alpine:init', () => {
                     const min = this.viewTagHoldDays(view, t);
                     if (min <= 0) return true;
                     const h = (this.tagHolds[p.id] || {})[t];
-                    return ShepherdingCore.holdMeetsMinimum(h && h.durationMs, min);
+                    return ShepherdingCore.holdSatisfies(h && h.durationMs, min, this.viewTagCmp(view, t));
                 };
                 result = result.filter(p => view.filterMode === 'all'
                     ? view.filterTags.every(t => matches(p, t))
@@ -349,9 +372,12 @@ document.addEventListener('alpine:init', () => {
                 this.newView.filterTags.push(tagId);
             } else {
                 this.newView.filterTags.splice(idx, 1);
-                // Deselecting a tag drops its Hold-Duration slider.
+                // Deselecting a tag drops its Hold-Duration slider and direction.
                 if (tagId in this.newView.tagHoldFilters) {
                     delete this.newView.tagHoldFilters[tagId];
+                }
+                if (tagId in this.newView.tagHoldCmp) {
+                    delete this.newView.tagHoldCmp[tagId];
                 }
             }
         },
@@ -364,6 +390,11 @@ document.addEventListener('alpine:init', () => {
             this.newView.tagHoldFilters = { ...this.newView.tagHoldFilters, [tagId]: days };
         },
         viewTagHoldShort(tagId) { return ShepherdingCore.formatHoldShort(this.newView.tagHoldFilters[tagId] || 0); },
+        viewNewCmpSymbol(tagId) { return this.newView.tagHoldCmp[tagId] === 'lt' ? '<' : '>'; },
+        toggleViewNewCmp(tagId) {
+            const next = this.newView.tagHoldCmp[tagId] === 'lt' ? 'gte' : 'lt';
+            this.newView.tagHoldCmp = { ...this.newView.tagHoldCmp, [tagId]: next };
+        },
 
         formatDatetime(timestamp) {
             if (!timestamp) return '';

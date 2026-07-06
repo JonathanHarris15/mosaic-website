@@ -22,9 +22,11 @@ document.addEventListener('alpine:init', () => {
         sortBy: 'name',
 
         // Hold-Duration filter (ADR-0011): each selected tag carries its own
-        // minimum hold in days (0 = anyone carrying it), keyed by tagId. Tag Hold
-        // is derived from Tag Change history, loaded lazily on first use.
+        // threshold in days (0 = anyone carrying it) and a direction — 'gte' (held
+        // at least) or 'lt' (held less than) — both keyed by tagId. Tag Hold is
+        // derived from Tag Change history, loaded lazily on first use.
         tagHoldFilters: {},
+        tagHoldCmp: {},
         tagHolds: {},
         holdsLoaded: false,
 
@@ -62,6 +64,8 @@ document.addEventListener('alpine:init', () => {
                 if (savedZones) this.statusZoneFilters = JSON.parse(savedZones);
                 const savedHoldFilters = sessionStorage.getItem('shepherding_tagHoldFilters');
                 if (savedHoldFilters) this.tagHoldFilters = JSON.parse(savedHoldFilters);
+                const savedHoldCmp = sessionStorage.getItem('shepherding_tagHoldCmp');
+                if (savedHoldCmp) this.tagHoldCmp = JSON.parse(savedHoldCmp);
             } catch {}
 
             this.$watch('tagFilters', val => sessionStorage.setItem('shepherding_tagFilters', JSON.stringify(val)));
@@ -73,6 +77,7 @@ document.addEventListener('alpine:init', () => {
                 sessionStorage.setItem('shepherding_tagHoldFilters', JSON.stringify(val));
                 if (this.anyHoldActive() && !this.holdsLoaded) this.loadTagHolds();
             });
+            this.$watch('tagHoldCmp', val => sessionStorage.setItem('shepherding_tagHoldCmp', JSON.stringify(val)));
 
             auth.onAuthStateChanged(async (user) => {
                 if (!user) {
@@ -150,7 +155,7 @@ document.addEventListener('alpine:init', () => {
                     const min = this.tagHoldFilters[t] || 0;
                     if (min <= 0) return true;
                     const h = (this.tagHolds[p.id] || {})[t];
-                    return ShepherdingCore.holdMeetsMinimum(h && h.durationMs, min);
+                    return ShepherdingCore.holdSatisfies(h && h.durationMs, min, this.tagHoldCmp[t]);
                 };
                 result = result.filter(p => this.tagFilterMode === 'all'
                     ? this.tagFilters.every(t => matches(p, t))
@@ -190,11 +195,16 @@ document.addEventListener('alpine:init', () => {
         toggleTagFilter(tagId) {
             if (this.tagFilters.includes(tagId)) {
                 this.tagFilters = this.tagFilters.filter(t => t !== tagId);
-                // Deselecting a tag drops its Hold-Duration slider.
+                // Deselecting a tag drops its Hold-Duration slider and direction.
                 if (tagId in this.tagHoldFilters) {
                     const next = { ...this.tagHoldFilters };
                     delete next[tagId];
                     this.tagHoldFilters = next;
+                }
+                if (tagId in this.tagHoldCmp) {
+                    const next = { ...this.tagHoldCmp };
+                    delete next[tagId];
+                    this.tagHoldCmp = next;
                 }
             } else {
                 this.tagFilters = [...this.tagFilters, tagId];
@@ -243,6 +253,12 @@ document.addEventListener('alpine:init', () => {
         },
         holdShort(tagId) { return ShepherdingCore.formatHoldShort(this.tagHoldFilters[tagId] || 0); },
         anyHoldActive() { return Object.values(this.tagHoldFilters).some(d => d > 0); },
+        // Direction: '<' (held less than) or '>' (held at least, the default).
+        holdCmpSymbol(tagId) { return this.tagHoldCmp[tagId] === 'lt' ? '<' : '>'; },
+        toggleHoldCmp(tagId) {
+            const next = this.tagHoldCmp[tagId] === 'lt' ? 'gte' : 'lt';
+            this.tagHoldCmp = { ...this.tagHoldCmp, [tagId]: next };
+        },
 
         // ── Status matrix ─────────────────────────────────────────────────────
 

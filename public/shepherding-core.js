@@ -249,6 +249,17 @@
         return durationMs >= minDays * MS_PER_DAY;
     }
 
+    // The directional Hold-Duration predicate. comparator 'lt' means "held less
+    // than days"; anything else (default) means "held at least days". A zero
+    // threshold imposes no constraint (the slider is off). An unknown hold never
+    // qualifies in either direction — we don't guess (ADR-0011).
+    function holdSatisfies(durationMs, days, comparator) {
+        if (!days || days <= 0) return true;
+        if (durationMs === null || durationMs === undefined) return false;
+        const threshold = days * MS_PER_DAY;
+        return comparator === 'lt' ? durationMs < threshold : durationMs >= threshold;
+    }
+
     // Discrete stops (in days) for the per-tag Hold-Duration slider: 0 (anyone
     // carrying the tag) up to a year, in widening increments. Each selected tag
     // filter chip carries its own stop.
@@ -329,6 +340,7 @@
         deriveTagHolds,
         formatHoldDuration,
         holdMeetsMinimum,
+        holdSatisfies,
         HOLD_FILTER_STOPS,
         holdStopIndex,
         formatHoldShort,
