@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#182F57" />
+  <title>Mosaic Services</title>
+
+  <link rel="stylesheet" href="fonts.css" />
+  <link rel="stylesheet" href="mobile/tokens.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: var(--background);
+      color: var(--on-surface);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      justify-content: center;
+      overscroll-behavior: none;
+    }
+    /* Phone-width frame on desktop; full-bleed on real phones / Capacitor. */
+    #app {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      height: 100%;
+      overflow: hidden;
+      background: var(--background);
+    }
+    @media (min-width: 481px) {
+      body { background: #e9e3d8; }
+      #app { box-shadow: var(--shadow-lg); }
+    }
+    button { font-family: inherit; }
+    ::-webkit-scrollbar { width: 0; height: 0; }
+    @keyframes mspin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- Runtime (vendored, offline) -->
+  <script src="vendor/preact-10.29.4.umd.js"></script>
+  <script src="vendor/preact-hooks-10.29.4.umd.js"></script>
+  <script src="vendor/htm-3.1.1.umd.js"></script>
+  <script src="vendor/lucide.js"></script>
+
+  <!-- Firebase (vendored) -->
+  <script src="vendor/firebase/firebase-app-compat.js"></script>
+  <script src="vendor/firebase/firebase-auth-compat.js"></script>
+  <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+
+  <!-- Mosaic mobile shell -->
+  <script src="mobile/core.js"></script>
+  <script src="mobile/ui.js"></script>
+  <script src="mobile/data.js"></script>
+  <script src="mobile/screens-content.js"></script>
+  <script src="mobile/app.js"></script>
+</body>
+</html>

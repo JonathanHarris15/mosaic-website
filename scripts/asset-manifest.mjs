@@ -58,4 +58,10 @@ export const JS_CSS_ASSETS = [
   // ---- Fuse.js (both versions in use) ----
   { url: "https://cdn.jsdelivr.net/npm/fuse.js@6.6.2", local: "vendor/fuse-6.6.2.js" },
   { url: "https://cdn.jsdelivr.net/npm/fuse.js@7.0.0", local: "vendor/fuse-7.0.0.js" },
+
+  // ---- Mobile shell runtime (Preact + htm; no build step) ----
+  // Lucide is vendored separately (public/vendor/lucide.js) from the design bundle.
+  { url: "https://unpkg.com/preact@10.29.4/dist/preact.umd.js",             local: "vendor/preact-10.29.4.umd.js" },
+  { url: "https://unpkg.com/preact@10.29.4/hooks/dist/hooks.umd.js",        local: "vendor/preact-hooks-10.29.4.umd.js" },
+  { url: "https://unpkg.com/htm@3.1.1/dist/htm.umd.js",                     local: "vendor/htm-3.1.1.umd.js" },
 ];

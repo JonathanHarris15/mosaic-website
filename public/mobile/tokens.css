@@ -1,0 +1,87 @@
+/* ============================================================
+   tokens.css — Mosaic brand tokens as CSS custom properties for
+   the mobile shell. Values mirror mosaic-theme.js (the Tailwind
+   MD3 theme) so the mobile app and the desktop app share one brand.
+
+   The mobile design (Mosaic Mobile) references these var(--*) names
+   directly in inline styles.
+   ============================================================ */
+
+:root {
+  /* Brand core */
+  --navy: #182F57;
+  --navy-900: #0E1C36;
+  --navy-800: #14264A;
+  --ocean: #3E6181;
+  --steel: #5D94A9;
+  --sand: #C2B79D;
+  --gold: #B89B6A;
+  --cream: #F2EAE2;
+  --parchment: #FBF7F0;
+
+  /* Primary */
+  --primary: #182F57;
+  --on-primary: #F2EAE2;
+  --primary-container: #14264A;
+  --on-primary-container: #8FA6C8;
+  --primary-fixed: #D8E2FF;
+  --primary-fixed-dim: #B2C6F8;
+  --inverse-primary: #B2C6F8;
+
+  /* Secondary / tertiary */
+  --secondary: #3E6181;
+  --on-secondary: #ffffff;
+  --secondary-container: #CFE0F1;
+  --on-secondary-container: #34506E;
+  --tertiary: #5D94A9;
+  --on-tertiary: #ffffff;
+  --tertiary-container: #D7E7EC;
+  --on-tertiary-container: #2D4F5B;
+
+  /* Surfaces */
+  --background: #F7F3ED;
+  --on-background: #0E1C36;
+  --surface: #FBF7F0;
+  --surface-bright: #FBF7F0;
+  --surface-dim: #E3D9CC;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #FAF5EE;
+  --surface-container: #F4ECE2;
+  --surface-container-high: #EEE4D8;
+  --surface-container-highest: #E8DDCD;
+  --surface-variant: #E8DDCD;
+  --on-surface: #0E1C36;
+  --on-surface-variant: #5E6B82;
+
+  /* Lines */
+  --outline: #8A93A6;
+  --outline-variant: #DAD0C0;
+
+  /* Status */
+  --error: #A8463E;
+  --on-error: #ffffff;
+  --error-container: #F3D9D4;
+  --on-error-container: #5C231C;
+  --success: #4B8A6B;
+  --warning: #B8862E;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-md: 10px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* Type */
+  --font-display: "Cinzel", Georgia, serif;
+  --font-serif: "EB Garamond", Georgia, serif;
+  --font-sans: "Libre Franklin", system-ui, -apple-system, sans-serif;
+
+  /* Elevation */
+  --shadow-xs: 0 1px 2px rgba(14, 28, 54, 0.06);
+  --shadow-sm: 0 2px 6px rgba(14, 28, 54, 0.08);
+  --shadow-md: 0 8px 24px rgba(14, 28, 54, 0.10);
+  --shadow-lg: 0 18px 48px rgba(14, 28, 54, 0.14);
+}
