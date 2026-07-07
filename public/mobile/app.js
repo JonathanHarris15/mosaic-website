@@ -17,7 +17,6 @@
   // Routes not yet ported render the in-shell ComingSoon screen, offering the
   // desktop page as "open full page" — no jarring bounce out of the shell.
   var ROUTE_META = {
-    serviceBuilder: { title: "Service Editor", page: "service-builder.html" },
     serviceGuide: { title: "Service Guide", page: "service-guide.html" },
     documentEditor: { title: "Document", page: "shepherding-documents.html" },
     shepherdProfile: { title: "Shepherding Profile", page: "shepherding-profile.html" },
@@ -77,10 +76,9 @@
       { icon: "book-open", label: "Hymn Directory", route: "hymnDirectory" },
       { icon: "calendar", label: "Service Calendar", route: "calendar" },
       { icon: "users", label: "People's Directory", route: "people" },
-      { icon: "shield", label: "Shepherd", route: "shepherd" },
-      { icon: "bar-chart-3", label: "Analytics", route: "analytics" },
+      { icon: "shield", label: "Shepherd", route: "shepherd", roles: ["elder", "super_admin"] },
       { icon: "library", label: "Hymn Manager", route: "hymnManager" },
-    ];
+    ].filter(function (t) { return data.canSee(t, user); });
     return html`
       <${Screen}>
         <${TopBar} title="Mosaic Services" onMenu=${props.openMenu} right=${html`<${BarAction} icon="user-round" label="Profile" onClick=${function () { props.nav("profile"); }} />`} />
@@ -189,7 +187,22 @@
   M.SCREENS = Object.assign(M.SCREENS || {}, { login: LoginScreen, home: HomeScreen, profile: ProfileScreen, admin: AdminScreen });
   var SCREENS = M.SCREENS;
 
+  // Routes that open a full desktop page in-place within the same WebView.
+  // shell=mobile makes those pages adapt their chrome for the phone and keep
+  // navigation inside the shell (see mobile-shell.js). Reused wholesale so the
+  // mobile app gets every feature + the proven save logic — no reimplementation.
+  var SHELL_PAGES = {
+    shepherd: "shepherding-dashboard.html",
+  };
+
   function nav(route, params) {
+    if (route === "serviceBuilder") {
+      var d = (params && params.date) || "";
+      if (!d) { M.navParams = {}; location.hash = "#/calendar"; return; }
+      window.location.href = "service-builder.html?date=" + encodeURIComponent(d) + "&shell=mobile";
+      return;
+    }
+    if (SHELL_PAGES[route]) { window.location.href = SHELL_PAGES[route] + "?shell=mobile"; return; }
     if (SCREENS[route]) { M.navParams = params || {}; location.hash = "#/" + route; return; }
     if (ROUTE_META[route]) { M.navParams = ROUTE_META[route]; location.hash = "#/" + route; return; }
     M.navParams = {}; location.hash = "#/home";
@@ -221,7 +234,7 @@
             </div>
           </div>
           <div style=${{ flex: 1, overflowY: "auto", padding: "10px 12px" }}>
-            ${data.DESTINATIONS.map(function (d) {
+            ${data.DESTINATIONS.filter(function (d) { return data.canSee(d, user); }).map(function (d) {
               var active = props.current === d.route;
               return html`
                 <button key=${d.key} onClick=${function () { props.onNavigate(d.route); }} style=${{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", marginBottom: 2, border: "none", borderRadius: "var(--radius)", cursor: "pointer", textAlign: "left", background: active ? "var(--primary-fixed)" : "transparent", color: active ? "var(--primary)" : "var(--on-surface)", fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: active ? 600 : 500 }}>

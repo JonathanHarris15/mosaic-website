@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
     <title>People | Mosaic Shepherd</title>
 
 
@@ -55,6 +57,43 @@
             overflow-y: auto;
             max-height: calc(100vh - 220px);
         }
+
+        /* The mobile "Filters" toggle is hidden on desktop (sidebar is always shown). */
+        .mobile-filter-toggle { display: none; }
+
+        /* Mobile shell (see mobile-shell.js): unlock body scroll, drop the fixed
+           sidebar into the flow, and reorder to search → filters → actions → table. */
+        html.shell-mobile, html.shell-mobile body {
+            overflow: auto;
+            height: auto;
+        }
+        html.shell-mobile .content-area {
+            display: flex;
+            flex-direction: column;
+            margin-left: 0;
+            padding: 0 16px;
+        }
+        html.shell-mobile .people-search  { order: 1; }
+        html.shell-mobile .filters-wrap   { order: 2; }
+        html.shell-mobile .people-actions { order: 3; }
+        html.shell-mobile .scrollable-table {
+            order: 4;
+            max-height: none;
+            overflow-y: visible;
+        }
+        html.shell-mobile .mobile-filter-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+        }
+        html.shell-mobile .filter-sidebar {
+            position: static;
+            top: auto; left: auto;
+            width: auto;
+            max-height: none;
+            margin: 0;
+        }
     </style>
 
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -87,9 +126,20 @@
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
-    <!-- FIXED FILTER SIDEBAR (left side)            -->
+    <!-- MAIN CONTENT — filters live inside it: a fixed left sidebar    -->
+    <!-- on desktop, a collapsible panel under the search bar on mobile -->
     <!-- ═══════════════════════════════════════════ -->
-    <aside x-show="!loading" class="filter-sidebar">
+    <main x-show="!loading" class="content-area">
+
+    <!-- Filters (fixed sidebar on desktop; collapsible on mobile) -->
+    <div class="filters-wrap" x-data="{ mobileFiltersOpen: false }">
+        <button type="button" @click="mobileFiltersOpen = !mobileFiltersOpen"
+            class="mobile-filter-toggle px-4 py-3 mb-3 bg-surface-container-lowest border border-outline-variant rounded-xl font-label-md text-label-md text-on-surface shadow-sm">
+            <span class="material-symbols-outlined text-[20px] text-secondary">tune</span>
+            <span>Filters</span>
+            <span class="material-symbols-outlined text-[20px] ml-auto transition-transform" :style="mobileFiltersOpen ? 'transform:rotate(180deg)' : ''">expand_more</span>
+        </button>
+    <aside x-show="!loading && (window.MOSAIC_SHELL !== 'mobile' || mobileFiltersOpen)" class="filter-sidebar">
         <div class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm divide-y divide-outline-variant">
 
             <!-- Saved Views -->
@@ -235,14 +285,10 @@
 
         </div>
     </aside>
-
-    <!-- ═══════════════════════════════════════════ -->
-    <!-- MAIN CONTENT (right of sidebar)             -->
-    <!-- ═══════════════════════════════════════════ -->
-    <main x-show="!loading" class="content-area">
+    </div>
 
         <!-- Page Title & Actions -->
-        <div style="margin-bottom:32px;" class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div style="margin-bottom:32px;" class="people-actions flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             <div>
                 <h1 class="font-headline-lg text-headline-lg text-primary">People</h1>
                 <p class="font-body-md text-body-md text-on-surface-variant mt-1">
@@ -275,7 +321,7 @@
         </div>
 
         <!-- Search bar -->
-        <div class="relative" style="margin-bottom:24px;">
+        <div class="relative people-search" style="margin-bottom:24px;">
             <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-outline pointer-events-none">search</span>
             <input type="text" x-model="search" placeholder="Search by name…"
                    class="w-full pl-[40px] pr-6 py-3 border border-outline-variant rounded-xl font-body-md text-body-md bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all shadow-sm" />

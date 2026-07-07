@@ -54,18 +54,25 @@
   function signOut() { return auth.signOut(); }
 
   // Drawer / home destinations -> desktop pages (page-load nav for now;
-  // in-shell screens override where they exist).
+  // in-shell screens override where they exist). `roles` mirrors the card
+  // gating on index.html (:300-320) — an entry is hidden unless the signed-in
+  // user's role is listed. See canSee().
   var DESTINATIONS = [
     { key: "home", label: "Home", icon: "house", route: "home" },
     { key: "hymn-directory", label: "Hymn Directory", icon: "book-open", route: "hymnDirectory" },
     { key: "calendar", label: "Service Calendar", icon: "calendar", route: "calendar" },
-    { key: "analytics", label: "Service Analytics", icon: "bar-chart-3", route: "analytics" },
     { key: "directory", label: "People's Directory", icon: "users", route: "people" },
     { key: "hymn-manager", label: "Hymn Manager", icon: "library", route: "hymnManager" },
-    { key: "shepherd", label: "Shepherd Dashboard", icon: "shield", route: "shepherd" },
-    { key: "documents", label: "Document Library", icon: "folder", route: "documents" },
-    { key: "admin", label: "Admin Dashboard", icon: "settings-2", route: "admin" },
+    { key: "shepherd", label: "Shepherd Dashboard", icon: "shield", route: "shepherd", roles: ["elder", "super_admin"] },
+    { key: "admin", label: "Admin Dashboard", icon: "settings-2", route: "admin", roles: ["admin", "super_admin"] },
   ];
+
+  // True when a destination/tile with an optional `roles` gate is visible to
+  // this user (no gate = always visible). Matches index.html role checks.
+  function canSee(item, user) {
+    if (!item || !item.roles) return true;
+    return !!(user && item.roles.indexOf(user.role) >= 0);
+  }
 
   // ── Collection loaders (defensive: tolerate missing fields) ──
   function lc(v) { return String(v == null ? "" : v).toLowerCase(); }
@@ -145,55 +152,6 @@
     });
   }
 
-  // Format a Firestore value that may be a Timestamp, ISO string, or Date.
-  function fmtDate(v) {
-    if (!v) return "";
-    if (typeof v === "string") return v.length > 10 ? v.slice(0, 10) : v;
-    var d = v.toDate ? v.toDate() : (typeof v.seconds === "number" ? new Date(v.seconds * 1000) : (v instanceof Date ? v : null));
-    return d ? d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "";
-  }
-
-  function getShepherdViews() {
-    return db.collection("shepherding_views").get().then(function (snap) {
-      var out = [];
-      snap.forEach(function (doc) {
-        var d = doc.data() || {};
-        out.push({ id: doc.id, name: d.name || d.label || d.title || "(view)", count: typeof d.count === "number" ? d.count : null, tone: d.tone || "secondary" });
-      });
-      return out;
-    }).catch(function () { return []; });
-  }
-
-  function getReminders() {
-    return db.collection("shepherding_reminders").get().then(function (snap) {
-      var out = [];
-      snap.forEach(function (doc) {
-        var d = doc.data() || {};
-        var people = Array.isArray(d.people) ? d.people : (Array.isArray(d.personNames) ? d.personNames : []);
-        out.push({ id: doc.id, text: d.text || d.title || d.note || "(reminder)", due: fmtDate(d.due || d.dueDate), people: people });
-      });
-      return out;
-    }).catch(function () { return []; });
-  }
-
-  function getDocuments() {
-    return Promise.all([
-      db.collection("elder_documents").get().catch(function () { return { forEach: function () {} }; }),
-      db.collection("elder_document_structure").get().catch(function () { return { forEach: function () {} }; }),
-    ]).then(function (r) {
-      var docs = [], folders = [];
-      r[0].forEach(function (doc) {
-        var d = doc.data() || {};
-        docs.push({ id: doc.id, title: d.title || d.name || "(untitled)", type: d.type || "note", author: d.author || d.createdBy || d.owner || "", updated: fmtDate(d.updated || d.updatedAt || d.modified) });
-      });
-      r[1].forEach(function (doc) {
-        var d = doc.data() || {};
-        if (d.name || d.label) folders.push({ id: doc.id, name: d.name || d.label, count: typeof d.count === "number" ? d.count : (Array.isArray(d.documentIds) ? d.documentIds.length : null) });
-      });
-      return { folders: folders, docs: docs };
-    });
-  }
-
   function todayStr() { return new Date().toISOString().slice(0, 10); }
 
   // The service to feature on Home: nearest upcoming (date >= today), else most recent.
@@ -206,45 +164,13 @@
     });
   }
 
-  // Analytics computed from real services + hymns.
-  function getAnalytics() {
-    return Promise.all([getServices(), getHymns()]).then(function (r) {
-      var svcs = r[0], hymns = r[1];
-      function tally(field) {
-        var m = {};
-        svcs.forEach(function (s) { var v = s[field]; if (v) m[v] = (m[v] || 0) + 1; });
-        return Object.keys(m).map(function (k) { return { name: k, count: m[k] }; }).sort(function (a, b) { return b.count - a.count; });
-      }
-      function coverage(field) { return svcs.filter(function (s) { return !!s[field]; }).length; }
-      var people = {};
-      svcs.forEach(function (s) { [s.preacher, s.serviceLeader, s.musicLeader, s.sermonette].forEach(function (n) { if (n) people[n] = 1; }); });
-      var topHymns = hymns.filter(function (h) { return h.uses > 0; }).sort(function (a, b) { return b.uses - a.uses; })
-        .slice(0, 5).map(function (h) { return { name: h.name, count: h.uses }; });
-      var total = svcs.length;
-      return {
-        totalServices: total,
-        uniqueParticipants: Object.keys(people).length,
-        baptisms: svcs.filter(function (s) { return s.hasBaptism; }).length,
-        topPreachers: tally("preacher").slice(0, 5),
-        topHymns: topHymns,
-        rolesCoverage: [
-          { role: "Service Leader", filled: coverage("serviceLeader"), total: total },
-          { role: "Preacher", filled: coverage("preacher"), total: total },
-          { role: "Music Leader", filled: coverage("musicLeader"), total: total },
-          { role: "Sermonette", filled: coverage("sermonette"), total: total },
-        ],
-      };
-    });
-  }
-
   M.data = {
     auth: auth, db: db,
     onUser: onUser, loadProfile: loadProfile,
     signIn: signIn, signOut: signOut,
-    DESTINATIONS: DESTINATIONS,
+    DESTINATIONS: DESTINATIONS, canSee: canSee,
     getHymns: getHymns, getPeople: getPeople, getServices: getServices,
-    getNextService: getNextService, getAnalytics: getAnalytics,
-    getShepherdViews: getShepherdViews, getReminders: getReminders, getDocuments: getDocuments,
-    lc: lc, fmtDate: fmtDate,
+    getNextService: getNextService,
+    lc: lc,
   };
 })();

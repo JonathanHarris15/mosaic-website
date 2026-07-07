@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
     <title>Manage Tags | Mosaic</title>
 
 
@@ -13,6 +15,13 @@
 
     <style>
         [x-cloak] { display: none !important; }
+
+        /* Mobile shell: the per-tag action buttons are hover-only on desktop,
+           so they're invisible/unusable on touch. Show them always, let the row
+           wrap instead of crushing the name, and enlarge the tap targets. */
+        html.shell-mobile .tag-actions { opacity: 1 !important; }
+        html.shell-mobile .tag-row { flex-wrap: wrap; row-gap: 4px; }
+        html.shell-mobile .tag-actions button { padding: 6px; }
     </style>
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
@@ -68,12 +77,12 @@
             <ul class="flex flex-col gap-xs">
                 <template x-for="tag in shepherdingTags" :key="tag.id">
                     <li class="group flex flex-col gap-xs px-sm py-sm rounded-lg border border-transparent hover:border-outline-variant hover:bg-surface-container transition-colors">
-                        <div class="flex items-center justify-between gap-sm">
+                        <div class="tag-row flex items-center justify-between gap-sm">
                             <span x-show="editingTagId !== tag.id" class="font-body-md text-on-surface" x-text="tag.name"></span>
                             <input x-show="editingTagId === tag.id" type="text" x-model="editingTagName"
                                    @keydown.enter="renameTag(tag.id)" @keydown.escape="cancelRenameTag()"
                                    class="flex-grow border border-outline-variant rounded px-sm py-[2px] font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                            <div class="flex items-center gap-sm flex-shrink-0"
+                            <div class="tag-actions flex items-center gap-sm flex-shrink-0"
                                  :class="editingTagId === tag.id || mergingTagId === tag.id ? '' : 'opacity-0 group-hover:opacity-100 transition-opacity'">
                                 <button x-show="editingTagId === tag.id" @click="renameTag(tag.id)"
                                     class="text-primary transition-colors" title="Save name">

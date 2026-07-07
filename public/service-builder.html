@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
     <title>Order of Service - Mosaic Services</title>
     <!-- Google Fonts: Noto Serif & Work Sans -->
 
@@ -60,6 +60,12 @@
         .theme-input { background: transparent; border: none; border-bottom: 1px dashed #cdbfa6; border-radius: 3px; padding: 1px 3px; width: 100%; transition: background .15s ease; }
         .theme-input:hover { background: #f3efe6; }
         .theme-input:focus { outline: none; background: #fff; border-bottom-color: transparent; box-shadow: 0 0 0 2px rgba(67,96,130,.45); }
+    </style>
+    <!-- Mobile shell polish: applied only when opened as service-builder.html?shell=mobile -->
+    <style>
+        body.shell-mobile > header { padding-top: env(safe-area-inset-top, 0px); }
+        body.shell-mobile > main { padding-left: 1rem; padding-right: 1rem; padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px)); }
+        body.shell-mobile > header > div { padding-left: 1rem; padding-right: 1rem; }
     </style>
     <!-- Firebase SDKs -->
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -130,7 +136,7 @@
 
     <header class="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-surface-variant/30">
         <div class="w-full mx-auto px-6 py-4 flex justify-between items-center" style="max-width: 1240px;">
-            <a href="service-calendar.html" class="font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-1">
+            <a :href="shell === 'mobile' ? 'mobile.html#/calendar' : 'service-calendar.html'" class="font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-1">
                 <span class="material-symbols-outlined text-sm">arrow_back</span>
                 Back to Calendar
             </a>

@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
     <title>Shepherd Dashboard | Mosaic</title>
 
 
@@ -40,7 +42,7 @@
 
     <!-- Header -->
     <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a href="index.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
+        <a :href="window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/home' : 'index.html'" href="index.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
             <span class="material-symbols-outlined text-[20px]">arrow_back</span>
             <span class="font-label-md text-label-md">Home</span>
         </a>

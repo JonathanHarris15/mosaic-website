@@ -127,6 +127,9 @@ function coerceBaptismCandidates(bap) {
 function serviceForm() {
     return {
         date: '',
+        // When opened from the mobile shell (service-builder.html?shell=mobile),
+        // the back link returns to the mobile app and the chrome gets phone polish.
+        shell: null,
         saving: false,
         canEdit: false,
         isShepherd: false,
@@ -432,8 +435,10 @@ function serviceForm() {
 
             const urlParams = new URLSearchParams(window.location.search);
             this.date = urlParams.get('date');
+            this.shell = urlParams.get('shell');
+            if (this.shell === 'mobile') document.body.classList.add('shell-mobile');
             if (!this.date) {
-                window.location.href = 'service-calendar.html';
+                window.location.href = this.shell === 'mobile' ? 'mobile.html#/calendar' : 'service-calendar.html';
                 return;
             }
             await this.load();

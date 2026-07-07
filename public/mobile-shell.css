@@ -1,0 +1,22 @@
+/* ============================================================
+   mobile-shell.css — base polish applied only when a desktop page
+   runs inside the mobile WebView shell (html.shell-mobile, set by
+   mobile-shell.js). Page-specific layout fixes live in that page's
+   own <style> block; this file holds only the shared chrome tweaks.
+   ============================================================ */
+
+/* Clear the notch / status bar under the top header. */
+html.shell-mobile header {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 8px) !important;
+}
+
+/* The mobile shell provides its own account menu — hide the desktop
+   auth widget (User Page / Log Out) so it can't bounce out of the shell. */
+html.shell-mobile #auth-container {
+  display: none !important;
+}
+
+/* Keep scrollable content clear of the home indicator. */
+html.shell-mobile body {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
