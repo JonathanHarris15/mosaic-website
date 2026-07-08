@@ -7,9 +7,9 @@
 (function () {
   "use strict";
   var html = M.html, Ic = M.Ic, useAsync = M.useAsync, data = M.data;
-  var useState = M.hooks.useState;
+  var useState = M.hooks.useState, useEffect = M.hooks.useEffect;
   var ui = M.ui;
-  var Screen = ui.Screen, TopBar = ui.TopBar, Body = ui.Body,
+  var Screen = ui.Screen, TopBar = ui.TopBar, BarAction = ui.BarAction, Body = ui.Body,
       Overline = ui.Overline, SearchBar = ui.SearchBar, FAB = ui.FAB, Button = ui.Button,
       Badge = ui.Badge, Avatar = ui.Avatar, statusTone = ui.statusTone;
 
@@ -261,45 +261,224 @@
   }
 
   // ── Service Calendar ─────────────────────────────────────
+  // Native port of mobile/screens_calendar.jsx: every Sunday is a slot,
+  // grouped Year › Month (blank until scheduled), with a Historic toggle,
+  // List / Table views, a month Directory sheet, Jump-to-Upcoming, and per-
+  // service Guide + Order-of-Service actions. Wired to real getServices data.
+  // "Inject service" opens the proven desktop scheduler in-shell (that shift
+  // is a destructive collectionGroup batch — kept on tested code, not re-ported).
+  var MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  function pad2(n) { return String(n).length < 2 ? "0" + n : String(n); }
+  function keyOf(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+  function parseKey(s) { var d = new Date(String(s) + "T00:00:00"); return isNaN(d.getTime()) ? null : d; }
+  function sundayOf(d) { var x = new Date(d.getTime()); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - x.getDay()); return x; }
+  function addDays(d, n) { var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
+  function scrollToId(id) { var el = document.getElementById(id); if (el) el.scrollIntoView({ block: "start", behavior: "smooth" }); }
+
+  var CAL_LABEL = { fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--on-surface-variant)" };
+
+  // Small rectangular status chip on the date cards.
+  function CalChip(props) {
+    var tones = {
+      tertiary: { bg: "var(--tertiary-container)", fg: "var(--on-tertiary-container)" },
+      secondary: { bg: "var(--secondary-container)", fg: "var(--on-secondary-container)" },
+      error: { bg: "var(--error-container)", fg: "var(--on-error-container)" },
+    };
+    var t = tones[props.tone] || tones.secondary;
+    return html`<span style=${{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 9px", borderRadius: "var(--radius-sm)", background: t.bg, color: t.fg, fontFamily: "var(--font-sans)", fontSize: 11.5, fontWeight: 600 }}>${Ic(props.icon, 12)}${props.children}</span>`;
+  }
+
+  function CalSwitch(props) {
+    return html`<button onClick=${props.onClick} role="switch" aria-checked=${props.on} style=${{ position: "relative", width: 44, height: 26, flexShrink: 0, border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-full)", cursor: "pointer", background: props.on ? "var(--primary)" : "var(--surface-container)", transition: "background 0.2s" }}>
+      <span style=${{ position: "absolute", top: 2, left: props.on ? 20 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", boxShadow: "var(--shadow-xs)", transition: "left 0.2s" }} />
+    </button>`;
+  }
+
+  function CalSheet(props) {
+    return html`<${M.Fragment}>
+      <div onClick=${props.onClose} style=${{ position: "absolute", inset: 0, zIndex: 50, background: "rgba(14,28,54,0.42)", backdropFilter: "blur(1.5px)" }} />
+      <div style=${{ position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 51, maxHeight: "78%", background: "var(--surface-container-lowest)", borderTopLeftRadius: 20, borderTopRightRadius: 20, borderTop: "1px solid var(--outline-variant)", boxShadow: "var(--shadow-lg)", display: "flex", flexDirection: "column" }}>
+        <div style=${{ padding: "16px 18px 12px", borderBottom: "1px solid var(--outline-variant)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+          <div>
+            <div style=${{ fontFamily: "var(--font-serif)", fontSize: 18, fontWeight: 600, color: "var(--primary)" }}>${props.title}</div>
+            ${props.subtitle ? html`<div style=${Object.assign({}, CAL_LABEL, { marginTop: 4 })}>${props.subtitle}</div>` : null}
+          </div>
+          <button onClick=${props.onClose} aria-label="Close" style=${{ width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-surface-variant)", cursor: "pointer", flexShrink: 0 }}>${Ic("x", 20)}</button>
+        </div>
+        <div style=${{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", paddingBottom: "calc(8px + env(safe-area-inset-bottom, 0px))" }}>${props.children}</div>
+      </div>
+    </${M.Fragment}>`;
+  }
+
+  function calActBtn(primary) {
+    return { flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 8px", borderRadius: "var(--radius-full)", cursor: "pointer", background: primary ? "var(--secondary)" : "transparent", color: primary ? "var(--on-secondary)" : "var(--secondary)", border: primary ? "1px solid var(--secondary)" : "1px solid var(--outline)", fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 600 };
+  }
+  function calDirRow(isYear) {
+    return { width: "100%", textAlign: "left", padding: isYear ? "12px 18px 6px" : "8px 18px 8px 34px", border: "none", background: "transparent", cursor: "pointer", fontFamily: isYear ? "var(--font-display)" : "var(--font-sans)", fontSize: isYear ? 16 : 14, fontWeight: isYear ? 600 : 500, color: isYear ? "var(--primary)" : "var(--on-surface-variant)" };
+  }
+
+  // Horizontally-scrolling table block for one month (columns that exist in the data).
+  function CalTable(props) {
+    var TH = { padding: "10px 12px", textAlign: "left", fontFamily: "var(--font-sans)", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--primary)", borderBottom: "1px solid var(--outline-variant)", whiteSpace: "nowrap", background: "var(--surface-container-low)" };
+    var TD = { padding: "11px 12px", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)", borderBottom: "1px solid var(--outline-variant)", whiteSpace: "nowrap", verticalAlign: "top" };
+    var cols = ["Date", "Theme", "Leader", "Preacher", "Music", "Baptism", "Sermonette"];
+    function dash(v) { return v && String(v).length ? v : "—"; }
+    return html`<div style=${{ margin: "0 16px", overflowX: "auto", WebkitOverflowScrolling: "touch", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", background: "var(--surface-container-lowest)" }}>
+      <table style=${{ borderCollapse: "collapse", minWidth: 720 }}>
+        <thead><tr>${cols.map(function (h) { return html`<th key=${h} style=${TH}>${h}</th>`; })}</tr></thead>
+        <tbody>
+          ${props.dates.map(function (d) {
+            var s = props.byDate[keyOf(d)] || {};
+            return html`<tr key=${keyOf(d)}>
+              <td style=${Object.assign({}, TD, { color: "var(--on-surface)", fontWeight: 500 })}>${d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</td>
+              <td style=${Object.assign({}, TD, { whiteSpace: "normal", minWidth: 160, color: "var(--primary)" })}>${dash(s.theme)}</td>
+              <td style=${TD}>${dash(s.serviceLeader)}</td>
+              <td style=${TD}>${dash(s.preacher)}</td>
+              <td style=${TD}>${dash(s.musicLeader)}</td>
+              <td style=${TD}>${s.hasBaptism ? "Yes" : "—"}</td>
+              <td style=${TD}>${dash(s.sermonette)}</td>
+            </tr>`;
+          })}
+        </tbody>
+      </table>
+    </div>`;
+  }
+
   function CalendarScreen(props) {
     var st = useAsync(data.getServices, []);
-    var tabS = useState("Upcoming");
+    var viewS = useState("List");
+    var histS = useState(false);
+    var dirS = useState(false);
+    var hlS = useState(null);
+    var view = viewS[0], hist = histS[0];
+
+    var services = st.data || [];
+    var byDate = {};
+    services.forEach(function (s) { byDate[s.date] = s; });
     var today = new Date().toISOString().slice(0, 10);
-    var all = st.data || [];
-    var list = all.filter(function (s) {
-      var upcoming = String(s.date) >= today;
-      return tabS[0] === "Upcoming" ? upcoming : !upcoming;
+
+    // Sunday range: from the earliest of (today, first scheduled Sunday) through
+    // the later of (last scheduled Sunday, ~120 days out) so upcoming blank slots
+    // are always available to schedule into.
+    var keys = services.map(function (s) { return s.date; }).filter(function (k) { return !!parseKey(k); });
+    var minKey = keys.length ? keys.reduce(function (a, b) { return a < b ? a : b; }) : today;
+    var maxKey = keys.length ? keys.reduce(function (a, b) { return a > b ? a : b; }) : today;
+    var startD = sundayOf(parseKey(minKey < today ? minKey : today) || new Date());
+    var endD = sundayOf(addDays(new Date(), 120));
+    var maxD = sundayOf(parseKey(maxKey) || new Date());
+    if (maxD.getTime() > endD.getTime()) endD = maxD;
+    var sundays = [];
+    for (var dd = new Date(startD.getTime()); dd.getTime() <= endD.getTime(); dd = addDays(dd, 7)) sundays.push(new Date(dd.getTime()));
+
+    var upcomingKey = null;
+    for (var u = 0; u < sundays.length; u++) { if (keyOf(sundays[u]) >= today) { upcomingKey = keyOf(sundays[u]); break; } }
+
+    var shown = hist ? sundays : sundays.filter(function (d) { return keyOf(d) >= today; });
+
+    // Group into [{ year, months: [{ mi, month, dates: [] }] }]
+    var grouped = [];
+    shown.forEach(function (d) {
+      var y = d.getFullYear(), mi = d.getMonth();
+      var yg = null, i;
+      for (i = 0; i < grouped.length; i++) { if (grouped[i].year === y) { yg = grouped[i]; break; } }
+      if (!yg) { yg = { year: y, months: [] }; grouped.push(yg); }
+      var mg = null;
+      for (i = 0; i < yg.months.length; i++) { if (yg.months[i].mi === mi) { mg = yg.months[i]; break; } }
+      if (!mg) { mg = { mi: mi, month: MONTH_NAMES[mi], dates: [] }; yg.months.push(mg); }
+      mg.dates.push(d);
     });
+
+    function jumpUpcoming() {
+      if (!upcomingKey) return;
+      var el = document.getElementById("cal-d-" + upcomingKey);
+      if (el) { el.scrollIntoView({ block: "start", behavior: "smooth" }); hlS[1](upcomingKey); setTimeout(function () { hlS[1](null); }, 2000); }
+    }
+    function goGuide(s, complete) {
+      if (s && !complete && !window.confirm("Warning: There are elements that you have not completed yet. Please do so before going to the service guide page.\n\nDo you still want to proceed to the editor?")) return;
+      props.nav("serviceGuide");
+    }
+    function openScheduler() { window.location.href = "service-calendar.html?shell=mobile"; }
+
+    // Jump to the upcoming service on first load / view switch.
+    useEffect(function () {
+      if (st.loading || !upcomingKey) return;
+      var el = document.getElementById("cal-d-" + upcomingKey);
+      if (el) el.scrollIntoView({ block: "start" });
+    }, [st.loading, view]);
+
+    function renderCard(d) {
+      var key = keyOf(d);
+      var s = byDate[key];
+      var hl = hlS[0] === key;
+      var complete = !!(s && s.theme && s.preacher && s.serviceLeader);
+      return html`<div key=${key} id=${"cal-d-" + key} style=${{ background: "var(--surface-container-lowest)", borderRadius: "var(--radius-xl)", padding: 15, border: hl ? "2px solid var(--primary)" : "1px solid var(--outline-variant)", boxShadow: hl ? "var(--shadow-sm)" : "none", transition: "border-color 0.3s, box-shadow 0.3s" }}>
+        <div style=${{ display: "flex", gap: 13 }}>
+          <div style=${{ flexShrink: 0, width: 52, height: 52, borderRadius: "var(--radius)", background: "var(--primary-fixed)", color: "var(--primary)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+            <span style=${{ fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>${d.toLocaleDateString(undefined, { weekday: "short" })}</span>
+            <span style=${{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, lineHeight: 1 }}>${d.getDate()}</span>
+          </div>
+          <div style=${{ flex: 1, minWidth: 0 }}>
+            <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14.5, fontWeight: 600, color: "var(--on-surface)" }}>${d.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}</div>
+            ${s ? html`<${M.Fragment}>
+              <div style=${{ fontFamily: "var(--font-serif)", fontSize: 15, fontWeight: 600, color: "var(--primary)", marginTop: 3, lineHeight: 1.25 }}>${s.theme}</div>
+              <div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 3 }}>${s.preacher ? "Preaching · " + s.preacher : "Sunday Service"}</div>
+              <div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                ${s.hasBaptism ? html`<${CalChip} icon="droplets" tone="tertiary">Baptism<//>` : null}
+                ${s.sermonette ? html`<${CalChip} icon="mic" tone="secondary">Sermonette<//>` : null}
+                ${!complete ? html`<${CalChip} icon="triangle-alert" tone="error">Incomplete<//>` : null}
+              </div>
+            </${M.Fragment}>` : html`<div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 3 }}>Sunday Service · <span style=${{ fontStyle: "italic" }}>unscheduled</span></div>`}
+          </div>
+        </div>
+        <div style=${{ display: "flex", gap: 8, marginTop: 13 }}>
+          <button onClick=${function () { goGuide(s, complete); }} style=${calActBtn(true)}>${Ic("book-open", 16)} Service Guide</button>
+          <button onClick=${function () { props.nav("serviceBuilder", { date: key }); }} style=${calActBtn(false)}>${Ic("list-checks", 16)} Order of Service</button>
+        </div>
+      </div>`;
+    }
+
     return html`
       <${Screen}>
-        <${TopBar} title="Service Calendar" onMenu=${props.openMenu} />
-        <${Body} style=${{ paddingTop: 14 }}>
-          <div style=${{ padding: "0 16px 14px" }}><${Segmented} options=${["Upcoming", "Past"]} value=${tabS[0]} onChange=${function (o) { tabS[1](o); }} /></div>
+        <${TopBar} title="Service Calendar" onMenu=${props.openMenu} right=${html`
+          <${BarAction} icon="list-tree" label="Directory" onClick=${function () { dirS[1](true); }} />
+          <${BarAction} icon="calendar-plus" label="Inject service" onClick=${openScheduler} />
+        `} />
+
+        <div style=${{ flexShrink: 0, background: "var(--surface-container-lowest)", borderBottom: "1px solid var(--outline-variant)", padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <label onClick=${function () { histS[1](!hist); }} style=${{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
+            <span style=${CAL_LABEL}>Historic</span>
+            <${CalSwitch} on=${hist} onClick=${function () { histS[1](!hist); }} />
+          </label>
+          <${Segmented} options=${["List", "Table"]} value=${view} onChange=${function (o) { viewS[1](o); }} />
+        </div>
+
+        <${Body}>
           ${st.loading ? html`<${Loading} label="Loading services…" />` : st.error ? html`<${ErrorNote}>Couldn't load services.<//>` : html`
-            <div style=${{ padding: "0 16px 90px", display: "flex", flexDirection: "column", gap: 12 }}>
-              ${list.map(function (s) {
-                var lab = svcLabel(s.date);
-                var complete = !!(s.theme && s.preacher && s.serviceLeader);
-                return html`<button key=${s.id} onClick=${function () { props.nav("serviceBuilder", { date: s.date }); }} style=${{ display: "flex", gap: 14, width: "100%", textAlign: "left", padding: 16, cursor: "pointer", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)" }}>
-                  <div style=${{ flexShrink: 0, width: 52, textAlign: "center" }}>
-                    <div style=${{ fontFamily: "var(--font-sans)", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.1em", color: "var(--secondary)" }}>${lab.mon}</div>
-                    <div style=${{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 600, color: "var(--primary)", lineHeight: 1 }}>${lab.day}</div>
-                    ${lab.year ? html`<div style=${{ fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 600, color: "var(--on-surface-variant)", marginTop: 3 }}>${lab.year}</div>` : null}
-                  </div>
-                  <div style=${{ flex: 1, minWidth: 0, borderLeft: "1px solid var(--outline-variant)", paddingLeft: 14 }}>
-                    <div style=${{ fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--on-surface)", lineHeight: 1.25 }}>${s.theme}</div>
-                    ${s.preacher ? html`<div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 4 }}>Preaching · ${s.preacher}</div>` : null}
-                    <div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-                      ${s.hasBaptism ? html`<${Badge} tone="tertiary" icon=${Ic("droplet", 12)}>Baptism<//>` : null}
-                      ${s.sermonette ? html`<${Badge} tone="secondary" icon=${Ic("mic", 12)}>Sermonette<//>` : null}
-                      ${!complete ? html`<${Badge} tone="neutral" icon=${Ic("triangle-alert", 12)}>Incomplete<//>` : null}
-                    </div>
-                  </div>
-                </button>`;
-              })}
-              ${list.length === 0 ? html`<${Empty}>No ${tabS[0].toLowerCase()} services.<//>` : null}
+            <div style=${{ padding: view === "List" ? "8px 16px 96px" : "8px 0 96px" }}>
+              ${grouped.map(function (yg) { return html`
+                <div key=${yg.year} id=${"cal-y-" + yg.year}>
+                  <h2 style=${{ margin: view === "List" ? "14px 0 8px" : "14px 16px 8px", paddingBottom: 6, borderBottom: "1px solid var(--outline-variant)", fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 600, color: "var(--primary)" }}>${yg.year}</h2>
+                  ${yg.months.map(function (mg) { return html`
+                    <div key=${mg.mi} id=${"cal-m-" + yg.year + "-" + mg.mi} style=${{ marginBottom: 18 }}>
+                      <h3 style=${{ margin: view === "List" ? "10px 0 8px" : "10px 16px 8px", fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--secondary)" }}>${mg.month}</h3>
+                      ${view === "List"
+                        ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>${mg.dates.map(function (d) { return renderCard(d); })}</div>`
+                        : html`<${CalTable} dates=${mg.dates} byDate=${byDate} />`}
+                    </div>`; })}
+                </div>`; })}
+              ${grouped.length === 0 ? html`<${Empty}>No services to show.<//>` : null}
             </div>`}
         </${Body}>
+
+        <${FAB} icon="calendar-check" label="Jump to upcoming" onClick=${jumpUpcoming} />
+
+        ${dirS[0] ? html`<${CalSheet} title="Directory" subtitle="Jump to a month" onClose=${function () { dirS[1](false); }}>
+          <button onClick=${function () { dirS[1](false); setTimeout(jumpUpcoming, 60); }} style=${{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "12px 18px", border: "none", borderBottom: "1px solid var(--outline-variant)", background: "transparent", cursor: "pointer", color: "var(--primary)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>${Ic("calendar-check", 16)} Jump to Upcoming</button>
+          ${grouped.map(function (yg) { return html`<div key=${yg.year}>
+            <button onClick=${function () { dirS[1](false); setTimeout(function () { scrollToId("cal-y-" + yg.year); }, 60); }} style=${calDirRow(true)}>${yg.year}</button>
+            ${yg.months.map(function (mg) { return html`<button key=${mg.mi} onClick=${function () { dirS[1](false); setTimeout(function () { scrollToId("cal-m-" + yg.year + "-" + mg.mi); }, 60); }} style=${calDirRow(false)}>${mg.month}</button>`; })}
+          </div>`; })}
+        </${CalSheet}>` : null}
       </${Screen}>`;
   }
 

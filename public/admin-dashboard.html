@@ -15,6 +15,30 @@
     <style>
         [x-cloak] { display: none !important; }
     </style>
+
+    <!-- ============================================================
+         Mobile-shell presentation. When admin-dashboard.html opens inside
+         the Capacitor WebView (?shell=mobile → html.shell-mobile), this tunes
+         the desktop page to the "Admin Dashboard" screen from the Mosaic
+         Mobile design (mobile/screens_admin.jsx): tighter phone padding and
+         type on the SMS (Textbelt) + Prayer Request cards. The desktop grid
+         already stacks to one column on narrow widths. Desktop is untouched.
+         ============================================================ -->
+    <style>
+        html.shell-mobile main {
+            padding: 14px 16px calc(28px + env(safe-area-inset-bottom, 0px));
+            gap: 22px;
+            max-width: 100%;
+        }
+        html.shell-mobile main h1 { font-size: 24px; line-height: 1.2; }
+        html.shell-mobile main section > .flex > h2 { font-size: 19px; }
+        html.shell-mobile main h3 { font-size: 16.5px; }
+        html.shell-mobile main section { gap: 14px; }
+        /* p-lg is 48px — far too much on a phone; the design cards use 18px */
+        html.shell-mobile main .p-lg { padding: 18px; }
+        /* Credits figure: display-lg (48px) → 40px as in the design */
+        html.shell-mobile main .text-display-lg { font-size: 40px; }
+    </style>
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
     <script src="vendor/firebase/firebase-firestore-compat.js"></script>

@@ -5,6 +5,19 @@
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Service Calendar - Mosaic Services</title>
+
+    <!-- Mobile shell: adapt this page when opened inside the Capacitor WebView
+         (the native Service Calendar routes its "Inject service" action here). -->
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.MOSAIC_SHELL === 'mobile') {
+                var h = document.getElementById('shell-home-link');
+                if (h) h.setAttribute('href', 'mobile.html#/home');
+            }
+        });
+    </script>
     <!-- Google Fonts: Noto Serif & Work Sans -->
 
 
@@ -377,7 +390,7 @@
     <header class="sticky top-0 flex-shrink-0 bg-background/80 backdrop-blur-md border-b border-surface-variant/30 z-[60]">
         <div class="w-full max-w-[1600px] mx-auto px-margin py-md flex justify-between items-center gap-md">
             <div class="flex items-center gap-md min-w-0">
-                <a href="index.html" class="flex-shrink-0 font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-1">
+                <a id="shell-home-link" href="index.html" class="flex-shrink-0 font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-1">
                     <span class="material-symbols-outlined text-sm">arrow_back</span>
                     <span class="hidden md:inline">Back to Dashboard</span>
                 </a>

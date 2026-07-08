@@ -14,14 +14,30 @@
    ============================================================ */
 (function () {
   "use strict";
+  var param = null;
   try {
     var p = new URLSearchParams(window.location.search);
-    if (p.get("shell") === "mobile") sessionStorage.setItem("mosaicShell", "mobile");
-    else if (p.get("shell") === "web") sessionStorage.removeItem("mosaicShell");
+    param = p.get("shell");
+    if (param === "mobile") sessionStorage.setItem("mosaicShell", "mobile");
+    else if (param === "web") sessionStorage.removeItem("mosaicShell");
   } catch (e) {}
 
   var isMobile = false;
   try { isMobile = sessionStorage.getItem("mosaicShell") === "mobile"; } catch (e) {}
+
+  // Guard against a sticky session flag leaking the mobile shell into a desktop
+  // browser. sessionStorage remembers "mobile" for the whole tab so navigation
+  // between shell pages needn't re-pass ?shell=mobile — but that same stickiness
+  // would make a desktop page (opened later in the tab) render mobile-cramped
+  // and send its back-links to the mobile home. So unless THIS navigation
+  // explicitly asked for the shell (?shell=mobile), only honor it inside the
+  // native app (window.Capacitor) or on a phone-sized viewport.
+  if (isMobile && param !== "mobile") {
+    var inApp = !!window.Capacitor;
+    var narrow = !window.matchMedia || window.matchMedia("(max-width: 820px)").matches;
+    if (!inApp && !narrow) isMobile = false;
+  }
+
   window.MOSAIC_SHELL = isMobile ? "mobile" : "web";
   if (!isMobile) return;
 
