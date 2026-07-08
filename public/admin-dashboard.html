@@ -5,8 +5,9 @@
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Admin Dashboard | Mosaic</title>
 
-
-
+    <!-- Mobile shell: adapt this page when opened inside the Capacitor WebView. -->
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
 
     <link rel="stylesheet" href="mosaic.css" />
     <link rel="stylesheet" href="fonts.css" />
@@ -27,7 +28,7 @@
 
     <!-- Header -->
     <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a href="index.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
+        <a :href="window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/home' : 'index.html'" href="index.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
             <span class="material-symbols-outlined text-[20px]">arrow_back</span>
             <span class="font-label-md text-label-md">Home</span>
         </a>

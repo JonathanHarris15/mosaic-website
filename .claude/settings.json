@@ -25,7 +25,10 @@
       "Bash(node --check public/shepherding-inline-triggers.js)",
       "Bash(node --check public/shepherding-care-list.js)",
       "Bash(node --check public/shepherding-document.js)",
-      "Bash(node --test test/shepherding-core.test.js)"
+      "Bash(node --test test/shepherding-core.test.js)",
+      "Bash(grep -iE '\\\\.html$')",
+      "Bash(node --check public/auth.js)",
+      "Bash(npm test *)"
     ]
   }
 }

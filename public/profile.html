@@ -4,6 +4,20 @@
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>User Profile - Mosaic Church</title>
+
+    <!-- Mobile shell: adapt this page when opened inside the Capacitor WebView. -->
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <script>
+        // Non-Alpine page: point the back link at the shell home when inside it.
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.MOSAIC_SHELL === 'mobile') {
+                var h = document.getElementById('shell-home-link');
+                if (h) h.setAttribute('href', 'mobile.html#/home');
+            }
+        });
+    </script>
+
     <link rel="stylesheet" href="mosaic.css" />
     <link rel="stylesheet" href="fonts.css" />
 
@@ -41,7 +55,7 @@
     
     <header class="w-full max-w-full border-b border-surface-variant/30 px-6 py-4 flex justify-between items-center relative z-50 bg-surface sticky top-0">
         <div class="flex-1">
-            <a href="index.html" class="font-label-md text-label-md text-secondary hover:text-primary transition-all flex items-center gap-2 group">
+            <a id="shell-home-link" href="index.html" class="font-label-md text-label-md text-secondary hover:text-primary transition-all flex items-center gap-2 group">
                 <span class="material-symbols-outlined text-sm group-hover:-translate-x-1 transition-transform">arrow_back</span>
                 <span class="hidden md:inline">Back to Dashboard</span>
                 <span class="md:hidden">Back</span>

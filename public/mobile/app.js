@@ -127,64 +127,13 @@
       </${Screen}>`;
   }
 
-  // ── Profile ──────────────────────────────────────────────
-  function ProfileScreen(props) {
-    var user = props.user || {};
-    function out() { data.signOut().then(function () { props.nav("login"); }); }
-    return html`
-      <${Screen}>
-        <${TopBar} title="Profile" onBack=${props.back} serif=${false} />
-        <${Body} style=${{ padding: "20px 16px calc(40px + env(safe-area-inset-bottom, 0px))" }}>
-          <div style=${{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 22 }}>
-            <${Avatar} name=${user.name || "Guest"} size=${80} />
-            <div style=${{ fontFamily: "var(--font-serif)", fontSize: 22, fontWeight: 600, color: "var(--on-surface)", marginTop: 12 }}>${user.name || "Guest"}</div>
-            <div style=${{ fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)", marginTop: 2 }}>${user.email || "Not signed in"}</div>
-            ${user.roleLabel ? html`<div style=${{ marginTop: 10 }}><${Badge} tone="primary" icon=${Ic("shield", 13)}>${user.roleLabel}<//></div>` : null}
-          </div>
-          <${Overline} style=${{ margin: "0 0 8px 6px" }}>Account<//>
-          <${CardList} style=${{ marginBottom: 18 }}>
-            <${Row} leading=${Ic("bell", 20)} title="Notifications" meta="On" onClick=${function () {}} />
-            <${Row} leading=${Ic("palette", 20)} title="Theme" meta="Parchment" onClick=${function () {}} isLast=${true} />
-          </${CardList}>
-          <div onClick=${out}>
-            <${Button} variant="secondary" size="md" style=${{ width: "100%" }} icon=${Ic("log-out", 17)}>Sign Out<//>
-          </div>
-        </${Body}>
-      </${Screen}>`;
-  }
-
-  // ── Admin ────────────────────────────────────────────────
-  function AdminScreen(props) {
-    var tools = [
-      { icon: "message-square-text", title: "SMS & Messaging", desc: "Prayer request texts & the Elder Digest." },
-      { icon: "refresh-cw", title: "Member Sync", desc: "Reconcile the directory with Planning Center." },
-      { icon: "user-cog", title: "Roles & Permissions", desc: "Assign editor, elder, and admin roles." },
-      { icon: "database", title: "Data & Exports", desc: "Backups, CSV exports, schedule import." },
-    ];
-    return html`
-      <${Screen}>
-        <${TopBar} title="Admin" onMenu=${props.openMenu} />
-        <${Body} style=${{ padding: "18px 16px calc(40px + env(safe-area-inset-bottom, 0px))" }}>
-          <${Overline} style=${{ margin: "0 0 10px 6px" }}>System Tools<//>
-          <div style=${{ display: "flex", flexDirection: "column", gap: 12 }}>
-            ${tools.map(function (t) {
-              return html`
-                <button key=${t.title} style=${{ display: "flex", alignItems: "center", gap: 14, padding: 16, background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", cursor: "pointer", textAlign: "left" }}>
-                  <${Medallion} icon=${t.icon} size=${46} />
-                  <div style=${{ flex: 1 }}>
-                    <div style=${{ fontFamily: "var(--font-serif)", fontSize: 16.5, fontWeight: 600, color: "var(--on-surface)" }}>${t.title}</div>
-                    <div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 2 }}>${t.desc}</div>
-                  </div>
-                  <span style=${{ color: "var(--outline)" }}>${Ic("chevron-right", 18)}</span>
-                </button>`;
-            })}
-          </div>
-        </${Body}>
-      </${Screen}>`;
-  }
+  // Profile and Admin are shell-adapted (see SHELL_PAGES below): the real
+  // desktop pages — profile.html (password change, staff management) and
+  // admin-dashboard.html — run inside the WebView with ?shell=mobile, so the
+  // mobile app inherits every feature instead of a placeholder stub.
 
   // Merge app-level screens with the content screens from screens-content.js.
-  M.SCREENS = Object.assign(M.SCREENS || {}, { login: LoginScreen, home: HomeScreen, profile: ProfileScreen, admin: AdminScreen });
+  M.SCREENS = Object.assign(M.SCREENS || {}, { login: LoginScreen, home: HomeScreen });
   var SCREENS = M.SCREENS;
 
   // Routes that open a full desktop page in-place within the same WebView.
@@ -193,6 +142,8 @@
   // mobile app gets every feature + the proven save logic — no reimplementation.
   var SHELL_PAGES = {
     shepherd: "shepherding-dashboard.html",
+    profile: "profile.html",
+    admin: "admin-dashboard.html",
   };
 
   function nav(route, params) {
