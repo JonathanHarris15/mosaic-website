@@ -50,22 +50,22 @@ test('classifyRows flags an ambiguous name (multiple matches) instead of merging
     assert.strictEqual(max.matchId, null);
 });
 
-test('buildPersonFromRow defaults to Member stage with the Member tag and stashes anniversary', () => {
+test('buildPersonFromRow fills only contact/birthday/anniversary — never stage or tags', () => {
     const rows = Import.parseCsv(CSV);
-    const fields = Import.buildPersonFromRow(rows[0], ['Red Flag']);
-    assert.strictEqual(fields.name, 'Max Maret');
-    assert.strictEqual(fields['membership.stage'], 'member');
+    const fields = Import.buildPersonFromRow(rows[0]);
     assert.strictEqual(fields['contact.phone'], '(816) 520-0262');
     assert.strictEqual(fields.birthday, '1995-01-27');
     assert.strictEqual(fields.importedAnniversary, '04/18/2021');
-    assert.ok(fields.tags.includes('Member'), 'Member tag projected');
-    assert.ok(fields.tags.includes('Red Flag'), 'existing non-membership tag preserved');
+    // Membership stage and tags are owned by the Track migration, not the import.
+    for (const key of Object.keys(fields)) {
+        assert.ok(!/membership|tags|stage/i.test(key), `import must not touch ${key}`);
+    }
 });
 
-test('buildPersonFromRow omits birthday and anniversary when the CSV has none', () => {
+test('buildPersonFromRow omits any field the CSV leaves blank (never blanks existing data)', () => {
     const rows = Import.parseCsv(CSV);
-    const visitor = Import.buildPersonFromRow(rows[2], []); // New Visitor row, blanks
+    const visitor = Import.buildPersonFromRow(rows[2]); // New Visitor row, blanks
     assert.ok(!('birthday' in visitor));
     assert.ok(!('importedAnniversary' in visitor));
-    assert.strictEqual(visitor['membership.stage'], 'member');
+    assert.ok(!('contact.phone' in visitor));
 });

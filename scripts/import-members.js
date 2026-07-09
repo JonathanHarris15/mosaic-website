@@ -76,18 +76,16 @@ function classifyRows(rows, existingPeople) {
     });
 }
 
-// Build the Person field set for a CSV row: name, phone, birthday, Member stage
-// (with its projected tags), and the stashed anniversary. `existingTags` lets an
-// update preserve any tags the Person already carries.
-function buildPersonFromRow(row, existingTags) {
-    const membership = { stage: 'member', inactive: false };
-    const fields = {
-        name: (row.Name || '').trim(),
-        'contact.phone': (row['Primary Phone Number'] || '').trim(),
-        'membership.stage': 'member',
-        'membership.inactive': false,
-        tags: Core.applyMembershipTags(existingTags || [], membership),
-    };
+// Build the contact-only update for a matched Person: phone, birthday, and the
+// stashed anniversary. Deliberately does NOT touch membership stage or tags —
+// those are owned by the Track migration (which derives them from the real tag
+// data); the CSV's blanket "member" would clobber Moving Membership etc. Only
+// fills a field when the CSV actually carries a value, so an update never blanks
+// existing data.
+function buildPersonFromRow(row) {
+    const fields = {};
+    const phone = (row['Primary Phone Number'] || '').trim();
+    if (phone) fields['contact.phone'] = phone;
     const birthday = toIsoDate(row.Birthdate);
     if (birthday) fields.birthday = birthday;
     const anniversary = (row.Anniversary || '').trim();
@@ -126,41 +124,33 @@ if (require.main === module) {
         const existing = peopleSnap.docs.map(d => ({ id: d.id, name: (d.data().name || ''), tags: d.data().tags || [] }));
         const plan = classifyRows(rows, existing);
 
-        let created = 0, updated = 0, flagged = 0;
+        let updated = 0, flagged = 0;
+        const flags = [];
         for (const item of plan) {
-            if (item.action === 'ambiguous') {
+            // Only a single confident name match is applied. No match (likely a
+            // nickname/spelling variant of someone who already exists) and
+            // multiple matches are FLAGGED for a human to add or merge by hand —
+            // the import never creates a Person, so it can't spawn duplicates.
+            if (item.action !== 'update') {
                 flagged++;
-                console.log(`  FLAG (ambiguous name): ${item.row.Name} — multiple existing People match; resolve by hand`);
+                flags.push(`${item.row.Name}${item.action === 'ambiguous' ? ' (ambiguous — multiple matches)' : ' (no exact match)'}`);
                 continue;
             }
-            const existingPerson = item.matchId ? existing.find(e => e.id === item.matchId) : null;
-            const fields = buildPersonFromRow(item.row, existingPerson ? existingPerson.tags : []);
-            if (item.action === 'create') {
-                created++;
-                console.log(`  ${COMMIT ? 'create' : 'would create'}: ${fields.name}`);
-                if (COMMIT) {
-                    await db.collection('people').add({
-                        name: fields.name,
-                        contact: { phone: fields['contact.phone'] },
-                        membership: { stage: 'member', inactive: false },
-                        tags: fields.tags,
-                        birthday: fields.birthday || null,
-                        importedAnniversary: fields.importedAnniversary || null,
-                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                    });
-                }
-            } else {
-                updated++;
-                console.log(`  ${COMMIT ? 'update' : 'would update'}: ${fields.name} (${item.matchId})`);
-                if (COMMIT) {
-                    await db.collection('people').doc(item.matchId).update(Object.assign({}, fields, {
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                    }));
-                }
+            const fields = buildPersonFromRow(item.row);
+            updated++;
+            const summary = Object.keys(fields).join(', ') || '(nothing to fill)';
+            console.log(`  ${COMMIT ? 'update' : 'would update'}: ${item.row.Name} (${item.matchId}) — ${summary}`);
+            if (COMMIT && Object.keys(fields).length) {
+                await db.collection('people').doc(item.matchId).update(Object.assign({}, fields, {
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                }));
             }
         }
-        console.log(`\nDone. ${COMMIT ? 'Created' : 'To create'}: ${created}, ${COMMIT ? 'updated' : 'to update'}: ${updated}, flagged: ${flagged}.`);
+        if (flags.length) {
+            console.log(`\n⚠ ${flags.length} row(s) FLAGGED — no confident match; add or merge by hand (never auto-created):`);
+            for (const f of flags) console.log(`   ${f}`);
+        }
+        console.log(`\nDone. ${COMMIT ? 'Updated' : 'To update'}: ${updated}, flagged: ${flagged}.`);
         if (!COMMIT) console.log('No changes were written. Re-run with --commit to apply.\n');
         process.exit(0);
     })().catch(err => { console.error('Import failed:', err); process.exit(1); });
