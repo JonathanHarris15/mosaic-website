@@ -15,6 +15,12 @@
     <link rel="stylesheet" href="mosaic.css" />
     <link rel="stylesheet" href="fonts.css" />
 
+    <!-- Mobile shell: standardized back-arrow header when opened in the WebView. -->
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <script>window.MOBILE_HEADER = { title: 'Service Editor', back: 'mobile.html#/calendar' };</script>
+    <script src="mobile-shell-header.js"></script>
+
     <!-- Alpine JS -->
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
     <!-- Sortable JS -->

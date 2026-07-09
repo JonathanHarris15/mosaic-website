@@ -8,15 +8,8 @@
     <!-- Mobile shell: adapt this page when opened inside the Capacitor WebView. -->
     <script src="mobile-shell.js"></script>
     <link rel="stylesheet" href="mobile-shell.css" />
-    <script>
-        // Non-Alpine page: point the back link at the shell home when inside it.
-        document.addEventListener('DOMContentLoaded', function () {
-            if (window.MOSAIC_SHELL === 'mobile') {
-                var h = document.getElementById('shell-home-link');
-                if (h) h.setAttribute('href', 'mobile.html#/home');
-            }
-        });
-    </script>
+    <script>window.MOBILE_HEADER = { title: 'Profile', back: 'mobile.html#/home' };</script>
+    <script src="mobile-shell-header.js"></script>
 
     <link rel="stylesheet" href="mosaic.css" />
     <link rel="stylesheet" href="fonts.css" />

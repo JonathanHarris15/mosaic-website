@@ -5,6 +5,8 @@
     <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
     <script src="mobile-shell.js"></script>
     <link rel="stylesheet" href="mobile-shell.css" />
+    <script>window.MOBILE_HEADER = { title: 'Manage Tags', back: 'mobile.html#/shepherd' };</script>
+    <script src="mobile-shell-header.js"></script>
     <title>Manage Tags | Mosaic</title>
 
 
@@ -16,12 +18,39 @@
     <style>
         [x-cloak] { display: none !important; }
 
-        /* Mobile shell: the per-tag action buttons are hover-only on desktop,
-           so they're invisible/unusable on touch. Show them always, let the row
-           wrap instead of crushing the name, and enlarge the tap targets. */
+        /* Mobile shell: the per-tag action buttons are hover-only on desktop, so
+           they're invisible/unusable on touch. Stack the name over a full-width
+           action bar with evenly-spread, finger-sized targets so nothing gets
+           crushed on a phone. Desktop is untouched (rules scoped to .shell-mobile). */
+        html.shell-mobile main { padding-left: 16px; padding-right: 16px; }
         html.shell-mobile .tag-actions { opacity: 1 !important; }
-        html.shell-mobile .tag-row { flex-wrap: wrap; row-gap: 4px; }
-        html.shell-mobile .tag-actions button { padding: 6px; }
+        html.shell-mobile .tag-row {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+        }
+        html.shell-mobile .tag-row > span,
+        html.shell-mobile .tag-row > input { width: 100%; font-size: 1rem; }
+        html.shell-mobile .tag-actions {
+            width: 100%;
+            justify-content: space-between;
+            gap: 4px;
+            padding-top: 8px;
+            border-top: 1px solid var(--outline-variant);
+        }
+        html.shell-mobile .tag-actions button {
+            flex: 1 1 0;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            background: var(--surface-container);
+            padding: 0;
+        }
+        html.shell-mobile .tag-actions button:active { background: var(--surface-container-high); }
+        /* Merge survivor picker: room to wrap + finger-sized chips. */
+        html.shell-mobile .tag-merge-option { padding: 8px 14px; }
     </style>
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
@@ -36,7 +65,7 @@
 
     <!-- Header -->
     <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a href="shepherding-dashboard.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
+        <a :href="window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/shepherd' : 'shepherding-dashboard.html'" href="shepherding-dashboard.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
             <span class="material-symbols-outlined text-[20px]">arrow_back</span>
             <span class="font-label-md text-label-md">Shepherd Dashboard</span>
         </a>
@@ -121,7 +150,7 @@
                             <div class="flex flex-wrap gap-xs">
                                 <template x-for="other in shepherdingTags.filter(t => t.id !== tag.id)" :key="other.id">
                                     <button @click="mergeTagInto(other.id)"
-                                        class="px-sm py-[2px] bg-surface-container text-on-surface hover:bg-primary hover:text-on-primary rounded-full font-label-md text-label-md transition-colors"
+                                        class="tag-merge-option px-sm py-[2px] bg-surface-container text-on-surface hover:bg-primary hover:text-on-primary rounded-full font-label-md text-label-md transition-colors"
                                         x-text="other.name"></button>
                                 </template>
                                 <span x-show="shepherdingTags.length <= 1" class="text-xs italic text-on-surface-variant">No other tag to merge into.</span>

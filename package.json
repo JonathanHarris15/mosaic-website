@@ -21,6 +21,7 @@
     "build:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/mosaic.css --minify",
     "watch:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/mosaic.css --watch",
     "vendor": "node scripts/vendor-assets.mjs && node scripts/vendor-fonts.mjs",
+    "vendor:tiptap": "cd build/tiptap && npm install --no-audit --no-fund && npm run build",
     "sync": "npm run build:css && cap sync"
   }
 }

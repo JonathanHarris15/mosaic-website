@@ -75,6 +75,7 @@
               ${results.length === 0 ? html`<${Empty}>No hymns match your search.<//>` : null}
             </div>`}
         </${Body}>
+        <${FAB} icon="plus" label="Add hymn" onClick=${function () { props.nav("hymnManager", { new: true }); }} />
       </${Screen}>`;
   }
 
@@ -104,59 +105,14 @@
             <span style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5 }}>No sheet music uploaded yet</span>
           </div>`}
           <div style=${{ display: "flex", gap: 10, marginTop: 20 }}>
-            <div style=${{ flex: 1 }}><${Button} variant="primary" size="md" style=${{ width: "100%" }} icon=${Ic("plus", 17)}>Add to Service<//></div>
+            <div style=${{ flex: 1 }}><${Button} variant="primary" size="md" style=${{ width: "100%" }} icon=${Ic("settings-2", 17)} onClick=${function () { props.nav("hymnManager", { edit: h.id }); }}>Manage Hymn<//></div>
             <div style=${{ flex: 1 }}><${Button} variant="secondary" size="md" style=${{ width: "100%" }} icon=${Ic("file-down", 17)}>Download<//></div>
           </div>
         </${Body}>
       </${Screen}>`;
   }
 
-  // ── Hymn Manager ─────────────────────────────────────────
-  function HymnManagerScreen(props) {
-    var st = useAsync(data.getHymns, []);
-    var qS = useState("");
-    var hymns = st.data || [];
-    var results = hymns.filter(function (h) { return !qS[0] || data.lc(h.name).indexOf(data.lc(qS[0])) >= 0; });
-    var noSheet = hymns.filter(function (h) { return !h.hasSheet; }).length;
-    return html`
-      <${Screen}>
-        <${TopBar} title="Hymn Manager" onMenu=${props.openMenu} />
-        <${Body} style=${{ paddingTop: 14 }}>
-          <div style=${{ padding: "0 16px 12px" }}><${SearchBar} placeholder="Search catalog" value=${qS[0]} onChange=${function (e) { qS[1](e.target.value); }} /></div>
-          <div style=${{ padding: "0 16px 12px", display: "flex", gap: 10 }}>
-            <div style=${{ flex: 1, background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", padding: "12px 14px" }}>
-              <div style=${{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 600, color: "var(--primary)" }}>${hymns.length}</div>
-              <div style=${{ fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--on-surface-variant)" }}>In catalog</div>
-            </div>
-            <div style=${{ flex: 1, background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", padding: "12px 14px" }}>
-              <div style=${{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 600, color: "var(--warning)" }}>${noSheet}</div>
-              <div style=${{ fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--on-surface-variant)" }}>No sheet music</div>
-            </div>
-          </div>
-          ${st.loading ? html`<${Loading} label="Loading catalog…" />` : html`
-            <${Overline} style=${{ padding: "0 16px 8px" }}>Catalog<//>
-            <div style=${{ padding: "0 16px 90px", display: "flex", flexDirection: "column", gap: 10 }}>
-              ${results.map(function (h) {
-                return html`<div key=${h.id} style=${{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)" }}>
-                  <div style=${{ flex: 1, minWidth: 0 }}>
-                    <div style=${{ fontFamily: "var(--font-serif)", fontSize: 16, fontWeight: 600, color: "var(--on-surface)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>${h.name}</div>
-                    <div style=${{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
-                      ${h.hasSheet
-                        ? html`<span style=${{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--success)" }}>${Ic("music", 13)} ${h.pages.length} page${h.pages.length === 1 ? "" : "s"}</span>`
-                        : html`<span style=${{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-sans)", fontSize: 11.5, color: "var(--on-surface-variant)" }}>${Ic("music-2", 13)} No sheet music</span>`}
-                    </div>
-                  </div>
-                  <button aria-label="Edit hymn" style=${{ width: 40, height: 40, border: "1px solid var(--outline-variant)", background: "var(--surface-container-low)", borderRadius: "var(--radius)", color: "var(--on-surface-variant)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>${Ic("pencil", 17)}</button>
-                </div>`;
-              })}
-              ${results.length === 0 ? html`<${Empty}>No hymns found.<//>` : null}
-            </div>`}
-        </${Body}>
-        <${FAB} icon="plus" label="Add hymn" />
-      </${Screen}>`;
-  }
-
-  // ── People's Directory ───────────────────────────────────
+  // ── Member Directory ─────────────────────────────────────
   var STATUS_LABELS = { member: "Member", regular_attender: "Regular attender", visitor: "Visitor", inactive: "Inactive" };
   function PeopleScreen(props) {
     var st = useAsync(data.getPeople, []);
@@ -175,7 +131,7 @@
     });
     return html`
       <${Screen}>
-        <${TopBar} title="People's Directory" onMenu=${props.openMenu} />
+        <${TopBar} title="Member Directory" onMenu=${props.openMenu} />
         <${Body} style=${{ paddingTop: 14 }}>
           <div style=${{ padding: "0 16px 12px" }}><${SearchBar} placeholder="Search people" value=${q} onChange=${function (e) { qS[1](e.target.value); }} /></div>
           <div style=${{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px 12px" }}>
@@ -323,13 +279,14 @@
     var TD = { padding: "11px 12px", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)", borderBottom: "1px solid var(--outline-variant)", whiteSpace: "nowrap", verticalAlign: "top" };
     var cols = ["Date", "Theme", "Leader", "Preacher", "Music", "Baptism", "Sermonette"];
     function dash(v) { return v && String(v).length ? v : "—"; }
+    function open(d) { if (props.onOpen) props.onOpen(d); }
     return html`<div style=${{ margin: "0 16px", overflowX: "auto", WebkitOverflowScrolling: "touch", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", background: "var(--surface-container-lowest)" }}>
       <table style=${{ borderCollapse: "collapse", minWidth: 720 }}>
         <thead><tr>${cols.map(function (h) { return html`<th key=${h} style=${TH}>${h}</th>`; })}</tr></thead>
         <tbody>
           ${props.dates.map(function (d) {
             var s = props.byDate[keyOf(d)] || {};
-            return html`<tr key=${keyOf(d)}>
+            return html`<tr key=${keyOf(d)} onClick=${function () { open(d); }} style=${{ cursor: "pointer" }}>
               <td style=${Object.assign({}, TD, { color: "var(--on-surface)", fontWeight: 500 })}>${d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</td>
               <td style=${Object.assign({}, TD, { whiteSpace: "normal", minWidth: 160, color: "var(--primary)" })}>${dash(s.theme)}</td>
               <td style=${TD}>${dash(s.serviceLeader)}</td>
@@ -463,7 +420,7 @@
                       <h3 style=${{ margin: view === "List" ? "10px 0 8px" : "10px 16px 8px", fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--secondary)" }}>${mg.month}</h3>
                       ${view === "List"
                         ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>${mg.dates.map(function (d) { return renderCard(d); })}</div>`
-                        : html`<${CalTable} dates=${mg.dates} byDate=${byDate} />`}
+                        : html`<${CalTable} dates=${mg.dates} byDate=${byDate} onOpen=${function (d) { props.nav("serviceBuilder", { date: keyOf(d) }); }} />`}
                     </div>`; })}
                 </div>`; })}
               ${grouped.length === 0 ? html`<${Empty}>No services to show.<//>` : null}
@@ -482,10 +439,11 @@
       </${Screen}>`;
   }
 
-  // The Shepherd Dashboard, Document Library, and the rest of the shepherding
-  // cluster are the real desktop pages, opened in-place with ?shell=mobile
-  // (routed in app.js SHELL_PAGES). Kept out of the Preact shell so mobile gets
-  // every feature + the proven save logic — see mobile-shell.js.
+  // The Shepherd Dashboard is a native screen (see mobile/screens-shepherd.js).
+  // The rest of the shepherding cluster — Documents, People, Manage Tags, and a
+  // person's file — are the real desktop pages, opened in-place with ?shell=mobile
+  // (routed in app.js SHELL_PAGES / nav). Kept out of the Preact shell so mobile
+  // gets every feature + the proven save logic — see mobile-shell.js.
 
   // ── In-shell placeholder for routes not yet ported ───────
   function ComingSoon(props) {
@@ -506,7 +464,6 @@
   M.SCREENS = Object.assign(M.SCREENS || {}, {
     hymnDirectory: HymnDirectoryScreen,
     hymnDetails: HymnDetailsScreen,
-    hymnManager: HymnManagerScreen,
     people: PeopleScreen,
     personDetail: PersonDetailScreen,
     calendar: CalendarScreen,

@@ -51,12 +51,24 @@
   <script src="vendor/firebase/firebase-app-compat.js"></script>
   <script src="vendor/firebase/firebase-auth-compat.js"></script>
   <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+  <script src="vendor/firebase/firebase-functions-compat.js"></script>
+
+  <!-- Shepherding Status value model + Tag-Hold logic (single source of truth,
+       shared with the desktop pages). Used by the native Shepherd Dashboard. -->
+  <script src="shepherding-core.js"></script>
 
   <!-- Mosaic mobile shell -->
   <script src="mobile/core.js"></script>
   <script src="mobile/ui.js"></script>
   <script src="mobile/data.js"></script>
+  <script src="mobile/tiptap-loader.js"></script>
   <script src="mobile/screens-content.js"></script>
+  <script src="mobile/screens-shepherd.js"></script>
+  <script src="mobile/screens-shepherd-tags.js"></script>
+  <script src="mobile/screens-carelist.js"></script>
+  <script src="mobile/screens-documents.js"></script>
+  <script src="mobile/screens-document-editor.js"></script>
+  <script src="mobile/screens-admin.js"></script>
   <script src="mobile/app.js"></script>
 </body>
 </html>

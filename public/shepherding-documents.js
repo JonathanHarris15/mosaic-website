@@ -427,7 +427,13 @@ document.addEventListener('alpine:init', () => {
 
         openDocument(docId) {
             const doc = this.allDocs[docId];
-            if (doc && doc.docType === 'care-list') {
+            const isCareList = doc && doc.docType === 'care-list';
+            // In the mobile shell both editors are native screens — deep-link via
+            // hash. Elsewhere use the desktop editor pages.
+            if (window.MOSAIC_SHELL === 'mobile') {
+                const route = isCareList ? 'careList' : 'documentEditor';
+                window.location.href = `mobile.html#/${route}?id=${encodeURIComponent(docId)}`;
+            } else if (isCareList) {
                 window.location.href = `shepherding-care-list.html?id=${docId}`;
             } else {
                 window.location.href = `shepherding-document.html?id=${docId}`;

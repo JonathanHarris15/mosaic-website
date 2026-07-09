@@ -18,13 +18,30 @@
   // desktop page as "open full page" — no jarring bounce out of the shell.
   var ROUTE_META = {
     serviceGuide: { title: "Service Guide", page: "service-guide.html" },
-    documentEditor: { title: "Document", page: "shepherding-documents.html" },
-    shepherdProfile: { title: "Shepherding Profile", page: "shepherding-profile.html" },
   };
 
   function currentRoute() {
     var m = (location.hash || "").replace(/^#\/?/, "");
+    var q = m.indexOf("?");
+    if (q !== -1) m = m.slice(0, q);
     return m || "home";
+  }
+  // Params carried in the hash query (e.g. mobile.html#/careList?id=X) — the
+  // deep-link path used when a shell page (the Documents library) opens a native
+  // screen by full page load, where in-memory M.navParams isn't available.
+  function currentHashParams() {
+    var h = location.hash || "";
+    var q = h.indexOf("?");
+    if (q === -1) return {};
+    var out = {};
+    h.slice(q + 1).split("&").forEach(function (kv) {
+      if (!kv) return;
+      var i = kv.indexOf("=");
+      var k = i === -1 ? kv : kv.slice(0, i);
+      var v = i === -1 ? "" : kv.slice(i + 1);
+      try { out[decodeURIComponent(k)] = decodeURIComponent(v); } catch (e) { out[k] = v; }
+    });
+    return out;
   }
   function greeting() {
     var h = new Date().getHours();
@@ -72,12 +89,13 @@
     var first = (user && user.first) || "friend";
     var svcState = M.useAsync(data.getNextService, []);
     var svc = svcState.data;
+    // The Home card grid mirrors the drawer's top-level destinations (role-gated).
     var tiles = [
       { icon: "book-open", label: "Hymn Directory", route: "hymnDirectory" },
       { icon: "calendar", label: "Service Calendar", route: "calendar" },
-      { icon: "users", label: "People's Directory", route: "people" },
+      { icon: "users", label: "Member Directory", route: "people" },
       { icon: "shield", label: "Shepherd", route: "shepherd", roles: ["elder", "super_admin"] },
-      { icon: "library", label: "Hymn Manager", route: "hymnManager" },
+      { icon: "settings-2", label: "Admin", route: "admin", roles: ["admin", "super_admin"] },
     ].filter(function (t) { return data.canSee(t, user); });
     return html`
       <${Screen}>
@@ -127,10 +145,10 @@
       </${Screen}>`;
   }
 
-  // Profile and Admin are shell-adapted (see SHELL_PAGES below): the real
-  // desktop pages — profile.html (password change, staff management) and
-  // admin-dashboard.html — run inside the WebView with ?shell=mobile, so the
-  // mobile app inherits every feature instead of a placeholder stub.
+  // Profile is shell-adapted (see SHELL_PAGES below): the real profile.html
+  // (password change, staff management) runs inside the WebView with
+  // ?shell=mobile so the mobile app inherits every feature. The Admin Dashboard
+  // is now a native screen (screens-admin.js, route "admin").
 
   // Merge app-level screens with the content screens from screens-content.js.
   M.SCREENS = Object.assign(M.SCREENS || {}, { login: LoginScreen, home: HomeScreen });
@@ -141,9 +159,13 @@
   // navigation inside the shell (see mobile-shell.js). Reused wholesale so the
   // mobile app gets every feature + the proven save logic — no reimplementation.
   var SHELL_PAGES = {
-    shepherd: "shepherding-dashboard.html",
     profile: "profile.html",
-    admin: "admin-dashboard.html",
+    // Native screens now cover the drawer pages (home, hymnDirectory, calendar,
+    // people, shepherd, admin) plus the shepherding cluster (including Manage Tags,
+    // route "shepherdTags" → screens-shepherd-tags.js) + both editors. The
+    // remaining shell pages are subpages opened in-place with ?shell=mobile and a
+    // standardized back-arrow header (mobile-shell-header.js): the hymn manager /
+    // service builder / service guide / profile (routed elsewhere in nav()).
   };
 
   function nav(route, params) {
@@ -151,6 +173,15 @@
       var d = (params && params.date) || "";
       if (!d) { M.navParams = {}; location.hash = "#/calendar"; return; }
       window.location.href = "service-builder.html?date=" + encodeURIComponent(d) + "&shell=mobile";
+      return;
+    }
+    if (route === "hymnManager") {
+      // The hymn manager is the real desktop page (manager.html) opened in-shell:
+      // ?edit=<id> from a hymn's "Manage Hymn" button, ?new=1 from the directory's
+      // add-a-hymn FAB. No separate mobile "manager" list — the directory is the list.
+      window.location.href = (params && params.edit)
+        ? "manager.html?edit=" + encodeURIComponent(params.edit) + "&shell=mobile"
+        : "manager.html?new=1&shell=mobile";
       return;
     }
     if (SHELL_PAGES[route]) { window.location.href = SHELL_PAGES[route] + "?shell=mobile"; return; }
@@ -161,22 +192,45 @@
 
   // ── Drawer ───────────────────────────────────────────────
   function Drawer(props) {
-    if (!props.open) return null;
+    // Own mount/visibility lifecycle so the panel slides in (and out) rather
+    // than popping. `render` keeps us in the DOM through the close animation;
+    // `vis` flips one frame after mount to trigger the CSS transition.
+    var renderS = useState(false), visS = useState(false);
+    var render = renderS[0], setRender = renderS[1], vis = visS[0], setVis = visS[1];
+    useEffect(function () {
+      var raf1, raf2, timer;
+      if (props.open) {
+        setRender(true);
+        // Two frames so the closed state paints before we transition open.
+        raf1 = requestAnimationFrame(function () {
+          raf2 = requestAnimationFrame(function () { setVis(true); });
+        });
+      } else {
+        setVis(false);
+        timer = setTimeout(function () { setRender(false); }, 300);
+      }
+      return function () {
+        if (raf1) cancelAnimationFrame(raf1);
+        if (raf2) cancelAnimationFrame(raf2);
+        if (timer) clearTimeout(timer);
+      };
+    }, [props.open]);
+
+    if (!render) return null;
     var user = props.user || {};
     return html`
       <${M.Fragment}>
-        <div onClick=${props.onClose} style=${{ position: "absolute", inset: 0, zIndex: 40, background: "rgba(14,28,54,0.42)", backdropFilter: "blur(1.5px)" }}></div>
-        <nav style=${{ position: "absolute", top: 0, bottom: 0, left: 0, width: 296, zIndex: 41, background: "var(--surface)", borderRight: "1px solid var(--outline-variant)", boxShadow: "var(--shadow-lg)", display: "flex", flexDirection: "column" }}>
-          <div style=${{ background: "var(--primary)", padding: "calc(env(safe-area-inset-top, 20px) + 24px) 20px 20px", position: "relative", overflow: "hidden" }}>
+        <div onClick=${props.onClose} style=${{ position: "absolute", inset: 0, zIndex: 40, background: "rgba(14,28,54,0.42)", backdropFilter: "blur(1.5px)", opacity: vis ? 1 : 0, transition: "opacity 0.28s ease" }}></div>
+        <nav style=${{ position: "absolute", top: 0, bottom: 0, left: 0, width: 296, zIndex: 41, background: "var(--surface)", borderRight: "1px solid var(--outline-variant)", boxShadow: "var(--shadow-lg)", display: "flex", flexDirection: "column", transform: vis ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.3s cubic-bezier(0.22, 1, 0.36, 1)", willChange: "transform" }}>
+          <div style=${{ background: "var(--primary)", padding: "calc(env(safe-area-inset-top, 20px) + 10px) 20px 20px", position: "relative", overflow: "hidden" }}>
             <div style=${{ position: "absolute", right: -30, top: -34, width: 120, height: 120, border: "1px solid rgba(255,255,255,0.14)", borderRadius: "50%" }}></div>
-            <div style=${{ display: "flex", alignItems: "center", gap: 12, position: "relative" }}>
-              <img src="mobile/assets/logo-white.png" alt="Mosaic" style=${{ width: 42, height: 42, objectFit: "contain" }} />
-              <div>
-                <div style=${{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 600, letterSpacing: "0.08em", color: "var(--on-primary)", textTransform: "uppercase" }}>Mosaic</div>
-                <div style=${{ fontFamily: "var(--font-sans)", fontSize: 11.5, letterSpacing: "0.06em", color: "var(--primary-fixed-dim)" }}>College Station</div>
-              </div>
+            <div style=${{ height: 52, display: "flex", alignItems: "center", position: "relative" }}>
+              <button onClick=${props.onClose} aria-label="Collapse menu"
+                style=${{ width: 44, height: 44, marginLeft: -14, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-primary)", cursor: "pointer", borderRadius: 10 }}>
+                ${Ic("menu", 24)}
+              </button>
             </div>
-            <div style=${{ display: "flex", alignItems: "center", gap: 10, marginTop: 18, position: "relative" }}>
+            <div style=${{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, position: "relative" }}>
               <${Avatar} name=${user.name || "Guest"} size=${36} />
               <div style=${{ minWidth: 0 }}>
                 <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--on-primary)" }}>${user.name || "Guest"}</div>
@@ -236,7 +290,7 @@
     var ScreenComp = SCREENS[routeState[0]] || SCREENS.comingSoon || HomeScreen;
     return html`
       <div style=${{ height: "100%", position: "relative", overflow: "hidden" }}>
-        <${ScreenComp} nav=${nav} openMenu=${function () { menuState[1](true); }} back=${function () { history.length > 1 ? history.back() : nav("home"); }} user=${userState[0]} params=${M.navParams || {}} />
+        <${ScreenComp} nav=${nav} openMenu=${function () { menuState[1](true); }} back=${function () { history.length > 1 ? history.back() : nav("home"); }} user=${userState[0]} params=${Object.assign({}, currentHashParams(), M.navParams || {})} />
         <${Drawer} open=${menuState[0]} current=${routeState[0]} user=${userState[0]} onClose=${function () { menuState[1](false); }} onNavigate=${function (r) { menuState[1](false); nav(r); }} />
       </div>`;
   }
