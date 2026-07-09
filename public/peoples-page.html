@@ -204,6 +204,12 @@
                                             <span class="material-symbols-outlined text-[12px]">link</span> Account
                                         </span>
                                     </div>
+                                    <!-- Self-service: a Person viewing their own card gets a link to edit their info (MS-87) -->
+                                    <a x-show="person.userId && person.userId === currentUserUid" href="profile.html"
+                                       class="inline-flex items-center gap-1 text-primary text-[10px] font-label-md uppercase tracking-widest hover:underline mb-1">
+                                        <span class="material-symbols-outlined text-[13px]">edit</span> Edit my info
+                                        <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
+                                    </a>
                                     <div class="space-y-1">
                                         <div x-show="person.contact?.email" class="flex items-center gap-1.5 text-on-surface-variant text-xs">
                                             <span class="material-symbols-outlined text-[14px]">mail</span>

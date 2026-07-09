@@ -446,6 +446,24 @@
         };
     }
 
+    // The Linked-User self-edit field policy (MS-87, ADR-0012). Given the existing
+    // Person and the raw form input, produce the update object the policy permits:
+    // contact (email/phone/address) and birthday always; sex only while unset.
+    // Membership, tags and shepherding data are deliberately never produced here,
+    // and the Firestore rules enforce the same allow-list server-side.
+    function buildSelfEditUpdate(existing, input) {
+        const i = input || {};
+        const update = {
+            'contact.email': (i.email || '').trim(),
+            'contact.phone': (i.phone || '').trim(),
+            'contact.address': (i.address || '').trim(),
+            birthday: i.birthday || null,
+        };
+        const sexUnset = !(existing && existing.sex);
+        if (sexUnset && i.sex) update.sex = i.sex;
+        return update;
+    }
+
     // Is a Person off the Track / Inactive? The new source of truth is
     // membership.inactive (ADR-0012); the legacy `membership.status === 'inactive'`
     // is honoured too so un-migrated records still read correctly. The single
@@ -550,6 +568,7 @@
         describeMembershipChange,
         personMatchesDirectoryTab,
         isInactiveMembership,
+        buildSelfEditUpdate,
         commitMembershipChange,
     };
 

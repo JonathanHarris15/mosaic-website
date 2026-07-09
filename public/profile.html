@@ -151,7 +151,51 @@
             </div>
 
             <!-- Right Side: Administration -->
-            <div class="lg:col-span-8">
+            <div class="lg:col-span-8 flex flex-col gap-lg">
+                <!-- My Information — self-service editing for a Linked User (MS-87) -->
+                <section id="my-info-panel" class="hidden">
+                    <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-sm overflow-hidden">
+                        <div class="p-md bg-surface-container-low/50 border-b border-outline-variant/20">
+                            <h2 class="font-headline-md text-headline-md text-primary flex items-center gap-3">
+                                <span class="material-symbols-outlined">badge</span>
+                                My Information
+                            </h2>
+                            <p class="text-[11px] text-on-surface-variant mt-1">Keep your own contact details current. Your membership standing is managed by the church office.</p>
+                        </div>
+                        <form id="my-info-form" class="p-md grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="flex flex-col gap-1">
+                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email</label>
+                                <input id="my-email" type="email" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Phone</label>
+                                <input id="my-phone" type="tel" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
+                            </div>
+                            <div class="flex flex-col gap-1 md:col-span-2">
+                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Address</label>
+                                <input id="my-address" type="text" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Birthday</label>
+                                <input id="my-birthday" type="date" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Sex</label>
+                                <select id="my-sex" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
+                                    <option value="">Select…</option>
+                                    <option value="male">Male</option>
+                                    <option value="female">Female</option>
+                                </select>
+                                <span id="my-sex-locked" class="hidden text-[10px] text-on-surface-variant italic">Set — contact the office to change.</span>
+                            </div>
+                            <div class="md:col-span-2 flex items-center gap-3">
+                                <button type="submit" class="bg-primary text-on-primary px-6 py-2 rounded-lg font-label-md text-[10px] uppercase tracking-widest hover:bg-primary-container transition-all shadow-sm">Save my info</button>
+                                <span id="my-info-status" class="text-[11px] font-body-md"></span>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+
                 <section id="admin-panel" class="hidden flex flex-col gap-lg">
                     <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-sm overflow-hidden">
                         <div class="p-md bg-surface-container-low/50 border-b border-outline-variant/20">
@@ -248,6 +292,7 @@
         </div>
     </div>
 
+    <script src="shepherding-core.js"></script>
     <script src="profile.js"></script>
 </body>
 </html>

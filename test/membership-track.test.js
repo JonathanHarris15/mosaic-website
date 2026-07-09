@@ -179,6 +179,32 @@ test('buildMembershipChange captures an Inactive toggle', () => {
     assert.strictEqual(rec.newStage, 'member');
 });
 
+// ── buildSelfEditUpdate: the Linked-User self-edit field policy (MS-87) ───────
+// A Linked User may set contact + birthday always, and sex only while unset;
+// membership, tags and shepherding data are never in the update.
+
+test('buildSelfEditUpdate always includes contact and birthday', () => {
+    const u = Core.buildSelfEditUpdate({ sex: 'male' }, { email: 'a@b.c', phone: '1', address: 'x', birthday: '1990-01-01' });
+    assert.strictEqual(u['contact.email'], 'a@b.c');
+    assert.strictEqual(u['contact.phone'], '1');
+    assert.strictEqual(u['contact.address'], 'x');
+    assert.strictEqual(u.birthday, '1990-01-01');
+});
+
+test('buildSelfEditUpdate sets sex only while it is unset', () => {
+    const whenUnset = Core.buildSelfEditUpdate({}, { sex: 'female' });
+    assert.strictEqual(whenUnset.sex, 'female');
+    const whenSet = Core.buildSelfEditUpdate({ sex: 'male' }, { sex: 'female' });
+    assert.ok(!('sex' in whenSet), 'sex is not re-writable once set');
+});
+
+test('buildSelfEditUpdate never carries membership, tags or shepherding fields', () => {
+    const u = Core.buildSelfEditUpdate({}, { email: 'a@b.c', membership: { stage: 'member' }, tags: ['Member'], shepherdingStatus: {} });
+    for (const key of Object.keys(u)) {
+        assert.ok(!/membership|tags|shepherd/i.test(key), `disallowed key leaked: ${key}`);
+    }
+});
+
 // ── isInactiveMembership: the single "active people" predicate ────────────────
 
 test('isInactiveMembership reads the new flag and the legacy status, else active', () => {

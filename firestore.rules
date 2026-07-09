@@ -72,8 +72,25 @@ service cloud.firestore {
 
     match /people/{personId} {
       allow read: if true;
-      allow create, update, delete: if isEditor();
-      
+      allow create, delete: if isEditor();
+      allow update: if isEditor();
+
+      // Self-service (MS-87, ADR-0012): a Linked User may update ONLY their own
+      // linked Person, and ONLY the self-editable fields — contact, birthday, and
+      // sex while it is still unset. Membership (the Track), tags, and all
+      // shepherding data are never self-editable. affectedKeys() reports the
+      // top-level `contact` map when any contact sub-field changes, so listing
+      // `contact` covers email/phone/address.
+      allow update: if request.auth != null
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['contact', 'birthday', 'sex', 'updatedAt'])
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['sex'])
+          || !('sex' in resource.data)
+          || resource.data.sex == null
+        );
+
+
       match /involvement/{involvementId} {
         allow read: if true;
         allow create, update, delete: if isEditor();
