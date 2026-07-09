@@ -112,22 +112,26 @@
       </${Screen}>`;
   }
 
-  // ── Member Directory ─────────────────────────────────────
-  var STATUS_LABELS = { member: "Member", regular_attender: "Regular attender", visitor: "Visitor", inactive: "Inactive" };
+  // ── Membership Directory (ADR-0012) ──────────────────────
+  // The congregation-facing directory: two tabs — Members (carries the Member
+  // tag) and Non-members (active People without it). This surface browses as a
+  // plain viewer (editors manage People in the shepherd screens), so Inactive
+  // People are hidden here. The stage label is derived from the Membership Track.
+  function membershipStageLabel(p) {
+    var m = p && p.membership;
+    if (m && m.inactive) return "Inactive";
+    if (m && m.stage) return window.ShepherdingCore.MEMBERSHIP_STAGE_LABEL[m.stage] || m.stage;
+    return null;
+  }
   function PeopleScreen(props) {
     var st = useAsync(data.getPeople, []);
-    var qS = useState(""), fS = useState("All");
+    var qS = useState(""), fS = useState("members");
     var people = st.data || [];
-    var filters = ["All", "Members", "Attenders", "Visitors", "Needs care"];
-    var q = qS[0], filter = fS[0];
+    var tabs = [["members", "Members"], ["non_members", "Non-members"]];
+    var q = qS[0], tab = fS[0];
     var results = people.filter(function (p) {
       var mq = !q || data.lc(p.name).indexOf(data.lc(q)) >= 0;
-      var mf = true;
-      if (filter === "Members") mf = p.status === "member";
-      else if (filter === "Attenders") mf = p.status === "regular_attender";
-      else if (filter === "Visitors") mf = p.status === "visitor";
-      else if (filter === "Needs care") mf = !!p.shepherding;
-      return mq && mf;
+      return mq && window.ShepherdingCore.personMatchesDirectoryTab(p, tab, false);
     });
     return html`
       <${Screen}>
@@ -135,7 +139,7 @@
         <${Body} style=${{ paddingTop: 14 }}>
           <div style=${{ padding: "0 16px 12px" }}><${SearchBar} placeholder="Search people" value=${q} onChange=${function (e) { qS[1](e.target.value); }} /></div>
           <div style=${{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px 12px" }}>
-            ${filters.map(function (f) { return html`<${Chip} key=${f} active=${f === filter} onClick=${function () { fS[1](f); }}>${f}<//>`; })}
+            ${tabs.map(function (t) { return html`<${Chip} key=${t[0]} active=${t[0] === tab} onClick=${function () { fS[1](t[0]); }}>${t[1]}<//>`; })}
           </div>
           ${st.loading ? html`<${Loading} label="Loading people…" />` : st.error ? html`<${ErrorNote}>Couldn't load the directory.<//>` : html`
             <div style=${{ padding: "0 16px 4px" }}><${Overline}>${results.length} People<//></div>
@@ -177,8 +181,8 @@
             <${Avatar} name=${p.name} size=${82} />
             <div style=${{ fontFamily: "var(--font-serif)", fontSize: 23, fontWeight: 600, color: "var(--on-surface)", marginTop: 12 }}>${p.name}</div>
             <div style=${{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
-              <${Badge} tone=${p.status === "member" ? "primary" : p.status === "visitor" ? "tertiary" : "secondary"}>${STATUS_LABELS[p.status] || p.status}<//>
-              ${p.tags.map(function (t) { return html`<${Badge} key=${t} tone=${t === "Red Flag" ? "neutral" : "neutral"}>${t}<//>`; })}
+              ${membershipStageLabel(p) ? html`<${Badge} tone=${(p.membership && p.membership.inactive) ? "secondary" : "primary"}>${membershipStageLabel(p)}<//>` : null}
+              ${p.tags.filter(function (t) { return !window.ShepherdingCore.isMembershipTagId(t); }).map(function (t) { return html`<${Badge} key=${t} tone="neutral">${t}<//>`; })}
             </div>
           </div>
           ${contact.length ? html`

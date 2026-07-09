@@ -167,6 +167,20 @@
                 </div>
             </div>
 
+            <!-- Membership Directory tabs (ADR-0012) -->
+            <div class="px-md pt-md flex items-center gap-1 border-b border-surface-variant/30">
+                <button @click="activeTab = 'members'"
+                        :class="activeTab === 'members' ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'"
+                        class="px-4 py-2 -mb-px border-b-2 font-label-md text-[11px] uppercase tracking-widest transition-colors">
+                    Members
+                </button>
+                <button @click="activeTab = 'non_members'"
+                        :class="activeTab === 'non_members' ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'"
+                        class="px-4 py-2 -mb-px border-b-2 font-label-md text-[11px] uppercase tracking-widest transition-colors">
+                    Non-members
+                </button>
+            </div>
+
             <div class="flex-grow p-md">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <template x-for="person in filteredPeople" :key="person.id">
@@ -175,6 +189,9 @@
                                 <div class="flex-grow">
                                     <div class="flex items-center gap-2 mb-1">
                                         <h3 class="font-headline-md text-lg text-primary" x-text="person.name"></h3>
+                                        <span class="text-[9px] px-2 py-0.5 rounded-full font-label-md uppercase tracking-widest"
+                                              :class="person.membership && person.membership.inactive ? 'bg-surface-container-high text-on-surface-variant' : 'bg-primary-fixed text-primary'"
+                                              x-text="membershipStageLabel(person)"></span>
                                         <span x-show="canEdit && person.userId"
                                               class="inline-flex items-center gap-1 bg-primary/10 text-primary text-[9px] px-2 py-0.5 rounded-full font-label-md uppercase tracking-widest"
                                               title="Linked to a website account">

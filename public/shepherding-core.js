@@ -446,6 +446,32 @@
         };
     }
 
+    // Is a Person off the Track / Inactive? The new source of truth is
+    // membership.inactive (ADR-0012); the legacy `membership.status === 'inactive'`
+    // is honoured too so un-migrated records still read correctly. The single
+    // predicate behind every "active people" filter.
+    function isInactiveMembership(membership) {
+        if (!membership) return false;
+        return !!membership.inactive || membership.status === 'inactive';
+    }
+
+    // The Membership Directory visibility rule (ADR-0012). The directory splits
+    // into two tabs: **members** lists Persons carrying the Member tag (stage
+    // Member or Moving Membership); **non_members** lists the remaining active
+    // Persons without it. Inactive Persons carry no Member tag, so they never
+    // land on the members tab, and they are hidden from non-editors on the
+    // non-members tab (visible to editors so they can be managed). `canEdit` is
+    // the viewer's edit capability.
+    function personMatchesDirectoryTab(person, tab, canEdit) {
+        const tags = (person && person.tags) || [];
+        const hasMember = tags.indexOf(MEMBER_TAG_ID) !== -1;
+        const inactive = isInactiveMembership(person && person.membership);
+        if (tab === 'members') return hasMember;
+        if (hasMember) return false;
+        if (inactive && !canEdit) return false;
+        return true;
+    }
+
     // The human sentence for a Membership Change in the Pastoral Record. Reads an
     // Inactive toggle first (it dominates), then compares stage positions on the
     // Track: later index = "Advanced to", earlier = "Moved back to", first
@@ -522,6 +548,8 @@
         membershipFromLegacyStatus,
         buildMembershipChange,
         describeMembershipChange,
+        personMatchesDirectoryTab,
+        isInactiveMembership,
         commitMembershipChange,
     };
 

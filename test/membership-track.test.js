@@ -179,6 +179,16 @@ test('buildMembershipChange captures an Inactive toggle', () => {
     assert.strictEqual(rec.newStage, 'member');
 });
 
+// ── isInactiveMembership: the single "active people" predicate ────────────────
+
+test('isInactiveMembership reads the new flag and the legacy status, else active', () => {
+    assert.strictEqual(Core.isInactiveMembership({ inactive: true }), true);
+    assert.strictEqual(Core.isInactiveMembership({ status: 'inactive' }), true); // un-migrated
+    assert.strictEqual(Core.isInactiveMembership({ stage: 'member', inactive: false }), false);
+    assert.strictEqual(Core.isInactiveMembership({ status: 'member' }), false);
+    assert.strictEqual(Core.isInactiveMembership(null), false);
+});
+
 // ── describeMembershipChange: the human sentence shown in the Pastoral Record ──
 
 test('describeMembershipChange reads forward moves as "Advanced to"', () => {
@@ -212,6 +222,59 @@ test('describeMembershipChange reads first placement on the Track as "Set to"', 
         previous: { stage: null }, next: { stage: 'visitor' },
     });
     assert.strictEqual(Core.describeMembershipChange(rec), 'Set to Visitor');
+});
+
+// ── personMatchesDirectoryTab: the Membership Directory visibility rule ────────
+// Members tab = carries the Member tag; Non-members tab = active People without
+// it; Inactive People are hidden from non-editors on both tabs.
+
+// Build a realistic person (tags projected from the membership) for a stage.
+const personFor = (stage, inactive) => {
+    const membership = { stage: stage || null, inactive: !!inactive };
+    return { membership, tags: Core.applyMembershipTags(['Red Flag'], membership) };
+};
+
+test('Members tab lists exactly the stages that carry the Member tag', () => {
+    for (const stage of ['member', 'moving_membership']) {
+        assert.strictEqual(Core.personMatchesDirectoryTab(personFor(stage), 'members', false), true, stage);
+    }
+    for (const stage of ['visitor', 'regular_attender', 'prospective_member', 'previous_member']) {
+        assert.strictEqual(Core.personMatchesDirectoryTab(personFor(stage), 'members', false), false, stage);
+    }
+});
+
+test('Non-members tab lists active People without the Member tag', () => {
+    for (const stage of ['visitor', 'regular_attender', 'prospective_member', 'previous_member']) {
+        assert.strictEqual(Core.personMatchesDirectoryTab(personFor(stage), 'non_members', false), true, stage);
+    }
+    for (const stage of ['member', 'moving_membership']) {
+        assert.strictEqual(Core.personMatchesDirectoryTab(personFor(stage), 'non_members', false), false, stage);
+    }
+});
+
+test('Inactive People are hidden from a plain member on both tabs', () => {
+    const inactive = personFor('member', true); // was a Member, now Inactive → tags [Red Flag, Inactive]
+    assert.strictEqual(Core.personMatchesDirectoryTab(inactive, 'members', false), false);
+    assert.strictEqual(Core.personMatchesDirectoryTab(inactive, 'non_members', false), false);
+});
+
+test('Inactive People are visible to an editor on the Non-members tab', () => {
+    const inactive = personFor('member', true);
+    assert.strictEqual(Core.personMatchesDirectoryTab(inactive, 'non_members', true), true);
+    // ...but never on the Members tab (they no longer carry the Member tag)
+    assert.strictEqual(Core.personMatchesDirectoryTab(inactive, 'members', true), false);
+});
+
+test('an editor and a plain member see the same active People (Inactive aside)', () => {
+    for (const stage of Core.MEMBERSHIP_STAGES) {
+        for (const tab of ['members', 'non_members']) {
+            assert.strictEqual(
+                Core.personMatchesDirectoryTab(personFor(stage), tab, true),
+                Core.personMatchesDirectoryTab(personFor(stage), tab, false),
+                `${stage}/${tab}`
+            );
+        }
+    }
 });
 
 // ── A membership_change is its own Pastoral Record entry, not a status group ──

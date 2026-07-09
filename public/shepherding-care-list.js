@@ -284,7 +284,7 @@ document.addEventListener('alpine:init', () => {
             }
 
             const view = this.viewConfig;
-            let result = this.people.filter(p => p.membership?.status !== 'inactive');
+            let result = this.people.filter(p => !ShepherdingCore.isInactiveMembership(p.membership));
 
             if (view.filterTags && view.filterTags.length > 0) {
                 result = result.filter(p => {

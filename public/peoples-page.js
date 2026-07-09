@@ -9,6 +9,8 @@ document.addEventListener('alpine:init', () => {
         people: [],
         isSubmitting: false,
         searchTerm: '',
+        // Membership Directory tab: 'members' (carries Member tag) | 'non_members'.
+        activeTab: 'members',
         sortKey: 'totalInvolvements', // 'name' or 'totalInvolvements'
         sortDirection: 'desc',
         
@@ -657,13 +659,11 @@ document.addEventListener('alpine:init', () => {
                 });
             }
 
-            // Non-editors see a directory of members only — people without the Member
-            // tag (visitors, prayer contacts, etc.) are hidden from them. Editors and
-            // above see everyone so they can manage and tag non-members.
-            if (!this.canEdit) {
-                list = list.filter(p => (p.tags || []).includes('Member'));
-            }
-            
+            // The Membership Directory (ADR-0012): the whole congregation browses
+            // two tabs — Members (carries the Member tag) and Non-members (active,
+            // no Member tag). Inactive People are hidden from non-editors on both.
+            list = list.filter(p => ShepherdingCore.personMatchesDirectoryTab(p, this.activeTab, this.canEdit));
+
             if (this.searchTerm) {
                 const term = this.searchTerm.toLowerCase();
                 list = list.filter(p => p.name.toLowerCase().includes(term));

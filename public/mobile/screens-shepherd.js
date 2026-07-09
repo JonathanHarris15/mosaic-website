@@ -109,7 +109,7 @@
     return !!f && Object.keys(f).some(function (k) { return f[k] > 0; });
   }
   function peopleForView(view, people, tagHolds) {
-    var result = people.filter(function (p) { return !(p.membership && p.membership.status === "inactive"); });
+    var result = people.filter(function (p) { return !window.ShepherdingCore.isInactiveMembership(p.membership); });
     if (view.filterTags && view.filterTags.length > 0) {
       var matches = function (p, t) {
         if ((p.tags || []).indexOf(t) === -1) return false;
