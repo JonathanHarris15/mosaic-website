@@ -51,6 +51,27 @@ function normalizeName(name) {
     return (name || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+// Confirmed CSV-name → canonical-DB-name aliases (the DB spelling is correct).
+// Resolves the 8 nickname/spelling variants the exact matcher couldn't, so those
+// rows update the right existing Person instead of being flagged. Keyed and
+// valued by normalized name.
+const NAME_ALIASES = {
+    'max maret': 'maxwell maret',
+    'samuel crites': 'sam crites',
+    'gwendolyn hattaway': 'gwen hattaway',
+    'jeffrey ziegelmann': 'jeff zeigelmann',
+    'amanda ziegelmann': 'amanda zeiglemann',
+    'zoey ziegelmann': 'zoey zeiglemann',
+    'kylie mcraven': 'kylie mccraven',
+    'philip vance': 'phillip vance',
+};
+
+// The name key a CSV row matches on, applying a confirmed alias when present.
+function matchKey(name) {
+    const key = normalizeName(name);
+    return NAME_ALIASES[key] || key;
+}
+
 // Convert a MM/DD/YYYY birthdate to YYYY-MM-DD (the app's date format); returns
 // null for blanks or anything that doesn't parse.
 function toIsoDate(mdY) {
@@ -69,7 +90,7 @@ function classifyRows(rows, existingPeople) {
         (byName[key] || (byName[key] = [])).push(p);
     }
     return (rows || []).map(row => {
-        const matches = byName[normalizeName(row.Name)] || [];
+        const matches = byName[matchKey(row.Name)] || [];
         if (matches.length === 0) return { row, action: 'create', matchId: null };
         if (matches.length === 1) return { row, action: 'update', matchId: matches[0].id };
         return { row, action: 'ambiguous', matchId: null };
@@ -93,7 +114,7 @@ function buildPersonFromRow(row) {
     return fields;
 }
 
-module.exports = { parseCsv, normalizeName, toIsoDate, classifyRows, buildPersonFromRow };
+module.exports = { parseCsv, normalizeName, matchKey, NAME_ALIASES, toIsoDate, classifyRows, buildPersonFromRow };
 
 // ── Firestore side (only when run directly) ──────────────────────────────────
 if (require.main === module) {
