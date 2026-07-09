@@ -438,6 +438,19 @@
       sourceDocumentId: sourceDocumentId || null,
     }));
   }
+  // Move a Person along the Membership Track (ADR-0012): set the stage/inactive
+  // field, re-project the Membership Tags, and append one Membership Change — all
+  // atomically. The tag swap is silent (no Tag Changes). Returns the activity id.
+  function setMembership(personId, currentTags, previous, next, user, source) {
+    return window.ShepherdingCore.commitMembershipChange(db, personId, {
+      currentTags: currentTags || [],
+      previous: previous, next: next,
+      authorUid: (user && user.uid) || (auth.currentUser && auth.currentUser.uid) || null,
+      authorName: (user && user.name) || "",
+      source: source || "profile",
+    });
+  }
+
   // Take a status change back entirely (Care List chip backspaced out): restore the
   // previous status AND delete the activity record that logged it (ADR-0005 mirror).
   function revertShepherdingStatus(personId, previousStatus, activityId) {
@@ -739,6 +752,7 @@
     updateShepherdingPersonDetails: updateShepherdingPersonDetails,
     setShepherdingStatus: setShepherdingStatus,
     toggleShepherdingTag: toggleShepherdingTag,
+    setMembership: setMembership,
     revertShepherdingStatus: revertShepherdingStatus,
     getShepherdingView: getShepherdingView,
     getCareList: getCareList,

@@ -179,6 +179,41 @@ test('buildMembershipChange captures an Inactive toggle', () => {
     assert.strictEqual(rec.newStage, 'member');
 });
 
+// ── describeMembershipChange: the human sentence shown in the Pastoral Record ──
+
+test('describeMembershipChange reads forward moves as "Advanced to"', () => {
+    const rec = Core.buildMembershipChange({
+        previous: { stage: 'regular_attender' }, next: { stage: 'member' },
+    });
+    assert.strictEqual(Core.describeMembershipChange(rec), 'Advanced to Member');
+});
+
+test('describeMembershipChange reads backward moves as "Moved back to"', () => {
+    const rec = Core.buildMembershipChange({
+        previous: { stage: 'member' }, next: { stage: 'visitor' },
+    });
+    assert.strictEqual(Core.describeMembershipChange(rec), 'Moved back to Visitor');
+});
+
+test('describeMembershipChange reads going Inactive and coming back', () => {
+    const off = Core.buildMembershipChange({
+        previous: { stage: 'member', inactive: false }, next: { stage: 'member', inactive: true },
+    });
+    assert.strictEqual(Core.describeMembershipChange(off), 'Marked Inactive');
+
+    const on = Core.buildMembershipChange({
+        previous: { stage: 'member', inactive: true }, next: { stage: 'member', inactive: false },
+    });
+    assert.strictEqual(Core.describeMembershipChange(on), 'Reactivated as Member');
+});
+
+test('describeMembershipChange reads first placement on the Track as "Set to"', () => {
+    const rec = Core.buildMembershipChange({
+        previous: { stage: null }, next: { stage: 'visitor' },
+    });
+    assert.strictEqual(Core.describeMembershipChange(rec), 'Set to Visitor');
+});
+
 // ── A membership_change is its own Pastoral Record entry, not a status group ──
 
 test('collapsePastoralRecord does not fold a membership_change into a status group', () => {

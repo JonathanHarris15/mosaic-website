@@ -58,6 +58,8 @@ document.addEventListener('alpine:init', () => {
                 }
                 const userData = await getUserData(user.uid);
                 this.currentUserRole = (userData && userData.role) || 'viewer';
+                this.currentUserUid = user.uid;
+                this.currentUserName = (userData && (userData.displayName || userData.name)) || user.email || '';
                 if (!['member', 'editor', 'elder', 'admin', 'super_admin'].includes(this.currentUserRole)) {
                     alert('Permission denied.');
                     window.location.href = 'index.html';
@@ -202,9 +204,85 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        // ── Membership Track (ADR-0012) ──────────────────────────────────────
+        // The stage slider and Inactive toggle in the person modal. The stage is
+        // the source of truth; ShepherdingCore re-projects the Membership Tags and
+        // logs one Membership Change per move (silent tag swap). Editors only.
+
+        get membershipStages() { return ShepherdingCore.MEMBERSHIP_STAGES; },
+
+        // The slider index for a Person: their stage's position on the Track, or 0
+        // when unset so the thumb has a home. Read alongside membershipInactive.
+        membershipIndex(person) {
+            const stage = person && person.membership && person.membership.stage;
+            const i = ShepherdingCore.MEMBERSHIP_STAGES.indexOf(stage);
+            return i === -1 ? 0 : i;
+        },
+
+        membershipStageLabel(person) {
+            if (person && person.membership && person.membership.inactive) return 'Inactive';
+            const stage = person && person.membership && person.membership.stage;
+            return ShepherdingCore.MEMBERSHIP_STAGE_LABEL[stage] || 'Not on the Track';
+        },
+
+        // Move the selected Person to the stage at the slider index. Never fired
+        // while Inactive (the slider is disabled then).
+        async setMembershipStageByIndex(index) {
+            const stage = ShepherdingCore.MEMBERSHIP_STAGES[Number(index)];
+            if (!stage) return;
+            await this.commitMembership({ stage, inactive: false });
+        },
+
+        // Toggle Inactive: keep the retained stage, flip the flag. Clearing it
+        // restores the stage (its tags come back via the projection).
+        async toggleMembershipInactive() {
+            const m = (this.selectedPerson && this.selectedPerson.membership) || {};
+            await this.commitMembership({ stage: m.stage || null, inactive: !m.inactive });
+        },
+
+        async commitMembership(next) {
+            const person = this.selectedPerson;
+            if (!person) return;
+            const previous = {
+                stage: (person.membership && person.membership.stage) || null,
+                inactive: !!(person.membership && person.membership.inactive),
+            };
+            if (previous.stage === next.stage && previous.inactive === next.inactive) return;
+            try {
+                await ShepherdingCore.commitMembershipChange(db, person.id, {
+                    currentTags: person.tags || [],
+                    previous,
+                    next,
+                    authorUid: this.currentUserUid,
+                    authorName: this.currentUserName,
+                    source: 'people_list',
+                });
+                // Reflect the field + re-projected tags locally (clone and list).
+                const newTags = ShepherdingCore.applyMembershipTags(person.tags || [], next);
+                person.membership = { ...(person.membership || {}), stage: next.stage, inactive: next.inactive };
+                person.tags = newTags;
+                const idx = this.people.findIndex(p => p.id === person.id);
+                if (idx !== -1) {
+                    this.people[idx] = { ...this.people[idx], membership: person.membership, tags: newTags };
+                }
+                this.showToast(ShepherdingCore.describeMembershipChange(
+                    ShepherdingCore.buildMembershipChange({ previous, next })
+                ));
+            } catch (e) {
+                console.error('Error updating membership:', e);
+                this.showToast('Error updating membership', 'error');
+            }
+        },
+
         async addTag(person, tagName) {
             tagName = tagName.trim();
             if (!tagName) return;
+            // Membership Tags are code-defined (ADR-0012) — they follow the Track
+            // slider, never hand-editing. Guard the person-modal tag editor too.
+            if (ShepherdingCore.isMembershipTagId(this.allTags.find(t => t.toLowerCase() === tagName.toLowerCase()) || tagName)) {
+                this.showToast('Membership Tags follow the Membership Track, not manual tagging', 'error');
+                return;
+            }
 
             // Find match or use original (case-insensitive check)
             const existingTag = this.allTags.find(t => t.toLowerCase() === tagName.toLowerCase());
@@ -249,6 +327,10 @@ document.addEventListener('alpine:init', () => {
         },
 
         async removeTag(person, tag) {
+            if (ShepherdingCore.isMembershipTagId(tag)) {
+                this.showToast('Membership Tags follow the Membership Track, not manual tagging', 'error');
+                return;
+            }
             const tags = person.tags || [];
             const newTags = tags.filter(t => t !== tag);
 

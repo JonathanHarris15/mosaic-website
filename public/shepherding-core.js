@@ -446,6 +446,23 @@
         };
     }
 
+    // The human sentence for a Membership Change in the Pastoral Record. Reads an
+    // Inactive toggle first (it dominates), then compares stage positions on the
+    // Track: later index = "Advanced to", earlier = "Moved back to", first
+    // placement from no stage = "Set to". Pure, so the feed renderer stays dumb.
+    function describeMembershipChange(entry) {
+        const e = entry || {};
+        if (e.newInactive && !e.previousInactive) return 'Marked Inactive';
+        const label = s => (s && MEMBERSHIP_STAGE_LABEL[s]) || 'no stage';
+        if (!e.newInactive && e.previousInactive) return `Reactivated as ${label(e.newStage)}`;
+        const from = MEMBERSHIP_STAGES.indexOf(e.previousStage);
+        const to = MEMBERSHIP_STAGES.indexOf(e.newStage);
+        if (from === -1 && to !== -1) return `Set to ${label(e.newStage)}`;
+        if (to > from) return `Advanced to ${label(e.newStage)}`;
+        if (to < from) return `Moved back to ${label(e.newStage)}`;
+        return `Set to ${label(e.newStage)}`;
+    }
+
     // Atomic Track move (browser only) — the membership analogue of the ADR-0005
     // dual-write. In one batch: set the Person's membership field, re-project the
     // Membership Tags, and append one Membership Change. The tag swap is therefore
@@ -504,6 +521,7 @@
         carriesMemberTag,
         membershipFromLegacyStatus,
         buildMembershipChange,
+        describeMembershipChange,
         commitMembershipChange,
     };
 

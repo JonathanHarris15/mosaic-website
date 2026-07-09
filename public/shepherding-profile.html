@@ -690,6 +690,21 @@
                                 </div>
                             </template>
 
+                            <!-- Membership Change (ADR-0012): a Track move, read as its own transition -->
+                            <template x-if="entry._entryKind === 'membership_change'">
+                                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-wrap items-center gap-sm">
+                                    <span class="flex items-center gap-xs px-sm py-xs bg-primary-fixed text-primary rounded font-label-md text-label-md">
+                                        <span class="material-symbols-outlined text-[14px]">trending_up</span>
+                                        <span x-text="ShepherdingCore.describeMembershipChange(entry)"></span>
+                                    </span>
+                                    <span class="font-label-md text-label-md text-on-surface-variant" x-text="formatDate(entry.createdAt)"></span>
+                                    <span class="font-label-md text-label-md text-on-surface-variant" x-text="'by ' + (entry.authorName || 'Unknown')"></span>
+                                    <template x-if="entry.source === 'people_list'">
+                                        <span class="font-label-md text-label-md text-on-surface-variant italic">via People list</span>
+                                    </template>
+                                </div>
+                            </template>
+
                             <!-- Collapsed status group -->
                             <template x-if="entry._entryKind === 'status_group'">
                                 <div class="flex items-center gap-sm py-xs">
