@@ -75,8 +75,56 @@ A standalone dated reminder visible to all elders on the Shepherd Landing Page. 
 _Avoid_: Task, to-do, alert
 
 **Shepherding Tag**:
-An elder-defined label that can be applied to a Person within the Shepherding System. Tags are the primary filter criterion for Filtered Views. Any elder or super admin can create, delete, Rename, Merge, or apply/remove tags on a Person. A tag has a stable identity that is independent of its name: renaming a tag changes only its display name, never which Persons carry it. Examples: "Red Flag", "New Member Follow-up", "Married".
-_Avoid_: Label, category, attribute
+A label that can be applied to a Person. Tags are the primary filter criterion for Filtered Views and the People list. Elders and super admins are the primary managers — any of them can create, delete, Rename, Merge, or apply/remove tags on a Person — but tags are not elder-only-*visible*: some tags (e.g. the Member tag, and any Membership Tag) are surfaced to ordinary members in the People directory. Visibility is governed per-tag (see `hidePeople` metadata), not by the tag concept itself. A tag has a stable identity that is independent of its name: renaming a tag changes only its display name, never which Persons carry it. Examples: "Red Flag", "New Member Follow-up", "Married". Membership Tags are a special, code-defined subset — see Membership Tag.
+_Avoid_: Label, category, attribute (and "elder-only tag" — visibility is per-tag)
+
+**Membership Track**:
+The single ordered progression a Person moves along in their relationship with the church: **Visitor → Regular Attender → Prospective Member → Member → Moving Membership → Previous Member**. A Person sits at exactly one Membership Stage at a time. The Track is the church-relationship state machine — the one canonical replacement for the previously conflicting `membership.status` field, the ad-hoc "Member" tag, and any use of user *role* to imply membership. It is deliberately **not** a permission or a User role. A Person's stage on the Track is *not* self-editable — only an editor (via the stage slider) can move someone along it.
+_Avoid_: Membership status (as an enum synonym), member type, member level
+
+**Membership Stage**:
+One of the six code-defined positions on the Membership Track. The stages are baked into the code — their set, order, and names cannot be changed by any user. Moving a Person to a new stage is the only Track mutation.
+_Avoid_: Membership state, status value
+
+**Membership Tag**:
+A Shepherding Tag that *projects* a Person's Membership Stage onto them so the stage is filterable and searchable through the ordinary tag filter system (the reason the Track is represented as tags at all). Each Membership Stage maps to a **defined set** of Membership Tags — usually a single eponymous tag (Visitor→Visitor, Regular Attender→Regular Attender, Prospective Member→Prospective Member, Member→Member, Previous Member→Previous Member), but **Moving Membership projects two tags: its own Moving Membership tag *and* the Member tag**. This overlap is deliberate: it lets "the Members directory = every Person carrying the Member tag" stay a single trivial query while still distinguishing those mid-transfer. Advancing along the Track re-derives the whole set (removing tags the new stage doesn't project, adding the ones it does). Inactive projects the Inactive tag instead of any stage tag. Membership Tags are the special code-defined subset of Shepherding Tags: they **cannot be renamed, deleted, merged, or hidden** by anyone, because they are seeded and maintained by the code from the Membership Track. The Membership Stage field on the Person is the source of truth; the Membership Tags are its synced projection (written together, never edited independently).
+_Avoid_: Member tag (the legacy single "Member" tag this subsumes — the Member tag is now one of the code-defined Membership Tags), status tag
+
+**Membership Directory**:
+The People directory as seen by the whole congregation, split into two tabs. The **Members tab** shows every Person carrying the Member tag (stage ∈ {Member, Moving Membership}). The **Non-members tab** shows the remaining active People who lack the Member tag (Visitor, Regular Attender, Prospective Member, Previous Member). Contact information is visible to members on both tabs (a member can look up a recent visitor). **Inactive** People appear on neither tab for a plain member. On either tab, an editor can enter **Edit Mode** to manage People inline. Supersedes the former single filter that showed non-editors only the ad-hoc "Member"-tagged people.
+_Avoid_: People directory (ambiguous with the editor-facing People Manager), member list
+
+**Edit Mode**:
+A toggle available to editors (and above) on the Membership Directory that turns the read-only directory into an inline People manager — the same surface, switched from viewing to editing People attributes (contact info, Membership Track slider, tags). Off by default; a plain member never sees the toggle.
+_Avoid_: Manage mode, admin mode
+
+**Linked User**:
+The association between a User (an authenticated account with a role) and a Person record, stored bidirectionally (`users.personId` ↔ `people.userId`) and set by an admin. When a User is linked, their own `profile.html` surfaces the **self-editable** fields of their Person and writes straight to the Person record (one source of truth, no copy). Self-editable fields are the Person's contact info (email, phone, address) and birthday, plus `sex` **only while unset** (a person may set their sex once; changing an already-set value is editor-only). The Membership Track, Shepherding Tags, Shepherding Status, involvement, and all shepherding data are **never** self-editable. From the Membership Directory, a Person viewing their own detail card gets an "Edit my info →" link to `profile.html` rather than inline editing. Anniversary is deliberately *not* self-editable — it belongs to Family structures (added later).
+_Avoid_: Account link, member login (a User is not necessarily a member)
+
+**Family**:
+A first-class entity (its own `families` collection) that groups a household for the Membership Directory: `{ husbandId?, wifeId?, childIds[], anniversary? }`. **Husband is exactly one male Person, Wife is exactly one female Person** (matching the `sex` enum); every field is optional, so partial families are allowed (a widow + kids, a childless couple, etc.). **Anniversary** (the couple's wedding date) lives on the Family, not the Person. Children are the shared `childIds` list — not duplicated onto each parent. **Multiple generations are emergent, not a nested tree:** a Person is a spouse in at most one Family (their marriage) and a child in at most one Family (their family of origin); a child who marries starts their own Family, and walking child → their-Family-as-spouse → that Family's children traverses the tree across any number of generations. Distinct from a Relationship (the freeform, shepherd-only edge model).
+_Avoid_: Household (use only as prose), family tree (that is the emergent traversal, not a stored structure), relationship (that is the freeform shepherd concept)
+
+**Relationship**:
+An elder-authored typed edge between two Persons, surfaced only on the Shepherding Profile (never in the member-facing Membership Directory). Carries a Relationship Type and, from that type, a direction. Stored as a person-to-person edge (the edge-graph model deliberately *not* used for Family). Independent of Family — a Relationship can cross-cut households. The thin first cut is create / apply a type / view / delete an edge on the Shepherding Profile.
+_Avoid_: Family (that is the tidy directory entity), tag (that is a Person label, not a Person-to-Person edge)
+
+**Relationship Type**:
+A reusable, elder-defined label for a kind of Relationship (e.g. "dating", "mentors", "caregiver for"), saved once and re-appliable to any pair of Persons — the freeform vocabulary grows organically as elders type new ones, exactly parallel to how Shepherding Tags accrue. A Relationship Type is **optionally directional**: a directional type (e.g. "mentors") renders oriented on both profiles ("A mentors B"), a non-directional type (e.g. "dating") renders symmetrically. Distinct from a Shepherding Tag: a Tag labels one Person, a Relationship Type labels an *edge* between two.
+_Avoid_: Relationship tag, edge label
+
+**Servant Role**:
+A non-liturgical service contribution — kids ministry, setup/teardown, coffee, sound, etc. — as opposed to the liturgical Roles (preacher, service leader, worship leader…). Servant Roles will be scheduled on a future **servant-roles tab** of the Service Calendar, distinct from the Order of Service editor, and recorded as Involvement like liturgical roles. **Out of scope for the People System (MS-81)** — MS-81's only obligation is to keep the Involvement model **role-open** (any `type` slug is accepted, no schema change) so the servant-roles feature can plug in later.
+_Avoid_: Ministry role, volunteer role (use Servant Role), duty
+
+**Inactive** (a Person):
+An off-Track state, toggled beside the Membership Stage slider. Marking a Person Inactive **removes their spot on the Membership Track** (they carry no Membership Stage while Inactive) and applies the Inactive Membership Tag in place of a stage tag. The Person's record stays **fully visible** — Inactive is *not* archival and does not hide the record; it is reserved for later use such as surfacing stale records that may warrant deletion. Distinct from **Previous Member**, which is a genuine Track stage (someone who was a Member and has since left but is still a tracked relationship). The prior Membership Stage is retained under the hood so that clearing Inactive restores the Person to where they were on the Track. Replaces the old `membership.status: 'inactive'` value; the existing "active people" filters (`status !== 'inactive'`) become "not Inactive."
+_Avoid_: Archived, hidden, deleted, dormant
+
+**Membership Change**:
+A Pastoral Record entry that captures a Person's move along the Membership Track (including onto/off of Inactive). Records the previous stage, the new stage, which editor made the change, the source, a timestamp, and an optional Explanation — mirroring Status Change. Generated once per slider move. The underlying Membership Tag swap is performed silently and does **not** generate Tag Changes; the Membership Change is the canonical record of the transition, and the Person's membership history is derived from these entries.
+_Avoid_: Status Change (that is Shepherding Status), tag change, track change
 
 **Red Flag**:
 A Shepherding Tag (not a built-in field) used as the canonical example of elder-defined tagging. No special UI treatment beyond being a tag.
