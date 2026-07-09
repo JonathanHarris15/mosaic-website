@@ -1,136 +1,184 @@
 /**
  * @fileoverview MS-83 — Membership Track migration (ADR-0012).
  *
- * One-shot, idempotent migration that moves every Person off the three old,
- * conflicting membership signals onto the single Membership Track:
+ * One-shot, idempotent migration that moves every Person onto the single
+ * Membership Track. Critically, in the real data membership is encoded in the
+ * **existing tags** (`Member`, `Regular Attender`, `Visitor`, `Moving
+ * Membership`, `Previous Member`) — the ad-hoc tag system the overhaul replaces —
+ * NOT in `membership.status`, which is empty for almost everyone. So the stage is
+ * derived tags-first, with the legacy `status` field only as a fallback when no
+ * membership tag is present.
  *
- *   1. Maps the legacy `membership.status` (visitor / regular_attender / member /
- *      inactive) onto the new { stage, inactive } shape via the same pure
- *      mapping the app uses (ShepherdingCore.membershipFromLegacyStatus).
- *   2. Re-projects each Person's `tags` so they carry exactly the Membership Tags
- *      their stage implies (applyMembershipTags). Moving Membership carries both
- *      its own tag and 'Member'; Inactive carries 'Inactive'.
- *   3. Seeds a `people_tags` document for every code-defined Membership Tag so the
- *      tag vocabulary shows them. The legacy 'Member' tag doc is left in place —
- *      its id already IS 'Member', so the Track absorbs it with no rewrite.
+ *   1. Derives { stage, inactive } from each Person (deriveMembership): a
+ *      membership tag wins (most-advanced first: Moving Membership → Member →
+ *      Previous Member → Prospective Member → Regular Attender → Visitor); else
+ *      the legacy status maps across; Inactive comes from membership.inactive,
+ *      the legacy 'inactive' status, or an Inactive tag.
+ *   2. Re-projects the Membership Tags (applyMembershipTags) so Moving Membership
+ *      carries both its own tag and Member, etc., preserving all non-membership
+ *      tags.
+ *   3. Seeds a `people_tags` doc for every code-defined Membership Tag.
+ *   4. Reports any Person whose explicit legacy status DISAGREES with the
+ *      tag-derived stage (e.g. status 'previous_member' but a Member tag) so a
+ *      human can resolve those few by hand — the migration keeps the tag-derived
+ *      stage and never guesses silently.
  *
- * The legacy `membership.status` field is intentionally left untouched for
- * back-compat with screens not yet migrated (MS-85 removes those readers). No
- * Pastoral Record entries are written — a migration is silent by design.
+ * The legacy `membership.status` field is left untouched for back-compat. No
+ * Pastoral Record entries are written. Idempotent: re-running derives the same
+ * stage and applyMembershipTags strips-then-re-adds, so tags never accumulate.
  *
- * Idempotent: re-running maps the same status again and applyMembershipTags first
- * strips all Membership Tags before re-adding, so tags never accumulate.
+ * The pure derivation is exported for unit tests; the Firestore side only runs
+ * when the script is executed directly.
  *
  * Usage:
- *   node scripts/migrate-membership-track.js            # dry run (default) — reports only
- *   node scripts/migrate-membership-track.js --commit   # apply the changes
+ *   node scripts/migrate-membership-track.js            # dry run (default)
+ *   node scripts/migrate-membership-track.js --commit   # apply
  */
-
-const admin = require('firebase-admin');
-const path = require('path');
-const fs = require('fs');
 
 const Core = require('../public/shepherding-core.js');
 
-const FIREBASE_PROJECT_ID = 'mosaic-hymn-database';
-const COMMIT = process.argv.includes('--commit');
+// Tag → stage precedence (most-advanced first). Moving Membership must be tested
+// before Member because such People carry BOTH tags.
+const TAG_STAGE_PRECEDENCE = [
+    ['Moving Membership', 'moving_membership'],
+    ['Member', 'member'],
+    ['Previous Member', 'previous_member'],
+    ['Prospective Member', 'prospective_member'],
+    ['Regular Attender', 'regular_attender'],
+    ['Visitor', 'visitor'],
+];
 
-// Find whichever Firebase Admin SDK service-account key is present in the repo
-// root (the exact filename hash differs between machines).
-function resolveServiceAccount() {
-    const root = path.join(__dirname, '..');
-    const match = fs.readdirSync(root).find(
-        f => f.startsWith('mosaic-hymn-database-firebase-adminsdk') && f.endsWith('.json')
-    );
-    if (!match) {
-        throw new Error('No mosaic-hymn-database-firebase-adminsdk-*.json found in project root.');
+// Map a legacy `membership.status` value to a stage. The field in the real data
+// holds more than the old 4-value enum (it also carries e.g. 'previous_member'),
+// so a direct stage name passes through; otherwise fall back to Core's mapping
+// for the historical enum. Returns null when there's nothing usable.
+const ALL_STAGES = new Set(Core.MEMBERSHIP_STAGES);
+function statusToStage(status) {
+    if (ALL_STAGES.has(status)) return status;
+    return Core.membershipFromLegacyStatus(status).stage;
+}
+
+// Derive { stage, inactive, conflict } for a Person. Tags are the primary signal
+// (that is where membership actually lives today); the legacy status is a
+// fallback and a conflict check.
+function deriveMembership(person) {
+    const p = person || {};
+    const tags = p.tags || [];
+    const status = p.membership && p.membership.status;
+
+    let stage = null;
+    for (const [tag, s] of TAG_STAGE_PRECEDENCE) {
+        if (tags.indexOf(tag) !== -1) { stage = s; break; }
     }
-    return require(path.join(root, match));
-}
 
-admin.initializeApp({
-    credential: admin.credential.cert(resolveServiceAccount()),
-    projectId: FIREBASE_PROJECT_ID,
-});
+    // Fallback: no membership tag at all → map the legacy status across.
+    if (!stage) stage = statusToStage(status);
 
-const db = admin.firestore();
+    const inactive = Core.isInactiveMembership(p.membership) || tags.indexOf('Inactive') !== -1;
 
-// Shallow-equal two string arrays regardless of order — so we only write when a
-// Person's tag set actually changes.
-function sameTagSet(a, b) {
-    if (a.length !== b.length) return false;
-    const sa = [...a].sort();
-    const sb = [...b].sort();
-    return sa.every((v, i) => v === sb[i]);
-}
-
-async function seedMembershipTagDocs() {
-    const col = db.collection('people_tags');
-    const existing = new Set((await col.get()).docs.map(d => d.id));
-    let created = 0;
-    for (const tagId of Core.MEMBERSHIP_TAG_IDS) {
-        if (existing.has(tagId)) continue;
-        if (COMMIT) {
-            await col.doc(tagId).set({ name: tagId, hiddenFromOthers: false, hidePeople: false }, { merge: true });
-        }
-        created++;
-        console.log(`  ${COMMIT ? 'seeded' : 'would seed'} Membership Tag doc: "${tagId}"`);
+    // Conflict: an explicit, recognised legacy status that maps to a DIFFERENT
+    // stage than the tags did. Reported, not auto-resolved.
+    let conflict = null;
+    const statusStage = statusToStage(status);
+    if (statusStage && stage && statusStage !== stage) {
+        conflict = { statusStage, tagStage: stage };
     }
-    if (!created) console.log('  all Membership Tag docs already present');
-    return created;
+
+    return { stage, inactive, conflict };
 }
 
-async function migratePeople() {
-    const snap = await db.collection('people').get();
-    let changed = 0;
-    let unchanged = 0;
-    for (const doc of snap.docs) {
-        const data = doc.data();
-        const legacyStatus = data.membership && data.membership.status;
-        const membership = Core.membershipFromLegacyStatus(legacyStatus);
-        const currentTags = data.tags || [];
-        const nextTags = Core.applyMembershipTags(currentTags, membership);
+module.exports = { deriveMembership, TAG_STAGE_PRECEDENCE };
 
-        const membershipChanged =
-            !data.membership ||
-            data.membership.stage !== membership.stage ||
-            !!data.membership.inactive !== membership.inactive;
-        const tagsChanged = !sameTagSet(currentTags, nextTags);
+// ── Firestore side (only when run directly) ──────────────────────────────────
+if (require.main === module) {
+    const admin = require('firebase-admin');
+    const path = require('path');
+    const fs = require('fs');
 
-        if (!membershipChanged && !tagsChanged) {
-            unchanged++;
-            continue;
-        }
-        changed++;
-        const stageLabel = membership.inactive
-            ? 'Inactive'
-            : (membership.stage ? Core.MEMBERSHIP_STAGE_LABEL[membership.stage] : '(unset)');
-        console.log(`  ${COMMIT ? 'update' : 'would update'} ${data.name || doc.id}: status="${legacyStatus || ''}" → ${stageLabel}; tags [${currentTags.join(', ')}] → [${nextTags.join(', ')}]`);
+    const FIREBASE_PROJECT_ID = 'mosaic-hymn-database';
+    const COMMIT = process.argv.includes('--commit');
 
-        if (COMMIT) {
-            // Merge stage/inactive into the existing membership object so joinedAt
-            // and the back-compat status field survive.
-            await doc.ref.update({
-                'membership.stage': membership.stage,
-                'membership.inactive': membership.inactive,
-                tags: nextTags,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
-        }
+    function resolveServiceAccount() {
+        const root = path.join(__dirname, '..');
+        const match = fs.readdirSync(root).find(
+            f => f.startsWith('mosaic-hymn-database-firebase-adminsdk') && f.endsWith('.json')
+        );
+        if (!match) throw new Error('No mosaic-hymn-database-firebase-adminsdk-*.json found in project root.');
+        return require(path.join(root, match));
     }
-    return { changed, unchanged };
-}
 
-(async () => {
-    console.log(`\nMembership Track migration (ADR-0012) — ${COMMIT ? 'COMMIT' : 'DRY RUN (use --commit to apply)'}\n`);
-    console.log('Seeding Membership Tag docs:');
-    const seeded = await seedMembershipTagDocs();
-    console.log('\nMigrating people:');
-    const { changed, unchanged } = await migratePeople();
-    console.log(`\nDone. Tag docs ${COMMIT ? 'seeded' : 'to seed'}: ${seeded}. People ${COMMIT ? 'updated' : 'to update'}: ${changed}, unchanged: ${unchanged}.`);
-    if (!COMMIT) console.log('No changes were written. Re-run with --commit to apply.\n');
-    process.exit(0);
-})().catch(err => {
-    console.error('Migration failed:', err);
-    process.exit(1);
-});
+    admin.initializeApp({ credential: admin.credential.cert(resolveServiceAccount()), projectId: FIREBASE_PROJECT_ID });
+    const db = admin.firestore();
+
+    function sameTagSet(a, b) {
+        if (a.length !== b.length) return false;
+        const sa = [...a].sort(), sb = [...b].sort();
+        return sa.every((v, i) => v === sb[i]);
+    }
+
+    async function seedMembershipTagDocs() {
+        const col = db.collection('people_tags');
+        const existing = new Set((await col.get()).docs.map(d => d.id));
+        let created = 0;
+        for (const tagId of Core.MEMBERSHIP_TAG_IDS) {
+            if (existing.has(tagId)) continue;
+            if (COMMIT) await col.doc(tagId).set({ name: tagId, hiddenFromOthers: false, hidePeople: false }, { merge: true });
+            created++;
+            console.log(`  ${COMMIT ? 'seeded' : 'would seed'} Membership Tag doc: "${tagId}"`);
+        }
+        if (!created) console.log('  all Membership Tag docs already present');
+        return created;
+    }
+
+    async function migratePeople() {
+        const snap = await db.collection('people').get();
+        let changed = 0, unchanged = 0;
+        const conflicts = [];
+        for (const doc of snap.docs) {
+            const data = doc.data();
+            const { stage, inactive, conflict } = deriveMembership(data);
+            const membership = { stage, inactive };
+            const currentTags = data.tags || [];
+            const nextTags = Core.applyMembershipTags(currentTags, membership);
+
+            if (conflict) conflicts.push({ name: data.name || doc.id, ...conflict });
+
+            const membershipChanged = !data.membership
+                || data.membership.stage !== stage
+                || !!data.membership.inactive !== inactive;
+            const tagsChanged = !sameTagSet(currentTags, nextTags);
+            if (!membershipChanged && !tagsChanged) { unchanged++; continue; }
+
+            changed++;
+            const label = inactive ? 'Inactive' : (stage ? Core.MEMBERSHIP_STAGE_LABEL[stage] : '(unset)');
+            console.log(`  ${COMMIT ? 'update' : 'would update'} ${data.name || doc.id}: → ${label}; tags [${currentTags.join(', ')}] → [${nextTags.join(', ')}]`);
+
+            if (COMMIT) {
+                await doc.ref.update({
+                    'membership.stage': stage,
+                    'membership.inactive': inactive,
+                    tags: nextTags,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+            }
+        }
+        return { changed, unchanged, conflicts };
+    }
+
+    (async () => {
+        console.log(`\nMembership Track migration (ADR-0012) — ${COMMIT ? 'COMMIT' : 'DRY RUN (use --commit to apply)'}\n`);
+        console.log('Seeding Membership Tag docs:');
+        const seeded = await seedMembershipTagDocs();
+        console.log('\nMigrating people (stage derived from tags, status as fallback):');
+        const { changed, unchanged, conflicts } = await migratePeople();
+        if (conflicts.length) {
+            console.log(`\n⚠ ${conflicts.length} status/tag CONFLICT(S) — kept the tag-derived stage; review by hand:`);
+            for (const c of conflicts) {
+                console.log(`   ${c.name}: legacy status → ${Core.MEMBERSHIP_STAGE_LABEL[c.statusStage]}, tags → ${Core.MEMBERSHIP_STAGE_LABEL[c.tagStage]}`);
+            }
+        }
+        console.log(`\nDone. Tag docs ${COMMIT ? 'seeded' : 'to seed'}: ${seeded}. People ${COMMIT ? 'updated' : 'to update'}: ${changed}, unchanged: ${unchanged}, conflicts: ${conflicts.length}.`);
+        if (!COMMIT) console.log('No changes were written. Re-run with --commit to apply.\n');
+        process.exit(0);
+    })().catch(err => { console.error('Migration failed:', err); process.exit(1); });
+}
