@@ -318,6 +318,152 @@
         return { personUpdates, activityRewrites, deleteTagIds: [...mergedSet] };
     }
 
+    // ── Membership Track (ADR-0012) ──────────────────────────────────────────
+    // The single church-relationship state machine. A Person sits at exactly one
+    // Membership Stage; from the stage the code projects a set of immutable
+    // Membership Tags so the Track plugs into the tag filter system rather than a
+    // parallel one. The stage field is the source of truth — membershipTagsFor /
+    // applyMembershipTags are the pure projection the dual-write commits. Inactive
+    // is orthogonal to the Track: it does not clear the stage (which is retained
+    // for restore) but overrides the projection to the single Inactive tag.
+
+    // Ordered stages. The order IS the Track direction; the slider walks this.
+    const MEMBERSHIP_STAGES = [
+        'visitor',
+        'regular_attender',
+        'prospective_member',
+        'member',
+        'moving_membership',
+        'previous_member',
+    ];
+
+    const MEMBERSHIP_STAGE_LABEL = {
+        visitor: 'Visitor',
+        regular_attender: 'Regular Attender',
+        prospective_member: 'Prospective Member',
+        member: 'Member',
+        moving_membership: 'Moving Membership',
+        previous_member: 'Previous Member',
+    };
+
+    // Tag identity is the tag name (ADR-0011), so a Membership Tag's id doubles as
+    // its display name — and the `member` stage's 'Member' id is the very tag the
+    // legacy directory gate used, so the Track absorbs it with no migration.
+    const MEMBER_TAG_ID = 'Member';
+    const INACTIVE_TAG_ID = 'Inactive';
+
+    // Each stage's projected Membership Tag ids. Moving Membership deliberately
+    // carries BOTH its own tag and 'Member' so "members = carries the Member tag"
+    // stays one query while still distinguishing those mid-transfer (ADR-0012).
+    const MEMBERSHIP_STAGE_TAGS = {
+        visitor: ['Visitor'],
+        regular_attender: ['Regular Attender'],
+        prospective_member: ['Prospective Member'],
+        member: ['Member'],
+        moving_membership: ['Moving Membership', 'Member'],
+        previous_member: ['Previous Member'],
+    };
+
+    // Every code-defined Membership Tag id — the stage tags plus 'Inactive'. This
+    // is the immutable subset the tag-management UI must refuse to rename / delete
+    // / merge / hide, and the exact set applyMembershipTags strips before
+    // re-projecting.
+    const MEMBERSHIP_TAG_IDS = [
+        'Visitor',
+        'Regular Attender',
+        'Prospective Member',
+        'Member',
+        'Moving Membership',
+        'Previous Member',
+        'Inactive',
+    ];
+    const MEMBERSHIP_TAG_ID_SET = new Set(MEMBERSHIP_TAG_IDS);
+
+    // Is this tag id one of the code-defined, immutable Membership Tags?
+    function isMembershipTagId(tagId) {
+        return MEMBERSHIP_TAG_ID_SET.has(tagId);
+    }
+
+    // The Membership Tag ids a Person's membership projects. Inactive wins and
+    // yields ['Inactive'] regardless of any retained stage; a Person with no stage
+    // (and not Inactive) projects none. Returns a fresh array each call.
+    function membershipTagsFor(membership) {
+        const m = membership || {};
+        if (m.inactive) return [INACTIVE_TAG_ID];
+        const stage = m.stage;
+        if (!stage || !MEMBERSHIP_STAGE_TAGS[stage]) return [];
+        return MEMBERSHIP_STAGE_TAGS[stage].slice();
+    }
+
+    // Re-project a Person's `tags` for a membership: drop EVERY Membership Tag,
+    // then append the ones the membership currently projects, preserving order and
+    // all non-membership tags. Idempotent — the stage is the source of truth, never
+    // the tags. The pure heart of the MS-83 dual-write.
+    function applyMembershipTags(currentTags, membership) {
+        const out = (currentTags || []).filter(t => !MEMBERSHIP_TAG_ID_SET.has(t));
+        for (const t of membershipTagsFor(membership)) {
+            if (out.indexOf(t) === -1) out.push(t);
+        }
+        return out;
+    }
+
+    // "Is this Person a current member?" — the Members-tab predicate. True iff the
+    // projection includes the Member tag (stage member or moving_membership, and
+    // not Inactive), so callers need not special-case Moving Membership.
+    function carriesMemberTag(membership) {
+        return membershipTagsFor(membership).indexOf(MEMBER_TAG_ID) !== -1;
+    }
+
+    // Migration (ADR-0012): map a legacy `membership.status` value to the new
+    // { stage, inactive } shape. visitor/regular_attender/member map straight
+    // across; inactive becomes the off-Track flag with no stage; anything absent
+    // or unrecognised (including the three new stages, which have no legacy source)
+    // yields an empty membership so it can be assigned by hand.
+    function membershipFromLegacyStatus(status) {
+        switch (status) {
+            case 'visitor': return { stage: 'visitor', inactive: false };
+            case 'regular_attender': return { stage: 'regular_attender', inactive: false };
+            case 'member': return { stage: 'member', inactive: false };
+            case 'inactive': return { stage: null, inactive: true };
+            default: return { stage: null, inactive: false };
+        }
+    }
+
+    // Pastoral Record entry for a Track move (ADR-0012). Mirrors buildStatusChange;
+    // previous/next are { stage, inactive }. The MS-84 slider is its one writer.
+    function buildMembershipChange({ previous, next, authorUid, authorName, source, sourceDocumentId }) {
+        return {
+            kind: 'membership_change',
+            previousStage: (previous && previous.stage) || null,
+            newStage: (next && next.stage) || null,
+            previousInactive: !!(previous && previous.inactive),
+            newInactive: !!(next && next.inactive),
+            authorUid: authorUid || null,
+            authorName: authorName || '',
+            source,
+            sourceDocumentId: sourceDocumentId || null,
+            explanation: '',
+        };
+    }
+
+    // Atomic Track move (browser only) — the membership analogue of the ADR-0005
+    // dual-write. In one batch: set the Person's membership field, re-project the
+    // Membership Tags, and append one Membership Change. The tag swap is therefore
+    // silent — it emits no Tag Changes; the Membership Change is the canonical
+    // record. `next` is { stage, inactive }; currentTags is the Person's live tags.
+    function commitMembershipChange(db, personId, { currentTags, previous, next, authorUid, authorName, source, sourceDocumentId }) {
+        // Dotted field paths so only stage/inactive move — joinedAt and the
+        // back-compat status field on the membership object are preserved.
+        const personUpdate = {
+            'membership.stage': (next && next.stage) || null,
+            'membership.inactive': !!(next && next.inactive),
+            tags: applyMembershipTags(currentTags, next),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+        const record = buildMembershipChange({ previous, next, authorUid, authorName, source, sourceDocumentId });
+        return commitPastoralChange(db, personId, personUpdate, record);
+    }
+
     const ShepherdingCore = {
         URGENCY_LEVELS,
         IMPORTANCE_LEVELS,
@@ -345,6 +491,20 @@
         holdStopIndex,
         formatHoldShort,
         planTagMerge,
+        // Membership Track (ADR-0012)
+        MEMBERSHIP_STAGES,
+        MEMBERSHIP_STAGE_LABEL,
+        MEMBERSHIP_STAGE_TAGS,
+        MEMBERSHIP_TAG_IDS,
+        MEMBER_TAG_ID,
+        INACTIVE_TAG_ID,
+        isMembershipTagId,
+        membershipTagsFor,
+        applyMembershipTags,
+        carriesMemberTag,
+        membershipFromLegacyStatus,
+        buildMembershipChange,
+        commitMembershipChange,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
