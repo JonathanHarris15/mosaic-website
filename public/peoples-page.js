@@ -11,6 +11,10 @@ document.addEventListener('alpine:init', () => {
         searchTerm: '',
         // Membership Directory tab: 'members' (carries Member tag) | 'non_members'.
         activeTab: 'members',
+        // Edit Mode (ADR-0012): the directory is read-only until an editor turns
+        // this on, which reveals the inline People-management affordances. Off by
+        // default; a plain member never sees the toggle (gated by canEdit).
+        editMode: false,
         sortKey: 'totalInvolvements', // 'name' or 'totalInvolvements'
         sortDirection: 'desc',
         

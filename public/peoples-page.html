@@ -132,7 +132,13 @@
                     <h2 class="font-headline-md text-sm uppercase tracking-wider text-primary flex items-center gap-2">
                         <span class="material-symbols-outlined text-[18px]">group</span> People's Directory <span class="text-[8px] font-mono opacity-20">v2.1</span>
                     </h2>
-                    <button x-show="canEdit" @click="showAddPersonModal = true" class="bg-primary text-on-primary text-[10px] uppercase tracking-widest px-4 py-1.5 rounded-full hover:bg-primary-container transition-all flex items-center gap-1.5 font-label-md shadow-sm">
+                    <button x-show="canEdit" @click="editMode = !editMode"
+                            :class="editMode ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest'"
+                            class="text-[10px] uppercase tracking-widest px-4 py-1.5 rounded-full transition-all flex items-center gap-1.5 font-label-md shadow-sm">
+                        <span class="material-symbols-outlined text-sm" x-text="editMode ? 'edit_off' : 'edit'"></span>
+                        <span x-text="editMode ? 'Done Editing' : 'Edit Mode'"></span>
+                    </button>
+                    <button x-show="editMode" @click="showAddPersonModal = true" class="bg-primary text-on-primary text-[10px] uppercase tracking-widest px-4 py-1.5 rounded-full hover:bg-primary-container transition-all flex items-center gap-1.5 font-label-md shadow-sm">
                         <span class="material-symbols-outlined text-sm">person_add</span> Add Person
                     </button>
                 </div>
@@ -229,22 +235,24 @@
                                     </div>
                                     <!-- Cache Bust: 2024-05-15 18:42 -->
 
-                                    <!-- Tag Management — editors and above only; members see contact details instead -->
-                                    <div x-show="canEdit" class="mt-4 border-t border-surface-variant/30 pt-3">
+                                    <!-- Tag Management — only in Edit Mode; members see contact details instead -->
+                                    <div x-show="editMode" class="mt-4 border-t border-surface-variant/30 pt-3">
                                         <p class="font-label-md text-[9px] uppercase tracking-widest text-on-surface-variant mb-2">Tags</p>
                                         <div class="flex flex-wrap gap-1.5">
                                             <!-- Existing Tags -->
                                             <template x-for="tag in (person.tags || [])" :key="tag">
-                                                <span class="inline-flex items-center gap-1 bg-surface-container-high text-on-surface text-[10px] px-2 py-0.5 rounded-full border border-outline-variant/30 group/tag">
+                                                <span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border group/tag"
+                                                      :class="ShepherdingCore.isMembershipTagId(tag) ? 'bg-primary-fixed text-primary border-primary/20' : 'bg-surface-container-high text-on-surface border-outline-variant/30'">
+                                                    <span x-show="ShepherdingCore.isMembershipTagId(tag)" class="material-symbols-outlined text-[11px] align-middle">lock</span>
                                                     <span x-text="tag"></span>
-                                                    <button x-show="canEdit" @click="removeTag(person, tag)" class="hover:text-error transition-colors">
+                                                    <button x-show="!ShepherdingCore.isMembershipTagId(tag)" @click="removeTag(person, tag)" class="hover:text-error transition-colors">
                                                         <span class="material-symbols-outlined text-[12px] align-middle">close</span>
                                                     </button>
                                                 </span>
                                             </template>
-                                            
+
                                             <!-- Add Tag Input -->
-                                            <div x-show="canEdit" class="relative" x-data="{ open: false, tagQuery: '' }">
+                                            <div class="relative" x-data="{ open: false, tagQuery: '' }">
                                                 <button x-show="!open" @click="open = true; $nextTick(() => $refs.tagInput.focus())"
                                                         class="inline-flex items-center gap-1 bg-surface-container-lowest text-primary text-[10px] px-2 py-0.5 rounded-full border border-primary/20 hover:bg-primary-fixed transition-colors font-medium">
                                                     <span class="material-symbols-outlined text-[12px]">add</span> Add Tag
@@ -260,9 +268,9 @@
                                                            class="text-[10px] px-2 py-0.5 rounded-full border border-primary/40 focus:ring-1 focus:ring-primary outline-none w-full bg-surface-container-lowest">
                                                     
                                                     <!-- Suggestions -->
-                                                    <div x-show="tagQuery && allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(person.tags || []).includes(t)).length > 0"
+                                                    <div x-show="tagQuery && allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(person.tags || []).includes(t) && !ShepherdingCore.isMembershipTagId(t)).length > 0"
                                                          class="absolute z-20 top-full mt-1 w-full bg-white border border-outline-variant rounded-lg shadow-xl py-1 max-h-40 overflow-y-auto">
-                                                        <template x-for="tag in allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(person.tags || []).includes(t))" :key="tag">
+                                                        <template x-for="tag in allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(person.tags || []).includes(t) && !ShepherdingCore.isMembershipTagId(t))" :key="tag">
                                                             <button @click="addTag(person, tag); tagQuery = ''; open = false"
                                                                     class="w-full text-left px-3 py-1.5 text-[10px] hover:bg-primary-fixed transition-colors">
                                                                 <span x-text="tag"></span>
@@ -274,13 +282,13 @@
                                         </div>
                                     </div>
                                 </div>
-                                <button x-show="canEdit" @click="deletePerson(person.id)"
+                                <button x-show="editMode" @click="deletePerson(person.id)"
                                         class="text-error/40 hover:text-error hover:bg-error-container/30 p-1.5 rounded-full transition-all opacity-0 group-hover:opacity-100">
                                     <span class="material-symbols-outlined text-[18px]">delete</span>
                                 </button>
                             </div>
-                            <div x-show="canEdit" class="flex gap-2 mt-4">
-                                <button @click="editPerson(person)" 
+                            <div x-show="editMode" class="flex gap-2 mt-4">
+                                <button @click="editPerson(person)"
                                         class="text-[11px] bg-primary text-on-primary px-4 py-1.5 rounded-full hover:bg-primary-container transition-all flex items-center gap-1.5 font-label-md uppercase tracking-widest shadow-sm">
                                     <span class="material-symbols-outlined text-[14px]">edit</span> Edit Person
                                 </button>
