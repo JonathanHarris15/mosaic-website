@@ -194,7 +194,8 @@
                                 <span x-show="tagHoldLabel(tagId)" class="opacity-70 text-[11px]"
                                       :title="'Held for ' + tagHoldLabel(tagId)"
                                       x-text="'· ' + tagHoldLabel(tagId)"></span>
-                                <button @click="toggleTag(tagId)" class="hover:opacity-70 transition-opacity">
+                                <span x-show="ShepherdingCore.isMembershipTagId(tagId)" class="material-symbols-outlined text-[13px] opacity-70" title="Set by the Membership Track">lock</span>
+                                <button x-show="!ShepherdingCore.isMembershipTagId(tagId)" @click="toggleTag(tagId)" class="hover:opacity-70 transition-opacity">
                                     <span class="material-symbols-outlined text-[14px]">close</span>
                                 </button>
                             </span>
@@ -207,7 +208,7 @@
                     <div class="flex flex-col gap-xs">
                         <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider text-xs">Add tag</span>
                         <div class="flex flex-wrap gap-xs">
-                            <template x-for="tag in shepherdingTags.filter(t => !hasTag(t.id))" :key="tag.id">
+                            <template x-for="tag in shepherdingTags.filter(t => !hasTag(t.id) && !ShepherdingCore.isMembershipTagId(t.id))" :key="tag.id">
                                 <button @click="toggleTag(tag.id)"
                                     class="px-sm py-xs bg-surface-container text-on-surface hover:bg-surface-container-high rounded-full font-label-md text-label-md transition-colors flex items-center gap-xs"
                                     :class="ShepherdingBlur.pastoralClass({ownProfile})">
@@ -236,6 +237,68 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Relationships Panel (ADR-0012, MS-89) — elder-only edge graph -->
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-md">
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-headline-md text-headline-md text-primary">Relationships</h2>
+                        <button @click="showAddRelationship = !showAddRelationship"
+                                class="text-primary hover:text-primary/80 flex items-center gap-1 font-label-md text-label-md">
+                            <span class="material-symbols-outlined text-[18px]" x-text="showAddRelationship ? 'close' : 'add'"></span>
+                            <span x-text="showAddRelationship ? 'Cancel' : 'Add'"></span>
+                        </button>
+                    </div>
+
+                    <div class="flex flex-col gap-xs">
+                        <template x-for="r in personRelationships" :key="r.edge.id">
+                            <div class="flex items-center justify-between gap-sm bg-surface-container rounded-lg px-sm py-xs" :class="ShepherdingBlur.pastoralClass({ownProfile})">
+                                <div class="flex items-center gap-xs min-w-0">
+                                    <span class="material-symbols-outlined text-[16px] text-secondary" x-text="r.directional ? 'trending_flat' : 'sync_alt'"></span>
+                                    <span class="text-sm text-on-surface truncate">
+                                        <template x-if="r.directional"><span x-text="r.sentence"></span></template>
+                                        <template x-if="!r.directional"><span><span class="font-medium" x-text="r.typeName"></span> · <span x-text="relPersonName(r.otherId)"></span></span></template>
+                                    </span>
+                                </div>
+                                <button @click="deleteRelationship(r.edge.id)" class="text-on-surface-variant hover:text-error transition-colors flex-shrink-0">
+                                    <span class="material-symbols-outlined text-[16px]">close</span>
+                                </button>
+                            </div>
+                        </template>
+                        <span x-show="personRelationships.length === 0" class="text-on-surface-variant italic text-sm">No relationships recorded.</span>
+                    </div>
+
+                    <!-- Add relationship form -->
+                    <div x-show="showAddRelationship" class="flex flex-col gap-sm pt-xs border-t border-outline-variant">
+                        <div class="relative">
+                            <input type="text" x-model="relPersonQuery" placeholder="Search person…"
+                                   class="w-full border border-outline-variant rounded-lg px-sm py-xs font-body-md text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                            <div x-show="!relForm.otherId && relPersonQuery && relPersonCandidates.length" class="absolute z-30 top-full mt-1 w-full bg-white border border-outline-variant rounded-lg shadow-xl py-1 max-h-40 overflow-y-auto">
+                                <template x-for="c in relPersonCandidates" :key="c.id">
+                                    <button @click="relForm.otherId = c.id; relPersonQuery = c.name" class="w-full text-left px-3 py-1.5 text-sm hover:bg-primary-fixed" x-text="c.name"></button>
+                                </template>
+                            </div>
+                        </div>
+                        <input type="text" x-model="relForm.typeName" list="rel-type-list" placeholder="Relationship type (e.g. mentors, dating)…"
+                               class="w-full border border-outline-variant rounded-lg px-sm py-xs font-body-md text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                        <datalist id="rel-type-list">
+                            <template x-for="t in relationshipTypes" :key="t.id"><option :value="t.name"></option></template>
+                        </datalist>
+                        <label class="flex items-center gap-2 text-sm text-on-surface-variant">
+                            <input type="checkbox" x-model="relForm.directional" class="accent-primary"> Directional (reads one way, e.g. "A mentors B")
+                        </label>
+                        <div x-show="relForm.directional" class="flex items-center gap-2 text-sm">
+                            <span class="text-on-surface-variant">This person is the</span>
+                            <select x-model="relForm.direction" class="border border-outline-variant rounded px-2 py-1 bg-surface text-sm">
+                                <option value="out">source ("→")</option>
+                                <option value="in">target ("←")</option>
+                            </select>
+                        </div>
+                        <button @click="addRelationship()" class="self-start px-sm py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors">
+                            Add relationship
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Pastoral Status Panel -->
                 <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-md">
                     <h2 class="font-headline-md text-headline-md text-primary">Pastoral Status</h2>
@@ -860,6 +923,7 @@
     </div>
 
     <script src="shepherding-core.js"></script>
+    <script src="relationship-core.js"></script>
     <script src="shepherding-blur.js"></script>
     <script src="tiptap-render.js"></script>
     <script src="shepherding-profile.js"></script>

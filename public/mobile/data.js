@@ -439,6 +439,19 @@
       sourceDocumentId: sourceDocumentId || null,
     }));
   }
+  // Relationships (ADR-0012, MS-89) — the elder-only edge graph and its reusable
+  // types. Small collections; fetched whole for RelationshipCore to render.
+  function getRelationships() {
+    return db.collection("relationships").get()
+      .then(function (snap) { return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); })
+      .catch(function () { return []; });
+  }
+  function getRelationshipTypes() {
+    return db.collection("relationship_types").get()
+      .then(function (snap) { return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); })
+      .catch(function () { return []; });
+  }
+
   // All Families (ADR-0012, MS-88) — the household graph. Small collection;
   // fetched whole so FamilyCore can resolve a Person's relations client-side.
   function getFamilies() {
@@ -763,6 +776,8 @@
     toggleShepherdingTag: toggleShepherdingTag,
     setMembership: setMembership,
     getFamilies: getFamilies,
+    getRelationships: getRelationships,
+    getRelationshipTypes: getRelationshipTypes,
     revertShepherdingStatus: revertShepherdingStatus,
     getShepherdingView: getShepherdingView,
     getCareList: getCareList,

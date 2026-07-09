@@ -252,6 +252,14 @@ document.addEventListener('alpine:init', () => {
 
         collapseStatusChanges: false,
 
+        // Relationships (ADR-0012, MS-89) — the elder-only edge graph.
+        relationships: [],
+        relationshipTypes: [],
+        allPeople: [],
+        relForm: { otherId: '', typeName: '', directional: false, direction: 'out' },
+        relPersonQuery: '',
+        showAddRelationship: false,
+
         noteTypes: [...NOTE_TYPES, 'Create New Note Type'],
         loading: true,
         toast: { show: false, message: '', type: 'success' },
@@ -297,9 +305,100 @@ document.addEventListener('alpine:init', () => {
                     this.loadNotes(),
                     this.loadTags(),
                     this.loadActivity(),
+                    this.loadRelationships(),
                 ]);
                 this.loading = false;
             });
+        },
+
+        // ── Relationships (ADR-0012, MS-89) ──────────────────────────────────
+        async loadRelationships() {
+            try {
+                const [relSnap, typeSnap, peopleSnap] = await Promise.all([
+                    db.collection('relationships').get(),
+                    db.collection('relationship_types').get(),
+                    db.collection('people').orderBy('name').get(),
+                ]);
+                this.relationships = relSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                this.relationshipTypes = typeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                this.allPeople = peopleSnap.docs.map(d => ({ id: d.id, name: (d.data().name || '(Unnamed)') }));
+            } catch (e) {
+                console.error('Error loading relationships:', e);
+            }
+        },
+
+        relPersonName(id) {
+            const p = this.allPeople.find(x => x.id === id);
+            return p ? p.name : '(unknown)';
+        },
+
+        relTypeById(id) {
+            return this.relationshipTypes.find(t => t.id === id) || null;
+        },
+
+        // The edges on this profile, each described from this Person's viewpoint.
+        get personRelationships() {
+            const edges = RelationshipCore.edgesForPerson(this.relationships, this.personId);
+            return edges.map(edge => {
+                const type = this.relTypeById(edge.typeId);
+                const desc = RelationshipCore.describeRelationship(edge, type, this.personId, id => this.relPersonName(id));
+                return { edge, ...desc };
+            });
+        },
+
+        get relPersonCandidates() {
+            const q = (this.relPersonQuery || '').toLowerCase();
+            return this.allPeople.filter(p =>
+                p.id !== this.personId &&
+                (!q || p.name.toLowerCase().includes(q))
+            ).slice(0, 8);
+        },
+
+        // Create (or reuse) a Relationship Type by the typed name, then add the edge.
+        async addRelationship() {
+            const otherId = this.relForm.otherId;
+            const typeName = (this.relForm.typeName || '').trim();
+            if (!otherId || !typeName) {
+                this.showToast('Pick a person and a relationship type', 'error');
+                return;
+            }
+            try {
+                // Reuse an existing type by name, else create one with the chosen
+                // directionality — the vocabulary accrues like tags.
+                let type = RelationshipCore.findTypeByName(this.relationshipTypes, typeName);
+                if (!type) {
+                    const ref = await db.collection('relationship_types').add({
+                        name: typeName,
+                        directional: !!this.relForm.directional,
+                    });
+                    type = { id: ref.id, name: typeName, directional: !!this.relForm.directional };
+                    this.relationshipTypes.push(type);
+                }
+                // Direction: 'out' → this Person is the `from`; 'in' → the `to`.
+                const fromId = this.relForm.direction === 'in' ? otherId : this.personId;
+                const toId = this.relForm.direction === 'in' ? this.personId : otherId;
+                const edge = { fromId, toId, typeId: type.id, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+                const ref = await db.collection('relationships').add(edge);
+                this.relationships.push({ id: ref.id, ...edge });
+                this.relForm = { otherId: '', typeName: '', directional: false, direction: 'out' };
+                this.relPersonQuery = '';
+                this.showAddRelationship = false;
+                this.showToast('Relationship added');
+            } catch (e) {
+                console.error('Error adding relationship:', e);
+                this.showToast('Error adding relationship', 'error');
+            }
+        },
+
+        async deleteRelationship(edgeId) {
+            try {
+                await db.collection('relationships').doc(edgeId).delete();
+                this.relationships = this.relationships.filter(r => r.id !== edgeId);
+                this.showToast('Relationship removed');
+            } catch (e) {
+                console.error('Error removing relationship:', e);
+                this.showToast('Error removing relationship', 'error');
+            }
         },
 
         async loadPerson() {
@@ -743,6 +842,12 @@ document.addEventListener('alpine:init', () => {
         hasTag(tagId) { return (this.person?.tags || []).includes(tagId); },
 
         async toggleTag(tagId) {
+            // Membership Tags follow the Membership Track (ADR-0012), never manual
+            // tagging — the slider on the People page is their only source.
+            if (ShepherdingCore.isMembershipTagId(tagId)) {
+                this.showToast('Membership Tags follow the Membership Track', 'error');
+                return;
+            }
             const current = this.person?.tags || [];
             const hasIt = current.includes(tagId);
             const newTags = hasIt ? current.filter(t => t !== tagId) : [...current, tagId];

@@ -674,9 +674,10 @@
     var personS = useState(null), notesS = useState([]), activityS = useState([]), tagsS = useState([]);
     var collapseS = useState(false), editorS = useState(null), newTagS = useState(""), editProfileS = useState(null), explEditS = useState({}), toastS = useState(null);
     var familiesS = useState([]), rosterS = useState([]); // Family graph + name lookup (MS-88)
+    var relsS = useState([]), relTypesS = useState([]);   // Relationship graph (MS-89)
 
     var person = personS[0], notes = notesS[0], activity = activityS[0], tags = tagsS[0];
-    var families = familiesS[0], roster = rosterS[0];
+    var families = familiesS[0], roster = rosterS[0], rels = relsS[0], relTypes = relTypesS[0];
     function rosterName(id) { for (var i = 0; i < roster.length; i++) { if (roster[i].id === id) return roster[i].name; } return "(unknown)"; }
     function showToast(m, t) { toastS[1]({ message: m, type: t || "success" }); setTimeout(function () { toastS[1](null); }, 2400); }
     function tagName(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i].name; } return id; }
@@ -690,8 +691,8 @@
         if (!alive) return;
         if (!p) { errS[1](true); loadingS[1](false); return; }
         personS[1](p);
-        Promise.all([data.getShepherdingNotes(pid), data.getShepherdingActivity(pid), data.getShepherdingTags(), data.getFamilies(), data.getPeople()])
-          .then(function (r) { if (!alive) return; notesS[1](r[0]); activityS[1](r[1]); tagsS[1](r[2]); familiesS[1](r[3]); rosterS[1](r[4]); loadingS[1](false); });
+        Promise.all([data.getShepherdingNotes(pid), data.getShepherdingActivity(pid), data.getShepherdingTags(), data.getFamilies(), data.getPeople(), data.getRelationships(), data.getRelationshipTypes()])
+          .then(function (r) { if (!alive) return; notesS[1](r[0]); activityS[1](r[1]); tagsS[1](r[2]); familiesS[1](r[3]); rosterS[1](r[4]); relsS[1](r[5]); relTypesS[1](r[6]); loadingS[1](false); });
       }).catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
       return function () { alive = false; };
     }, [pid]);
@@ -850,6 +851,24 @@
                     <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)" }}>${row[2].map(function (id) { return rosterName(id); }).join(", ")}</div>
                   </div>
                 </div>`; })}
+              </div>
+            </div>`;
+          })()}
+
+          ${(function () {
+            var edges = window.RelationshipCore.edgesForPerson(rels, pid);
+            if (!edges.length) return null;
+            return html`<div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
+              <h2 style=${Object.assign({}, SF_H2, { marginBottom: 12 })}>Relationships</h2>
+              <div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
+                ${edges.map(function (edge) {
+                  var type = null; for (var i = 0; i < relTypes.length; i++) { if (relTypes[i].id === edge.typeId) { type = relTypes[i]; break; } }
+                  var d = window.RelationshipCore.describeRelationship(edge, type, pid, rosterName);
+                  return html`<div key=${edge.id} style=${{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style=${{ display: "inline-flex", flexShrink: 0, color: "var(--secondary)" }}>${Ic(d.directional ? "move-right" : "arrow-left-right", 16)}</span>
+                    <span style=${{ fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)" }}>${d.directional ? d.sentence : (d.typeName + " · " + rosterName(d.otherId))}</span>
+                  </div>`;
+                })}
               </div>
             </div>`;
           })()}

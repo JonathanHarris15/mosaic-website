@@ -137,6 +137,16 @@ service cloud.firestore {
       allow read, write: if isElder();
     }
 
+    // Relationships (ADR-0012, MS-89): the elder-only person-to-person edge graph
+    // and its reusable Relationship Types. Never surfaced in the member-facing
+    // directory, so read is elder-gated too.
+    match /relationships/{edgeId} {
+      allow read, write: if isElder();
+    }
+    match /relationship_types/{typeId} {
+      allow read, write: if isElder();
+    }
+
     match /shepherding_views/{viewId} {
       allow read, write: if isElder();
     }
