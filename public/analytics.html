@@ -71,7 +71,7 @@
             <div x-show="activeTab === 'hymns' || activeTab === 'people' || (activeTab === 'praise' && isEditor)" class="py-4">
                 <div class="relative w-full max-w-md">
                     <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
-                    <input type="text" x-model="activeTab === 'hymns' ? hymnSearch : (activeTab === 'people' ? peopleSearch : pastoralSearch)" :placeholder="activeTab === 'hymns' ? 'Filter by hymn name...' : (activeTab === 'people' ? 'Search people...' : 'Search members...')" 
+                    <input type="text" x-model="activeSearch" :placeholder="activeTab === 'hymns' ? 'Filter by hymn name...' : (activeTab === 'people' ? 'Search people...' : 'Search members...')"
                         class="w-full pl-12 pr-4 py-2.5 bg-surface-container-low border-outline-variant rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all shadow-sm text-sm" />
                 </div>
             </div>

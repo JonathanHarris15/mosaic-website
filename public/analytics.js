@@ -259,6 +259,20 @@ export function analyticsPage() {
             }
         },
 
+        // Single shared search input across the hymns/people/praise tabs.
+        // x-model needs an assignable target, so route reads/writes through
+        // this accessor rather than an (unassignable) inline ternary.
+        get activeSearch() {
+            if (this.activeTab === 'hymns') return this.hymnSearch;
+            if (this.activeTab === 'people') return this.peopleSearch;
+            return this.pastoralSearch;
+        },
+        set activeSearch(value) {
+            if (this.activeTab === 'hymns') this.hymnSearch = value;
+            else if (this.activeTab === 'people') this.peopleSearch = value;
+            else this.pastoralSearch = value;
+        },
+
         get filteredPeople() {
             let list = this.people.filter(p => p.totalInvolvements > 0);
             
