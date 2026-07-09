@@ -227,6 +227,16 @@
                                             <span class="material-symbols-outlined text-[14px]">cake</span>
                                             <span x-text="person.birthday"></span>
                                         </div>
+                                        <!-- Family (MS-88): spouse + children, resolved from the family graph -->
+                                        <template x-if="relationsFor(person).spouseId || relationsFor(person).childIds.length">
+                                            <div class="flex items-start gap-1.5 text-on-surface-variant text-xs">
+                                                <span class="material-symbols-outlined text-[14px]">family_restroom</span>
+                                                <span>
+                                                    <template x-if="relationsFor(person).spouseId"><span x-text="personName(relationsFor(person).spouseId)"></span></template>
+                                                    <template x-if="relationsFor(person).childIds.length"><span x-text="(relationsFor(person).spouseId ? ' · ' : '') + relationsFor(person).childIds.map(c => personName(c)).join(', ')"></span></template>
+                                                </span>
+                                            </div>
+                                        </template>
                                         <div class="flex items-center flex-wrap gap-x-3 gap-y-1 pt-1.5">
                                             <!-- Last Prayed For & Involvements Row -->
                                             <div class="flex items-center gap-2">
@@ -541,6 +551,64 @@
                                 </button>
                             </div>
 
+                            <!-- Family (ADR-0012, MS-88): editors build the household -->
+                            <div x-show="canEdit" class="flex flex-col gap-2 pt-2">
+                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Family</label>
+                                <template x-if="!selectedSpouseRole">
+                                    <p class="text-[11px] text-on-surface-variant italic">Set this person’s sex above to build their family.</p>
+                                </template>
+                                <div x-show="selectedSpouseRole" class="p-3 bg-surface-container-lowest border border-outline-variant/20 rounded-lg flex flex-col gap-3">
+                                    <!-- Spouse -->
+                                    <div class="flex flex-col gap-1" x-data="{ open: false }">
+                                        <span class="text-[9px] uppercase tracking-widest text-on-surface-variant" x-text="selectedSpouseRole === 'husband' ? 'Wife' : 'Husband'"></span>
+                                        <template x-if="selectedFamily && (selectedSpouseRole === 'husband' ? selectedFamily.wifeId : selectedFamily.husbandId)">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-sm text-on-surface" x-text="personName(selectedSpouseRole === 'husband' ? selectedFamily.wifeId : selectedFamily.husbandId)"></span>
+                                                <button @click="saveFamily({ [selectedSpouseRole === 'husband' ? 'wifeId' : 'husbandId']: null })" class="text-error/60 hover:text-error text-[11px]">remove</button>
+                                            </div>
+                                        </template>
+                                        <template x-if="!selectedFamily || !(selectedSpouseRole === 'husband' ? selectedFamily.wifeId : selectedFamily.husbandId)">
+                                            <div class="relative">
+                                                <input type="text" x-model="familySpouseQuery" @focus="open = true" placeholder="Search to set spouse..."
+                                                       class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface py-1.5 px-3">
+                                                <div x-show="familySpouseQuery && spouseCandidates.length" class="absolute z-30 top-full mt-1 w-full bg-white border border-outline-variant rounded-lg shadow-xl py-1 max-h-40 overflow-y-auto">
+                                                    <template x-for="c in spouseCandidates" :key="c.id">
+                                                        <button @click="setSpouse(c.id)" class="w-full text-left px-3 py-1.5 text-xs hover:bg-primary-fixed" x-text="c.name"></button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                    <!-- Children -->
+                                    <div class="flex flex-col gap-1">
+                                        <span class="text-[9px] uppercase tracking-widest text-on-surface-variant">Children</span>
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <template x-for="cid in (selectedFamily ? (selectedFamily.childIds || []) : [])" :key="cid">
+                                                <span class="inline-flex items-center gap-1 bg-surface-container-high text-on-surface text-[10px] px-2 py-0.5 rounded-full border border-outline-variant/30">
+                                                    <span x-text="personName(cid)"></span>
+                                                    <button @click="removeChild(cid)" class="hover:text-error"><span class="material-symbols-outlined text-[12px] align-middle">close</span></button>
+                                                </span>
+                                            </template>
+                                        </div>
+                                        <div class="relative mt-1">
+                                            <input type="text" x-model="familyChildQuery" placeholder="Search to add a child..."
+                                                   class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface py-1.5 px-3">
+                                            <div x-show="familyChildQuery && childCandidates.length" class="absolute z-30 top-full mt-1 w-full bg-white border border-outline-variant rounded-lg shadow-xl py-1 max-h-40 overflow-y-auto">
+                                                <template x-for="c in childCandidates" :key="c.id">
+                                                    <button @click="addChild(c.id)" class="w-full text-left px-3 py-1.5 text-xs hover:bg-primary-fixed" x-text="c.name"></button>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Anniversary -->
+                                    <div class="flex flex-col gap-1">
+                                        <span class="text-[9px] uppercase tracking-widest text-on-surface-variant">Anniversary</span>
+                                        <input type="date" :value="selectedFamily ? (selectedFamily.anniversary || '') : ''" @change="setAnniversary($event.target.value)"
+                                               class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface py-1.5 px-3">
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Tags Management in Modal -->
                             <div class="flex flex-col gap-xs pt-2">
                                 <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Tags</label>
@@ -650,6 +718,7 @@
     </div>
 
     <script src="shepherding-core.js"></script>
+    <script src="family-core.js"></script>
     <script src="peoples-page.js"></script>
 </body>
 </html>

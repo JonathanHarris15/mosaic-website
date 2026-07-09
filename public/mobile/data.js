@@ -439,6 +439,14 @@
       sourceDocumentId: sourceDocumentId || null,
     }));
   }
+  // All Families (ADR-0012, MS-88) — the household graph. Small collection;
+  // fetched whole so FamilyCore can resolve a Person's relations client-side.
+  function getFamilies() {
+    return db.collection("families").get()
+      .then(function (snap) { return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); })
+      .catch(function () { return []; });
+  }
+
   // Move a Person along the Membership Track (ADR-0012): set the stage/inactive
   // field, re-project the Membership Tags, and append one Membership Change — all
   // atomically. The tag swap is silent (no Tag Changes). Returns the activity id.
@@ -754,6 +762,7 @@
     setShepherdingStatus: setShepherdingStatus,
     toggleShepherdingTag: toggleShepherdingTag,
     setMembership: setMembership,
+    getFamilies: getFamilies,
     revertShepherdingStatus: revertShepherdingStatus,
     getShepherdingView: getShepherdingView,
     getCareList: getCareList,

@@ -124,6 +124,14 @@ service cloud.firestore {
       allow create, update, delete: if isEditor();
     }
 
+    // Families (ADR-0012, MS-88): household entities for the Membership Directory.
+    // Public read (the directory shows households to the congregation); editor+
+    // write (families are managed alongside People).
+    match /families/{familyId} {
+      allow read: if true;
+      allow create, update, delete: if isEditor();
+    }
+
     // Shepherding System — elders and super_admins only
     match /shepherding_tags/{tagId} {
       allow read, write: if isElder();

@@ -74,6 +74,7 @@ document.addEventListener('alpine:init', () => {
                 this.authorized = true;
                 this.loadPeople();
                 this.loadTags();
+                this.loadFamilies();
             });
         },
 
@@ -208,6 +209,134 @@ document.addEventListener('alpine:init', () => {
                 console.error("Error loading people:", error);
                 this.showToast('Error loading people list', 'error');
             }
+        },
+
+        // ── Families (ADR-0012, MS-88) ───────────────────────────────────────
+        families: [],
+        familyChildQuery: '',
+        familySpouseQuery: '',
+
+        async loadFamilies() {
+            try {
+                const snap = await db.collection('families').get();
+                this.families = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            } catch (e) {
+                console.error('Error loading families:', e);
+            }
+        },
+
+        personName(id) {
+            const p = this.people.find(x => x.id === id);
+            return p ? p.name : '(unknown)';
+        },
+
+        personSex(id) {
+            const p = this.people.find(x => x.id === id);
+            return p ? p.sex : null;
+        },
+
+        // The resolved relations (ids) for a Person from the family graph.
+        relationsFor(person) {
+            if (!person) return { spouseId: null, childIds: [], parentIds: [] };
+            return FamilyCore.resolveRelations(this.families, person.id);
+        },
+
+        // The Family the selected Person is a spouse in (for the modal editor).
+        get selectedFamily() {
+            if (!this.selectedPerson) return null;
+            return FamilyCore.familyOfSpouse(this.families, this.selectedPerson.id);
+        },
+
+        // The role the selected Person plays as a spouse, from their sex.
+        get selectedSpouseRole() {
+            const sex = this.selectedPerson && this.selectedPerson.sex;
+            return sex === 'male' ? 'husband' : sex === 'female' ? 'wife' : null;
+        },
+
+        // People eligible to be the selected Person's spouse: the opposite sex,
+        // not the person themselves, not already a spouse in another family.
+        get spouseCandidates() {
+            if (!this.selectedPerson || !this.selectedSpouseRole) return [];
+            const otherRole = this.selectedSpouseRole === 'husband' ? 'wife' : 'husband';
+            const needSex = otherRole === 'husband' ? 'male' : 'female';
+            const q = (this.familySpouseQuery || '').toLowerCase();
+            return this.people.filter(p =>
+                p.id !== this.selectedPerson.id &&
+                p.sex === needSex &&
+                (!q || p.name.toLowerCase().includes(q)) &&
+                !FamilyCore.familyOfSpouse(this.families, p.id)
+            ).slice(0, 8);
+        },
+
+        get childCandidates() {
+            if (!this.selectedPerson) return [];
+            const fam = this.selectedFamily;
+            const existing = fam ? (fam.childIds || []) : [];
+            const q = (this.familyChildQuery || '').toLowerCase();
+            return this.people.filter(p =>
+                p.id !== this.selectedPerson.id &&
+                existing.indexOf(p.id) === -1 &&
+                (!q || p.name.toLowerCase().includes(q))
+            ).slice(0, 8);
+        },
+
+        // Write a change to the selected Person's Family, creating one if needed.
+        // The selected Person is anchored into their spousal role by sex.
+        async saveFamily(patch) {
+            const person = this.selectedPerson;
+            if (!person) return;
+            if (!this.selectedSpouseRole) {
+                this.showToast('Set this person’s sex before building a family', 'error');
+                return;
+            }
+            try {
+                let fam = this.selectedFamily;
+                if (!fam) {
+                    // Create a new family anchoring the selected person in their role.
+                    const base = { husbandId: null, wifeId: null, childIds: [], anniversary: null };
+                    base[this.selectedSpouseRole === 'husband' ? 'husbandId' : 'wifeId'] = person.id;
+                    Object.assign(base, patch);
+                    const ref = await db.collection('families').add(base);
+                    this.families.push({ id: ref.id, ...base });
+                } else {
+                    await db.collection('families').doc(fam.id).update(patch);
+                    Object.assign(fam, patch);
+                }
+                this.showToast('Family updated');
+            } catch (e) {
+                console.error('Error saving family:', e);
+                this.showToast('Error saving family', 'error');
+            }
+        },
+
+        async setSpouse(spouseId) {
+            const spouse = this.people.find(p => p.id === spouseId);
+            const spouseRole = this.selectedSpouseRole === 'husband' ? 'wife' : 'husband';
+            if (!FamilyCore.spouseSexOk(spouse, spouseRole)) {
+                this.showToast('Spouse must be the opposite sex', 'error');
+                return;
+            }
+            await this.saveFamily({ [spouseRole === 'husband' ? 'husbandId' : 'wifeId']: spouseId });
+            this.familySpouseQuery = '';
+        },
+
+        async addChild(childId) {
+            const fam = this.selectedFamily;
+            const childIds = fam ? [...(fam.childIds || [])] : [];
+            if (childIds.indexOf(childId) === -1) childIds.push(childId);
+            await this.saveFamily({ childIds });
+            this.familyChildQuery = '';
+        },
+
+        async removeChild(childId) {
+            const fam = this.selectedFamily;
+            if (!fam) return;
+            const childIds = (fam.childIds || []).filter(c => c !== childId);
+            await this.saveFamily({ childIds });
+        },
+
+        async setAnniversary(value) {
+            await this.saveFamily({ anniversary: value || null });
         },
 
         // ── Membership Track (ADR-0012) ──────────────────────────────────────

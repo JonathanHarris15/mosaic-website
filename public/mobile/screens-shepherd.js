@@ -673,8 +673,11 @@
     var loadingS = useState(true), errS = useState(false);
     var personS = useState(null), notesS = useState([]), activityS = useState([]), tagsS = useState([]);
     var collapseS = useState(false), editorS = useState(null), newTagS = useState(""), editProfileS = useState(null), explEditS = useState({}), toastS = useState(null);
+    var familiesS = useState([]), rosterS = useState([]); // Family graph + name lookup (MS-88)
 
     var person = personS[0], notes = notesS[0], activity = activityS[0], tags = tagsS[0];
+    var families = familiesS[0], roster = rosterS[0];
+    function rosterName(id) { for (var i = 0; i < roster.length; i++) { if (roster[i].id === id) return roster[i].name; } return "(unknown)"; }
     function showToast(m, t) { toastS[1]({ message: m, type: t || "success" }); setTimeout(function () { toastS[1](null); }, 2400); }
     function tagName(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i].name; } return id; }
     function reloadNotes() { return data.getShepherdingNotes(pid).then(notesS[1]); }
@@ -687,8 +690,8 @@
         if (!alive) return;
         if (!p) { errS[1](true); loadingS[1](false); return; }
         personS[1](p);
-        Promise.all([data.getShepherdingNotes(pid), data.getShepherdingActivity(pid), data.getShepherdingTags()])
-          .then(function (r) { if (!alive) return; notesS[1](r[0]); activityS[1](r[1]); tagsS[1](r[2]); loadingS[1](false); });
+        Promise.all([data.getShepherdingNotes(pid), data.getShepherdingActivity(pid), data.getShepherdingTags(), data.getFamilies(), data.getPeople()])
+          .then(function (r) { if (!alive) return; notesS[1](r[0]); activityS[1](r[1]); tagsS[1](r[2]); familiesS[1](r[3]); rosterS[1](r[4]); loadingS[1](false); });
       }).catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
       return function () { alive = false; };
     }, [pid]);
@@ -829,6 +832,27 @@
               </div>`; })}
             </div>` : html`<p style=${{ margin: 0, fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)" }}>No contact details provided.</p>`}
           </div>
+
+          ${(function () {
+            var rel = window.FamilyCore.resolveRelations(families, pid);
+            if (!rel.spouseId && !rel.childIds.length && !rel.parentIds.length) return null;
+            var rows = [];
+            if (rel.spouseId) rows.push(["heart", "Spouse", [rel.spouseId]]);
+            if (rel.childIds.length) rows.push(["baby", "Children", rel.childIds]);
+            if (rel.parentIds.length) rows.push(["users", "Parents", rel.parentIds]);
+            return html`<div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
+              <h2 style=${Object.assign({}, SF_H2, { marginBottom: 12 })}>Family</h2>
+              <div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>
+                ${rows.map(function (row) { return html`<div key=${row[1]} style=${{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <span style=${{ display: "inline-flex", flexShrink: 0, color: "var(--secondary)" }}>${Ic(row[0], 17)}</span>
+                  <div style=${{ flex: 1 }}>
+                    <div style=${Object.assign({}, SF_OVER, { fontSize: 9, marginBottom: 2 })}>${row[1]}</div>
+                    <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)" }}>${row[2].map(function (id) { return rosterName(id); }).join(", ")}</div>
+                  </div>
+                </div>`; })}
+              </div>
+            </div>`;
+          })()}
 
           <div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
             <h2 style=${Object.assign({}, SF_H2, { marginBottom: 12 })}>Shepherding Tags</h2>
