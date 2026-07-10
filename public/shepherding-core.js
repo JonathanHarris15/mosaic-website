@@ -384,6 +384,45 @@
         return MEMBERSHIP_TAG_ID_SET.has(tagId);
     }
 
+    // ── Elder Tag = a Projected Tag (ADR-0013, MS-92) ────────────────────────
+    // Generalise the Membership-Tag idea into a Projected Tag: a code-defined
+    // Shepherding Tag projected from a source-of-truth field, never hand-applied,
+    // and immutable (no rename / delete / merge / hide). Membership Tags project
+    // from the Membership Stage; the Elder Tag projects from the `elder` User role
+    // of a Person's Linked User (people.userId ↔ users.role). Its directory
+    // visibility is fixed VISIBLE to members — eldership is a public office.
+    const ELDER_TAG_ID = 'Elder';
+
+    // Every code-defined, immutable Projected Tag id: the Membership Tags plus the
+    // Elder Tag. This is the set the tag-management UI (web + mobile) must refuse
+    // to rename / delete / merge / hide.
+    const PROJECTED_TAG_IDS = MEMBERSHIP_TAG_IDS.concat([ELDER_TAG_ID]);
+    const PROJECTED_TAG_ID_SET = new Set(PROJECTED_TAG_IDS);
+
+    // Is this tag id a Projected Tag (Membership OR Elder)? The generalised
+    // immutability check — the one guard every tag-management mutation consults.
+    function isProjectedTagId(tagId) {
+        return PROJECTED_TAG_ID_SET.has(tagId);
+    }
+
+    // Does a Person's Linked User make them an elder? Source of truth for the
+    // Elder Tag projection: the linked User's role is exactly 'elder'. Super
+    // Admins are NOT elders (a distinct office). A Person with no Linked User,
+    // or a non-elder role, is not an elder.
+    function isElderUser(userData) {
+        return !!userData && userData.role === 'elder';
+    }
+
+    // Re-project a Person's `tags` for elder-ness: drop the Elder Tag, then re-add
+    // it iff they are an elder. Idempotent and order-preserving, exactly like
+    // applyMembershipTags — the linked User's role is the source of truth, never
+    // the tags. The pure heart of the MS-92 Elder-Tag projection.
+    function applyElderTag(currentTags, isElder) {
+        const out = (currentTags || []).filter(function (t) { return t !== ELDER_TAG_ID; });
+        if (isElder && out.indexOf(ELDER_TAG_ID) === -1) out.push(ELDER_TAG_ID);
+        return out;
+    }
+
     // The Membership Tag ids a Person's membership projects. Inactive wins and
     // yields ['Inactive'] regardless of any retained stage; a Person with no stage
     // (and not Inactive) projects none. Returns a fresh array each call.
@@ -525,6 +564,75 @@
         return commitPastoralChange(db, personId, personUpdate, record);
     }
 
+    // ── Elder Assignment (ADR-0013, MS-94) ──────────────────────────────────
+    // A member is assigned to at most one elder for care. The assignment is a
+    // single field on the member's Person — `shepherding.assignedElderId`, holding
+    // the elder's PERSON id (keeps everything Person↔Person for the graph). The
+    // reverse set — the members an elder shepherds — is their Care Group. Setting /
+    // changing / clearing it logs an Assignment Change to the Pastoral Record,
+    // mirroring the Membership Change. The assignable set is the Elder-Tag People.
+
+    // Is this Person an elder (carries the projected Elder Tag)? The assignable-set
+    // predicate — the Assigned Elder picker offers exactly these People.
+    function isElderPerson(person) {
+        return !!person && Array.isArray(person.tags) && person.tags.indexOf(ELDER_TAG_ID) !== -1;
+    }
+
+    // A Person's Care Group: the members whose assignedElderId points at them.
+    // Pure reverse query over a People array; empty for a non-elder id.
+    function careGroupOf(people, elderPersonId) {
+        if (!elderPersonId) return [];
+        return (people || []).filter(function (p) {
+            return p && p.shepherding && p.shepherding.assignedElderId === elderPersonId;
+        });
+    }
+
+    // Pastoral Record entry for an Elder Assignment change (ADR-0013). Mirrors
+    // buildMembershipChange; `previous`/`next` are { elderId, elderName }. One
+    // writer: the Assigned Elder section on the Shepherding Profile.
+    function buildAssignmentChange({ previous, next, authorUid, authorName, source, sourceDocumentId }) {
+        return {
+            kind: 'assignment_change',
+            previousElderId: (previous && previous.elderId) || null,
+            previousElderName: (previous && previous.elderName) || '',
+            newElderId: (next && next.elderId) || null,
+            newElderName: (next && next.elderName) || '',
+            authorUid: authorUid || null,
+            authorName: authorName || '',
+            source,
+            sourceDocumentId: sourceDocumentId || null,
+            explanation: '',
+        };
+    }
+
+    // The human sentence for an Assignment Change in the Pastoral Record. Set from
+    // unassigned = "Assigned to X"; cleared = "Unassigned from X"; moved =
+    // "Reassigned from X to Y". Pure, so the feed renderer stays dumb.
+    function describeAssignmentChange(entry) {
+        const e = entry || {};
+        const prev = e.previousElderName || (e.previousElderId ? 'their elder' : '');
+        const next = e.newElderName || (e.newElderId ? 'an elder' : '');
+        if (e.newElderId && !e.previousElderId) return `Assigned to ${next}`;
+        if (!e.newElderId && e.previousElderId) return `Unassigned from ${prev}`;
+        if (e.newElderId && e.previousElderId) {
+            if (e.newElderId === e.previousElderId) return `Assigned to ${next}`;
+            return `Reassigned from ${prev} to ${next}`;
+        }
+        return 'Assignment updated';
+    }
+
+    // Atomic Elder Assignment write (browser only) — the ADR-0005 dual-write for
+    // assignment. In one batch: set `shepherding.assignedElderId` on the member and
+    // append one Assignment Change. `previous`/`next` are { elderId, elderName }.
+    function commitAssignmentChange(db, personId, { previous, next, authorUid, authorName, source, sourceDocumentId }) {
+        const personUpdate = {
+            'shepherding.assignedElderId': (next && next.elderId) || null,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+        const record = buildAssignmentChange({ previous, next, authorUid, authorName, source, sourceDocumentId });
+        return commitPastoralChange(db, personId, personUpdate, record);
+    }
+
     const ShepherdingCore = {
         URGENCY_LEVELS,
         IMPORTANCE_LEVELS,
@@ -559,7 +667,12 @@
         MEMBERSHIP_TAG_IDS,
         MEMBER_TAG_ID,
         INACTIVE_TAG_ID,
+        ELDER_TAG_ID,
+        PROJECTED_TAG_IDS,
         isMembershipTagId,
+        isProjectedTagId,
+        isElderUser,
+        applyElderTag,
         membershipTagsFor,
         applyMembershipTags,
         carriesMemberTag,
@@ -570,6 +683,12 @@
         isInactiveMembership,
         buildSelfEditUpdate,
         commitMembershipChange,
+        // Elder Assignment (ADR-0013, MS-94)
+        isElderPerson,
+        careGroupOf,
+        buildAssignmentChange,
+        describeAssignmentChange,
+        commitAssignmentChange,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
