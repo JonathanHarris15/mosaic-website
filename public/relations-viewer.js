@@ -48,7 +48,7 @@
     this.mount = mount;
     // reactive-ish UI state
     this.toggles = {};          // edgeTypeKey -> bool
-    this.showIsolated = false;
+    this.showIsolated = true;
     this.showInactive = false;
     this.query = '';
     this.searchFocus = false;
@@ -286,17 +286,55 @@
       (this.adj[focusId] || []).forEach(function (id) { hi[id] = true; });
     }
 
+    // Collapse every connection between the same two people onto ONE line.
+    // A single connection draws as before; two or more render as a striped line
+    // (a solid colour stripe per connection type, interleaved along its length
+    // via offset dash patterns) so no connection is hidden under another.
+    var order = self.allKeys(), orderIx = {};
+    order.forEach(function (k, i) { orderIx[k] = i; });
+    var pairs = {}, pairOrder = [];
     this.visEdges.forEach(function (e) {
-      var A = self.byId[e.a], B = self.byId[e.b], def = self.EDGE[e.type];
-      var on = !hi || (hi[e.a] && hi[e.b]);
-      ctx.globalAlpha = hi ? (on ? 1 : 0.045) : 0.9;
-      ctx.strokeStyle = def.color;
-      ctx.lineWidth = on && hi ? def.w + 0.7 : def.w;
-      ctx.setLineDash(def.dash);
-      ctx.lineCap = def.css === 'dotted' ? 'round' : 'butt';
-      ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+      var key = e.a < e.b ? e.a + ' ' + e.b : e.b + ' ' + e.a;
+      if (!pairs[key]) { pairs[key] = []; pairOrder.push(key); }
+      pairs[key].push(e);
     });
-    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    pairOrder.forEach(function (key) {
+      var group = pairs[key];
+      group.sort(function (x, y) { return (orderIx[x.type] || 0) - (orderIx[y.type] || 0); });
+      var e0 = group[0], A = self.byId[e0.a], B = self.byId[e0.b];
+      var on = !hi || (hi[e0.a] && hi[e0.b]);
+      ctx.globalAlpha = hi ? (on ? 1 : 0.045) : 0.9;
+      if (group.length === 1) {
+        var def = self.EDGE[e0.type];
+        ctx.strokeStyle = def.color;
+        ctx.lineWidth = on && hi ? def.w + 0.7 : def.w;
+        ctx.setLineDash(def.dash);
+        ctx.lineDashOffset = 0;
+        ctx.lineCap = def.css === 'dotted' ? 'round' : 'butt';
+        ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+        return;
+      }
+      // Striped combined line: one thin line per connection type, laid side by
+      // side and running PARALLEL to the connection (each offset perpendicular
+      // to the line direction so the stripes run along its length).
+      var nT = group.length, bump = on && hi ? 0.7 : 0;
+      var dx = B.x - A.x, dy = B.y - A.y, len = Math.sqrt(dx * dx + dy * dy) || 1;
+      var nx = -dy / len, ny = dx / len; // unit perpendicular
+      var maxW = 0;
+      group.forEach(function (e) { maxW = Math.max(maxW, self.EDGE[e.type].w); });
+      var slot = maxW + bump + 1.1; // centre-to-centre spacing between stripes
+      var start = -((nT - 1) * slot) / 2;
+      group.forEach(function (e, i) {
+        var def = self.EDGE[e.type], off = start + i * slot, ox = nx * off, oy = ny * off;
+        ctx.strokeStyle = def.color;
+        ctx.lineWidth = def.w + bump;
+        ctx.setLineDash(def.dash);
+        ctx.lineDashOffset = 0;
+        ctx.lineCap = def.css === 'dotted' ? 'round' : 'butt';
+        ctx.beginPath(); ctx.moveTo(A.x + ox, A.y + oy); ctx.lineTo(B.x + ox, B.y + oy); ctx.stroke();
+      });
+    });
+    ctx.setLineDash([]); ctx.lineDashOffset = 0; ctx.globalAlpha = 1;
 
     this.visNodes.forEach(function (n) {
       var alpha = hi ? (hi[n.id] ? 1 : 0.15) : 1;
@@ -365,6 +403,13 @@
     this.dpr = window.devicePixelRatio || 1;
     this.canvas.width = Math.round(this.W * this.dpr);
     this.canvas.height = Math.round(this.H * this.dpr);
+    // Pin the CSS box to the logical size. The width/height attributes above are
+    // a low-priority CSS presentation hint; without an explicit style the canvas
+    // lays out at its backing-store size (W*dpr) instead of stretching via
+    // inset:0, so at DPR>1 it renders scaled and pointer hit-testing drifts. See
+    // ADR/notes: this only misbehaves off DPR=1 (laptops with display scaling).
+    this.canvas.style.width = this.W + 'px';
+    this.canvas.style.height = this.H + 'px';
     var rootW = this.root ? this.root.getBoundingClientRect().width : r.width;
     var narrow = rootW < 900;
     if (narrow !== this.narrow) { this.narrow = narrow; this.applyRailLayout(); var self = this; setTimeout(function () { self.fitView(); }, 60); }
