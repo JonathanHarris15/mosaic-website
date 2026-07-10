@@ -65,12 +65,59 @@
         return false;
     }
 
+    // ── Projected Relationships (ADR-0013, MS-93) ────────────────────────────
+    // Family relationships surface on the Shepherding Profile as *derived*,
+    // read-only rows alongside the freeform Custom Relationships — never written
+    // to the `relationships` collection. Siblings are the one addition the panel
+    // needs beyond resolveRelations: the other children of the family of origin.
+
+    // The Person's siblings: the other children of their family of origin (self
+    // excluded). Empty when they have no recorded family of origin.
+    function siblingIds(families, personId) {
+        const origin = familyOfChild(families, personId);
+        if (!origin) return [];
+        return (origin.childIds || []).filter(id => id !== personId);
+    }
+
+    // The gendered relationship label for a family role, by the OTHER Person's
+    // sex, with a neutral fallback when sex is unset (ADR-0013): spouse →
+    // Husband/Wife/Spouse, parent → Father/Mother/Parent, child →
+    // Son/Daughter/Child, sibling → Brother/Sister/Sibling.
+    function familyRoleLabel(kind, sex) {
+        switch (kind) {
+            case 'spouse':  return sex === 'male' ? 'Husband' : sex === 'female' ? 'Wife' : 'Spouse';
+            case 'parent':  return sex === 'male' ? 'Father'  : sex === 'female' ? 'Mother' : 'Parent';
+            case 'child':   return sex === 'male' ? 'Son'     : sex === 'female' ? 'Daughter' : 'Child';
+            case 'sibling': return sex === 'male' ? 'Brother' : sex === 'female' ? 'Sister' : 'Sibling';
+            default:        return 'Family';
+        }
+    }
+
+    // The full set of a Person's family-derived relationships for the panel, as
+    // ordered rows `{ otherId, kind, label }` — spouse, then parents, children,
+    // siblings. `sexOf(id)` resolves the other Person's sex for the gendered
+    // label (unset → neutral fallback). Pure; the panel merges these read-only
+    // rows with the deletable Custom Relationships.
+    function familyRelations(families, personId, sexOf) {
+        const rel = resolveRelations(families, personId);
+        const sx = typeof sexOf === 'function' ? sexOf : function () { return null; };
+        const out = [];
+        if (rel.spouseId) out.push({ otherId: rel.spouseId, kind: 'spouse', label: familyRoleLabel('spouse', sx(rel.spouseId)) });
+        rel.parentIds.forEach(function (id) { out.push({ otherId: id, kind: 'parent', label: familyRoleLabel('parent', sx(id)) }); });
+        rel.childIds.forEach(function (id) { out.push({ otherId: id, kind: 'child', label: familyRoleLabel('child', sx(id)) }); });
+        siblingIds(families, personId).forEach(function (id) { out.push({ otherId: id, kind: 'sibling', label: familyRoleLabel('sibling', sx(id)) }); });
+        return out;
+    }
+
     const FamilyCore = {
         familyOfSpouse,
         familyOfChild,
         spouseOf,
         resolveRelations,
         spouseSexOk,
+        siblingIds,
+        familyRoleLabel,
+        familyRelations,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -70,3 +70,61 @@ test('spouseSexOk enforces husband=male, wife=female, and fails closed on unset 
     assert.strictEqual(Family.spouseSexOk({ sex: 'male' }, 'wife'), false);
     assert.strictEqual(Family.spouseSexOk({}, 'husband'), false);
 });
+
+// ── Projected Relationships (ADR-0013, MS-93) ────────────────────────────────
+// Family surfaces on the Shepherding Profile as derived, read-only rows.
+
+test('siblingIds returns the other children of the family of origin, self excluded', () => {
+    assert.deepStrictEqual(Family.siblingIds(families, K1), [K2]);
+    assert.deepStrictEqual(Family.siblingIds(families, K2), [K1]);
+    assert.deepStrictEqual(Family.siblingIds(families, P), []); // only child in famA
+    assert.deepStrictEqual(Family.siblingIds(families, G1), []); // no family of origin here
+});
+
+test('familyRoleLabel is gendered with a neutral fallback on unset sex', () => {
+    assert.strictEqual(Family.familyRoleLabel('spouse', 'male'), 'Husband');
+    assert.strictEqual(Family.familyRoleLabel('spouse', 'female'), 'Wife');
+    assert.strictEqual(Family.familyRoleLabel('spouse', null), 'Spouse');
+    assert.strictEqual(Family.familyRoleLabel('parent', 'male'), 'Father');
+    assert.strictEqual(Family.familyRoleLabel('parent', 'female'), 'Mother');
+    assert.strictEqual(Family.familyRoleLabel('parent', undefined), 'Parent');
+    assert.strictEqual(Family.familyRoleLabel('child', 'male'), 'Son');
+    assert.strictEqual(Family.familyRoleLabel('child', 'female'), 'Daughter');
+    assert.strictEqual(Family.familyRoleLabel('child', ''), 'Child');
+    assert.strictEqual(Family.familyRoleLabel('sibling', 'male'), 'Brother');
+    assert.strictEqual(Family.familyRoleLabel('sibling', 'female'), 'Sister');
+    assert.strictEqual(Family.familyRoleLabel('sibling', null), 'Sibling');
+});
+
+test('familyRelations derives spouse/parents/children/siblings with gendered labels', () => {
+    // Sexes: G1 m, G2 f, P m, S f, K1 m, K2 f.
+    const sex = { g1: 'male', g2: 'female', p: 'male', s: 'female', k1: 'male', k2: 'female' };
+    const sexOf = (id) => sex[id] || null;
+
+    // P: spouse S (Wife), parents G1/G2 (Father/Mother), children K1/K2 (Son/Daughter), no siblings.
+    const forP = Family.familyRelations(families, P, sexOf);
+    assert.deepStrictEqual(forP, [
+        { otherId: 's', kind: 'spouse', label: 'Wife' },
+        { otherId: 'g1', kind: 'parent', label: 'Father' },
+        { otherId: 'g2', kind: 'parent', label: 'Mother' },
+        { otherId: 'k1', kind: 'child', label: 'Son' },
+        { otherId: 'k2', kind: 'child', label: 'Daughter' },
+    ]);
+
+    // K1: parents P/S, sibling K2 (Sister), no spouse/children.
+    const forK1 = Family.familyRelations(families, K1, sexOf);
+    assert.deepStrictEqual(forK1, [
+        { otherId: 'p', kind: 'parent', label: 'Father' },
+        { otherId: 's', kind: 'parent', label: 'Mother' },
+        { otherId: 'k2', kind: 'sibling', label: 'Sister' },
+    ]);
+});
+
+test('familyRelations falls back to neutral labels when sex is unset', () => {
+    const forP = Family.familyRelations(families, P); // no sexOf → all neutral
+    assert.deepStrictEqual(forP.map(r => r.label), ['Spouse', 'Parent', 'Parent', 'Child', 'Child']);
+});
+
+test('familyRelations is empty for a Person with no family at all', () => {
+    assert.deepStrictEqual(Family.familyRelations(families, 'nobody', () => null), []);
+});
