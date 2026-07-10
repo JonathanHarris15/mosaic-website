@@ -54,10 +54,11 @@ document.addEventListener('alpine:init', () => {
                     name: doc.data().name || doc.id,
                     hiddenFromOthers: doc.data().hiddenFromOthers || false,
                     hidePeople: doc.data().hidePeople || false,
-                    // Membership Tags are code-defined and immutable (ADR-0012):
-                    // the UI locks rename/delete/merge/hide on them. They still
-                    // appear in the list so elders can see the vocabulary.
-                    locked: ShepherdingCore.isMembershipTagId(doc.id),
+                    // Projected Tags are code-defined and immutable (ADR-0012,
+                    // ADR-0013): Membership Tags AND the Elder Tag. The UI locks
+                    // rename/delete/merge/hide on them; they still appear in the
+                    // list so elders can see the vocabulary.
+                    locked: ShepherdingCore.isProjectedTagId(doc.id),
                 }));
             } catch (e) {
                 console.error('Error loading tags:', e);
@@ -91,12 +92,13 @@ document.addEventListener('alpine:init', () => {
 
         // ── Rename (ADR-0011) — changes only the display name; identity is stable,
         // so every carrier, view, and Tag Change keeps referring to this tag.
-        // A Membership Tag (ADR-0012) is code-defined and cannot be renamed,
-        // deleted, merged into, or hidden. Every mutation entry point checks this
-        // so the immutable subset holds even if a control is somehow reachable.
+        // A Projected Tag (ADR-0012 Membership Tags, ADR-0013 Elder Tag) is
+        // code-defined and cannot be renamed, deleted, merged into, or hidden.
+        // Every mutation entry point checks this so the immutable subset holds
+        // even if a control is somehow reachable.
         rejectIfMembershipTag(id) {
-            if (ShepherdingCore.isMembershipTagId(id)) {
-                this.showToast('Membership Tags are managed by the system and cannot be changed', 'error');
+            if (ShepherdingCore.isProjectedTagId(id)) {
+                this.showToast('This tag is managed by the system and cannot be changed', 'error');
                 return true;
             }
             return false;

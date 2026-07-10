@@ -82,11 +82,12 @@
       }).catch(function () { showToast("Error creating tag", "error"); });
     }
 
-    // A Membership Tag (ADR-0012) is code-defined and immutable: no rename,
-    // delete, merge, or hide. Guard every mutator so the subset holds.
-    function isLocked(id) { return !!(window.ShepherdingCore && window.ShepherdingCore.isMembershipTagId(id)); }
+    // A Projected Tag (ADR-0012 Membership Tags, ADR-0013 Elder Tag) is
+    // code-defined and immutable: no rename, delete, merge, or hide. Guard every
+    // mutator so the subset holds.
+    function isLocked(id) { return !!(window.ShepherdingCore && window.ShepherdingCore.isProjectedTagId(id)); }
     function rejectLocked(id) {
-      if (isLocked(id)) { showToast("Membership Tags are managed by the system", "error"); return true; }
+      if (isLocked(id)) { showToast("This tag is managed by the system", "error"); return true; }
       return false;
     }
 

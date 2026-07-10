@@ -317,6 +317,12 @@ const {
   shouldPromoteToMember,
 } = require("./member-sync");
 
+const {
+  ELDER_TAG,
+  isElderRole,
+  hasElderTag,
+} = require("./elder-sync");
+
 /**
  * Direction A: a user's role grants the linked person the "member" tag.
  */
@@ -374,6 +380,82 @@ exports.syncMemberTagToRole = onDocumentWritten(
 
       await userRef.update({role: MEMBER_ROLE});
       log(`Promoted user ${userId} from '${role}' to '${MEMBER_ROLE}' (linked person has the member tag).`);
+    },
+);
+
+/**
+ * Elder-Tag projection (ADR-0013, MS-92): the `elder` User role projects an
+ * immutable "Elder" tag onto the linked directory Person. Unlike the member sync
+ * (add-only), the Elder Tag is a Projected Tag kept in EXACT sync — added when a
+ * linked user is an elder, removed when they stop being one or are unlinked.
+ *
+ * The tag on a Person is a function of THAT Person's current linked user, so we
+ * reconcile from the person's live `userId` rather than trusting the event delta:
+ * one `reconcileElderTag(personId)` recomputes the correct state and only writes
+ * on a change (which also stops the trigger looping). Both the newly-linked
+ * person and any person the user was UNLINKED from get reconciled.
+ *
+ * One-directional: the Elder Tag is never hand-applied, so there is no
+ * person-tag → user-role counterpart (contrast syncMemberTagToRole).
+ */
+async function reconcileElderTag(db, personId) {
+  const personRef = db.collection("people").doc(personId);
+  const personSnap = await personRef.get();
+  if (!personSnap.exists) return;
+  const person = personSnap.data();
+  const tags = person.tags || [];
+
+  // Elder-ness comes from the person's CURRENT linked user's role.
+  let elder = false;
+  if (person.userId) {
+    const userSnap = await db.collection("users").doc(person.userId).get();
+    elder = userSnap.exists && isElderRole(userSnap.data().role);
+  }
+
+  const has = hasElderTag(tags);
+  if (elder === has) return; // Already correct — skip write to avoid a trigger loop.
+
+  if (elder) {
+    // Register the tag so it shows in the Tags Manager (like the member tag).
+    await db.collection("people_tags").doc(ELDER_TAG)
+        .set({name: ELDER_TAG}, {merge: true});
+    await personRef.update({
+      tags: admin.firestore.FieldValue.arrayUnion(ELDER_TAG),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    log(`Tagged person ${personId} as '${ELDER_TAG}' (linked user is an elder).`);
+  } else {
+    await personRef.update({
+      tags: admin.firestore.FieldValue.arrayRemove(ELDER_TAG),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    log(`Removed '${ELDER_TAG}' from person ${personId} (linked user no longer an elder).`);
+  }
+}
+
+exports.syncElderRoleToTag = onDocumentWritten(
+    {document: "users/{uid}", region: "us-central1"},
+    async (event) => {
+      const before = event.data && event.data.before && event.data.before.exists ?
+        event.data.before.data() : null;
+      const after = event.data && event.data.after && event.data.after.exists ?
+        event.data.after.data() : null;
+
+      const beforePersonId = before && before.personId;
+      const afterPersonId = after && after.personId;
+      if (!beforePersonId && !afterPersonId) return; // Never linked — nothing to project.
+
+      const db = admin.firestore();
+
+      // Reconcile the person the user is linked to now (apply or remove).
+      if (afterPersonId) await reconcileElderTag(db, afterPersonId);
+
+      // If the link moved or was cleared (unlink / relink / user deleted), the
+      // previously-linked person may still carry a stale Elder tag — reconcile it
+      // too (its userId was cleared reciprocally, so it resolves to non-elder).
+      if (beforePersonId && beforePersonId !== afterPersonId) {
+        await reconcileElderTag(db, beforePersonId);
+      }
     },
 );
 
