@@ -119,10 +119,15 @@
           membership: d.membership || null,
           email: d.email || (d.contact && d.contact.email) || "",
           phone: d.phone || d.phoneNumber || (d.contact && d.contact.phone) || "",
+          address: (d.contact && d.contact.address) || d.address || "",
+          birthday: d.birthday || "",
           tags: Array.isArray(d.tags) ? d.tags : [],
           involvements: typeof d.involvements === "number" ? d.involvements : 0,
           lastPrayed: d.lastPrayed || d.lastPrayedFor || null,
           shepherding: d.shepherding || (d.urgency ? { urgency: d.urgency, importance: d.importance } : null),
+          // Shepherding visibility (mirrors desktop): people carrying a hidePeople
+          // tag are flagged hidden and suppressed from the directory for non-admins.
+          shepherdingHidden: !!d.shepherdingHidden,
         });
       });
       out.sort(function (a, b) { return a.name.localeCompare(b.name); });

@@ -106,6 +106,9 @@ document.addEventListener('alpine:init', () => {
         toggleViewAsMember() {
             if (!this.isSuperAdmin) return;
             this.viewAsMember = !this.viewAsMember;
+            // Previewing as a member has no edit rights, so drop out of Edit Mode
+            // to keep the editor chrome (sidebar, inline controls) consistent.
+            if (this.viewAsMember) this.editMode = false;
             this.loadTags();
         },
 
@@ -412,10 +415,11 @@ document.addEventListener('alpine:init', () => {
         async addTag(person, tagName) {
             tagName = tagName.trim();
             if (!tagName) return;
-            // Membership Tags are code-defined (ADR-0012) — they follow the Track
-            // slider, never hand-editing. Guard the person-modal tag editor too.
-            if (ShepherdingCore.isMembershipTagId(this.allTags.find(t => t.toLowerCase() === tagName.toLowerCase()) || tagName)) {
-                this.showToast('Membership Tags follow the Membership Track, not manual tagging', 'error');
+            // Projected Tags are code-defined (ADR-0012 Membership, ADR-0013
+            // Elder) — they follow their source of truth, never hand-editing.
+            // Guard the person-modal tag editor too.
+            if (ShepherdingCore.isProjectedTagId(this.allTags.find(t => t.toLowerCase() === tagName.toLowerCase()) || tagName)) {
+                this.showToast('This tag is set by the system, not manual tagging', 'error');
                 return;
             }
 
@@ -462,8 +466,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         async removeTag(person, tag) {
-            if (ShepherdingCore.isMembershipTagId(tag)) {
-                this.showToast('Membership Tags follow the Membership Track, not manual tagging', 'error');
+            if (ShepherdingCore.isProjectedTagId(tag)) {
+                this.showToast('This tag is set by the system, not manual tagging', 'error');
                 return;
             }
             const tags = person.tags || [];

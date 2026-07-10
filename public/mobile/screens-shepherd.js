@@ -236,6 +236,9 @@
       { icon: "folder-open", title: "Documents", desc: "Elder notes & meeting minutes.", go: function () { props.nav("documents"); } },
       { icon: "users", title: "People", desc: "View & manage member profiles.", go: function () { props.nav("shepherdPeople"); } },
       { icon: "tag", title: "Manage Tags", desc: "Create, rename & merge shepherding tags.", go: function () { props.nav("shepherdTags"); } },
+      // Relations Viewer: placeholder card, intentionally not linked yet — the
+      // visual relationship dashboard is still being designed (see PRD).
+      { icon: "waypoints", title: "Relations Viewer", desc: "See how members are connected.", soon: true, go: function () {} },
     ];
 
     var userKnown = props.user !== undefined; // undefined = still resolving auth
@@ -262,13 +265,13 @@
 
           <div style=${{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
             ${navCards.map(function (c) {
-              return html`<button key=${c.title} onClick=${c.go} style=${{ display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", padding: 16, cursor: "pointer", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)" }}>
+              return html`<button key=${c.title} onClick=${c.go} disabled=${!!c.soon} style=${{ display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", padding: 16, cursor: c.soon ? "default" : "pointer", background: "var(--surface-container-lowest)", border: c.soon ? "1px dashed var(--outline-variant)" : "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", opacity: c.soon ? 0.65 : 1 }}>
                 <span style=${{ width: 48, height: 48, borderRadius: "var(--radius-full)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--surface-container)", color: "var(--primary)" }}>${Ic(c.icon, 24)}</span>
                 <div style=${{ flex: 1, minWidth: 0 }}>
-                  <div style=${{ fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--on-surface)" }}>${c.title}</div>
+                  <div style=${{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--on-surface)" }}>${c.title}${c.soon ? html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--on-surface-variant)", background: "var(--surface-container)", padding: "2px 7px", borderRadius: "var(--radius-full)" }}>Soon</span>` : null}</div>
                   <div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 2 }}>${c.desc}</div>
                 </div>
-                <span style=${{ color: "var(--outline)" }}>${Ic("chevron-right", 18)}</span>
+                ${c.soon ? null : html`<span style=${{ color: "var(--outline)" }}>${Ic("chevron-right", 18)}</span>`}
               </button>`;
             })}
           </div>
@@ -728,7 +731,7 @@
       commitMembership({ stage: m.stage || null, inactive: !m.inactive });
     }
     function toggleTag(tagId) {
-      if (window.ShepherdingCore.isMembershipTagId(tagId)) { showToast("Membership Tags follow the Membership Track", "error"); return; }
+      if (window.ShepherdingCore.isProjectedTagId(tagId)) { showToast("This tag is set by the system, not manual tagging", "error"); return; }
       var has = (person.tags || []).indexOf(tagId) !== -1;
       var newTags = has ? (person.tags || []).filter(function (x) { return x !== tagId; }) : (person.tags || []).concat([tagId]);
       var hid = hiddenIdsFrom(tags);
@@ -799,7 +802,7 @@
 
     var record = Core.assemblePastoralRecord(notes, activity, {});
     var visible = collapseS[0] ? record.filter(function (e) { return e._entryKind === "note"; }) : record;
-    var addableTags = tags.filter(function (t) { return (person.tags || []).indexOf(t.id) === -1 && !window.ShepherdingCore.isMembershipTagId(t.id); });
+    var addableTags = tags.filter(function (t) { return (person.tags || []).indexOf(t.id) === -1 && !window.ShepherdingCore.isProjectedTagId(t.id); });
     var mLabel = membershipLabel(person.membership);
     var details = [
       person.contact && person.contact.email && { icon: "mail", text: person.contact.email },
@@ -876,7 +879,7 @@
           <div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
             <h2 style=${Object.assign({}, SF_H2, { marginBottom: 12 })}>Shepherding Tags</h2>
             <div style=${{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-              ${(person.tags || []).length ? (person.tags || []).map(function (t) { var mt = window.ShepherdingCore.isMembershipTagId(t); return html`<span key=${t} style=${{ display: "inline-flex", alignItems: "center", gap: 6, padding: mt ? "5px 12px" : "5px 8px 5px 12px", borderRadius: "var(--radius-full)", background: mt ? "var(--primary-fixed)" : "var(--primary)", color: mt ? "var(--primary)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500 }}>
+              ${(person.tags || []).length ? (person.tags || []).map(function (t) { var mt = window.ShepherdingCore.isProjectedTagId(t); return html`<span key=${t} style=${{ display: "inline-flex", alignItems: "center", gap: 6, padding: mt ? "5px 12px" : "5px 8px 5px 12px", borderRadius: "var(--radius-full)", background: mt ? "var(--primary-fixed)" : "var(--primary)", color: mt ? "var(--primary)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500 }}>
                 ${mt ? html`${Ic("lock", 11)}` : null}${tagName(t)}
                 ${mt ? null : html`<button onClick=${function () { toggleTag(t); }} aria-label="Remove tag" style=${{ width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-primary)", cursor: "pointer", opacity: 0.8 }}>${Ic("x", 12)}</button>`}
               </span>`; }) : html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)" }}>No tags applied.</span>`}

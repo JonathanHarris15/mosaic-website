@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>People's Directory - Mosaic Church</title>
+    <title>Member Directory - Mosaic Church</title>
     <link rel="stylesheet" href="mosaic.css" />
     <link rel="stylesheet" href="fonts.css" />
 
@@ -55,8 +55,9 @@
     </header>
 
     <main x-show="authorized" class="flex-grow flex flex-col md:flex-row gap-margin px-margin pb-md pt-base max-w-[1600px] w-full mx-auto relative z-10">
-        <!-- Sidebar: Tags Manager — editors and above only -->
-        <aside x-show="canEdit" class="w-full md:w-80 flex-shrink-0 flex flex-col gap-4">
+        <!-- Sidebar: Tags Manager — revealed only in Edit Mode. Editors land on the
+             member view by default (editMode off) and turn this on to manage tags. -->
+        <aside x-show="editMode" class="w-full md:w-80 flex-shrink-0 flex flex-col gap-4">
             <section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col shadow-sm">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="font-headline-md text-sm uppercase tracking-wider text-primary flex items-center gap-2 flex-shrink-0">
@@ -130,9 +131,9 @@
             <div class="p-md border-b border-surface-variant/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface-container-low/50 flex-shrink-0">
                 <div class="flex items-center gap-4">
                     <h2 class="font-headline-md text-sm uppercase tracking-wider text-primary flex items-center gap-2">
-                        <span class="material-symbols-outlined text-[18px]">group</span> People's Directory <span class="text-[8px] font-mono opacity-20">v2.1</span>
+                        <span class="material-symbols-outlined text-[18px]">group</span> Member Directory <span class="text-[8px] font-mono opacity-20">v2.1</span>
                     </h2>
-                    <button x-show="canEdit" @click="editMode = !editMode"
+                    <button x-show="canEdit" @click="editMode = !editMode; if (!editMode) selectedTags = []"
                             :class="editMode ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest'"
                             class="text-[10px] uppercase tracking-widest px-4 py-1.5 rounded-full transition-all flex items-center gap-1.5 font-label-md shadow-sm">
                         <span class="material-symbols-outlined text-sm" x-text="editMode ? 'edit_off' : 'edit'"></span>
@@ -192,13 +193,24 @@
                     <template x-for="person in filteredPeople" :key="person.id">
                         <div class="bg-surface border border-outline-variant/20 p-4 rounded-xl hover:border-primary/40 transition-all group relative shadow-sm hover:shadow-md">
                             <div class="flex justify-between items-start">
+                                <!-- Photo slot (photo upload wired later; shows a placeholder until a photo is set) -->
+                                <div class="flex-shrink-0 mr-3">
+                                    <div class="w-14 h-14 rounded-full bg-surface-container-high border border-outline-variant/30 flex items-center justify-center overflow-hidden">
+                                        <template x-if="person.photoUrl">
+                                            <img :src="person.photoUrl" :alt="person.name" class="w-full h-full object-cover">
+                                        </template>
+                                        <template x-if="!person.photoUrl">
+                                            <span class="material-symbols-outlined text-outline-variant text-[28px]">person</span>
+                                        </template>
+                                    </div>
+                                </div>
                                 <div class="flex-grow">
                                     <div class="flex items-center gap-2 mb-1">
                                         <h3 class="font-headline-md text-lg text-primary" x-text="person.name"></h3>
                                         <span class="text-[9px] px-2 py-0.5 rounded-full font-label-md uppercase tracking-widest"
                                               :class="person.membership && person.membership.inactive ? 'bg-surface-container-high text-on-surface-variant' : 'bg-primary-fixed text-primary'"
                                               x-text="membershipStageLabel(person)"></span>
-                                        <span x-show="canEdit && person.userId"
+                                        <span x-show="editMode && person.userId"
                                               class="inline-flex items-center gap-1 bg-primary/10 text-primary text-[9px] px-2 py-0.5 rounded-full font-label-md uppercase tracking-widest"
                                               title="Linked to a website account">
                                             <span class="material-symbols-outlined text-[12px]">link</span> Account
@@ -258,10 +270,10 @@
                                             <!-- Existing Tags -->
                                             <template x-for="tag in (person.tags || [])" :key="tag">
                                                 <span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border group/tag"
-                                                      :class="ShepherdingCore.isMembershipTagId(tag) ? 'bg-primary-fixed text-primary border-primary/20' : 'bg-surface-container-high text-on-surface border-outline-variant/30'">
-                                                    <span x-show="ShepherdingCore.isMembershipTagId(tag)" class="material-symbols-outlined text-[11px] align-middle">lock</span>
+                                                      :class="ShepherdingCore.isProjectedTagId(tag) ? 'bg-primary-fixed text-primary border-primary/20' : 'bg-surface-container-high text-on-surface border-outline-variant/30'">
+                                                    <span x-show="ShepherdingCore.isProjectedTagId(tag)" class="material-symbols-outlined text-[11px] align-middle">lock</span>
                                                     <span x-text="tag"></span>
-                                                    <button x-show="!ShepherdingCore.isMembershipTagId(tag)" @click="removeTag(person, tag)" class="hover:text-error transition-colors">
+                                                    <button x-show="!ShepherdingCore.isProjectedTagId(tag)" @click="removeTag(person, tag)" class="hover:text-error transition-colors">
                                                         <span class="material-symbols-outlined text-[12px] align-middle">close</span>
                                                     </button>
                                                 </span>
@@ -284,9 +296,9 @@
                                                            class="text-[10px] px-2 py-0.5 rounded-full border border-primary/40 focus:ring-1 focus:ring-primary outline-none w-full bg-surface-container-lowest">
                                                     
                                                     <!-- Suggestions -->
-                                                    <div x-show="tagQuery && allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(person.tags || []).includes(t) && !ShepherdingCore.isMembershipTagId(t)).length > 0"
+                                                    <div x-show="tagQuery && allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(person.tags || []).includes(t) && !ShepherdingCore.isProjectedTagId(t)).length > 0"
                                                          class="absolute z-20 top-full mt-1 w-full bg-white border border-outline-variant rounded-lg shadow-xl py-1 max-h-40 overflow-y-auto">
-                                                        <template x-for="tag in allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(person.tags || []).includes(t) && !ShepherdingCore.isMembershipTagId(t))" :key="tag">
+                                                        <template x-for="tag in allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(person.tags || []).includes(t) && !ShepherdingCore.isProjectedTagId(t))" :key="tag">
                                                             <button @click="addTag(person, tag); tagQuery = ''; open = false"
                                                                     class="w-full text-left px-3 py-1.5 text-[10px] hover:bg-primary-fixed transition-colors">
                                                                 <span x-text="tag"></span>
@@ -615,12 +627,12 @@
                                 <div class="flex flex-wrap gap-1.5 p-3 bg-surface-container-lowest border border-outline-variant/20 rounded-lg min-h-[44px]">
                                     <template x-for="tag in (selectedPerson.tags || [])" :key="tag">
                                         <span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border"
-                                              :class="ShepherdingCore.isMembershipTagId(tag) ? 'bg-primary-fixed text-primary border-primary/20' : 'bg-surface-container-high text-on-surface border-outline-variant/30'"
-                                              :title="ShepherdingCore.isMembershipTagId(tag) ? 'Membership Tag — set by the Membership Track' : ''">
-                                            <span x-show="ShepherdingCore.isMembershipTagId(tag)" class="material-symbols-outlined text-[11px] align-middle">lock</span>
+                                              :class="ShepherdingCore.isProjectedTagId(tag) ? 'bg-primary-fixed text-primary border-primary/20' : 'bg-surface-container-high text-on-surface border-outline-variant/30'"
+                                              :title="ShepherdingCore.isProjectedTagId(tag) ? 'Set by the system' : ''">
+                                            <span x-show="ShepherdingCore.isProjectedTagId(tag)" class="material-symbols-outlined text-[11px] align-middle">lock</span>
                                             <span x-text="tag"></span>
                                             <!-- Membership Tags are code-defined: no manual remove -->
-                                            <button x-show="!ShepherdingCore.isMembershipTagId(tag)" @click="removeTag(selectedPerson, tag)" class="hover:text-error transition-colors">
+                                            <button x-show="!ShepherdingCore.isProjectedTagId(tag)" @click="removeTag(selectedPerson, tag)" class="hover:text-error transition-colors">
                                                 <span class="material-symbols-outlined text-[12px] align-middle">close</span>
                                             </button>
                                         </span>
@@ -641,9 +653,9 @@
                                                    placeholder="Type tag..."
                                                    class="text-[10px] px-2 py-0.5 rounded-full border border-primary/40 focus:ring-1 focus:ring-primary outline-none w-full bg-surface-container-lowest">
                                             
-                                            <div x-show="tagQuery && allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(selectedPerson.tags || []).includes(t) && !ShepherdingCore.isMembershipTagId(t)).length > 0"
+                                            <div x-show="tagQuery && allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(selectedPerson.tags || []).includes(t) && !ShepherdingCore.isProjectedTagId(t)).length > 0"
                                                  class="absolute z-20 top-full mt-1 w-full bg-white border border-outline-variant rounded-lg shadow-xl py-1 max-h-40 overflow-y-auto">
-                                                <template x-for="tag in allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(selectedPerson.tags || []).includes(t) && !ShepherdingCore.isMembershipTagId(t))" :key="tag">
+                                                <template x-for="tag in allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(selectedPerson.tags || []).includes(t) && !ShepherdingCore.isProjectedTagId(t))" :key="tag">
                                                     <button @click="addTag(selectedPerson, tag); tagQuery = ''; open = false"
                                                             class="w-full text-left px-3 py-1.5 text-[10px] hover:bg-primary-fixed transition-colors">
                                                         <span x-text="tag"></span>
