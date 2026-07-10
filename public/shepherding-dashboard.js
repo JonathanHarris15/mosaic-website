@@ -315,7 +315,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         getPeopleForView(view) {
-            let result = this.people.filter(p => p.membership?.status !== 'inactive');
+            let result = this.people.filter(p => !ShepherdingCore.isInactiveMembership(p.membership));
 
             if (view.filterTags && view.filterTags.length > 0) {
                 // A person "matches" a filter tag when they carry it AND (if that

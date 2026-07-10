@@ -20,6 +20,9 @@ document.addEventListener('alpine:init', () => {
         tagFilterMode: 'any',
         statusZoneFilters: [],
         sortBy: 'name',
+        // Inactive people are hidden from the People list by default; this toggle
+        // (in Filters) reveals them (ADR-0012 — inactive is orthogonal to the Track).
+        showInactive: false,
 
         // Hold-Duration filter (ADR-0011): each selected tag carries its own
         // threshold in days (0 = anyone carrying it) and a direction — 'gte' (held
@@ -66,6 +69,8 @@ document.addEventListener('alpine:init', () => {
                 if (savedHoldFilters) this.tagHoldFilters = JSON.parse(savedHoldFilters);
                 const savedHoldCmp = sessionStorage.getItem('shepherding_tagHoldCmp');
                 if (savedHoldCmp) this.tagHoldCmp = JSON.parse(savedHoldCmp);
+                const savedShowInactive = sessionStorage.getItem('shepherding_showInactive');
+                if (savedShowInactive) this.showInactive = savedShowInactive === 'true';
             } catch {}
 
             this.$watch('tagFilters', val => sessionStorage.setItem('shepherding_tagFilters', JSON.stringify(val)));
@@ -78,6 +83,7 @@ document.addEventListener('alpine:init', () => {
                 if (this.anyHoldActive() && !this.holdsLoaded) this.loadTagHolds();
             });
             this.$watch('tagHoldCmp', val => sessionStorage.setItem('shepherding_tagHoldCmp', JSON.stringify(val)));
+            this.$watch('showInactive', val => sessionStorage.setItem('shepherding_showInactive', String(val)));
 
             auth.onAuthStateChanged(async (user) => {
                 if (!user) {
@@ -152,6 +158,11 @@ document.addEventListener('alpine:init', () => {
 
         get filteredPeople() {
             let result = this.people;
+
+            // Hide inactive people unless the Filters toggle reveals them.
+            if (!this.showInactive) {
+                result = result.filter(p => !ShepherdingCore.isInactiveMembership(p.membership));
+            }
 
             if (this.tagFilters.length > 0) {
                 // A person "matches" a filter tag when they carry it AND (if that

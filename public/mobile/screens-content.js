@@ -11,7 +11,7 @@
   var ui = M.ui;
   var Screen = ui.Screen, TopBar = ui.TopBar, BarAction = ui.BarAction, Body = ui.Body,
       Overline = ui.Overline, SearchBar = ui.SearchBar, FAB = ui.FAB, Button = ui.Button,
-      Badge = ui.Badge, Avatar = ui.Avatar, statusTone = ui.statusTone;
+      Badge = ui.Badge, Avatar = ui.Avatar, Input = ui.Input, statusTone = ui.statusTone;
 
   function Loading(props) {
     return html`<div style=${{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "48px 20px", color: "var(--on-surface-variant)" }}>
@@ -112,22 +112,47 @@
       </${Screen}>`;
   }
 
-  // ── Member Directory ─────────────────────────────────────
-  var STATUS_LABELS = { member: "Member", regular_attender: "Regular attender", visitor: "Visitor", inactive: "Inactive" };
+  // ── Membership Directory (ADR-0012) ──────────────────────
+  // The congregation-facing directory: two tabs — Members (carries the Member
+  // tag) and Non-members (active People without it). This surface browses as a
+  // plain viewer (editors manage People in the shepherd screens), so Inactive
+  // People are hidden here. The stage label is derived from the Membership Track.
+  function membershipStageLabel(p) {
+    var m = p && p.membership;
+    if (m && m.inactive) return "Inactive";
+    if (m && m.stage) return window.ShepherdingCore.MEMBERSHIP_STAGE_LABEL[m.stage] || m.stage;
+    return null;
+  }
+  // Which shepherding-tag ids are hidden from this viewer, keyed for O(1) lookup.
+  // hiddenFromOthers → the tag chip itself is hidden; hidePeople → the whole
+  // person is suppressed. Both are lifted only for admins (elder/super_admin),
+  // mirroring the desktop directory's isAdmin gate.
+  function tagVisibility(tagMeta) {
+    var hidden = {}, hidePeople = {};
+    (tagMeta || []).forEach(function (t) {
+      if (t.hiddenFromOthers) hidden[t.id] = true;
+      if (t.hidePeople) hidePeople[t.id] = true;
+    });
+    return { hidden: hidden, hidePeople: hidePeople };
+  }
+  function isDirectoryAdmin(user) {
+    return !!user && (user.role === "elder" || user.role === "super_admin");
+  }
   function PeopleScreen(props) {
     var st = useAsync(data.getPeople, []);
-    var qS = useState(""), fS = useState("All");
+    var tagsSt = useAsync(data.getShepherdingTags, []);
+    var qS = useState(""), fS = useState("members");
     var people = st.data || [];
-    var filters = ["All", "Members", "Attenders", "Visitors", "Needs care"];
-    var q = qS[0], filter = fS[0];
+    var vis = tagVisibility(tagsSt.data);
+    var isAdmin = isDirectoryAdmin(props.user);
+    var tabs = [["members", "Members"], ["non_members", "Non-members"]];
+    var q = qS[0], tab = fS[0];
     var results = people.filter(function (p) {
       var mq = !q || data.lc(p.name).indexOf(data.lc(q)) >= 0;
-      var mf = true;
-      if (filter === "Members") mf = p.status === "member";
-      else if (filter === "Attenders") mf = p.status === "regular_attender";
-      else if (filter === "Visitors") mf = p.status === "visitor";
-      else if (filter === "Needs care") mf = !!p.shepherding;
-      return mq && mf;
+      if (!mq || !window.ShepherdingCore.personMatchesDirectoryTab(p, tab, false)) return false;
+      // Respect shepherding visibility: hidden people are suppressed for non-admins.
+      if (!isAdmin && (p.shepherdingHidden || (p.tags || []).some(function (t) { return vis.hidePeople[t]; }))) return false;
+      return true;
     });
     return html`
       <${Screen}>
@@ -135,7 +160,7 @@
         <${Body} style=${{ paddingTop: 14 }}>
           <div style=${{ padding: "0 16px 12px" }}><${SearchBar} placeholder="Search people" value=${q} onChange=${function (e) { qS[1](e.target.value); }} /></div>
           <div style=${{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px 12px" }}>
-            ${filters.map(function (f) { return html`<${Chip} key=${f} active=${f === filter} onClick=${function () { fS[1](f); }}>${f}<//>`; })}
+            ${tabs.map(function (t) { return html`<${Chip} key=${t[0]} active=${t[0] === tab} onClick=${function () { fS[1](t[0]); }}>${t[1]}<//>`; })}
           </div>
           ${st.loading ? html`<${Loading} label="Loading people…" />` : st.error ? html`<${ErrorNote}>Couldn't load the directory.<//>` : html`
             <div style=${{ padding: "0 16px 4px" }}><${Overline}>${results.length} People<//></div>
@@ -152,7 +177,6 @@
                       <div style=${{ fontFamily: "var(--font-sans)", fontSize: 15.5, fontWeight: 600, color: "var(--on-surface)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>${p.name}</div>
                       ${p.role ? html`<div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>${p.role}</div>` : null}
                     </div>
-                    ${p.tags.indexOf("Red Flag") >= 0 ? html`<span style=${{ color: "var(--error)" }}>${Ic("flag", 15)}</span>` : null}
                     <span style=${{ color: "var(--outline)" }}>${Ic("chevron-right", 18)}</span>
                   </button>`;
                 })}
@@ -165,10 +189,36 @@
   }
 
   // ── Person Detail ────────────────────────────────────────
+  // Member-facing person page: contact + membership, no shepherding surface.
+  // Editors (editor/elder/admin/super_admin) get an inline Edit Details modal
+  // that writes the same contact fields as the shepherd person file.
   function PersonDetailScreen(props) {
-    var p = (props.params && props.params.person) || { name: "Person", status: "member", tags: [], involvements: 0 };
-    var s = statusTone(p.shepherding);
+    var pS = useState((props.params && props.params.person) || { name: "Person", status: "member", tags: [], involvements: 0 });
+    var p = pS[0];
+    var tagsSt = useAsync(data.getShepherdingTags, []);
+    var vis = tagVisibility(tagsSt.data);
+    var isAdmin = isDirectoryAdmin(props.user);
+    var tagsReady = !tagsSt.loading;
+    var canEdit = !!props.user && ["editor", "elder", "admin", "super_admin"].indexOf(props.user.role) >= 0;
     var contact = [["mail", p.email], ["phone", p.phone]].filter(function (r) { return r[1]; });
+    // Membership tags always resolve via the Track; other tags obey visibility.
+    var chipTags = (p.tags || []).filter(function (t) {
+      return !window.ShepherdingCore.isMembershipTagId(t) && (isAdmin || (tagsReady && !vis.hidden[t]));
+    });
+
+    var editS = useState(null);   // null = closed; else the working draft
+    var savingS = useState(false);
+    function openEdit() { editS[1]({ email: p.email || "", phone: p.phone || "", address: p.address || "", birthday: p.birthday || "" }); }
+    function saveEdit() {
+      var d = editS[0]; if (!d) return;
+      savingS[1](true);
+      data.updateShepherdingPersonDetails(p.id, d).then(function () {
+        pS[1](Object.assign({}, p, { email: (d.email || "").trim(), phone: (d.phone || "").trim(), address: (d.address || "").trim(), birthday: d.birthday || "" }));
+        savingS[1](false); editS[1](null);
+      }).catch(function () { savingS[1](false); window.alert("Couldn't save details. Please try again."); });
+    }
+    function setField(k, v) { var o = Object.assign({}, editS[0]); o[k] = v; editS[1](o); }
+
     return html`
       <${Screen}>
         <${TopBar} title="Directory" onBack=${props.back} serif=${false} />
@@ -177,8 +227,8 @@
             <${Avatar} name=${p.name} size=${82} />
             <div style=${{ fontFamily: "var(--font-serif)", fontSize: 23, fontWeight: 600, color: "var(--on-surface)", marginTop: 12 }}>${p.name}</div>
             <div style=${{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
-              <${Badge} tone=${p.status === "member" ? "primary" : p.status === "visitor" ? "tertiary" : "secondary"}>${STATUS_LABELS[p.status] || p.status}<//>
-              ${p.tags.map(function (t) { return html`<${Badge} key=${t} tone=${t === "Red Flag" ? "neutral" : "neutral"}>${t}<//>`; })}
+              ${membershipStageLabel(p) ? html`<${Badge} tone=${(p.membership && p.membership.inactive) ? "secondary" : "primary"}>${membershipStageLabel(p)}<//>` : null}
+              ${chipTags.map(function (t) { return html`<${Badge} key=${t} tone="neutral">${t}<//>`; })}
             </div>
           </div>
           ${contact.length ? html`
@@ -189,15 +239,17 @@
                 <span style=${{ fontFamily: "var(--font-sans)", fontSize: 14.5, color: "var(--on-surface)" }}>${r[1]}</span>
               </div>`; })}
             </div>` : null}
-          <${Overline} style=${{ margin: "0 0 8px 4px" }}>Shepherding<//>
-          <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: 16 }}>
-            ${s ? html`<div style=${{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-              <span style=${{ width: 10, height: 10, borderRadius: "50%", background: s.color }}></span>
-              <span style=${{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--on-surface)" }}>${s.label}</span>
-            </div>` : html`<div style=${{ fontFamily: "var(--font-serif)", fontSize: 14, fontStyle: "italic", color: "var(--on-surface-variant)", marginBottom: 14 }}>No shepherding status set.</div>`}
-            <${Button} variant="secondary" size="md" style=${{ width: "100%" }} icon=${Ic("shield", 16)} onClick=${function () { props.nav("shepherd"); }}>Open Shepherd Dashboard<//>
-          </div>
+          ${canEdit ? html`<${Button} variant="primary" size="md" style=${{ width: "100%" }} icon=${Ic("square-pen", 17)} onClick=${openEdit}>Edit Details<//>` : null}
         </${Body}>
+        ${editS[0] ? html`<${CalSheet} title="Edit Details" subtitle=${p.name} onClose=${function () { if (!savingS[0]) editS[1](null); }}>
+          <div style=${{ padding: "16px 18px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
+            <${Input} label="Email" type="email" value=${editS[0].email} onInput=${function (e) { setField("email", e.target.value); }} />
+            <${Input} label="Phone" type="tel" value=${editS[0].phone} onInput=${function (e) { setField("phone", e.target.value); }} />
+            <${Input} label="Address" value=${editS[0].address} onInput=${function (e) { setField("address", e.target.value); }} />
+            <${Input} label="Birthday" type="date" value=${editS[0].birthday} onInput=${function (e) { setField("birthday", e.target.value); }} />
+            <${Button} variant="primary" size="md" style=${{ width: "100%", marginTop: 4 }} onClick=${saveEdit}>${savingS[0] ? "Saving…" : "Save Details"}<//>
+          </div>
+        <//>` : null}
       </${Screen}>`;
   }
 

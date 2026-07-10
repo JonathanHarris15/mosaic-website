@@ -54,6 +54,11 @@ document.addEventListener('alpine:init', () => {
                     name: doc.data().name || doc.id,
                     hiddenFromOthers: doc.data().hiddenFromOthers || false,
                     hidePeople: doc.data().hidePeople || false,
+                    // Projected Tags are code-defined and immutable (ADR-0012,
+                    // ADR-0013): Membership Tags AND the Elder Tag. The UI locks
+                    // rename/delete/merge/hide on them; they still appear in the
+                    // list so elders can see the vocabulary.
+                    locked: ShepherdingCore.isProjectedTagId(doc.id),
                 }));
             } catch (e) {
                 console.error('Error loading tags:', e);
@@ -87,7 +92,20 @@ document.addEventListener('alpine:init', () => {
 
         // ── Rename (ADR-0011) — changes only the display name; identity is stable,
         // so every carrier, view, and Tag Change keeps referring to this tag.
+        // A Projected Tag (ADR-0012 Membership Tags, ADR-0013 Elder Tag) is
+        // code-defined and cannot be renamed, deleted, merged into, or hidden.
+        // Every mutation entry point checks this so the immutable subset holds
+        // even if a control is somehow reachable.
+        rejectIfMembershipTag(id) {
+            if (ShepherdingCore.isProjectedTagId(id)) {
+                this.showToast('This tag is managed by the system and cannot be changed', 'error');
+                return true;
+            }
+            return false;
+        },
+
         startRenameTag(tag) {
+            if (this.rejectIfMembershipTag(tag.id)) return;
             this.editingTagId = tag.id;
             this.editingTagName = tag.name;
             this.mergingTagId = null;
@@ -99,6 +117,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async renameTag(id) {
+            if (this.rejectIfMembershipTag(id)) { this.cancelRenameTag(); return; }
             const name = this.editingTagName.trim();
             const tag = this.shepherdingTags.find(t => t.id === id);
             if (!tag) { this.cancelRenameTag(); return; }
@@ -123,6 +142,7 @@ document.addEventListener('alpine:init', () => {
         // ── Tag Merge (ADR-0011) — fold this tag into a surviving tag. Directional:
         // the row's tag is the merged one; the elder picks the survivor.
         startMergeTag(tag) {
+            if (this.rejectIfMembershipTag(tag.id)) return;
             this.mergingTagId = tag.id;
             this.editingTagId = null;
         },
@@ -134,6 +154,10 @@ document.addEventListener('alpine:init', () => {
         async mergeTagInto(survivorId) {
             const sourceId = this.mergingTagId;
             if (!sourceId || !survivorId || sourceId === survivorId) { this.cancelMergeTag(); return; }
+            // Neither side may be a Membership Tag: not as the merged source, and
+            // not as the survivor (which would fold ordinary carriers into a
+            // code-defined stage tag).
+            if (this.rejectIfMembershipTag(sourceId) || this.rejectIfMembershipTag(survivorId)) { this.cancelMergeTag(); return; }
             const source = this.shepherdingTags.find(t => t.id === sourceId);
             const survivor = this.shepherdingTags.find(t => t.id === survivorId);
             if (!source || !survivor) { this.cancelMergeTag(); return; }
@@ -205,6 +229,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async deleteTag(id, name) {
+            if (this.rejectIfMembershipTag(id)) return;
             if (!confirm(`Delete tag "${name}"? It will be removed from all people.`)) return;
             const tag = this.shepherdingTags.find(t => t.id === id);
             try {
@@ -234,6 +259,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async toggleTagFlag(id, field) {
+            if (this.rejectIfMembershipTag(id)) return;
             const idx = this.shepherdingTags.findIndex(t => t.id === id);
             if (idx === -1) return;
             const tag = this.shepherdingTags[idx];

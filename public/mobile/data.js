@@ -116,12 +116,18 @@
           name: name,
           role: d.role || d.title || "",
           status: d.status || "member",
-          email: d.email || "",
-          phone: d.phone || d.phoneNumber || "",
+          membership: d.membership || null,
+          email: d.email || (d.contact && d.contact.email) || "",
+          phone: d.phone || d.phoneNumber || (d.contact && d.contact.phone) || "",
+          address: (d.contact && d.contact.address) || d.address || "",
+          birthday: d.birthday || "",
           tags: Array.isArray(d.tags) ? d.tags : [],
           involvements: typeof d.involvements === "number" ? d.involvements : 0,
           lastPrayed: d.lastPrayed || d.lastPrayedFor || null,
           shepherding: d.shepherding || (d.urgency ? { urgency: d.urgency, importance: d.importance } : null),
+          // Shepherding visibility (mirrors desktop): people carrying a hidePeople
+          // tag are flagged hidden and suppressed from the directory for non-admins.
+          shepherdingHidden: !!d.shepherdingHidden,
         });
       });
       out.sort(function (a, b) { return a.name.localeCompare(b.name); });
@@ -438,6 +444,40 @@
       sourceDocumentId: sourceDocumentId || null,
     }));
   }
+  // Relationships (ADR-0012, MS-89) — the elder-only edge graph and its reusable
+  // types. Small collections; fetched whole for RelationshipCore to render.
+  function getRelationships() {
+    return db.collection("relationships").get()
+      .then(function (snap) { return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); })
+      .catch(function () { return []; });
+  }
+  function getRelationshipTypes() {
+    return db.collection("relationship_types").get()
+      .then(function (snap) { return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); })
+      .catch(function () { return []; });
+  }
+
+  // All Families (ADR-0012, MS-88) — the household graph. Small collection;
+  // fetched whole so FamilyCore can resolve a Person's relations client-side.
+  function getFamilies() {
+    return db.collection("families").get()
+      .then(function (snap) { return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); })
+      .catch(function () { return []; });
+  }
+
+  // Move a Person along the Membership Track (ADR-0012): set the stage/inactive
+  // field, re-project the Membership Tags, and append one Membership Change — all
+  // atomically. The tag swap is silent (no Tag Changes). Returns the activity id.
+  function setMembership(personId, currentTags, previous, next, user, source) {
+    return window.ShepherdingCore.commitMembershipChange(db, personId, {
+      currentTags: currentTags || [],
+      previous: previous, next: next,
+      authorUid: (user && user.uid) || (auth.currentUser && auth.currentUser.uid) || null,
+      authorName: (user && user.name) || "",
+      source: source || "profile",
+    });
+  }
+
   // Take a status change back entirely (Care List chip backspaced out): restore the
   // previous status AND delete the activity record that logged it (ADR-0005 mirror).
   function revertShepherdingStatus(personId, previousStatus, activityId) {
@@ -739,6 +779,10 @@
     updateShepherdingPersonDetails: updateShepherdingPersonDetails,
     setShepherdingStatus: setShepherdingStatus,
     toggleShepherdingTag: toggleShepherdingTag,
+    setMembership: setMembership,
+    getFamilies: getFamilies,
+    getRelationships: getRelationships,
+    getRelationshipTypes: getRelationshipTypes,
     revertShepherdingStatus: revertShepherdingStatus,
     getShepherdingView: getShepherdingView,
     getCareList: getCareList,

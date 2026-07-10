@@ -182,6 +182,37 @@
                     </div>
                 </div>
 
+                <!-- Membership Track (ADR-0012): stage slider + Inactive toggle, editors only -->
+                <div x-show="canEditMembership" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-headline-md text-headline-md text-primary">Membership Track</h2>
+                        <span class="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                              :class="membershipInactive ? 'bg-surface-container-high text-on-surface-variant' : 'bg-primary-fixed text-primary'"
+                              x-text="membershipStageLabel"></span>
+                    </div>
+                    <div class="p-3 bg-surface-container-lowest border border-outline-variant/20 rounded-lg flex flex-col gap-2"
+                         :class="membershipInactive ? 'opacity-50' : ''">
+                        <input type="range" min="0" :max="membershipStages.length - 1" step="1"
+                               :value="membershipIndex"
+                               :disabled="membershipInactive"
+                               @change="setMembershipStageByIndex($event.target.value)"
+                               class="w-full accent-primary cursor-pointer disabled:cursor-not-allowed">
+                        <div class="flex justify-between text-[9px] text-on-surface-variant leading-tight">
+                            <template x-for="(stage, i) in membershipStages" :key="stage">
+                                <span class="flex-1 text-center px-0.5"
+                                      :class="membershipIndex === i && !membershipInactive ? 'text-primary font-semibold' : ''"
+                                      x-text="ShepherdingCore.MEMBERSHIP_STAGE_LABEL[stage]"></span>
+                            </template>
+                        </div>
+                    </div>
+                    <button @click="toggleMembershipInactive()"
+                            class="self-start inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-label-md px-3 py-1.5 rounded-lg border transition-colors"
+                            :class="membershipInactive ? 'bg-primary text-on-primary border-primary' : 'text-on-surface-variant border-outline-variant/50 hover:border-primary hover:text-primary'">
+                        <span class="material-symbols-outlined text-[14px]" x-text="membershipInactive ? 'toggle_on' : 'toggle_off'"></span>
+                        <span x-text="membershipInactive ? 'Inactive — click to reactivate' : 'Mark inactive'"></span>
+                    </button>
+                </div>
+
                 <!-- Shepherding Tags Panel -->
                 <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-md">
                     <h2 class="font-headline-md text-headline-md text-primary">Shepherding Tags</h2>
@@ -194,7 +225,8 @@
                                 <span x-show="tagHoldLabel(tagId)" class="opacity-70 text-[11px]"
                                       :title="'Held for ' + tagHoldLabel(tagId)"
                                       x-text="'· ' + tagHoldLabel(tagId)"></span>
-                                <button @click="toggleTag(tagId)" class="hover:opacity-70 transition-opacity">
+                                <span x-show="ShepherdingCore.isProjectedTagId(tagId)" class="material-symbols-outlined text-[13px] opacity-70" title="Set by the Membership Track">lock</span>
+                                <button x-show="!ShepherdingCore.isProjectedTagId(tagId)" @click="toggleTag(tagId)" class="hover:opacity-70 transition-opacity">
                                     <span class="material-symbols-outlined text-[14px]">close</span>
                                 </button>
                             </span>
@@ -207,7 +239,7 @@
                     <div class="flex flex-col gap-xs">
                         <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider text-xs">Add tag</span>
                         <div class="flex flex-wrap gap-xs">
-                            <template x-for="tag in shepherdingTags.filter(t => !hasTag(t.id))" :key="tag.id">
+                            <template x-for="tag in shepherdingTags.filter(t => !hasTag(t.id) && !ShepherdingCore.isProjectedTagId(t.id))" :key="tag.id">
                                 <button @click="toggleTag(tag.id)"
                                     class="px-sm py-xs bg-surface-container text-on-surface hover:bg-surface-container-high rounded-full font-label-md text-label-md transition-colors flex items-center gap-xs"
                                     :class="ShepherdingBlur.pastoralClass({ownProfile})">
@@ -236,6 +268,149 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Relationships Panel (ADR-0012, MS-89) — elder-only edge graph -->
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-md">
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-headline-md text-headline-md text-primary">Relationships</h2>
+                        <button @click="showAddRelationship = !showAddRelationship"
+                                class="text-primary hover:text-primary/80 flex items-center gap-1 font-label-md text-label-md">
+                            <span class="material-symbols-outlined text-[18px]" x-text="showAddRelationship ? 'close' : 'add'"></span>
+                            <span x-text="showAddRelationship ? 'Cancel' : 'Add'"></span>
+                        </button>
+                    </div>
+
+                    <div class="flex flex-col gap-xs">
+                        <template x-for="r in personRelationships" :key="r.edge.id">
+                            <div class="flex items-center justify-between gap-sm bg-surface-container rounded-lg px-sm py-xs" :class="ShepherdingBlur.pastoralClass({ownProfile})">
+                                <div class="flex items-center gap-xs min-w-0">
+                                    <span class="material-symbols-outlined text-[16px] text-secondary" x-text="r.readOnly ? 'family_restroom' : (r.directional ? 'trending_flat' : 'sync_alt')"></span>
+                                    <span class="text-sm text-on-surface truncate">
+                                        <template x-if="r.directional"><span x-text="r.sentence"></span></template>
+                                        <template x-if="!r.directional"><span><span class="font-medium" x-text="r.typeName"></span> · <span x-text="relPersonName(r.otherId)"></span></span></template>
+                                    </span>
+                                </div>
+                                <!-- Family-derived rows are read-only (ADR-0013): edit the Family in the directory. Only Custom Relationships get a delete control. -->
+                                <span x-show="r.readOnly" class="material-symbols-outlined text-[15px] text-on-surface-variant flex-shrink-0" title="From the family tree — edit in the Member Directory">lock</span>
+                                <button x-show="!r.readOnly" @click="deleteRelationship(r.edge.id)" class="text-on-surface-variant hover:text-error transition-colors flex-shrink-0">
+                                    <span class="material-symbols-outlined text-[16px]">close</span>
+                                </button>
+                            </div>
+                        </template>
+                        <span x-show="personRelationships.length === 0" class="text-on-surface-variant italic text-sm">No relationships recorded.</span>
+                    </div>
+
+                    <!-- Add relationship — the Relationship Tracker card (MS-93 design),
+                         rebuilt as a flex row (no absolute overlap) for the narrow
+                         profile sidebar: [avatar] ←arrow— phrase —arrow→ [avatar],
+                         with a live sentence preview and a full-width name field. -->
+                    <div x-show="showAddRelationship" class="flex flex-col gap-sm pt-sm border-t border-outline-variant">
+                        <!-- direction row -->
+                        <div class="flex items-center gap-1">
+                            <span class="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center text-sm font-semibold flex-shrink-0" x-text="relInitials(person?.name)"></span>
+
+                            <!-- left arrow (flows toward this person) -->
+                            <button type="button" @click="toggleRelLeft()" :title="'Flows toward ' + (person?.name || 'this person')"
+                                    class="flex-shrink-0 flex items-center justify-center transition-transform"
+                                    :style="`color:${relForm.leftActive ? '#3E6181' : '#C7BCA8'};transform:scale(${relForm.leftActive ? 1.15 : 0.9})`" style="width:22px;height:30px;background:none;border:none;cursor:pointer;padding:0">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"></polyline></svg>
+                            </button>
+
+                            <!-- phrase -->
+                            <input type="text" x-model="relForm.typeName" list="rel-type-list" placeholder="relationship"
+                                   class="flex-1 min-w-0 text-center border border-outline-variant rounded-lg bg-surface text-secondary font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                   style="font-size:12px;padding:7px 4px" />
+                            <datalist id="rel-type-list">
+                                <template x-for="t in relationshipTypes" :key="t.id"><option :value="t.name"></option></template>
+                            </datalist>
+
+                            <!-- right arrow (flows toward the other person) -->
+                            <button type="button" @click="toggleRelRight()" :title="'Flows toward ' + (relForm.otherName || 'the other person')"
+                                    class="flex-shrink-0 flex items-center justify-center transition-transform"
+                                    :style="`color:${relForm.rightActive ? '#3E6181' : '#C7BCA8'};transform:scale(${relForm.rightActive ? 1.15 : 0.9})`" style="width:22px;height:30px;background:none;border:none;cursor:pointer;padding:0">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"></polyline></svg>
+                            </button>
+
+                            <span class="w-10 h-10 rounded-full bg-secondary text-on-secondary flex items-center justify-center text-sm font-semibold flex-shrink-0" x-text="relInitials(relForm.otherName)"></span>
+                        </div>
+
+                        <!-- live sentence preview -->
+                        <p class="text-[11px] text-on-surface-variant italic text-center leading-tight px-1" x-text="relSentencePreview"></p>
+
+                        <!-- other person: full-width name field + candidates -->
+                        <div class="relative">
+                            <input type="text" x-model="relForm.otherName" @input="relForm.otherId = ''" placeholder="Type the other person's name…"
+                                   class="w-full border border-outline-variant rounded-lg px-sm py-xs font-body-md text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                            <div x-show="!relForm.otherId && relPersonCandidates.length" class="absolute z-30 top-full mt-1 w-full bg-white border border-outline-variant rounded-lg shadow-xl py-1 max-h-40 overflow-y-auto">
+                                <template x-for="c in relPersonCandidates" :key="c.id">
+                                    <button @click="pickRelPerson(c)" class="w-full text-left px-3 py-1.5 text-sm hover:bg-primary-fixed" x-text="c.name"></button>
+                                </template>
+                            </div>
+                        </div>
+
+                        <button @click="addRelationship()" class="w-full px-sm py-sm font-label-md text-label-md uppercase tracking-wider bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors mt-xs">
+                            Add relationship
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Assigned Elder (ADR-0013, MS-94) — a dedicated single-elder picker, deliberately separate from the Relationships panel. -->
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-sm">
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-headline-md text-headline-md text-primary">Assigned Elder</h2>
+                        <button x-show="assignedElderId && !showAssignElder" @click="showAssignElder = true" class="text-secondary hover:text-primary transition-colors flex items-center gap-1 font-label-md text-label-md">
+                            <span class="material-symbols-outlined text-[18px]">edit</span><span>Change</span>
+                        </button>
+                    </div>
+
+                    <!-- Current assignment -->
+                    <template x-if="assignedElderId && !showAssignElder">
+                        <div class="flex items-center gap-xs min-w-0 bg-surface-container rounded-lg px-sm py-xs">
+                            <span class="material-symbols-outlined text-[18px] text-secondary flex-shrink-0">shield_person</span>
+                            <span class="text-sm text-on-surface truncate" x-text="assignedElderName"></span>
+                        </div>
+                    </template>
+
+                    <!-- No assignment yet -->
+                    <template x-if="!assignedElderId && !showAssignElder">
+                        <button @click="showAssignElder = true" class="self-start px-sm py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[16px]">add</span> Assign an elder
+                        </button>
+                    </template>
+
+                    <!-- Picker -->
+                    <template x-if="showAssignElder">
+                        <div class="flex flex-col gap-sm">
+                            <select @change="setAssignedElder($event.target.value); showAssignElder = false" :disabled="assignmentSaving"
+                                    class="w-full px-sm py-xs border border-outline-variant rounded-lg bg-surface-container-lowest text-sm text-on-surface">
+                                <option value="" x-text="assignedElderId ? '— Unassign —' : '— Select an elder —'"></option>
+                                <template x-for="e in elderCandidates" :key="e.id">
+                                    <option :value="e.id" :selected="e.id === assignedElderId" x-text="e.name"></option>
+                                </template>
+                            </select>
+                            <span x-show="elderCandidates.length === 0" class="text-on-surface-variant italic text-sm">No elders available yet. An elder is a person whose linked account has the elder role.</span>
+                            <button @click="showAssignElder = false" class="self-start px-sm py-xs font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors">Cancel</button>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Care Group (ADR-0013, MS-94) — the members this elder shepherds; shown only on an elder's profile. -->
+                <div x-show="viewedPersonIsElder" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-sm">
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-headline-md text-headline-md text-primary">Care Group</h2>
+                        <span class="font-label-md text-label-md text-on-surface-variant" x-text="careGroup.length"></span>
+                    </div>
+                    <div class="flex flex-col gap-xs">
+                        <template x-for="m in careGroup" :key="m.id">
+                            <a :href="'shepherding-profile.html?id=' + m.id" class="flex items-center gap-xs min-w-0 bg-surface-container rounded-lg px-sm py-xs hover:bg-surface-container-high transition-colors">
+                                <span class="material-symbols-outlined text-[18px] text-secondary flex-shrink-0">person</span>
+                                <span class="text-sm text-on-surface truncate" x-text="m.name"></span>
+                            </a>
+                        </template>
+                        <span x-show="careGroup.length === 0" class="text-on-surface-variant italic text-sm">No members assigned yet.</span>
+                    </div>
+                </div>
+
                 <!-- Pastoral Status Panel -->
                 <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-md">
                     <h2 class="font-headline-md text-headline-md text-primary">Pastoral Status</h2>
@@ -690,6 +865,33 @@
                                 </div>
                             </template>
 
+                            <!-- Membership Change (ADR-0012): a Track move, read as its own transition -->
+                            <template x-if="entry._entryKind === 'membership_change'">
+                                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-wrap items-center gap-sm">
+                                    <span class="flex items-center gap-xs px-sm py-xs bg-primary-fixed text-primary rounded font-label-md text-label-md">
+                                        <span class="material-symbols-outlined text-[14px]">trending_up</span>
+                                        <span x-text="ShepherdingCore.describeMembershipChange(entry)"></span>
+                                    </span>
+                                    <span class="font-label-md text-label-md text-on-surface-variant" x-text="formatDate(entry.createdAt)"></span>
+                                    <span class="font-label-md text-label-md text-on-surface-variant" x-text="'by ' + (entry.authorName || 'Unknown')"></span>
+                                    <template x-if="entry.source === 'people_list'">
+                                        <span class="font-label-md text-label-md text-on-surface-variant italic">via People list</span>
+                                    </template>
+                                </div>
+                            </template>
+
+                            <!-- Assignment Change (ADR-0013, MS-94) — elder assignment history -->
+                            <template x-if="entry._entryKind === 'assignment_change'">
+                                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-wrap items-center gap-sm">
+                                    <span class="flex items-center gap-xs px-sm py-xs bg-primary-fixed text-primary rounded font-label-md text-label-md">
+                                        <span class="material-symbols-outlined text-[14px]">shield_person</span>
+                                        <span x-text="ShepherdingCore.describeAssignmentChange(entry)"></span>
+                                    </span>
+                                    <span class="font-label-md text-label-md text-on-surface-variant" x-text="formatDate(entry.createdAt)"></span>
+                                    <span class="font-label-md text-label-md text-on-surface-variant" x-text="'by ' + (entry.authorName || 'Unknown')"></span>
+                                </div>
+                            </template>
+
                             <!-- Collapsed status group -->
                             <template x-if="entry._entryKind === 'status_group'">
                                 <div class="flex items-center gap-sm py-xs">
@@ -845,6 +1047,8 @@
     </div>
 
     <script src="shepherding-core.js"></script>
+    <script src="relationship-core.js"></script>
+    <script src="family-core.js"></script>
     <script src="shepherding-blur.js"></script>
     <script src="tiptap-render.js"></script>
     <script src="shepherding-profile.js"></script>

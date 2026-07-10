@@ -9,6 +9,12 @@ document.addEventListener('alpine:init', () => {
         people: [],
         isSubmitting: false,
         searchTerm: '',
+        // Membership Directory tab: 'members' (carries Member tag) | 'non_members'.
+        activeTab: 'members',
+        // Edit Mode (ADR-0012): the directory is read-only until an editor turns
+        // this on, which reveals the inline People-management affordances. Off by
+        // default; a plain member never sees the toggle (gated by canEdit).
+        editMode: false,
         sortKey: 'totalInvolvements', // 'name' or 'totalInvolvements'
         sortDirection: 'desc',
         
@@ -58,6 +64,8 @@ document.addEventListener('alpine:init', () => {
                 }
                 const userData = await getUserData(user.uid);
                 this.currentUserRole = (userData && userData.role) || 'viewer';
+                this.currentUserUid = user.uid;
+                this.currentUserName = (userData && (userData.displayName || userData.name)) || user.email || '';
                 if (!['member', 'editor', 'elder', 'admin', 'super_admin'].includes(this.currentUserRole)) {
                     alert('Permission denied.');
                     window.location.href = 'index.html';
@@ -66,6 +74,7 @@ document.addEventListener('alpine:init', () => {
                 this.authorized = true;
                 this.loadPeople();
                 this.loadTags();
+                this.loadFamilies();
             });
         },
 
@@ -97,6 +106,9 @@ document.addEventListener('alpine:init', () => {
         toggleViewAsMember() {
             if (!this.isSuperAdmin) return;
             this.viewAsMember = !this.viewAsMember;
+            // Previewing as a member has no edit rights, so drop out of Edit Mode
+            // to keep the editor chrome (sidebar, inline controls) consistent.
+            if (this.viewAsMember) this.editMode = false;
             this.loadTags();
         },
 
@@ -202,9 +214,214 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        // ── Families (ADR-0012, MS-88) ───────────────────────────────────────
+        families: [],
+        familyChildQuery: '',
+        familySpouseQuery: '',
+
+        async loadFamilies() {
+            try {
+                const snap = await db.collection('families').get();
+                this.families = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            } catch (e) {
+                console.error('Error loading families:', e);
+            }
+        },
+
+        personName(id) {
+            const p = this.people.find(x => x.id === id);
+            return p ? p.name : '(unknown)';
+        },
+
+        personSex(id) {
+            const p = this.people.find(x => x.id === id);
+            return p ? p.sex : null;
+        },
+
+        // The resolved relations (ids) for a Person from the family graph.
+        relationsFor(person) {
+            if (!person) return { spouseId: null, childIds: [], parentIds: [] };
+            return FamilyCore.resolveRelations(this.families, person.id);
+        },
+
+        // The Family the selected Person is a spouse in (for the modal editor).
+        get selectedFamily() {
+            if (!this.selectedPerson) return null;
+            return FamilyCore.familyOfSpouse(this.families, this.selectedPerson.id);
+        },
+
+        // The role the selected Person plays as a spouse, from their sex.
+        get selectedSpouseRole() {
+            const sex = this.selectedPerson && this.selectedPerson.sex;
+            return sex === 'male' ? 'husband' : sex === 'female' ? 'wife' : null;
+        },
+
+        // People eligible to be the selected Person's spouse: the opposite sex,
+        // not the person themselves, not already a spouse in another family.
+        get spouseCandidates() {
+            if (!this.selectedPerson || !this.selectedSpouseRole) return [];
+            const otherRole = this.selectedSpouseRole === 'husband' ? 'wife' : 'husband';
+            const needSex = otherRole === 'husband' ? 'male' : 'female';
+            const q = (this.familySpouseQuery || '').toLowerCase();
+            return this.people.filter(p =>
+                p.id !== this.selectedPerson.id &&
+                p.sex === needSex &&
+                (!q || p.name.toLowerCase().includes(q)) &&
+                !FamilyCore.familyOfSpouse(this.families, p.id)
+            ).slice(0, 8);
+        },
+
+        get childCandidates() {
+            if (!this.selectedPerson) return [];
+            const fam = this.selectedFamily;
+            const existing = fam ? (fam.childIds || []) : [];
+            const q = (this.familyChildQuery || '').toLowerCase();
+            return this.people.filter(p =>
+                p.id !== this.selectedPerson.id &&
+                existing.indexOf(p.id) === -1 &&
+                (!q || p.name.toLowerCase().includes(q))
+            ).slice(0, 8);
+        },
+
+        // Write a change to the selected Person's Family, creating one if needed.
+        // The selected Person is anchored into their spousal role by sex.
+        async saveFamily(patch) {
+            const person = this.selectedPerson;
+            if (!person) return;
+            if (!this.selectedSpouseRole) {
+                this.showToast('Set this person’s sex before building a family', 'error');
+                return;
+            }
+            try {
+                let fam = this.selectedFamily;
+                if (!fam) {
+                    // Create a new family anchoring the selected person in their role.
+                    const base = { husbandId: null, wifeId: null, childIds: [], anniversary: null };
+                    base[this.selectedSpouseRole === 'husband' ? 'husbandId' : 'wifeId'] = person.id;
+                    Object.assign(base, patch);
+                    const ref = await db.collection('families').add(base);
+                    this.families.push({ id: ref.id, ...base });
+                } else {
+                    await db.collection('families').doc(fam.id).update(patch);
+                    Object.assign(fam, patch);
+                }
+                this.showToast('Family updated');
+            } catch (e) {
+                console.error('Error saving family:', e);
+                this.showToast('Error saving family', 'error');
+            }
+        },
+
+        async setSpouse(spouseId) {
+            const spouse = this.people.find(p => p.id === spouseId);
+            const spouseRole = this.selectedSpouseRole === 'husband' ? 'wife' : 'husband';
+            if (!FamilyCore.spouseSexOk(spouse, spouseRole)) {
+                this.showToast('Spouse must be the opposite sex', 'error');
+                return;
+            }
+            await this.saveFamily({ [spouseRole === 'husband' ? 'husbandId' : 'wifeId']: spouseId });
+            this.familySpouseQuery = '';
+        },
+
+        async addChild(childId) {
+            const fam = this.selectedFamily;
+            const childIds = fam ? [...(fam.childIds || [])] : [];
+            if (childIds.indexOf(childId) === -1) childIds.push(childId);
+            await this.saveFamily({ childIds });
+            this.familyChildQuery = '';
+        },
+
+        async removeChild(childId) {
+            const fam = this.selectedFamily;
+            if (!fam) return;
+            const childIds = (fam.childIds || []).filter(c => c !== childId);
+            await this.saveFamily({ childIds });
+        },
+
+        async setAnniversary(value) {
+            await this.saveFamily({ anniversary: value || null });
+        },
+
+        // ── Membership Track (ADR-0012) ──────────────────────────────────────
+        // The stage slider and Inactive toggle in the person modal. The stage is
+        // the source of truth; ShepherdingCore re-projects the Membership Tags and
+        // logs one Membership Change per move (silent tag swap). Editors only.
+
+        get membershipStages() { return ShepherdingCore.MEMBERSHIP_STAGES; },
+
+        // The slider index for a Person: their stage's position on the Track, or 0
+        // when unset so the thumb has a home. Read alongside membershipInactive.
+        membershipIndex(person) {
+            const stage = person && person.membership && person.membership.stage;
+            const i = ShepherdingCore.MEMBERSHIP_STAGES.indexOf(stage);
+            return i === -1 ? 0 : i;
+        },
+
+        membershipStageLabel(person) {
+            if (person && person.membership && person.membership.inactive) return 'Inactive';
+            const stage = person && person.membership && person.membership.stage;
+            return ShepherdingCore.MEMBERSHIP_STAGE_LABEL[stage] || 'Not on the Track';
+        },
+
+        // Move the selected Person to the stage at the slider index. Never fired
+        // while Inactive (the slider is disabled then).
+        async setMembershipStageByIndex(index) {
+            const stage = ShepherdingCore.MEMBERSHIP_STAGES[Number(index)];
+            if (!stage) return;
+            await this.commitMembership({ stage, inactive: false });
+        },
+
+        // Toggle Inactive: keep the retained stage, flip the flag. Clearing it
+        // restores the stage (its tags come back via the projection).
+        async toggleMembershipInactive() {
+            const m = (this.selectedPerson && this.selectedPerson.membership) || {};
+            await this.commitMembership({ stage: m.stage || null, inactive: !m.inactive });
+        },
+
+        async commitMembership(next) {
+            const person = this.selectedPerson;
+            if (!person) return;
+            const previous = {
+                stage: (person.membership && person.membership.stage) || null,
+                inactive: !!(person.membership && person.membership.inactive),
+            };
+            if (previous.stage === next.stage && previous.inactive === next.inactive) return;
+            try {
+                await ShepherdingCore.commitMembershipChange(db, person.id, {
+                    currentTags: person.tags || [],
+                    previous,
+                    next,
+                    authorUid: this.currentUserUid,
+                    authorName: this.currentUserName,
+                    source: 'people_list',
+                });
+                // Reflect the field + re-projected tags locally (clone and list).
+                const newTags = ShepherdingCore.applyMembershipTags(person.tags || [], next);
+                person.membership = { ...(person.membership || {}), stage: next.stage, inactive: next.inactive };
+                person.tags = newTags;
+                const idx = this.people.findIndex(p => p.id === person.id);
+                if (idx !== -1) {
+                    this.people[idx] = { ...this.people[idx], membership: person.membership, tags: newTags };
+                }
+                this.showToast(ShepherdingCore.describeMembershipChange(
+                    ShepherdingCore.buildMembershipChange({ previous, next })
+                ));
+            } catch (e) {
+                console.error('Error updating membership:', e);
+                this.showToast('Error updating membership', 'error');
+            }
+        },
+
         async addTag(person, tagName) {
             tagName = tagName.trim();
             if (!tagName) return;
+            // Projected Tags are code-defined (ADR-0012 Membership, ADR-0013
+            // Elder) — they follow their source of truth, never hand-editing.
+            // Guard the person-modal tag editor too.
+            if (ShepherdingCore.isProjectedTagId(this.allTags.find(t => t.toLowerCase() === tagName.toLowerCase()) || tagName)) {
+                this.showToast('This tag is set by the system, not manual tagging', 'error');
+                return;
+            }
 
             // Find match or use original (case-insensitive check)
             const existingTag = this.allTags.find(t => t.toLowerCase() === tagName.toLowerCase());
@@ -249,6 +466,10 @@ document.addEventListener('alpine:init', () => {
         },
 
         async removeTag(person, tag) {
+            if (ShepherdingCore.isProjectedTagId(tag)) {
+                this.showToast('This tag is set by the system, not manual tagging', 'error');
+                return;
+            }
             const tags = person.tags || [];
             const newTags = tags.filter(t => t !== tag);
 
@@ -575,13 +796,11 @@ document.addEventListener('alpine:init', () => {
                 });
             }
 
-            // Non-editors see a directory of members only — people without the Member
-            // tag (visitors, prayer contacts, etc.) are hidden from them. Editors and
-            // above see everyone so they can manage and tag non-members.
-            if (!this.canEdit) {
-                list = list.filter(p => (p.tags || []).includes('Member'));
-            }
-            
+            // The Membership Directory (ADR-0012): the whole congregation browses
+            // two tabs — Members (carries the Member tag) and Non-members (active,
+            // no Member tag). Inactive People are hidden from non-editors on both.
+            list = list.filter(p => ShepherdingCore.personMatchesDirectoryTab(p, this.activeTab, this.canEdit));
+
             if (this.searchTerm) {
                 const term = this.searchTerm.toLowerCase();
                 list = list.filter(p => p.name.toLowerCase().includes(term));

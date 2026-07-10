@@ -82,7 +82,7 @@
 
   // Filter people through a saved view config (mirrors shepherding-care-list.js applyFilter).
   function filterPeople(people, view) {
-    var list = people.filter(function (p) { return !(p.membership && p.membership.status === "inactive"); });
+    var list = people.filter(function (p) { return !window.ShepherdingCore.isInactiveMembership(p.membership); });
     if (view) {
       if (view.filterTags && view.filterTags.length) {
         list = list.filter(function (p) {

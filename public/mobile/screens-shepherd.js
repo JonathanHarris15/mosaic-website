@@ -109,7 +109,7 @@
     return !!f && Object.keys(f).some(function (k) { return f[k] > 0; });
   }
   function peopleForView(view, people, tagHolds) {
-    var result = people.filter(function (p) { return !(p.membership && p.membership.status === "inactive"); });
+    var result = people.filter(function (p) { return !window.ShepherdingCore.isInactiveMembership(p.membership); });
     if (view.filterTags && view.filterTags.length > 0) {
       var matches = function (p, t) {
         if ((p.tags || []).indexOf(t) === -1) return false;
@@ -236,6 +236,9 @@
       { icon: "folder-open", title: "Documents", desc: "Elder notes & meeting minutes.", go: function () { props.nav("documents"); } },
       { icon: "users", title: "People", desc: "View & manage member profiles.", go: function () { props.nav("shepherdPeople"); } },
       { icon: "tag", title: "Manage Tags", desc: "Create, rename & merge shepherding tags.", go: function () { props.nav("shepherdTags"); } },
+      // Relations Viewer: placeholder card, intentionally not linked yet — the
+      // visual relationship dashboard is still being designed (see PRD).
+      { icon: "waypoints", title: "Relations Viewer", desc: "See how members are connected.", soon: true, go: function () {} },
     ];
 
     var userKnown = props.user !== undefined; // undefined = still resolving auth
@@ -262,13 +265,13 @@
 
           <div style=${{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
             ${navCards.map(function (c) {
-              return html`<button key=${c.title} onClick=${c.go} style=${{ display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", padding: 16, cursor: "pointer", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)" }}>
+              return html`<button key=${c.title} onClick=${c.go} disabled=${!!c.soon} style=${{ display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", padding: 16, cursor: c.soon ? "default" : "pointer", background: "var(--surface-container-lowest)", border: c.soon ? "1px dashed var(--outline-variant)" : "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", opacity: c.soon ? 0.65 : 1 }}>
                 <span style=${{ width: 48, height: 48, borderRadius: "var(--radius-full)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--surface-container)", color: "var(--primary)" }}>${Ic(c.icon, 24)}</span>
                 <div style=${{ flex: 1, minWidth: 0 }}>
-                  <div style=${{ fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--on-surface)" }}>${c.title}</div>
+                  <div style=${{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--on-surface)" }}>${c.title}${c.soon ? html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--on-surface-variant)", background: "var(--surface-container)", padding: "2px 7px", borderRadius: "var(--radius-full)" }}>Soon</span>` : null}</div>
                   <div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 2 }}>${c.desc}</div>
                 </div>
-                <span style=${{ color: "var(--outline)" }}>${Ic("chevron-right", 18)}</span>
+                ${c.soon ? null : html`<span style=${{ color: "var(--outline)" }}>${Ic("chevron-right", 18)}</span>`}
               </button>`;
             })}
           </div>
@@ -403,7 +406,16 @@
     var d = ts.toDate ? ts.toDate() : new Date(ts);
     return isNaN(d.getTime()) ? null : d.toLocaleDateString("default", { month: "short", day: "numeric", year: "numeric" });
   }
-  function membershipLabel(m) { return !m ? null : (typeof m === "string" ? m : (m.status || null)); }
+  // The Membership Track label for a person's membership object (ADR-0012):
+  // Inactive dominates, then the stage's label, falling back to the legacy status
+  // string for records not yet migrated.
+  function membershipLabel(m) {
+    if (!m) return null;
+    if (typeof m === "string") return m;
+    if (m.inactive) return "Inactive";
+    if (m.stage) return (window.ShepherdingCore.MEMBERSHIP_STAGE_LABEL[m.stage] || m.stage);
+    return m.status || null;
+  }
   function hiddenIdsFrom(tags) { var s = {}; tags.forEach(function (t) { if (t.hidePeople) s[t.id] = true; }); return s; }
 
   function ShepherdPeopleScreen(props) {
@@ -664,8 +676,12 @@
     var loadingS = useState(true), errS = useState(false);
     var personS = useState(null), notesS = useState([]), activityS = useState([]), tagsS = useState([]);
     var collapseS = useState(false), editorS = useState(null), newTagS = useState(""), editProfileS = useState(null), explEditS = useState({}), toastS = useState(null);
+    var familiesS = useState([]), rosterS = useState([]); // Family graph + name lookup (MS-88)
+    var relsS = useState([]), relTypesS = useState([]);   // Relationship graph (MS-89)
 
     var person = personS[0], notes = notesS[0], activity = activityS[0], tags = tagsS[0];
+    var families = familiesS[0], roster = rosterS[0], rels = relsS[0], relTypes = relTypesS[0];
+    function rosterName(id) { for (var i = 0; i < roster.length; i++) { if (roster[i].id === id) return roster[i].name; } return "(unknown)"; }
     function showToast(m, t) { toastS[1]({ message: m, type: t || "success" }); setTimeout(function () { toastS[1](null); }, 2400); }
     function tagName(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i].name; } return id; }
     function reloadNotes() { return data.getShepherdingNotes(pid).then(notesS[1]); }
@@ -678,8 +694,8 @@
         if (!alive) return;
         if (!p) { errS[1](true); loadingS[1](false); return; }
         personS[1](p);
-        Promise.all([data.getShepherdingNotes(pid), data.getShepherdingActivity(pid), data.getShepherdingTags()])
-          .then(function (r) { if (!alive) return; notesS[1](r[0]); activityS[1](r[1]); tagsS[1](r[2]); loadingS[1](false); });
+        Promise.all([data.getShepherdingNotes(pid), data.getShepherdingActivity(pid), data.getShepherdingTags(), data.getFamilies(), data.getPeople(), data.getRelationships(), data.getRelationshipTypes()])
+          .then(function (r) { if (!alive) return; notesS[1](r[0]); activityS[1](r[1]); tagsS[1](r[2]); familiesS[1](r[3]); rosterS[1](r[4]); relsS[1](r[5]); relTypesS[1](r[6]); loadingS[1](false); });
       }).catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
       return function () { alive = false; };
     }, [pid]);
@@ -692,7 +708,30 @@
         personS[1](Object.assign({}, person, { shepherdingStatus: next })); reloadActivity(); showToast(same ? "Status cleared" : "Status updated");
       }).catch(function () { showToast("Error updating status", "error"); });
     }
+    // Move this Person along the Membership Track (ADR-0012). The stage is the
+    // source of truth; data.setMembership re-projects the Membership Tags and logs
+    // one Membership Change. Inactive keeps the stage but flips the flag.
+    function commitMembership(next) {
+      var m = person.membership || {};
+      var previous = { stage: m.stage || null, inactive: !!m.inactive };
+      if (previous.stage === next.stage && previous.inactive === next.inactive) return;
+      data.setMembership(pid, person.tags || [], previous, next, user, "profile").then(function () {
+        var newTags = Core.applyMembershipTags(person.tags || [], next);
+        personS[1](Object.assign({}, person, { membership: Object.assign({}, m, { stage: next.stage, inactive: next.inactive }), tags: newTags }));
+        reloadActivity();
+        showToast(Core.describeMembershipChange(Core.buildMembershipChange({ previous: previous, next: next })));
+      }).catch(function () { showToast("Error updating membership", "error"); });
+    }
+    function setMembershipStage(idx) {
+      var stage = Core.MEMBERSHIP_STAGES[Number(idx)];
+      if (stage) commitMembership({ stage: stage, inactive: false });
+    }
+    function toggleInactive() {
+      var m = person.membership || {};
+      commitMembership({ stage: m.stage || null, inactive: !m.inactive });
+    }
     function toggleTag(tagId) {
+      if (window.ShepherdingCore.isProjectedTagId(tagId)) { showToast("This tag is set by the system, not manual tagging", "error"); return; }
       var has = (person.tags || []).indexOf(tagId) !== -1;
       var newTags = has ? (person.tags || []).filter(function (x) { return x !== tagId; }) : (person.tags || []).concat([tagId]);
       var hid = hiddenIdsFrom(tags);
@@ -763,7 +802,7 @@
 
     var record = Core.assemblePastoralRecord(notes, activity, {});
     var visible = collapseS[0] ? record.filter(function (e) { return e._entryKind === "note"; }) : record;
-    var addableTags = tags.filter(function (t) { return (person.tags || []).indexOf(t.id) === -1; });
+    var addableTags = tags.filter(function (t) { return (person.tags || []).indexOf(t.id) === -1 && !window.ShepherdingCore.isProjectedTagId(t.id); });
     var mLabel = membershipLabel(person.membership);
     var details = [
       person.contact && person.contact.email && { icon: "mail", text: person.contact.email },
@@ -798,12 +837,51 @@
             </div>` : html`<p style=${{ margin: 0, fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)" }}>No contact details provided.</p>`}
           </div>
 
+          ${(function () {
+            var rel = window.FamilyCore.resolveRelations(families, pid);
+            if (!rel.spouseId && !rel.childIds.length && !rel.parentIds.length) return null;
+            var rows = [];
+            if (rel.spouseId) rows.push(["heart", "Spouse", [rel.spouseId]]);
+            if (rel.childIds.length) rows.push(["baby", "Children", rel.childIds]);
+            if (rel.parentIds.length) rows.push(["users", "Parents", rel.parentIds]);
+            return html`<div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
+              <h2 style=${Object.assign({}, SF_H2, { marginBottom: 12 })}>Family</h2>
+              <div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>
+                ${rows.map(function (row) { return html`<div key=${row[1]} style=${{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <span style=${{ display: "inline-flex", flexShrink: 0, color: "var(--secondary)" }}>${Ic(row[0], 17)}</span>
+                  <div style=${{ flex: 1 }}>
+                    <div style=${Object.assign({}, SF_OVER, { fontSize: 9, marginBottom: 2 })}>${row[1]}</div>
+                    <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)" }}>${row[2].map(function (id) { return rosterName(id); }).join(", ")}</div>
+                  </div>
+                </div>`; })}
+              </div>
+            </div>`;
+          })()}
+
+          ${(function () {
+            var edges = window.RelationshipCore.edgesForPerson(rels, pid);
+            if (!edges.length) return null;
+            return html`<div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
+              <h2 style=${Object.assign({}, SF_H2, { marginBottom: 12 })}>Relationships</h2>
+              <div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
+                ${edges.map(function (edge) {
+                  var type = null; for (var i = 0; i < relTypes.length; i++) { if (relTypes[i].id === edge.typeId) { type = relTypes[i]; break; } }
+                  var d = window.RelationshipCore.describeRelationship(edge, type, pid, rosterName);
+                  return html`<div key=${edge.id} style=${{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style=${{ display: "inline-flex", flexShrink: 0, color: "var(--secondary)" }}>${Ic(d.directional ? "move-right" : "arrow-left-right", 16)}</span>
+                    <span style=${{ fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)" }}>${d.directional ? d.sentence : (d.typeName + " · " + rosterName(d.otherId))}</span>
+                  </div>`;
+                })}
+              </div>
+            </div>`;
+          })()}
+
           <div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
             <h2 style=${Object.assign({}, SF_H2, { marginBottom: 12 })}>Shepherding Tags</h2>
             <div style=${{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-              ${(person.tags || []).length ? (person.tags || []).map(function (t) { return html`<span key=${t} style=${{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 8px 5px 12px", borderRadius: "var(--radius-full)", background: "var(--primary)", color: "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500 }}>
-                ${tagName(t)}
-                <button onClick=${function () { toggleTag(t); }} aria-label="Remove tag" style=${{ width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-primary)", cursor: "pointer", opacity: 0.8 }}>${Ic("x", 12)}</button>
+              ${(person.tags || []).length ? (person.tags || []).map(function (t) { var mt = window.ShepherdingCore.isProjectedTagId(t); return html`<span key=${t} style=${{ display: "inline-flex", alignItems: "center", gap: 6, padding: mt ? "5px 12px" : "5px 8px 5px 12px", borderRadius: "var(--radius-full)", background: mt ? "var(--primary-fixed)" : "var(--primary)", color: mt ? "var(--primary)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500 }}>
+                ${mt ? html`${Ic("lock", 11)}` : null}${tagName(t)}
+                ${mt ? null : html`<button onClick=${function () { toggleTag(t); }} aria-label="Remove tag" style=${{ width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-primary)", cursor: "pointer", opacity: 0.8 }}>${Ic("x", 12)}</button>`}
               </span>`; }) : html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)" }}>No tags applied.</span>`}
             </div>
             ${addableTags.length ? html`<${Fragment}>
@@ -819,6 +897,27 @@
                 <button onClick=${createTag} style=${pill()}>Create</button>
               </div>
             </div>
+          </div>
+
+          <div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
+            <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <h2 style=${SF_H2}>Membership Track</h2>
+              <span style=${{ padding: "2px 9px", borderRadius: "var(--radius-full)", fontFamily: "var(--font-sans)", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.04em", background: (person.membership && person.membership.inactive) ? "var(--surface-container-high)" : "var(--primary-fixed)", color: (person.membership && person.membership.inactive) ? "var(--on-surface-variant)" : "var(--primary)" }}>${membershipLabel(person.membership) || "Not set"}</span>
+            </div>
+            <input type="range" min="0" max=${Core.MEMBERSHIP_STAGES.length - 1} step="1"
+              value=${Math.max(0, Core.MEMBERSHIP_STAGES.indexOf(person.membership && person.membership.stage))}
+              disabled=${!!(person.membership && person.membership.inactive)}
+              onChange=${function (e) { setMembershipStage(e.target.value); }}
+              style=${{ width: "100%", accentColor: "var(--primary)", opacity: (person.membership && person.membership.inactive) ? 0.45 : 1 }} />
+            <div style=${{ display: "flex", justifyContent: "space-between", gap: 2, marginTop: 4 }}>
+              ${Core.MEMBERSHIP_STAGES.map(function (stage, i) {
+                var on = !(person.membership && person.membership.inactive) && Core.MEMBERSHIP_STAGES.indexOf(person.membership && person.membership.stage) === i;
+                return html`<span key=${stage} style=${{ flex: 1, textAlign: "center", fontFamily: "var(--font-sans)", fontSize: 8.5, lineHeight: 1.15, color: on ? "var(--primary)" : "var(--on-surface-variant)", fontWeight: on ? 700 : 400 }}>${Core.MEMBERSHIP_STAGE_LABEL[stage]}</span>`;
+              })}
+            </div>
+            <button onClick=${toggleInactive} style=${{ marginTop: 14, display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: "var(--radius)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600, border: "1px solid " + ((person.membership && person.membership.inactive) ? "var(--primary)" : "var(--outline-variant)"), background: (person.membership && person.membership.inactive) ? "var(--primary)" : "transparent", color: (person.membership && person.membership.inactive) ? "var(--on-primary)" : "var(--on-surface-variant)" }}>
+              ${Ic((person.membership && person.membership.inactive) ? "toggle-right" : "toggle-left", 15)} ${(person.membership && person.membership.inactive) ? "Inactive — tap to reactivate" : "Mark inactive"}
+            </button>
           </div>
 
           <div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
@@ -893,6 +992,12 @@
                       <button onClick=${function () { var n = Object.assign({}, explEditS[0]); n[e.id] = e.explanation || ""; explEditS[1](n); }} style=${{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 4, border: "none", background: "none", color: "var(--on-surface-variant)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 11.5, fontWeight: 600, flexShrink: 0 }}>${Ic("pencil-line", 14)} ${e.explanation ? "Edit" : "Add"} explanation</button>
                     </div>`}
                   </div>
+                </div>`;
+              }
+              if (e._entryKind === "membership_change") {
+                return html`<div key=${e.id} style=${Object.assign({}, SF_PANEL, { padding: "12px 16px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 })}>
+                  <span style=${{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 9px", borderRadius: "var(--radius-sm)", background: "var(--primary-fixed)", color: "var(--primary)", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>${Ic("trending-up", 13)} ${Core.describeMembershipChange(e)}</span>
+                  <span style=${{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--on-surface-variant)", marginLeft: "auto" }}>${e.authorName || "Elder"} · ${fmtEntryDate(e.createdAt)}</span>
                 </div>`;
               }
               return html`<div key=${e.id} style=${Object.assign({}, SF_PANEL, { padding: "12px 16px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 })}>

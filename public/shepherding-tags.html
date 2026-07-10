@@ -111,7 +111,12 @@
                             <input x-show="editingTagId === tag.id" type="text" x-model="editingTagName"
                                    @keydown.enter="renameTag(tag.id)" @keydown.escape="cancelRenameTag()"
                                    class="flex-grow border border-outline-variant rounded px-sm py-[2px] font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                            <div class="tag-actions flex items-center gap-sm flex-shrink-0"
+                            <!-- Membership Tags are code-defined (ADR-0012): no edit controls, a lock badge instead. -->
+                            <span x-show="tag.locked" class="flex items-center gap-xs text-outline-variant font-label-sm text-label-sm flex-shrink-0" title="Managed by the Membership Track">
+                                <span class="material-symbols-outlined text-[18px]">lock</span>
+                                <span>System</span>
+                            </span>
+                            <div x-show="!tag.locked" class="tag-actions flex items-center gap-sm flex-shrink-0"
                                  :class="editingTagId === tag.id || mergingTagId === tag.id ? '' : 'opacity-0 group-hover:opacity-100 transition-opacity'">
                                 <button x-show="editingTagId === tag.id" @click="renameTag(tag.id)"
                                     class="text-primary transition-colors" title="Save name">
@@ -148,7 +153,7 @@
                         <div x-show="mergingTagId === tag.id" class="flex flex-col gap-xs bg-surface-container-low rounded-lg p-sm">
                             <span class="text-xs text-on-surface-variant">Merge <span class="font-medium" x-text="tag.name"></span> into…</span>
                             <div class="flex flex-wrap gap-xs">
-                                <template x-for="other in shepherdingTags.filter(t => t.id !== tag.id)" :key="other.id">
+                                <template x-for="other in shepherdingTags.filter(t => t.id !== tag.id && !t.locked)" :key="other.id">
                                     <button @click="mergeTagInto(other.id)"
                                         class="tag-merge-option px-sm py-[2px] bg-surface-container text-on-surface hover:bg-primary hover:text-on-primary rounded-full font-label-md text-label-md transition-colors"
                                         x-text="other.name"></button>

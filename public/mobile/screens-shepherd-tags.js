@@ -82,10 +82,20 @@
       }).catch(function () { showToast("Error creating tag", "error"); });
     }
 
+    // A Projected Tag (ADR-0012 Membership Tags, ADR-0013 Elder Tag) is
+    // code-defined and immutable: no rename, delete, merge, or hide. Guard every
+    // mutator so the subset holds.
+    function isLocked(id) { return !!(window.ShepherdingCore && window.ShepherdingCore.isProjectedTagId(id)); }
+    function rejectLocked(id) {
+      if (isLocked(id)) { showToast("This tag is managed by the system", "error"); return true; }
+      return false;
+    }
+
     // ── Rename (identity is a stable auto-id, so carriers are untouched) ──
     function commitRename() {
       var ed = editingS[0];
       if (!ed) return;
+      if (rejectLocked(ed.id)) { editingS[1](null); return; }
       var next = ed.value.trim(), tag = tagById(ed.id);
       if (!tag) { editingS[1](null); return; }
       if (!next || next === tag.name) { editingS[1](null); return; }
@@ -101,6 +111,7 @@
       if (busyS[0]) return;
       var sourceId = mergeSourceS[0], target = tagById(targetId), source = tagById(sourceId);
       if (!source || !target || sourceId === targetId) { mergeSourceS[1](null); return; }
+      if (rejectLocked(sourceId) || rejectLocked(targetId)) { mergeSourceS[1](null); return; }
       busyS[1](true);
       data.mergeShepherdingTag(sourceId, targetId, target.name, tags).then(function () {
         tagsS[1](tags.filter(function (x) { return x.id !== sourceId; }));
@@ -118,6 +129,7 @@
       if (busyS[0]) return;
       var id = confirmDeleteS[0], tag = tagById(id);
       if (!tag) { confirmDeleteS[1](null); return; }
+      if (rejectLocked(id)) { confirmDeleteS[1](null); return; }
       busyS[1](true);
       data.deleteShepherdingTag(id, tag.hidePeople, tags).then(function () {
         tagsS[1](tags.filter(function (x) { return x.id !== id; }));
@@ -128,6 +140,7 @@
 
     // ── Visibility flags (hiddenFromOthers / hidePeople) ──
     function toggleFlag(t, field) {
+      if (rejectLocked(t.id)) return;
       var newVal = !t[field];
       data.toggleShepherdingTagFlag(t.id, field, newVal, tags).then(function () {
         tagsS[1](tags.map(function (x) { if (x.id !== t.id) return x; var patch = {}; patch[field] = newVal; return Object.assign({}, x, patch); }));
@@ -175,6 +188,7 @@
                 var ed = editingS[0];
                 var isEditing = ed && ed.id === t.id;
                 var actionsOpen = actionsOpenS[0] === t.id;
+                var locked = isLocked(t.id); // Membership Tag — code-defined, no actions (ADR-0012)
                 return html`<div key=${t.id} style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: 14 }}>
                   ${isEditing ? html`<div style=${{ display: "flex", gap: 8 }}>
                     <input autofocus value=${ed.value} onInput=${function (e) { editingS[1]({ id: t.id, value: e.target.value }); }} onKeyDown=${function (e) { if (e.key === "Enter") commitRename(); if (e.key === "Escape") editingS[1](null); }} style=${Object.assign({}, inputStyle, { flex: 1 })} />
@@ -194,7 +208,9 @@
                       <button onClick=${function () { toggleFlag(t, "hidePeople"); }} aria-label=${t.hidePeople ? "Carriers hidden from non-admins — tap to show" : "Carriers visible — tap to hide from non-admins"} tabindex=${actionsOpen ? 0 : -1} style=${Object.assign({}, iconBtn, { flexShrink: 0, color: t.hidePeople ? "var(--primary)" : "var(--on-surface-variant)" })}>${Ic(t.hidePeople ? "user-x" : "user", 16)}</button>
                       <button onClick=${function () { confirmDeleteS[1](t.id); }} aria-label=${"Delete " + t.name} tabindex=${actionsOpen ? 0 : -1} style=${Object.assign({}, iconBtn, { flexShrink: 0, color: "var(--error)" })}>${Ic("trash-2", 16)}</button>
                     </div>
-                    <button onClick=${function () { actionsOpenS[1](actionsOpen ? null : t.id); }} aria-label=${actionsOpen ? "Hide actions for " + t.name : "Show actions for " + t.name} aria-expanded=${actionsOpen} style=${Object.assign({}, iconBtn, { flexShrink: 0, transform: actionsOpen ? "rotate(180deg)" : "none", transition: "transform 0.26s ease" })}>${Ic("chevron-left", 18)}</button>
+                    ${locked
+                      ? html`<span aria-label="Managed by the Membership Track" title="Managed by the Membership Track" style=${{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0, color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 11 }}>${Ic("lock", 15)} System</span>`
+                      : html`<button onClick=${function () { actionsOpenS[1](actionsOpen ? null : t.id); }} aria-label=${actionsOpen ? "Hide actions for " + t.name : "Show actions for " + t.name} aria-expanded=${actionsOpen} style=${Object.assign({}, iconBtn, { flexShrink: 0, transform: actionsOpen ? "rotate(180deg)" : "none", transition: "transform 0.26s ease" })}>${Ic("chevron-left", 18)}</button>`}
                   </div>`}
                 </div>`;
               })}
@@ -208,7 +224,7 @@
           <p style=${{ margin: "0 0 16px", fontFamily: "var(--font-sans)", fontSize: 12, fontStyle: "italic", color: "var(--on-surface-variant)" }}>${countFor(mergeSource.id)} member${countFor(mergeSource.id) === 1 ? "" : "s"} will be moved. This cannot be undone.</p>
           <div style=${Object.assign({}, OVER, { fontSize: 10, marginBottom: 8 })}>Merge into</div>
           <div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
-            ${tags.filter(function (x) { return x.id !== mergeSource.id; }).map(function (target) {
+            ${tags.filter(function (x) { return x.id !== mergeSource.id && !isLocked(x.id); }).map(function (target) {
               return html`<button key=${target.id} onClick=${function () { doMerge(target.id); }} disabled=${busyS[0]} style=${{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "12px 14px", cursor: busyS[0] ? "default" : "pointer", opacity: busyS[0] ? 0.6 : 1, background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--on-surface)" }}>
                 ${Ic("tag", 16)}
                 <span style=${{ flex: 1 }}>${target.name}</span>

@@ -283,6 +283,19 @@
                 </div>
             </div>
 
+            <!-- Show inactive people -->
+            <div class="p-6 flex flex-col gap-3 border-t border-outline-variant/60">
+                <span class="font-label-md text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Inactive People</span>
+                <button @click="showInactive = !showInactive" type="button" class="flex items-center gap-2.5 self-start text-left">
+                    <span class="relative inline-block w-9 h-5 rounded-full transition-colors flex-shrink-0"
+                          :class="showInactive ? 'bg-primary' : 'bg-outline-variant'">
+                        <span class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200"
+                              :class="showInactive ? 'translate-x-4' : ''"></span>
+                    </span>
+                    <span class="font-body-md text-sm text-on-surface" x-text="showInactive ? 'Showing inactive people' : 'Show inactive people'"></span>
+                </button>
+            </div>
+
         </div>
     </aside>
     </div>
