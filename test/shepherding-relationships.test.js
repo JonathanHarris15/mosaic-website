@@ -304,5 +304,41 @@ test('the person picker matches on name and excludes people already chosen', asy
     const tab = await mountTab({ people: PEOPLE });
     assert.deepStrictEqual(tab.personCandidates('a').map(p => p.id), ['alice', 'cara']); // both contain "a"
     assert.deepStrictEqual(tab.personCandidates('a', ['alice']).map(p => p.id), ['cara']);
-    assert.deepStrictEqual(tab.personCandidates(''), [], 'an empty query offers nobody');
+    // The picker opens onto a browsable roster, so an empty query offers everyone.
+    assert.deepStrictEqual(tab.personCandidates('').map(p => p.id), ['alice', 'bob', 'cara']);
+});
+
+test('the open picker offers only people who can legally fill the slot it is filling', async () => {
+    const tab = await mountTab({
+        relationship_types: { t2: BIBLE_STUDY },
+        relationship_groups: { g1: { typeId: 't2', name: 'Tuesday', leaderId: 'alice', memberIds: ['bob'] } },
+        people: PEOPLE,
+    });
+
+    // A roster picker excludes everyone already holding a slot — leader included.
+    tab.openPicker('g1');
+    assert.deepStrictEqual(tab.pickerOptions.map(p => p.id), ['cara']);
+
+    // A pair slot excludes whoever is standing in the other end of the pair.
+    tab.selectType(tab.relTypes[0]);
+    tab.pickPairPerson('counterpart', { id: 'bob', name: 'Bob' });
+    tab.openPicker('holder');
+    assert.deepStrictEqual(tab.pickerOptions.map(p => p.id), ['alice', 'cara']);
+});
+
+test('the picker highlight wraps with the arrow keys, and Enter takes the highlighted person', async () => {
+    const tab = await mountTab({ relationship_types: { t1: DISCIPLESHIP }, people: PEOPLE });
+    tab.selectType(tab.relTypes[0]);
+    tab.openPicker('holder');
+
+    assert.strictEqual(tab.picker.index, 0);
+    tab.pickerMove(1);
+    assert.strictEqual(tab.picker.index, 1);
+    tab.pickerMove(-1);
+    tab.pickerMove(-1);
+    assert.strictEqual(tab.picker.index, 2, 'moving up from the first option wraps to the last');
+
+    tab.pickerChooseHighlighted(); // Cara
+    assert.strictEqual(tab.pairForm.holderId, 'cara');
+    assert.strictEqual(tab.picker.open, null, 'choosing closes the picker');
 });
