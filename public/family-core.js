@@ -109,6 +109,169 @@
         return out;
     }
 
+    // ── Family write-through (ADR-0014 s4, MS-104) ───────────────────────────
+    // The Shepherding Profile's quick-assign card can now AUTHOR Family, not just
+    // display it. It writes straight to `families` — find-or-create the Family, seat
+    // a spouse, append or pull a child — and never mints a parallel edge in
+    // `relationships`. So `families` stays the single source of truth and Family
+    // remains a Projected Relationship for display. (Supersedes ADR-0013, which made
+    // Family editable only in the Membership Directory.)
+    //
+    // These are pure PLANNERS: they return the single write to make, and a browser
+    // writer applies it — the same shape as ShepherdingCore.planTagMerge.
+    //
+    //   { valid, errors, collection: 'families', action: 'create'|'update',
+    //     familyId?, changes }
+    //
+    // `changes` is the field patch for an update, or the whole doc for a create.
+
+    const KINDS = ['spouse', 'parent', 'child'];
+
+    function refuse(errors) {
+        return { valid: false, errors, collection: 'families', action: null, familyId: null, changes: null };
+    }
+
+    // Which seat a Person takes in a Family. Husband is male, wife female; an unset
+    // sex fails closed rather than guessing (ADR-0012).
+    function seatFor(person) {
+        if (!person) return null;
+        if (person.sex === 'male') return 'husbandId';
+        if (person.sex === 'female') return 'wifeId';
+        return null;
+    }
+
+    function seatWord(seat) {
+        return seat === 'husbandId' ? 'father' : 'mother';
+    }
+
+    // Add a Family relation between `personId` and `otherId`.
+    //
+    //   spouse — seat them together (their marriage). Find-or-create.
+    //   child  — append `otherId` to the children of the Family personId is married
+    //            into. Find-or-create that Family.
+    //   parent — seat `otherId` as a parent in personId's family of origin.
+    //            Find-or-create that Family.
+    function planAddFamilyRelation(families, personId, kind, otherId, personById) {
+        if (KINDS.indexOf(kind) === -1) return refuse([`"${kind}" is not a Family relation`]);
+        if (!personId || !otherId) return refuse(['two People are required']);
+        if (personId === otherId) return refuse(['a Person cannot be their own ' + kind]);
+
+        const byId = typeof personById === 'function' ? personById : function () { return null; };
+        const self = byId(personId);
+        const other = byId(otherId);
+
+        if (kind === 'spouse') {
+            const selfSeat = seatFor(self);
+            const otherSeat = seatFor(other);
+            if (!selfSeat || !otherSeat) {
+                return refuse(['both People need a recorded sex before they can be seated as husband and wife']);
+            }
+            if (selfSeat === otherSeat) {
+                return refuse(['a Family seats one husband and one wife']);
+            }
+            const mine = familyOfSpouse(families, personId);
+            if (mine && spouseOf(mine, personId)) return refuse(['this Person already has a spouse']);
+            const theirs = familyOfSpouse(families, otherId);
+            if (theirs && spouseOf(theirs, otherId)) return refuse(['that Person already has a spouse']);
+
+            if (mine) {
+                return { valid: true, errors: [], collection: 'families', action: 'update', familyId: mine.id, changes: { [otherSeat]: otherId } };
+            }
+            return {
+                valid: true, errors: [], collection: 'families', action: 'create', familyId: null,
+                changes: { [selfSeat]: personId, [otherSeat]: otherId, childIds: [] },
+            };
+        }
+
+        if (kind === 'child') {
+            // A Person is a child in at most one Family — that is what keeps the
+            // generational walk unambiguous.
+            if (familyOfChild(families, otherId)) {
+                return refuse(['that Person is already a child in another Family (they have a family of origin)']);
+            }
+            const mine = familyOfSpouse(families, personId);
+            if (mine) {
+                const kids = (mine.childIds || []).slice();
+                if (kids.indexOf(otherId) !== -1) return refuse(['that Person is already a child of this Family']);
+                kids.push(otherId);
+                return { valid: true, errors: [], collection: 'families', action: 'update', familyId: mine.id, changes: { childIds: kids } };
+            }
+            const selfSeat = seatFor(self);
+            if (!selfSeat) return refuse(['this Person needs a recorded sex before a Family can be created for them']);
+            return {
+                valid: true, errors: [], collection: 'families', action: 'create', familyId: null,
+                changes: { [selfSeat]: personId, childIds: [otherId] },
+            };
+        }
+
+        // kind === 'parent'
+        const otherSeat = seatFor(other);
+        if (!otherSeat) return refuse(['that Person needs a recorded sex before they can be seated as a parent']);
+
+        const origin = familyOfChild(families, personId);
+        if (origin) {
+            if (origin[otherSeat]) return refuse([`this Person already has a ${seatWord(otherSeat)}`]);
+            return { valid: true, errors: [], collection: 'families', action: 'update', familyId: origin.id, changes: { [otherSeat]: otherId } };
+        }
+        return {
+            valid: true, errors: [], collection: 'families', action: 'create', familyId: null,
+            changes: { [otherSeat]: otherId, childIds: [personId] },
+        };
+    }
+
+    // Remove a Family relation. Removal is scoped to ONE individual's membership —
+    // no other Person's place in the Family changes.
+    //
+    //   spouse — vacate the OTHER spouse's seat. A spouse link is one mutual field,
+    //            so ending it necessarily ends it for both.
+    //   child  — pull `otherId` from the children. Their siblings stay put.
+    //   parent — pull `personId` from their family of origin. The Family itself is
+    //            untouched, so the siblings keep both parents and the parents keep
+    //            their other children. Because a Family seats exactly one father and
+    //            one mother, a parent cannot be removed from one child without
+    //            removing them from every sibling — so the individual leaves instead.
+    //            `alsoDetaches` reports what else this Person loses, for the confirm.
+    function planRemoveFamilyRelation(families, personId, kind, otherId) {
+        if (KINDS.indexOf(kind) === -1) return refuse([`"${kind}" is not a removable Family relation`]);
+        if (!personId || !otherId) return refuse(['two People are required']);
+
+        if (kind === 'spouse') {
+            const family = familyOfSpouse(families, personId);
+            if (!family || spouseOf(family, personId) !== otherId) {
+                return refuse(['those two are not recorded as spouses']);
+            }
+            const theirSeat = family.husbandId === otherId ? 'husbandId' : 'wifeId';
+            return { valid: true, errors: [], collection: 'families', action: 'update', familyId: family.id, changes: { [theirSeat]: null } };
+        }
+
+        if (kind === 'child') {
+            const family = familyOfSpouse(families, personId);
+            if (!family || (family.childIds || []).indexOf(otherId) === -1) {
+                return refuse(['that Person is not recorded as a child of this Family']);
+            }
+            return {
+                valid: true, errors: [], collection: 'families', action: 'update', familyId: family.id,
+                changes: { childIds: (family.childIds || []).filter(id => id !== otherId) },
+            };
+        }
+
+        // kind === 'parent'
+        const origin = familyOfChild(families, personId);
+        if (!origin || (origin.husbandId !== otherId && origin.wifeId !== otherId)) {
+            return refuse(['that Person is not recorded as a parent of this Person']);
+        }
+        return {
+            valid: true, errors: [], collection: 'families', action: 'update', familyId: origin.id,
+            changes: { childIds: (origin.childIds || []).filter(id => id !== personId) },
+            // Leaving the family of origin costs this Person the other parent and
+            // every sibling too. The card warns with this before it writes.
+            alsoDetaches: {
+                parentIds: [origin.husbandId, origin.wifeId].filter(Boolean),
+                siblingIds: (origin.childIds || []).filter(id => id !== personId),
+            },
+        };
+    }
+
     const FamilyCore = {
         familyOfSpouse,
         familyOfChild,
@@ -118,6 +281,9 @@
         siblingIds,
         familyRoleLabel,
         familyRelations,
+        // write-through (ADR-0014 s4)
+        planAddFamilyRelation,
+        planRemoveFamilyRelation,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
