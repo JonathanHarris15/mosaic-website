@@ -196,6 +196,13 @@
         <div x-show="activeTab === 'relationships'"
              class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-md">
 
+            <!-- The tab failed to load — say so plainly rather than showing an
+                 empty panel that looks like "no types yet". -->
+            <div x-show="relError" class="flex items-start gap-sm rounded-lg bg-error-container text-on-error-container p-md">
+                <span class="material-symbols-outlined text-[20px] flex-shrink-0">error</span>
+                <span class="font-body-md text-body-md" x-text="relError"></span>
+            </div>
+
             <!-- New / edit Relationship Type -->
             <div class="flex items-center justify-between">
                 <h2 class="font-title-md text-title-md text-on-surface">Relationship Types</h2>

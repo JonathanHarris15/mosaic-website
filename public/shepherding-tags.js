@@ -51,8 +51,14 @@ document.addEventListener('alpine:init', () => {
                     uid: user.uid,
                     personId: userData && userData.personId,
                 });
-                await Promise.all([this.loadTags(), this.loadRelationshipsTab()]);
-                this.loading = false;
+                // The two tabs load independently. A failure in one must not brick
+                // the other, and must not leave the page stuck on its spinner —
+                // each load owns its own errors, and `loading` clears regardless.
+                try {
+                    await Promise.all([this.loadTags(), this.loadRelationshipsTab()]);
+                } finally {
+                    this.loading = false;
+                }
             });
         },
 

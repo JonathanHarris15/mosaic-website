@@ -10,18 +10,28 @@ const assert = require('node:assert');
 
 // ── An in-memory stand-in for the Firestore compat API ────────────────────────
 
-function fakeDb(seed = {}) {
+function permissionDenied() {
+    const e = new Error('Missing or insufficient permissions.');
+    e.code = 'permission-denied';
+    return e;
+}
+
+// `denied` names collections the rules reject — e.g. relationship_groups before
+// its rule is deployed.
+function fakeDb(seed = {}, denied = []) {
     const data = JSON.parse(JSON.stringify(seed)); // { collection: { id: doc } }
     let nextId = 1;
     const coll = name => (data[name] = data[name] || {});
+    const guard = name => { if (denied.includes(name)) throw permissionDenied(); };
 
     const api = {
         _data: data,
         collection(name) {
             return {
-                get: async () => ({
-                    docs: Object.entries(coll(name)).map(([id, d]) => ({ id, data: () => d })),
-                }),
+                get: async () => {
+                    guard(name);
+                    return { docs: Object.entries(coll(name)).map(([id, d]) => ({ id, data: () => d })) };
+                },
                 orderBy: () => ({
                     get: async () => ({
                         docs: Object.entries(coll(name))
@@ -63,8 +73,8 @@ require('../public/shepherding-relationships.js');
 // Read straight out of the fake Firestore, to assert what actually got written.
 const storedIn = name => global.db._data[name] || {};
 
-async function mountTab(seed, { confirmAnswer = true } = {}) {
-    global.db = fakeDb(seed);
+async function mountTab(seed, { confirmAnswer = true, denied = [] } = {}) {
+    global.db = fakeDb(seed, denied);
     global.confirm = () => confirmAnswer;
 
     const tab = window.RelationshipsTab();
@@ -96,6 +106,18 @@ test('the tab reads a legacy directional type as its enriched equivalent', async
     assert.strictEqual(type.kind, 'pairwise');
     assert.strictEqual(type.priority, true);
     assert.strictEqual(tab.typeSummary(type), 'Pairwise · Prioritized (mentors / mentors)');
+});
+
+test('a denied collection read is absorbed, not thrown — the Tags tab must survive it', async () => {
+    // relationship_groups is a new collection: production denies the READ (not just
+    // the write) until its rule is deployed. This tab is one half of a shared page,
+    // and letting that rejection escape leaves the whole page stuck on its spinner.
+    const tab = await mountTab(
+        { relationship_types: { t1: DISCIPLESHIP }, people: PEOPLE },
+        { denied: ['relationship_groups'] });
+
+    assert.match(tab.relError, /permission|deployed/i, 'the failure is reported, not swallowed silently');
+    assert.deepStrictEqual(tab.relGroups, [], 'and the tab degrades to empty rather than half-built');
 });
 
 // ── Creating and editing Relationship Types ───────────────────────────────────

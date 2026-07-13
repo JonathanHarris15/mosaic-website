@@ -36,23 +36,36 @@ window.RelationshipsTab = () => ({
     groupForm: { name: '' },
     memberPicker: { groupId: null, name: '' },
 
+    relError: '',
+
     async loadRelationshipsTab() {
-        const [typesSnap, pairsSnap, groupsSnap, peopleSnap] = await Promise.all([
-            db.collection('relationship_types').get(),
-            db.collection('relationships').get(),
-            db.collection('relationship_groups').get(),
-            db.collection('people').orderBy('name', 'asc').get(),
-        ]);
-        // Legacy `directional` docs are normalized on read, so the tab works
-        // before the MS-102 backfill has run (ADR-0014 s6).
-        this.relTypes = typesSnap.docs
-            .map(d => RelationshipCore.normalizeType({ id: d.id, ...d.data() }))
-            .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        this.relPairs = pairsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        this.relGroups = groupsSnap.docs.map(d => ({
-            id: d.id, leaderId: null, memberIds: [], ...d.data(),
-        }));
-        this.relPeople = peopleSnap.docs.map(d => ({ id: d.id, name: d.data().name || d.id }));
+        // This tab owns its own failures. It is one half of a shared page, and a
+        // Firestore error here (most likely `relationship_groups` before its rule
+        // is deployed) must not take the Tags tab down with it.
+        try {
+            const [typesSnap, pairsSnap, groupsSnap, peopleSnap] = await Promise.all([
+                db.collection('relationship_types').get(),
+                db.collection('relationships').get(),
+                db.collection('relationship_groups').get(),
+                db.collection('people').orderBy('name', 'asc').get(),
+            ]);
+            // Legacy `directional` docs are normalized on read, so the tab works
+            // before the MS-102 backfill has run (ADR-0014 s6).
+            this.relTypes = typesSnap.docs
+                .map(d => RelationshipCore.normalizeType({ id: d.id, ...d.data() }))
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            this.relPairs = pairsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            this.relGroups = groupsSnap.docs.map(d => ({
+                id: d.id, leaderId: null, memberIds: [], ...d.data(),
+            }));
+            this.relPeople = peopleSnap.docs.map(d => ({ id: d.id, name: d.data().name || d.id }));
+            this.relError = '';
+        } catch (e) {
+            console.error('Error loading relationships:', e);
+            this.relError = (e && e.code === 'permission-denied')
+                ? 'Relationships could not load: this account lacks permission, or the relationship_groups rule has not been deployed yet.'
+                : 'Relationships could not load.';
+        }
     },
 
     // ── Reading the model ─────────────────────────────────────────────────────
