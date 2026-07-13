@@ -503,20 +503,47 @@
     ctx.setLineDash([]);
   };
 
+  // Is a world-space point inside this hull? Ray-casting; the drawn blob is a
+  // smoothing of the hull, so the hull itself is the right hit region.
+  RelationsViewer.prototype.pointInHull = function (hull, x, y) {
+    if (!hull || hull.length < 3) return false;
+    var inside = false;
+    for (var i = 0, j = hull.length - 1; i < hull.length; j = i++) {
+      var xi = hull[i].x, yi = hull[i].y, xj = hull[j].x, yj = hull[j].y;
+      if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / ((yj - yi) || 1e-9) + xi)) inside = !inside;
+    }
+    return inside;
+  };
+
   // Group names ride in screen space so they stay level and legible at any zoom.
-  RelationsViewer.prototype.drawGroupLabels = function (focusGroupIds) {
+  //
+  // A name is shown ONLY while the pointer is inside that group's bubble. With
+  // several overlapping groups on screen, showing every name at once buried the
+  // graph under chips — and the names were the least useful thing on it, since the
+  // bubble already carries the group's identity by colour. Hovering into a region
+  // is the natural way to ask "which one is this?".
+  RelationsViewer.prototype.drawGroupLabels = function () {
     var ctx = this.ctx, self = this;
     if (!this.visGroups || !this.visGroups.length) return;
+    var p = this.pointer;
+    if (!p) return;
+
     var tx = this.cam.tx, ty = this.cam.ty, k = this.cam.k;
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
 
-    this.visGroups.forEach(function (gr) {
+    // Smallest first: when bubbles nest, the innermost group is the one you meant.
+    var hovered = this.visGroups.filter(function (gr) {
+      return self.pointInHull(gr._hull, p.x, p.y);
+    }).sort(function (a, b) { return a.memberNodes.length - b.memberNodes.length; });
+    if (!hovered.length) return;
+
+    // Stack the chips when the pointer sits in several overlapping groups at once,
+    // so each name stays readable instead of printing on top of the last.
+    hovered.forEach(function (gr, i) {
       var hull = gr._hull;
-      if (!hull || !hull.length) return;
-      var faded = focusGroupIds && !focusGroupIds[gr.id];
       var top = hull[0];
-      hull.forEach(function (p) { if (p.y < top.y) top = p; });
-      var sx = top.x * k + tx, sy = top.y * k + ty - 13;
+      hull.forEach(function (q) { if (q.y < top.y) top = q; });
+      var sx = top.x * k + tx, sy = top.y * k + ty - 13 - i * 26;
       if (sx < -140 || sx > self.W + 140 || sy < -20 || sy > self.H + 20) return;
 
       ctx.font = "600 11.5px 'Work Sans', sans-serif";
@@ -525,7 +552,7 @@
       var boxW = padX * 2 + dot + gap + w;
       var bx = sx - boxW / 2, by = sy - h / 2;
 
-      ctx.globalAlpha = faded ? 0.22 : 1;
+      ctx.globalAlpha = 1;
       ctx.fillStyle = 'rgba(251,247,240,0.94)';           // parchment chip
       self.roundRect(bx, by, boxW, h, 7); ctx.fill();
       ctx.strokeStyle = self.hexA(gr.colour, 0.55);
@@ -676,7 +703,7 @@
     ctx.globalAlpha = 1;
 
     // Group names last, so nothing overdraws them.
-    this.drawGroupLabels(focusGroupIds);
+    this.drawGroupLabels();
   };
   RelationsViewer.prototype.drawNode = function (n, alpha, focusId) {
     var ctx = this.ctx, r = n.elder ? 22 : 16;
@@ -784,7 +811,13 @@
       return;
     }
     var q = this.toWorld(e);
-    if (q.mx < 0 || q.my < 0 || q.mx > this.W || q.my > this.H) { if (this.hoverId) { this.hoverId = null; this.canvas.style.cursor = 'default'; } return; }
+    if (q.mx < 0 || q.my < 0 || q.mx > this.W || q.my > this.H) {
+      this.pointer = null;
+      if (this.hoverId) { this.hoverId = null; this.canvas.style.cursor = 'default'; }
+      return;
+    }
+    // The pointer in world space — a group names itself only while you are inside it.
+    this.pointer = { x: q.x, y: q.y };
     var hit = this.hitNode(q.x, q.y), id = hit ? hit.id : null;
     if (id !== this.hoverId) { this.hoverId = id; this.canvas.style.cursor = id ? 'pointer' : 'default'; }
   };
