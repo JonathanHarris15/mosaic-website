@@ -1,14 +1,24 @@
-// Manage Tags — the full-page home for creating, renaming, merging, deleting,
-// and flagging Shepherding Tags. Split out of the Shepherd Dashboard, where it
-// used to be a modal. The dashboard still reads tags (for Filtered View filters
-// and display); this page owns every write. Tag identity is a stable auto-id
-// independent of the name (ADR-0011), so a Rename touches only the name field
-// and a Merge re-points carriers and their Tag Changes onto the survivor.
+// Manage Tags and Relationships — the full-page home for the elder-only
+// vocabulary. Two tabs (MS-103, ADR-0014):
+//
+//   Tags          — create, rename, merge, delete and flag Shepherding Tags.
+//                   Unchanged from when this page was just "Manage Tags".
+//   Relationships — define Relationship Types and manage who holds them.
+//                   Lives in shepherding-relationships.js, mixed in below.
+//
+// The dashboard still reads tags (for Filtered View filters and display); this
+// page owns every write. Tag identity is a stable auto-id independent of the name
+// (ADR-0011), so a Rename touches only the name field and a Merge re-points
+// carriers and their Tag Changes onto the survivor.
 
 document.addEventListener('alpine:init', () => {
     Alpine.data('shepherdingTags', () => ({
+        ...window.RelationshipsTab(),
+
         currentUser: null,
         currentUserRole: null,
+
+        activeTab: 'tags', // 'tags' | 'relationships'
 
         shepherdingTags: [],
         newTagName: '',
@@ -41,7 +51,7 @@ document.addEventListener('alpine:init', () => {
                     uid: user.uid,
                     personId: userData && userData.personId,
                 });
-                await this.loadTags();
+                await Promise.all([this.loadTags(), this.loadRelationshipsTab()]);
                 this.loading = false;
             });
         },

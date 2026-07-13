@@ -5,9 +5,9 @@
     <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
     <script src="mobile-shell.js"></script>
     <link rel="stylesheet" href="mobile-shell.css" />
-    <script>window.MOBILE_HEADER = { title: 'Manage Tags', back: 'mobile.html#/shepherd' };</script>
+    <script>window.MOBILE_HEADER = { title: 'Manage Tags and Relationships', back: 'mobile.html#/shepherd' };</script>
     <script src="mobile-shell-header.js"></script>
-    <title>Manage Tags | Mosaic</title>
+    <title>Manage Tags and Relationships | Mosaic</title>
 
 
 
@@ -84,11 +84,30 @@
 
         <!-- Page Title -->
         <div>
-            <h1 class="font-headline-lg text-headline-lg text-primary">Manage Tags</h1>
-            <p class="font-body-md text-body-md text-on-surface-variant mt-xs">Create, rename, merge, and delete shepherding tags. Hover a tag for its actions.</p>
+            <h1 class="font-headline-lg text-headline-lg text-primary">Manage Tags and Relationships</h1>
+            <p class="font-body-md text-body-md text-on-surface-variant mt-xs"
+               x-text="activeTab === 'tags'
+                   ? 'Create, rename, merge, and delete shepherding tags. Hover a tag for its actions.'
+                   : 'Define Relationship Types and manage who holds them. Types and named groups can only be created here.'"></p>
         </div>
 
-        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-md">
+        <!-- Tabs -->
+        <div class="flex gap-xs border-b border-outline-variant" role="tablist">
+            <button role="tab" @click="activeTab = 'tags'"
+                :aria-selected="activeTab === 'tags'"
+                :class="activeTab === 'tags' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'"
+                class="px-md py-sm -mb-px border-b-2 font-label-md text-label-md transition-colors">
+                Tags
+            </button>
+            <button role="tab" @click="activeTab = 'relationships'"
+                :aria-selected="activeTab === 'relationships'"
+                :class="activeTab === 'relationships' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'"
+                class="px-md py-sm -mb-px border-b-2 font-label-md text-label-md transition-colors">
+                Relationships
+            </button>
+        </div>
+
+        <div x-show="activeTab === 'tags'" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-md">
 
             <!-- Create new tag -->
             <div class="flex gap-sm">
@@ -169,6 +188,229 @@
                 </li>
             </ul>
         </div>
+
+        <!-- ── Relationships tab ─────────────────────────────────────────────
+             The one home for relationship vocabulary (ADR-0014). A type is a
+             kind × priority structure; selecting one manages who holds it —
+             the pairs of a Pairwise type, or the named groups of a Group type. -->
+        <div x-show="activeTab === 'relationships'"
+             class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col gap-md">
+
+            <!-- New / edit Relationship Type -->
+            <div class="flex items-center justify-between">
+                <h2 class="font-title-md text-title-md text-on-surface">Relationship Types</h2>
+                <button x-show="!showTypeForm" @click="startNewType()"
+                    class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors">
+                    New Relationship Type
+                </button>
+            </div>
+
+            <div x-show="showTypeForm" class="flex flex-col gap-sm bg-surface-container-low rounded-lg p-md">
+                <input type="text" x-model="typeForm.name" placeholder="Type name (e.g. Discipleship, Bible Study)"
+                       class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+
+                <div class="flex flex-wrap gap-md">
+                    <!-- Kind is fixed once the type exists: flipping it would orphan every instance. -->
+                    <label class="flex flex-col gap-xs">
+                        <span class="font-label-sm text-label-sm text-on-surface-variant">Kind</span>
+                        <select x-model="typeForm.kind" :disabled="editingTypeId"
+                            class="border border-outline-variant rounded-lg px-sm py-xs bg-surface font-body-md text-body-md disabled:opacity-50 disabled:cursor-not-allowed">
+                            <option value="pairwise">Pairwise — connects two people</option>
+                            <option value="group">Group — a roster of many</option>
+                        </select>
+                        <span x-show="editingTypeId" class="font-label-sm text-label-sm text-outline-variant">Kind cannot be changed after creation.</span>
+                    </label>
+
+                    <label class="flex items-center gap-xs self-end pb-xs">
+                        <input type="checkbox" x-model="typeForm.priority" class="rounded border-outline-variant" />
+                        <span class="font-label-md text-label-md text-on-surface">Prioritized (one side leads)</span>
+                    </label>
+                </div>
+
+                <!-- The label fields depend on kind × priority. -->
+                <div x-show="!typeForm.priority" class="flex flex-col gap-xs">
+                    <input type="text" x-model="typeForm.label" placeholder="Label — the one symmetric name (e.g. Friend, Participant)"
+                           class="border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                </div>
+                <div x-show="typeForm.priority && typeForm.kind === 'pairwise'" class="flex flex-wrap gap-sm">
+                    <input type="text" x-model="typeForm.holderLabel" placeholder="Holder Label (e.g. Discipler)"
+                           class="flex-1 border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                    <input type="text" x-model="typeForm.counterpartLabel" placeholder="Counterpart Label (e.g. Disciplee)"
+                           class="flex-1 border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                </div>
+                <div x-show="typeForm.priority && typeForm.kind === 'group'" class="flex flex-wrap gap-sm">
+                    <input type="text" x-model="typeForm.leaderLabel" placeholder="Leader Label (e.g. Leader)"
+                           class="flex-1 border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                    <input type="text" x-model="typeForm.memberLabel" placeholder="Member Label (e.g. Member)"
+                           class="flex-1 border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                </div>
+
+                <div class="flex gap-sm">
+                    <button @click="saveType()"
+                        class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors"
+                        x-text="editingTypeId ? 'Save changes' : 'Create type'"></button>
+                    <button @click="resetTypeForm()"
+                        class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-error transition-colors">Cancel</button>
+                </div>
+            </div>
+
+            <!-- Type list. Selecting a type opens its instances. -->
+            <ul class="flex flex-col gap-xs">
+                <template x-for="type in relTypes" :key="type.id">
+                    <li class="group flex flex-col gap-xs rounded-lg border border-transparent hover:border-outline-variant transition-colors">
+                        <div class="flex items-center justify-between gap-sm px-sm py-sm">
+                            <button @click="selectType(type)" class="flex-grow text-left">
+                                <span class="font-body-md text-on-surface" x-text="type.name"></span>
+                                <span class="block font-label-sm text-label-sm text-on-surface-variant" x-text="typeSummary(type)"></span>
+                            </button>
+                            <div class="flex items-center gap-sm flex-shrink-0">
+                                <span class="font-label-sm text-label-sm text-outline-variant"
+                                      x-text="instanceCount(type.id) + (type.kind === 'group' ? ' group(s)' : ' pair(s)')"></span>
+                                <button @click="startEditType(type)" class="text-outline-variant hover:text-primary transition-colors" title="Edit labels and priority">
+                                    <span class="material-symbols-outlined text-[20px]">edit</span>
+                                </button>
+                                <button @click="deleteType(type)" class="text-on-surface-variant hover:text-error transition-colors" title="Delete type">
+                                    <span class="material-symbols-outlined text-[20px]">delete</span>
+                                </button>
+                                <span class="material-symbols-outlined text-[20px] text-outline-variant"
+                                      x-text="selectedTypeId === type.id ? 'expand_less' : 'expand_more'"></span>
+                            </div>
+                        </div>
+
+                        <!-- ── Who holds this type ────────────────────────────── -->
+                        <div x-show="selectedTypeId === type.id" class="bg-surface-container-low rounded-lg p-md flex flex-col gap-sm mx-sm mb-sm">
+
+                            <!-- Pairwise: the pairs -->
+                            <template x-if="type.kind === 'pairwise'">
+                                <div class="flex flex-col gap-sm">
+                                    <div class="flex flex-col gap-xs">
+                                        <template x-for="pair in pairsForType(type.id)" :key="pair.id">
+                                            <div class="flex items-center justify-between gap-sm px-sm py-xs bg-surface rounded">
+                                                <span class="font-body-md text-body-md text-on-surface" x-text="pairSentence(pair, type)"></span>
+                                                <button @click="removePair(pair)" class="text-on-surface-variant hover:text-error transition-colors flex-shrink-0">
+                                                    <span class="material-symbols-outlined text-[18px]">close</span>
+                                                </button>
+                                            </div>
+                                        </template>
+                                        <span x-show="pairsForType(type.id).length === 0" class="text-xs italic text-on-surface-variant">Nobody holds this type yet.</span>
+                                    </div>
+
+                                    <!-- Add a pair. For a Prioritized type the first slot is the priority holder. -->
+                                    <div class="flex flex-wrap gap-sm items-start">
+                                        <div class="flex-1 min-w-[160px] relative">
+                                            <input type="text" x-model="pairForm.holderName" @input="pairForm.holderId = null"
+                                                   :placeholder="type.priority ? labelFor(type, 'holder') : 'Person'"
+                                                   class="w-full border border-outline-variant rounded-lg px-sm py-xs font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                                            <div x-show="!pairForm.holderId && personCandidates(pairForm.holderName, [pairForm.counterpartId]).length"
+                                                 class="absolute z-10 mt-1 w-full bg-surface border border-outline-variant rounded-lg shadow-lg">
+                                                <template x-for="p in personCandidates(pairForm.holderName, [pairForm.counterpartId])" :key="p.id">
+                                                    <button @click="pickPairPerson('holder', p)"
+                                                        class="block w-full text-left px-sm py-xs font-body-md text-body-md hover:bg-surface-container" x-text="p.name"></button>
+                                                </template>
+                                            </div>
+                                        </div>
+                                        <span class="pt-xs text-outline-variant" x-text="type.priority ? '→' : '↔'"></span>
+                                        <div class="flex-1 min-w-[160px] relative">
+                                            <input type="text" x-model="pairForm.counterpartName" @input="pairForm.counterpartId = null"
+                                                   :placeholder="type.priority ? labelFor(type, 'counterpart') : 'Person'"
+                                                   class="w-full border border-outline-variant rounded-lg px-sm py-xs font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                                            <div x-show="!pairForm.counterpartId && personCandidates(pairForm.counterpartName, [pairForm.holderId]).length"
+                                                 class="absolute z-10 mt-1 w-full bg-surface border border-outline-variant rounded-lg shadow-lg">
+                                                <template x-for="p in personCandidates(pairForm.counterpartName, [pairForm.holderId])" :key="p.id">
+                                                    <button @click="pickPairPerson('counterpart', p)"
+                                                        class="block w-full text-left px-sm py-xs font-body-md text-body-md hover:bg-surface-container" x-text="p.name"></button>
+                                                </template>
+                                            </div>
+                                        </div>
+                                        <button @click="addPair()" :disabled="!pairForm.holderId || !pairForm.counterpartId"
+                                            class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                                            Add
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Group: the named Relationship Groups -->
+                            <template x-if="type.kind === 'group'">
+                                <div class="flex flex-col gap-sm">
+                                    <template x-for="group in groupsForType(type.id)" :key="group.id">
+                                        <div class="flex flex-col gap-xs bg-surface rounded p-sm">
+                                            <div class="flex items-center justify-between">
+                                                <span class="font-medium font-body-md text-on-surface" x-text="group.name"></span>
+                                                <button @click="deleteGroup(group)" class="text-on-surface-variant hover:text-error transition-colors">
+                                                    <span class="material-symbols-outlined text-[18px]">delete</span>
+                                                </button>
+                                            </div>
+
+                                            <!-- Leader (Prioritized groups only). May sit empty. -->
+                                            <div x-show="type.priority" class="flex items-center gap-xs flex-wrap">
+                                                <span class="font-label-sm text-label-sm text-on-surface-variant" x-text="labelFor(type, 'leader') + ':'"></span>
+                                                <template x-if="group.leaderId">
+                                                    <span class="flex items-center gap-xs px-sm py-[2px] bg-primary/10 text-primary rounded-full font-label-md text-label-md">
+                                                        <span x-text="personName(group.leaderId)"></span>
+                                                        <button @click="clearGroupLeader(group)" title="Stand down">
+                                                            <span class="material-symbols-outlined text-[14px]">close</span>
+                                                        </button>
+                                                    </span>
+                                                </template>
+                                                <span x-show="!group.leaderId" class="text-xs italic text-on-surface-variant">none yet — pick from the roster below</span>
+                                            </div>
+
+                                            <!-- Roster -->
+                                            <div class="flex flex-wrap gap-xs items-center">
+                                                <template x-for="mid in group.memberIds" :key="mid">
+                                                    <span class="flex items-center gap-xs px-sm py-[2px] bg-surface-container rounded-full font-label-md text-label-md">
+                                                        <span x-text="personName(mid)"></span>
+                                                        <button x-show="type.priority && !group.leaderId" @click="setGroupLeader(group, mid)"
+                                                                :title="'Make ' + labelFor(type, 'leader')" class="text-outline-variant hover:text-primary">
+                                                            <span class="material-symbols-outlined text-[14px]">arrow_upward</span>
+                                                        </button>
+                                                        <button @click="removeGroupMember(group, mid)" class="text-outline-variant hover:text-error">
+                                                            <span class="material-symbols-outlined text-[14px]">close</span>
+                                                        </button>
+                                                    </span>
+                                                </template>
+                                                <span x-show="group.memberIds.length === 0" class="text-xs italic text-on-surface-variant">empty roster</span>
+                                            </div>
+
+                                            <!-- Add a member -->
+                                            <div class="relative w-full max-w-[240px]">
+                                                <input type="text" placeholder="Add someone…"
+                                                       :value="memberPicker.groupId === group.id ? memberPicker.name : ''"
+                                                       @input="memberPicker = { groupId: group.id, name: $event.target.value }"
+                                                       class="w-full border border-outline-variant rounded-lg px-sm py-xs font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                                                <div x-show="memberPicker.groupId === group.id && personCandidates(memberPicker.name, [group.leaderId, ...group.memberIds]).length"
+                                                     class="absolute z-10 mt-1 w-full bg-surface border border-outline-variant rounded-lg shadow-lg">
+                                                    <template x-for="p in personCandidates(memberPicker.name, [group.leaderId, ...group.memberIds])" :key="p.id">
+                                                        <button @click="addGroupMember(group, p)"
+                                                            class="block w-full text-left px-sm py-xs font-body-md text-body-md hover:bg-surface-container" x-text="p.name"></button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <span x-show="groupsForType(type.id).length === 0" class="text-xs italic text-on-surface-variant">No groups of this type yet.</span>
+
+                                    <!-- New named group. A fresh group is leaderless and empty — both valid. -->
+                                    <div class="flex gap-sm">
+                                        <input type="text" x-model="groupForm.name" placeholder="New group name (e.g. Tuesday Bible Study)"
+                                               @keydown.enter="createGroup()"
+                                               class="flex-grow border border-outline-variant rounded-lg px-sm py-xs font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                                        <button @click="createGroup()" :disabled="!groupForm.name.trim()"
+                                            class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                                            Create group
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </li>
+                </template>
+                <li x-show="relTypes.length === 0" class="text-on-surface-variant italic text-sm px-sm py-md">
+                    No Relationship Types yet. Create one above.
+                </li>
+            </ul>
+        </div>
     </main>
 
     <!-- Toast -->
@@ -180,6 +422,9 @@
 
     <script src="shepherding-core.js"></script>
     <script src="shepherding-blur.js"></script>
+    <script src="relationship-core.js"></script>
+    <script src="relationship-group-core.js"></script>
+    <script src="shepherding-relationships.js"></script>
     <script src="shepherding-tags.js"></script>
 </body>
 </html>
