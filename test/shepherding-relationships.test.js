@@ -94,6 +94,35 @@ const BIBLE_STUDY = {
 };
 const PEOPLE = { alice: { name: 'Alice' }, bob: { name: 'Bob' }, cara: { name: 'Cara' } };
 
+// ── Composition into the page's Alpine component ──────────────────────────────
+// The tab is folded into the Tags component that owns the page. Getting that
+// fold wrong is invisible to every test that builds the tab directly, and it
+// silently broke the whole detail pane once already.
+
+test('folding the tab into the page component keeps its getters live', async () => {
+    global.db = fakeDb({ relationship_types: { t1: DISCIPLESHIP }, people: PEOPLE });
+
+    // Exactly what shepherding-tags.js does.
+    const page = window.withRelationshipsTab({
+        activeTab: 'tags',
+        showToast() {},
+    });
+    await page.loadRelationshipsTab();
+
+    // `selectedType` and `pickerOptions` are getters. Object spread would have
+    // evaluated them once — at page load, when relTypes was still empty — and
+    // frozen the results, so the detail pane could never open.
+    page.selectedTypeId = 't1';
+    assert.ok(page.selectedType, 'selectedType must recompute after a type is selected');
+    assert.strictEqual(page.selectedType.name, 'Discipleship');
+
+    page.openPicker('holder');
+    assert.strictEqual(page.pickerOptions.length, 3, 'pickerOptions must recompute when a picker opens');
+
+    // And the Tags half is still intact.
+    assert.strictEqual(page.activeTab, 'tags');
+});
+
 // ── Loading ───────────────────────────────────────────────────────────────────
 
 test('the tab reads a legacy directional type as its enriched equivalent', async () => {

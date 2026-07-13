@@ -11,6 +11,15 @@
 // model logic lives in RelationshipCore / RelationshipGroupCore — this layer only
 // loads, writes, and confirms.
 
+// Fold this tab into the Tags component that owns the page.
+//
+// This must NOT be done with object spread. `{ ...RelationshipsTab() }` *evaluates*
+// every getter and copies the resulting value — so `selectedType` and
+// `pickerOptions` would be frozen at whatever they returned on page load (null and
+// []), and never recompute. Copying the property descriptors keeps them live.
+window.withRelationshipsTab = (component) =>
+    Object.defineProperties(component, Object.getOwnPropertyDescriptors(window.RelationshipsTab()));
+
 window.RelationshipsTab = () => ({
     // Vocabulary and instances.
     relTypes: [],

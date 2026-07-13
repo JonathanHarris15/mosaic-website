@@ -12,8 +12,10 @@
 // carriers and their Tag Changes onto the survivor.
 
 document.addEventListener('alpine:init', () => {
-    Alpine.data('shepherdingTags', () => ({
-        ...window.RelationshipsTab(),
+    // withRelationshipsTab, not object spread: the Relationships tab exposes getters
+    // (selectedType, pickerOptions) and spreading would freeze them at their
+    // page-load values. See shepherding-relationships.js.
+    Alpine.data('shepherdingTags', () => window.withRelationshipsTab({
 
         currentUser: null,
         currentUserRole: null,
@@ -320,3 +322,4 @@ document.addEventListener('alpine:init', () => {
         },
     }));
 });
+
