@@ -39,11 +39,26 @@ Both Apple and Google require a public web page describing what data the app col
 It just needs to exist at a real URL — e.g. add `public/privacy.html` and deploy, giving
 you `https://mosaic-hymn-database.web.app/privacy.html`.
 
-### 2. A demo account for Apple
+### 2. A demo account for the reviewers
 
-The app is behind a login. **Apple's reviewer will reject a build they cannot get into.**
-Create a real Firebase user with a plain viewer role, and give App Store Connect its
-email and password in the TestFlight "Test Information" section.
+The app is behind a login, and **a reviewer who cannot get in will reject the build.**
+Both stores have a specific place to hand them working credentials.
+
+Create a real Firebase user — a normal email/password account with a plain **viewer**
+role, so the reviewer can see the app working but cannot change or delete anything real.
+Something like `appreview@yourchurch.org`. Then:
+
+- **Apple.** App Store Connect → your app → **TestFlight** tab → **Test Information** in
+  the left sidebar → scroll to the **Review Information** section → tick **"Sign-in
+  required"**, which reveals **Username** and **Password** fields. Put the account's
+  email and password there. The **Notes** box on the same page is worth using too: say
+  it's a private tool for one church's members and that accounts are created by an
+  administrator, so there is deliberately no sign-up screen. That pre-empts the obvious
+  "we couldn't create an account" rejection.
+- **Google.** Play Console → **App content** → **App access** → choose "All or some
+  functionality is restricted" and add the same email and password there.
+
+Do this once. Both stores keep the credentials on file for future builds.
 
 ---
 
@@ -100,9 +115,9 @@ Your upload file lands at `android/app/build/outputs/bundle/release/app-release.
 
 1. **Create app** — name "Mosaic Manager", app, free.
 2. **Complete the "App content" section.** This is the boring hour: privacy policy URL,
-   data safety questionnaire, content rating, target audience, "no ads", "not a news
-   app", "not a government app". Google will not let you release anything until these
-   are all green.
+   **App access** (where the demo account goes — see prerequisites), data safety
+   questionnaire, content rating, target audience, "no ads", "not a news app", "not a
+   government app". Google will not let you release anything until these are all green.
 3. **Testing → Internal testing → Testers.** Create an email list. Every member who
    wants the app gives you the Google account email they use on their phone. Cap is
    **100 testers**.
@@ -183,8 +198,10 @@ Processing on Apple's side takes 5–30 minutes.
 
 In App Store Connect → your app → **TestFlight**:
 
-1. Fill in **Test Information**: beta app description, feedback email, your privacy
-   policy URL, and — critically — the **demo account** email and password from the
+1. Open **Test Information** in the left sidebar and fill it in: beta app description,
+   feedback email, and your privacy policy URL (`/privacy.html` on your Firebase site).
+   Then, in the **Review Information** section further down that same page, tick
+   **"Sign-in required"** and enter the **demo account** email and password from the
    prerequisites. Skipping this is the number one cause of rejection for a login-gated
    app.
 2. Create an **External** testing group (not Internal — Internal is capped at 100 people
