@@ -53,6 +53,7 @@
     var confirmDeleteS = useState(null); // tag id
     var busyS = useState(false);         // guards merge/delete network ops
     var toastS = useState(null);
+    var tabS = useState("tags");         // "tags" | "relationships"
 
     var people = peopleS[0], tags = tagsS[0], toast = toastS[0];
     function showToast(message, type) { toastS[1]({ message: message, type: type || "success" }); setTimeout(function () { toastS[1](null); }, 2600); }
@@ -154,17 +155,38 @@
     var mergeSource = mergeSourceS[0] ? tagById(mergeSourceS[0]) : null;
     var confirmDelete = confirmDeleteS[0] ? tagById(confirmDeleteS[0]) : null;
 
+    // Two tabs, as on the desktop (MS-106): Tags is unchanged; Relationships is the
+    // one home for relationship vocabulary. The Relations Viewer stays desktop-only.
+    var tab = tabS[0];
+    function tabBtn(key, label, icon) {
+      var on = tab === key;
+      return html`<button onClick=${function () { tabS[1](key); }}
+        style=${{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 8px", borderRadius: 999, border: "none", cursor: "pointer", background: on ? "var(--surface-container-lowest)" : "transparent", color: on ? "var(--primary)" : "var(--on-surface-variant)", boxShadow: on ? "var(--shadow-sm)" : "none", fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 700 }}>
+        ${Ic(icon, 16)} ${label}
+      </button>`;
+    }
+
     return html`
       <${Screen}>
-        <${TopBar} title="Manage Tags" onBack=${props.back} serif=${false} />
+        <${TopBar} title="Manage Tags & Relationships" onBack=${props.back} serif=${false} />
         <${Body} style=${{ padding: "16px 16px 40px" }}>
           ${!userKnown ? html`<div style=${{ display: "flex", justifyContent: "center", padding: "48px 20px", color: "var(--on-surface-variant)" }}><span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 26)}</span></div>`
           : !isElder ? html`<div style=${{ padding: "60px 24px", textAlign: "center", color: "var(--on-surface-variant)" }}><div style=${{ display: "inline-flex", opacity: 0.5 }}>${Ic("shield-alert", 40)}</div><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15, marginTop: 12 }}>Elder-only tools.</p></div>`
           : html`
-          <div style=${{ marginBottom: 18 }}>
-            <div style=${{ fontFamily: "var(--font-serif)", fontSize: 24, fontWeight: 600, color: "var(--primary)" }}>Manage Tags</div>
-            <p style=${{ margin: "4px 0 0", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)" }}>Create, rename & merge the tags used to group members across the shepherding tools.</p>
+          <div style=${{ marginBottom: 14 }}>
+            <div style=${{ fontFamily: "var(--font-serif)", fontSize: 24, fontWeight: 600, color: "var(--primary)" }}>Manage Tags & Relationships</div>
           </div>
+
+          <div style=${{ display: "flex", gap: 4, padding: 4, marginBottom: 18, background: "var(--surface-container)", border: "1px solid var(--outline-variant)", borderRadius: 999 }}>
+            ${tabBtn("tags", "Tags", "tags")}
+            ${tabBtn("relationships", "Relationships", "users")}
+          </div>
+
+          ${tab === "relationships"
+            ? html`<${M.RelationshipsTab} showToast=${showToast} user=${props.user} />`
+            : html`<${Fragment}>
+
+          <p style=${{ margin: "0 0 16px", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)" }}>Create, rename & merge the tags used to group members across the shepherding tools.</p>
 
           <div style=${Object.assign({}, OVER, { marginBottom: 8 })}>Create a Tag</div>
           <div style=${{ display: "flex", gap: 8, marginBottom: 24 }}>
@@ -215,6 +237,7 @@
                 </div>`;
               })}
             </div>`}
+          </${Fragment}>`}
           `}
         </${Body}>
 
