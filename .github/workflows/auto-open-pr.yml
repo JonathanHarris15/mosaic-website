@@ -1,0 +1,46 @@
+name: Auto-open PR for night branches
+
+# When the Midnight Agent pushes a branch named  night/<base>__<description>
+# this runs on GitHub's servers and opens a PR from that branch into <base>.
+# No api.github.com access from outside is needed — it runs inside GitHub.
+
+on:
+  push:
+    branches:
+      - 'night/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse base branch from the branch name
+        id: parse
+        run: |
+          BR="${GITHUB_REF_NAME}"          # e.g. night/mobile-port__MS-101-relationship-cores
+          REST="${BR#night/}"              # mobile-port__MS-101-relationship-cores
+          BASE="${REST%%__*}"              # mobile-port
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "head=$BR"   >> "$GITHUB_OUTPUT"
+
+      - name: Open PR if one isn't already open
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BASE="${{ steps.parse.outputs.base }}"
+          HEAD="${{ steps.parse.outputs.head }}"
+          if [ -z "$BASE" ] || [ "$BASE" = "$HEAD" ]; then
+            echo "Could not parse a base branch from '$HEAD' (expected night/<base>__<desc>); skipping."
+            exit 0
+          fi
+          existing=$(gh pr list --head "$HEAD" --state open --json number --jq 'length')
+          if [ "$existing" -gt 0 ]; then
+            echo "A PR is already open for $HEAD; nothing to do."
+            exit 0
+          fi
+          gh pr create --base "$BASE" --head "$HEAD" \
+            --title "$HEAD" \
+            --body "Automated PR opened by the Midnight Agent for \`$HEAD\` targeting \`$BASE\`."
