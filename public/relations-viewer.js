@@ -104,8 +104,11 @@
       db.collection('relationships').get(),
       db.collection('relationship_types').get(),
       db.collection('users').get().catch(function () { return { docs: [] }; }),
+      // Relationship Groups (MS-105). A brand-new collection, so tolerate its
+      // absence rather than taking the whole viewer down with it.
+      db.collection('relationship_groups').get().catch(function () { return { docs: [] }; }),
     ]).then(function (snaps) {
-      var peopleSnap = snaps[0], famSnap = snaps[1], relSnap = snaps[2], typeSnap = snaps[3], usersSnap = snaps[4];
+      var peopleSnap = snaps[0], famSnap = snaps[1], relSnap = snaps[2], typeSnap = snaps[3], usersSnap = snaps[4], groupSnap = snaps[5];
 
       // Elder-ness comes from the projected Elder Tag (MS-92). Interim fallback:
       // personIds linked to an *elder* User (super_admins excluded), so the graph
@@ -124,6 +127,7 @@
         families: toArr(famSnap),
         relationships: toArr(relSnap),
         relationshipTypes: toArr(typeSnap),
+        relationshipGroups: toArr(groupSnap),
         eldersById: eldersById,
       });
 
@@ -136,14 +140,26 @@
 
       // Edge-type registry with presentation: Family + Elder fixed, then one per
       // Relationship Type coloured from the cycling custom palette.
+      // `prio` on an edge type means its edges are directional: the `a` end is the
+      // priority holder, and the viewer draws an arrowhead at `b`. Family and Elder
+      // Assignment are structural and never directional (MS-105).
       var EDGE = {
-        family: { label: 'Family',           color: '#182F57', dash: [], w: 2.2, rest: 86,  css: 'solid', custom: false },
-        elder:  { label: 'Elder Assignment', color: '#5D94A9', dash: [], w: 1.9, rest: 128, css: 'solid', custom: false },
+        family: { label: 'Family',           color: '#182F57', dash: [], w: 2.2, rest: 86,  css: 'solid', custom: false, prio: false },
+        elder:  { label: 'Elder Assignment', color: '#5D94A9', dash: [], w: 1.9, rest: 128, css: 'solid', custom: false, prio: false },
       };
-      var customKeys = [];
+
+      // A Group-kind type has NO edges — it governs bubbles. So it gets its own
+      // toggle list and a bubble swatch, not a line in the edge-type list.
+      var customKeys = [];   // pairwise types → coloured lines
+      var groupKeys = [];    // group types    → bubbles + leader lines
       graph.customTypes.forEach(function (t) {
+        if (t.kind === 'group') {
+          EDGE[t.key] = { label: t.label, color: null, dash: [], w: 0, rest: 0, css: 'solid', custom: true, group: true, prio: t.prio };
+          groupKeys.push(t.key);
+          return;
+        }
         var pal = CUSTOM_PALETTE[customKeys.length % CUSTOM_PALETTE.length];
-        EDGE[t.key] = { label: t.label, color: pal.color, dash: pal.dash, w: 1.9, rest: pal.rest, css: pal.css, custom: true };
+        EDGE[t.key] = { label: t.label, color: pal.color, dash: pal.dash, w: 1.9, rest: pal.rest, css: pal.css, custom: true, group: false, prio: t.prio };
         customKeys.push(t.key);
       });
 
@@ -151,6 +167,9 @@
       self.byId = byId;
       self.EDGE = EDGE;
       self.customKeys = customKeys;
+      self.groupKeys = groupKeys;
+      self.groups = graph.groups;
+      self.leaderColour = graph.leaderColourByPerson;
       self.assignedElderName = graph.assignedElderName;
       self.hasData = graph.hasData;
       // default preset = Full Web (every edge type on)
@@ -158,7 +177,11 @@
     });
   };
 
-  RelationsViewer.prototype.allKeys = function () { return this.primaryKeys.concat(this.customKeys); };
+  // Group types are toggled like edge types — one switch governs a type's bubbles
+  // AND its leader lines — so they belong in the same key space as the presets.
+  RelationsViewer.prototype.allKeys = function () {
+    return this.primaryKeys.concat(this.customKeys, this.groupKeys || []);
+  };
   RelationsViewer.prototype.presetToggles = function (key) {
     var t = {}, self = this;
     this.allKeys().forEach(function (k) {
@@ -184,11 +207,44 @@
     var active = {};
     this.g.nodes.forEach(function (n) { if (st.showInactive || !n.inactive) active[n.id] = true; });
     this.visEdges = this.g.edges.filter(function (e) { return st.toggles[e.type] && active[e.a] && active[e.b]; });
+
+    // Visible Relationship Groups. A group is shown when its TYPE is toggled on —
+    // the one switch governs both the bubble and the leader line (MS-105). Members
+    // hidden by Show-inactive drop out of the hull; a group left with nobody visible
+    // simply isn't drawn this frame.
+    this.visGroups = (this.groups || []).filter(function (g) {
+      return st.toggles['rel:' + g.typeId];
+    }).map(function (g) {
+      var memberNodes = g.memberIds.map(function (id) { return self.byId[id]; })
+        .filter(function (n) { return n && active[n.id]; });
+      var leaderNode = (g.leaderId && active[g.leaderId]) ? self.byId[g.leaderId] : null;
+      return {
+        id: g.id, name: g.name, typeId: g.typeId, colour: g.colour,
+        prio: !!(self.EDGE['rel:' + g.typeId] || {}).prio,
+        memberNodes: memberNodes, leaderNode: leaderNode || null,
+      };
+    }).filter(function (g) { return g.memberNodes.length > 0; });
+
+    // Belonging to a visible group counts as being connected — otherwise a group's
+    // members would vanish under "hide isolated people" and leave an empty bubble.
     var deg = {};
     this.visEdges.forEach(function (e) { deg[e.a] = (deg[e.a] || 0) + 1; deg[e.b] = (deg[e.b] || 0) + 1; });
+    this.visGroups.forEach(function (g) {
+      g.memberNodes.forEach(function (n) { deg[n.id] = (deg[n.id] || 0) + 1; });
+      if (g.leaderNode) deg[g.leaderNode.id] = (deg[g.leaderNode.id] || 0) + 1;
+    });
+
     this.visNodes = this.g.nodes.filter(function (n) { return active[n.id] && (st.showIsolated || deg[n.id]); });
     this.shownIds = {};
     this.visNodes.forEach(function (n) { self.shownIds[n.id] = true; });
+
+    // Which groups a Person belongs to — used to light up their whole bubble on hover.
+    this.nodeGroups = {};
+    this.visGroups.forEach(function (g) {
+      g.memberNodes.forEach(function (n) { (self.nodeGroups[n.id] || (self.nodeGroups[n.id] = [])).push(g); });
+      if (g.leaderNode) (self.nodeGroups[g.leaderNode.id] || (self.nodeGroups[g.leaderNode.id] = [])).push(g);
+    });
+
     this.adj = {};
     this.visEdges.forEach(function (e) {
       (self.adj[e.a] || (self.adj[e.a] = [])).push(e.b);
@@ -215,6 +271,96 @@
     this.draw();
     this.raf = requestAnimationFrame(function () { self.loop(); });
   };
+  // ---------- group hull geometry (MS-105) ----------
+  // A bubble is a smoothed blob over the convex hull of ring-sampled points around
+  // each member node. Sampling a ring (rather than hulling the node centres) means
+  // the same code handles a one-person group — which becomes a circle — and a
+  // thirty-person group, with the padding always outside the avatars.
+
+  RelationsViewer.prototype.convexHull = function (points) {
+    var p = points.slice().sort(function (a, b) { return a.x - b.x || a.y - b.y; });
+    if (p.length < 3) return p;
+    var cross = function (o, a, b) { return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x); };
+    var lower = [], upper = [], i, pt;
+    for (i = 0; i < p.length; i++) {
+      pt = p[i];
+      while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], pt) <= 0) lower.pop();
+      lower.push(pt);
+    }
+    for (i = p.length - 1; i >= 0; i--) {
+      pt = p[i];
+      while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], pt) <= 0) upper.pop();
+      upper.push(pt);
+    }
+    lower.pop(); upper.pop();
+    return lower.concat(upper);
+  };
+
+  RelationsViewer.prototype.groupHull = function (gr) {
+    var mem = gr.memberNodes;
+    if (!mem.length) return null;
+    var pts = [], K = 14;
+    mem.forEach(function (n) {
+      var r = (n.elder ? 22 : 16) + 22; // node radius + bubble padding
+      for (var i = 0; i < K; i++) {
+        var a = i / K * Math.PI * 2;
+        pts.push({ x: n.x + Math.cos(a) * r, y: n.y + Math.sin(a) * r });
+      }
+    });
+    return this.convexHull(pts);
+  };
+
+  // Quadratic-through-midpoints: a closed curve that passes near every hull vertex,
+  // so the bubble reads as an organic region rather than a polygon.
+  RelationsViewer.prototype.tracePath = function (pts) {
+    var ctx = this.ctx, n = pts.length;
+    if (n === 1) { ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, 30, 0, Math.PI * 2); ctx.closePath(); return; }
+    if (n === 2) { ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[1].x, pts[1].y); return; }
+    ctx.beginPath();
+    ctx.moveTo((pts[n - 1].x + pts[0].x) / 2, (pts[n - 1].y + pts[0].y) / 2);
+    for (var i = 0; i < n; i++) {
+      var p1 = pts[i], p2 = pts[(i + 1) % n];
+      ctx.quadraticCurveTo(p1.x, p1.y, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
+    }
+    ctx.closePath();
+  };
+
+  RelationsViewer.prototype.nearestOnHull = function (hull, x, y) {
+    var best = null, bd = 1e18;
+    for (var i = 0; i < hull.length; i++) {
+      var a = hull[i], b = hull[(i + 1) % hull.length];
+      var abx = b.x - a.x, aby = b.y - a.y;
+      var t = Math.max(0, Math.min(1, ((x - a.x) * abx + (y - a.y) * aby) / (abx * abx + aby * aby || 1)));
+      var px = a.x + abx * t, py = a.y + aby * t;
+      var dd = (px - x) * (px - x) + (py - y) * (py - y);
+      if (dd < bd) { bd = dd; best = { x: px, y: py }; }
+    }
+    return best;
+  };
+
+  RelationsViewer.prototype.diamond = function (x, y, s, color) {
+    var ctx = this.ctx;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = color; ctx.fillRect(-s, -s, s * 2, s * 2); ctx.restore();
+  };
+
+  RelationsViewer.prototype.roundRect = function (x, y, w, h, r) {
+    var ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  };
+
+  RelationsViewer.prototype.hexA = function (hex, a) {
+    var h = String(hex).replace('#', '');
+    var n = parseInt(h, 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+  };
+
   RelationsViewer.prototype.physics = function () {
     var ns = this.visNodes; if (!ns || !ns.length) return;
     this.heat = Math.max(0, this.heat - 0.012);
@@ -243,6 +389,27 @@
       var fx = f * dx / d, fy = f * dy / d;
       a.fx += fx; a.fy += fy; b.fx -= fx; b.fy -= fy;
     });
+
+    // Group clustering (MS-105). A gentle pull toward each visible group's centroid,
+    // ADDED on top of the spring model — it changes no rest length, so the Family and
+    // Elder structure still decides the layout. Without it a group's members scatter
+    // and its bubble degenerates into a useless stretched sliver. The leader is pulled
+    // more weakly, so they settle just OUTSIDE the hull — which is what makes the
+    // single leader→bubble line read as leadership rather than membership.
+    (this.visGroups || []).forEach(function (gr) {
+      var mem = gr.memberNodes;
+      if (!mem.length) return;
+      var cx = 0, cy = 0;
+      mem.forEach(function (n) { cx += n.x; cy += n.y; });
+      cx /= mem.length; cy /= mem.length;
+      var kc = 0.013 * boost;
+      mem.forEach(function (n) { n.fx += (cx - n.x) * kc; n.fy += (cy - n.y) * kc; });
+      if (gr.leaderNode) {
+        var L = gr.leaderNode, kl = 0.008 * boost;
+        L.fx += (cx - L.x) * kl; L.fy += (cy - L.y) * kl;
+      }
+    });
+
     for (i = 0; i < ns.length; i++) {
       var n = ns[i];
       n.fx += -n.x * 0.0038; n.fy += -n.y * 0.0038;
@@ -271,6 +438,109 @@
   };
   RelationsViewer.prototype.releaseCamera = function () { this.camGoal = null; this.focusNodeId = null; };
 
+  // ---------- Relationship Group bubbles (MS-105) ----------
+  // People belong to several groups and leaders lead several, so bubbles overlap —
+  // irregularly. Three things keep that legible: fills composite with `multiply`, so
+  // an overlap darkens predictably and READS as an intersection rather than as a
+  // third colour; larger bubbles are drawn first, so a small bubble's stroke stays on
+  // top and can be traced by eye; and a Prioritized type strokes solid while a
+  // symmetric one strokes dashed, so the two kinds are distinguishable even where
+  // their colours are close.
+  RelationsViewer.prototype.drawGroups = function (focusGroupIds) {
+    var ctx = this.ctx, self = this;
+    if (!this.visGroups || !this.visGroups.length) return;
+
+    var list = this.visGroups.slice().sort(function (a, b) {
+      return b.memberNodes.length - a.memberNodes.length;
+    });
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply';
+    list.forEach(function (gr) {
+      var hull = self.groupHull(gr);
+      gr._hull = hull;
+      if (!hull) return;
+      var faded = focusGroupIds && !focusGroupIds[gr.id];
+      ctx.globalAlpha = faded ? 0.04 : 0.16;
+      ctx.fillStyle = gr.colour;
+      self.tracePath(hull); ctx.fill();
+    });
+    ctx.restore();
+
+    list.forEach(function (gr) {
+      var hull = gr._hull;
+      if (!hull) return;
+      var faded = focusGroupIds && !focusGroupIds[gr.id];
+      ctx.globalAlpha = faded ? 0.12 : 0.7;
+      ctx.strokeStyle = gr.colour;
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash(gr.prio ? [] : [7, 5]);
+      self.tracePath(hull); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // ONE line from the leader to the nearest point on the bubble — not a star to
+      // every member. That was the whole reason groups exist. A leaderless group,
+      // and any symmetric group, simply has no line.
+      if (gr.leaderNode && hull.length) {
+        var L = gr.leaderNode;
+        var p = self.nearestOnHull(hull, L.x, L.y);
+        if (p) {
+          var dx = p.x - L.x, dy = p.y - L.y;
+          var d = Math.sqrt(dx * dx + dy * dy) || 1;
+          var rL = (L.elder ? 22 : 16) + 4;
+          var sx = L.x + dx / d * rL, sy = L.y + dy / d * rL;
+          ctx.globalAlpha = faded ? 0.14 : 0.92;
+          ctx.strokeStyle = gr.colour;
+          ctx.lineWidth = 2.4;
+          ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(p.x, p.y); ctx.stroke();
+          // The diamond anchors the line to the region, so it reads as "leads this
+          // group" rather than "is connected to whoever happens to be nearest".
+          self.diamond(p.x, p.y, 4.4, gr.colour);
+        }
+      }
+    });
+    ctx.globalAlpha = 1;
+    ctx.setLineDash([]);
+  };
+
+  // Group names ride in screen space so they stay level and legible at any zoom.
+  RelationsViewer.prototype.drawGroupLabels = function (focusGroupIds) {
+    var ctx = this.ctx, self = this;
+    if (!this.visGroups || !this.visGroups.length) return;
+    var tx = this.cam.tx, ty = this.cam.ty, k = this.cam.k;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+
+    this.visGroups.forEach(function (gr) {
+      var hull = gr._hull;
+      if (!hull || !hull.length) return;
+      var faded = focusGroupIds && !focusGroupIds[gr.id];
+      var top = hull[0];
+      hull.forEach(function (p) { if (p.y < top.y) top = p; });
+      var sx = top.x * k + tx, sy = top.y * k + ty - 13;
+      if (sx < -140 || sx > self.W + 140 || sy < -20 || sy > self.H + 20) return;
+
+      ctx.font = "600 11.5px 'Work Sans', sans-serif";
+      var w = ctx.measureText(gr.name).width;
+      var dot = 7, gap = 6, padX = 9, h = 22;
+      var boxW = padX * 2 + dot + gap + w;
+      var bx = sx - boxW / 2, by = sy - h / 2;
+
+      ctx.globalAlpha = faded ? 0.22 : 1;
+      ctx.fillStyle = 'rgba(251,247,240,0.94)';           // parchment chip
+      self.roundRect(bx, by, boxW, h, 7); ctx.fill();
+      ctx.strokeStyle = self.hexA(gr.colour, 0.55);
+      ctx.lineWidth = 1;
+      self.roundRect(bx, by, boxW, h, 7); ctx.stroke();
+
+      ctx.fillStyle = gr.colour;
+      ctx.beginPath(); ctx.arc(bx + padX + dot / 2, sy, dot / 2, 0, Math.PI * 2); ctx.fill();
+
+      ctx.fillStyle = '#28324A';
+      ctx.fillText(gr.name, bx + padX + dot + gap, sy + 0.5);
+    });
+    ctx.globalAlpha = 1;
+  };
+
   // ---------- draw (verbatim) ----------
   RelationsViewer.prototype.draw = function () {
     var ctx = this.ctx; if (!ctx) return;
@@ -280,11 +550,25 @@
     ctx.translate(tx, ty); ctx.scale(k, k);
 
     var focusId = this.selectedId || this.hoverId;
-    var hi = null;
+    var hi = null, focusGroupIds = null;
     if (focusId && this.shownIds[focusId]) {
       hi = {}; hi[focusId] = true;
       (this.adj[focusId] || []).forEach(function (id) { hi[id] = true; });
+      // Focusing someone lights up every group they belong to, whole — a group is
+      // one thing, so highlighting half of it would be a lie.
+      var grs = this.nodeGroups && this.nodeGroups[focusId];
+      if (grs && grs.length) {
+        focusGroupIds = {};
+        grs.forEach(function (gr) {
+          focusGroupIds[gr.id] = true;
+          gr.memberNodes.forEach(function (n) { hi[n.id] = true; });
+          if (gr.leaderNode) hi[gr.leaderNode.id] = true;
+        });
+      }
     }
+
+    // Group bubbles sit UNDER everything — they are regions, not marks.
+    this.drawGroups(focusGroupIds);
 
     // Collapse every connection between the same two people onto ONE line.
     // A single connection draws as before; two or more render as a striped line
@@ -342,6 +626,35 @@
     });
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // Arrowheads on Prioritized relationships (Holder → Counterpart). Drawn in
+    // SCREEN space at a constant pixel size, so they stay legible when zoomed out —
+    // and drawn as a solid filled triangle after the stroke, so a dashed or dotted
+    // edge still gets a clean head. Only prioritized types get one; Family and Elder
+    // Assignment never do, or the graph would become a thicket of arrows.
+    this.visEdges.forEach(function (e) {
+      var def = self.EDGE[e.type];
+      if (!def || !def.prio) return;
+      var A = self.byId[e.a], B = self.byId[e.b];
+      if (!A || !B) return;
+      var on = !hi || (hi[e.a] && hi[e.b]);
+      var dx = B.x - A.x, dy = B.y - A.y;
+      var d = Math.sqrt(dx * dx + dy * dy) || 1;
+      dx /= d; dy /= d;
+      var bsx = B.x * k + tx, bsy = B.y * k + ty;
+      var rB = (B.elder ? 22 : 16) * k + 2.5;   // sit just outside the counterpart
+      var tipx = bsx - dx * rB, tipy = bsy - dy * rB;
+      var s = 8.5, ang = Math.atan2(dy, dx);
+      ctx.globalAlpha = hi ? (on ? 1 : 0.05) : 0.95;
+      ctx.fillStyle = def.color;
+      ctx.beginPath();
+      ctx.moveTo(tipx, tipy);
+      ctx.lineTo(tipx - Math.cos(ang - 0.42) * s, tipy - Math.sin(ang - 0.42) * s);
+      ctx.lineTo(tipx - Math.cos(ang + 0.42) * s, tipy - Math.sin(ang + 0.42) * s);
+      ctx.closePath(); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     this.visNodes.forEach(function (n) {
       var inHi = hi && hi[n.id];
@@ -361,10 +674,23 @@
       ctx.fillText(n.name, sx, sy);
     });
     ctx.globalAlpha = 1;
+
+    // Group names last, so nothing overdraws them.
+    this.drawGroupLabels(focusGroupIds);
   };
   RelationsViewer.prototype.drawNode = function (n, alpha, focusId) {
     var ctx = this.ctx, r = n.elder ? 22 : 16;
     ctx.globalAlpha = alpha;
+
+    // A leader wears a ring in the colour of the group they lead, so you can see who
+    // leads without following the line back to the bubble.
+    var lead = this.leaderColour && this.leaderColour[n.id];
+    if (lead && this.nodeGroups && this.nodeGroups[n.id]) {
+      ctx.strokeStyle = lead;
+      ctx.lineWidth = 2.4;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r + 3.5, 0, Math.PI * 2); ctx.stroke();
+    }
+
     if (n.id === focusId) {
       var sel = n.id === this.selectedId;
       ctx.beginPath(); ctx.arc(n.x, n.y, r + 7, 0, Math.PI * 2);
@@ -590,7 +916,8 @@
           '<aside data-rv="rail" class="rv-scroll" style="flex:0 0 288px;width:288px;background:var(--surface-container-lowest);border-right:1px solid var(--outline-variant);overflow-y:auto;overflow-x:hidden">' +
             '<div style="padding:20px 18px 26px;display:flex;flex-direction:column;gap:22px">' +
               '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant)">View Preset</span></div><div data-rv="presets" style="display:flex;gap:6px"></div></div>' +
-              '<div><span style="display:block;font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--outline-variant)">Relationship Types</span><div data-rv="primaryTypes"></div><div data-rv="customHdr" style="margin:12px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">hub</span> Custom Relationships</div><div data-rv="customTypes"></div><p data-rv="customNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">Custom types are elder-authored and appear here automatically as they’re created.</p></div>' +
+              '<div><span style="display:block;font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--outline-variant)">Relationship Types</span><div data-rv="primaryTypes"></div><div data-rv="customHdr" style="margin:12px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">hub</span> Custom Relationships</div><div data-rv="customTypes"></div><p data-rv="customNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">Custom types are elder-authored and appear here automatically as they’re created.</p>' +
+              '<div data-rv="groupHdr" style="margin:14px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">bubble_chart</span> Relationship Groups</div><div data-rv="groupTypes"></div><p data-rv="groupNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">One toggle governs a type’s bubbles and its leader lines. A group can be leaderless or empty — both are normal.</p></div>' +
               '<div><span style="display:block;font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--outline-variant)">Display</span>' +
                 '<div data-act="toggleIsolated" class="rv-row" style="display:flex;align-items:center;gap:11px;padding:9px 8px;border-radius:9px;cursor:pointer"><span class="msy" style="font-size:19px;color:var(--on-surface-variant)">scatter_plot</span><span style="flex:1 1 auto;font-size:13.5px;font-weight:600;color:var(--navy-900)">Show isolated people</span><span data-rv="isoBg"><span data-rv="isoKnob"></span></span></div>' +
                 '<div data-act="toggleInactive" class="rv-row" style="display:flex;align-items:center;gap:11px;padding:9px 8px;border-radius:9px;cursor:pointer"><span class="msy" style="font-size:19px;color:var(--on-surface-variant)">do_not_disturb_on</span><span style="flex:1 1 auto;font-size:13.5px;font-weight:600;color:var(--navy-900)">Show inactive people</span><span data-rv="inactBg"><span data-rv="inactKnob"></span></span></div>' +
@@ -659,6 +986,34 @@
       '<span style="font-size:12px;font-weight:600;color:var(--on-surface-variant);min-width:22px;text-align:right">' + this.edgeCount(k) + '</span>' +
       '<span style="' + sw.bg + '"><span style="' + sw.knob + '"></span></span></div>';
   };
+  // A Group type draws no lines, so a line swatch would be a lie. It gets two
+  // overlapping bubbles instead — in the colours of its own groups — and the count
+  // is groups, not edges. The one toggle governs the bubbles AND the leader lines.
+  RelationsViewer.prototype.groupTypeRow = function (k) {
+    var def = this.EDGE[k], sw = this.switchStyles(!!this.toggles[k]);
+    var typeId = k.slice(4);
+    var mine = (this.groups || []).filter(function (g) { return g.typeId === typeId; });
+    var c1 = (mine[0] && mine[0].colour) || '#8A93A6';
+    var c2 = (mine[1] && mine[1].colour) || c1;
+
+    var swatch =
+      '<span style="position:relative;width:22px;height:14px;flex:0 0 auto">' +
+        '<span style="position:absolute;left:0;top:0;width:14px;height:14px;border-radius:50%;background:' + this.hexA(c1, 0.28) + ';border:1.4px solid ' + c1 + '"></span>' +
+        '<span style="position:absolute;left:8px;top:0;width:14px;height:14px;border-radius:50%;background:' + this.hexA(c2, 0.28) + ';border:1.4px solid ' + c2 + '"></span>' +
+      '</span>';
+
+    var prioMark = def.prio
+      ? '<span title="Prioritized — a leader draws one line to the bubble" class="msy" style="font-size:15px;color:var(--on-surface-variant)">workspace_premium</span>'
+      : '';
+
+    return '<div class="rv-row" data-act="toggle:' + k + '" style="display:flex;align-items:center;gap:11px;padding:9px 8px;border-radius:9px;cursor:pointer">' +
+      swatch +
+      '<span style="flex:1 1 auto;font-size:13.5px;font-weight:600;color:var(--navy-900)">' + esc(def.label) + '</span>' +
+      prioMark +
+      '<span style="font-size:12px;font-weight:600;color:var(--on-surface-variant);min-width:22px;text-align:right">' + mine.length + '</span>' +
+      '<span style="' + sw.bg + '"><span style="' + sw.knob + '"></span></span></div>';
+  };
+
   RelationsViewer.prototype.renderTypes = function () {
     var self = this;
     this.refs.primaryTypes.innerHTML = this.primaryKeys.map(function (k) { return self.typeRow(k); }).join('');
@@ -666,6 +1021,13 @@
     var hasCustom = this.customKeys.length > 0;
     this.refs.customHdr.style.display = hasCustom ? 'flex' : 'none';
     this.refs.customNote.style.display = 'block';
+
+    var hasGroups = (this.groupKeys || []).length > 0;
+    if (this.refs.groupTypes) {
+      this.refs.groupTypes.innerHTML = (this.groupKeys || []).map(function (k) { return self.groupTypeRow(k); }).join('');
+      this.refs.groupHdr.style.display = hasGroups ? 'flex' : 'none';
+      this.refs.groupNote.style.display = hasGroups ? 'block' : 'none';
+    }
   };
   RelationsViewer.prototype.renderDisplay = function () {
     var iso = this.switchStyles(this.showIsolated), inact = this.switchStyles(this.showInactive);
