@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Relations Viewer | Mosaic</title>
+
+    <link rel="stylesheet" href="fonts.css" />
+
+    <style>
+        /* Design tokens (Mosaic seal palette) — this page uses CSS custom
+           properties directly, so the tokens are defined here rather than
+           relying on the Tailwind-class-based mosaic.css. */
+        :root {
+            --font-display: 'Noto Serif', Georgia, serif;
+            --font-serif:   'Noto Serif', Georgia, serif;
+            --font-sans:    'Work Sans', system-ui, -apple-system, sans-serif;
+
+            --navy: #182F57; --navy-900: #0E1C36; --navy-800: #14264A;
+            --ocean: #3E6181; --steel: #5D94A9; --sand: #C2B79D;
+            --gold: #B89B6A; --cream: #F2EAE2; --parchment: #FBF7F0;
+
+            --primary: #182F57; --on-primary: #F2EAE2;
+
+            --background: #F7F3ED; --on-background: #0E1C36;
+            --surface: #FBF7F0;
+            --surface-container-lowest: #ffffff;
+            --surface-container-low: #FAF5EE;
+            --surface-container: #F4ECE2;
+            --surface-container-high: #EEE4D8;
+            --surface-variant: #E8DDCD;
+            --on-surface: #0E1C36; --on-surface-variant: #5E6B82;
+
+            --outline: #8A93A6; --outline-variant: #DAD0C0;
+            --error: #A8463E; --success: #4B8A6B; --warning: #B8862E;
+        }
+        html, body { margin: 0; height: 100%; background: var(--background); }
+        * { box-sizing: border-box; }
+
+        .msy {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal; font-style: normal; line-height: 1;
+            letter-spacing: normal; text-transform: none; display: inline-block;
+            white-space: nowrap; direction: ltr;
+            -webkit-font-feature-settings: 'liga'; font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
+        }
+        .rv-scroll { scrollbar-width: thin; scrollbar-color: var(--outline-variant) transparent; }
+        .rv-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+        .rv-scroll::-webkit-scrollbar-thumb { background: var(--outline-variant); border-radius: 8px; }
+        .rv-scroll::-webkit-scrollbar-track { background: transparent; }
+        .rv-search::placeholder { color: var(--on-surface-variant); opacity: .75; }
+        .rv-search:focus { border-color: var(--steel) !important; box-shadow: 0 0 0 3px rgba(93,148,169,.20) !important; }
+        .rv-row { transition: background .15s cubic-bezier(0.2,0,0,1); }
+        .rv-row:hover { background: var(--surface-container); }
+        .rv-preset { transition: all .15s cubic-bezier(0.2,0,0,1); }
+        .rv-icobtn { transition: background .15s, color .15s; }
+        .rv-icobtn:hover { background: var(--surface-container); }
+        .rv-primary { transition: transform .12s cubic-bezier(0.2,0,0,1), box-shadow .15s; }
+        .rv-primary:hover { box-shadow: 0 8px 24px rgba(14,28,54,.14); }
+        .rv-primary:active { transform: scale(0.98); }
+        .rv-result:hover { background: var(--surface-container); }
+        #app { height: 100vh; }
+    </style>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="auth.js"></script>
+</head>
+<body>
+    <div id="app"></div>
+    <script src="relations-graph-core.js"></script>
+    <script src="relations-viewer.js"></script>
+</body>
+</html>

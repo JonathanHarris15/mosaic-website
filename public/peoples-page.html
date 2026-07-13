@@ -3,21 +3,22 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>People's Directory - Mosaic Church</title>
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script src="mosaic-theme.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400..700;1,400..700&amp;family=Work+Sans:wght@400..700&amp;display=swap" rel="stylesheet"/>
+    <title>Member Directory - Mosaic Church</title>
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+
+
     
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-storage-compat.js"></script>
+    <script src="vendor/firebase/firebase-functions-compat.js"></script>
     
     <script src="auth.js"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
     
     <style>
         [x-cloak] { display: none !important; }
@@ -54,8 +55,9 @@
     </header>
 
     <main x-show="authorized" class="flex-grow flex flex-col md:flex-row gap-margin px-margin pb-md pt-base max-w-[1600px] w-full mx-auto relative z-10">
-        <!-- Sidebar: Tags Manager — editors and above only -->
-        <aside x-show="canEdit" class="w-full md:w-80 flex-shrink-0 flex flex-col gap-4">
+        <!-- Sidebar: Tags Manager — revealed only in Edit Mode. Editors land on the
+             member view by default (editMode off) and turn this on to manage tags. -->
+        <aside x-show="editMode" class="w-full md:w-80 flex-shrink-0 flex flex-col gap-4">
             <section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col shadow-sm">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="font-headline-md text-sm uppercase tracking-wider text-primary flex items-center gap-2 flex-shrink-0">
@@ -129,9 +131,15 @@
             <div class="p-md border-b border-surface-variant/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface-container-low/50 flex-shrink-0">
                 <div class="flex items-center gap-4">
                     <h2 class="font-headline-md text-sm uppercase tracking-wider text-primary flex items-center gap-2">
-                        <span class="material-symbols-outlined text-[18px]">group</span> People's Directory <span class="text-[8px] font-mono opacity-20">v2.1</span>
+                        <span class="material-symbols-outlined text-[18px]">group</span> Member Directory <span class="text-[8px] font-mono opacity-20">v2.1</span>
                     </h2>
-                    <button x-show="canEdit" @click="showAddPersonModal = true" class="bg-primary text-on-primary text-[10px] uppercase tracking-widest px-4 py-1.5 rounded-full hover:bg-primary-container transition-all flex items-center gap-1.5 font-label-md shadow-sm">
+                    <button x-show="canEdit" @click="editMode = !editMode; if (!editMode) selectedTags = []"
+                            :class="editMode ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface hover:bg-surface-container-highest'"
+                            class="text-[10px] uppercase tracking-widest px-4 py-1.5 rounded-full transition-all flex items-center gap-1.5 font-label-md shadow-sm">
+                        <span class="material-symbols-outlined text-sm" x-text="editMode ? 'edit_off' : 'edit'"></span>
+                        <span x-text="editMode ? 'Done Editing' : 'Edit Mode'"></span>
+                    </button>
+                    <button x-show="editMode" @click="showAddPersonModal = true" class="bg-primary text-on-primary text-[10px] uppercase tracking-widest px-4 py-1.5 rounded-full hover:bg-primary-container transition-all flex items-center gap-1.5 font-label-md shadow-sm">
                         <span class="material-symbols-outlined text-sm">person_add</span> Add Person
                     </button>
                 </div>
@@ -166,20 +174,54 @@
                 </div>
             </div>
 
+            <!-- Membership Directory tabs (ADR-0012) -->
+            <div class="px-md pt-md flex items-center gap-1 border-b border-surface-variant/30">
+                <button @click="activeTab = 'members'"
+                        :class="activeTab === 'members' ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'"
+                        class="px-4 py-2 -mb-px border-b-2 font-label-md text-[11px] uppercase tracking-widest transition-colors">
+                    Members
+                </button>
+                <button @click="activeTab = 'non_members'"
+                        :class="activeTab === 'non_members' ? 'text-primary border-primary' : 'text-on-surface-variant border-transparent hover:text-primary'"
+                        class="px-4 py-2 -mb-px border-b-2 font-label-md text-[11px] uppercase tracking-widest transition-colors">
+                    Non-members
+                </button>
+            </div>
+
             <div class="flex-grow p-md">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <template x-for="person in filteredPeople" :key="person.id">
                         <div class="bg-surface border border-outline-variant/20 p-4 rounded-xl hover:border-primary/40 transition-all group relative shadow-sm hover:shadow-md">
                             <div class="flex justify-between items-start">
+                                <!-- Photo slot (photo upload wired later; shows a placeholder until a photo is set) -->
+                                <div class="flex-shrink-0 mr-3">
+                                    <div class="w-14 h-14 rounded-full bg-surface-container-high border border-outline-variant/30 flex items-center justify-center overflow-hidden">
+                                        <template x-if="person.photoUrl">
+                                            <img :src="person.photoUrl" :alt="person.name" class="w-full h-full object-cover">
+                                        </template>
+                                        <template x-if="!person.photoUrl">
+                                            <span class="material-symbols-outlined text-outline-variant text-[28px]">person</span>
+                                        </template>
+                                    </div>
+                                </div>
                                 <div class="flex-grow">
                                     <div class="flex items-center gap-2 mb-1">
                                         <h3 class="font-headline-md text-lg text-primary" x-text="person.name"></h3>
-                                        <span x-show="canEdit && person.userId"
+                                        <span class="text-[9px] px-2 py-0.5 rounded-full font-label-md uppercase tracking-widest"
+                                              :class="person.membership && person.membership.inactive ? 'bg-surface-container-high text-on-surface-variant' : 'bg-primary-fixed text-primary'"
+                                              x-text="membershipStageLabel(person)"></span>
+                                        <span x-show="editMode && person.userId"
                                               class="inline-flex items-center gap-1 bg-primary/10 text-primary text-[9px] px-2 py-0.5 rounded-full font-label-md uppercase tracking-widest"
                                               title="Linked to a website account">
                                             <span class="material-symbols-outlined text-[12px]">link</span> Account
                                         </span>
                                     </div>
+                                    <!-- Self-service: a Person viewing their own card gets a link to edit their info (MS-87) -->
+                                    <a x-show="person.userId && person.userId === currentUserUid" href="profile.html"
+                                       class="inline-flex items-center gap-1 text-primary text-[10px] font-label-md uppercase tracking-widest hover:underline mb-1">
+                                        <span class="material-symbols-outlined text-[13px]">edit</span> Edit my info
+                                        <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
+                                    </a>
                                     <div class="space-y-1">
                                         <div x-show="person.contact?.email" class="flex items-center gap-1.5 text-on-surface-variant text-xs">
                                             <span class="material-symbols-outlined text-[14px]">mail</span>
@@ -197,6 +239,16 @@
                                             <span class="material-symbols-outlined text-[14px]">cake</span>
                                             <span x-text="person.birthday"></span>
                                         </div>
+                                        <!-- Family (MS-88): spouse + children, resolved from the family graph -->
+                                        <template x-if="relationsFor(person).spouseId || relationsFor(person).childIds.length">
+                                            <div class="flex items-start gap-1.5 text-on-surface-variant text-xs">
+                                                <span class="material-symbols-outlined text-[14px]">family_restroom</span>
+                                                <span>
+                                                    <template x-if="relationsFor(person).spouseId"><span x-text="personName(relationsFor(person).spouseId)"></span></template>
+                                                    <template x-if="relationsFor(person).childIds.length"><span x-text="(relationsFor(person).spouseId ? ' · ' : '') + relationsFor(person).childIds.map(c => personName(c)).join(', ')"></span></template>
+                                                </span>
+                                            </div>
+                                        </template>
                                         <div class="flex items-center flex-wrap gap-x-3 gap-y-1 pt-1.5">
                                             <!-- Last Prayed For & Involvements Row -->
                                             <div class="flex items-center gap-2">
@@ -211,22 +263,24 @@
                                     </div>
                                     <!-- Cache Bust: 2024-05-15 18:42 -->
 
-                                    <!-- Tag Management — editors and above only; members see contact details instead -->
-                                    <div x-show="canEdit" class="mt-4 border-t border-surface-variant/30 pt-3">
+                                    <!-- Tag Management — only in Edit Mode; members see contact details instead -->
+                                    <div x-show="editMode" class="mt-4 border-t border-surface-variant/30 pt-3">
                                         <p class="font-label-md text-[9px] uppercase tracking-widest text-on-surface-variant mb-2">Tags</p>
                                         <div class="flex flex-wrap gap-1.5">
                                             <!-- Existing Tags -->
                                             <template x-for="tag in (person.tags || [])" :key="tag">
-                                                <span class="inline-flex items-center gap-1 bg-surface-container-high text-on-surface text-[10px] px-2 py-0.5 rounded-full border border-outline-variant/30 group/tag">
+                                                <span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border group/tag"
+                                                      :class="ShepherdingCore.isProjectedTagId(tag) ? 'bg-primary-fixed text-primary border-primary/20' : 'bg-surface-container-high text-on-surface border-outline-variant/30'">
+                                                    <span x-show="ShepherdingCore.isProjectedTagId(tag)" class="material-symbols-outlined text-[11px] align-middle">lock</span>
                                                     <span x-text="tag"></span>
-                                                    <button x-show="canEdit" @click="removeTag(person, tag)" class="hover:text-error transition-colors">
+                                                    <button x-show="!ShepherdingCore.isProjectedTagId(tag)" @click="removeTag(person, tag)" class="hover:text-error transition-colors">
                                                         <span class="material-symbols-outlined text-[12px] align-middle">close</span>
                                                     </button>
                                                 </span>
                                             </template>
-                                            
+
                                             <!-- Add Tag Input -->
-                                            <div x-show="canEdit" class="relative" x-data="{ open: false, tagQuery: '' }">
+                                            <div class="relative" x-data="{ open: false, tagQuery: '' }">
                                                 <button x-show="!open" @click="open = true; $nextTick(() => $refs.tagInput.focus())"
                                                         class="inline-flex items-center gap-1 bg-surface-container-lowest text-primary text-[10px] px-2 py-0.5 rounded-full border border-primary/20 hover:bg-primary-fixed transition-colors font-medium">
                                                     <span class="material-symbols-outlined text-[12px]">add</span> Add Tag
@@ -242,9 +296,9 @@
                                                            class="text-[10px] px-2 py-0.5 rounded-full border border-primary/40 focus:ring-1 focus:ring-primary outline-none w-full bg-surface-container-lowest">
                                                     
                                                     <!-- Suggestions -->
-                                                    <div x-show="tagQuery && allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(person.tags || []).includes(t)).length > 0"
+                                                    <div x-show="tagQuery && allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(person.tags || []).includes(t) && !ShepherdingCore.isProjectedTagId(t)).length > 0"
                                                          class="absolute z-20 top-full mt-1 w-full bg-white border border-outline-variant rounded-lg shadow-xl py-1 max-h-40 overflow-y-auto">
-                                                        <template x-for="tag in allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(person.tags || []).includes(t))" :key="tag">
+                                                        <template x-for="tag in allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(person.tags || []).includes(t) && !ShepherdingCore.isProjectedTagId(t))" :key="tag">
                                                             <button @click="addTag(person, tag); tagQuery = ''; open = false"
                                                                     class="w-full text-left px-3 py-1.5 text-[10px] hover:bg-primary-fixed transition-colors">
                                                                 <span x-text="tag"></span>
@@ -256,13 +310,13 @@
                                         </div>
                                     </div>
                                 </div>
-                                <button x-show="canEdit" @click="deletePerson(person.id)"
+                                <button x-show="editMode" @click="deletePerson(person.id)"
                                         class="text-error/40 hover:text-error hover:bg-error-container/30 p-1.5 rounded-full transition-all opacity-0 group-hover:opacity-100">
                                     <span class="material-symbols-outlined text-[18px]">delete</span>
                                 </button>
                             </div>
-                            <div x-show="canEdit" class="flex gap-2 mt-4">
-                                <button @click="editPerson(person)" 
+                            <div x-show="editMode" class="flex gap-2 mt-4">
+                                <button @click="editPerson(person)"
                                         class="text-[11px] bg-primary text-on-primary px-4 py-1.5 rounded-full hover:bg-primary-container transition-all flex items-center gap-1.5 font-label-md uppercase tracking-widest shadow-sm">
                                     <span class="material-symbols-outlined text-[14px]">edit</span> Edit Person
                                 </button>
@@ -478,14 +532,107 @@
                                 </div>
                             </div>
 
+                            <!-- Membership Track (ADR-0012): stage slider + Inactive toggle, editors only -->
+                            <div x-show="canEdit" class="flex flex-col gap-2 pt-2">
+                                <div class="flex items-center justify-between">
+                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Membership Track</label>
+                                    <span class="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                                          :class="selectedPerson.membership && selectedPerson.membership.inactive ? 'bg-surface-container-high text-on-surface-variant' : 'bg-primary-fixed text-primary'"
+                                          x-text="membershipStageLabel(selectedPerson)"></span>
+                                </div>
+                                <div class="p-3 bg-surface-container-lowest border border-outline-variant/20 rounded-lg flex flex-col gap-2"
+                                     :class="selectedPerson.membership && selectedPerson.membership.inactive ? 'opacity-50' : ''">
+                                    <input type="range" min="0" :max="membershipStages.length - 1" step="1"
+                                           :value="membershipIndex(selectedPerson)"
+                                           :disabled="selectedPerson.membership && selectedPerson.membership.inactive"
+                                           @change="setMembershipStageByIndex($event.target.value)"
+                                           class="w-full accent-primary cursor-pointer disabled:cursor-not-allowed">
+                                    <div class="flex justify-between text-[9px] text-on-surface-variant leading-tight">
+                                        <template x-for="(stage, i) in membershipStages" :key="stage">
+                                            <span class="flex-1 text-center px-0.5"
+                                                  :class="membershipIndex(selectedPerson) === i && !(selectedPerson.membership && selectedPerson.membership.inactive) ? 'text-primary font-semibold' : ''"
+                                                  x-text="ShepherdingCore.MEMBERSHIP_STAGE_LABEL[stage]"></span>
+                                        </template>
+                                    </div>
+                                </div>
+                                <button @click="toggleMembershipInactive()"
+                                        class="self-start inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-label-md px-3 py-1.5 rounded-lg border transition-colors"
+                                        :class="selectedPerson.membership && selectedPerson.membership.inactive ? 'bg-primary text-on-primary border-primary' : 'text-on-surface-variant border-outline-variant/50 hover:border-primary hover:text-primary'">
+                                    <span class="material-symbols-outlined text-[14px]" x-text="selectedPerson.membership && selectedPerson.membership.inactive ? 'toggle_on' : 'toggle_off'"></span>
+                                    <span x-text="selectedPerson.membership && selectedPerson.membership.inactive ? 'Inactive — click to reactivate' : 'Mark inactive'"></span>
+                                </button>
+                            </div>
+
+                            <!-- Family (ADR-0012, MS-88): editors build the household -->
+                            <div x-show="canEdit" class="flex flex-col gap-2 pt-2">
+                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Family</label>
+                                <template x-if="!selectedSpouseRole">
+                                    <p class="text-[11px] text-on-surface-variant italic">Set this person’s sex above to build their family.</p>
+                                </template>
+                                <div x-show="selectedSpouseRole" class="p-3 bg-surface-container-lowest border border-outline-variant/20 rounded-lg flex flex-col gap-3">
+                                    <!-- Spouse -->
+                                    <div class="flex flex-col gap-1" x-data="{ open: false }">
+                                        <span class="text-[9px] uppercase tracking-widest text-on-surface-variant" x-text="selectedSpouseRole === 'husband' ? 'Wife' : 'Husband'"></span>
+                                        <template x-if="selectedFamily && (selectedSpouseRole === 'husband' ? selectedFamily.wifeId : selectedFamily.husbandId)">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-sm text-on-surface" x-text="personName(selectedSpouseRole === 'husband' ? selectedFamily.wifeId : selectedFamily.husbandId)"></span>
+                                                <button @click="saveFamily({ [selectedSpouseRole === 'husband' ? 'wifeId' : 'husbandId']: null })" class="text-error/60 hover:text-error text-[11px]">remove</button>
+                                            </div>
+                                        </template>
+                                        <template x-if="!selectedFamily || !(selectedSpouseRole === 'husband' ? selectedFamily.wifeId : selectedFamily.husbandId)">
+                                            <div class="relative">
+                                                <input type="text" x-model="familySpouseQuery" @focus="open = true" placeholder="Search to set spouse..."
+                                                       class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface py-1.5 px-3">
+                                                <div x-show="familySpouseQuery && spouseCandidates.length" class="absolute z-30 top-full mt-1 w-full bg-white border border-outline-variant rounded-lg shadow-xl py-1 max-h-40 overflow-y-auto">
+                                                    <template x-for="c in spouseCandidates" :key="c.id">
+                                                        <button @click="setSpouse(c.id)" class="w-full text-left px-3 py-1.5 text-xs hover:bg-primary-fixed" x-text="c.name"></button>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                    <!-- Children -->
+                                    <div class="flex flex-col gap-1">
+                                        <span class="text-[9px] uppercase tracking-widest text-on-surface-variant">Children</span>
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <template x-for="cid in (selectedFamily ? (selectedFamily.childIds || []) : [])" :key="cid">
+                                                <span class="inline-flex items-center gap-1 bg-surface-container-high text-on-surface text-[10px] px-2 py-0.5 rounded-full border border-outline-variant/30">
+                                                    <span x-text="personName(cid)"></span>
+                                                    <button @click="removeChild(cid)" class="hover:text-error"><span class="material-symbols-outlined text-[12px] align-middle">close</span></button>
+                                                </span>
+                                            </template>
+                                        </div>
+                                        <div class="relative mt-1">
+                                            <input type="text" x-model="familyChildQuery" placeholder="Search to add a child..."
+                                                   class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface py-1.5 px-3">
+                                            <div x-show="familyChildQuery && childCandidates.length" class="absolute z-30 top-full mt-1 w-full bg-white border border-outline-variant rounded-lg shadow-xl py-1 max-h-40 overflow-y-auto">
+                                                <template x-for="c in childCandidates" :key="c.id">
+                                                    <button @click="addChild(c.id)" class="w-full text-left px-3 py-1.5 text-xs hover:bg-primary-fixed" x-text="c.name"></button>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Anniversary -->
+                                    <div class="flex flex-col gap-1">
+                                        <span class="text-[9px] uppercase tracking-widest text-on-surface-variant">Anniversary</span>
+                                        <input type="date" :value="selectedFamily ? (selectedFamily.anniversary || '') : ''" @change="setAnniversary($event.target.value)"
+                                               class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface py-1.5 px-3">
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Tags Management in Modal -->
                             <div class="flex flex-col gap-xs pt-2">
                                 <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Tags</label>
                                 <div class="flex flex-wrap gap-1.5 p-3 bg-surface-container-lowest border border-outline-variant/20 rounded-lg min-h-[44px]">
                                     <template x-for="tag in (selectedPerson.tags || [])" :key="tag">
-                                        <span class="inline-flex items-center gap-1 bg-surface-container-high text-on-surface text-[10px] px-2 py-0.5 rounded-full border border-outline-variant/30">
+                                        <span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border"
+                                              :class="ShepherdingCore.isProjectedTagId(tag) ? 'bg-primary-fixed text-primary border-primary/20' : 'bg-surface-container-high text-on-surface border-outline-variant/30'"
+                                              :title="ShepherdingCore.isProjectedTagId(tag) ? 'Set by the system' : ''">
+                                            <span x-show="ShepherdingCore.isProjectedTagId(tag)" class="material-symbols-outlined text-[11px] align-middle">lock</span>
                                             <span x-text="tag"></span>
-                                            <button @click="removeTag(selectedPerson, tag)" class="hover:text-error transition-colors">
+                                            <!-- Membership Tags are code-defined: no manual remove -->
+                                            <button x-show="!ShepherdingCore.isProjectedTagId(tag)" @click="removeTag(selectedPerson, tag)" class="hover:text-error transition-colors">
                                                 <span class="material-symbols-outlined text-[12px] align-middle">close</span>
                                             </button>
                                         </span>
@@ -506,9 +653,9 @@
                                                    placeholder="Type tag..."
                                                    class="text-[10px] px-2 py-0.5 rounded-full border border-primary/40 focus:ring-1 focus:ring-primary outline-none w-full bg-surface-container-lowest">
                                             
-                                            <div x-show="tagQuery && allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(selectedPerson.tags || []).includes(t)).length > 0"
+                                            <div x-show="tagQuery && allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(selectedPerson.tags || []).includes(t) && !ShepherdingCore.isProjectedTagId(t)).length > 0"
                                                  class="absolute z-20 top-full mt-1 w-full bg-white border border-outline-variant rounded-lg shadow-xl py-1 max-h-40 overflow-y-auto">
-                                                <template x-for="tag in allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(selectedPerson.tags || []).includes(t))" :key="tag">
+                                                <template x-for="tag in allTags.filter(t => t.toLowerCase().includes(tagQuery.toLowerCase()) && !(selectedPerson.tags || []).includes(t) && !ShepherdingCore.isProjectedTagId(t))" :key="tag">
                                                     <button @click="addTag(selectedPerson, tag); tagQuery = ''; open = false"
                                                             class="w-full text-left px-3 py-1.5 text-[10px] hover:bg-primary-fixed transition-colors">
                                                         <span x-text="tag"></span>
@@ -582,6 +729,8 @@
         </button>
     </div>
 
+    <script src="shepherding-core.js"></script>
+    <script src="family-core.js"></script>
     <script src="peoples-page.js"></script>
 </body>
 </html>

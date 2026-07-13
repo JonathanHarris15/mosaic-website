@@ -19,6 +19,7 @@ document.addEventListener('alpine:init', () => {
         showFormModal: false,
         selectedHymnId: null,
         editingHymnId: null,
+        pendingEditId: null,   // hymn id from ?edit=<id> to auto-open once loaded (mobile "Manage Hymn")
         isSubmitting: false,
         
         tagInput: '',
@@ -49,17 +50,25 @@ document.addEventListener('alpine:init', () => {
                 const role = (userData && userData.role) || 'viewer';
                 if (!['editor', 'elder', 'admin', 'super_admin'].includes(role)) {
                     alert('You do not have permission to access the Hymn Manager.');
-                    window.location.href = 'index.html';
+                    window.location.href = window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/home' : 'index.html';
                     return;
                 }
+
+                // Query params: ?name= pre-fills a new hymn; ?new=1 opens the create
+                // form straight away (mobile add FAB); ?edit=<id> opens that hymn once
+                // the catalog loads (mobile "Manage Hymn").
+                const urlParams = new URLSearchParams(window.location.search);
+                const nameParam = urlParams.get('name');
+                const editId = urlParams.get('edit');
+                const wantNew = urlParams.get('new');
+                if (editId) this.pendingEditId = editId;
 
                 this.loadHymns();
                 this.loadTags();
 
-                // Check for name query param to pre-fill
-                const urlParams = new URLSearchParams(window.location.search);
-                const nameParam = urlParams.get('name');
-                if (nameParam && !this.isEditing) {
+                if (wantNew) {
+                    this.startCreateHymn(nameParam || '');
+                } else if (nameParam && !this.isEditing) {
                     this.formData.hymn_name = nameParam;
                 }
             });
@@ -84,6 +93,13 @@ document.addEventListener('alpine:init', () => {
         loadHymns() {
             db.collection('hymns').orderBy('hymn_name').get().then(snapshot => {
                 this.hymns = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // Deep-link from the mobile app: open the requested hymn for editing.
+                if (this.pendingEditId) {
+                    const target = this.hymns.find(h => h.id === this.pendingEditId);
+                    this.pendingEditId = null;
+                    if (target) this.startEditHymn(target);
+                    else if (window.MOSAIC_SHELL === 'mobile') this.exitToApp();
+                }
             });
         },
 
@@ -107,6 +123,23 @@ document.addEventListener('alpine:init', () => {
             db.collection('tags').get().then(snapshot => {
                 this.allTags = snapshot.docs.map(doc => doc.id).sort();
             });
+        },
+
+        /**
+         * Mobile shell: leave the manager and return to the app's Hymn Directory.
+         * The desktop catalog list is intentionally not reachable on mobile.
+         */
+        exitToApp() {
+            window.location.href = 'mobile.html#/hymnDirectory';
+        },
+
+        /**
+         * Closing the form: on mobile that means leaving the manager entirely
+         * (there is no catalog behind it); on desktop it just closes the modal.
+         */
+        closeForm() {
+            if (window.MOSAIC_SHELL === 'mobile') this.exitToApp();
+            else this.resetForm();
         },
 
         /**
@@ -390,6 +423,7 @@ document.addEventListener('alpine:init', () => {
                     this.showToast('Hymn added successfully!');
                 }
 
+                if (window.MOSAIC_SHELL === 'mobile') { this.exitToApp(); return; }
                 this.resetForm();
                 this.loadHymns();
 

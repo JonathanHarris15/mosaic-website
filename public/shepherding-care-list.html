@@ -2,15 +2,18 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
     <title>Care List | Mosaic Shepherd</title>
-    <link href="https://fonts.googleapis.com" rel="preconnect" />
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script src="mosaic-theme.js"></script>
-    <style type="text/tailwindcss">
+
+
+
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <style>
         [x-cloak] { display: none !important; }
         .ProseMirror { outline: none; min-height: 100px; padding: 12px; box-sizing: border-box; }
         .ProseMirror p { margin: 0 0 0.5em; }
@@ -24,11 +27,11 @@
         .active-editor-row { outline: 2px solid #182F57; outline-offset: -2px; }
         .ProseMirror-selectednode[data-action-chip] { outline: 2px solid #182F57; outline-offset: 1px; border-radius: 3px; }
     </style>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
     <script src="auth.js"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
 <body class="bg-background text-on-background font-body-md text-body-md antialiased h-screen overflow-hidden flex flex-col"

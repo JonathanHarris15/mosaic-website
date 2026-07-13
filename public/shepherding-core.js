@@ -318,6 +318,321 @@
         return { personUpdates, activityRewrites, deleteTagIds: [...mergedSet] };
     }
 
+    // ── Membership Track (ADR-0012) ──────────────────────────────────────────
+    // The single church-relationship state machine. A Person sits at exactly one
+    // Membership Stage; from the stage the code projects a set of immutable
+    // Membership Tags so the Track plugs into the tag filter system rather than a
+    // parallel one. The stage field is the source of truth — membershipTagsFor /
+    // applyMembershipTags are the pure projection the dual-write commits. Inactive
+    // is orthogonal to the Track: it does not clear the stage (which is retained
+    // for restore) but overrides the projection to the single Inactive tag.
+
+    // Ordered stages. The order IS the Track direction; the slider walks this.
+    const MEMBERSHIP_STAGES = [
+        'visitor',
+        'regular_attender',
+        'prospective_member',
+        'member',
+        'moving_membership',
+        'previous_member',
+    ];
+
+    const MEMBERSHIP_STAGE_LABEL = {
+        visitor: 'Visitor',
+        regular_attender: 'Regular Attender',
+        prospective_member: 'Prospective Member',
+        member: 'Member',
+        moving_membership: 'Moving Membership',
+        previous_member: 'Previous Member',
+    };
+
+    // Tag identity is the tag name (ADR-0011), so a Membership Tag's id doubles as
+    // its display name — and the `member` stage's 'Member' id is the very tag the
+    // legacy directory gate used, so the Track absorbs it with no migration.
+    const MEMBER_TAG_ID = 'Member';
+    const INACTIVE_TAG_ID = 'Inactive';
+
+    // Each stage's projected Membership Tag ids. Moving Membership deliberately
+    // carries BOTH its own tag and 'Member' so "members = carries the Member tag"
+    // stays one query while still distinguishing those mid-transfer (ADR-0012).
+    const MEMBERSHIP_STAGE_TAGS = {
+        visitor: ['Visitor'],
+        regular_attender: ['Regular Attender'],
+        prospective_member: ['Prospective Member'],
+        member: ['Member'],
+        moving_membership: ['Moving Membership', 'Member'],
+        previous_member: ['Previous Member'],
+    };
+
+    // Every code-defined Membership Tag id — the stage tags plus 'Inactive'. This
+    // is the immutable subset the tag-management UI must refuse to rename / delete
+    // / merge / hide, and the exact set applyMembershipTags strips before
+    // re-projecting.
+    const MEMBERSHIP_TAG_IDS = [
+        'Visitor',
+        'Regular Attender',
+        'Prospective Member',
+        'Member',
+        'Moving Membership',
+        'Previous Member',
+        'Inactive',
+    ];
+    const MEMBERSHIP_TAG_ID_SET = new Set(MEMBERSHIP_TAG_IDS);
+
+    // Is this tag id one of the code-defined, immutable Membership Tags?
+    function isMembershipTagId(tagId) {
+        return MEMBERSHIP_TAG_ID_SET.has(tagId);
+    }
+
+    // ── Elder Tag = a Projected Tag (ADR-0013, MS-92) ────────────────────────
+    // Generalise the Membership-Tag idea into a Projected Tag: a code-defined
+    // Shepherding Tag projected from a source-of-truth field, never hand-applied,
+    // and immutable (no rename / delete / merge / hide). Membership Tags project
+    // from the Membership Stage; the Elder Tag projects from the `elder` User role
+    // of a Person's Linked User (people.userId ↔ users.role). Its directory
+    // visibility is fixed VISIBLE to members — eldership is a public office.
+    const ELDER_TAG_ID = 'Elder';
+
+    // Every code-defined, immutable Projected Tag id: the Membership Tags plus the
+    // Elder Tag. This is the set the tag-management UI (web + mobile) must refuse
+    // to rename / delete / merge / hide.
+    const PROJECTED_TAG_IDS = MEMBERSHIP_TAG_IDS.concat([ELDER_TAG_ID]);
+    const PROJECTED_TAG_ID_SET = new Set(PROJECTED_TAG_IDS);
+
+    // Is this tag id a Projected Tag (Membership OR Elder)? The generalised
+    // immutability check — the one guard every tag-management mutation consults.
+    function isProjectedTagId(tagId) {
+        return PROJECTED_TAG_ID_SET.has(tagId);
+    }
+
+    // Does a Person's Linked User make them an elder? Source of truth for the
+    // Elder Tag projection: the linked User's role is exactly 'elder'. Super
+    // Admins are NOT elders (a distinct office). A Person with no Linked User,
+    // or a non-elder role, is not an elder.
+    function isElderUser(userData) {
+        return !!userData && userData.role === 'elder';
+    }
+
+    // Re-project a Person's `tags` for elder-ness: drop the Elder Tag, then re-add
+    // it iff they are an elder. Idempotent and order-preserving, exactly like
+    // applyMembershipTags — the linked User's role is the source of truth, never
+    // the tags. The pure heart of the MS-92 Elder-Tag projection.
+    function applyElderTag(currentTags, isElder) {
+        const out = (currentTags || []).filter(function (t) { return t !== ELDER_TAG_ID; });
+        if (isElder && out.indexOf(ELDER_TAG_ID) === -1) out.push(ELDER_TAG_ID);
+        return out;
+    }
+
+    // The Membership Tag ids a Person's membership projects. Inactive wins and
+    // yields ['Inactive'] regardless of any retained stage; a Person with no stage
+    // (and not Inactive) projects none. Returns a fresh array each call.
+    function membershipTagsFor(membership) {
+        const m = membership || {};
+        if (m.inactive) return [INACTIVE_TAG_ID];
+        const stage = m.stage;
+        if (!stage || !MEMBERSHIP_STAGE_TAGS[stage]) return [];
+        return MEMBERSHIP_STAGE_TAGS[stage].slice();
+    }
+
+    // Re-project a Person's `tags` for a membership: drop EVERY Membership Tag,
+    // then append the ones the membership currently projects, preserving order and
+    // all non-membership tags. Idempotent — the stage is the source of truth, never
+    // the tags. The pure heart of the MS-83 dual-write.
+    function applyMembershipTags(currentTags, membership) {
+        const out = (currentTags || []).filter(t => !MEMBERSHIP_TAG_ID_SET.has(t));
+        for (const t of membershipTagsFor(membership)) {
+            if (out.indexOf(t) === -1) out.push(t);
+        }
+        return out;
+    }
+
+    // "Is this Person a current member?" — the Members-tab predicate. True iff the
+    // projection includes the Member tag (stage member or moving_membership, and
+    // not Inactive), so callers need not special-case Moving Membership.
+    function carriesMemberTag(membership) {
+        return membershipTagsFor(membership).indexOf(MEMBER_TAG_ID) !== -1;
+    }
+
+    // Migration (ADR-0012): map a legacy `membership.status` value to the new
+    // { stage, inactive } shape. visitor/regular_attender/member map straight
+    // across; inactive becomes the off-Track flag with no stage; anything absent
+    // or unrecognised (including the three new stages, which have no legacy source)
+    // yields an empty membership so it can be assigned by hand.
+    function membershipFromLegacyStatus(status) {
+        switch (status) {
+            case 'visitor': return { stage: 'visitor', inactive: false };
+            case 'regular_attender': return { stage: 'regular_attender', inactive: false };
+            case 'member': return { stage: 'member', inactive: false };
+            case 'inactive': return { stage: null, inactive: true };
+            default: return { stage: null, inactive: false };
+        }
+    }
+
+    // Pastoral Record entry for a Track move (ADR-0012). Mirrors buildStatusChange;
+    // previous/next are { stage, inactive }. The MS-84 slider is its one writer.
+    function buildMembershipChange({ previous, next, authorUid, authorName, source, sourceDocumentId }) {
+        return {
+            kind: 'membership_change',
+            previousStage: (previous && previous.stage) || null,
+            newStage: (next && next.stage) || null,
+            previousInactive: !!(previous && previous.inactive),
+            newInactive: !!(next && next.inactive),
+            authorUid: authorUid || null,
+            authorName: authorName || '',
+            source,
+            sourceDocumentId: sourceDocumentId || null,
+            explanation: '',
+        };
+    }
+
+    // The Linked-User self-edit field policy (MS-87, ADR-0012). Given the existing
+    // Person and the raw form input, produce the update object the policy permits:
+    // contact (email/phone/address) and birthday always; sex only while unset.
+    // Membership, tags and shepherding data are deliberately never produced here,
+    // and the Firestore rules enforce the same allow-list server-side.
+    function buildSelfEditUpdate(existing, input) {
+        const i = input || {};
+        const update = {
+            'contact.email': (i.email || '').trim(),
+            'contact.phone': (i.phone || '').trim(),
+            'contact.address': (i.address || '').trim(),
+            birthday: i.birthday || null,
+        };
+        const sexUnset = !(existing && existing.sex);
+        if (sexUnset && i.sex) update.sex = i.sex;
+        return update;
+    }
+
+    // Is a Person off the Track / Inactive? The new source of truth is
+    // membership.inactive (ADR-0012); the legacy `membership.status === 'inactive'`
+    // is honoured too so un-migrated records still read correctly. The single
+    // predicate behind every "active people" filter.
+    function isInactiveMembership(membership) {
+        if (!membership) return false;
+        return !!membership.inactive || membership.status === 'inactive';
+    }
+
+    // The Membership Directory visibility rule (ADR-0012). The directory splits
+    // into two tabs: **members** lists Persons carrying the Member tag (stage
+    // Member or Moving Membership); **non_members** lists the remaining active
+    // Persons without it. Inactive Persons carry no Member tag, so they never
+    // land on the members tab, and they are hidden from non-editors on the
+    // non-members tab (visible to editors so they can be managed). `canEdit` is
+    // the viewer's edit capability.
+    function personMatchesDirectoryTab(person, tab, canEdit) {
+        const tags = (person && person.tags) || [];
+        const hasMember = tags.indexOf(MEMBER_TAG_ID) !== -1;
+        const inactive = isInactiveMembership(person && person.membership);
+        if (tab === 'members') return hasMember;
+        if (hasMember) return false;
+        if (inactive && !canEdit) return false;
+        return true;
+    }
+
+    // The human sentence for a Membership Change in the Pastoral Record. Reads an
+    // Inactive toggle first (it dominates), then compares stage positions on the
+    // Track: later index = "Advanced to", earlier = "Moved back to", first
+    // placement from no stage = "Set to". Pure, so the feed renderer stays dumb.
+    function describeMembershipChange(entry) {
+        const e = entry || {};
+        if (e.newInactive && !e.previousInactive) return 'Marked Inactive';
+        const label = s => (s && MEMBERSHIP_STAGE_LABEL[s]) || 'no stage';
+        if (!e.newInactive && e.previousInactive) return `Reactivated as ${label(e.newStage)}`;
+        const from = MEMBERSHIP_STAGES.indexOf(e.previousStage);
+        const to = MEMBERSHIP_STAGES.indexOf(e.newStage);
+        if (from === -1 && to !== -1) return `Set to ${label(e.newStage)}`;
+        if (to > from) return `Advanced to ${label(e.newStage)}`;
+        if (to < from) return `Moved back to ${label(e.newStage)}`;
+        return `Set to ${label(e.newStage)}`;
+    }
+
+    // Atomic Track move (browser only) — the membership analogue of the ADR-0005
+    // dual-write. In one batch: set the Person's membership field, re-project the
+    // Membership Tags, and append one Membership Change. The tag swap is therefore
+    // silent — it emits no Tag Changes; the Membership Change is the canonical
+    // record. `next` is { stage, inactive }; currentTags is the Person's live tags.
+    function commitMembershipChange(db, personId, { currentTags, previous, next, authorUid, authorName, source, sourceDocumentId }) {
+        // Dotted field paths so only stage/inactive move — joinedAt and the
+        // back-compat status field on the membership object are preserved.
+        const personUpdate = {
+            'membership.stage': (next && next.stage) || null,
+            'membership.inactive': !!(next && next.inactive),
+            tags: applyMembershipTags(currentTags, next),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+        const record = buildMembershipChange({ previous, next, authorUid, authorName, source, sourceDocumentId });
+        return commitPastoralChange(db, personId, personUpdate, record);
+    }
+
+    // ── Elder Assignment (ADR-0013, MS-94) ──────────────────────────────────
+    // A member is assigned to at most one elder for care. The assignment is a
+    // single field on the member's Person — `shepherding.assignedElderId`, holding
+    // the elder's PERSON id (keeps everything Person↔Person for the graph). The
+    // reverse set — the members an elder shepherds — is their Care Group. Setting /
+    // changing / clearing it logs an Assignment Change to the Pastoral Record,
+    // mirroring the Membership Change. The assignable set is the Elder-Tag People.
+
+    // Is this Person an elder (carries the projected Elder Tag)? The assignable-set
+    // predicate — the Assigned Elder picker offers exactly these People.
+    function isElderPerson(person) {
+        return !!person && Array.isArray(person.tags) && person.tags.indexOf(ELDER_TAG_ID) !== -1;
+    }
+
+    // A Person's Care Group: the members whose assignedElderId points at them.
+    // Pure reverse query over a People array; empty for a non-elder id.
+    function careGroupOf(people, elderPersonId) {
+        if (!elderPersonId) return [];
+        return (people || []).filter(function (p) {
+            return p && p.shepherding && p.shepherding.assignedElderId === elderPersonId;
+        });
+    }
+
+    // Pastoral Record entry for an Elder Assignment change (ADR-0013). Mirrors
+    // buildMembershipChange; `previous`/`next` are { elderId, elderName }. One
+    // writer: the Assigned Elder section on the Shepherding Profile.
+    function buildAssignmentChange({ previous, next, authorUid, authorName, source, sourceDocumentId }) {
+        return {
+            kind: 'assignment_change',
+            previousElderId: (previous && previous.elderId) || null,
+            previousElderName: (previous && previous.elderName) || '',
+            newElderId: (next && next.elderId) || null,
+            newElderName: (next && next.elderName) || '',
+            authorUid: authorUid || null,
+            authorName: authorName || '',
+            source,
+            sourceDocumentId: sourceDocumentId || null,
+            explanation: '',
+        };
+    }
+
+    // The human sentence for an Assignment Change in the Pastoral Record. Set from
+    // unassigned = "Assigned to X"; cleared = "Unassigned from X"; moved =
+    // "Reassigned from X to Y". Pure, so the feed renderer stays dumb.
+    function describeAssignmentChange(entry) {
+        const e = entry || {};
+        const prev = e.previousElderName || (e.previousElderId ? 'their elder' : '');
+        const next = e.newElderName || (e.newElderId ? 'an elder' : '');
+        if (e.newElderId && !e.previousElderId) return `Assigned to ${next}`;
+        if (!e.newElderId && e.previousElderId) return `Unassigned from ${prev}`;
+        if (e.newElderId && e.previousElderId) {
+            if (e.newElderId === e.previousElderId) return `Assigned to ${next}`;
+            return `Reassigned from ${prev} to ${next}`;
+        }
+        return 'Assignment updated';
+    }
+
+    // Atomic Elder Assignment write (browser only) — the ADR-0005 dual-write for
+    // assignment. In one batch: set `shepherding.assignedElderId` on the member and
+    // append one Assignment Change. `previous`/`next` are { elderId, elderName }.
+    function commitAssignmentChange(db, personId, { previous, next, authorUid, authorName, source, sourceDocumentId }) {
+        const personUpdate = {
+            'shepherding.assignedElderId': (next && next.elderId) || null,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+        const record = buildAssignmentChange({ previous, next, authorUid, authorName, source, sourceDocumentId });
+        return commitPastoralChange(db, personId, personUpdate, record);
+    }
+
     const ShepherdingCore = {
         URGENCY_LEVELS,
         IMPORTANCE_LEVELS,
@@ -345,6 +660,35 @@
         holdStopIndex,
         formatHoldShort,
         planTagMerge,
+        // Membership Track (ADR-0012)
+        MEMBERSHIP_STAGES,
+        MEMBERSHIP_STAGE_LABEL,
+        MEMBERSHIP_STAGE_TAGS,
+        MEMBERSHIP_TAG_IDS,
+        MEMBER_TAG_ID,
+        INACTIVE_TAG_ID,
+        ELDER_TAG_ID,
+        PROJECTED_TAG_IDS,
+        isMembershipTagId,
+        isProjectedTagId,
+        isElderUser,
+        applyElderTag,
+        membershipTagsFor,
+        applyMembershipTags,
+        carriesMemberTag,
+        membershipFromLegacyStatus,
+        buildMembershipChange,
+        describeMembershipChange,
+        personMatchesDirectoryTab,
+        isInactiveMembership,
+        buildSelfEditUpdate,
+        commitMembershipChange,
+        // Elder Assignment (ADR-0013, MS-94)
+        isElderPerson,
+        careGroupOf,
+        buildAssignmentChange,
+        describeAssignmentChange,
+        commitAssignmentChange,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -2,14 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
     <title>People | Mosaic Shepherd</title>
-    <link href="https://fonts.googleapis.com" rel="preconnect" />
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script src="mosaic-theme.js"></script>
+
+
+
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
 
     <style>
         [x-cloak] { display: none !important; }
@@ -54,14 +57,51 @@
             overflow-y: auto;
             max-height: calc(100vh - 220px);
         }
+
+        /* The mobile "Filters" toggle is hidden on desktop (sidebar is always shown). */
+        .mobile-filter-toggle { display: none; }
+
+        /* Mobile shell (see mobile-shell.js): unlock body scroll, drop the fixed
+           sidebar into the flow, and reorder to search → filters → actions → table. */
+        html.shell-mobile, html.shell-mobile body {
+            overflow: auto;
+            height: auto;
+        }
+        html.shell-mobile .content-area {
+            display: flex;
+            flex-direction: column;
+            margin-left: 0;
+            padding: 0 16px;
+        }
+        html.shell-mobile .people-search  { order: 1; }
+        html.shell-mobile .filters-wrap   { order: 2; }
+        html.shell-mobile .people-actions { order: 3; }
+        html.shell-mobile .scrollable-table {
+            order: 4;
+            max-height: none;
+            overflow-y: visible;
+        }
+        html.shell-mobile .mobile-filter-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+        }
+        html.shell-mobile .filter-sidebar {
+            position: static;
+            top: auto; left: auto;
+            width: auto;
+            max-height: none;
+            margin: 0;
+        }
     </style>
 
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-functions-compat.js"></script>
     <script src="auth.js"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
 <body class="bg-background text-on-background font-body-md text-body-md antialiased"
@@ -86,9 +126,20 @@
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
-    <!-- FIXED FILTER SIDEBAR (left side)            -->
+    <!-- MAIN CONTENT — filters live inside it: a fixed left sidebar    -->
+    <!-- on desktop, a collapsible panel under the search bar on mobile -->
     <!-- ═══════════════════════════════════════════ -->
-    <aside x-show="!loading" class="filter-sidebar">
+    <main x-show="!loading" class="content-area">
+
+    <!-- Filters (fixed sidebar on desktop; collapsible on mobile) -->
+    <div class="filters-wrap" x-data="{ mobileFiltersOpen: false }">
+        <button type="button" @click="mobileFiltersOpen = !mobileFiltersOpen"
+            class="mobile-filter-toggle px-4 py-3 mb-3 bg-surface-container-lowest border border-outline-variant rounded-xl font-label-md text-label-md text-on-surface shadow-sm">
+            <span class="material-symbols-outlined text-[20px] text-secondary">tune</span>
+            <span>Filters</span>
+            <span class="material-symbols-outlined text-[20px] ml-auto transition-transform" :style="mobileFiltersOpen ? 'transform:rotate(180deg)' : ''">expand_more</span>
+        </button>
+    <aside x-show="!loading && (window.MOSAIC_SHELL !== 'mobile' || mobileFiltersOpen)" class="filter-sidebar">
         <div class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm divide-y divide-outline-variant">
 
             <!-- Saved Views -->
@@ -232,16 +283,25 @@
                 </div>
             </div>
 
+            <!-- Show inactive people -->
+            <div class="p-6 flex flex-col gap-3 border-t border-outline-variant/60">
+                <span class="font-label-md text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Inactive People</span>
+                <button @click="showInactive = !showInactive" type="button" class="flex items-center gap-2.5 self-start text-left">
+                    <span class="relative inline-block w-9 h-5 rounded-full transition-colors flex-shrink-0"
+                          :class="showInactive ? 'bg-primary' : 'bg-outline-variant'">
+                        <span class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200"
+                              :class="showInactive ? 'translate-x-4' : ''"></span>
+                    </span>
+                    <span class="font-body-md text-sm text-on-surface" x-text="showInactive ? 'Showing inactive people' : 'Show inactive people'"></span>
+                </button>
+            </div>
+
         </div>
     </aside>
-
-    <!-- ═══════════════════════════════════════════ -->
-    <!-- MAIN CONTENT (right of sidebar)             -->
-    <!-- ═══════════════════════════════════════════ -->
-    <main x-show="!loading" class="content-area">
+    </div>
 
         <!-- Page Title & Actions -->
-        <div style="margin-bottom:32px;" class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div style="margin-bottom:32px;" class="people-actions flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             <div>
                 <h1 class="font-headline-lg text-headline-lg text-primary">People</h1>
                 <p class="font-body-md text-body-md text-on-surface-variant mt-1">
@@ -274,7 +334,7 @@
         </div>
 
         <!-- Search bar -->
-        <div class="relative" style="margin-bottom:24px;">
+        <div class="relative people-search" style="margin-bottom:24px;">
             <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-outline pointer-events-none">search</span>
             <input type="text" x-model="search" placeholder="Search by name…"
                    class="w-full pl-[40px] pr-6 py-3 border border-outline-variant rounded-xl font-body-md text-body-md bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all shadow-sm" />

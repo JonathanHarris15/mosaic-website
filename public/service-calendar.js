@@ -1161,8 +1161,11 @@ function injectServiceData(serviceMap) {
         const baptismCell = el.querySelector('.baptism-cell');
         if (baptismCell) {
             // Baptism Candidates are linked to People and managed in the Order of
-            // Service Builder, so the calendar shows them read-only.
-            baptismCell.textContent = baptismCandidateNames(svc) || '—';
+            // Service Builder, so the calendar shows them read-only. Gate on
+            // hasBaptism so a stale candidate left in liturgy.baptism (e.g. after
+            // the flag was toggled/derived off) isn't shown as an upcoming
+            // baptism here when every other view hides it.
+            baptismCell.textContent = (svc.hasBaptism && baptismCandidateNames(svc)) || '—';
         }
 
         const musicCell = el.querySelector('.music-cell');

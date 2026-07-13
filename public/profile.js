@@ -63,9 +63,84 @@ async function initProfile() {
                     loadUsersList();
                 }
             }
+
+            // Self-service (MS-87): a Linked User maintains their own Person's
+            // contact details, birthday, and (set-once) sex. Everything else on
+            // the Person — Membership Track, tags, shepherding — is read-only here
+            // and enforced by the Firestore rules.
+            if (userData && userData.personId) {
+                initMyInfo(userData.personId);
+            }
         } catch (error) {
             console.error("Error fetching user data:", error);
             document.getElementById('user-role-badge').textContent = 'Error loading role';
+        }
+    });
+}
+
+// --- SELF-SERVICE PERSON INFO (MS-87) ---
+// A Linked User edits their own Person record's self-editable fields. Sex is
+// set-once: editable only while unset, then locked (an editor changes it after).
+async function initMyInfo(personId) {
+    const panel = document.getElementById('my-info-panel');
+    const form = document.getElementById('my-info-form');
+    if (!panel || !form) return;
+    let sexWasUnset = true;
+    try {
+        const snap = await db.collection('people').doc(personId).get();
+        if (!snap.exists) return;
+        const p = snap.data() || {};
+        const contact = p.contact || {};
+        document.getElementById('my-email').value = contact.email || '';
+        document.getElementById('my-phone').value = contact.phone || '';
+        document.getElementById('my-address').value = contact.address || '';
+        document.getElementById('my-birthday').value = p.birthday || '';
+        const sexSelect = document.getElementById('my-sex');
+        sexSelect.value = p.sex || '';
+        sexWasUnset = !p.sex;
+        if (!sexWasUnset) {
+            sexSelect.disabled = true;
+            document.getElementById('my-sex-locked').classList.remove('hidden');
+        }
+        panel.classList.remove('hidden');
+    } catch (e) {
+        console.error('Error loading my info:', e);
+        return;
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const status = document.getElementById('my-info-status');
+        status.textContent = 'Saving…';
+        status.className = 'text-[11px] font-body-md text-primary animate-pulse';
+        // The self-editable field policy lives in ShepherdingCore so the client
+        // and the Firestore rules share one allow-list — never membership, tags
+        // or shepherding, and sex only while unset.
+        const updates = ShepherdingCore.buildSelfEditUpdate(
+            { sex: sexWasUnset ? null : 'set' },
+            {
+                email: document.getElementById('my-email').value,
+                phone: document.getElementById('my-phone').value,
+                address: document.getElementById('my-address').value,
+                birthday: document.getElementById('my-birthday').value,
+                sex: document.getElementById('my-sex').value,
+            }
+        );
+        updates.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+        try {
+            await db.collection('people').doc(personId).update(updates);
+            status.textContent = 'Saved.';
+            status.className = 'text-[11px] font-body-md text-green-600';
+            if (sexWasUnset && updates.sex) {
+                sexWasUnset = false;
+                document.getElementById('my-sex').disabled = true;
+                document.getElementById('my-sex-locked').classList.remove('hidden');
+            }
+            setTimeout(() => { status.textContent = ''; }, 4000);
+        } catch (err) {
+            console.error('Error saving my info:', err);
+            status.textContent = 'Save failed: ' + err.message;
+            status.className = 'text-[11px] font-body-md text-error';
         }
     });
 }

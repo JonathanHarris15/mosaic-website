@@ -41,7 +41,9 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
  */
 function logout() {
     auth.signOut().then(() => {
-        window.location.href = 'index.html';
+        // In the mobile shell, return to the shell's login rather than the
+        // desktop app (which would bounce the user out of the WebView).
+        window.location.href = (window.MOSAIC_SHELL === 'mobile') ? 'mobile.html#/login' : 'index.html';
     });
 }
 

@@ -2,15 +2,18 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
     <title>Shepherding Profile | Mosaic</title>
-    <link href="https://fonts.googleapis.com" rel="preconnect" />
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script src="mosaic-theme.js"></script>
-    <style type="text/tailwindcss">
+
+
+
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <style>
         [x-cloak] { display: none !important; }
         .ProseMirror { outline: none; min-height: 180px; padding: 16px; }
         .ProseMirror p { margin: 0 0 0.5em; }
@@ -38,12 +41,12 @@
         .profile-layout { display: grid; gap: 32px; align-items: start; }
         @media (min-width: 1024px) { .profile-layout { grid-template-columns: 320px 1fr; } }
     </style>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-functions-compat.js"></script>
     <script src="auth.js"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
 <body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
@@ -179,6 +182,37 @@
                     </div>
                 </div>
 
+                <!-- Membership Track (ADR-0012): stage slider + Inactive toggle, editors only -->
+                <div x-show="canEditMembership" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-headline-md text-headline-md text-primary">Membership Track</h2>
+                        <span class="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                              :class="membershipInactive ? 'bg-surface-container-high text-on-surface-variant' : 'bg-primary-fixed text-primary'"
+                              x-text="membershipStageLabel"></span>
+                    </div>
+                    <div class="p-3 bg-surface-container-lowest border border-outline-variant/20 rounded-lg flex flex-col gap-2"
+                         :class="membershipInactive ? 'opacity-50' : ''">
+                        <input type="range" min="0" :max="membershipStages.length - 1" step="1"
+                               :value="membershipIndex"
+                               :disabled="membershipInactive"
+                               @change="setMembershipStageByIndex($event.target.value)"
+                               class="w-full accent-primary cursor-pointer disabled:cursor-not-allowed">
+                        <div class="flex justify-between text-[9px] text-on-surface-variant leading-tight">
+                            <template x-for="(stage, i) in membershipStages" :key="stage">
+                                <span class="flex-1 text-center px-0.5"
+                                      :class="membershipIndex === i && !membershipInactive ? 'text-primary font-semibold' : ''"
+                                      x-text="ShepherdingCore.MEMBERSHIP_STAGE_LABEL[stage]"></span>
+                            </template>
+                        </div>
+                    </div>
+                    <button @click="toggleMembershipInactive()"
+                            class="self-start inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-label-md px-3 py-1.5 rounded-lg border transition-colors"
+                            :class="membershipInactive ? 'bg-primary text-on-primary border-primary' : 'text-on-surface-variant border-outline-variant/50 hover:border-primary hover:text-primary'">
+                        <span class="material-symbols-outlined text-[14px]" x-text="membershipInactive ? 'toggle_on' : 'toggle_off'"></span>
+                        <span x-text="membershipInactive ? 'Inactive — click to reactivate' : 'Mark inactive'"></span>
+                    </button>
+                </div>
+
                 <!-- Shepherding Tags Panel -->
                 <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-md">
                     <h2 class="font-headline-md text-headline-md text-primary">Shepherding Tags</h2>
@@ -191,7 +225,8 @@
                                 <span x-show="tagHoldLabel(tagId)" class="opacity-70 text-[11px]"
                                       :title="'Held for ' + tagHoldLabel(tagId)"
                                       x-text="'· ' + tagHoldLabel(tagId)"></span>
-                                <button @click="toggleTag(tagId)" class="hover:opacity-70 transition-opacity">
+                                <span x-show="ShepherdingCore.isProjectedTagId(tagId)" class="material-symbols-outlined text-[13px] opacity-70" title="Set by the Membership Track">lock</span>
+                                <button x-show="!ShepherdingCore.isProjectedTagId(tagId)" @click="toggleTag(tagId)" class="hover:opacity-70 transition-opacity">
                                     <span class="material-symbols-outlined text-[14px]">close</span>
                                 </button>
                             </span>
@@ -204,7 +239,7 @@
                     <div class="flex flex-col gap-xs">
                         <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider text-xs">Add tag</span>
                         <div class="flex flex-wrap gap-xs">
-                            <template x-for="tag in shepherdingTags.filter(t => !hasTag(t.id))" :key="tag.id">
+                            <template x-for="tag in shepherdingTags.filter(t => !hasTag(t.id) && !ShepherdingCore.isProjectedTagId(t.id))" :key="tag.id">
                                 <button @click="toggleTag(tag.id)"
                                     class="px-sm py-xs bg-surface-container text-on-surface hover:bg-surface-container-high rounded-full font-label-md text-label-md transition-colors flex items-center gap-xs"
                                     :class="ShepherdingBlur.pastoralClass({ownProfile})">
@@ -233,6 +268,245 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Relationships Panel (ADR-0012, MS-89) — elder-only edge graph -->
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-md">
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-headline-md text-headline-md text-primary">Relationships</h2>
+                        <button x-show="qaMode" @click="qaClose()"
+                                class="text-on-surface-variant hover:text-error flex items-center gap-1 font-label-md text-label-md">
+                            <span class="material-symbols-outlined text-[18px]">close</span><span>Cancel</span>
+                        </button>
+                    </div>
+
+                    <div class="flex flex-col gap-xs">
+                        <template x-for="r in personRelationships" :key="r.key">
+                            <div class="flex items-center justify-between gap-sm bg-surface-container rounded-lg px-sm py-xs" :class="ShepherdingBlur.pastoralClass({ownProfile})">
+                                <div class="flex items-center gap-xs min-w-0">
+                                    <span class="material-symbols-outlined text-[16px] text-secondary flex-shrink-0"
+                                          x-text="r.source === 'family' ? 'family_restroom'
+                                                : r.source === 'group'  ? (r.leading ? 'star' : 'groups')
+                                                : (r.prioritized ? 'trending_flat' : 'sync_alt')"></span>
+
+                                    <span class="text-sm text-on-surface truncate">
+                                        <!-- Family: the gendered role, then the person -->
+                                        <template x-if="r.source === 'family'">
+                                            <span><span class="font-medium" x-text="r.label"></span> · <span x-text="relPersonName(r.otherId)"></span></span>
+                                        </template>
+                                        <!-- Group: the group's name, and the role this Person holds in it -->
+                                        <template x-if="r.source === 'group'">
+                                            <span><span class="font-medium" x-text="r.groupName"></span> · <span x-text="r.roleLabel"></span></span>
+                                        </template>
+                                        <!-- Pairwise: the oriented sentence, or the type plus the other person -->
+                                        <template x-if="r.source === 'pairwise' && r.sentence">
+                                            <span x-text="r.sentence"></span>
+                                        </template>
+                                        <template x-if="r.source === 'pairwise' && !r.sentence">
+                                            <span><span class="font-medium" x-text="r.typeName"></span> · <span x-text="relPersonName(r.otherId)"></span></span>
+                                        </template>
+                                    </span>
+                                </div>
+
+                                <!-- A sibling is emergent from the family roster, not a link this Person holds. -->
+                                <span x-show="!r.removable" class="material-symbols-outlined text-[15px] text-on-surface-variant flex-shrink-0"
+                                      title="Emergent from the family — remove a parent or child instead">lock</span>
+
+                                <button x-show="r.removable"
+                                        @click="r.source === 'family' ? qaRemoveFamily(r) : r.source === 'group' ? qaLeaveGroup(r) : deleteRelationship(r.edge.id)"
+                                        class="text-on-surface-variant hover:text-error transition-colors flex-shrink-0">
+                                    <span class="material-symbols-outlined text-[16px]">close</span>
+                                </button>
+                            </div>
+                        </template>
+                        <span x-show="personRelationships.length === 0" class="text-on-surface-variant italic text-sm">No relationships recorded.</span>
+                    </div>
+
+                    <!-- ── Quick-assign (MS-104, ADR-0014) ────────────────────────
+                         This card APPLIES vocabulary; it never creates it. A new
+                         Relationship Type or named group is made in Manage Tags and
+                         Relationships, and only there. Family is authored here by
+                         write-through — straight to the `families` record, never as
+                         a parallel edge. -->
+                    <div x-show="!qaMode" class="grid grid-cols-3 gap-xs pt-sm border-t border-outline-variant">
+                        <button @click="qaOpen('pairwise')"
+                                class="flex flex-col items-center gap-1 py-sm rounded-lg border border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary transition-colors">
+                            <span class="material-symbols-outlined text-[20px]">swap_horiz</span>
+                            <span class="text-[11px] font-semibold">Relationship</span>
+                        </button>
+                        <button @click="qaOpen('group')"
+                                class="flex flex-col items-center gap-1 py-sm rounded-lg border border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary transition-colors">
+                            <span class="material-symbols-outlined text-[20px]">groups</span>
+                            <span class="text-[11px] font-semibold">Join group</span>
+                        </button>
+                        <button @click="qaOpen('family')"
+                                class="flex flex-col items-center gap-1 py-sm rounded-lg border border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary transition-colors">
+                            <span class="material-symbols-outlined text-[20px]">family_restroom</span>
+                            <span class="text-[11px] font-semibold">Family</span>
+                        </button>
+                    </div>
+
+                    <!-- ─── Apply an existing Pairwise type ─────────────────── -->
+                    <div x-show="qaMode === 'pairwise'" class="flex flex-col gap-sm pt-sm border-t border-outline-variant">
+                        <select x-model="qaForm.typeId"
+                                class="w-full border border-outline-variant rounded-lg px-sm py-xs text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                            <option value="">Choose a relationship type…</option>
+                            <template x-for="t in qaPairwiseTypes" :key="t.id">
+                                <option :value="t.id" x-text="t.name"></option>
+                            </template>
+                        </select>
+
+                        <p x-show="qaPairwiseTypes.length === 0" class="text-[11px] text-on-surface-variant italic leading-snug">
+                            No relationship types defined yet. Create one in Manage Tags and Relationships.
+                        </p>
+
+                        <!-- Which side does THIS Person hold? Only a Prioritized type has sides. -->
+                        <div x-show="qaSelectedType && qaSelectedType.priority" class="flex gap-xs">
+                            <template x-for="side in ['holder','counterpart']" :key="side">
+                                <button type="button" @click="qaForm.side = side"
+                                    :class="qaForm.side === side ? 'bg-primary text-on-primary border-primary' : 'border-outline-variant text-on-surface-variant hover:border-primary'"
+                                    class="flex-1 rounded-lg border px-xs py-xs text-[11px] font-semibold transition-colors"
+                                    x-text="person?.name?.split(' ')[0] + ' is the ' + (qaSelectedType ? RelationshipCore.labelForSide(qaSelectedType, side) : '')"></button>
+                            </template>
+                        </div>
+
+                        <div class="relative">
+                            <input type="text" x-model="qaForm.otherName" @input="qaForm.otherId = ''"
+                                   placeholder="Type the other person's name…"
+                                   class="w-full border border-outline-variant rounded-lg px-sm py-xs text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                            <div x-show="!qaForm.otherId && qaForm.otherName && qaCandidates.length"
+                                 class="absolute z-30 top-full mt-1 w-full bg-white border border-outline-variant rounded-lg shadow-xl py-1 max-h-40 overflow-y-auto">
+                                <template x-for="c in qaCandidates" :key="c.id">
+                                    <button @click="qaPickPerson(c)" class="w-full text-left px-3 py-1.5 text-sm hover:bg-primary-fixed" x-text="c.name"></button>
+                                </template>
+                            </div>
+                        </div>
+
+                        <p x-show="qaSelectedType && qaForm.otherId" class="text-[11px] text-on-surface-variant italic text-center leading-tight" x-text="qaPreview"></p>
+
+                        <button @click="qaAddPairwise()" :disabled="!qaForm.typeId || !qaForm.otherId"
+                            class="w-full px-sm py-sm font-label-md text-label-md uppercase tracking-wider bg-primary text-on-primary rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                            Add relationship
+                        </button>
+                    </div>
+
+                    <!-- ─── Join an existing Relationship Group ─────────────── -->
+                    <div x-show="qaMode === 'group'" class="flex flex-col gap-sm pt-sm border-t border-outline-variant">
+                        <select x-model="qaForm.groupId"
+                                class="w-full border border-outline-variant rounded-lg px-sm py-xs text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30">
+                            <option value="">Choose a group to join…</option>
+                            <template x-for="g in qaJoinableGroups" :key="g.id">
+                                <option :value="g.id" x-text="g.name"></option>
+                            </template>
+                        </select>
+
+                        <p x-show="qaJoinableGroups.length === 0" class="text-[11px] text-on-surface-variant italic leading-snug">
+                            No groups left to join. New groups are created in Manage Tags and Relationships.
+                        </p>
+
+                        <!-- The leader seat is only offered on a Prioritized group that has none. -->
+                        <label x-show="qaLeaderSeatOpen" class="flex items-center gap-xs text-[12px] text-on-surface">
+                            <input type="checkbox" x-model="qaForm.asLeader" class="rounded border-outline-variant" />
+                            <span>Join as its leader — the seat is open</span>
+                        </label>
+
+                        <button @click="qaJoinGroup()" :disabled="!qaForm.groupId"
+                            class="w-full px-sm py-sm font-label-md text-label-md uppercase tracking-wider bg-primary text-on-primary rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                            Join group
+                        </button>
+                    </div>
+
+                    <!-- ─── Add a Family relation (write-through) ───────────── -->
+                    <div x-show="qaMode === 'family'" class="flex flex-col gap-sm pt-sm border-t border-outline-variant">
+                        <div class="flex gap-xs">
+                            <template x-for="k in ['spouse','parent','child']" :key="k">
+                                <button type="button" @click="qaForm.familyKind = k"
+                                    :class="qaForm.familyKind === k ? 'bg-primary text-on-primary border-primary' : 'border-outline-variant text-on-surface-variant hover:border-primary'"
+                                    class="flex-1 rounded-lg border px-xs py-xs text-[11px] font-semibold capitalize transition-colors"
+                                    x-text="k"></button>
+                            </template>
+                        </div>
+
+                        <div class="relative">
+                            <input type="text" x-model="qaForm.otherName" @input="qaForm.otherId = ''"
+                                   placeholder="Type their name…"
+                                   class="w-full border border-outline-variant rounded-lg px-sm py-xs text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                            <div x-show="!qaForm.otherId && qaForm.otherName && qaCandidates.length"
+                                 class="absolute z-30 top-full mt-1 w-full bg-white border border-outline-variant rounded-lg shadow-xl py-1 max-h-40 overflow-y-auto">
+                                <template x-for="c in qaCandidates" :key="c.id">
+                                    <button @click="qaPickPerson(c)" class="w-full text-left px-3 py-1.5 text-sm hover:bg-primary-fixed" x-text="c.name"></button>
+                                </template>
+                            </div>
+                        </div>
+
+                        <p class="text-[11px] text-on-surface-variant italic leading-snug">
+                            This updates the family record itself, so it shows the same everywhere. Bigger
+                            restructuring still belongs in the Member Directory.
+                        </p>
+
+                        <button @click="qaAddFamily()" :disabled="!qaForm.otherId"
+                            class="w-full px-sm py-sm font-label-md text-label-md uppercase tracking-wider bg-primary text-on-primary rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                            Add family relation
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Assigned Elder (ADR-0013, MS-94) — a dedicated single-elder picker, deliberately separate from the Relationships panel. -->
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-sm">
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-headline-md text-headline-md text-primary">Assigned Elder</h2>
+                        <button x-show="assignedElderId && !showAssignElder" @click="showAssignElder = true" class="text-secondary hover:text-primary transition-colors flex items-center gap-1 font-label-md text-label-md">
+                            <span class="material-symbols-outlined text-[18px]">edit</span><span>Change</span>
+                        </button>
+                    </div>
+
+                    <!-- Current assignment -->
+                    <template x-if="assignedElderId && !showAssignElder">
+                        <div class="flex items-center gap-xs min-w-0 bg-surface-container rounded-lg px-sm py-xs">
+                            <span class="material-symbols-outlined text-[18px] text-secondary flex-shrink-0">shield_person</span>
+                            <span class="text-sm text-on-surface truncate" x-text="assignedElderName"></span>
+                        </div>
+                    </template>
+
+                    <!-- No assignment yet -->
+                    <template x-if="!assignedElderId && !showAssignElder">
+                        <button @click="showAssignElder = true" class="self-start px-sm py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[16px]">add</span> Assign an elder
+                        </button>
+                    </template>
+
+                    <!-- Picker -->
+                    <template x-if="showAssignElder">
+                        <div class="flex flex-col gap-sm">
+                            <select @change="setAssignedElder($event.target.value); showAssignElder = false" :disabled="assignmentSaving"
+                                    class="w-full px-sm py-xs border border-outline-variant rounded-lg bg-surface-container-lowest text-sm text-on-surface">
+                                <option value="" x-text="assignedElderId ? '— Unassign —' : '— Select an elder —'"></option>
+                                <template x-for="e in elderCandidates" :key="e.id">
+                                    <option :value="e.id" :selected="e.id === assignedElderId" x-text="e.name"></option>
+                                </template>
+                            </select>
+                            <span x-show="elderCandidates.length === 0" class="text-on-surface-variant italic text-sm">No elders available yet. An elder is a person whose linked account has the elder role.</span>
+                            <button @click="showAssignElder = false" class="self-start px-sm py-xs font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors">Cancel</button>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Care Group (ADR-0013, MS-94) — the members this elder shepherds; shown only on an elder's profile. -->
+                <div x-show="viewedPersonIsElder" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-sm">
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-headline-md text-headline-md text-primary">Care Group</h2>
+                        <span class="font-label-md text-label-md text-on-surface-variant" x-text="careGroup.length"></span>
+                    </div>
+                    <div class="flex flex-col gap-xs">
+                        <template x-for="m in careGroup" :key="m.id">
+                            <a :href="'shepherding-profile.html?id=' + m.id" class="flex items-center gap-xs min-w-0 bg-surface-container rounded-lg px-sm py-xs hover:bg-surface-container-high transition-colors">
+                                <span class="material-symbols-outlined text-[18px] text-secondary flex-shrink-0">person</span>
+                                <span class="text-sm text-on-surface truncate" x-text="m.name"></span>
+                            </a>
+                        </template>
+                        <span x-show="careGroup.length === 0" class="text-on-surface-variant italic text-sm">No members assigned yet.</span>
+                    </div>
+                </div>
+
                 <!-- Pastoral Status Panel -->
                 <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-md">
                     <h2 class="font-headline-md text-headline-md text-primary">Pastoral Status</h2>
@@ -687,6 +961,33 @@
                                 </div>
                             </template>
 
+                            <!-- Membership Change (ADR-0012): a Track move, read as its own transition -->
+                            <template x-if="entry._entryKind === 'membership_change'">
+                                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-wrap items-center gap-sm">
+                                    <span class="flex items-center gap-xs px-sm py-xs bg-primary-fixed text-primary rounded font-label-md text-label-md">
+                                        <span class="material-symbols-outlined text-[14px]">trending_up</span>
+                                        <span x-text="ShepherdingCore.describeMembershipChange(entry)"></span>
+                                    </span>
+                                    <span class="font-label-md text-label-md text-on-surface-variant" x-text="formatDate(entry.createdAt)"></span>
+                                    <span class="font-label-md text-label-md text-on-surface-variant" x-text="'by ' + (entry.authorName || 'Unknown')"></span>
+                                    <template x-if="entry.source === 'people_list'">
+                                        <span class="font-label-md text-label-md text-on-surface-variant italic">via People list</span>
+                                    </template>
+                                </div>
+                            </template>
+
+                            <!-- Assignment Change (ADR-0013, MS-94) — elder assignment history -->
+                            <template x-if="entry._entryKind === 'assignment_change'">
+                                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-wrap items-center gap-sm">
+                                    <span class="flex items-center gap-xs px-sm py-xs bg-primary-fixed text-primary rounded font-label-md text-label-md">
+                                        <span class="material-symbols-outlined text-[14px]">shield_person</span>
+                                        <span x-text="ShepherdingCore.describeAssignmentChange(entry)"></span>
+                                    </span>
+                                    <span class="font-label-md text-label-md text-on-surface-variant" x-text="formatDate(entry.createdAt)"></span>
+                                    <span class="font-label-md text-label-md text-on-surface-variant" x-text="'by ' + (entry.authorName || 'Unknown')"></span>
+                                </div>
+                            </template>
+
                             <!-- Collapsed status group -->
                             <template x-if="entry._entryKind === 'status_group'">
                                 <div class="flex items-center gap-sm py-xs">
@@ -842,8 +1143,12 @@
     </div>
 
     <script src="shepherding-core.js"></script>
+    <script src="relationship-core.js"></script>
+    <script src="family-core.js"></script>
     <script src="shepherding-blur.js"></script>
     <script src="tiptap-render.js"></script>
+    <script src="relationship-group-core.js"></script>
+    <script src="shepherding-quick-assign.js"></script>
     <script src="shepherding-profile.js"></script>
 </body>
 </html>

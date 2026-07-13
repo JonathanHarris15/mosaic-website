@@ -4,22 +4,23 @@
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Service Guide Manager - Mosaic Services</title>
-    <link href="https://fonts.googleapis.com" rel="preconnect" />
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&family=Work+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+
+
     <!-- Mosaic Print brand fonts (designed booklet Style Preset) -->
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Libre+Franklin:wght@300;400;500;600;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=UnifrakturCook:wght@700&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+
+
     <!-- CodeMirror: real line-numbered, syntax-highlighted HTML/CSS editing -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css" />
-    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
-    <script src="mosaic-theme.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage-compat.js"></script>
+    <link rel="stylesheet" href="vendor/codemirror/codemirror.min.css" />
+    <link rel="stylesheet" href="vendor/codemirror/theme/material-darker.min.css" />
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-storage-compat.js"></script>
     <script src="auth.js"></script>
     <script src="date-utils.js"></script>
     <script src="guide-engine.js"></script>
@@ -27,33 +28,34 @@
     <script src="guide-seed.js"></script>
     <script src="guide-store.js"></script>
     <script src="service-guide-manager.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <style type="text/tailwindcss">
-        [x-cloak] { display: none !important; }
-        .preview-page {
-            @apply bg-white shadow-lg mx-auto mb-6 relative text-black overflow-hidden;
+    <script src="vendor/codemirror/codemirror.min.js"></script>
+    <script src="vendor/codemirror/mode/xml/xml.min.js"></script>
+    <script src="vendor/codemirror/mode/javascript/javascript.min.js"></script>
+    <script src="vendor/codemirror/mode/css/css.min.js"></script>
+    <script src="vendor/codemirror/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script src="vendor/codemirror/addon/edit/closebrackets.min.js"></script>
+    <script src="vendor/codemirror/addon/edit/matchbrackets.min.js"></script>
+    <script src="vendor/codemirror/addon/selection/active-line.min.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+    <style>
+[x-cloak] { display: none !important; }
+        .preview-page { position: relative; margin-left: auto; margin-right: auto; margin-bottom: 1.5rem; overflow: hidden; --tw-bg-opacity: 1; background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1)); --tw-text-opacity: 1; color: rgb(0 0 0 / var(--tw-text-opacity, 1)); --tw-shadow: 0 18px 48px rgba(14,28,54,.14); --tw-shadow-colored: 0 18px 48px var(--tw-shadow-color); box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
             width: 5.5in; height: 8.5in; padding: 0.2in; box-sizing: border-box;
-            font-family: 'Times New Roman', Times, serif; font-size: 10pt; line-height: 1.2;
-        }
-        .latex-h1 { @apply text-[1.1rem] font-normal block; }
-        .latex-hr { @apply border-t border-black my-1 w-full; }
+            font-family: 'Times New Roman', Times, serif; font-size: 10pt; line-height: 1.2; }
+        .latex-h1 { display: block; font-size: 1.1rem; font-weight: 400; }
+        .latex-hr { margin-top: 0.25rem; margin-bottom: 0.25rem; width: 100%; border-top-width: 1px; --tw-border-opacity: 1; border-color: rgb(0 0 0 / var(--tw-border-opacity, 1)); }
         .latex-spacing-2 { line-height: 2.2; }
-        .preview-page ul, .preview-page ol { list-style-type: disc !important; @apply pl-8; }
-        .tab-btn { @apply px-4 py-2 text-sm font-semibold rounded-lg transition-colors; }
-        .tab-active { @apply bg-primary text-white; }
-        .tab-idle { @apply text-secondary hover:bg-surface; }
-        .card { @apply bg-white border border-outline-variant rounded-xl p-4 shadow-sm; }
-        .btn-primary { @apply px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-secondary transition-colors flex items-center gap-2; }
-        .btn-ghost { @apply px-3 py-2 border border-outline-variant rounded-lg text-primary hover:bg-surface transition-colors flex items-center gap-2; }
-        .code-editor { @apply w-full text-[11px] font-mono rounded border-outline-variant px-3 py-2 bg-gray-50; }
+        .preview-page ul, .preview-page ol { list-style-type: disc !important; padding-left: 2rem; }
+        .tab-btn { border-radius: 10px; padding-left: 1rem; padding-right: 1rem; padding-top: 0.5rem; padding-bottom: 0.5rem; font-size: 0.875rem; line-height: 1.25rem; font-weight: 600; transition-property: color, background-color, border-color, text-decoration-color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+        .tab-active { --tw-bg-opacity: 1; background-color: rgb(24 47 87 / var(--tw-bg-opacity, 1)); --tw-text-opacity: 1; color: rgb(255 255 255 / var(--tw-text-opacity, 1)); }
+        .tab-idle { --tw-text-opacity: 1; color: rgb(62 97 129 / var(--tw-text-opacity, 1)); }
+        .tab-idle:hover { --tw-bg-opacity: 1; background-color: rgb(251 247 240 / var(--tw-bg-opacity, 1)); }
+        .card { border-radius: 16px; border-width: 1px; --tw-border-opacity: 1; border-color: rgb(218 208 192 / var(--tw-border-opacity, 1)); --tw-bg-opacity: 1; background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1)); padding: 1rem; --tw-shadow: 0 2px 6px rgba(14,28,54,.08); --tw-shadow-colored: 0 2px 6px var(--tw-shadow-color); box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow); }
+        .btn-primary { display: flex; align-items: center; gap: 0.5rem; border-radius: 10px; --tw-bg-opacity: 1; background-color: rgb(24 47 87 / var(--tw-bg-opacity, 1)); padding-left: 1rem; padding-right: 1rem; padding-top: 0.5rem; padding-bottom: 0.5rem; font-weight: 600; --tw-text-opacity: 1; color: rgb(255 255 255 / var(--tw-text-opacity, 1)); transition-property: color, background-color, border-color, text-decoration-color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+        .btn-primary:hover { --tw-bg-opacity: 1; background-color: rgb(62 97 129 / var(--tw-bg-opacity, 1)); }
+        .btn-ghost { display: flex; align-items: center; gap: 0.5rem; border-radius: 10px; border-width: 1px; --tw-border-opacity: 1; border-color: rgb(218 208 192 / var(--tw-border-opacity, 1)); padding-left: 0.75rem; padding-right: 0.75rem; padding-top: 0.5rem; padding-bottom: 0.5rem; --tw-text-opacity: 1; color: rgb(24 47 87 / var(--tw-text-opacity, 1)); transition-property: color, background-color, border-color, text-decoration-color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+        .btn-ghost:hover { --tw-bg-opacity: 1; background-color: rgb(251 247 240 / var(--tw-bg-opacity, 1)); }
+        .code-editor { width: 100%; border-radius: 10px; --tw-border-opacity: 1; border-color: rgb(218 208 192 / var(--tw-border-opacity, 1)); --tw-bg-opacity: 1; background-color: rgb(249 250 251 / var(--tw-bg-opacity, 1)); padding-left: 0.75rem; padding-right: 0.75rem; padding-top: 0.5rem; padding-bottom: 0.5rem; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 11px; }
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #3a3f4b; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4b515f; }

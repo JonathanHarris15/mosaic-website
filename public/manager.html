@@ -4,21 +4,70 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Hymn Manager - Mosaic Church</title>
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script src="mosaic-theme.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400..700;1,400..700&amp;family=Work+Sans:wght@400..700&amp;display=swap" rel="stylesheet"/>
+
+    <!-- Mobile shell: adapt this page when opened inside the Capacitor WebView.
+         The mobile Hymn Directory routes here — "Manage Hymn" (?edit=<id>) and
+         the add-a-hymn FAB (?new=1) — so there is no separate mobile manager. -->
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <script>window.MOBILE_HEADER = { title: new URLSearchParams(location.search).get('edit') ? 'Edit Hymn' : 'New Hymn', back: 'mobile.html#/hymnDirectory' };</script>
+    <script src="mobile-shell-header.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.MOSAIC_SHELL === 'mobile') {
+                var h = document.getElementById('shell-home-link');
+                if (h) h.setAttribute('href', 'mobile.html#/home');
+            }
+        });
+    </script>
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+
+
     <link rel="stylesheet" href="manager.css">
+
+    <!-- ============================================================
+         Mobile shell: the desktop catalog list must NOT be reachable on the
+         phone. When opened in-shell (always via ?edit=<id> or ?new=1, which
+         auto-open the form), hide the toolbar + catalog and present just the
+         edit/create form as a full-screen page. Close / Cancel / Save exit to
+         the app's Hymn Directory (manager.js closeForm/exitToApp). Desktop is
+         untouched. Colours are the theme hexes (no --token vars on this page).
+         ============================================================ -->
+    <style>
+        html.shell-mobile #mgr-toolbar,
+        html.shell-mobile #mgr-list-area { display: none; }
+
+        /* Turn the centred modal into a full-bleed page: the card fills the fixed
+           overlay via absolute-inset (independent of the flex centring / Alpine's
+           inline display on the overlay). */
+        html.shell-mobile #mgr-modal { padding: 0; background: transparent; backdrop-filter: none; }
+        html.shell-mobile #mgr-modal-card {
+            position: absolute; inset: 0;
+            max-width: none; width: 100%; max-height: none; height: 100%;
+            border: none; border-radius: 0; box-shadow: none;
+        }
+        html.shell-mobile #mgr-modal-body { padding: 16px; }
+        html.shell-mobile #mgr-modal-foot { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); }
+        /* Standardized back-arrow header (mobile-shell-header.js) replaces the
+           modal's own head (icon + X) and the foot Cancel; offset the full-bleed
+           modal below the fixed header. Save stays. */
+        html.shell-mobile #mgr-modal { top: var(--msh-height, 62px); }
+        html.shell-mobile #mgr-modal-head { display: none; }
+        html.shell-mobile #mgr-cancel-btn { display: none; }
+    </style>
     
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-storage-compat.js"></script>
+    <script src="vendor/firebase/firebase-functions-compat.js"></script>
     
     <script src="auth.js"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
     
 </head>
 <body class="bg-background text-on-background font-body-md antialiased h-screen flex flex-col relative overflow-hidden">
@@ -27,7 +76,7 @@
     
     <header class="w-full flex-shrink-0 flex justify-between items-center px-6 py-4 max-w-full mx-auto border-b border-surface-variant/30 relative z-10 bg-surface">
         <div class="flex-1">
-            <a href="index.html" class="font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-2 uppercase tracking-widest text-[11px]">
+            <a id="shell-home-link" href="index.html" class="font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-2 uppercase tracking-widest text-[11px]">
                 <span class="material-symbols-outlined text-sm">arrow_back</span>
                 <span class="hidden md:inline">Back to Dashboard</span>
                 <span class="md:hidden">Back</span>
@@ -43,7 +92,7 @@
     
     <main class="flex-1 flex flex-col w-full max-w-[1280px] mx-auto relative z-10 overflow-hidden" x-data="hymnManager()">
         <!-- Sticky Action Bar -->
-        <div class="px-gutter py-md border-b border-surface-variant/10 bg-background/80 backdrop-blur-md flex-shrink-0 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 z-20">
+        <div id="mgr-toolbar" class="px-gutter py-md border-b border-surface-variant/10 bg-background/80 backdrop-blur-md flex-shrink-0 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 z-20">
             <h1 class="font-headline-md text-2xl text-primary tracking-tight flex-shrink-0">Hymn Catalog</h1>
             <div class="flex items-center gap-3 w-full sm:w-auto">
                 <div class="relative flex-1 sm:flex-none sm:w-72">
@@ -63,7 +112,7 @@
         </div>
 
         <!-- Scrollable List Area -->
-        <div class="flex-1 overflow-y-auto px-gutter py-md scrollbar-thin">
+        <div id="mgr-list-area" class="flex-1 overflow-y-auto px-gutter py-md scrollbar-thin">
             <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-sm overflow-hidden">
                 <div class="p-md border-b border-surface-variant/30 flex justify-between items-center bg-surface-container-low/50">
                     <span class="font-label-md text-xs text-on-surface-variant uppercase tracking-widest" x-text="searchQuery ? filteredHymns.length + ' of ' + hymns.length + ' Hymns' : hymns.length + ' Total Hymns'"></span>
@@ -137,6 +186,7 @@
         <!-- Modal Overlay -->
         <div x-show="showFormModal" 
              x-cloak
+             id="mgr-modal"
              class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-primary/20 backdrop-blur-sm"
              x-transition:enter="transition ease-out duration-300"
              x-transition:enter-start="opacity-0"
@@ -145,20 +195,20 @@
              x-transition:leave-start="opacity-100"
              x-transition:leave-end="opacity-0">
             
-            <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden relative"
-                 @click.away="!isSubmitting && resetForm()">
-                
-                <div class="flex items-center justify-between p-md border-b border-outline-variant/20 bg-surface-container-low/50">
+            <div id="mgr-modal-card" class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden relative"
+                 @click.away="!isSubmitting && closeForm()">
+
+                <div id="mgr-modal-head" class="flex items-center justify-between p-md border-b border-outline-variant/20 bg-surface-container-low/50">
                     <div class="flex items-center gap-3">
                         <span class="material-symbols-outlined text-primary" x-text="isEditing ? 'edit_note' : 'add_circle'"></span>
                         <h2 class="font-headline-md text-xl text-primary tracking-tight" x-text="isEditing ? 'Edit Hymn Details' : 'Register New Hymn'"></h2>
                     </div>
-                    <button @click="resetForm()" class="text-on-surface-variant hover:text-error transition-colors" :disabled="isSubmitting">
+                    <button @click="closeForm()" class="text-on-surface-variant hover:text-error transition-colors" :disabled="isSubmitting">
                         <span class="material-symbols-outlined">close</span>
                     </button>
                 </div>
 
-                <div class="flex-1 overflow-y-auto p-lg scrollbar-thin">
+                <div id="mgr-modal-body" class="flex-1 overflow-y-auto p-lg scrollbar-thin">
                     <form id="add-hymn-form" @submit.prevent="handleSubmit" class="space-y-md">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-md">
                             <div class="flex flex-col gap-xs">
@@ -260,8 +310,8 @@
                     </form>
                 </div>
 
-                <div class="p-md border-t border-surface-variant/20 bg-surface-container-low/50 flex justify-end items-center gap-md">
-                    <button type="button" @click="resetForm()" class="text-secondary hover:text-error font-label-md text-xs uppercase tracking-widest transition-colors" :disabled="isSubmitting">
+                <div id="mgr-modal-foot" class="p-md border-t border-surface-variant/20 bg-surface-container-low/50 flex justify-end items-center gap-md">
+                    <button type="button" id="mgr-cancel-btn" @click="closeForm()" class="text-secondary hover:text-error font-label-md text-xs uppercase tracking-widest transition-colors" :disabled="isSubmitting">
                         Cancel
                     </button>
                     <button type="button" @click="handleSubmit()" :disabled="isSubmitting" class="bg-primary text-on-primary font-label-md text-label-md px-lg py-3 rounded-lg hover:bg-primary-container transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">

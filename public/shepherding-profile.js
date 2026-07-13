@@ -212,7 +212,9 @@ function tiptapJsonToHtml(doc) {
 }
 
 document.addEventListener('alpine:init', () => {
-    Alpine.data('shepherdingProfile', () => ({
+    // withQuickAssign, not object spread: the quick-assign card exposes getters and
+    // spreading would freeze them at their page-load values.
+    Alpine.data('shepherdingProfile', () => window.withQuickAssign({
         currentUser: null,
         currentUserRole: null,
         currentUserName: '',
@@ -251,6 +253,21 @@ document.addEventListener('alpine:init', () => {
         isDeleting: false,
 
         collapseStatusChanges: false,
+
+        // Relationships (ADR-0012, MS-89) — the elder-only edge graph.
+        relationships: [],
+        relationshipTypes: [],
+        allPeople: [],
+        families: [],   // ADR-0013, MS-93 — source of the read-only Family projection
+        // Relationship Tracker card (MS-93 design): two avatars + a phrase with a
+        // directional chevron at each end. rightActive = flows toward the other
+        // person (this Person is the source); leftActive = flows toward this
+        // Person; both = symmetric (non-directional).
+        relPersonQuery: '',
+
+        // Elder Assignment (ADR-0013, MS-94)
+        showAssignElder: false,
+        assignmentSaving: false,
 
         noteTypes: [...NOTE_TYPES, 'Create New Note Type'],
         loading: true,
@@ -297,9 +314,202 @@ document.addEventListener('alpine:init', () => {
                     this.loadNotes(),
                     this.loadTags(),
                     this.loadActivity(),
+                    this.loadRelationships(),
                 ]);
                 this.loading = false;
             });
+        },
+
+        // ── Relationships (ADR-0012, MS-89; ADR-0013, MS-93) ─────────────────
+        async loadRelationships() {
+            try {
+                const [relSnap, typeSnap, peopleSnap, famSnap, groupSnap] = await Promise.all([
+                    db.collection('relationships').get(),
+                    db.collection('relationship_types').get(),
+                    db.collection('people').orderBy('name').get(),
+                    db.collection('families').get(),
+                    db.collection('relationship_groups').get(),
+                ]);
+                this.relationships = relSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                this.relationshipTypes = typeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                this.relGroups = groupSnap.docs.map(d => ({ id: d.id, leaderId: null, memberIds: [], ...d.data() }));
+                // Carry `sex` for the Family projection's gendered labels, `tags`
+                // so the Assigned-Elder picker can find Elder-Tag People, and
+                // `shepherding` so an elder's Care Group (reverse query) resolves.
+                this.allPeople = peopleSnap.docs.map(d => ({ id: d.id, name: (d.data().name || '(Unnamed)'), sex: d.data().sex || null, tags: d.data().tags || [], shepherding: d.data().shepherding || {} }));
+                this.families = famSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            } catch (e) {
+                console.error('Error loading relationships:', e);
+            }
+        },
+
+        relPersonName(id) {
+            const p = this.allPeople.find(x => x.id === id);
+            return p ? p.name : '(unknown)';
+        },
+
+        relPersonSex(id) {
+            const p = this.allPeople.find(x => x.id === id);
+            return p ? p.sex : null;
+        },
+
+        relTypeById(id) {
+            return this.relationshipTypes.find(t => t.id === id) || null;
+        },
+
+        // personRelationships — the card's row model (Family + Pairwise + Group)
+        // — now lives in shepherding-quick-assign.js, beside the actions that
+        // mutate those rows.
+
+        relInitials(name) {
+            const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+            if (!parts.length) return '?';
+            if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+            return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+        },
+
+        // The free-type relationship form (relForm, the chevron direction toggles,
+        // relSentencePreview) lived here. It is gone: a Relationship Type is now a
+        // kind × priority structure that a text box cannot express, and vocabulary is
+        // curated in one place. The card applies existing types — see
+        // shepherding-quick-assign.js.
+
+        // ── Elder Assignment (ADR-0013, MS-94) ───────────────────────────────
+        // A dedicated section (NOT the Relationships panel) assigns this member to
+        // exactly one elder for care. Writes shepherding.assignedElderId (the
+        // elder's Person id) and logs an Assignment Change to the Pastoral Record.
+        get assignedElderId() {
+            return (this.person && this.person.shepherding && this.person.shepherding.assignedElderId) || null;
+        },
+        get assignedElderName() {
+            return this.assignedElderId ? this.relPersonName(this.assignedElderId) : '';
+        },
+        // The assignable set is exactly the Elder-Tag People (excluding self, so a
+        // person is never their own elder).
+        get elderCandidates() {
+            return this.allPeople
+                .filter(p => p.id !== this.personId && ShepherdingCore.isElderPerson(p))
+                .slice()
+                .sort((a, b) => a.name.localeCompare(b.name));
+        },
+
+        async setAssignedElder(elderId) {
+            const newId = elderId || null;
+            const prevId = this.assignedElderId;
+            if (newId === prevId) return;
+            this.assignmentSaving = true;
+            try {
+                await ShepherdingCore.commitAssignmentChange(db, this.personId, {
+                    previous: { elderId: prevId, elderName: prevId ? this.relPersonName(prevId) : '' },
+                    next: { elderId: newId, elderName: newId ? this.relPersonName(newId) : '' },
+                    authorUid: this.currentUser && this.currentUser.uid,
+                    authorName: this.currentUserName,
+                    source: 'profile',
+                });
+                if (!this.person.shepherding) this.person.shepherding = {};
+                this.person.shepherding.assignedElderId = newId;
+                await this.loadActivity();  // surface the new Assignment Change in the feed
+                this.showToast(newId ? `Assigned to ${this.relPersonName(newId)}` : 'Assignment cleared');
+            } catch (e) {
+                console.error('Error updating elder assignment:', e);
+                this.showToast('Error updating assignment', 'error');
+            } finally {
+                this.assignmentSaving = false;
+            }
+        },
+        clearAssignedElder() { return this.setAssignedElder(null); },
+
+        // Is the Person being viewed an elder (carries the projected Elder Tag)?
+        get viewedPersonIsElder() {
+            return ShepherdingCore.isElderPerson(this.person);
+        },
+        // The elder's Care Group: the members assigned to them (reverse query).
+        get careGroup() {
+            return ShepherdingCore.careGroupOf(this.allPeople, this.personId)
+                .slice()
+                .sort((a, b) => a.name.localeCompare(b.name));
+        },
+
+        // ── Membership Track (ADR-0012) — the stage slider, also on the profile ──
+        // The same Track control the People list has, driven off this Person and
+        // committing one Membership Change (silent tag swap) per move. Editors only.
+        get canEditMembership() {
+            return ['editor', 'admin', 'elder', 'super_admin'].includes(this.currentUserRole);
+        },
+        get membershipStages() { return ShepherdingCore.MEMBERSHIP_STAGES; },
+        get membershipIndex() {
+            const stage = this.person && this.person.membership && this.person.membership.stage;
+            const i = ShepherdingCore.MEMBERSHIP_STAGES.indexOf(stage);
+            return i === -1 ? 0 : i;
+        },
+        get membershipInactive() {
+            return !!(this.person && this.person.membership && this.person.membership.inactive);
+        },
+        get membershipStageLabel() {
+            if (this.membershipInactive) return 'Inactive';
+            const stage = this.person && this.person.membership && this.person.membership.stage;
+            return ShepherdingCore.MEMBERSHIP_STAGE_LABEL[stage] || 'Not on the Track';
+        },
+        async setMembershipStageByIndex(index) {
+            const stage = ShepherdingCore.MEMBERSHIP_STAGES[Number(index)];
+            if (!stage) return;
+            await this.commitMembership({ stage, inactive: false });
+        },
+        async toggleMembershipInactive() {
+            const m = (this.person && this.person.membership) || {};
+            await this.commitMembership({ stage: m.stage || null, inactive: !m.inactive });
+        },
+        async commitMembership(next) {
+            const person = this.person;
+            if (!person) return;
+            const previous = {
+                stage: (person.membership && person.membership.stage) || null,
+                inactive: !!(person.membership && person.membership.inactive),
+            };
+            if (previous.stage === next.stage && previous.inactive === next.inactive) return;
+            try {
+                await ShepherdingCore.commitMembershipChange(db, person.id, {
+                    currentTags: person.tags || [],
+                    previous,
+                    next,
+                    authorUid: this.currentUser && this.currentUser.uid,
+                    authorName: this.currentUserName,
+                    source: 'profile',
+                });
+                // Reflect the field + re-projected tags locally, then refresh the feed.
+                const newTags = ShepherdingCore.applyMembershipTags(person.tags || [], next);
+                person.membership = { ...(person.membership || {}), stage: next.stage, inactive: next.inactive };
+                person.tags = newTags;
+                await this.loadActivity();
+                this.showToast(ShepherdingCore.describeMembershipChange(
+                    ShepherdingCore.buildMembershipChange({ previous, next })
+                ));
+            } catch (e) {
+                console.error('Error updating membership:', e);
+                this.showToast('Error updating membership', 'error');
+            }
+        },
+
+        // Create (or reuse) a Relationship Type by the typed phrase, then add the
+        // edge oriented by the chevrons: both ends on → symmetric (non-directional);
+        // left-only → the other person is the source (flows toward this Person);
+        // otherwise this Person is the source.
+        // addRelationship() lived here. It free-typed a Relationship Type into
+        // existence — `{ name, directional }` — straight from the profile. ADR-0014
+        // retires both halves of that: `directional` is gone, and vocabulary is now
+        // curated in Manage Tags and Relationships, never minted from a profile. The
+        // card applies existing types only; see qaAddPairwise in
+        // shepherding-quick-assign.js.
+
+        async deleteRelationship(edgeId) {
+            try {
+                await db.collection('relationships').doc(edgeId).delete();
+                this.relationships = this.relationships.filter(r => r.id !== edgeId);
+                this.showToast('Relationship removed');
+            } catch (e) {
+                console.error('Error removing relationship:', e);
+                this.showToast('Error removing relationship', 'error');
+            }
         },
 
         async loadPerson() {
@@ -743,6 +953,12 @@ document.addEventListener('alpine:init', () => {
         hasTag(tagId) { return (this.person?.tags || []).includes(tagId); },
 
         async toggleTag(tagId) {
+            // Projected Tags follow their source of truth (ADR-0012 Membership
+            // Track, ADR-0013 Elder role), never manual tagging.
+            if (ShepherdingCore.isProjectedTagId(tagId)) {
+                this.showToast('This tag is set by the system, not manual tagging', 'error');
+                return;
+            }
             const current = this.person?.tags || [];
             const hasIt = current.includes(tagId);
             const newTags = hasIt ? current.filter(t => t !== tagId) : [...current, tagId];

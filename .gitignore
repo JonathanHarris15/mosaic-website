@@ -15,3 +15,14 @@ docs/.venv/
 
 # Misc
 examples/
+
+# Logs
+*.log
+firebase-debug.log
+firestore-debug.log
+cmdline-tools.zip
+
+# Claude Code local settings (personal permission grants, not shared)
+.claude/settings.json
+.claude/settings.local.json
+.claude/worktrees/

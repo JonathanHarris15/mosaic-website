@@ -3,28 +3,39 @@
 
 <head>
     <meta charset="utf-8" />
+    <!-- Native app only: launch the mobile shell when running inside Capacitor.
+         Runs before any resources load. Web browsers (any width) fall through
+         to the desktop app — a narrow desktop window is still the desktop app. -->
+    <script>
+        (function () {
+            var C = window.Capacitor;
+            var native = !!(C && (typeof C.isNativePlatform === "function"
+                ? C.isNativePlatform()
+                : (C.platform && C.platform !== "web")));
+            if (native && location.pathname.indexOf("mobile.html") === -1) {
+                location.replace("mobile.html");
+            }
+        })();
+    </script>
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Mosaic Services</title>
     <!-- Google Fonts: Noto Serif & Work Sans -->
-    <link href="https://fonts.googleapis.com" rel="preconnect" />
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-    <link
-        href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&amp;family=Work+Sans:wght@400;500;600;700&amp;display=swap"
-        rel="stylesheet" />
+
+
+
     <!-- Material Symbols -->
-    <link
-        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
-        rel="stylesheet" />
+
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script src="mosaic-theme.js"></script>
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
     <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-functions-compat.js"></script>
     <!-- SortableJS — drag-to-reorder dashboard cards -->
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="vendor/sortable-1.15.0.min.js"></script>
 
     <script src="auth.js"></script>
 </head>

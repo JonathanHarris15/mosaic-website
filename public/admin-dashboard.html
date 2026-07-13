@@ -4,21 +4,47 @@
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Admin Dashboard | Mosaic</title>
-    <link href="https://fonts.googleapis.com" rel="preconnect" />
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script src="mosaic-theme.js"></script>
-    <style type="text/tailwindcss">
+
+    <!-- Mobile shell: adapt this page when opened inside the Capacitor WebView. -->
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <style>
         [x-cloak] { display: none !important; }
     </style>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+
+    <!-- ============================================================
+         Mobile-shell presentation. When admin-dashboard.html opens inside
+         the Capacitor WebView (?shell=mobile → html.shell-mobile), this tunes
+         the desktop page to the "Admin Dashboard" screen from the Mosaic
+         Mobile design (mobile/screens_admin.jsx): tighter phone padding and
+         type on the SMS (Textbelt) + Prayer Request cards. The desktop grid
+         already stacks to one column on narrow widths. Desktop is untouched.
+         ============================================================ -->
+    <style>
+        html.shell-mobile main {
+            padding: 14px 16px calc(28px + env(safe-area-inset-bottom, 0px));
+            gap: 22px;
+            max-width: 100%;
+        }
+        html.shell-mobile main h1 { font-size: 24px; line-height: 1.2; }
+        html.shell-mobile main section > .flex > h2 { font-size: 19px; }
+        html.shell-mobile main h3 { font-size: 16.5px; }
+        html.shell-mobile main section { gap: 14px; }
+        /* p-lg is 48px — far too much on a phone; the design cards use 18px */
+        html.shell-mobile main .p-lg { padding: 18px; }
+        /* Credits figure: display-lg (48px) → 40px as in the design */
+        html.shell-mobile main .text-display-lg { font-size: 40px; }
+    </style>
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-functions-compat.js"></script>
     <script src="auth.js"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
 <body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"

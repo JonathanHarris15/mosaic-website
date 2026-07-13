@@ -75,8 +75,92 @@ A standalone dated reminder visible to all elders on the Shepherd Landing Page. 
 _Avoid_: Task, to-do, alert
 
 **Shepherding Tag**:
-An elder-defined label that can be applied to a Person within the Shepherding System. Tags are the primary filter criterion for Filtered Views. Any elder or super admin can create, delete, Rename, Merge, or apply/remove tags on a Person. A tag has a stable identity that is independent of its name: renaming a tag changes only its display name, never which Persons carry it. Examples: "Red Flag", "New Member Follow-up", "Married".
-_Avoid_: Label, category, attribute
+A label that can be applied to a Person. Tags are the primary filter criterion for Filtered Views and the People list. Elders and super admins are the primary managers — any of them can create, delete, Rename, Merge, or apply/remove tags on a Person — but tags are not elder-only-*visible*: some tags (e.g. the Member tag, and any Membership Tag) are surfaced to ordinary members in the People directory. Visibility is governed per-tag (see `hidePeople` metadata), not by the tag concept itself. A tag has a stable identity that is independent of its name: renaming a tag changes only its display name, never which Persons carry it. Examples: "Red Flag", "New Member Follow-up", "Married". Membership Tags are a special, code-defined subset — see Membership Tag.
+_Avoid_: Label, category, attribute (and "elder-only tag" — visibility is per-tag)
+
+**Membership Track**:
+The single ordered progression a Person moves along in their relationship with the church: **Visitor → Regular Attender → Prospective Member → Member → Moving Membership → Previous Member**. A Person sits at exactly one Membership Stage at a time. The Track is the church-relationship state machine — the one canonical replacement for the previously conflicting `membership.status` field, the ad-hoc "Member" tag, and any use of user *role* to imply membership. It is deliberately **not** a permission or a User role. A Person's stage on the Track is *not* self-editable — only an editor (via the stage slider) can move someone along it.
+_Avoid_: Membership status (as an enum synonym), member type, member level
+
+**Membership Stage**:
+One of the six code-defined positions on the Membership Track. The stages are baked into the code — their set, order, and names cannot be changed by any user. Moving a Person to a new stage is the only Track mutation.
+_Avoid_: Membership state, status value
+
+**Projected Tag**:
+A Shepherding Tag that is **code-defined and projected from a source-of-truth field**, not hand-applied — its presence on a Person is written by the projection and never edited directly. Immutable: it **cannot be renamed, deleted, merged, or visibility-toggled** by anyone, because the code seeds and maintains it. Two families exist: **Membership Tags** (projected from a Person's Membership Stage) and the **Elder Tag** (projected from the `elder` role of a Person's Linked User). The generalisation of the previously membership-only "special code-defined immutable tag" idea.
+_Avoid_: System tag, locked tag, derived tag (use Projected Tag)
+
+**Membership Tag**:
+A Projected Tag that *projects* a Person's Membership Stage onto them so the stage is filterable and searchable through the ordinary tag filter system (the reason the Track is represented as tags at all). Each Membership Stage maps to a **defined set** of Membership Tags — usually a single eponymous tag (Visitor→Visitor, Regular Attender→Regular Attender, Prospective Member→Prospective Member, Member→Member, Previous Member→Previous Member), but **Moving Membership projects two tags: its own Moving Membership tag *and* the Member tag**. This overlap is deliberate: it lets "the Members directory = every Person carrying the Member tag" stay a single trivial query while still distinguishing those mid-transfer. Advancing along the Track re-derives the whole set (removing tags the new stage doesn't project, adding the ones it does). Inactive projects the Inactive tag instead of any stage tag. Membership Tags are the membership family of Projected Tags. The Membership Stage field on the Person is the source of truth; the Membership Tags are its synced projection (written together, never edited independently).
+_Avoid_: Member tag (the legacy single "Member" tag this subsumes — the Member tag is now one of the code-defined Membership Tags), status tag
+
+**Elder Tag**:
+The Projected Tag that marks a Person as an Elder. Projected from the Person's Linked User having role `elder` — it is **not** hand-applied: linking/unlinking a User, or a role change to/from `elder`, adds or removes it. Like all Projected Tags it is immutable (no rename/delete/merge/hide). It is the canonical answer to "which Persons are Elders," and therefore supplies the assignable-elder set for Elder Assignment. Every Elder is also a Member, so an elder Person carries both the Elder Tag and their Membership Tags. Distinct from the User role `elder`, which is the permission source the tag is projected from (role grants shepherding *access*; the tag makes elder-ness a filterable, graph-visible Person attribute). Its visibility in the member-facing Membership Directory is **fixed and visible to ordinary members** (not toggleable, like all Projected Tags) — eldership is a public office.
+_Avoid_: Elder role (that is the User role), shepherd tag
+
+**Membership Directory**:
+The People directory as seen by the whole congregation, split into two tabs. The **Members tab** shows every Person carrying the Member tag (stage ∈ {Member, Moving Membership}). The **Non-members tab** shows the remaining active People who lack the Member tag (Visitor, Regular Attender, Prospective Member, Previous Member). Contact information is visible to members on both tabs (a member can look up a recent visitor). **Inactive** People appear on neither tab for a plain member. On either tab, an editor can enter **Edit Mode** to manage People inline. Supersedes the former single filter that showed non-editors only the ad-hoc "Member"-tagged people.
+_Avoid_: People directory (ambiguous with the editor-facing People Manager), member list
+
+**Edit Mode**:
+A toggle available to editors (and above) on the Membership Directory that turns the read-only directory into an inline People manager — the same surface, switched from viewing to editing People attributes (contact info, Membership Track slider, tags). Off by default; a plain member never sees the toggle.
+_Avoid_: Manage mode, admin mode
+
+**Linked User**:
+The association between a User (an authenticated account with a role) and a Person record, stored bidirectionally (`users.personId` ↔ `people.userId`) and set by an admin. When a User is linked, their own `profile.html` surfaces the **self-editable** fields of their Person and writes straight to the Person record (one source of truth, no copy). Self-editable fields are the Person's contact info (email, phone, address) and birthday, plus `sex` **only while unset** (a person may set their sex once; changing an already-set value is editor-only). The Membership Track, Shepherding Tags, Shepherding Status, involvement, and all shepherding data are **never** self-editable. From the Membership Directory, a Person viewing their own detail card gets an "Edit my info →" link to `profile.html` rather than inline editing. Anniversary is deliberately *not* self-editable — it belongs to Family structures (added later).
+_Avoid_: Account link, member login (a User is not necessarily a member)
+
+**Family**:
+A first-class entity (its own `families` collection) that groups a household for the Membership Directory: `{ husbandId?, wifeId?, childIds[], anniversary? }`. **Husband is exactly one male Person, Wife is exactly one female Person** (matching the `sex` enum); every field is optional, so partial families are allowed (a widow + kids, a childless couple, etc.). **Anniversary** (the couple's wedding date) lives on the Family, not the Person. Children are the shared `childIds` list — not duplicated onto each parent. **Multiple generations are emergent, not a nested tree:** a Person is a spouse in at most one Family (their marriage) and a child in at most one Family (their family of origin); a child who marries starts their own Family, and walking child → their-Family-as-spouse → that Family's children traverses the tree across any number of generations. **Editor-authored, not elder-only:** a Family is built and edited by an editor (or above) in the Membership Directory from *either spouse's card* — declaring who the spouse is and who the children are — never from the elder-only Shepherding Profile. On the Shepherding Profile it only **projects read-only** into the Relationships panel, as gendered Projected Relationships (Husband/Wife, Father/Mother, Son/Daughter, Brother/Sister; neutral fallback when sex is unset) covering spouse, parents, children, and siblings (siblings = the other children of the family of origin). Distinct from a Custom Relationship (the freeform, elder-authored edge model).
+_Avoid_: Household (use only as prose), family tree (that is the emergent traversal, not a stored structure), relationship (that is the freeform shepherd concept)
+
+**Relationship**:
+A connection among Persons, surfaced on the Shepherding Profile's Relationships panel (never in the member-facing Membership Directory). Two kinds share the panel: a **Custom Relationship** (elder-authored, stored, deletable — a **Pairwise Relationship** or a **Relationship Group**) and a **Projected Relationship** (derived from Family). Elder Assignment is deliberately **not** shown in this panel — it is a relationship in the Relations Viewer graph only. Relationships can cross-cut households.
+_Avoid_: Family (that is the tidy directory entity), tag (that is a Person label, not a Person-to-Person edge)
+
+**Custom Relationship**:
+An elder-authored, stored, deletable Relationship carrying a Relationship Type — the freeform, hand-built layer (vs. a Projected Relationship, which is derived from Family). Two shapes: a **Pairwise Relationship** — a typed edge between two Persons — and a **Relationship Group** — a named roster of a Group-kind type. Authored in the **Relationships tab** of Manage Tags and Relationships (where types are also defined), or quick-added from a Shepherding Profile into an **already-defined** type. Only Custom Relationships are deletable; Projected Relationships are not.
+_Avoid_: Manual relationship, freeform edge (use Custom Relationship)
+
+**Pairwise Relationship**:
+A Custom Relationship that is a single typed edge between two Persons, stored in the `relationships` collection as `{fromId, toId, typeId}`. If its Relationship Type is **Prioritized**, `fromId` is the **priority holder** (shown with the type's Holder Label) and `toId` the Counterpart; if **Non-Prioritized** it renders symmetrically.
+_Avoid_: edge, link, directional relationship (use Pairwise Relationship)
+
+**Relationship Group**:
+A Custom Relationship that is a named roster of a **Group**-kind Relationship Type — one record naming the group (e.g. "Tuesday Bible Study") and listing its member Persons. If its type is **Prioritized** it has a single **leader** (the priority holder, shown with the Leader Label) plus members; if **Non-Prioritized** it is a flat roster with no leader. A Person may belong to many. Distinct from a **Care Group** (an Elder's assigned People, derived from Elder Assignment) and from a **Family**.
+_Avoid_: Care Group, small group, cohort (use Relationship Group)
+
+**Projected Relationship**:
+A relationship shown in the Relationships panel that is **derived at render time from Family** (spouse, parent, child — via FamilyCore) and never stored as an edge. Its display is always a synced view of the Family (the source of truth), but it **can be authored from the panel by write-through**: adding or removing a Family relation from the quick-assign card writes straight to the `families` collection (find-or-create / detach), never a parallel edge. Removal is scoped to the individual (e.g. pull from `childIds`); removing a **spouse** necessarily ends the mutual pairing. Full family restructuring still lives in the Membership Directory. (Elder Assignment is *not* a Projected Relationship — it never surfaces in the panel; it feeds only the Relations Viewer.)
+_Avoid_: Auto relationship, derived edge (use Projected Relationship)
+
+**Elder Assignment**:
+The pastoral-care link marking which single Elder is responsible for shepherding a Person. A Person has **at most one** assigned Elder (their shepherding elder); an Elder may shepherd many People — their **Care Group** (the reverse set). Authored in a dedicated single-elder-picker section on the Person's Shepherding Profile. It does **not** appear in the Relationships panel at all — it lives only in that dedicated section and supplies the "view by elder" axis of the Relations Viewer. Distinct from the Elder Tag (which marks who *is* an elder, not whom they shepherd) and from a Custom Relationship (freeform, deletable).
+_Avoid_: Elder link, shepherd assignment (use Elder Assignment), care group (reserve for the reverse set — an Elder's assigned People)
+
+**Relations Viewer**:
+An elder-only visual tool on the Shepherd Dashboard for exploring how People are connected. People are nodes; their relationships are edges, rendered in an **interactive force-directed graph** — an Obsidian-style physics simulation where nodes are draggable and their connected neighbours follow. There is **one layout** (the physics web); the different "views" are just **edge-type filtering**. A left-hand **Edge-Type Toggle List** switches individual edge types on/off — one entry per Relationship Type (the elder-defined vocabulary, growing automatically) plus **Family** and **Elder Assignment**. Three **preset buttons** — **Full Web** (all edge types on), **By Family** (only Family on), **By Elder** (only Elder Assignment on) — set the toggles to common configurations; the elder can also set any combination by hand. A separate **Show-Isolated toggle** controls whether People with no *currently-visible* edges are hidden or shown. Clusters (households, Care Groups) are **emergent** from the filtered edges under the physics sim, not a separate layout mode. Visual/layout/styling design is authored separately (Cloud Design); this entry fixes only the data-and-behavior contract.
+_Avoid_: Relations Dashboard, relationship graph (use only as prose), view mode (there is one layout, filtered by edge type)
+
+**Relationship Type**:
+A reusable, elder-defined definition for a kind of Relationship, saved once and re-appliable — the vocabulary grows as elders add types, parallel to how Shepherding Tags accrue. Every type has two axes. Its **kind** is **Pairwise** (connects two Persons) or **Group** (a roster of many Persons). Its **priority** is **Prioritized** or **Non-Prioritized**: a Prioritized type names two roles — the **Holder Label** and **Counterpart Label** for a Pairwise type (e.g. Discipler / Disciplee), or the **Leader Label** and **Member Label** for a Group type — and renders oriented; a Non-Prioritized type names a single symmetric **Label** (e.g. Friendship, or a group's Member Label) and renders unoriented. Defined in the **Relationships tab** of Manage Tags and Relationships — **never** created inline on a profile. Distinct from a Shepherding Tag: a Tag labels one Person, a Relationship Type labels a Relationship among Persons.
+_Avoid_: Relationship tag, edge label, directional (**Prioritized** is its enriched successor)
+
+**Servant Role**:
+A non-liturgical service contribution — kids ministry, setup/teardown, coffee, sound, etc. — as opposed to the liturgical Roles (preacher, service leader, worship leader…). Servant Roles will be scheduled on a future **servant-roles tab** of the Service Calendar, distinct from the Order of Service editor, and recorded as Involvement like liturgical roles. **Out of scope for the People System (MS-81)** — MS-81's only obligation is to keep the Involvement model **role-open** (any `type` slug is accepted, no schema change) so the servant-roles feature can plug in later.
+_Avoid_: Ministry role, volunteer role (use Servant Role), duty
+
+**Inactive** (a Person):
+An off-Track state, toggled beside the Membership Stage slider. Marking a Person Inactive **removes their spot on the Membership Track** (they carry no Membership Stage while Inactive) and applies the Inactive Membership Tag in place of a stage tag. The Person's record stays **fully visible** — Inactive is *not* archival and does not hide the record; it is reserved for later use such as surfacing stale records that may warrant deletion. Distinct from **Previous Member**, which is a genuine Track stage (someone who was a Member and has since left but is still a tracked relationship). The prior Membership Stage is retained under the hood so that clearing Inactive restores the Person to where they were on the Track. Replaces the old `membership.status: 'inactive'` value; the existing "active people" filters (`status !== 'inactive'`) become "not Inactive."
+_Avoid_: Archived, hidden, deleted, dormant
+
+**Membership Change**:
+A Pastoral Record entry that captures a Person's move along the Membership Track (including onto/off of Inactive). Records the previous stage, the new stage, which editor made the change, the source, a timestamp, and an optional Explanation — mirroring Status Change. Generated once per slider move. The underlying Membership Tag swap is performed silently and does **not** generate Tag Changes; the Membership Change is the canonical record of the transition, and the Person's membership history is derived from these entries.
+_Avoid_: Status Change (that is Shepherding Status), tag change, track change
+
+**Assignment Change**:
+A Pastoral Record entry that captures a change to a Person's Elder Assignment — being assigned to an Elder, reassigned to a different Elder, or unassigned. Records the previous Elder, the new Elder, which Elder made the change, the source, a timestamp, and an optional Explanation — mirroring Membership Change and Status Change. Generated once per change, made from the Assigned Elder section of the Shepherding Profile.
+_Avoid_: Elder change, reassignment, care change (use Assignment Change)
 
 **Red Flag**:
 A Shepherding Tag (not a built-in field) used as the canonical example of elder-defined tagging. No special UI treatment beyond being a tag.
