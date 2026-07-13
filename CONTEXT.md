@@ -115,15 +115,23 @@ A first-class entity (its own `families` collection) that groups a household for
 _Avoid_: Household (use only as prose), family tree (that is the emergent traversal, not a stored structure), relationship (that is the freeform shepherd concept)
 
 **Relationship**:
-A connection between two Persons, surfaced only on the Shepherding Profile's Relationships panel (never in the member-facing Membership Directory). Two kinds share the panel: a **Custom Relationship** (elder-authored, freeform, deletable) and a **Projected Relationship** (derived from Family, and not deletable there). Elder Assignment is deliberately **not** shown in this panel — it is a relationship in the Relations Viewer graph only. Relationships can cross-cut households.
+A connection among Persons, surfaced on the Shepherding Profile's Relationships panel (never in the member-facing Membership Directory). Two kinds share the panel: a **Custom Relationship** (elder-authored, stored, deletable — a **Pairwise Relationship** or a **Relationship Group**) and a **Projected Relationship** (derived from Family). Elder Assignment is deliberately **not** shown in this panel — it is a relationship in the Relations Viewer graph only. Relationships can cross-cut households.
 _Avoid_: Family (that is the tidy directory entity), tag (that is a Person label, not a Person-to-Person edge)
 
 **Custom Relationship**:
-An elder-authored typed edge between two Persons, stored in the `relationships` collection as `{fromId, toId, typeId}`. Carries a Relationship Type and, from that type, a direction. Created and deleted **inline in the Relationships panel** — the freeform, hand-built layer, and the only relationships an elder can delete from the panel.
+An elder-authored, stored, deletable Relationship carrying a Relationship Type — the freeform, hand-built layer (vs. a Projected Relationship, which is derived from Family). Two shapes: a **Pairwise Relationship** — a typed edge between two Persons — and a **Relationship Group** — a named roster of a Group-kind type. Authored in the **Relationships tab** of Manage Tags and Relationships (where types are also defined), or quick-added from a Shepherding Profile into an **already-defined** type. Only Custom Relationships are deletable; Projected Relationships are not.
 _Avoid_: Manual relationship, freeform edge (use Custom Relationship)
 
+**Pairwise Relationship**:
+A Custom Relationship that is a single typed edge between two Persons, stored in the `relationships` collection as `{fromId, toId, typeId}`. If its Relationship Type is **Prioritized**, `fromId` is the **priority holder** (shown with the type's Holder Label) and `toId` the Counterpart; if **Non-Prioritized** it renders symmetrically.
+_Avoid_: edge, link, directional relationship (use Pairwise Relationship)
+
+**Relationship Group**:
+A Custom Relationship that is a named roster of a **Group**-kind Relationship Type — one record naming the group (e.g. "Tuesday Bible Study") and listing its member Persons. If its type is **Prioritized** it has a single **leader** (the priority holder, shown with the Leader Label) plus members; if **Non-Prioritized** it is a flat roster with no leader. A Person may belong to many. Distinct from a **Care Group** (an Elder's assigned People, derived from Elder Assignment) and from a **Family**.
+_Avoid_: Care Group, small group, cohort (use Relationship Group)
+
 **Projected Relationship**:
-A read-only relationship shown in the Relationships panel that is **derived at render time from Family** (spouse, parent, child — via FamilyCore), never stored as an edge and **not deletable in the panel** — you change it by editing the Family. Exactly parallel to a Projected Tag: the source field is truth, the relationship is its synced view. (Elder Assignment is *not* a Projected Relationship — it never surfaces in the panel; it feeds only the Relations Viewer.)
+A relationship shown in the Relationships panel that is **derived at render time from Family** (spouse, parent, child — via FamilyCore) and never stored as an edge. Its display is always a synced view of the Family (the source of truth), but it **can be authored from the panel by write-through**: adding or removing a Family relation from the quick-assign card writes straight to the `families` collection (find-or-create / detach), never a parallel edge. Removal is scoped to the individual (e.g. pull from `childIds`); removing a **spouse** necessarily ends the mutual pairing. Full family restructuring still lives in the Membership Directory. (Elder Assignment is *not* a Projected Relationship — it never surfaces in the panel; it feeds only the Relations Viewer.)
 _Avoid_: Auto relationship, derived edge (use Projected Relationship)
 
 **Elder Assignment**:
@@ -135,8 +143,8 @@ An elder-only visual tool on the Shepherd Dashboard for exploring how People are
 _Avoid_: Relations Dashboard, relationship graph (use only as prose), view mode (there is one layout, filtered by edge type)
 
 **Relationship Type**:
-A reusable, elder-defined label for a kind of Relationship (e.g. "dating", "mentors", "caregiver for"), saved once and re-appliable to any pair of Persons — the freeform vocabulary grows organically as elders type new ones, exactly parallel to how Shepherding Tags accrue. A Relationship Type is **optionally directional**: a directional type (e.g. "mentors") renders oriented on both profiles ("A mentors B"), a non-directional type (e.g. "dating") renders symmetrically. Distinct from a Shepherding Tag: a Tag labels one Person, a Relationship Type labels an *edge* between two.
-_Avoid_: Relationship tag, edge label
+A reusable, elder-defined definition for a kind of Relationship, saved once and re-appliable — the vocabulary grows as elders add types, parallel to how Shepherding Tags accrue. Every type has two axes. Its **kind** is **Pairwise** (connects two Persons) or **Group** (a roster of many Persons). Its **priority** is **Prioritized** or **Non-Prioritized**: a Prioritized type names two roles — the **Holder Label** and **Counterpart Label** for a Pairwise type (e.g. Discipler / Disciplee), or the **Leader Label** and **Member Label** for a Group type — and renders oriented; a Non-Prioritized type names a single symmetric **Label** (e.g. Friendship, or a group's Member Label) and renders unoriented. Defined in the **Relationships tab** of Manage Tags and Relationships — **never** created inline on a profile. Distinct from a Shepherding Tag: a Tag labels one Person, a Relationship Type labels a Relationship among Persons.
+_Avoid_: Relationship tag, edge label, directional (**Prioritized** is its enriched successor)
 
 **Servant Role**:
 A non-liturgical service contribution — kids ministry, setup/teardown, coffee, sound, etc. — as opposed to the liturgical Roles (preacher, service leader, worship leader…). Servant Roles will be scheduled on a future **servant-roles tab** of the Service Calendar, distinct from the Order of Service editor, and recorded as Involvement like liturgical roles. **Out of scope for the People System (MS-81)** — MS-81's only obligation is to keep the Involvement model **role-open** (any `type` slug is accepted, no schema change) so the servant-roles feature can plug in later.

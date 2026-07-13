@@ -18,6 +18,25 @@
     // dependency-free; the tests pin that all three agree.
     var ELDER_TAG = 'Elder';
 
+    // Relationship Group bubble colours (MS-105, from the Cloud Design pass).
+    // Deliberately clear of the membership-stage pips and the custom-edge palette:
+    // bubbles are filled regions, so they must not be mistaken for either. Assigned
+    // here rather than in the viewer, so a group keeps its colour across reloads.
+    var GROUP_PALETTE = ['#5E8C8A', '#C0803A', '#8E6FA6', '#6F9E5C', '#C26B6B', '#4E7BA6'];
+
+    // A Relationship Type is a kind × priority structure (ADR-0014). Legacy docs
+    // carry a `directional` flag instead — read them defensively, so the graph is
+    // right before the backfill has run.
+    function typeKind(type) {
+        return (type && type.kind === 'group') ? 'group' : 'pairwise';
+    }
+    function typeIsPrioritized(type) {
+        if (!type) return false;
+        if (type.kind) return !!type.priority;
+        return !!type.directional; // legacy: `directional` is priority's ancestor
+    }
+    function isGroupType(type) { return typeKind(type) === 'group'; }
+
     // Split a display name into first/last/initials, matching the viewer's chips.
     function nameParts(person) {
         var name = person.name || [person.firstName, person.lastName].filter(Boolean).join(' ') || '(no name)';
@@ -49,6 +68,7 @@
         var families = inp.families || [];
         var relationships = inp.relationships || [];
         var relationshipTypes = inp.relationshipTypes || [];
+        var relationshipGroups = inp.relationshipGroups || [];
         var eldersById = inp.eldersById || null;
 
         var nodes = [];
@@ -91,33 +111,95 @@
             }
         });
 
-        // Custom Relationships: one edge per stored relationship, typed by its type.
-        var typeName = {};
-        relationshipTypes.forEach(function (t) { typeName[t.id] = t.name || 'Relationship'; });
+        // Custom Relationships: one edge per stored Pairwise Relationship. A
+        // GROUP-kind type has no edges at all — it governs bubbles (below).
+        //
+        // For a Prioritized type, `fromId` is the priority holder (ADR-0014 s2), so
+        // the edge's `a` end is the holder and `b` the counterpart. That is all the
+        // viewer needs to point the arrowhead the right way.
+        var typeById = {};
+        relationshipTypes.forEach(function (t) { typeById[t.id] = t; });
         relationships.forEach(function (r) {
             if (!r.fromId || !r.toId || !r.typeId) return;
-            if (!(r.typeId in typeName)) return; // unknown type → skip (dangling)
-            add(r.fromId, r.toId, 'rel:' + r.typeId, typeName[r.typeId]);
+            var t = typeById[r.typeId];
+            if (!t) return;                 // unknown type → dangling edge, skip
+            if (isGroupType(t)) return;     // a Group type never yields an edge
+            add(r.fromId, r.toId, 'rel:' + r.typeId, t.name || 'Relationship');
         });
 
-        // Every Relationship Type becomes a toggle, in input order (even with no edges yet).
+        // Every Relationship Type becomes a toggle, in input order (even with no
+        // instances yet). `kind` lets the sidebar split groups from edge types;
+        // `prio` decides arrowheads (pairwise) or a leader line (group).
         var customTypes = relationshipTypes.map(function (t) {
-            return { key: 'rel:' + t.id, label: t.name || 'Relationship' };
+            return {
+                key: 'rel:' + t.id,
+                label: t.name || 'Relationship',
+                kind: typeKind(t),
+                prio: typeIsPrioritized(t),
+            };
+        });
+
+        // Family and Elder Assignment are structural, never directional.
+        var primaryTypes = {
+            family: { key: 'family', label: 'Family', kind: 'pairwise', prio: false },
+            elder: { key: 'elder', label: 'Elder Assignment', kind: 'pairwise', prio: false },
+        };
+
+        // ── Relationship Groups → one hull descriptor each (ADR-0014 s5) ──────
+        // The viewer draws a bubble around `memberIds` in `colour`, labels it
+        // `name`, and — only when the type is Prioritized and the seat is filled —
+        // draws ONE line from `leaderId` to the bubble. The leader is deliberately
+        // NOT in `memberIds`: they sit outside the hull, which is what makes a
+        // single leader→bubble line possible instead of a star to every member.
+        var groups = [];
+        var leaderColourByPerson = {};
+        relationshipGroups.forEach(function (g) {
+            var t = typeById[g.typeId];
+            if (!t || !isGroupType(t)) return;   // orphaned or wrong-kind → skip
+
+            var memberIds = (g.memberIds || []).filter(function (id) { return !!byId[id]; });
+            if (!memberIds.length) return;       // nothing to draw a bubble around
+
+            // A symmetric group has no leader by definition, so a stray leaderId on
+            // one is dropped rather than drawn.
+            var leaderId = (typeIsPrioritized(t) && g.leaderId && byId[g.leaderId]) ? g.leaderId : null;
+
+            var colour = GROUP_PALETTE[groups.length % GROUP_PALETTE.length];
+            groups.push({
+                id: g.id,
+                name: g.name || 'Group',
+                typeId: g.typeId,
+                colour: colour,
+                leaderId: leaderId,
+                memberIds: memberIds,
+            });
+            // The node ring that marks someone as a leader takes the colour of the
+            // first group they lead.
+            if (leaderId && !(leaderId in leaderColourByPerson)) {
+                leaderColourByPerson[leaderId] = colour;
+            }
         });
 
         return {
             nodes: nodes,
             edges: edges,
             customTypes: customTypes,
+            primaryTypes: primaryTypes,
+            groups: groups,
+            leaderColourByPerson: leaderColourByPerson,
             assignedElderName: assignedElderName,
-            hasData: edges.length > 0,
+            hasData: edges.length > 0 || groups.length > 0,
         };
     }
 
     var RelationsGraphCore = {
         ELDER_TAG: ELDER_TAG,
+        GROUP_PALETTE: GROUP_PALETTE,
         nameParts: nameParts,
         isElderNode: isElderNode,
+        typeKind: typeKind,
+        typeIsPrioritized: typeIsPrioritized,
+        isGroupType: isGroupType,
         buildGraph: buildGraph,
     };
 

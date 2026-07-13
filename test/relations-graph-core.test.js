@@ -70,11 +70,15 @@ test('elder assignment yields a member→elder edge and the Shepherded-By name m
 });
 
 test('customTypes lists every Relationship Type as a toggle key, in input order', () => {
+    // Since MS-105 each row also carries the type's kind (so the sidebar can split
+    // Group types, which draw bubbles, from edge types) and its priority (which
+    // decides an arrowhead, or a leader line). These legacy docs have neither field,
+    // so they read as symmetric pairwise types.
     const types = [{ id: 't1', name: 'Mentor' }, { id: 't2', name: 'Dating' }];
     const g = Graph.buildGraph({ people, families: [], relationships: [], relationshipTypes: types });
     assert.deepStrictEqual(g.customTypes, [
-        { key: 'rel:t1', label: 'Mentor' },
-        { key: 'rel:t2', label: 'Dating' },
+        { key: 'rel:t1', label: 'Mentor', kind: 'pairwise', prio: false },
+        { key: 'rel:t2', label: 'Dating', kind: 'pairwise', prio: false },
     ]);
 });
 

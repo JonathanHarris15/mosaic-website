@@ -212,7 +212,9 @@ function tiptapJsonToHtml(doc) {
 }
 
 document.addEventListener('alpine:init', () => {
-    Alpine.data('shepherdingProfile', () => ({
+    // withQuickAssign, not object spread: the quick-assign card exposes getters and
+    // spreading would freeze them at their page-load values.
+    Alpine.data('shepherdingProfile', () => window.withQuickAssign({
         currentUser: null,
         currentUserRole: null,
         currentUserName: '',
@@ -261,9 +263,7 @@ document.addEventListener('alpine:init', () => {
         // directional chevron at each end. rightActive = flows toward the other
         // person (this Person is the source); leftActive = flows toward this
         // Person; both = symmetric (non-directional).
-        relForm: { otherId: '', otherName: '', typeName: '', leftActive: false, rightActive: true },
         relPersonQuery: '',
-        showAddRelationship: false,
 
         // Elder Assignment (ADR-0013, MS-94)
         showAssignElder: false,
@@ -323,14 +323,16 @@ document.addEventListener('alpine:init', () => {
         // ── Relationships (ADR-0012, MS-89; ADR-0013, MS-93) ─────────────────
         async loadRelationships() {
             try {
-                const [relSnap, typeSnap, peopleSnap, famSnap] = await Promise.all([
+                const [relSnap, typeSnap, peopleSnap, famSnap, groupSnap] = await Promise.all([
                     db.collection('relationships').get(),
                     db.collection('relationship_types').get(),
                     db.collection('people').orderBy('name').get(),
                     db.collection('families').get(),
+                    db.collection('relationship_groups').get(),
                 ]);
                 this.relationships = relSnap.docs.map(d => ({ id: d.id, ...d.data() }));
                 this.relationshipTypes = typeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                this.relGroups = groupSnap.docs.map(d => ({ id: d.id, leaderId: null, memberIds: [], ...d.data() }));
                 // Carry `sex` for the Family projection's gendered labels, `tags`
                 // so the Assigned-Elder picker can find Elder-Tag People, and
                 // `shepherding` so an elder's Care Group (reverse query) resolves.
@@ -355,70 +357,22 @@ document.addEventListener('alpine:init', () => {
             return this.relationshipTypes.find(t => t.id === id) || null;
         },
 
-        // The edges on this profile, each described from this Person's viewpoint.
-        // Family-derived relationships (ADR-0013) surface as read-only rows before
-        // the freeform Custom Relationships; only Custom rows get a delete control.
-        get personRelationships() {
-            // Projected Family relationships — spouse, parents, children, siblings.
-            const family = FamilyCore.familyRelations(this.families, this.personId, id => this.relPersonSex(id))
-                .filter(r => !!this.allPeople.find(p => p.id === r.otherId))
-                .map(r => ({
-                    edge: { id: 'fam:' + r.kind + ':' + r.otherId },
-                    otherId: r.otherId,
-                    typeName: r.label,
-                    directional: false,
-                    sentence: null,
-                    readOnly: true,
-                }));
-            // Custom Relationships — the deletable, elder-authored edges.
-            const custom = RelationshipCore.edgesForPerson(this.relationships, this.personId).map(edge => {
-                const type = this.relTypeById(edge.typeId);
-                const desc = RelationshipCore.describeRelationship(edge, type, this.personId, id => this.relPersonName(id));
-                return { edge, ...desc, readOnly: false };
-            });
-            return family.concat(custom);
-        },
+        // personRelationships — the card's row model (Family + Pairwise + Group)
+        // — now lives in shepherding-quick-assign.js, beside the actions that
+        // mutate those rows.
 
-        // Candidates for the "other person" field — matched on the typed name,
-        // shown only until one is picked (which sets otherId).
-        get relPersonCandidates() {
-            const q = (this.relForm.otherName || '').toLowerCase().trim();
-            if (!q) return [];
-            return this.allPeople.filter(p =>
-                p.id !== this.personId && p.name.toLowerCase().includes(q)
-            ).slice(0, 6);
-        },
-        pickRelPerson(p) { this.relForm.otherId = p.id; this.relForm.otherName = p.name; },
-        // Chevron toggles — never leave both ends off (flip to the other instead),
-        // mirroring the design's direction control.
-        toggleRelRight() {
-            if (this.relForm.rightActive && !this.relForm.leftActive) { this.relForm.rightActive = false; this.relForm.leftActive = true; }
-            else { this.relForm.rightActive = !this.relForm.rightActive; }
-        },
-        toggleRelLeft() {
-            if (this.relForm.leftActive && !this.relForm.rightActive) { this.relForm.leftActive = false; this.relForm.rightActive = true; }
-            else { this.relForm.leftActive = !this.relForm.leftActive; }
-        },
         relInitials(name) {
             const parts = (name || '').trim().split(/\s+/).filter(Boolean);
             if (!parts.length) return '?';
             if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
             return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
         },
-        // A live, human-readable preview of the relationship being built, oriented
-        // by the chevrons — replaces the cramped under-avatar name labels.
-        get relSentencePreview() {
-            const cur = (this.person && this.person.name) || 'This person';
-            const other = (this.relForm.otherName || '').trim() || 'the other person';
-            const phrase = (this.relForm.typeName || '').trim() || 'related to';
-            if (this.relForm.leftActive && this.relForm.rightActive) return `${cur} ↔ ${other} · ${phrase}`;
-            if (this.relForm.leftActive) return `${other} ${phrase} ${cur}`;
-            return `${cur} ${phrase} ${other}`;
-        },
-        resetRelForm() {
-            this.relForm = { otherId: '', otherName: '', typeName: '', leftActive: false, rightActive: true };
-            this.relPersonQuery = '';
-        },
+
+        // The free-type relationship form (relForm, the chevron direction toggles,
+        // relSentencePreview) lived here. It is gone: a Relationship Type is now a
+        // kind × priority structure that a text box cannot express, and vocabulary is
+        // curated in one place. The card applies existing types — see
+        // shepherding-quick-assign.js.
 
         // ── Elder Assignment (ADR-0013, MS-94) ───────────────────────────────
         // A dedicated section (NOT the Relationships panel) assigns this member to
@@ -540,37 +494,12 @@ document.addEventListener('alpine:init', () => {
         // edge oriented by the chevrons: both ends on → symmetric (non-directional);
         // left-only → the other person is the source (flows toward this Person);
         // otherwise this Person is the source.
-        async addRelationship() {
-            const otherId = this.relForm.otherId;
-            const typeName = (this.relForm.typeName || '').trim();
-            if (!otherId || !typeName) {
-                this.showToast('Pick a person and type a relationship', 'error');
-                return;
-            }
-            const directional = !(this.relForm.leftActive && this.relForm.rightActive);
-            const leftOnly = this.relForm.leftActive && !this.relForm.rightActive;
-            try {
-                // Reuse an existing type by name, else create one with the chosen
-                // directionality — the vocabulary accrues like tags.
-                let type = RelationshipCore.findTypeByName(this.relationshipTypes, typeName);
-                if (!type) {
-                    const ref = await db.collection('relationship_types').add({ name: typeName, directional });
-                    type = { id: ref.id, name: typeName, directional };
-                    this.relationshipTypes.push(type);
-                }
-                const fromId = leftOnly ? otherId : this.personId;
-                const toId = leftOnly ? this.personId : otherId;
-                const edge = { fromId, toId, typeId: type.id, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
-                const ref = await db.collection('relationships').add(edge);
-                this.relationships.push({ id: ref.id, ...edge });
-                this.resetRelForm();
-                this.showAddRelationship = false;
-                this.showToast('Relationship added');
-            } catch (e) {
-                console.error('Error adding relationship:', e);
-                this.showToast('Error adding relationship', 'error');
-            }
-        },
+        // addRelationship() lived here. It free-typed a Relationship Type into
+        // existence — `{ name, directional }` — straight from the profile. ADR-0014
+        // retires both halves of that: `directional` is gone, and vocabulary is now
+        // curated in Manage Tags and Relationships, never minted from a profile. The
+        // card applies existing types only; see qaAddPairwise in
+        // shepherding-quick-assign.js.
 
         async deleteRelationship(edgeId) {
             try {

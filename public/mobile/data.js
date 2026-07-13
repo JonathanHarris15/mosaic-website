@@ -457,6 +457,70 @@
       .catch(function () { return []; });
   }
 
+  // ── Relationship Groups + the manager's writes (MS-106, ADR-0014) ───────────
+  // The mobile Relationships tab is the same manager as the desktop one, so these
+  // mirror shepherding-relationships.js exactly. Every model decision goes through
+  // RelationshipCore / RelationshipGroupCore — this layer only reads and writes.
+
+  function getRelationshipGroups() {
+    return db.collection("relationship_groups").get()
+      .then(function (snap) {
+        return snap.docs.map(function (d) {
+          return Object.assign({ id: d.id, leaderId: null, memberIds: [] }, d.data());
+        });
+      })
+      .catch(function () { return []; });
+  }
+
+  // The doc is canonicalised first, so a type edited down to Non-Prioritized does
+  // not leave its old role labels lying in Firestore ready to resurrect.
+  function saveRelationshipType(existing, form) {
+    var doc = window.RelationshipCore.canonicalType(Object.assign({}, existing || {}, form));
+    delete doc.id;
+    if (existing && existing.id) {
+      return db.collection("relationship_types").doc(existing.id).set(doc)
+        .then(function () { return Object.assign({ id: existing.id }, doc); });
+    }
+    return db.collection("relationship_types").add(doc)
+      .then(function (ref) { return Object.assign({ id: ref.id }, doc); });
+  }
+
+  // Deleting a type in use cascades: it takes its pairs and its named groups with
+  // it. The screen count-confirms before calling this.
+  function deleteRelationshipType(typeId, pairs, groups) {
+    var batch = db.batch();
+    (pairs || []).forEach(function (p) { batch.delete(db.collection("relationships").doc(p.id)); });
+    (groups || []).forEach(function (g) { batch.delete(db.collection("relationship_groups").doc(g.id)); });
+    batch.delete(db.collection("relationship_types").doc(typeId));
+    return batch.commit();
+  }
+
+  // fromId is the priority holder (ADR-0014 s2).
+  function addRelationshipPair(fromId, toId, typeId) {
+    var edge = { fromId: fromId, toId: toId, typeId: typeId };
+    return db.collection("relationships").add(edge)
+      .then(function (ref) { return Object.assign({ id: ref.id }, edge); });
+  }
+  function deleteRelationshipPair(edgeId) {
+    return db.collection("relationships").doc(edgeId).delete();
+  }
+
+  function createRelationshipGroup(typeId, name) {
+    var group = { typeId: typeId, name: name, leaderId: null, memberIds: [] };
+    return db.collection("relationship_groups").add(group)
+      .then(function (ref) { return Object.assign({ id: ref.id }, group); });
+  }
+  // `next` is whatever RelationshipGroupCore returned — the roster invariants are
+  // already enforced there, so this only persists the two fields it can change.
+  function writeRelationshipGroup(next) {
+    return db.collection("relationship_groups").doc(next.id)
+      .update({ leaderId: next.leaderId, memberIds: next.memberIds })
+      .then(function () { return next; });
+  }
+  function deleteRelationshipGroup(groupId) {
+    return db.collection("relationship_groups").doc(groupId).delete();
+  }
+
   // All Families (ADR-0012, MS-88) — the household graph. Small collection;
   // fetched whole so FamilyCore can resolve a Person's relations client-side.
   function getFamilies() {
@@ -772,6 +836,14 @@
     deleteShepherdingNote: deleteShepherdingNote,
     saveShepherdingExplanation: saveShepherdingExplanation,
     createShepherdingTag: createShepherdingTag,
+    getRelationshipGroups: getRelationshipGroups,
+    saveRelationshipType: saveRelationshipType,
+    deleteRelationshipType: deleteRelationshipType,
+    addRelationshipPair: addRelationshipPair,
+    deleteRelationshipPair: deleteRelationshipPair,
+    createRelationshipGroup: createRelationshipGroup,
+    writeRelationshipGroup: writeRelationshipGroup,
+    deleteRelationshipGroup: deleteRelationshipGroup,
     renameShepherdingTag: renameShepherdingTag,
     mergeShepherdingTag: mergeShepherdingTag,
     deleteShepherdingTag: deleteShepherdingTag,
