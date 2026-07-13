@@ -1,9 +1,5 @@
 {
   "appId": "com.mosaicmanagercstx.app",
   "appName": "Mosaic Manager",
-  "webDir": "public",
-  "server": {
-    "url": "https://mosaic-hymn-database.web.app",
-    "cleartext": false
-  }
+  "webDir": "public"
 }

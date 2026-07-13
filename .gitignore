@@ -2,6 +2,12 @@
 *firebase-adminsdk*.json
 serviceAccountKey.json
 
+# Android release signing (losing the keystore means you cannot ship updates —
+# back it up somewhere safe, but never in the repo)
+android/keystore.properties
+*.jks
+*.keystore
+
 # Node modules
 node_modules/
 
