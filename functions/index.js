@@ -169,6 +169,40 @@ exports.createUser = onCall({cors: true, region: "us-central1"}, async (request)
 /**
  * A Callable Cloud Function that allows admins to delete users.
  */
+/**
+ * Tears down a login: the Auth account, the users doc, and the Person link.
+ *
+ * The Person record itself SURVIVES. A Person is the church's membership
+ * record, not the user's property — deleting it would take the directory
+ * entry, the family structure and the elders' shepherding notes with it.
+ * Losing a login must never cost the church its records. Members who want
+ * the record itself removed are pointed at the church office (see
+ * public/privacy.html).
+ *
+ * Clearing people.userId matters: the link is bidirectional
+ * (users.personId <-> people.userId, see CONTEXT.md), so skipping it would
+ * leave the Person pointing at a uid that no longer exists, and the next
+ * admin to link that Person would be fighting a ghost.
+ *
+ * @param {string} uid The uid of the login being torn down.
+ * @return {Promise<void>}
+ */
+async function tearDownLogin(uid) {
+  const db = admin.firestore();
+  const del = admin.firestore.FieldValue.delete();
+
+  const linked = await db.collection("people")
+      .where("userId", "==", uid).get();
+
+  const batch = db.batch();
+  linked.forEach((person) => batch.update(person.ref, {userId: del}));
+  batch.delete(db.collection("users").doc(uid));
+  await batch.commit();
+
+  await admin.auth().deleteUser(uid);
+  log(`Tore down login ${uid}; unlinked ${linked.size} person record(s)`);
+}
+
 exports.deleteUser = onCall({cors: true, region: "us-central1"}, async (request) => {
   if (!request.auth) {
     throw new Error("The function must be called while authenticated.");
@@ -177,7 +211,7 @@ exports.deleteUser = onCall({cors: true, region: "us-central1"}, async (request)
   const callerUid = request.auth.uid;
   const db = admin.firestore();
   const callerDoc = await db.collection("users").doc(callerUid).get();
-  
+
   if (!callerDoc.exists || !["admin", "super_admin"].includes(callerDoc.data().role)) {
     throw new Error("Only admins can delete users.");
   }
@@ -192,16 +226,52 @@ exports.deleteUser = onCall({cors: true, region: "us-central1"}, async (request)
   }
 
   try {
-    // Delete from Auth
-    await admin.auth().deleteUser(uid);
-    // Delete from Firestore
-    await db.collection("users").doc(uid).delete();
-
-    log(`Successfully deleted user: ${uid}`);
+    await tearDownLogin(uid);
     return {success: true};
   } catch (error) {
     log(`Error deleting user: ${error.message}`);
     throw new Error(error.message);
+  }
+});
+
+/**
+ * Lets a signed-in member delete their OWN login. Required by both app stores:
+ * an app with accounts must offer in-app account deletion.
+ *
+ * Distinct from deleteUser above, which is an admin acting on someone else and
+ * deliberately refuses self-deletion. Here the caller IS the subject, so there
+ * is no role check — anyone may leave. The one guard is numerical: the last
+ * remaining admin cannot delete themselves, because that would strand the
+ * church with no one who can administer it and no way back in.
+ */
+exports.deleteOwnAccount = onCall({cors: true, region: "us-central1"}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be signed in to delete your account.");
+  }
+
+  const uid = request.auth.uid;
+  const db = admin.firestore();
+  const userDoc = await db.collection("users").doc(uid).get();
+  const role = userDoc.exists ? userDoc.data().role : null;
+
+  if (["admin", "super_admin"].includes(role)) {
+    const admins = await db.collection("users")
+        .where("role", "in", ["admin", "super_admin"]).get();
+    if (admins.size <= 1) {
+      throw new HttpsError(
+          "failed-precondition",
+          "You are the only administrator. Make someone else an administrator " +
+          "before deleting your account, or the church will be locked out.",
+      );
+    }
+  }
+
+  try {
+    await tearDownLogin(uid);
+    return {success: true};
+  } catch (error) {
+    log(`Error deleting own account ${uid}: ${error.message}`);
+    throw new HttpsError("internal", error.message);
   }
 });
 

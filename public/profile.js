@@ -176,6 +176,56 @@ if (changePasswordForm) {
     });
 }
 
+// --- SELF ACCOUNT DELETION ---
+// Deletes the LOGIN, not the member. The Person record is the church's
+// membership record and survives — see tearDownLogin in functions/index.js.
+// The password is re-checked here rather than trusting the session, so a phone
+// left unlocked on a pew can't be used to delete someone's account.
+const deleteAccountForm = document.getElementById('delete-account-form');
+const deleteAccountStatus = document.getElementById('delete-account-status');
+
+if (deleteAccountForm) {
+    deleteAccountForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const password = document.getElementById('delete-account-password').value;
+        const btn = document.getElementById('delete-account-btn');
+
+        if (!confirm('Delete your account?\n\nYou will be signed out and will not be able to sign in again. Your membership record stays with the church.\n\nThis cannot be undone.')) {
+            return;
+        }
+
+        btn.disabled = true;
+        deleteAccountStatus.textContent = 'Deleting your account...';
+        deleteAccountStatus.className = 'text-[10px] font-body-md text-primary animate-pulse';
+
+        try {
+            const credential = firebase.auth.EmailAuthProvider.credential(user.email, password);
+            await user.reauthenticateWithCredential(credential);
+
+            const deleteOwnAccountFunc = firebase.functions().httpsCallable('deleteOwnAccount');
+            await deleteOwnAccountFunc({});
+
+            // The Auth user is gone server-side; drop the stale local session
+            // before leaving, or the login page sees a signed-in ghost.
+            await auth.signOut();
+            window.location.href = 'login.html';
+        } catch (error) {
+            console.error(error);
+            const wrongPassword = error.code === 'auth/wrong-password' ||
+                error.code === 'auth/invalid-credential';
+            deleteAccountStatus.textContent = wrongPassword ?
+                'That password is not correct.' :
+                'Could not delete account: ' + error.message;
+            deleteAccountStatus.className = 'text-[10px] font-body-md text-error';
+            btn.disabled = false;
+        }
+    });
+}
+
 // --- ADMIN: CREATE USER ---
 const createUserForm = document.getElementById('create-user-form');
 const createUserStatus = document.getElementById('create-user-status');
