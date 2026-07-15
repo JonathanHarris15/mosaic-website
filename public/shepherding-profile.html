@@ -131,7 +131,21 @@
             </div>
         </div>
 
-        <div class="profile-layout">
+        <!-- Tabs (MS-98) -->
+        <div class="flex items-center gap-1 border-b border-outline-variant">
+            <button @click="activeTab = 'record'"
+                class="px-4 py-2 font-label-md text-label-md border-b-2 -mb-px transition-colors"
+                :class="activeTab === 'record' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'">
+                Pastoral Record
+            </button>
+            <button @click="activeTab = 'documents'"
+                class="px-4 py-2 font-label-md text-label-md border-b-2 -mb-px transition-colors"
+                :class="activeTab === 'documents' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'">
+                Documents
+            </button>
+        </div>
+
+        <div class="profile-layout" x-show="activeTab === 'record'">
 
             <!-- Left column: Info & Tags -->
             <div class="flex flex-col gap-md">
@@ -1032,6 +1046,187 @@
             </div>
         </div>
 
+        <!-- Documents tab (MS-98): a per-person directory, reusing the Document
+             Library engine scoped to this Person. Created lazily once personId is
+             known so the nested component captures a valid scope. -->
+        <div x-show="activeTab === 'documents'" x-cloak>
+            <template x-if="personId">
+                <div x-data="documentLibrary({ structureDocId: 'person_' + personId, ownerPersonId: personId, embedded: true, currentUser: currentUser, currentUserName: currentUserName, currentUserRole: currentUserRole })">
+
+                    <div x-show="loading" class="flex items-center justify-center py-xl">
+                        <span class="material-symbols-outlined text-[36px] text-outline animate-spin">progress_activity</span>
+                    </div>
+
+                    <div x-show="!loading" class="flex flex-col gap-md">
+                        <!-- Toolbar -->
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-sm">
+                            <p class="font-body-md text-on-surface-variant text-sm">Documents kept on this profile. Private here unless added to the Library.</p>
+                            <div class="flex items-center gap-sm">
+                                <button @click="createFolder()" class="flex items-center gap-1 px-md py-xs bg-surface-container border border-outline-variant text-on-surface font-label-md text-label-md rounded-lg hover:bg-surface-container-high transition-colors">
+                                    <span class="material-symbols-outlined text-[18px]">create_new_folder</span>
+                                    New Folder
+                                </button>
+                                <button @click="openCreateModal()" class="flex items-center gap-1 px-md py-xs bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary/90 transition-colors">
+                                    <span class="material-symbols-outlined text-[18px]">note_add</span>
+                                    New Document
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Breadcrumb -->
+                        <nav class="flex items-center gap-xs flex-wrap" @dragover.prevent="dragOverFolderId = '__breadcrumb_root__'" @dragleave="dragOverFolderId = null" @drop.prevent="onDropAtRoot($event)">
+                            <button @click="navigateToRoot()" class="font-label-md text-label-md text-primary hover:underline flex items-center gap-xs" :class="dragOverFolderId === '__breadcrumb_root__' ? 'underline' : ''">
+                                <span class="material-symbols-outlined text-[16px]" style='font-variation-settings:"FILL" 1'>folder_open</span>
+                                Home
+                            </button>
+                            <template x-for="(folderId, idx) in currentPath" :key="folderId">
+                                <span class="flex items-center gap-xs">
+                                    <span class="text-on-surface-variant">/</span>
+                                    <button @click="navigateToIndex(idx + 1)" class="font-label-md text-label-md hover:underline" :class="idx === currentPath.length - 1 ? 'text-on-surface' : 'text-primary'" x-text="getFolderById(folderId)?.name || '…'"></button>
+                                </span>
+                            </template>
+                        </nav>
+
+                        <!-- Directory -->
+                        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden min-h-[320px]" @dragover.prevent @drop.prevent="onDropAtRoot($event)">
+                            <div class="grid grid-cols-[auto_1fr_auto_auto] gap-0 border-b border-outline-variant bg-surface-container px-md py-xs">
+                                <div class="w-8"></div>
+                                <div class="font-label-md text-on-surface-variant uppercase tracking-wider text-xs">Name</div>
+                                <div class="font-label-md text-on-surface-variant uppercase tracking-wider text-xs hidden md:block w-44 text-right pr-lg">Created</div>
+                                <div class="w-28"></div>
+                            </div>
+
+                            <div x-show="currentChildren.length === 0" class="flex flex-col items-center justify-center py-xl text-center">
+                                <span class="material-symbols-outlined text-[48px] text-outline mb-sm" style='font-variation-settings:"FILL" 0'>folder_open</span>
+                                <p class="font-body-md text-on-surface-variant">No documents yet.</p>
+                                <p class="font-label-md text-outline text-sm mt-xs">Create a document or folder using the buttons above.</p>
+                            </div>
+
+                            <template x-for="item in currentChildren" :key="item.id">
+                                <div class="item-row grid grid-cols-[auto_1fr_auto_auto] gap-0 border-b border-outline-variant last:border-b-0 px-md py-sm items-center cursor-pointer select-none"
+                                     :class="{ 'bg-surface-container-low': dragOverFolderId === item.id, 'drag-over': dragOverFolderId === item.id && item.type === 'folder' }"
+                                     :draggable="renamingItemId !== item.id"
+                                     @dragstart="onDragStart(item, $event)"
+                                     @dragover="item.type === 'folder' ? onDragOver(item, $event) : $event.preventDefault()"
+                                     @dragleave="onDragLeave($event)"
+                                     @drop="item.type === 'folder' ? onDrop(item, $event) : null"
+                                     @dblclick="renamingItemId !== item.id && handleItemDblClick(item)">
+                                    <div class="w-8 flex-shrink-0">
+                                        <span x-show="item.type === 'folder'" class="material-symbols-outlined text-[22px] text-secondary" style='font-variation-settings:"FILL" 1'>folder</span>
+                                        <span x-show="item.type !== 'folder'" class="material-symbols-outlined text-[22px] text-on-surface-variant" style='font-variation-settings:"FILL" 0'>description</span>
+                                    </div>
+                                    <div class="min-w-0 flex items-center gap-xs">
+                                        <template x-if="renamingItemId === item.id">
+                                            <input :id="`rename-${item.id}`" type="text" x-model="renameValue" @keydown.enter.stop="finishRename(item)" @keydown.escape.stop="renamingItemId = null" @blur="finishRename(item)" @click.stop @dblclick.stop class="w-full border border-primary rounded px-xs py-[2px] font-body-md text-on-surface text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                                        </template>
+                                        <template x-if="renamingItemId !== item.id">
+                                            <span class="font-body-md text-on-surface text-sm truncate" x-text="item.type === 'folder' ? item.name : getDocTitle(item.id)"></span>
+                                        </template>
+                                        <span x-show="item.type === 'document' && isInLibrary(item.id)" title="Also in the Library" class="material-symbols-outlined text-[14px] text-primary flex-shrink-0" style='font-variation-settings:"FILL" 1'>library_books</span>
+                                    </div>
+                                    <div class="hidden md:block w-44 text-right pr-lg">
+                                        <span class="font-label-md text-on-surface-variant text-xs" x-text="item.type === 'document' ? getDocCreated(item.id) : ''"></span>
+                                    </div>
+                                    <div class="item-actions flex items-center gap-xs w-28 justify-end" @click.stop @dblclick.stop>
+                                        <button x-show="item.type === 'document' && !isInLibrary(item.id)" @click="openLibraryDialog(item); loadLibraryFolderOptions()" class="w-7 h-7 rounded flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors" title="Add to Library">
+                                            <span class="material-symbols-outlined text-[16px]">library_add</span>
+                                        </button>
+                                        <button @click="startRename(item)" class="w-7 h-7 rounded flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors" title="Rename">
+                                            <span class="material-symbols-outlined text-[16px]">edit</span>
+                                        </button>
+                                        <button @click="openMoveDialog(item)" class="w-7 h-7 rounded flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors" title="Move">
+                                            <span class="material-symbols-outlined text-[16px]">drive_file_move</span>
+                                        </button>
+                                        <button @click="confirmDelete(item)" class="w-7 h-7 rounded flex items-center justify-center text-on-surface-variant hover:text-error hover:bg-surface-container transition-colors" title="Delete">
+                                            <span class="material-symbols-outlined text-[16px]">delete</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                        <p class="font-label-md text-outline text-xs">Double-click a folder to open it. Double-click a document to edit it. Drag items into folders to reorganise.</p>
+                    </div>
+
+                    <!-- Move Modal -->
+                    <div x-show="showMoveModal" x-cloak class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="showMoveModal = false">
+                        <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-sm flex flex-col gap-md">
+                            <h2 class="font-headline-md text-headline-md text-primary">Move to…</h2>
+                            <div class="flex flex-col gap-xs max-h-64 overflow-y-auto">
+                                <label class="flex items-center gap-sm px-sm py-xs rounded-lg hover:bg-surface-container cursor-pointer">
+                                    <input type="radio" x-model="moveTargetId" value="__root__" class="accent-primary" />
+                                    <span class="material-symbols-outlined text-[18px] text-secondary" style='font-variation-settings:"FILL" 1'>folder_open</span>
+                                    <span class="font-body-md text-on-surface">Home (root)</span>
+                                </label>
+                                <template x-for="opt in getFolderOptions(null, 0, movingItem?.type === 'folder' ? movingItem?.id : null)" :key="opt.id">
+                                    <label class="flex items-center gap-sm px-sm py-xs rounded-lg hover:bg-surface-container cursor-pointer" :style="`padding-left: ${12 + opt.depth * 20}px`">
+                                        <input type="radio" x-model="moveTargetId" :value="opt.id" class="accent-primary" />
+                                        <span class="material-symbols-outlined text-[18px] text-secondary" style='font-variation-settings:"FILL" 1'>folder</span>
+                                        <span class="font-body-md text-on-surface" x-text="opt.name"></span>
+                                    </label>
+                                </template>
+                                <p x-show="getFolderOptions(null, 0, movingItem?.type === 'folder' ? movingItem?.id : null).length === 0" class="font-body-md text-on-surface-variant italic text-sm px-sm">No other folders.</p>
+                            </div>
+                            <div class="flex justify-end gap-sm">
+                                <button @click="showMoveModal = false" class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">Cancel</button>
+                                <button @click="confirmMove()" class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors">Move</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Add to Library Modal -->
+                    <div x-show="showLibraryModal" x-cloak class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="showLibraryModal = false">
+                        <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-sm flex flex-col gap-md">
+                            <h2 class="font-headline-md text-headline-md text-primary">Add to Library</h2>
+                            <p class="font-body-md text-on-surface-variant text-sm">Pick a Library folder. The document stays on this profile — it's the same file shown in both places, not a copy.</p>
+                            <div class="flex flex-col gap-xs max-h-64 overflow-y-auto">
+                                <label class="flex items-center gap-sm px-sm py-xs rounded-lg hover:bg-surface-container cursor-pointer">
+                                    <input type="radio" x-model="libraryTargetId" value="__root__" class="accent-primary" />
+                                    <span class="material-symbols-outlined text-[18px] text-secondary" style='font-variation-settings:"FILL" 1'>folder_open</span>
+                                    <span class="font-body-md text-on-surface">Library home (root)</span>
+                                </label>
+                                <template x-for="opt in libraryFolderOptions" :key="opt.id">
+                                    <label class="flex items-center gap-sm px-sm py-xs rounded-lg hover:bg-surface-container cursor-pointer" :style="`padding-left: ${12 + opt.depth * 20}px`">
+                                        <input type="radio" x-model="libraryTargetId" :value="opt.id" class="accent-primary" />
+                                        <span class="material-symbols-outlined text-[18px] text-secondary" style='font-variation-settings:"FILL" 1'>folder</span>
+                                        <span class="font-body-md text-on-surface" x-text="opt.name"></span>
+                                    </label>
+                                </template>
+                            </div>
+                            <div class="flex justify-end gap-sm">
+                                <button @click="showLibraryModal = false" class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">Cancel</button>
+                                <button @click="confirmAddToLibrary()" class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors">Add</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Delete Confirm Modal -->
+                    <div x-show="showDeleteConfirm" x-cloak class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="showDeleteConfirm = false">
+                        <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-sm flex flex-col gap-md">
+                            <h2 class="font-headline-md text-headline-md text-error">Delete?</h2>
+                            <template x-if="deletingItem?.type === 'folder'">
+                                <p class="font-body-md text-on-surface">Delete the folder "<strong x-text="deleteFolderName"></strong>"?
+                                    <template x-if="deleteDocCount > 0"><span> This will permanently delete <strong x-text="deleteDocCount"></strong> document<span x-text="deleteDocCount !== 1 ? 's' : ''"></span> inside it.</span></template>
+                                    <template x-if="deleteDocCount === 0"><span> The folder is empty.</span></template>
+                                </p>
+                            </template>
+                            <template x-if="deletingItem?.type === 'document'">
+                                <p class="font-body-md text-on-surface">Permanently delete "<strong x-text="getDocTitle(deletingItem?.id)"></strong>"? This removes it from this profile and the Library. This cannot be undone.</p>
+                            </template>
+                            <div class="flex justify-end gap-sm">
+                                <button @click="showDeleteConfirm = false" class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">Cancel</button>
+                                <button @click="executeDelete()" class="px-md py-xs font-label-md text-label-md bg-error text-on-error rounded-lg hover:bg-error/90 transition-colors">Delete</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Toast -->
+                    <div x-show="toast.show" x-cloak x-transition class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-lg py-sm rounded-lg shadow-lg font-label-md text-label-md" :class="toast.type === 'error' ? 'bg-error text-on-error' : 'bg-inverse-surface text-inverse-on-surface'">
+                        <span x-text="toast.message"></span>
+                    </div>
+                </div>
+            </template>
+        </div>
+
         <!-- Edit Profile Modal -->
         <template x-if="showEditProfileModal">
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1149,6 +1344,8 @@
     <script src="tiptap-render.js"></script>
     <script src="relationship-group-core.js"></script>
     <script src="shepherding-quick-assign.js"></script>
+    <script src="shepherding-documents-core.js"></script>
+    <script src="shepherding-documents.js"></script>
     <script src="shepherding-profile.js"></script>
 </body>
 </html>

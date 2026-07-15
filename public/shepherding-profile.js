@@ -229,6 +229,10 @@ document.addEventListener('alpine:init', () => {
         personId: null,
         person: null,
 
+        // Which profile tab is showing (MS-98): the Pastoral Record or the
+        // per-person Documents directory.
+        activeTab: 'record', // 'record' | 'documents'
+
         fromPage: null,
         fromId: null,
         fromTitle: null,
