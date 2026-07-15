@@ -85,3 +85,15 @@
   --shadow-md: 0 8px 24px rgba(14, 28, 54, 0.10);
   --shadow-lg: 0 18px 48px rgba(14, 28, 54, 0.14);
 }
+
+/* iOS auto-zooms into any focused input whose font-size is < 16px and then
+   frequently fails to zoom back out, leaving the app scaled and cropped.
+   maximum-scale / user-scalable in the viewport meta are ignored by iOS
+   Safari/WKWebView, so the only reliable fix is a 16px font-size floor on form
+   controls. No text input in the shell is intentionally larger than 16px, so
+   this is lossless. Inline styles set the size, hence !important. */
+input,
+textarea,
+select {
+  font-size: 16px !important;
+}
