@@ -480,8 +480,17 @@
     // (Nav params live in transient M.navParams, so history.back() can't restore
     // the profile's person id — navigate explicitly.)
     function goBack() {
-      if (props.params && props.params.backPersonId) props.nav("shepherdProfile", { id: props.params.backPersonId });
-      else props.back();
+      if (props.params && props.params.backPersonId) {
+        // Restore the profile's person id (nav params are transient, so a plain
+        // history.back() would land on a profile with no id), then POP the entry
+        // rather than nav()-ing — a push left a phantom documentEditor entry in
+        // the back stack, so the next Back went to a blank Documents page.
+        M.navParams = { id: props.params.backPersonId };
+        if (history.length > 1) history.back();
+        else props.nav("shepherdProfile", { id: props.params.backPersonId });
+      } else {
+        props.back();
+      }
     }
 
     // ── Load doc + mention data + TipTap bundle ──
