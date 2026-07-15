@@ -114,6 +114,9 @@
         out.push({
           id: doc.id,
           name: name,
+          // sex seats a Person in a Family (husband/wife) and genders the Family
+          // role labels — the quick-assign card on the profile needs it.
+          sex: d.sex || null,
           role: d.role || d.title || "",
           status: d.status || "member",
           membership: d.membership || null,
@@ -529,6 +532,19 @@
       .catch(function () { return []; });
   }
 
+  // Family write-through (ADR-0014 s4). The profile's quick-assign card authors
+  // Family straight into `families` — never a parallel edge — via a FamilyCore
+  // planner. These apply the two shapes a plan produces: create the whole doc, or
+  // patch one field. `families` stays the single source of truth.
+  function addFamily(changes) {
+    return db.collection("families").add(changes)
+      .then(function (ref) { return Object.assign({ id: ref.id, childIds: [] }, changes); });
+  }
+  function updateFamily(familyId, changes) {
+    return db.collection("families").doc(familyId).update(changes)
+      .then(function () { return changes; });
+  }
+
   // Move a Person along the Membership Track (ADR-0012): set the stage/inactive
   // field, re-project the Membership Tags, and append one Membership Change — all
   // atomically. The tag swap is silent (no Tag Changes). Returns the activity id.
@@ -891,6 +907,8 @@
     toggleShepherdingTag: toggleShepherdingTag,
     setMembership: setMembership,
     getFamilies: getFamilies,
+    addFamily: addFamily,
+    updateFamily: updateFamily,
     getRelationships: getRelationships,
     getRelationshipTypes: getRelationshipTypes,
     revertShepherdingStatus: revertShepherdingStatus,
