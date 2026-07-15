@@ -963,9 +963,11 @@
           ${drawerS[0] ? html`<${Fragment}>
             <div onClick=${function () { drawerS[1](false); }} style=${{ position: "absolute", inset: 0, zIndex: 40, background: "rgba(14,28,54,0.42)", backdropFilter: "blur(1.5px)" }}></div>
             <div style=${{ position: "absolute", top: 0, right: 0, bottom: 0, zIndex: 41, width: "88%", maxWidth: 420, background: "var(--surface-container-lowest)", borderLeft: "1px solid var(--outline-variant)", boxShadow: "var(--shadow-lg)", display: "flex", flexDirection: "column" }}>
-              <div style=${{ padding: "14px 16px", borderBottom: "1px solid var(--outline-variant)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-                <div style=${{ fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--primary)" }}>Details</div>
-                <button onClick=${function () { drawerS[1](false); }} aria-label="Close" style=${iconBtn}>${Ic("x", 20)}</button>
+              <div style=${{ flexShrink: 0, paddingTop: "calc(env(safe-area-inset-top, 20px) + 10px)", borderBottom: "1px solid var(--outline-variant)" }}>
+                <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, height: 52, padding: "0 8px 0 16px" }}>
+                  <div style=${{ fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--primary)" }}>Details</div>
+                  <button onClick=${function () { drawerS[1](false); }} aria-label="Close" style=${{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-surface)", cursor: "pointer", borderRadius: 10 }}>${Ic("x", 22)}</button>
+                </div>
               </div>
               <div style=${{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: 16, paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))", display: "flex", flexDirection: "column", gap: 12 }}>
 
