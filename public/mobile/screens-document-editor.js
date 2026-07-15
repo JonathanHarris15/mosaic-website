@@ -476,6 +476,13 @@
 
     var pk = pickerS[0], del = delS[0];
     function showToast(m, t) { toastS[1]({ message: m, type: t || "success" }); setTimeout(function () { toastS[1](null); }, 2600); }
+    // MS-98: opened from a Shepherding Profile → back returns to that profile.
+    // (Nav params live in transient M.navParams, so history.back() can't restore
+    // the profile's person id — navigate explicitly.)
+    function goBack() {
+      if (props.params && props.params.backPersonId) props.nav("shepherdProfile", { id: props.params.backPersonId });
+      else props.back();
+    }
 
     // ── Load doc + mention data + TipTap bundle ──
     useEffect(function () {
@@ -657,21 +664,21 @@
     </span>`;
 
     if (!userKnown || loadingS[0]) {
-      return html`<${Screen}><${TopBar} title="Document" onBack=${props.back} serif=${false} />
+      return html`<${Screen}><${TopBar} title="Document" onBack=${goBack} serif=${false} />
         <${Body} style=${{ padding: "16px" }}><div style=${{ display: "flex", justifyContent: "center", padding: "48px 20px", color: "var(--on-surface-variant)" }}><span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 26)}</span></div></${Body}></${Screen}>`;
     }
     if (!isElder) {
-      return html`<${Screen}><${TopBar} title="Document" onBack=${props.back} serif=${false} />
+      return html`<${Screen}><${TopBar} title="Document" onBack=${goBack} serif=${false} />
         <${Body} style=${{ padding: "60px 24px", textAlign: "center" }}><div style=${{ display: "inline-flex", opacity: 0.5, color: "var(--on-surface-variant)" }}>${Ic("shield-alert", 40)}</div><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15, marginTop: 12, color: "var(--on-surface-variant)" }}>Elder-only tools.</p></${Body}></${Screen}>`;
     }
     if (errS[0]) {
-      return html`<${Screen}><${TopBar} title="Document" onBack=${props.back} serif=${false} />
+      return html`<${Screen}><${TopBar} title="Document" onBack=${goBack} serif=${false} />
         <${Body} style=${{ padding: "60px 24px", textAlign: "center" }}><p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 15, color: "var(--on-surface-variant)" }}>Couldn't load this document.</p></${Body}></${Screen}>`;
     }
 
     return html`
       <${Screen}>
-        <${TopBar} title="Document" onBack=${props.back} serif=${false} right=${savedRight} />
+        <${TopBar} title="Document" onBack=${goBack} serif=${false} right=${savedRight} />
 
         <!-- Title band: part of the header, visually separated from the body. -->
         <div style=${{ flexShrink: 0, padding: "12px 16px 12px", borderBottom: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)" }}>

@@ -528,7 +528,10 @@ document.addEventListener('alpine:init', () => {
             } else if (isCareList) {
                 window.location.href = `shepherding-care-list.html?id=${docId}`;
             } else {
-                window.location.href = `shepherding-document.html?id=${docId}`;
+                // MS-98: opened from a profile Documents tab → back returns to that profile.
+                const suffix = this.isProfileScope
+                    ? `&from=profile&personId=${encodeURIComponent(this.ownerPersonId)}` : '';
+                window.location.href = `shepherding-document.html?id=${docId}${suffix}`;
             }
         },
 

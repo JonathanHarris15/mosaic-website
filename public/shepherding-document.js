@@ -886,6 +886,11 @@ document.addEventListener('alpine:init', () => {
 
         toast: { show: false, message: '', type: 'success' },
 
+        // Back link — defaults to the Document Library, or the originating
+        // Shepherding Profile when opened from a profile Documents tab (MS-98).
+        backHref: 'shepherding-documents.html',
+        backLabel: 'Documents',
+
         // ── Computed ──
         get filteredPeople() {
             const q = this.pickerSearch.toLowerCase();
@@ -896,6 +901,10 @@ document.addEventListener('alpine:init', () => {
             const params = new URLSearchParams(window.location.search);
             this.docId = params.get('id');
             if (!this.docId) { window.location.href = 'shepherding-documents.html'; return; }
+            if (params.get('from') === 'profile' && params.get('personId')) {
+                this.backHref = `shepherding-profile.html?id=${encodeURIComponent(params.get('personId'))}`;
+                this.backLabel = 'Profile';
+            }
 
             this._onKeyDown = e => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 's') {
