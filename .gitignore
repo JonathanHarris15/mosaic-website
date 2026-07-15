@@ -13,6 +13,9 @@ android/local.properties
 *.p8
 mobile-release.local.json
 
+# In-project secrets folder (keystore + ASC key — never commit)
+Secrets/
+
 # Mobile build outputs
 android/app/build/
 ios/App/build/
