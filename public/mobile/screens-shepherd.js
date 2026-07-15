@@ -706,7 +706,7 @@
 
     function navInto(fid) { renameIdS[1](null); pathS[1](path.concat([fid])); }
     function navToCrumb(idx) { renameIdS[1](null); pathS[1](path.slice(0, idx)); }
-    function openDoc(id) { nav("documentEditor", { id: id, backPersonId: pid }); }
+    function openDoc(id) { nav("documentEditor", { id: id }); }
     function createDoc() {
       data.createElderDocument({ type: "note", ownerPersonId: pid }, user).then(function (id) {
         var next = clone(structure);
