@@ -50,11 +50,15 @@ async function loadDocMentionData() {
         }
 
         if (docsResult.status === 'fulfilled') {
-            _mentionDocs = docsResult.value.docs.map(doc => {
-                const d = doc.data();
-                _docTypeById[doc.id] = d.docType || 'note';
-                return { id: JSON.stringify({ kind: 'elder_document', id: doc.id }), label: d.title || 'Untitled Document' };
-            });
+            // MS-98: a profile-owned document is mentionable only once opted into
+            // the Library. Plain Library documents (no ownerPersonId) are unaffected.
+            _mentionDocs = docsResult.value.docs
+                .filter(doc => { const d = doc.data(); return !(d.ownerPersonId && d.inLibrary !== true); })
+                .map(doc => {
+                    const d = doc.data();
+                    _docTypeById[doc.id] = d.docType || 'note';
+                    return { id: JSON.stringify({ kind: 'elder_document', id: doc.id }), label: d.title || 'Untitled Document' };
+                });
         }
 
         if (notesResult.status === 'fulfilled') {

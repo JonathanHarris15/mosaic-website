@@ -1,11 +1,21 @@
-function genId() {
-    return typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
+// Document directory component. Drives two surfaces off one code path:
+//   • the global Document Library page   → scope { structureDocId: 'root', ownerPersonId: null }
+//   • a Person's Shepherding-Profile tab → scope { structureDocId: 'person_<id>', ownerPersonId: <id>, embedded }
+// The tree logic lives in ShepherdingDocsCore; this component owns Firestore and
+// the Alpine view state. Called as `documentLibrary()` (defaults to the global
+// Library) or `documentLibrary({ ...scope })` when embedded in a profile.
+const Docs = (typeof ShepherdingDocsCore !== 'undefined') ? ShepherdingDocsCore : require('./shepherding-documents-core.js');
 
 document.addEventListener('alpine:init', () => {
-    Alpine.data('documentLibrary', () => ({
+    Alpine.data('documentLibrary', (config = {}) => ({
+        // ── Scope (MS-98) ─────────────────────────────────────────────────────
+        // Which structure document this directory reads/writes, and (for a profile
+        // tab) the Person that owns documents created here. Defaults reproduce the
+        // global Library exactly.
+        structureDocId: config.structureDocId || 'root',
+        ownerPersonId: config.ownerPersonId || null,
+        embedded: !!config.embedded, // mounted inside an already-authenticated page
+
         loading: true,
         currentUser: null,
         currentUserRole: null,
@@ -39,13 +49,23 @@ document.addEventListener('alpine:init', () => {
         deleteDocCount: 0,
         deleteFolderName: '',
 
+        // Opt-in-to-Library dialog (profile scope only).
+        showLibraryModal: false,
+        libraryItem: null,
+        libraryTargetId: '__root__',
+        libraryFolderOptions: [],
+
         toast: { show: false, message: '', type: 'success' },
+
+        // True when this directory is a per-person profile tab rather than the
+        // global Library. Drives the profile-only affordances (opt into Library).
+        get isProfileScope() { return !!this.ownerPersonId; },
 
         // ── Computed ──────────────────────────────────────────────────────────
 
         get currentFolder() {
             if (this.currentPath.length === 0) return this.structure;
-            return this.getFolderById(this.currentPath[this.currentPath.length - 1]) || this.structure;
+            return Docs.getFolderById(this.structure, this.currentPath[this.currentPath.length - 1]) || this.structure;
         },
 
         get currentChildren() {
@@ -59,6 +79,17 @@ document.addEventListener('alpine:init', () => {
         // ── Init ──────────────────────────────────────────────────────────────
 
         async init() {
+            if (this.embedded) {
+                // Mounted inside an already-authenticated page (the Shepherding
+                // Profile). The host passes identity in; no auth gate here.
+                this.currentUser = config.currentUser || null;
+                this.currentUserName = config.currentUserName || 'Elder';
+                this.currentUserRole = config.currentUserRole || 'elder';
+                await this.loadData();
+                this.loading = false;
+                return;
+            }
+
             auth.onAuthStateChanged(async (user) => {
                 if (!user) { window.location.href = 'login.html'; return; }
                 const userData = await getUserData(user.uid);
@@ -83,7 +114,7 @@ document.addEventListener('alpine:init', () => {
                 const params = new URLSearchParams(window.location.search);
                 const folderId = params.get('folder');
                 if (folderId) {
-                    const path = this.findPathToFolder(folderId, this.structure, []);
+                    const path = Docs.findPathToFolder(this.structure, folderId);
                     if (path) this.currentPath = path;
                 }
 
@@ -93,12 +124,17 @@ document.addEventListener('alpine:init', () => {
 
         async loadData() {
             try {
-                const [structSnap, docsSnap, viewsSnap, tagsSnap] = await Promise.all([
-                    db.collection('elder_document_structure').doc('root').get(),
+                const reads = [
+                    db.collection('elder_document_structure').doc(this.structureDocId).get(),
                     db.collection('elder_documents').orderBy('createdAt', 'desc').get(),
-                    db.collection('shepherding_views').orderBy('title', 'asc').get(),
-                    db.collection('people_tags').orderBy('name', 'asc').get(),
-                ]);
+                ];
+                // The care-list picker (views/tags) only exists on the global
+                // Library; a profile tab creates plain notes, so skip those reads.
+                if (!this.isProfileScope) {
+                    reads.push(db.collection('shepherding_views').orderBy('title', 'asc').get());
+                    reads.push(db.collection('people_tags').orderBy('name', 'asc').get());
+                }
+                const [structSnap, docsSnap, viewsSnap, tagsSnap] = await Promise.all(reads);
 
                 if (structSnap.exists) {
                     const data = structSnap.data();
@@ -112,8 +148,8 @@ document.addEventListener('alpine:init', () => {
                     this.allDocs[doc.id] = { id: doc.id, ...doc.data() };
                 });
 
-                this.views = viewsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                this.shepherdingTags = tagsSnap.docs.map(doc => ({
+                if (viewsSnap) this.views = viewsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                if (tagsSnap) this.shepherdingTags = tagsSnap.docs.map(doc => ({
                     id: doc.id,
                     name: doc.data().name || doc.id
                 }));
@@ -169,38 +205,15 @@ document.addEventListener('alpine:init', () => {
             this.currentPath = [];
         },
 
-        findPathToFolder(targetId, node, path) {
-            for (const child of (node.children || [])) {
-                if (child.type === 'folder') {
-                    if (child.id === targetId) return [...path, child.id];
-                    const found = this.findPathToFolder(targetId, child, [...path, child.id]);
-                    if (found) return found;
-                }
-            }
-            return null;
-        },
+        // ── Tree Helpers (delegate to ShepherdingDocsCore) ────────────────────
 
-        // ── Tree Helpers ──────────────────────────────────────────────────────
-
-        getFolderById(id, node = null) {
-            const root = node || this.structure;
-            for (const child of (root.children || [])) {
-                if (child.type === 'folder') {
-                    if (child.id === id) return child;
-                    const found = this.getFolderById(id, child);
-                    if (found) return found;
-                }
-            }
-            return null;
-        },
+        getFolderById(id) { return Docs.getFolderById(this.structure, id); },
 
         getDocTitle(id) {
             return this.allDocs[id]?.title || 'Untitled Document';
         },
 
-        // Dev-only blur class for a directory item: Elder Document titles are elder
-        // content, so they screen unless the current user authored them. Folders are
-        // structural navigation and never blur.
+        // Dev-only blur class for a directory item.
         docItemBlurClass(item) {
             if (!item || item.type === 'folder') return '';
             return ShepherdingBlur.contentClass(this.allDocs[item.id]?.authorUid);
@@ -234,52 +247,23 @@ document.addEventListener('alpine:init', () => {
             return dateStr || editor;
         },
 
-        findParent(targetId, node = null) {
-            const root = node || this.structure;
-            for (const child of (root.children || [])) {
-                if (child.id === targetId) return root;
-                if (child.type === 'folder') {
-                    const found = this.findParent(targetId, child);
-                    if (found) return found;
-                }
-            }
-            return null;
-        },
-
-        getAllDocIds(node) {
-            const ids = [];
-            for (const child of (node.children || [])) {
-                if (child.type === 'document') ids.push(child.id);
-                else if (child.type === 'folder') ids.push(...this.getAllDocIds(child));
-            }
-            return ids;
-        },
-
-        removeFromTree(targetId, node = null) {
-            const root = node || this.structure;
-            const idx = (root.children || []).findIndex(c => c.id === targetId);
-            if (idx !== -1) { root.children.splice(idx, 1); return true; }
-            for (const child of (root.children || [])) {
-                if (child.type === 'folder' && this.removeFromTree(targetId, child)) return true;
-            }
-            return false;
-        },
-
-        isDescendant(potentialDescendantId, ancestorId) {
-            const ancestor = this.getFolderById(ancestorId);
-            if (!ancestor) return false;
-            return this.getFolderById(potentialDescendantId, ancestor) !== null;
+        // True if this document (in the current tree) is also referenced by the
+        // global Library — i.e. it has been opted in. Profile scope only.
+        isInLibrary(docId) {
+            return !!this.allDocs[docId] && (this.allDocs[docId].inLibrary === true);
         },
 
         async saveStructure() {
             const plain = JSON.parse(JSON.stringify(this.structure));
-            await db.collection('elder_document_structure').doc('root').set(plain);
+            await db.collection('elder_document_structure').doc(this.structureDocId).set(plain);
             this.structure = plain;
         },
 
         // ── Create ────────────────────────────────────────────────────────────
 
         openCreateModal() {
+            // A profile tab makes plain notes only — skip the care-list picker.
+            if (this.isProfileScope) { this.createDocument(); return; }
             this.createDocType = 'note';
             this.createFilterMode = 'preset';
             this.customFilter = { filterTags: [], filterMode: 'any', statusZoneFilters: [] };
@@ -289,7 +273,7 @@ document.addEventListener('alpine:init', () => {
 
         async createDocument() {
             this.showCreateModal = false;
-            const type = this.createDocType;
+            const type = this.isProfileScope ? 'note' : this.createDocType;
             const title = type === 'care-list' ? 'New Care List' : 'New Document';
             try {
                 const docData = {
@@ -301,6 +285,12 @@ document.addEventListener('alpine:init', () => {
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                     updatedByName: this.currentUserName,
                 };
+                // MS-98: a profile document is owned by its Person and hidden from
+                // shared surfaces until opted into the Library.
+                if (this.ownerPersonId) {
+                    docData.ownerPersonId = this.ownerPersonId;
+                    docData.inLibrary = false;
+                }
 
                 if (type === 'care-list') {
                     if (this.createFilterMode === 'preset') {
@@ -314,7 +304,10 @@ document.addEventListener('alpine:init', () => {
                 }
 
                 const docRef = await db.collection('elder_documents').add(docData);
-                this.allDocs[docRef.id] = { id: docRef.id, title: title, docType: type, authorName: this.currentUserName };
+                this.allDocs[docRef.id] = {
+                    id: docRef.id, title: title, docType: type, authorName: this.currentUserName,
+                    ownerPersonId: this.ownerPersonId || null, inLibrary: false,
+                };
 
                 const currentFolder = this.currentFolder;
                 if (!currentFolder.children) currentFolder.children = [];
@@ -334,7 +327,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async createFolder() {
-            const folderId = genId();
+            const folderId = Docs.newId();
             const currentFolder = this.currentFolder;
             if (!currentFolder.children) currentFolder.children = [];
             currentFolder.children.unshift({ type: 'folder', id: folderId, name: 'New Folder', children: [] });
@@ -365,7 +358,7 @@ document.addEventListener('alpine:init', () => {
             this.renamingItemId = null;
             try {
                 if (item.type === 'folder') {
-                    const folder = this.getFolderById(item.id);
+                    const folder = Docs.getFolderById(this.structure, item.id);
                     if (folder) folder.name = newName;
                     await this.saveStructure();
                 } else {
@@ -387,8 +380,8 @@ document.addEventListener('alpine:init', () => {
         confirmDelete(item) {
             this.deletingItem = item;
             if (item.type === 'folder') {
-                const folder = this.getFolderById(item.id);
-                this.deleteDocCount = folder ? this.getAllDocIds(folder).length : 0;
+                const folder = Docs.getFolderById(this.structure, item.id);
+                this.deleteDocCount = folder ? Docs.getAllDocIds(folder).length : 0;
                 this.deleteFolderName = item.name;
             } else {
                 this.deleteDocCount = 1;
@@ -403,23 +396,124 @@ document.addEventListener('alpine:init', () => {
             const item = this.deletingItem;
             this.deletingItem = null;
             try {
+                // Which document records this removal touches.
+                let docIds = [];
                 if (item.type === 'document') {
-                    await db.collection('elder_documents').doc(item.id).delete();
-                    delete this.allDocs[item.id];
+                    docIds = [item.id];
                 } else {
-                    const folder = this.getFolderById(item.id);
-                    if (folder) {
-                        const docIds = this.getAllDocIds(folder);
-                        await Promise.all(docIds.map(id => db.collection('elder_documents').doc(id).delete()));
-                        docIds.forEach(id => delete this.allDocs[id]);
+                    const folder = Docs.getFolderById(this.structure, item.id);
+                    if (folder) docIds = Docs.getAllDocIds(folder);
+                }
+
+                // MS-98 delete reconciliation — a document referenced by two trees
+                // must not be destroyed when removed from just one:
+                //  • Profile scope OWNS its documents → delete the record, and also
+                //    prune it from the Library root tree if it was opted in.
+                //  • Library scope only hard-deletes genuine Library documents
+                //    (no ownerPersonId); a profile-owned doc that was opted in is
+                //    kept — removing it here just opts it back out.
+                const toHardDelete = [];
+                const toPruneFromLibrary = [];
+                const toOptOut = [];
+                for (const id of docIds) {
+                    const owner = this.allDocs[id]?.ownerPersonId || null;
+                    if (this.isProfileScope) {
+                        toHardDelete.push(id);
+                        // Always attempt a Library prune (idempotent no-op if it
+                        // was never opted in) — don't trust the denormalized flag.
+                        toPruneFromLibrary.push(id);
+                    } else if (!owner) {
+                        toHardDelete.push(id); // genuine Library document
+                    } else {
+                        // Library scope + profile-owned doc → keep the record; this
+                        // is an opt-out. Remove the node below and clear the flag.
+                        toOptOut.push(id);
                     }
                 }
-                this.removeFromTree(item.id);
+
+                await Promise.all(toHardDelete.map(id => db.collection('elder_documents').doc(id).delete()));
+                toHardDelete.forEach(id => delete this.allDocs[id]);
+                await Promise.all(toOptOut.map(id =>
+                    db.collection('elder_documents').doc(id).update({ inLibrary: false })));
+                toOptOut.forEach(id => { if (this.allDocs[id]) this.allDocs[id].inLibrary = false; });
+
+                Docs.removeFromTree(this.structure, item.id);
                 await this.saveStructure();
+
+                if (toPruneFromLibrary.length) await this.pruneFromLibraryRoot(toPruneFromLibrary);
+
                 this.showToast('Deleted successfully');
             } catch (e) {
                 console.error('Error deleting:', e);
                 this.showToast('Error deleting', 'error');
+            }
+        },
+
+        // Remove document nodes from the global Library root tree (used when a
+        // profile deletes docs that had been opted in). Profile scope only.
+        async pruneFromLibraryRoot(docIds) {
+            try {
+                const snap = await db.collection('elder_document_structure').doc('root').get();
+                const rootStruct = snap.exists && snap.data().children ? snap.data() : { children: [] };
+                let changed = false;
+                for (const id of docIds) {
+                    if (Docs.removeFromTree(rootStruct, id)) changed = true;
+                }
+                if (changed) {
+                    await db.collection('elder_document_structure').doc('root')
+                        .set(JSON.parse(JSON.stringify(rootStruct)));
+                }
+            } catch (e) {
+                console.error('Error pruning from Library root:', e);
+            }
+        },
+
+        // ── Opt into / out of the global Library (profile scope, MS-98) ────────
+
+        openLibraryDialog(item) {
+            if (item.type !== 'document') return;
+            this.libraryItem = item;
+            this.libraryTargetId = '__root__';
+            this.showLibraryModal = true;
+        },
+
+        // Surface this profile document in the global Library by referencing the
+        // same record from the Library root tree (no copy). It stays on the profile.
+        async confirmAddToLibrary() {
+            if (!this.libraryItem) return;
+            this.showLibraryModal = false;
+            const docId = this.libraryItem.id;
+            const targetId = this.libraryTargetId;
+            this.libraryItem = null;
+            try {
+                const snap = await db.collection('elder_document_structure').doc('root').get();
+                const rootStruct = snap.exists && snap.data().children ? snap.data() : { children: [] };
+                if (Docs.containsDoc(rootStruct, docId)) { this.showToast('Already in the Library'); return; }
+
+                const target = targetId === '__root__' ? rootStruct : Docs.getFolderById(rootStruct, targetId);
+                if (!target) { this.showToast('Target folder no longer exists', 'error'); return; }
+                if (!target.children) target.children = [];
+                target.children.push({ type: 'document', id: docId });
+
+                await db.collection('elder_document_structure').doc('root')
+                    .set(JSON.parse(JSON.stringify(rootStruct)));
+                await db.collection('elder_documents').doc(docId).update({ inLibrary: true });
+                if (this.allDocs[docId]) this.allDocs[docId].inLibrary = true;
+                this.showToast('Added to the Library');
+            } catch (e) {
+                console.error('Error adding to Library:', e);
+                this.showToast('Error adding to Library', 'error');
+            }
+        },
+
+        // The Library folder choices for the opt-in dialog.
+        async loadLibraryFolderOptions() {
+            try {
+                const snap = await db.collection('elder_document_structure').doc('root').get();
+                const rootStruct = snap.exists && snap.data().children ? snap.data() : { children: [] };
+                this.libraryFolderOptions = Docs.getFolderOptions(rootStruct);
+            } catch (e) {
+                this.libraryFolderOptions = [];
             }
         },
 
@@ -428,8 +522,6 @@ document.addEventListener('alpine:init', () => {
         openDocument(docId) {
             const doc = this.allDocs[docId];
             const isCareList = doc && doc.docType === 'care-list';
-            // In the mobile shell both editors are native screens — deep-link via
-            // hash. Elsewhere use the desktop editor pages.
             if (window.MOSAIC_SHELL === 'mobile') {
                 const route = isCareList ? 'careList' : 'documentEditor';
                 window.location.href = `mobile.html#/${route}?id=${encodeURIComponent(docId)}`;
@@ -459,7 +551,7 @@ document.addEventListener('alpine:init', () => {
         onDragOver(targetFolder, event) {
             if (!this.draggedItem) return;
             if (this.draggedItem.id === targetFolder.id) return;
-            if (this.draggedItem.type === 'folder' && this.isDescendant(targetFolder.id, this.draggedItem.id)) return;
+            if (this.draggedItem.type === 'folder' && Docs.isDescendant(this.structure, targetFolder.id, this.draggedItem.id)) return;
             event.preventDefault();
             this.dragOverFolderId = targetFolder.id;
         },
@@ -476,7 +568,7 @@ document.addEventListener('alpine:init', () => {
             this.dragOverFolderId = null;
             if (!this.draggedItem) return;
             if (this.draggedItem.id === targetFolder.id) { this.draggedItem = null; return; }
-            if (this.draggedItem.type === 'folder' && this.isDescendant(targetFolder.id, this.draggedItem.id)) {
+            if (this.draggedItem.type === 'folder' && Docs.isDescendant(this.structure, targetFolder.id, this.draggedItem.id)) {
                 this.draggedItem = null; return;
             }
             const item = this.draggedItem;
@@ -490,7 +582,7 @@ document.addEventListener('alpine:init', () => {
             if (!this.draggedItem) return;
             const item = this.draggedItem;
             this.draggedItem = null;
-            const parent = this.findParent(item.id);
+            const parent = Docs.findParent(this.structure, item.id);
             if (parent === this.structure || !parent) return; // already at root
             this.moveItem(item, '__root__');
         },
@@ -498,26 +590,8 @@ document.addEventListener('alpine:init', () => {
         // ── Move ──────────────────────────────────────────────────────────────
 
         async moveItem(item, targetFolderId) {
-            const itemInTree = item.type === 'folder'
-                ? this.getFolderById(item.id)
-                : this.currentChildren.find(c => c.id === item.id) || this.findItemById(item.id);
-
-            this.removeFromTree(item.id);
-
-            let targetNode;
-            if (targetFolderId === '__root__') {
-                targetNode = this.structure;
-            } else {
-                targetNode = this.getFolderById(targetFolderId);
-            }
-            if (!targetNode) { await this.loadData(); return; }
-            if (!targetNode.children) targetNode.children = [];
-
-            const snapshot = item.type === 'folder'
-                ? (itemInTree || item)
-                : { type: 'document', id: item.id };
-            targetNode.children.push(snapshot);
-
+            const ok = Docs.moveNode(this.structure, item, targetFolderId);
+            if (!ok) { await this.loadData(); return; }
             try {
                 await this.saveStructure();
             } catch (e) {
@@ -527,34 +601,16 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        findItemById(id, node = null) {
-            const root = node || this.structure;
-            for (const child of (root.children || [])) {
-                if (child.id === id) return child;
-                if (child.type === 'folder') {
-                    const found = this.findItemById(id, child);
-                    if (found) return found;
-                }
-            }
-            return null;
-        },
-
         openMoveDialog(item) {
             this.movingItem = item;
             this.moveTargetId = '__root__';
             this.showMoveModal = true;
         },
 
-        getFolderOptions(node = null, depth = 0, excludeId = null) {
-            const root = node || this.structure;
-            const options = [];
-            for (const child of (root.children || [])) {
-                if (child.type === 'folder' && child.id !== excludeId) {
-                    options.push({ id: child.id, name: child.name, depth });
-                    options.push(...this.getFolderOptions(child, depth + 1, excludeId));
-                }
-            }
-            return options;
+        // Signature kept as (node, depth, excludeId) for the existing Library
+        // move-modal markup; node/depth are always the defaults from the template.
+        getFolderOptions(_node = null, _depth = 0, excludeId = null) {
+            return Docs.getFolderOptions(this.structure, excludeId);
         },
 
         async confirmMove() {
@@ -565,7 +621,7 @@ document.addEventListener('alpine:init', () => {
             this.movingItem = null;
 
             if (item.type === 'folder' && targetId !== '__root__') {
-                if (targetId === item.id || this.isDescendant(targetId, item.id)) {
+                if (targetId === item.id || Docs.isDescendant(this.structure, targetId, item.id)) {
                     this.showToast('Cannot move a folder into itself', 'error');
                     return;
                 }
