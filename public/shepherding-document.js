@@ -50,11 +50,15 @@ async function loadDocMentionData() {
         }
 
         if (docsResult.status === 'fulfilled') {
-            _mentionDocs = docsResult.value.docs.map(doc => {
-                const d = doc.data();
-                _docTypeById[doc.id] = d.docType || 'note';
-                return { id: JSON.stringify({ kind: 'elder_document', id: doc.id }), label: d.title || 'Untitled Document' };
-            });
+            // MS-98: a profile-owned document is mentionable only once opted into
+            // the Library. Plain Library documents (no ownerPersonId) are unaffected.
+            _mentionDocs = docsResult.value.docs
+                .filter(doc => { const d = doc.data(); return !(d.ownerPersonId && d.inLibrary !== true); })
+                .map(doc => {
+                    const d = doc.data();
+                    _docTypeById[doc.id] = d.docType || 'note';
+                    return { id: JSON.stringify({ kind: 'elder_document', id: doc.id }), label: d.title || 'Untitled Document' };
+                });
         }
 
         if (notesResult.status === 'fulfilled') {
@@ -882,6 +886,11 @@ document.addEventListener('alpine:init', () => {
 
         toast: { show: false, message: '', type: 'success' },
 
+        // Back link — defaults to the Document Library, or the originating
+        // Shepherding Profile when opened from a profile Documents tab (MS-98).
+        backHref: 'shepherding-documents.html',
+        backLabel: 'Documents',
+
         // ── Computed ──
         get filteredPeople() {
             const q = this.pickerSearch.toLowerCase();
@@ -892,6 +901,10 @@ document.addEventListener('alpine:init', () => {
             const params = new URLSearchParams(window.location.search);
             this.docId = params.get('id');
             if (!this.docId) { window.location.href = 'shepherding-documents.html'; return; }
+            if (params.get('from') === 'profile' && params.get('personId')) {
+                this.backHref = `shepherding-profile.html?id=${encodeURIComponent(params.get('personId'))}`;
+                this.backLabel = 'Profile';
+            }
 
             this._onKeyDown = e => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 's') {

@@ -43,6 +43,23 @@
     });
     return out;
   }
+  // Serialize simple params into a hash query so history.back() (incl. Android's
+  // hardware/gesture back) can restore them — M.navParams is transient and doesn't
+  // survive a history pop. Objects/functions are skipped; they stay available via
+  // M.navParams for the immediate forward render.
+  function encodeParams(params) {
+    if (!params) return "";
+    var parts = [];
+    Object.keys(params).forEach(function (k) {
+      var v = params[k];
+      if (v === undefined || v === null) return;
+      var t = typeof v;
+      if (t === "string" || t === "number" || t === "boolean") {
+        parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(v));
+      }
+    });
+    return parts.length ? "?" + parts.join("&") : "";
+  }
   function greeting() {
     var h = new Date().getHours();
     if (h >= 5 && h < 12) return "Good morning";
@@ -185,8 +202,8 @@
       return;
     }
     if (SHELL_PAGES[route]) { window.location.href = SHELL_PAGES[route] + "?shell=mobile"; return; }
-    if (SCREENS[route]) { M.navParams = params || {}; location.hash = "#/" + route; return; }
-    if (ROUTE_META[route]) { M.navParams = ROUTE_META[route]; location.hash = "#/" + route; return; }
+    if (SCREENS[route]) { M.navParams = params || {}; location.hash = "#/" + route + encodeParams(params); return; }
+    if (ROUTE_META[route]) { M.navParams = ROUTE_META[route]; location.hash = "#/" + route + encodeParams(ROUTE_META[route]); return; }
     M.navParams = {}; location.hash = "#/home";
   }
 
@@ -290,7 +307,7 @@
     var ScreenComp = SCREENS[routeState[0]] || SCREENS.comingSoon || HomeScreen;
     return html`
       <div style=${{ height: "100%", position: "relative", overflow: "hidden" }}>
-        <${ScreenComp} nav=${nav} openMenu=${function () { menuState[1](true); }} back=${function () { history.length > 1 ? history.back() : nav("home"); }} user=${userState[0]} params=${Object.assign({}, currentHashParams(), M.navParams || {})} />
+        <${ScreenComp} nav=${nav} openMenu=${function () { menuState[1](true); }} back=${function () { history.length > 1 ? history.back() : nav("home"); }} user=${userState[0]} params=${Object.assign({}, M.navParams || {}, currentHashParams())} />
         <${Drawer} open=${menuState[0]} current=${routeState[0]} user=${userState[0]} onClose=${function () { menuState[1](false); }} onNavigate=${function (r) { menuState[1](false); nav(r); }} />
       </div>`;
   }

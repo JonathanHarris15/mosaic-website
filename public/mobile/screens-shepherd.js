@@ -235,7 +235,7 @@
     var navCards = [
       { icon: "folder-open", title: "Documents", desc: "Elder notes & meeting minutes.", go: function () { props.nav("documents"); } },
       { icon: "users", title: "People", desc: "View & manage member profiles.", go: function () { props.nav("shepherdPeople"); } },
-      { icon: "tag", title: "Manage Tags", desc: "Create, rename & merge shepherding tags.", go: function () { props.nav("shepherdTags"); } },
+      { icon: "tag", title: "Manage Tags and Relationships", desc: "Create, rename & merge shepherding tags.", go: function () { props.nav("shepherdTags"); } },
       // Relations Viewer: placeholder card, intentionally not linked yet — the
       // visual relationship dashboard is still being designed (see PRD).
       { icon: "waypoints", title: "Relations Viewer", desc: "See how members are connected.", soon: true, go: function () {} },
@@ -670,6 +670,140 @@
     </div>`;
   }
 
+  // MS-98: per-person Documents directory shown in the profile's Documents tab.
+  // Reuses the shared tree engine (window.ShepherdingDocsCore) over this Person's
+  // own structure doc (person_<id>); documents carry ownerPersonId and can be
+  // opted into the global Library. Notes only (matches desktop scope).
+  function ProfileDocuments(props) {
+    var DC = window.ShepherdingDocsCore;
+    var pid = props.pid, user = props.user, nav = props.nav, showToast = props.showToast;
+    var structDocId = "person_" + pid;
+    var loadingS = useState(true);
+    var structureS = useState({ children: [] }), docsS = useState({});
+    var pathS = useState([]), renameIdS = useState(null), renameValS = useState("");
+    var moveS = useState(null), deleteS = useState(null);
+    var structure = structureS[0], docs = docsS[0], path = pathS[0];
+    function clone(x) { return JSON.parse(JSON.stringify(x)); }
+    function persist(next) { structureS[1](next); data.saveDocumentStructure(next, structDocId).catch(function () { showToast("Error saving", "error"); }); }
+
+    useEffect(function () {
+      var alive = true;
+      Promise.all([data.getDocumentStructure(structDocId), data.getElderDocuments()]).then(function (r) {
+        if (!alive) return;
+        structureS[1](r[0]);
+        var map = {}; r[1].forEach(function (d) { map[d.id] = d; }); docsS[1](map);
+        loadingS[1](false);
+      }).catch(function () { if (alive) loadingS[1](false); });
+      return function () { alive = false; };
+    }, [pid]);
+
+    var currentFolder = path.length === 0 ? structure : (DC.getFolderById(structure, path[path.length - 1]) || structure);
+    var children = currentFolder.children || [];
+    var folders = children.filter(function (c) { return c.type === "folder"; });
+    var docItems = children.filter(function (c) { return c.type === "document"; });
+    var crumbs = [{ id: null, name: "Documents" }];
+    path.forEach(function (fid) { var f = DC.getFolderById(structure, fid); crumbs.push({ id: fid, name: (f && f.name) || "Folder" }); });
+
+    function navInto(fid) { renameIdS[1](null); pathS[1](path.concat([fid])); }
+    function navToCrumb(idx) { renameIdS[1](null); pathS[1](path.slice(0, idx)); }
+    function openDoc(id) { nav("documentEditor", { id: id }); }
+    function createDoc() {
+      data.createElderDocument({ type: "note", ownerPersonId: pid }, user).then(function (id) {
+        var next = clone(structure);
+        var folder = path.length === 0 ? next : (DC.getFolderById(next, path[path.length - 1]) || next);
+        if (!folder.children) folder.children = [];
+        folder.children.push({ type: "document", id: id });
+        data.saveDocumentStructure(next, structDocId).then(function () { nav("documentEditor", { id: id }); }).catch(function () { showToast("Error creating", "error"); });
+      }).catch(function () { showToast("Error creating", "error"); });
+    }
+    function createFolder() {
+      var fid = DC.newId(); var next = clone(structure);
+      var folder = path.length === 0 ? next : (DC.getFolderById(next, path[path.length - 1]) || next);
+      if (!folder.children) folder.children = [];
+      folder.children.unshift({ type: "folder", id: fid, name: "New Folder", children: [] });
+      persist(next); renameIdS[1](fid); renameValS[1]("New Folder");
+    }
+    function startRename(item) { renameValS[1](item.type === "folder" ? item.name : ((docs[item.id] && docs[item.id].title) || "Untitled Document")); renameIdS[1](item.id); }
+    function finishRename(item) {
+      if (renameIdS[0] !== item.id) return;
+      var name = renameValS[0].trim() || (item.type === "folder" ? "New Folder" : "New Document");
+      renameIdS[1](null);
+      if (item.type === "folder") { var next = clone(structure); var f = DC.getFolderById(next, item.id); if (f) f.name = name; persist(next); }
+      else { docsS[1](Object.assign({}, docs, (function () { var o = {}; o[item.id] = Object.assign({}, docs[item.id], { title: name }); return o; })())); data.renameElderDocument(item.id, name, user).catch(function () { showToast("Error renaming", "error"); }); }
+    }
+    function doMove(item, targetId) {
+      moveS[1](null);
+      var next = clone(structure);
+      if (item.type === "folder" && targetId !== "__root__" && (targetId === item.id || DC.isDescendant(next, targetId, item.id))) { showToast("Can't move a folder into itself", "error"); return; }
+      DC.moveNode(next, item, targetId); persist(next); showToast("Moved");
+    }
+    function doDelete(item) {
+      deleteS[1](null);
+      var next = clone(structure);
+      var ids = item.type === "document" ? [item.id] : (function () { var f = DC.getFolderById(structure, item.id); return f ? DC.getAllDocIds(f) : []; })();
+      if (ids.length) { data.deleteElderDocuments(ids); data.pruneElderDocsFromLibrary(ids); }
+      var m = Object.assign({}, docs); ids.forEach(function (id) { delete m[id]; }); docsS[1](m);
+      DC.removeFromTree(next, item.id); persist(next); showToast("Deleted");
+    }
+    function addToLibrary(item) {
+      data.addElderDocToLibrary(item.id, "__root__").then(function (ok) {
+        if (ok) { docsS[1](Object.assign({}, docs, (function () { var o = {}; o[item.id] = Object.assign({}, docs[item.id], { inLibrary: true }); return o; })())); showToast("Added to the Library"); }
+        else showToast("Already in the Library");
+      }).catch(function () { showToast("Error", "error"); });
+    }
+
+    var moveItem = moveS[0], delItem = deleteS[0];
+    var folderOptions = moveItem ? DC.getFolderOptions(structure, moveItem.type === "folder" ? moveItem.id : null) : [];
+    var rowCard = { display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 14px", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)" };
+
+    function renameField(item) {
+      return html`<input value=${renameValS[0]} autoFocus=${true} onInput=${function (e) { renameValS[1](e.target.value); }} onBlur=${function () { finishRename(item); }} onKeyDown=${function (e) { if (e.key === "Enter") finishRename(item); if (e.key === "Escape") renameIdS[1](null); }} style=${{ flex: 1, minWidth: 0, border: "none", borderBottom: "1px solid var(--primary)", background: "transparent", outline: "none", fontFamily: "var(--font-serif)", fontSize: 15, fontWeight: 600, color: "var(--on-surface)" }} />`;
+    }
+    function rowActions(item) {
+      return html`<div style=${{ display: "flex", gap: 2, flexShrink: 0 }}>
+        ${item.type === "document" && !(docs[item.id] && docs[item.id].inLibrary) ? html`<button onClick=${function () { addToLibrary(item); }} aria-label="Add to Library" style=${Object.assign({}, iconBtn, { width: 30, height: 30 })}>${Ic("library-big", 15)}</button>` : null}
+        <button onClick=${function () { startRename(item); }} aria-label="Rename" style=${Object.assign({}, iconBtn, { width: 30, height: 30 })}>${Ic("pencil", 15)}</button>
+        <button onClick=${function () { moveS[1](item); }} aria-label="Move" style=${Object.assign({}, iconBtn, { width: 30, height: 30 })}>${Ic("folder-input", 15)}</button>
+        <button onClick=${function () { deleteS[1](item); }} aria-label="Delete" style=${Object.assign({}, iconBtn, { width: 30, height: 30, color: "var(--error)" })}>${Ic("trash-2", 15)}</button>
+      </div>`;
+    }
+
+    return html`<div style=${{ marginTop: 16 }}>
+      <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
+        <div style=${{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4, fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)", minWidth: 0 }}>
+          ${crumbs.map(function (cr, i) { var isLast = i === crumbs.length - 1; return html`<${Fragment} key=${cr.id || "root"}>${i > 0 ? html`<span style=${{ color: "var(--outline)" }}>${Ic("chevron-right", 13)}</span>` : null}<button onClick=${function () { navToCrumb(i); }} disabled=${isLast} style=${{ border: "none", background: "transparent", cursor: isLast ? "default" : "pointer", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: isLast ? 600 : 500, color: isLast ? "var(--on-surface)" : "var(--secondary)" }}>${cr.name}</button></${Fragment}>`; })}
+        </div>
+        <div style=${{ display: "flex", gap: 6, flexShrink: 0 }}>
+          <button onClick=${createFolder} aria-label="New folder" style=${{ display: "inline-flex", alignItems: "center", padding: "7px 10px", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", background: "transparent", color: "var(--on-surface-variant)", cursor: "pointer" }}>${Ic("folder-plus", 15)}</button>
+          <button onClick=${createDoc} style=${{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", border: "none", borderRadius: "var(--radius)", background: "var(--primary)", color: "var(--on-primary)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>${Ic("plus", 15)} New</button>
+        </div>
+      </div>
+      ${loadingS[0] ? html`<div style=${{ display: "flex", justifyContent: "center", padding: 30, color: "var(--on-surface-variant)" }}><span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 22)}</span></div>`
+        : (folders.length === 0 && docItems.length === 0) ? html`<p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14, color: "var(--on-surface-variant)", textAlign: "center", padding: "24px 8px" }}>No documents yet. Use “New” to add one.</p>`
+        : html`<div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>
+          ${folders.map(function (f) { var renaming = renameIdS[0] === f.id; return html`<div key=${f.id} style=${rowCard}>
+            <span style=${{ color: "var(--secondary)", flexShrink: 0 }} onClick=${function () { if (!renaming) navInto(f.id); }}>${Ic("folder", 20)}</span>
+            ${renaming ? renameField(f) : html`<button onClick=${function () { navInto(f.id); }} style=${{ flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", fontFamily: "var(--font-serif)", fontSize: 15, fontWeight: 600, color: "var(--on-surface)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>${f.name}</button>`}
+            ${renaming ? null : rowActions(f)}
+          </div>`; })}
+          ${docItems.map(function (it) { var d = docs[it.id] || { title: "Untitled Document" }; var renaming = renameIdS[0] === it.id; return html`<div key=${it.id} style=${rowCard}>
+            <span style=${{ width: 34, height: 34, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--surface-container)", color: "var(--primary)" }} onClick=${function () { if (!renaming) openDoc(it.id); }}>${Ic("file-text", 17)}</span>
+            ${renaming ? renameField(it) : html`<button onClick=${function () { openDoc(it.id); }} style=${{ flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", overflow: "hidden" }}>
+              <div style=${{ display: "flex", alignItems: "center", gap: 6 }}><span style=${{ fontFamily: "var(--font-serif)", fontSize: 15, fontWeight: 600, color: "var(--on-surface)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>${d.title}</span>${d.inLibrary ? html`<span style=${{ color: "var(--primary)", display: "inline-flex", flexShrink: 0 }} title="Also in the Library">${Ic("library-big", 13)}</span>` : null}</div>
+            </button>`}
+            ${renaming ? null : rowActions(it)}
+          </div>`; })}
+        </div>`}
+      ${moveItem ? html`<${Modal} title="Move" onClose=${function () { moveS[1](null); }} footer=${html`<button onClick=${function () { moveS[1](null); }} style=${pill("ghost")}>Cancel</button>`}>
+        <button onClick=${function () { doMove(moveItem, "__root__"); }} style=${{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "12px 8px", border: "none", borderBottom: "1px solid var(--outline-variant)", background: "transparent", cursor: "pointer", textAlign: "left", fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 600, color: "var(--on-surface)" }}>${Ic("home", 17)} Home (root)</button>
+        ${folderOptions.map(function (o) { return html`<button key=${o.id} onClick=${function () { doMove(moveItem, o.id); }} style=${{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "12px 8px", paddingLeft: (8 + o.depth * 16) + "px", border: "none", borderBottom: "1px solid var(--outline-variant)", background: "transparent", cursor: "pointer", textAlign: "left", fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--on-surface)" }}>${Ic("folder", 17)} ${o.name}</button>`; })}
+      </${Modal}>` : null}
+      ${delItem ? html`<${Modal} title="Delete?" onClose=${function () { deleteS[1](null); }} footer=${html`<${Fragment}><button onClick=${function () { deleteS[1](null); }} style=${pill("ghost")}>Cancel</button><button onClick=${function () { doDelete(delItem); }} style=${Object.assign({}, pill(), { background: "var(--error)" })}>Delete</button></${Fragment}>`}>
+        <p style=${{ margin: 0, fontFamily: "var(--font-sans)", fontSize: 14, lineHeight: 1.5, color: "var(--on-surface)" }}>${delItem.type === "folder" ? html`Delete “${delItem.name}” and everything in it? This cannot be undone.` : html`Delete “${(docs[delItem.id] && docs[delItem.id].title) || "this document"}”? This removes it from the profile and the Library. This cannot be undone.`}</p>
+      </${Modal}>` : null}
+    </div>`;
+  }
+
   function ShepherdProfileScreen(props) {
     var user = props.user || {};
     var pid = (props.params && props.params.id) || null;
@@ -678,10 +812,21 @@
     var collapseS = useState(false), editorS = useState(null), newTagS = useState(""), editProfileS = useState(null), explEditS = useState({}), toastS = useState(null);
     var familiesS = useState([]), rosterS = useState([]); // Family graph + name lookup (MS-88)
     var relsS = useState([]), relTypesS = useState([]);   // Relationship graph (MS-89)
+    var relGroupsS = useState([]);                          // Relationship Groups (ADR-0014)
+    var tabS = useState("record"); // MS-98: 'record' | 'documents'
+    var drawerS = useState(false);  // details side drawer (member details/tags/track/status/relationships)
+    // Quick-assign card (MS-104 parity): apply existing vocabulary to this Person.
+    var qaModeS = useState(null);   // null | 'pairwise' | 'group' | 'family'
+    var qaFormS = useState({ typeId: "", side: "holder", groupId: "", asLeader: false, familyKind: "spouse", otherId: "", otherName: "" });
 
     var person = personS[0], notes = notesS[0], activity = activityS[0], tags = tagsS[0];
-    var families = familiesS[0], roster = rosterS[0], rels = relsS[0], relTypes = relTypesS[0];
+    var families = familiesS[0], roster = rosterS[0], rels = relsS[0], relTypes = relTypesS[0], relGroups = relGroupsS[0];
+    var qaMode = qaModeS[0], qaForm = qaFormS[0];
+    var RC = window.RelationshipCore, GC = window.RelationshipGroupCore;
     function rosterName(id) { for (var i = 0; i < roster.length; i++) { if (roster[i].id === id) return roster[i].name; } return "(unknown)"; }
+    function rosterSex(id) { for (var i = 0; i < roster.length; i++) { if (roster[i].id === id) return roster[i].sex; } return null; }
+    function personById(id) { for (var i = 0; i < roster.length; i++) { if (roster[i].id === id) return roster[i]; } return null; }
+    function relTypeById(id) { for (var i = 0; i < relTypes.length; i++) { if (relTypes[i].id === id) return relTypes[i]; } return null; }
     function showToast(m, t) { toastS[1]({ message: m, type: t || "success" }); setTimeout(function () { toastS[1](null); }, 2400); }
     function tagName(id) { for (var i = 0; i < tags.length; i++) { if (tags[i].id === id) return tags[i].name; } return id; }
     function reloadNotes() { return data.getShepherdingNotes(pid).then(notesS[1]); }
@@ -694,8 +839,8 @@
         if (!alive) return;
         if (!p) { errS[1](true); loadingS[1](false); return; }
         personS[1](p);
-        Promise.all([data.getShepherdingNotes(pid), data.getShepherdingActivity(pid), data.getShepherdingTags(), data.getFamilies(), data.getPeople(), data.getRelationships(), data.getRelationshipTypes()])
-          .then(function (r) { if (!alive) return; notesS[1](r[0]); activityS[1](r[1]); tagsS[1](r[2]); familiesS[1](r[3]); rosterS[1](r[4]); relsS[1](r[5]); relTypesS[1](r[6]); loadingS[1](false); });
+        Promise.all([data.getShepherdingNotes(pid), data.getShepherdingActivity(pid), data.getShepherdingTags(), data.getFamilies(), data.getPeople(), data.getRelationships(), data.getRelationshipTypes(), data.getRelationshipGroups()])
+          .then(function (r) { if (!alive) return; notesS[1](r[0]); activityS[1](r[1]); tagsS[1](r[2]); familiesS[1](r[3]); rosterS[1](r[4]); relsS[1](r[5]); relTypesS[1](r[6]); relGroupsS[1](r[7]); loadingS[1](false); });
       }).catch(function () { if (alive) { errS[1](true); loadingS[1](false); } });
       return function () { alive = false; };
     }, [pid]);
@@ -782,6 +927,124 @@
       }).catch(function () { showToast("Error saving details", "error"); });
     }
 
+    // ── Quick-assign (MS-104, ADR-0014) ──────────────────────────────────────
+    // Parity with the desktop profile card: this APPLIES vocabulary defined in
+    // Manage Tags and Relationships, and authors Family by write-through. It never
+    // creates a Relationship Type or a named group.
+    function qaOpen(mode) { qaModeS[1](mode); qaFormS[1]({ typeId: "", side: "holder", groupId: "", asLeader: false, familyKind: "spouse", otherId: "", otherName: "" }); }
+    function qaClose() { qaModeS[1](null); }
+    function setQa(patch) { qaFormS[1](Object.assign({}, qaFormS[0], patch)); }
+
+    function qaCandidates() {
+      var q = (qaForm.otherName || "").toLowerCase().trim();
+      return roster.filter(function (p) { return p.id !== pid && (!q || p.name.toLowerCase().indexOf(q) !== -1); }).slice(0, 8);
+    }
+    function qaPairwiseTypes() {
+      return relTypes.map(function (t) { return RC.normalizeType(t); })
+        .filter(function (t) { return t.kind === "pairwise"; })
+        .sort(function (a, b) { return (a.name || "").localeCompare(b.name || ""); });
+    }
+    function qaSelectedType() { var list = qaPairwiseTypes(); for (var i = 0; i < list.length; i++) { if (list[i].id === qaForm.typeId) return list[i]; } return null; }
+    function qaJoinableGroups() { return relGroups.filter(function (g) { return !GC.belongsTo(g, pid); }).sort(function (a, b) { return (a.name || "").localeCompare(b.name || ""); }); }
+    function qaSelectedGroup() { for (var i = 0; i < relGroups.length; i++) { if (relGroups[i].id === qaForm.groupId) return relGroups[i]; } return null; }
+    function qaLeaderSeatOpen() { var g = qaSelectedGroup(); if (!g) return false; var t = relTypeById(g.typeId); return !!(t && RC.normalizeType(t).priority && !g.leaderId); }
+    function qaPreview() {
+      var type = qaSelectedType(); if (!type) return "";
+      var me = (person && person.name) || "This person";
+      var them = (qaForm.otherName || "").trim() || "the other person";
+      if (!type.priority) return me + " ↔ " + them + " — " + RC.labelForSide(type, "peer");
+      return qaForm.side === "holder" ? RC.orientedSentence(type, me, them) : RC.orientedSentence(type, them, me);
+    }
+
+    // Every relationship on this profile — Family projection + Pairwise edges +
+    // Group memberships — from this Person's viewpoint (mirrors personRelationships
+    // in shepherding-quick-assign.js).
+    function personRelationships() {
+      var family = window.FamilyCore.familyRelations(families, pid, rosterSex)
+        .filter(function (r) { return roster.some(function (p) { return p.id === r.otherId; }); })
+        .map(function (r) {
+          return { key: "fam:" + r.kind + ":" + r.otherId, source: "family", familyKind: r.kind, otherId: r.otherId, typeName: r.label, label: r.label, removable: r.kind !== "sibling" };
+        });
+      var pairwise = RC.edgesForPerson(rels, pid).map(function (edge) {
+        var desc = RC.describeRelationship(edge, relTypeById(edge.typeId), pid, rosterName);
+        return Object.assign({ key: "rel:" + edge.id, source: "pairwise", edge: edge, removable: true }, desc);
+      });
+      var groups = GC.groupsForPerson(relGroups, pid).map(function (g) {
+        var type = RC.normalizeType(relTypeById(g.typeId));
+        var leading = GC.isLeader(g, pid);
+        return { key: "grp:" + g.id, source: "group", group: g, groupName: g.name, typeName: type ? type.name : "(type)", roleLabel: RC.labelForSide(type, leading ? "leader" : "member") || (leading ? "Leader" : "Member"), leading: leading, size: GC.rosterIds(g).length, removable: true };
+      });
+      return family.concat(pairwise, groups);
+    }
+
+    function deleteRelationship(edgeId) {
+      data.deleteRelationshipPair(edgeId).then(function () {
+        relsS[1](rels.filter(function (r) { return r.id !== edgeId; }));
+        showToast("Relationship removed");
+      }).catch(function () { showToast("Error removing relationship", "error"); });
+    }
+    function qaAddPairwise() {
+      var type = qaSelectedType(), otherId = qaForm.otherId;
+      if (!type || !otherId) { showToast("Pick a relationship type and a person", "error"); return; }
+      var iAmHolder = !type.priority || qaForm.side === "holder";
+      var fromId = iAmHolder ? pid : otherId;
+      var toId = iAmHolder ? otherId : pid;
+      var dup = rels.some(function (r) {
+        return r.typeId === type.id && ((r.fromId === fromId && r.toId === toId) || (!type.priority && r.fromId === toId && r.toId === fromId));
+      });
+      if (dup) { showToast("That relationship already exists", "error"); return; }
+      data.addRelationshipPair(fromId, toId, type.id).then(function (edge) {
+        relsS[1](rels.concat([edge])); qaClose(); showToast("Relationship added");
+      }).catch(function () { showToast("Error adding relationship", "error"); });
+    }
+    function qaJoinGroup() {
+      var group = qaSelectedGroup();
+      if (!group) { showToast("Pick a group to join", "error"); return; }
+      var next = (qaForm.asLeader && qaLeaderSeatOpen()) ? GC.setLeader(group, pid) : GC.addMember(group, pid);
+      data.writeRelationshipGroup(next).then(function () {
+        relGroupsS[1](relGroups.map(function (g) { return g.id === group.id ? next : g; }));
+        qaClose(); showToast('Joined "' + group.name + '"');
+      }).catch(function () { showToast("Error joining group", "error"); });
+    }
+    function qaLeaveGroup(row) {
+      if (!window.confirm("Remove " + person.name + ' from "' + row.groupName + '"?')) return;
+      var next = row.leading ? GC.clearLeader(row.group) : GC.removeMember(row.group, pid);
+      data.writeRelationshipGroup(next).then(function () {
+        relGroupsS[1](relGroups.map(function (g) { return g.id === row.group.id ? next : g; }));
+        showToast("Removed from group");
+      }).catch(function () { showToast("Error leaving group", "error"); });
+    }
+    function qaAddFamily() {
+      var otherId = qaForm.otherId;
+      if (!otherId) { showToast("Pick a person", "error"); return; }
+      var plan = window.FamilyCore.planAddFamilyRelation(families, pid, qaForm.familyKind, otherId, personById);
+      if (!plan.valid) { showToast(plan.errors[0], "error"); return; }
+      var op = plan.action === "create"
+        ? data.addFamily(plan.changes).then(function (fam) { familiesS[1](families.concat([fam])); })
+        : data.updateFamily(plan.familyId, plan.changes).then(function () {
+            familiesS[1](families.map(function (f) { return f.id === plan.familyId ? Object.assign({}, f, plan.changes) : f; }));
+          });
+      op.then(function () { qaClose(); showToast("Family updated"); })
+        .catch(function () { showToast("Error updating family", "error"); });
+    }
+    function qaRemoveFamily(row) {
+      var plan = window.FamilyCore.planRemoveFamilyRelation(families, pid, row.familyKind, row.otherId);
+      if (!plan.valid) { showToast(plan.errors[0], "error"); return; }
+      var message = "Remove " + rosterName(row.otherId) + " as " + person.name + "'s " + row.label.toLowerCase() + "?";
+      if (row.familyKind === "spouse") message += " This ends the marriage record for both of them.";
+      if (row.familyKind === "parent") {
+        var also = plan.alsoDetaches || { parentIds: [], siblingIds: [] };
+        var lost = also.parentIds.filter(function (id) { return id !== row.otherId; }).map(rosterName).concat(also.siblingIds.map(rosterName));
+        message = "Remove " + person.name + " from that family?";
+        if (lost.length) message += " A family has one father and one mother, so " + person.name + " leaves it entirely — they will also no longer show " + lost.join(", ") + ". Everyone else keeps their place.";
+      }
+      if (!window.confirm(message)) return;
+      data.updateFamily(plan.familyId, plan.changes).then(function () {
+        familiesS[1](families.map(function (f) { return f.id === plan.familyId ? Object.assign({}, f, plan.changes) : f; }));
+        showToast("Family updated");
+      }).catch(function () { showToast("Error updating family", "error"); });
+    }
+
     var userKnown = props.user !== undefined;
     var isElder = userKnown && !!props.user && (props.user.role === "elder" || props.user.role === "super_admin");
     var fromLabel = (props.params && props.params.from === "dashboard") ? "Dashboard" : "People";
@@ -814,7 +1077,7 @@
 
     return html`
       <${Screen}>
-        <${TopBar} title=${fromLabel} onBack=${props.back} serif=${false} />
+        <${TopBar} title=${fromLabel} onBack=${props.back} serif=${false} right=${html`<button onClick=${function () { drawerS[1](true); }} aria-label="Details" style=${{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-surface)", cursor: "pointer", borderRadius: 10 }}>${Ic("menu", 22)}</button>`} />
         <${Body} style=${{ padding: "16px 16px 44px" }}>
           <div style=${{ marginBottom: 16 }}>
             <h1 style=${{ margin: 0, fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 600, color: "var(--primary)", letterSpacing: "0.02em" }}>${person.name}</h1>
@@ -823,6 +1086,17 @@
               ${mLabel ? html`<span style=${{ padding: "2px 9px", borderRadius: "var(--radius-full)", background: "rgba(62,97,129,0.12)", color: "var(--secondary)", fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", border: "1px solid rgba(62,97,129,0.2)" }}>${mLabel}</span>` : null}
             </div>
           </div>
+
+          ${drawerS[0] ? html`<${Fragment}>
+            <div onClick=${function () { drawerS[1](false); }} style=${{ position: "absolute", inset: 0, zIndex: 40, background: "rgba(14,28,54,0.42)", backdropFilter: "blur(1.5px)" }}></div>
+            <div style=${{ position: "absolute", top: 0, right: 0, bottom: 0, zIndex: 41, width: "88%", maxWidth: 420, background: "var(--surface-container-lowest)", borderLeft: "1px solid var(--outline-variant)", boxShadow: "var(--shadow-lg)", display: "flex", flexDirection: "column" }}>
+              <div style=${{ flexShrink: 0, paddingTop: "calc(env(safe-area-inset-top, 20px) + 10px)", borderBottom: "1px solid var(--outline-variant)" }}>
+                <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, height: 52, padding: "0 8px 0 16px" }}>
+                  <div style=${{ fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--primary)" }}>Details</div>
+                  <button onClick=${function () { drawerS[1](false); }} aria-label="Close" style=${{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-surface)", cursor: "pointer", borderRadius: 10 }}>${Ic("x", 22)}</button>
+                </div>
+              </div>
+              <div style=${{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: 16, paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))", display: "flex", flexDirection: "column", gap: 12 }}>
 
           <div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
             <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -838,41 +1112,114 @@
           </div>
 
           ${(function () {
-            var rel = window.FamilyCore.resolveRelations(families, pid);
-            if (!rel.spouseId && !rel.childIds.length && !rel.parentIds.length) return null;
-            var rows = [];
-            if (rel.spouseId) rows.push(["heart", "Spouse", [rel.spouseId]]);
-            if (rel.childIds.length) rows.push(["baby", "Children", rel.childIds]);
-            if (rel.parentIds.length) rows.push(["users", "Parents", rel.parentIds]);
-            return html`<div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
-              <h2 style=${Object.assign({}, SF_H2, { marginBottom: 12 })}>Family</h2>
-              <div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>
-                ${rows.map(function (row) { return html`<div key=${row[1]} style=${{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                  <span style=${{ display: "inline-flex", flexShrink: 0, color: "var(--secondary)" }}>${Ic(row[0], 17)}</span>
-                  <div style=${{ flex: 1 }}>
-                    <div style=${Object.assign({}, SF_OVER, { fontSize: 9, marginBottom: 2 })}>${row[1]}</div>
-                    <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)" }}>${row[2].map(function (id) { return rosterName(id); }).join(", ")}</div>
-                  </div>
-                </div>`; })}
-              </div>
-            </div>`;
-          })()}
+            // The full relationship card (MS-104 parity): it lists Family, Pairwise
+            // and Group relationships, and APPLIES existing vocabulary — set a
+            // relationship, join a group, or edit family. It never creates a type or
+            // a named group; that lives only in Manage Tags and Relationships.
+            var rows = personRelationships();
+            var selType = qaSelectedType();
+            var joinable = qaJoinableGroups();
+            var pwTypes = qaPairwiseTypes();
 
-          ${(function () {
-            var edges = window.RelationshipCore.edgesForPerson(rels, pid);
-            if (!edges.length) return null;
+            var selectStyle = Object.assign({}, inputStyle, { appearance: "none", WebkitAppearance: "none", paddingRight: 34, cursor: "pointer" });
+            var actionBtn = { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 4px", borderRadius: "var(--radius)", border: "1px solid var(--outline-variant)", background: "transparent", color: "var(--on-surface-variant)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 600 };
+            var applyBtn = Object.assign({}, pill(), { width: "100%", textAlign: "center" });
+            function toggleBtn(on) { return { flex: 1, padding: "8px 6px", borderRadius: 8, border: "1px solid " + (on ? "var(--primary)" : "var(--outline-variant)"), background: on ? "var(--primary)" : "transparent", color: on ? "var(--on-primary)" : "var(--on-surface-variant)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 11.5, fontWeight: 600, textTransform: "capitalize" }; }
+
+            function rowIcon(r) {
+              if (r.source === "family") return "heart";
+              if (r.source === "group") return r.leading ? "star" : "users";
+              return r.prioritized ? "move-right" : "arrow-left-right";
+            }
+            function rowText(r) {
+              if (r.source === "family") return html`<span><span style=${{ fontWeight: 600 }}>${r.label}</span> · ${rosterName(r.otherId)}</span>`;
+              if (r.source === "group") return html`<span><span style=${{ fontWeight: 600 }}>${r.groupName}</span> · ${r.roleLabel}</span>`;
+              if (r.sentence) return html`<span>${r.sentence}</span>`;
+              return html`<span><span style=${{ fontWeight: 600 }}>${r.typeName}</span> · ${rosterName(r.otherId)}</span>`;
+            }
+            function removeRow(r) {
+              if (r.source === "family") return qaRemoveFamily(r);
+              if (r.source === "group") return qaLeaveGroup(r);
+              return deleteRelationship(r.edge.id);
+            }
+
+            // Inline person picker — a text box plus a tap-list of candidates. Kept
+            // in-flow (not absolute) so it never clips inside the scrolling drawer.
+            function personPicker(placeholder) {
+              var cands = qaCandidates();
+              return html`<div>
+                <input value=${qaForm.otherName} onInput=${function (e) { setQa({ otherName: e.target.value, otherId: "" }); }} placeholder=${placeholder} style=${inputStyle} />
+                ${(!qaForm.otherId && qaForm.otherName && cands.length) ? html`<div style=${{ marginTop: 6, border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", overflow: "hidden", maxHeight: 176, overflowY: "auto" }}>
+                  ${cands.map(function (c, i) { return html`<button key=${c.id} onClick=${function () { setQa({ otherId: c.id, otherName: c.name }); }} style=${{ width: "100%", textAlign: "left", padding: "9px 12px", border: "none", borderTop: i === 0 ? "none" : "1px solid var(--outline-variant)", background: "transparent", color: "var(--on-surface)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 14 }}>${c.name}</button>`; })}
+                </div>` : null}
+              </div>`;
+            }
+
             return html`<div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
-              <h2 style=${Object.assign({}, SF_H2, { marginBottom: 12 })}>Relationships</h2>
-              <div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
-                ${edges.map(function (edge) {
-                  var type = null; for (var i = 0; i < relTypes.length; i++) { if (relTypes[i].id === edge.typeId) { type = relTypes[i]; break; } }
-                  var d = window.RelationshipCore.describeRelationship(edge, type, pid, rosterName);
-                  return html`<div key=${edge.id} style=${{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style=${{ display: "inline-flex", flexShrink: 0, color: "var(--secondary)" }}>${Ic(d.directional ? "move-right" : "arrow-left-right", 16)}</span>
-                    <span style=${{ fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)" }}>${d.directional ? d.sentence : (d.typeName + " · " + rosterName(d.otherId))}</span>
-                  </div>`;
-                })}
+              <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <h2 style=${SF_H2}>Relationships</h2>
+                ${qaMode ? html`<button onClick=${qaClose} style=${{ display: "inline-flex", alignItems: "center", gap: 4, border: "none", background: "transparent", color: "var(--on-surface-variant)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>${Ic("x", 15)} Cancel</button>` : null}
               </div>
+
+              <div style=${{ display: "flex", flexDirection: "column", gap: 7 }}>
+                ${rows.length ? rows.map(function (r) { return html`<div key=${r.key} style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: "var(--surface-container)", borderRadius: "var(--radius)", padding: "8px 10px" }}>
+                  <div style=${{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <span style=${{ display: "inline-flex", flexShrink: 0, color: "var(--secondary)" }}>${Ic(rowIcon(r), 15)}</span>
+                    <span style=${{ fontFamily: "var(--font-sans)", fontSize: 13.5, color: "var(--on-surface)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>${rowText(r)}</span>
+                  </div>
+                  ${r.removable
+                    ? html`<button onClick=${function () { removeRow(r); }} aria-label="Remove" style=${{ flexShrink: 0, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-surface-variant)", cursor: "pointer", borderRadius: 6 }}>${Ic("x", 15)}</button>`
+                    : html`<span title="Emergent from the family — remove a parent or child instead" style=${{ flexShrink: 0, display: "inline-flex", color: "var(--on-surface-variant)" }}>${Ic("lock", 13)}</span>`}
+                </div>`; }) : html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)" }}>No relationships recorded.</span>`}
+              </div>
+
+              ${!qaMode ? html`<div style=${{ display: "flex", gap: 6, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--outline-variant)" }}>
+                <button onClick=${function () { qaOpen("pairwise"); }} style=${actionBtn}>${Ic("arrow-left-right", 19)}<span>Relationship</span></button>
+                <button onClick=${function () { qaOpen("group"); }} style=${actionBtn}>${Ic("users", 19)}<span>Join group</span></button>
+                <button onClick=${function () { qaOpen("family"); }} style=${actionBtn}>${Ic("heart", 19)}<span>Family</span></button>
+              </div>` : null}
+
+              ${qaMode === "pairwise" ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--outline-variant)" }}>
+                <div style=${{ position: "relative" }}>
+                  <select value=${qaForm.typeId} onChange=${function (e) { setQa({ typeId: e.target.value }); }} style=${selectStyle}>
+                    <option value="">Choose a relationship type…</option>
+                    ${pwTypes.map(function (t) { return html`<option key=${t.id} value=${t.id}>${t.name}</option>`; })}
+                  </select>
+                  <span style=${{ position: "absolute", right: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--on-surface-variant)" }}>${Ic("chevron-down", 16)}</span>
+                </div>
+                ${pwTypes.length === 0 ? html`<p style=${{ margin: 0, fontFamily: "var(--font-sans)", fontSize: 11.5, fontStyle: "italic", color: "var(--on-surface-variant)" }}>No relationship types defined yet. Create one in Manage Tags and Relationships.</p>` : null}
+                ${(selType && selType.priority) ? html`<div style=${{ display: "flex", gap: 6 }}>
+                  ${["holder", "counterpart"].map(function (side) { return html`<button key=${side} onClick=${function () { setQa({ side: side }); }} style=${Object.assign({}, toggleBtn(qaForm.side === side), { textTransform: "none" })}>${(person.name || "").split(" ")[0]} is the ${RC.labelForSide(selType, side)}</button>`; })}
+                </div>` : null}
+                ${personPicker("Type the other person's name…")}
+                ${(selType && qaForm.otherId) ? html`<p style=${{ margin: 0, textAlign: "center", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 12.5, color: "var(--on-surface-variant)" }}>${qaPreview()}</p>` : null}
+                <button onClick=${qaAddPairwise} disabled=${!qaForm.typeId || !qaForm.otherId} style=${Object.assign({}, applyBtn, { opacity: (qaForm.typeId && qaForm.otherId) ? 1 : 0.45 })}>Add relationship</button>
+              </div>` : null}
+
+              ${qaMode === "group" ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--outline-variant)" }}>
+                <div style=${{ position: "relative" }}>
+                  <select value=${qaForm.groupId} onChange=${function (e) { setQa({ groupId: e.target.value, asLeader: false }); }} style=${selectStyle}>
+                    <option value="">Choose a group to join…</option>
+                    ${joinable.map(function (g) { return html`<option key=${g.id} value=${g.id}>${g.name}</option>`; })}
+                  </select>
+                  <span style=${{ position: "absolute", right: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--on-surface-variant)" }}>${Ic("chevron-down", 16)}</span>
+                </div>
+                ${joinable.length === 0 ? html`<p style=${{ margin: 0, fontFamily: "var(--font-sans)", fontSize: 11.5, fontStyle: "italic", color: "var(--on-surface-variant)" }}>No groups left to join. New groups are created in Manage Tags and Relationships.</p>` : null}
+                ${qaLeaderSeatOpen() ? html`<label style=${{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface)" }}>
+                  <input type="checkbox" checked=${qaForm.asLeader} onChange=${function (e) { setQa({ asLeader: e.target.checked }); }} />
+                  <span>Join as its leader — the seat is open</span>
+                </label>` : null}
+                <button onClick=${qaJoinGroup} disabled=${!qaForm.groupId} style=${Object.assign({}, applyBtn, { opacity: qaForm.groupId ? 1 : 0.45 })}>Join group</button>
+              </div>` : null}
+
+              ${qaMode === "family" ? html`<div style=${{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--outline-variant)" }}>
+                <div style=${{ display: "flex", gap: 6 }}>
+                  ${["spouse", "parent", "child"].map(function (k) { return html`<button key=${k} onClick=${function () { setQa({ familyKind: k }); }} style=${toggleBtn(qaForm.familyKind === k)}>${k}</button>`; })}
+                </div>
+                ${personPicker("Type their name…")}
+                <p style=${{ margin: 0, fontFamily: "var(--font-sans)", fontSize: 11.5, fontStyle: "italic", color: "var(--on-surface-variant)", lineHeight: 1.4 }}>This updates the family record itself, so it shows the same everywhere. Bigger restructuring still belongs in the Member Directory.</p>
+                <button onClick=${qaAddFamily} disabled=${!qaForm.otherId} style=${Object.assign({}, applyBtn, { opacity: qaForm.otherId ? 1 : 0.45 })}>Add family relation</button>
+              </div>` : null}
             </div>`;
           })()}
 
@@ -934,7 +1281,15 @@
               </${Fragment}>` : html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)" }}>Tap a cell to set status.</span>`}
             </div>
           </div>
+              </div>
+            </div>
+          </${Fragment}>` : null}
 
+          <div style=${{ display: "flex", gap: 4, borderBottom: "1px solid var(--outline-variant)", margin: "18px 2px 0" }}>
+            ${[["record", "Pastoral Record"], ["documents", "Documents"]].map(function (t) { var on = tabS[0] === t[0]; return html`<button key=${t[0]} onClick=${function () { tabS[1](t[0]); }} style=${{ padding: "9px 12px", border: "none", borderBottom: on ? "2px solid var(--primary)" : "2px solid transparent", background: "transparent", color: on ? "var(--primary)" : "var(--on-surface-variant)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, marginBottom: -1 }}>${t[1]}</button>`; })}
+          </div>
+
+          ${tabS[0] === "documents" ? html`<${ProfileDocuments} pid=${pid} user=${user} nav=${props.nav} showToast=${showToast} />` : html`<${Fragment}>
           <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "20px 2px 12px" }}>
             <h2 style=${SF_H2}>Pastoral Record</h2>
             <div style=${{ display: "flex", gap: 6 }}>
@@ -1006,6 +1361,7 @@
               </div>`;
             })}
           </div>`}
+          </${Fragment}>`}
         </${Body}>
 
         ${editor ? html`<${Modal} onClose=${function () { editorS[1](null); }} title=${editor.id ? "Edit Note" : "New Note"}
