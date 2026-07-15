@@ -586,7 +586,7 @@
                     <div style=${{ fontFamily: "var(--font-sans)", fontSize: 15.5, fontWeight: 700, color: "var(--primary)" }}>${p.name || "(no name)"}</div>
                     ${st ? html`<div style=${{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
                       <span style=${{ fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: strong ? "var(--error)" : "var(--secondary)" }}>${URGL[st.urgency]}</span>
-                      <span style=${{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--on-surface-variant)" }}>· ${IMPL[st.importance]}</span>
+                      <span style=${{ fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--on-surface-variant)" }}>· ${IMPL[st.importance]}</span>
                     </div>` : html`<div style=${{ fontFamily: "var(--font-sans)", fontSize: 11, fontStyle: "italic", color: "var(--outline)", marginTop: 3 }}>No status</div>`}
                   </div>
                   <span style=${{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--surface-container)", color: "var(--on-surface-variant)" }}>${Ic("chevron-right", 17)}</span>
