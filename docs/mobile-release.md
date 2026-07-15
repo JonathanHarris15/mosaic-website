@@ -218,6 +218,13 @@ then the app. No Apple ID needs to be collected from anyone.
 
 ## Shipping an update
 
+> **Fast path (Mac):** once the one-time setup is done, `node scripts/mobile-build.mjs`
+> (or `npm run mobile:build`) rebuilds **both** platforms in one go — it bumps the build
+> number on both, rebuilds the CSS, runs `cap sync`, produces the signed Android `.aab`,
+> and archives + uploads iOS to TestFlight. See the `rebuild-mobile` skill
+> (`.claude/skills/rebuild-mobile/SKILL.md`) for setup and flags. The manual steps below
+> are the fallback / reference.
+
 **Every upload needs a higher version number** — both stores reject a rebuild of a
 version they have already seen.
 
