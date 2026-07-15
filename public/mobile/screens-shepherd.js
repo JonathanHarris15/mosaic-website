@@ -813,6 +813,7 @@
     var familiesS = useState([]), rosterS = useState([]); // Family graph + name lookup (MS-88)
     var relsS = useState([]), relTypesS = useState([]);   // Relationship graph (MS-89)
     var tabS = useState("record"); // MS-98: 'record' | 'documents'
+    var drawerS = useState(false);  // details side drawer (member details/tags/track/status/relationships)
 
     var person = personS[0], notes = notesS[0], activity = activityS[0], tags = tagsS[0];
     var families = familiesS[0], roster = rosterS[0], rels = relsS[0], relTypes = relTypesS[0];
@@ -949,7 +950,7 @@
 
     return html`
       <${Screen}>
-        <${TopBar} title=${fromLabel} onBack=${props.back} serif=${false} />
+        <${TopBar} title=${fromLabel} onBack=${props.back} serif=${false} right=${html`<button onClick=${function () { drawerS[1](true); }} aria-label="Details" style=${{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-surface)", cursor: "pointer", borderRadius: 10 }}>${Ic("menu", 22)}</button>`} />
         <${Body} style=${{ padding: "16px 16px 44px" }}>
           <div style=${{ marginBottom: 16 }}>
             <h1 style=${{ margin: 0, fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 600, color: "var(--primary)", letterSpacing: "0.02em" }}>${person.name}</h1>
@@ -958,6 +959,15 @@
               ${mLabel ? html`<span style=${{ padding: "2px 9px", borderRadius: "var(--radius-full)", background: "rgba(62,97,129,0.12)", color: "var(--secondary)", fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", border: "1px solid rgba(62,97,129,0.2)" }}>${mLabel}</span>` : null}
             </div>
           </div>
+
+          ${drawerS[0] ? html`<${Fragment}>
+            <div onClick=${function () { drawerS[1](false); }} style=${{ position: "absolute", inset: 0, zIndex: 40, background: "rgba(14,28,54,0.42)", backdropFilter: "blur(1.5px)" }}></div>
+            <div style=${{ position: "absolute", top: 0, right: 0, bottom: 0, zIndex: 41, width: "88%", maxWidth: 420, background: "var(--surface-container-lowest)", borderLeft: "1px solid var(--outline-variant)", boxShadow: "var(--shadow-lg)", display: "flex", flexDirection: "column" }}>
+              <div style=${{ padding: "14px 16px", borderBottom: "1px solid var(--outline-variant)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+                <div style=${{ fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--primary)" }}>Details</div>
+                <button onClick=${function () { drawerS[1](false); }} aria-label="Close" style=${iconBtn}>${Ic("x", 20)}</button>
+              </div>
+              <div style=${{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: 16, paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))", display: "flex", flexDirection: "column", gap: 12 }}>
 
           <div style=${Object.assign({}, SF_PANEL, { marginBottom: 12 })}>
             <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -1069,6 +1079,9 @@
               </${Fragment}>` : html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontStyle: "italic", color: "var(--on-surface-variant)" }}>Tap a cell to set status.</span>`}
             </div>
           </div>
+              </div>
+            </div>
+          </${Fragment}>` : null}
 
           <div style=${{ display: "flex", gap: 4, borderBottom: "1px solid var(--outline-variant)", margin: "18px 2px 0" }}>
             ${[["record", "Pastoral Record"], ["documents", "Documents"]].map(function (t) { var on = tabS[0] === t[0]; return html`<button key=${t[0]} onClick=${function () { tabS[1](t[0]); }} style=${{ padding: "9px 12px", border: "none", borderBottom: on ? "2px solid var(--primary)" : "2px solid transparent", background: "transparent", color: on ? "var(--primary)" : "var(--on-surface-variant)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, marginBottom: -1 }}>${t[1]}</button>`; })}
