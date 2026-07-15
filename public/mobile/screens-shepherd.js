@@ -670,6 +670,140 @@
     </div>`;
   }
 
+  // MS-98: per-person Documents directory shown in the profile's Documents tab.
+  // Reuses the shared tree engine (window.ShepherdingDocsCore) over this Person's
+  // own structure doc (person_<id>); documents carry ownerPersonId and can be
+  // opted into the global Library. Notes only (matches desktop scope).
+  function ProfileDocuments(props) {
+    var DC = window.ShepherdingDocsCore;
+    var pid = props.pid, user = props.user, nav = props.nav, showToast = props.showToast;
+    var structDocId = "person_" + pid;
+    var loadingS = useState(true);
+    var structureS = useState({ children: [] }), docsS = useState({});
+    var pathS = useState([]), renameIdS = useState(null), renameValS = useState("");
+    var moveS = useState(null), deleteS = useState(null);
+    var structure = structureS[0], docs = docsS[0], path = pathS[0];
+    function clone(x) { return JSON.parse(JSON.stringify(x)); }
+    function persist(next) { structureS[1](next); data.saveDocumentStructure(next, structDocId).catch(function () { showToast("Error saving", "error"); }); }
+
+    useEffect(function () {
+      var alive = true;
+      Promise.all([data.getDocumentStructure(structDocId), data.getElderDocuments()]).then(function (r) {
+        if (!alive) return;
+        structureS[1](r[0]);
+        var map = {}; r[1].forEach(function (d) { map[d.id] = d; }); docsS[1](map);
+        loadingS[1](false);
+      }).catch(function () { if (alive) loadingS[1](false); });
+      return function () { alive = false; };
+    }, [pid]);
+
+    var currentFolder = path.length === 0 ? structure : (DC.getFolderById(structure, path[path.length - 1]) || structure);
+    var children = currentFolder.children || [];
+    var folders = children.filter(function (c) { return c.type === "folder"; });
+    var docItems = children.filter(function (c) { return c.type === "document"; });
+    var crumbs = [{ id: null, name: "Documents" }];
+    path.forEach(function (fid) { var f = DC.getFolderById(structure, fid); crumbs.push({ id: fid, name: (f && f.name) || "Folder" }); });
+
+    function navInto(fid) { renameIdS[1](null); pathS[1](path.concat([fid])); }
+    function navToCrumb(idx) { renameIdS[1](null); pathS[1](path.slice(0, idx)); }
+    function openDoc(id) { nav("documentEditor", { id: id }); }
+    function createDoc() {
+      data.createElderDocument({ type: "note", ownerPersonId: pid }, user).then(function (id) {
+        var next = clone(structure);
+        var folder = path.length === 0 ? next : (DC.getFolderById(next, path[path.length - 1]) || next);
+        if (!folder.children) folder.children = [];
+        folder.children.push({ type: "document", id: id });
+        data.saveDocumentStructure(next, structDocId).then(function () { nav("documentEditor", { id: id }); }).catch(function () { showToast("Error creating", "error"); });
+      }).catch(function () { showToast("Error creating", "error"); });
+    }
+    function createFolder() {
+      var fid = DC.newId(); var next = clone(structure);
+      var folder = path.length === 0 ? next : (DC.getFolderById(next, path[path.length - 1]) || next);
+      if (!folder.children) folder.children = [];
+      folder.children.unshift({ type: "folder", id: fid, name: "New Folder", children: [] });
+      persist(next); renameIdS[1](fid); renameValS[1]("New Folder");
+    }
+    function startRename(item) { renameValS[1](item.type === "folder" ? item.name : ((docs[item.id] && docs[item.id].title) || "Untitled Document")); renameIdS[1](item.id); }
+    function finishRename(item) {
+      if (renameIdS[0] !== item.id) return;
+      var name = renameValS[0].trim() || (item.type === "folder" ? "New Folder" : "New Document");
+      renameIdS[1](null);
+      if (item.type === "folder") { var next = clone(structure); var f = DC.getFolderById(next, item.id); if (f) f.name = name; persist(next); }
+      else { docsS[1](Object.assign({}, docs, (function () { var o = {}; o[item.id] = Object.assign({}, docs[item.id], { title: name }); return o; })())); data.renameElderDocument(item.id, name, user).catch(function () { showToast("Error renaming", "error"); }); }
+    }
+    function doMove(item, targetId) {
+      moveS[1](null);
+      var next = clone(structure);
+      if (item.type === "folder" && targetId !== "__root__" && (targetId === item.id || DC.isDescendant(next, targetId, item.id))) { showToast("Can't move a folder into itself", "error"); return; }
+      DC.moveNode(next, item, targetId); persist(next); showToast("Moved");
+    }
+    function doDelete(item) {
+      deleteS[1](null);
+      var next = clone(structure);
+      var ids = item.type === "document" ? [item.id] : (function () { var f = DC.getFolderById(structure, item.id); return f ? DC.getAllDocIds(f) : []; })();
+      if (ids.length) { data.deleteElderDocuments(ids); data.pruneElderDocsFromLibrary(ids); }
+      var m = Object.assign({}, docs); ids.forEach(function (id) { delete m[id]; }); docsS[1](m);
+      DC.removeFromTree(next, item.id); persist(next); showToast("Deleted");
+    }
+    function addToLibrary(item) {
+      data.addElderDocToLibrary(item.id, "__root__").then(function (ok) {
+        if (ok) { docsS[1](Object.assign({}, docs, (function () { var o = {}; o[item.id] = Object.assign({}, docs[item.id], { inLibrary: true }); return o; })())); showToast("Added to the Library"); }
+        else showToast("Already in the Library");
+      }).catch(function () { showToast("Error", "error"); });
+    }
+
+    var moveItem = moveS[0], delItem = deleteS[0];
+    var folderOptions = moveItem ? DC.getFolderOptions(structure, moveItem.type === "folder" ? moveItem.id : null) : [];
+    var rowCard = { display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 14px", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)" };
+
+    function renameField(item) {
+      return html`<input value=${renameValS[0]} autoFocus=${true} onInput=${function (e) { renameValS[1](e.target.value); }} onBlur=${function () { finishRename(item); }} onKeyDown=${function (e) { if (e.key === "Enter") finishRename(item); if (e.key === "Escape") renameIdS[1](null); }} style=${{ flex: 1, minWidth: 0, border: "none", borderBottom: "1px solid var(--primary)", background: "transparent", outline: "none", fontFamily: "var(--font-serif)", fontSize: 15, fontWeight: 600, color: "var(--on-surface)" }} />`;
+    }
+    function rowActions(item) {
+      return html`<div style=${{ display: "flex", gap: 2, flexShrink: 0 }}>
+        ${item.type === "document" && !(docs[item.id] && docs[item.id].inLibrary) ? html`<button onClick=${function () { addToLibrary(item); }} aria-label="Add to Library" style=${Object.assign({}, iconBtn, { width: 30, height: 30 })}>${Ic("library-big", 15)}</button>` : null}
+        <button onClick=${function () { startRename(item); }} aria-label="Rename" style=${Object.assign({}, iconBtn, { width: 30, height: 30 })}>${Ic("pencil", 15)}</button>
+        <button onClick=${function () { moveS[1](item); }} aria-label="Move" style=${Object.assign({}, iconBtn, { width: 30, height: 30 })}>${Ic("folder-input", 15)}</button>
+        <button onClick=${function () { deleteS[1](item); }} aria-label="Delete" style=${Object.assign({}, iconBtn, { width: 30, height: 30, color: "var(--error)" })}>${Ic("trash-2", 15)}</button>
+      </div>`;
+    }
+
+    return html`<div style=${{ marginTop: 16 }}>
+      <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
+        <div style=${{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4, fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)", minWidth: 0 }}>
+          ${crumbs.map(function (cr, i) { var isLast = i === crumbs.length - 1; return html`<${Fragment} key=${cr.id || "root"}>${i > 0 ? html`<span style=${{ color: "var(--outline)" }}>${Ic("chevron-right", 13)}</span>` : null}<button onClick=${function () { navToCrumb(i); }} disabled=${isLast} style=${{ border: "none", background: "transparent", cursor: isLast ? "default" : "pointer", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: isLast ? 600 : 500, color: isLast ? "var(--on-surface)" : "var(--secondary)" }}>${cr.name}</button></${Fragment}>`; })}
+        </div>
+        <div style=${{ display: "flex", gap: 6, flexShrink: 0 }}>
+          <button onClick=${createFolder} aria-label="New folder" style=${{ display: "inline-flex", alignItems: "center", padding: "7px 10px", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius)", background: "transparent", color: "var(--on-surface-variant)", cursor: "pointer" }}>${Ic("folder-plus", 15)}</button>
+          <button onClick=${createDoc} style=${{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", border: "none", borderRadius: "var(--radius)", background: "var(--primary)", color: "var(--on-primary)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>${Ic("plus", 15)} New</button>
+        </div>
+      </div>
+      ${loadingS[0] ? html`<div style=${{ display: "flex", justifyContent: "center", padding: 30, color: "var(--on-surface-variant)" }}><span style=${{ display: "flex", animation: "mspin 0.9s linear infinite" }}>${Ic("loader-circle", 22)}</span></div>`
+        : (folders.length === 0 && docItems.length === 0) ? html`<p style=${{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14, color: "var(--on-surface-variant)", textAlign: "center", padding: "24px 8px" }}>No documents yet. Use “New” to add one.</p>`
+        : html`<div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>
+          ${folders.map(function (f) { var renaming = renameIdS[0] === f.id; return html`<div key=${f.id} style=${rowCard}>
+            <span style=${{ color: "var(--secondary)", flexShrink: 0 }} onClick=${function () { if (!renaming) navInto(f.id); }}>${Ic("folder", 20)}</span>
+            ${renaming ? renameField(f) : html`<button onClick=${function () { navInto(f.id); }} style=${{ flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", fontFamily: "var(--font-serif)", fontSize: 15, fontWeight: 600, color: "var(--on-surface)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>${f.name}</button>`}
+            ${renaming ? null : rowActions(f)}
+          </div>`; })}
+          ${docItems.map(function (it) { var d = docs[it.id] || { title: "Untitled Document" }; var renaming = renameIdS[0] === it.id; return html`<div key=${it.id} style=${rowCard}>
+            <span style=${{ width: 34, height: 34, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--surface-container)", color: "var(--primary)" }} onClick=${function () { if (!renaming) openDoc(it.id); }}>${Ic("file-text", 17)}</span>
+            ${renaming ? renameField(it) : html`<button onClick=${function () { openDoc(it.id); }} style=${{ flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", overflow: "hidden" }}>
+              <div style=${{ display: "flex", alignItems: "center", gap: 6 }}><span style=${{ fontFamily: "var(--font-serif)", fontSize: 15, fontWeight: 600, color: "var(--on-surface)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>${d.title}</span>${d.inLibrary ? html`<span style=${{ color: "var(--primary)", display: "inline-flex", flexShrink: 0 }} title="Also in the Library">${Ic("library-big", 13)}</span>` : null}</div>
+            </button>`}
+            ${renaming ? null : rowActions(it)}
+          </div>`; })}
+        </div>`}
+      ${moveItem ? html`<${Modal} title="Move" onClose=${function () { moveS[1](null); }} footer=${html`<button onClick=${function () { moveS[1](null); }} style=${pill("ghost")}>Cancel</button>`}>
+        <button onClick=${function () { doMove(moveItem, "__root__"); }} style=${{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "12px 8px", border: "none", borderBottom: "1px solid var(--outline-variant)", background: "transparent", cursor: "pointer", textAlign: "left", fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 600, color: "var(--on-surface)" }}>${Ic("home", 17)} Home (root)</button>
+        ${folderOptions.map(function (o) { return html`<button key=${o.id} onClick=${function () { doMove(moveItem, o.id); }} style=${{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "12px 8px", paddingLeft: (8 + o.depth * 16) + "px", border: "none", borderBottom: "1px solid var(--outline-variant)", background: "transparent", cursor: "pointer", textAlign: "left", fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--on-surface)" }}>${Ic("folder", 17)} ${o.name}</button>`; })}
+      </${Modal}>` : null}
+      ${delItem ? html`<${Modal} title="Delete?" onClose=${function () { deleteS[1](null); }} footer=${html`<${Fragment}><button onClick=${function () { deleteS[1](null); }} style=${pill("ghost")}>Cancel</button><button onClick=${function () { doDelete(delItem); }} style=${Object.assign({}, pill(), { background: "var(--error)" })}>Delete</button></${Fragment}>`}>
+        <p style=${{ margin: 0, fontFamily: "var(--font-sans)", fontSize: 14, lineHeight: 1.5, color: "var(--on-surface)" }}>${delItem.type === "folder" ? html`Delete “${delItem.name}” and everything in it? This cannot be undone.` : html`Delete “${(docs[delItem.id] && docs[delItem.id].title) || "this document"}”? This removes it from the profile and the Library. This cannot be undone.`}</p>
+      </${Modal}>` : null}
+    </div>`;
+  }
+
   function ShepherdProfileScreen(props) {
     var user = props.user || {};
     var pid = (props.params && props.params.id) || null;
@@ -678,6 +812,7 @@
     var collapseS = useState(false), editorS = useState(null), newTagS = useState(""), editProfileS = useState(null), explEditS = useState({}), toastS = useState(null);
     var familiesS = useState([]), rosterS = useState([]); // Family graph + name lookup (MS-88)
     var relsS = useState([]), relTypesS = useState([]);   // Relationship graph (MS-89)
+    var tabS = useState("record"); // MS-98: 'record' | 'documents'
 
     var person = personS[0], notes = notesS[0], activity = activityS[0], tags = tagsS[0];
     var families = familiesS[0], roster = rosterS[0], rels = relsS[0], relTypes = relTypesS[0];
@@ -935,6 +1070,11 @@
             </div>
           </div>
 
+          <div style=${{ display: "flex", gap: 4, borderBottom: "1px solid var(--outline-variant)", margin: "18px 2px 0" }}>
+            ${[["record", "Pastoral Record"], ["documents", "Documents"]].map(function (t) { var on = tabS[0] === t[0]; return html`<button key=${t[0]} onClick=${function () { tabS[1](t[0]); }} style=${{ padding: "9px 12px", border: "none", borderBottom: on ? "2px solid var(--primary)" : "2px solid transparent", background: "transparent", color: on ? "var(--primary)" : "var(--on-surface-variant)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600, marginBottom: -1 }}>${t[1]}</button>`; })}
+          </div>
+
+          ${tabS[0] === "documents" ? html`<${ProfileDocuments} pid=${pid} user=${user} nav=${props.nav} showToast=${showToast} />` : html`<${Fragment}>
           <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "20px 2px 12px" }}>
             <h2 style=${SF_H2}>Pastoral Record</h2>
             <div style=${{ display: "flex", gap: 6 }}>
@@ -1006,6 +1146,7 @@
               </div>`;
             })}
           </div>`}
+          </${Fragment}>`}
         </${Body}>
 
         ${editor ? html`<${Modal} onClose=${function () { editorS[1](null); }} title=${editor.id ? "Edit Note" : "New Note"}
