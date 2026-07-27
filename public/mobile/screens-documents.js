@@ -297,7 +297,7 @@
     }
 
     var userKnown = props.user !== undefined;
-    var isElder = userKnown && !!props.user && (props.user.role === "elder" || props.user.role === "super_admin");
+    var isElder = userKnown && !!props.user && (props.user.permissionLevel === "elder" || props.user.permissionLevel === "super_admin");
     var c = createS[0], menuItem = menuS[0], moveItem = moveS[0], delItem = deleteS[0];
     var folderOptions = moveItem ? getFolderOptions(structure, 0, moveItem.type === "folder" ? moveItem.id : null) : [];
 

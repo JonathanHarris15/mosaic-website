@@ -1,9 +1,12 @@
 /* Verse Picker Styles */
 .verse-picker-dropdown {
     position: absolute;
+    left: 0;
     z-index: 9999;
     margin-top: 4px;
     width: 320px;
+    max-width: calc(100vw - 24px); /* never overflow the viewport on mobile / narrow cells */
+    max-height: min(80vh, 460px);
     background-color: #ffffff;
     border: 1px solid #c5c6d0; /* outline-variant */
     border-radius: 12px;
@@ -11,6 +14,16 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+}
+
+/* On phones, let the picker use the full available width so buttons stay tappable */
+@media (max-width: 480px) {
+    .verse-picker-dropdown {
+        width: calc(100vw - 24px);
+    }
+    .verse-picker-btn {
+        padding: 10px 8px; /* roomier tap targets on touch screens */
+    }
 }
 
 .verse-picker-header {

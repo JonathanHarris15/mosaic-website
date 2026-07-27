@@ -134,7 +134,7 @@
             <a href="service-calendar.html" class="hover:opacity-80">
                 <span class="material-symbols-outlined">arrow_back</span>
             </a>
-            <h1 class="text-lg font-semibold" x-text="(userRole === 'viewer' ? 'Service Guide: ' : 'Service Guide Editor: ') + formatDate(date)"></h1>
+            <h1 class="text-lg font-semibold" x-text="(permissionLevel === 'viewer' ? 'Service Guide: ' : 'Service Guide Editor: ') + formatDate(date)"></h1>
         </div>
         <div class="flex items-center gap-3">
             <div x-show="typeof isOverflowing !== 'undefined' && isOverflowing" x-cloak class="flex items-center gap-2 px-3 py-1 bg-red-400/10 border border-red-400/30 rounded-full mr-1">
@@ -145,7 +145,7 @@
                 <span class="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.8)]"></span>
                 <span class="text-[9px] font-bold uppercase tracking-widest text-yellow-400">Unsaved</span>
             </div>
-            <button x-show="userRole !== 'viewer'" @click="save()" class="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-2 transition-colors">
+            <button x-show="permissionLevel !== 'viewer'" @click="save()" class="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-2 transition-colors">
                 <span class="material-symbols-outlined text-[20px]">save</span>
                 <span>Save</span>
             </button>
@@ -171,18 +171,18 @@
         <aside class="no-print w-64 bg-white border-r border-outline-variant flex flex-col shadow-sm">
             <div class="p-4 border-b border-outline-variant bg-surface">
                 <h2 class="font-semibold text-secondary uppercase tracking-wider text-[10px]">Guide Elements</h2>
-                <p x-show="userRole !== 'viewer'" class="text-[10px] text-gray-400 mt-0.5">Drag to reorder elements.</p>
+                <p x-show="permissionLevel !== 'viewer'" class="text-[10px] text-gray-400 mt-0.5">Drag to reorder elements.</p>
             </div>
             
             <div id="toc-list" class="flex-1 overflow-y-auto p-3 custom-scrollbar">
                 <template x-for="(el, index) in elements" :key="el.id">
                     <div class="toc-item group" :class="{'opacity-50': !el.enabled, 'ring-2 ring-primary bg-surface': selectedElement?.id === el.id}" @click="selectElement(el)">
-                        <span x-show="userRole !== 'viewer'" class="material-symbols-outlined text-gray-400 drag-handle cursor-move">drag_indicator</span>
+                        <span x-show="permissionLevel !== 'viewer'" class="material-symbols-outlined text-gray-400 drag-handle cursor-move">drag_indicator</span>
                         <div class="flex-1 min-w-0">
                             <div class="text-[11px] font-medium text-primary truncate" x-text="el.label"></div>
                             <div class="text-[8px] text-gray-400 uppercase tracking-tight" x-text="el.type.replace('_', ' ')"></div>
                         </div>
-                        <div x-show="userRole !== 'viewer'" class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div x-show="permissionLevel !== 'viewer'" class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button @click.stop="el.enabled = !el.enabled; recalculateSermonNotes()" class="text-gray-400 hover:text-primary">
                                 <span class="material-symbols-outlined text-[14px]" x-text="el.enabled ? 'visibility' : 'visibility_off'"></span>
                             </button>
@@ -193,12 +193,12 @@
                     </div>
                 </template>
                 
-                <button x-show="userRole !== 'viewer'" @click="addCustomPage()" class="w-full py-2 border border-dashed border-outline-variant rounded text-secondary text-[10px] font-bold uppercase flex items-center justify-center gap-2 hover:border-primary hover:text-primary transition-all mt-4">
+                <button x-show="permissionLevel !== 'viewer'" @click="addCustomPage()" class="w-full py-2 border border-dashed border-outline-variant rounded text-secondary text-[10px] font-bold uppercase flex items-center justify-center gap-2 hover:border-primary hover:text-primary transition-all mt-4">
                     <span class="material-symbols-outlined text-[16px]">add_circle</span>
                     <span>Add Page</span>
                 </button>
 
-                <button x-show="userRole !== 'viewer'" @click="regenerateGuide()" title="Rebuild hymn pages from the current order of service" class="w-full py-2 border border-dashed border-outline-variant rounded text-secondary text-[10px] font-bold uppercase flex items-center justify-center gap-2 hover:border-amber-500 hover:text-amber-600 transition-all mt-2">
+                <button x-show="permissionLevel !== 'viewer'" @click="regenerateGuide()" title="Rebuild hymn pages from the current order of service" class="w-full py-2 border border-dashed border-outline-variant rounded text-secondary text-[10px] font-bold uppercase flex items-center justify-center gap-2 hover:border-amber-500 hover:text-amber-600 transition-all mt-2">
                     <span class="material-symbols-outlined text-[16px]">autorenew</span>
                     <span>Regenerate Guide</span>
                 </button>
@@ -541,7 +541,7 @@
         </section>
 
         <!-- Right Sidebar: Task Manager / Inspector -->
-        <aside x-show="userRole !== 'viewer'" class="no-print w-96 bg-white border-l border-outline-variant flex flex-col shadow-sm">
+        <aside x-show="permissionLevel !== 'viewer'" class="no-print w-96 bg-white border-l border-outline-variant flex flex-col shadow-sm">
             <div class="p-4 border-b border-outline-variant bg-surface flex justify-between items-center">
                 <div>
                     <h2 class="font-semibold text-secondary uppercase tracking-wider text-[10px]">Task Manager</h2>

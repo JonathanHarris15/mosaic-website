@@ -21,7 +21,7 @@ const ESV_API_KEY = '3ca8c306dfdefdc42598bb88a037361a0f44cb0b';
 function guideEditorV2() {
     return {
         date: '',
-        userRole: 'viewer',
+        permissionLevel: 'viewer',
         loading: true,
         saving: false,
         legacy: false,
@@ -47,7 +47,7 @@ function guideEditorV2() {
         previousAnnouncements: [],
         previousAnnouncementsDate: '',
 
-        get canEdit() { return ['editor', 'elder', 'admin', 'super_admin'].includes(this.userRole); },
+        get canEdit() { return ['editor', 'elder', 'admin', 'super_admin'].includes(this.permissionLevel); },
 
         // Dirty by diff against the last saved state (template + values), so
         // merely opening or clicking around never shows "Unsaved". A new week
@@ -66,7 +66,7 @@ function guideEditorV2() {
                 if (!user) { window.location.href = 'login.html'; return; }
                 const userData = await getUserData(user.uid);
                 if (!userData) { window.location.href = 'service-calendar.html'; return; }
-                self.userRole = userData.role || 'viewer';
+                self.permissionLevel = userData.permissionLevel || userData.role || 'viewer';
 
                 const params = new URLSearchParams(window.location.search);
                 self.date = params.get('date');

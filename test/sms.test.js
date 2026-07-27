@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const crypto = require('crypto');
 const {
     toE164US,
-    isAdminRole,
+    isAdminPermissionLevel,
     interpretQuota,
     interpretSend,
     parseInboundReply,
@@ -37,12 +37,12 @@ test('toE164US returns "" for empty/unparseable input', () => {
     assert.strictEqual(toE164US('abc'), '');
 });
 
-test('isAdminRole admits only admin and super_admin', () => {
+test('isAdminPermissionLevel admits only admin and super_admin', () => {
     for (const r of ['admin', 'super_admin']) {
-        assert.strictEqual(isAdminRole(r), true, r);
+        assert.strictEqual(isAdminPermissionLevel(r), true, r);
     }
     for (const r of ['elder', 'editor', 'member', 'viewer', undefined, null, '']) {
-        assert.strictEqual(isAdminRole(r), false, String(r));
+        assert.strictEqual(isAdminPermissionLevel(r), false, String(r));
     }
 });
 

@@ -410,7 +410,7 @@
     // Admins are NOT elders (a distinct office). A Person with no Linked User,
     // or a non-elder role, is not an elder.
     function isElderUser(userData) {
-        return !!userData && userData.role === 'elder';
+        return !!userData && (userData.permissionLevel || userData.role) === 'elder';
     }
 
     // Re-project a Person's `tags` for elder-ness: drop the Elder Tag, then re-add

@@ -17,7 +17,7 @@ function guideEditor() {
         keyVerseText: '',
         schedule: [],
         loading: true,
-        userRole: 'viewer',
+        permissionLevel: 'viewer',
         hasChanges: false,
         selectedElement: null,
         zoomLevel: 1.0,
@@ -36,7 +36,7 @@ function guideEditor() {
                     return;
                 }
                 
-                self.userRole = userData.role || 'viewer';
+                self.permissionLevel = userData.permissionLevel || userData.role || 'viewer';
 
                 const urlParams = new URLSearchParams(window.location.search);
                 self.date = urlParams.get('date');
@@ -57,13 +57,13 @@ function guideEditor() {
                     self.fixBrokenElements();
                 }
 
-                if (self.userRole === 'admin' || self.userRole === 'editor') {
+                if (self.permissionLevel === 'admin' || self.permissionLevel === 'editor') {
                     self.initSortable();
                 }
                 self.loading = false;
 
                 // Only watch for changes if user has permission
-                if (self.userRole === 'admin' || self.userRole === 'editor') {
+                if (self.permissionLevel === 'admin' || self.permissionLevel === 'editor') {
                     // Watch for changes after initial load
                     self.$watch('elements', (val) => {
                         if (!self.loading) {

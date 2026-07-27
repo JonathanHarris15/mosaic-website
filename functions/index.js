@@ -6,7 +6,7 @@ const {log} = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const {
   toE164US,
-  isAdminRole,
+  isAdminPermissionLevel,
   interpretQuota,
   interpretSend,
   parseInboundReply,
@@ -133,14 +133,15 @@ exports.createUser = onCall({cors: true, region: "us-central1"}, async (request)
   const db = admin.firestore();
   const callerDoc = await db.collection("users").doc(callerUid).get();
   
-  if (!callerDoc.exists || !["admin", "super_admin"].includes(callerDoc.data().role)) {
+  if (!callerDoc.exists || !["admin", "super_admin"].includes(callerDoc.data().permissionLevel || callerDoc.data().role)) {
     throw new Error("Only admins can create new users.");
   }
 
-  const {email, password, role} = request.data;
+  const {email, password, role, permissionLevel} = request.data;
+  const level = permissionLevel || role; // Accept either during the MS-119 migration.
 
-  if (!email || !password || !role) {
-    throw new Error("Missing required fields: email, password, or role.");
+  if (!email || !password || !level) {
+    throw new Error("Missing required fields: email, password, or permission level.");
   }
 
   try {
@@ -150,10 +151,13 @@ exports.createUser = onCall({cors: true, region: "us-central1"}, async (request)
       password: password,
     });
 
-    // 3. Store the user's role and password in Firestore
+    // 3. Store the user's permission level and password in Firestore. Write both
+    // permissionLevel and the legacy role during the MS-119 migration (MS-127
+    // drops the old role field afterwards).
     await db.collection("users").doc(userRecord.uid).set({
       email: email,
-      role: role,
+      permissionLevel: level,
+      role: level,
       password: password, // Storing for admin visibility as requested
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -212,7 +216,7 @@ exports.deleteUser = onCall({cors: true, region: "us-central1"}, async (request)
   const db = admin.firestore();
   const callerDoc = await db.collection("users").doc(callerUid).get();
 
-  if (!callerDoc.exists || !["admin", "super_admin"].includes(callerDoc.data().role)) {
+  if (!callerDoc.exists || !["admin", "super_admin"].includes(callerDoc.data().permissionLevel || callerDoc.data().role)) {
     throw new Error("Only admins can delete users.");
   }
 
@@ -252,11 +256,11 @@ exports.deleteOwnAccount = onCall({cors: true, region: "us-central1"}, async (re
   const uid = request.auth.uid;
   const db = admin.firestore();
   const userDoc = await db.collection("users").doc(uid).get();
-  const role = userDoc.exists ? userDoc.data().role : null;
+  const permissionLevel = userDoc.exists ? (userDoc.data().permissionLevel || userDoc.data().role) : null;
 
-  if (["admin", "super_admin"].includes(role)) {
+  if (["admin", "super_admin"].includes(permissionLevel)) {
     const admins = await db.collection("users")
-        .where("role", "in", ["admin", "super_admin"]).get();
+        .where("permissionLevel", "in", ["admin", "super_admin"]).get();
     if (admins.size <= 1) {
       throw new HttpsError(
           "failed-precondition",
@@ -287,7 +291,7 @@ exports.updateUserPasswordAdmin = onCall({cors: true, region: "us-central1"}, as
   const db = admin.firestore();
   const callerDoc = await db.collection("users").doc(callerUid).get();
   
-  if (!callerDoc.exists || !["admin", "super_admin"].includes(callerDoc.data().role)) {
+  if (!callerDoc.exists || !["admin", "super_admin"].includes(callerDoc.data().permissionLevel || callerDoc.data().role)) {
     throw new Error("Only admins can update user passwords.");
   }
 
@@ -380,7 +384,7 @@ exports.updateUserPasswordSelf = onCall({cors: true, region: "us-central1"}, asy
  */
 const {
   MEMBER_TAG,
-  MEMBER_ROLE,
+  MEMBER_PERMISSION_LEVEL,
   isMemberOrHigher,
   hasMemberTag,
   shouldAddMemberTag,
@@ -389,7 +393,7 @@ const {
 
 const {
   ELDER_TAG,
-  isElderRole,
+  isElderPermissionLevel,
   hasElderTag,
 } = require("./elder-sync");
 
@@ -405,7 +409,7 @@ exports.syncRoleToMemberTag = onDocumentWritten(
 
       const personId = after.personId;
       if (!personId) return; // Not linked to a person.
-      if (!isMemberOrHigher(after.role)) return; // Viewer/unknown: never tag, never untag (skip the read).
+      if (!isMemberOrHigher(after.permissionLevel || after.role)) return; // Viewer/unknown: never tag, never untag (skip the read).
 
       const db = admin.firestore();
       const personRef = db.collection("people").doc(personId);
@@ -413,7 +417,7 @@ exports.syncRoleToMemberTag = onDocumentWritten(
       if (!personSnap.exists) return;
 
       const tags = personSnap.data().tags || [];
-      if (!shouldAddMemberTag(after.role, tags)) return; // Already tagged — skip write to avoid a trigger loop.
+      if (!shouldAddMemberTag(after.permissionLevel || after.role, tags)) return; // Already tagged — skip write to avoid a trigger loop.
 
       // Make sure the tag exists in the directory's tag registry so it shows in the Tags Manager.
       await db.collection("people_tags").doc(MEMBER_TAG).set({name: MEMBER_TAG}, {merge: true});
@@ -421,7 +425,7 @@ exports.syncRoleToMemberTag = onDocumentWritten(
         tags: admin.firestore.FieldValue.arrayUnion(MEMBER_TAG),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      log(`Tagged person ${personId} as '${MEMBER_TAG}' (linked user role: ${after.role}).`);
+      log(`Tagged person ${personId} as '${MEMBER_TAG}' (linked user permission level: ${after.permissionLevel || after.role}).`);
     },
 );
 
@@ -445,11 +449,11 @@ exports.syncMemberTagToRole = onDocumentWritten(
       const userSnap = await userRef.get();
       if (!userSnap.exists) return;
 
-      const role = userSnap.data().role || "viewer";
-      if (!shouldPromoteToMember(role)) return; // Already member+ — never demote, and skip write to avoid a loop.
+      const permissionLevel = userSnap.data().permissionLevel || userSnap.data().role || "viewer";
+      if (!shouldPromoteToMember(permissionLevel)) return; // Already member+ — never demote, and skip write to avoid a loop.
 
-      await userRef.update({role: MEMBER_ROLE});
-      log(`Promoted user ${userId} from '${role}' to '${MEMBER_ROLE}' (linked person has the member tag).`);
+      await userRef.update({permissionLevel: MEMBER_PERMISSION_LEVEL, role: MEMBER_PERMISSION_LEVEL});
+      log(`Promoted user ${userId} from '${permissionLevel}' to '${MEMBER_PERMISSION_LEVEL}' (linked person has the member tag).`);
     },
 );
 
@@ -479,7 +483,7 @@ async function reconcileElderTag(db, personId) {
   let elder = false;
   if (person.userId) {
     const userSnap = await db.collection("users").doc(person.userId).get();
-    elder = userSnap.exists && isElderRole(userSnap.data().role);
+    elder = userSnap.exists && isElderPermissionLevel(userSnap.data().permissionLevel || userSnap.data().role);
   }
 
   const has = hasElderTag(tags);
@@ -546,7 +550,7 @@ async function assertAdmin(db, authCtx) {
     throw new HttpsError("unauthenticated", "Sign in to use the SMS tools.");
   }
   const callerDoc = await db.collection("users").doc(authCtx.uid).get();
-  if (!callerDoc.exists || !isAdminRole(callerDoc.data().role)) {
+  if (!callerDoc.exists || !isAdminPermissionLevel(callerDoc.data().permissionLevel || callerDoc.data().role)) {
     throw new HttpsError("permission-denied", "Admins only.");
   }
 }
@@ -564,8 +568,8 @@ async function assertElder(db, authCtx) {
     throw new HttpsError("unauthenticated", "Sign in first.");
   }
   const callerDoc = await db.collection("users").doc(authCtx.uid).get();
-  const role = callerDoc.exists ? callerDoc.data().role : null;
-  if (!["elder", "super_admin"].includes(role)) {
+  const permissionLevel = callerDoc.exists ? (callerDoc.data().permissionLevel || callerDoc.data().role) : null;
+  if (!["elder", "super_admin"].includes(permissionLevel)) {
     throw new HttpsError("permission-denied", "Elders only.");
   }
 }

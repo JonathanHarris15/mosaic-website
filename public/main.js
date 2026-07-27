@@ -118,8 +118,8 @@ async function checkAdminAccess(user) {
     if (user && !user.isAnonymous) {
         try {
             const userData = await getUserData(user.uid);
-            const role = (userData && userData.role) || 'viewer';
-            if (['editor', 'elder', 'admin', 'super_admin'].includes(role)) {
+            const permissionLevel = (userData && userData.permissionLevel) || (userData && userData.role) || 'viewer';
+            if (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
                 adminActions.classList.remove('hidden');
             } else {
                 adminActions.classList.add('hidden');

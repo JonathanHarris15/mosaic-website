@@ -42,14 +42,14 @@
     const BLUR_CLASS = 'sensitive-blur';
 
     const state = {
-        role: null,
+        permissionLevel: null,
         uid: null,
         personId: null,   // the Person record id that IS the current user, if any
         ready: false,
     };
 
     function active() {
-        return state.role === 'super_admin';
+        return state.permissionLevel === 'super_admin';
     }
 
     // ── Class helpers (safe before configure; inert when not active) ───────────
@@ -189,12 +189,12 @@
 
     // ── Setup ─────────────────────────────────────────────────────────────────
     // Call once from a page's auth handler with the resolved user identity.
-    //   role     — the current user's role string
+    //   permissionLevel — the current user's permission tier string
     //   uid      — auth uid (to exempt content the user authored)
     //   personId — the Person record id that is the current user, if known (to
     //              exempt their own profile). Optional.
-    function configure({ role, uid, personId }) {
-        state.role = role || null;
+    function configure({ permissionLevel, uid, personId }) {
+        state.permissionLevel = permissionLevel || null;
         state.uid = uid || null;
         state.personId = personId || null;
         state.ready = true;

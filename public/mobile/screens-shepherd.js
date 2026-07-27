@@ -242,7 +242,7 @@
     ];
 
     var userKnown = props.user !== undefined; // undefined = still resolving auth
-    var isElder = userKnown && !!props.user && (props.user.role === "elder" || props.user.role === "super_admin");
+    var isElder = userKnown && !!props.user && (props.user.permissionLevel === "elder" || props.user.permissionLevel === "super_admin");
     var vm = viewModalS[0];
     var selectedView = views.filter(function (v) { return v.id === selectedS[0]; })[0];
 
@@ -487,7 +487,7 @@
     function loadView(v) { tagFiltersS[1]((v.filterTags || []).slice()); tagModeS[1](v.filterMode || "any"); statusZonesS[1]((v.statusZoneFilters || []).slice()); if (v.sortBy) sortByS[1](v.sortBy); showToast("Loaded “" + v.title + "”"); }
 
     var userKnown = props.user !== undefined;
-    var isElder = userKnown && !!props.user && (props.user.role === "elder" || props.user.role === "super_admin");
+    var isElder = userKnown && !!props.user && (props.user.permissionLevel === "elder" || props.user.permissionLevel === "super_admin");
     var addBtn = html`<button onClick=${function () { addModalS[1](true); }} aria-label="Add person" style=${Object.assign({}, iconBtn, { color: "var(--primary)", marginRight: 4, width: 40, height: 40 })}>${Ic("user-plus", 20)}</button>`;
 
     return html`
@@ -1046,7 +1046,7 @@
     }
 
     var userKnown = props.user !== undefined;
-    var isElder = userKnown && !!props.user && (props.user.role === "elder" || props.user.role === "super_admin");
+    var isElder = userKnown && !!props.user && (props.user.permissionLevel === "elder" || props.user.permissionLevel === "super_admin");
     var fromLabel = (props.params && props.params.from === "dashboard") ? "Dashboard" : "People";
     var editor = editorS[0], editProfile = editProfileS[0];
 

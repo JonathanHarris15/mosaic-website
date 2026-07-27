@@ -3,7 +3,7 @@
 ## Language
 
 **Elder**:
-A church officer with a shepherding role. The canonical term in code (role: `elder`).
+A church officer with a shepherding role. The canonical term in code (the `elder` Permission Level).
 _Avoid_: Shepherd (use only as UI-facing label, never in code identifiers)
 
 **Shepherding System**:
@@ -79,7 +79,7 @@ A label that can be applied to a Person. Tags are the primary filter criterion f
 _Avoid_: Label, category, attribute (and "elder-only tag" — visibility is per-tag)
 
 **Membership Track**:
-The single ordered progression a Person moves along in their relationship with the church: **Visitor → Regular Attender → Prospective Member → Member → Moving Membership → Previous Member**. A Person sits at exactly one Membership Stage at a time. The Track is the church-relationship state machine — the one canonical replacement for the previously conflicting `membership.status` field, the ad-hoc "Member" tag, and any use of user *role* to imply membership. It is deliberately **not** a permission or a User role. A Person's stage on the Track is *not* self-editable — only an editor (via the stage slider) can move someone along it.
+The single ordered progression a Person moves along in their relationship with the church: **Visitor → Regular Attender → Prospective Member → Member → Moving Membership → Previous Member**. A Person sits at exactly one Membership Stage at a time. The Track is the church-relationship state machine — the one canonical replacement for the previously conflicting `membership.status` field, the ad-hoc "Member" tag, and any use of Permission Level to imply membership. It is deliberately **not** a Permission Level. A Person's stage on the Track is *not* self-editable — only an editor (via the stage slider) can move someone along it.
 _Avoid_: Membership status (as an enum synonym), member type, member level
 
 **Membership Stage**:
@@ -87,7 +87,7 @@ One of the six code-defined positions on the Membership Track. The stages are ba
 _Avoid_: Membership state, status value
 
 **Projected Tag**:
-A Shepherding Tag that is **code-defined and projected from a source-of-truth field**, not hand-applied — its presence on a Person is written by the projection and never edited directly. Immutable: it **cannot be renamed, deleted, merged, or visibility-toggled** by anyone, because the code seeds and maintains it. Two families exist: **Membership Tags** (projected from a Person's Membership Stage) and the **Elder Tag** (projected from the `elder` role of a Person's Linked User). The generalisation of the previously membership-only "special code-defined immutable tag" idea.
+A Shepherding Tag that is **code-defined and projected from a source-of-truth field**, not hand-applied — its presence on a Person is written by the projection and never edited directly. Immutable: it **cannot be renamed, deleted, merged, or visibility-toggled** by anyone, because the code seeds and maintains it. Two families exist: **Membership Tags** (projected from a Person's Membership Stage) and the **Elder Tag** (projected from the `elder` Permission Level of a Person's Linked User). The generalisation of the previously membership-only "special code-defined immutable tag" idea.
 _Avoid_: System tag, locked tag, derived tag (use Projected Tag)
 
 **Membership Tag**:
@@ -95,8 +95,8 @@ A Projected Tag that *projects* a Person's Membership Stage onto them so the sta
 _Avoid_: Member tag (the legacy single "Member" tag this subsumes — the Member tag is now one of the code-defined Membership Tags), status tag
 
 **Elder Tag**:
-The Projected Tag that marks a Person as an Elder. Projected from the Person's Linked User having role `elder` — it is **not** hand-applied: linking/unlinking a User, or a role change to/from `elder`, adds or removes it. Like all Projected Tags it is immutable (no rename/delete/merge/hide). It is the canonical answer to "which Persons are Elders," and therefore supplies the assignable-elder set for Elder Assignment. Every Elder is also a Member, so an elder Person carries both the Elder Tag and their Membership Tags. Distinct from the User role `elder`, which is the permission source the tag is projected from (role grants shepherding *access*; the tag makes elder-ness a filterable, graph-visible Person attribute). Its visibility in the member-facing Membership Directory is **fixed and visible to ordinary members** (not toggleable, like all Projected Tags) — eldership is a public office.
-_Avoid_: Elder role (that is the User role), shepherd tag
+The Projected Tag that marks a Person as an Elder. Projected from the Person's Linked User having Permission Level `elder` — it is **not** hand-applied: linking/unlinking a User, or a Permission Level change to/from `elder`, adds or removes it. Like all Projected Tags it is immutable (no rename/delete/merge/hide). It is the canonical answer to "which Persons are Elders," and therefore supplies the assignable-elder set for Elder Assignment. Every Elder is also a Member, so an elder Person carries both the Elder Tag and their Membership Tags. Distinct from the `elder` Permission Level, which is the permission source the tag is projected from (the Permission Level grants shepherding *access*; the tag makes elder-ness a filterable, graph-visible Person attribute). Its visibility in the member-facing Membership Directory is **fixed and visible to ordinary members** (not toggleable, like all Projected Tags) — eldership is a public office.
+_Avoid_: Elder role (that is the `elder` Permission Level), shepherd tag
 
 **Membership Directory**:
 The People directory as seen by the whole congregation, split into two tabs. The **Members tab** shows every Person carrying the Member tag (stage ∈ {Member, Moving Membership}). The **Non-members tab** shows the remaining active People who lack the Member tag (Visitor, Regular Attender, Prospective Member, Previous Member). Contact information is visible to members on both tabs (a member can look up a recent visitor). **Inactive** People appear on neither tab for a plain member. On either tab, an editor can enter **Edit Mode** to manage People inline. Supersedes the former single filter that showed non-editors only the ad-hoc "Member"-tagged people.
@@ -107,7 +107,7 @@ A toggle available to editors (and above) on the Membership Directory that turns
 _Avoid_: Manage mode, admin mode
 
 **Linked User**:
-The association between a User (an authenticated account with a role) and a Person record, stored bidirectionally (`users.personId` ↔ `people.userId`) and set by an admin. When a User is linked, their own `profile.html` surfaces the **self-editable** fields of their Person and writes straight to the Person record (one source of truth, no copy). Self-editable fields are the Person's contact info (email, phone, address) and birthday, plus `sex` **only while unset** (a person may set their sex once; changing an already-set value is editor-only). The Membership Track, Shepherding Tags, Shepherding Status, involvement, and all shepherding data are **never** self-editable. From the Membership Directory, a Person viewing their own detail card gets an "Edit my info →" link to `profile.html` rather than inline editing. Anniversary is deliberately *not* self-editable — it belongs to Family structures (added later).
+The association between a User (an authenticated account with a Permission Level) and a Person record, stored bidirectionally (`users.personId` ↔ `people.userId`) and set by an admin. When a User is linked, their own `profile.html` surfaces the **self-editable** fields of their Person and writes straight to the Person record (one source of truth, no copy). Self-editable fields are the Person's contact info (email, phone, address) and birthday, plus `sex` **only while unset** (a person may set their sex once; changing an already-set value is editor-only). The Membership Track, Shepherding Tags, Shepherding Status, involvement, and all shepherding data are **never** self-editable. From the Membership Directory, a Person viewing their own detail card gets an "Edit my info →" link to `profile.html` rather than inline editing. Anniversary is deliberately *not* self-editable — it belongs to Family structures (added later).
 _Avoid_: Account link, member login (a User is not necessarily a member)
 
 **Family**:
@@ -146,9 +146,29 @@ _Avoid_: Relations Dashboard, relationship graph (use only as prose), view mode 
 A reusable, elder-defined definition for a kind of Relationship, saved once and re-appliable — the vocabulary grows as elders add types, parallel to how Shepherding Tags accrue. Every type has two axes. Its **kind** is **Pairwise** (connects two Persons) or **Group** (a roster of many Persons). Its **priority** is **Prioritized** or **Non-Prioritized**: a Prioritized type names two roles — the **Holder Label** and **Counterpart Label** for a Pairwise type (e.g. Discipler / Disciplee), or the **Leader Label** and **Member Label** for a Group type — and renders oriented; a Non-Prioritized type names a single symmetric **Label** (e.g. Friendship, or a group's Member Label) and renders unoriented. Defined in the **Relationships tab** of Manage Tags and Relationships — **never** created inline on a profile. Distinct from a Shepherding Tag: a Tag labels one Person, a Relationship Type labels a Relationship among Persons.
 _Avoid_: Relationship tag, edge label, directional (**Prioritized** is its enriched successor)
 
+**Role** (umbrella):
+A type of participation a Person is assigned to for an **Event**, recorded as Involvement. Two families: **liturgical Roles** (preacher, service leader, worship leader…) are **locked** — code-defined, undeletable, and wired into the Service entity and the Service Guide — while **Servant Roles** are editable **Role Definitions**. Assigned to People on the service page's **Roles tab** and in bulk from the **Roles Manager**. Distinct from **Permission Level** (a User's access) and **Membership Stage** (a Person's church relationship). Decided in [ADR 0016](docs/adr/0016-roles-as-events-locked-liturgical-editable-servant.md).
+_Avoid_: using "role" for access (that is Permission Level) or for membership (that is Membership Stage)
+
 **Servant Role**:
-A non-liturgical service contribution — kids ministry, setup/teardown, coffee, sound, etc. — as opposed to the liturgical Roles (preacher, service leader, worship leader…). Servant Roles will be scheduled on a future **servant-roles tab** of the Service Calendar, distinct from the Order of Service editor, and recorded as Involvement like liturgical roles. **Out of scope for the People System (MS-81)** — MS-81's only obligation is to keep the Involvement model **role-open** (any `type` slug is accepted, no schema change) so the servant-roles feature can plug in later.
+A non-liturgical service contribution — kids ministry, setup/teardown, coffee, sound, etc. — as opposed to the locked liturgical Roles. Unlike liturgical Roles, a Servant Role is an editable **Role Definition** authored in the **Roles Manager** and assigned to People per **Event**. Recorded as Involvement like liturgical Roles (the model is **role-open** — any `type` slug is accepted, no schema change). Groundwork laid by the People System (MS-81); the scheduling feature itself is MS-22.
 _Avoid_: Ministry role, volunteer role (use Servant Role), duty
+
+**Role Definition**:
+The editable specification of a **Servant Role**, authored in the **Roles Manager**: a name, an ordered set of **slots** (each requiring **male**, **female**, or **either** — three people needed means three slots), and optional **restriction rules** that read existing Shepherding Tags and Relationships (e.g. "no married couple in this Role", "exclude anyone tagged X"). Liturgical Roles are the locked, code-defined counterpart and have no editable Role Definition.
+_Avoid_: Role template, role config
+
+**Event**:
+A dated occurrence that carries **Roles** to be filled. A Sunday **Service** is one **locked, recurring** Event — always present, its liturgical Roles undeletable. Arbitrary Events (introduced with the Calendar, MS-99) can carry Servant Roles too. Fairness is scoped **per Event series**: a Person's serving history for a Role is counted within that recurring Event, not globally, so someone can be overdue for one Event's Role and fresh for another's at the same time.
+_Avoid_: Meeting, appointment (use Event); do not conflate with Service (a Service is one kind of Event)
+
+**Roles Manager**:
+The editor+ dashboard card where **Role Definitions** are authored and managed, and where a date range of a recurring **Event** is **auto-assigned** — the system drafts a fair, rule-valid lineup for the user to review and accept (propose-then-approve). Distinct from the per-Event **Roles tab**, which assigns a single service by hand.
+_Avoid_: Scheduler page, role admin
+
+**Permission Level**:
+An authenticated User's access tier — the concept formerly called the User **role** (viewer → member → editor → elder → admin → super_admin). Renamed to free the word "role" for serving **Roles**; the tier values are unchanged. The stored field is `users.permissionLevel`; the legacy `role` field is retained as a fallback (read by the Firestore rules and by client reads) until the migration completes and MS-127 drops it. Distinct from **Membership Stage** (church relationship) and **Role** (serving).
+_Avoid_: User role, access role (use Permission Level)
 
 **Inactive** (a Person):
 An off-Track state, toggled beside the Membership Stage slider. Marking a Person Inactive **removes their spot on the Membership Track** (they carry no Membership Stage while Inactive) and applies the Inactive Membership Tag in place of a stage tag. The Person's record stays **fully visible** — Inactive is *not* archival and does not hide the record; it is reserved for later use such as surfacing stale records that may warrant deletion. Distinct from **Previous Member**, which is a genuine Track stage (someone who was a Member and has since left but is still a tracked relationship). The prior Membership Stage is retained under the hood so that clearing Inactive restores the Person to where they were on the Track. Replaces the old `membership.status: 'inactive'` value; the existing "active people" filters (`status !== 'inactive'`) become "not Inactive."

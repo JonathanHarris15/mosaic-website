@@ -3,7 +3,7 @@ const assert = require('node:assert');
 
 const {
     MEMBER_TAG,
-    MEMBER_ROLE,
+    MEMBER_PERMISSION_LEVEL,
     isMemberOrHigher,
     hasMemberTag,
     shouldAddMemberTag,
@@ -37,8 +37,8 @@ test('the directory tag is capital "Member"; the account role is lowercase "memb
     // The two were once one constant — splitting them is what stopped the role
     // sync from writing a "Member"-cased role, and the tag from being lowercase.
     assert.strictEqual(MEMBER_TAG, 'Member');
-    assert.strictEqual(MEMBER_ROLE, 'member');
-    assert.notStrictEqual(MEMBER_TAG, MEMBER_ROLE);
+    assert.strictEqual(MEMBER_PERMISSION_LEVEL, 'member');
+    assert.notStrictEqual(MEMBER_TAG, MEMBER_PERMISSION_LEVEL);
 });
 
 test('hasMemberTag matches either casing — no duplicate is ever added', () => {

@@ -18,7 +18,7 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('shepherdingTags', () => window.withRelationshipsTab({
 
         currentUser: null,
-        currentUserRole: null,
+        currentPermissionLevel: null,
 
         activeTab: 'tags', // 'tags' | 'relationships'
 
@@ -39,8 +39,8 @@ document.addEventListener('alpine:init', () => {
                     return;
                 }
                 const userData = await getUserData(user.uid);
-                this.currentUserRole = (userData && userData.role) || 'viewer';
-                if (!['elder', 'super_admin'].includes(this.currentUserRole)) {
+                this.currentPermissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                if (!['elder', 'super_admin'].includes(this.currentPermissionLevel)) {
                     window.location.href = 'index.html';
                     return;
                 }
@@ -49,7 +49,7 @@ document.addEventListener('alpine:init', () => {
                 // tag vocabulary (no person associations), so nothing is blurred here;
                 // configure keeps the toggle available for consistency.
                 ShepherdingBlur.configure({
-                    role: this.currentUserRole,
+                    permissionLevel: this.currentPermissionLevel,
                     uid: user.uid,
                     personId: userData && userData.personId,
                 });

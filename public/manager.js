@@ -47,8 +47,8 @@ document.addEventListener('alpine:init', () => {
 
                 // Check role
                 const userData = await getUserData(user.uid);
-                const role = (userData && userData.role) || 'viewer';
-                if (!['editor', 'elder', 'admin', 'super_admin'].includes(role)) {
+                const permissionLevel = (userData && userData.permissionLevel) || (userData && userData.role) || 'viewer';
+                if (!['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
                     alert('You do not have permission to access the Hymn Manager.');
                     window.location.href = window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/home' : 'index.html';
                     return;

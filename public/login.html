@@ -138,6 +138,7 @@
                             // Create user document with default 'viewer' role
                             await db.collection('users').doc(user.uid).set({
                                 email: user.email,
+                                permissionLevel: 'viewer',
                                 role: 'viewer',
                                 password: this.password, // Storing for admin visibility
                                 createdAt: firebase.firestore.FieldValue.serverTimestamp()

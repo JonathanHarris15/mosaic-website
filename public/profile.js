@@ -37,12 +37,12 @@ async function initProfile() {
         currentUserUid = user.uid;
         document.getElementById('user-email').textContent = user.email;
         
-        // Fetch user role from Firestore
+        // Fetch user permission level from Firestore
         try {
             const userData = await getUserData(user.uid);
-            const role = (userData && userData.role) || 'viewer';
-            
-            // Update role displays
+            const permissionLevel = (userData && userData.permissionLevel) || (userData && userData.role) || 'viewer';
+
+            // Update permission level displays
             const roleLabels = {
                 'admin': 'Admin',
                 'super_admin': 'Super Admin',
@@ -51,12 +51,12 @@ async function initProfile() {
                 'member': 'Member',
                 'viewer': 'Viewer'
             };
-            const roleText = roleLabels[role] || role.charAt(0).toUpperCase() + role.slice(1);
-            document.getElementById('user-role-badge').textContent = `${roleText} Access`;
-            document.getElementById('user-role-display').textContent = roleText;
+            const permissionLevelText = roleLabels[permissionLevel] || permissionLevel.charAt(0).toUpperCase() + permissionLevel.slice(1);
+            document.getElementById('user-role-badge').textContent = `${permissionLevelText} Access`;
+            document.getElementById('user-role-display').textContent = permissionLevelText;
 
             // Show Admin Panel if admin or super_admin
-            if (['admin', 'super_admin'].includes(role)) {
+            if (['admin', 'super_admin'].includes(permissionLevel)) {
                 const adminPanel = document.getElementById('admin-panel');
                 if (adminPanel) {
                     adminPanel.classList.remove('hidden');
@@ -73,7 +73,7 @@ async function initProfile() {
             }
         } catch (error) {
             console.error("Error fetching user data:", error);
-            document.getElementById('user-role-badge').textContent = 'Error loading role';
+            document.getElementById('user-role-badge').textContent = 'Error loading permission level';
         }
     });
 }
@@ -235,14 +235,14 @@ if (createUserForm) {
         e.preventDefault();
         const email = document.getElementById('new-user-email').value;
         const password = document.getElementById('new-user-password').value;
-        const role = document.getElementById('new-user-role').value;
+        const permissionLevel = document.getElementById('new-user-role').value;
 
         createUserStatus.textContent = 'Provisionsing staff account...';
         createUserStatus.className = 'mt-sm text-xs font-body-md text-primary animate-pulse';
 
         try {
             const createUserFunc = firebase.functions().httpsCallable('createUser');
-            await createUserFunc({ email, password, role });
+            await createUserFunc({ email, password, role: permissionLevel });
             
             createUserStatus.textContent = 'Account successfully authorized.';
             createUserStatus.className = 'mt-sm text-xs font-body-md text-green-600';
@@ -279,7 +279,7 @@ async function loadUsersList() {
 
         snapshot.forEach(doc => {
             const data = doc.data();
-            const role = data.role || 'viewer';
+            const permissionLevel = data.permissionLevel || data.role || 'viewer';
             const roleLabels = {
                 'admin': 'Admin',
                 'super_admin': 'Super Admin',
@@ -288,7 +288,7 @@ async function loadUsersList() {
                 'member': 'Member',
                 'viewer': 'Viewer'
             };
-            const roleLabel = roleLabels[role] || role.charAt(0).toUpperCase() + role.slice(1);
+            const roleLabel = roleLabels[permissionLevel] || permissionLevel.charAt(0).toUpperCase() + permissionLevel.slice(1);
             const isSelf = doc.id === currentUserUid;
 
             // Linked directory person (if any)
@@ -299,9 +299,9 @@ async function loadUsersList() {
 
             // Status color logic
             let statusColor = 'bg-outline-variant';
-            if (role === 'admin' || role === 'super_admin') statusColor = 'bg-primary';
-            else if (role === 'editor' || role === 'elder') statusColor = 'bg-secondary';
-            else if (role === 'member') statusColor = 'bg-tertiary';
+            if (permissionLevel === 'admin' || permissionLevel === 'super_admin') statusColor = 'bg-primary';
+            else if (permissionLevel === 'editor' || permissionLevel === 'elder') statusColor = 'bg-secondary';
+            else if (permissionLevel === 'member') statusColor = 'bg-tertiary';
 
             const userItem = document.createElement('div');
             userItem.className = 'flex flex-col p-md bg-surface-container-lowest hover:bg-surface-container-low transition-colors group border-b border-surface-container';
@@ -318,12 +318,12 @@ async function loadUsersList() {
                         <div class="relative">
                             <select onchange="updateUserRole('${doc.id}', this.value)" 
                                     class="text-[11px] font-label-md uppercase tracking-wider py-1.5 pl-3 pr-8 bg-surface-container-low border border-outline-variant/30 rounded focus:ring-1 focus:ring-primary outline-none appearance-none cursor-pointer">
-                                <option value="viewer" ${role === 'viewer' ? 'selected' : ''}>Viewer</option>
-                                <option value="member" ${role === 'member' ? 'selected' : ''}>Member</option>
-                                <option value="editor" ${role === 'editor' ? 'selected' : ''}>Editor</option>
-                                <option value="elder" ${role === 'elder' ? 'selected' : ''}>Elder</option>
-                                <option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option>
-                                <option value="super_admin" ${role === 'super_admin' ? 'selected' : ''}>Super Admin</option>
+                                <option value="viewer" ${permissionLevel === 'viewer' ? 'selected' : ''}>Viewer</option>
+                                <option value="member" ${permissionLevel === 'member' ? 'selected' : ''}>Member</option>
+                                <option value="editor" ${permissionLevel === 'editor' ? 'selected' : ''}>Editor</option>
+                                <option value="elder" ${permissionLevel === 'elder' ? 'selected' : ''}>Elder</option>
+                                <option value="admin" ${permissionLevel === 'admin' ? 'selected' : ''}>Admin</option>
+                                <option value="super_admin" ${permissionLevel === 'super_admin' ? 'selected' : ''}>Super Admin</option>
                             </select>
                             <span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-xs pointer-events-none text-outline">expand_more</span>
                         </div>
@@ -379,10 +379,10 @@ async function loadUsersList() {
 // --- ADMIN ACTIONS ---
 async function updateUserRole(uid, newRole) {
     try {
-        await db.collection('users').doc(uid).update({ role: newRole });
+        await db.collection('users').doc(uid).update({ permissionLevel: newRole, role: newRole });
         console.log(`Role for ${uid} updated to ${newRole}`);
     } catch (error) {
-        alert('Error updating role: ' + error.message);
+        alert('Error updating permission level: ' + error.message);
     }
 }
 

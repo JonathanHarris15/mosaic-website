@@ -708,7 +708,7 @@ function renderSidebar(grouped) {
 window.navigateToGuide = function(date) {
     const svc = serviceDataMap[date];
     const guide = svc && svc.guide;
-    const isViewer = !['editor', 'elder', 'admin', 'super_admin'].includes(window.currentUserRole);
+    const isViewer = !['editor', 'elder', 'admin', 'super_admin'].includes(window.currentPermissionLevel);
 
     // Which Service Guide system this week uses — the explicit per-week toggle set
     // in the Order of Service editor, else a legacy `elements` blob, else v2
@@ -1292,20 +1292,20 @@ function setupInlineEdit(el, dateKey, field) {
                             </button>
                         </div>
                         
-                        <div class="verse-picker-grid h-32" style="grid-template-columns: repeat(4, minmax(0, 1fr))" x-show="step === 'book'">
+                        <div class="verse-picker-grid max-h-56" style="grid-template-columns: repeat(4, minmax(0, 1fr))" x-show="step === 'book'">
                             <template x-for="book in filteredBooks" :key="book">
                                 <button @click="selectBook(book)" class="verse-picker-btn verse-picker-btn-book" :class="activeBook === book ? 'verse-picker-btn-active' : ''" x-text="book"></button>
                             </template>
                         </div>
 
-                        <div class="verse-picker-grid h-32" style="grid-template-columns: repeat(6, minmax(0, 1fr))" x-show="step === 'chapter'">
+                        <div class="verse-picker-grid max-h-56" style="grid-template-columns: repeat(6, minmax(0, 1fr))" x-show="step === 'chapter'">
                             <template x-for="chapter in chapters" :key="chapter">
                                 <button @click="selectChapter(chapter)" class="verse-picker-btn verse-picker-btn-chapter" :class="activeChapter === chapter ? 'verse-picker-btn-active' : ''" x-text="chapter"></button>
                             </template>
                         </div>
 
                         <div class="p-2 flex flex-col" x-show="step === 'verse'">
-                            <div class="verse-picker-grid h-24" style="grid-template-columns: repeat(6, minmax(0, 1fr))">
+                            <div class="verse-picker-grid max-h-56" style="grid-template-columns: repeat(6, minmax(0, 1fr))">
                                 <template x-for="verse in verses" :key="verse">
                                     <button @click="selectVerse(verse)" class="verse-picker-btn verse-picker-btn-verse" 
                                         :class="{
@@ -1690,9 +1690,9 @@ auth.onAuthStateChanged(async (user) => {
     if (user) {
         try {
             const userData = await getUserData(user.uid);
-            const role = (userData && userData.role) || 'viewer';
-            window.currentUserRole = role;
-            if (['editor', 'elder', 'admin', 'super_admin'].includes(role)) {
+            const permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+            window.currentPermissionLevel = permissionLevel;
+            if (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
                 document.body.classList.add('can-edit');
                 const importBtn = document.getElementById('import-docx-btn');
                 if (importBtn) {
