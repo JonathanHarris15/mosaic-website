@@ -48,11 +48,15 @@ async function loadMentionData() {
         }
 
         if (docsResult.status === 'fulfilled') {
-            _mentionDocs = docsResult.value.docs.map(doc => {
-                const d = doc.data();
-                _docTypeById[doc.id] = d.docType || 'note';
-                return { id: JSON.stringify({ kind: 'elder_document', id: doc.id }), label: d.title || 'Untitled Document' };
-            });
+            // MS-98: a profile-owned document is mentionable only once opted into
+            // the Library. Plain Library documents (no ownerPersonId) are unaffected.
+            _mentionDocs = docsResult.value.docs
+                .filter(doc => { const d = doc.data(); return !(d.ownerPersonId && d.inLibrary !== true); })
+                .map(doc => {
+                    const d = doc.data();
+                    _docTypeById[doc.id] = d.docType || 'note';
+                    return { id: JSON.stringify({ kind: 'elder_document', id: doc.id }), label: d.title || 'Untitled Document' };
+                });
         }
 
         if (notesResult.status === 'fulfilled') {
@@ -224,6 +228,10 @@ document.addEventListener('alpine:init', () => {
 
         personId: null,
         person: null,
+
+        // Which profile tab is showing (MS-98): the Pastoral Record or the
+        // per-person Documents directory.
+        activeTab: 'record', // 'record' | 'documents'
 
         fromPage: null,
         fromId: null,

@@ -1,3 +1,24 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* iOS auto-zooms into any focused input whose font-size is < 16px and then
+   frequently fails to zoom back out, leaving the page scaled and cropped in the
+   Capacitor WebView. The viewport maximum-scale flag is ignored by iOS, so we
+   set a 16px font-size floor on form controls. Base layer gives unclassed and
+   size-inheriting inputs a 16px default (larger utilities like text-lg still
+   win); the utilities block raises only the sub-16px classes (text-xs=12,
+   text-sm=14) so nothing intentionally larger gets shrunk. */
+@layer base {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+@layer utilities {
+  input.text-xs, textarea.text-xs, select.text-xs,
+  input.text-sm, textarea.text-sm, select.text-sm {
+    font-size: 16px !important;
+  }
+}

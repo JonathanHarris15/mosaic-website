@@ -1,0 +1,16 @@
+{
+  "//": "Copy this file to mobile-release.local.json (gitignored) and fill in the iOS secrets.",
+  "android": {
+    "//": "Filled in by the setup. JAVA_HOME and the Android SDK the build should use.",
+    "javaHome": "/opt/homebrew/opt/openjdk@21",
+    "androidSdk": "/opt/homebrew/share/android-commandlinetools"
+  },
+  "ios": {
+    "//": "From your Apple Developer account + an App Store Connect API key (Users and Access -> Integrations -> App Store Connect API). Give the key the 'Admin' role (needed for cloud signing to create the distribution certificate).",
+    "teamId": "YOUR_10CHAR_TEAM_ID",
+    "ascApiKeyId": "THE_KEY_ID",
+    "ascApiIssuerId": "the-issuer-uuid",
+    "ascApiKeyPath": "~/.appstoreconnect/private_keys/AuthKey_THE_KEY_ID.p8",
+    "upload": true
+  }
+}

@@ -5,8 +5,21 @@ serviceAccountKey.json
 # Android release signing (losing the keystore means you cannot ship updates —
 # back it up somewhere safe, but never in the repo)
 android/keystore.properties
+android/local.properties
 *.jks
 *.keystore
+
+# App Store Connect API key + machine-specific release config (secrets — never commit)
+*.p8
+mobile-release.local.json
+
+# In-project secrets folder (keystore + ASC key — never commit)
+Secrets/
+
+# Mobile build outputs
+android/app/build/
+ios/App/build/
+build/mobile/
 
 # Node modules
 node_modules/

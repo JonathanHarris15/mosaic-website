@@ -43,7 +43,7 @@
     header.id = "mobile-shell-header";
     header.style.cssText = "position:sticky;top:0;left:0;right:0;z-index:1000;flex-shrink:0;" +
       "padding-top:calc(env(safe-area-inset-top, 20px) + 10px);" +
-      "background:var(--surface-container-lowest);border-bottom:1px solid var(--outline-variant);";
+      "background:var(--surface-container-lowest, #ffffff);border-bottom:1px solid var(--outline-variant, rgba(0,0,0,0.12));";
 
     var row = document.createElement("div");
     row.style.cssText = "display:flex;align-items:center;gap:6px;height:52px;padding:0 8px 0 6px;";
