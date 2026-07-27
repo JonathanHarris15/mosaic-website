@@ -26,7 +26,7 @@ const PRAYER_MESSAGE_DEFAULTS = {
 document.addEventListener('alpine:init', () => {
     Alpine.data('adminDashboard', () => ({
         currentUser: null,
-        currentUserRole: null,
+        currentPermissionLevel: null,
         loading: true,
 
         // SMS key + quota status
@@ -66,8 +66,8 @@ document.addEventListener('alpine:init', () => {
                     return;
                 }
                 const userData = await getUserData(user.uid);
-                this.currentUserRole = (userData && userData.role) || 'viewer';
-                if (!['admin', 'super_admin'].includes(this.currentUserRole)) {
+                this.currentPermissionLevel = (userData && userData.permissionLevel) || (userData && userData.role) || 'viewer';
+                if (!['admin', 'super_admin'].includes(this.currentPermissionLevel)) {
                     window.location.href = 'index.html';
                     return;
                 }

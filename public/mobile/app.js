@@ -106,13 +106,13 @@
     var first = (user && user.first) || "friend";
     var svcState = M.useAsync(data.getNextService, []);
     var svc = svcState.data;
-    // The Home card grid mirrors the drawer's top-level destinations (role-gated).
+    // The Home card grid mirrors the drawer's top-level destinations (permission-gated).
     var tiles = [
       { icon: "book-open", label: "Hymn Directory", route: "hymnDirectory" },
       { icon: "calendar", label: "Service Calendar", route: "calendar" },
       { icon: "users", label: "Member Directory", route: "people" },
-      { icon: "shield", label: "Shepherd", route: "shepherd", roles: ["elder", "super_admin"] },
-      { icon: "settings-2", label: "Admin", route: "admin", roles: ["admin", "super_admin"] },
+      { icon: "shield", label: "Shepherd", route: "shepherd", permissionLevels: ["elder", "super_admin"] },
+      { icon: "settings-2", label: "Admin", route: "admin", permissionLevels: ["admin", "super_admin"] },
     ].filter(function (t) { return data.canSee(t, user); });
     return html`
       <${Screen}>

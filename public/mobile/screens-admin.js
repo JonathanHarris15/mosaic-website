@@ -74,9 +74,9 @@
 
     useEffect(function () {
       var alive = true;
-      // Wait until auth resolves + role known before hitting admin callables.
+      // Wait until auth resolves + permissionLevel known before hitting admin callables.
       if (props.user === undefined) return;
-      if (!props.user || (props.user.role !== "admin" && props.user.role !== "super_admin")) { loadingS[1](false); return; }
+      if (!props.user || (props.user.permissionLevel !== "admin" && props.user.permissionLevel !== "super_admin")) { loadingS[1](false); return; }
       loadingS[1](false);
       refreshStatus(); loadReplies(); loadPrayer();
       return function () { alive = false; };
@@ -119,7 +119,7 @@
     }
 
     var userKnown = props.user !== undefined;
-    var isAdmin = userKnown && !!props.user && (props.user.role === "admin" || props.user.role === "super_admin");
+    var isAdmin = userKnown && !!props.user && (props.user.permissionLevel === "admin" || props.user.permissionLevel === "super_admin");
     var lastResult = lastResultS[0];
 
     if (!userKnown || loadingS[0]) {

@@ -708,7 +708,7 @@ function renderSidebar(grouped) {
 window.navigateToGuide = function(date) {
     const svc = serviceDataMap[date];
     const guide = svc && svc.guide;
-    const isViewer = !['editor', 'elder', 'admin', 'super_admin'].includes(window.currentUserRole);
+    const isViewer = !['editor', 'elder', 'admin', 'super_admin'].includes(window.currentPermissionLevel);
 
     // Which Service Guide system this week uses — the explicit per-week toggle set
     // in the Order of Service editor, else a legacy `elements` blob, else v2
@@ -1690,9 +1690,9 @@ auth.onAuthStateChanged(async (user) => {
     if (user) {
         try {
             const userData = await getUserData(user.uid);
-            const role = (userData && userData.role) || 'viewer';
-            window.currentUserRole = role;
-            if (['editor', 'elder', 'admin', 'super_admin'].includes(role)) {
+            const permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+            window.currentPermissionLevel = permissionLevel;
+            if (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
                 document.body.classList.add('can-edit');
                 const importBtn = document.getElementById('import-docx-btn');
                 if (importBtn) {

@@ -156,7 +156,7 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('careListEditor', () => ({
         loading: true,
         currentUser: null,
-        currentUserRole: null,
+        currentPermissionLevel: null,
         currentUserName: '',
 
         docId: null,
@@ -191,8 +191,8 @@ document.addEventListener('alpine:init', () => {
             auth.onAuthStateChanged(async user => {
                 if (!user) { window.location.href = 'login.html'; return; }
                 const userData = await getUserData(user.uid);
-                this.currentUserRole = (userData && userData.role) || 'viewer';
-                if (!['elder', 'super_admin'].includes(this.currentUserRole)) {
+                this.currentPermissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                if (!['elder', 'super_admin'].includes(this.currentPermissionLevel)) {
                     window.location.href = 'index.html';
                     return;
                 }
@@ -201,7 +201,7 @@ document.addEventListener('alpine:init', () => {
 
                 // Dev-only privacy screen (shepherding-blur.js).
                 ShepherdingBlur.configure({
-                    role: this.currentUserRole,
+                    permissionLevel: this.currentPermissionLevel,
                     uid: user.uid,
                     personId: userData && userData.personId,
                 });

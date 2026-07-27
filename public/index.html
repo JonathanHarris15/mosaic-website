@@ -225,14 +225,14 @@
                 });
             });
 
-            let userRole = 'viewer';
+            let permissionLevel = 'viewer';
             let savedCardOrder = null;
             if (user) {
                 let name = 'Friend';
                 try {
                     const userData = await getUserData(user.uid);
                     if (userData) {
-                        userRole = userData.role || 'viewer';
+                        permissionLevel = userData.permissionLevel || userData.role || 'viewer';
                         savedCardOrder = Array.isArray(userData.dashboardCardOrder) ? userData.dashboardCardOrder : null;
                         if (userData.email) {
                             name = userData.email.split('@')[0];
@@ -261,7 +261,7 @@
 
                 // People's Directory — members and above (members get a read-only view)
                 if (grid && !document.getElementById('directory-card') &&
-                    ['member', 'editor', 'elder', 'admin', 'super_admin'].includes(userRole)) {
+                    ['member', 'editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
                     const dirCard = document.createElement('a');
                     dirCard.id = 'directory-card';
                     dirCard.dataset.cardKey = 'directory';
@@ -280,7 +280,7 @@
 
                 // Hymn Manager — editors and above (manage the hymn catalog)
                 if (grid && !document.getElementById('hymn-manager-card') &&
-                    ['editor', 'elder', 'admin', 'super_admin'].includes(userRole)) {
+                    ['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
                     const card = document.createElement('a');
                     card.id = 'hymn-manager-card';
                     card.dataset.cardKey = 'hymn-manager';
@@ -299,7 +299,7 @@
 
                 // Shepherd Dashboard — elders and super_admins
                 if (grid && !document.getElementById('shepherding-card') &&
-                    ['elder', 'super_admin'].includes(userRole)) {
+                    ['elder', 'super_admin'].includes(permissionLevel)) {
                     const card = document.createElement('a');
                     card.id = 'shepherding-card';
                     card.dataset.cardKey = 'shepherding';
@@ -317,7 +317,7 @@
 
                 // Admin Dashboard — admins and super_admins. Hosts the admin tools (SMS, etc.).
                 if (grid && !document.getElementById('admin-dashboard-card') &&
-                    ['admin', 'super_admin'].includes(userRole)) {
+                    ['admin', 'super_admin'].includes(permissionLevel)) {
                     const card = document.createElement('a');
                     card.id = 'admin-dashboard-card';
                     card.dataset.cardKey = 'admin-dashboard';
@@ -538,7 +538,7 @@
 
                     const totalIssues = missingFields.length + literalHymns.length;
 
-                    if (['editor', 'elder', 'admin', 'super_admin'].includes(userRole)) {
+                    if (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
                         const actionDiv = document.createElement('div');
                         actionDiv.className = 'mt-auto pt-md flex flex-col gap-2';
                         
@@ -582,7 +582,7 @@
                     console.log("No service data found for:", dateKey);
                     glanceContent.innerHTML = '<p class="text-on-surface-variant italic">No service data found for this Sunday.</p>';
                     
-                    if (['editor', 'elder', 'admin', 'super_admin'].includes(userRole)) {
+                    if (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
                         const createBtn = document.createElement('a');
                         createBtn.href = `service-builder.html?date=${dateKey}`;
                         createBtn.className = 'mt-auto pt-md flex items-center justify-center group';

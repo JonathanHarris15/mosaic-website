@@ -25,7 +25,7 @@ function guideManager() {
     // so you can't place the cursor. Keeping them in this closure keeps them raw.
     const __cm = { html: null, css: null };
     return {
-        userRole: 'viewer',
+        permissionLevel: 'viewer',
         loading: true,
         tab: 'pages',
         catalog: (window.GuideComponents && window.GuideComponents.defaultCatalog) || null,
@@ -56,7 +56,7 @@ function guideManager() {
         toast: '',
         _uidCounter: 0,
 
-        get canEdit() { return ['editor', 'elder', 'admin', 'super_admin'].includes(this.userRole); },
+        get canEdit() { return ['editor', 'elder', 'admin', 'super_admin'].includes(this.permissionLevel); },
 
         async init() {
             const self = this;
@@ -74,7 +74,7 @@ function guideManager() {
             auth.onAuthStateChanged(async (user) => {
                 if (!user) { window.location.href = 'login.html'; return; }
                 const userData = await getUserData(user.uid);
-                self.userRole = (userData && userData.role) || 'viewer';
+                self.permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
                 if (!self.canEdit) { window.location.href = 'service-calendar.html'; return; }
                 self.palette = self.catalog.palette();
                 try {

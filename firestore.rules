@@ -2,26 +2,40 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // Effective permission level for the signed-in user. Reads the new
+    // `permissionLevel` field, falling back to the legacy `role` field during the
+    // MS-119 migration while both coexist (MS-127 drops `role` afterwards).
+    // Callers guard on request.auth first, so this get() only runs when signed in.
+    function permissionLevel() {
+      let d = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return ('permissionLevel' in d) ? d.permissionLevel : d.role;
+    }
+
     // Helper to check if user is admin
     function isAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin'];
+      return request.auth != null && permissionLevel() in ['admin', 'super_admin'];
     }
 
     // Helper to check if user is editor
     function isEditor() {
-      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['editor', 'admin', 'elder', 'super_admin'];
+      return request.auth != null && permissionLevel() in ['editor', 'admin', 'elder', 'super_admin'];
     }
 
     // Helper to check if user is elder or super_admin
     function isElder() {
-      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['elder', 'super_admin'];
+      return request.auth != null && permissionLevel() in ['elder', 'super_admin'];
     }
 
     match /users/{userId} {
       // Allow users to read their own document
       allow read: if request.auth != null && request.auth.uid == userId;
-      // Allow users to create their own document as 'viewer'
-      allow create: if request.auth != null && request.auth.uid == userId && request.resource.data.role == 'viewer';
+      // Allow users to create their own document as 'viewer' (permission level).
+      // During the MS-119 migration the client writes both permissionLevel and the
+      // legacy role; accept whichever the new doc carries.
+      allow create: if request.auth != null && request.auth.uid == userId
+        && (('permissionLevel' in request.resource.data)
+            ? request.resource.data.permissionLevel == 'viewer'
+            : request.resource.data.role == 'viewer');
       // Allow users to update ONLY their own dashboard card arrangement.
       // Restricting the affected keys prevents self role-escalation or tampering
       // with any other field (email, personId, etc.).

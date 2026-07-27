@@ -40,7 +40,7 @@ export function analyticsPage() {
         drillDownData: null, // Will hold the book object with chapters and verses usage
         sortKey: 'count', // 'name', 'status', 'count', 'lastUsed'
         sortOrder: 'desc', // 'asc', 'desc'
-        currentUserRole: 'viewer',
+        currentPermissionLevel: 'viewer',
         tagMetadata: {},
 
         async init() {
@@ -50,7 +50,7 @@ export function analyticsPage() {
                     return;
                 }
                 const userData = await getUserData(user.uid);
-                this.currentUserRole = (userData && userData.role) || 'viewer';
+                this.currentPermissionLevel = (userData && userData.permissionLevel) || (userData && userData.role) || 'viewer';
                 await this.loadTagMetadata();
                 await this.fetchAndProcessData();
                 this.loading = false;
@@ -58,11 +58,11 @@ export function analyticsPage() {
         },
 
         get isAdmin() {
-            return ['elder', 'super_admin'].includes(this.currentUserRole);
+            return ['elder', 'super_admin'].includes(this.currentPermissionLevel);
         },
 
         get isEditor() {
-            return ['editor', 'elder', 'admin', 'super_admin'].includes(this.currentUserRole);
+            return ['editor', 'elder', 'admin', 'super_admin'].includes(this.currentPermissionLevel);
         },
 
         async loadTagMetadata() {

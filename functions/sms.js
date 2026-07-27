@@ -10,7 +10,7 @@
 
 const crypto = require("crypto");
 
-const ADMIN_ROLES = ["admin", "super_admin"];
+const ADMIN_PERMISSION_LEVELS = ["admin", "super_admin"];
 
 /** Reject webhook timestamps older/newer than this to blunt replay attacks. */
 const WEBHOOK_MAX_SKEW_MS = 15 * 60 * 1000;
@@ -29,12 +29,12 @@ function toE164US(raw) {
 }
 
 /**
- * Whether a /users role may use the admin SMS tools.
- * @param {string} role
+ * Whether a /users permission level may use the admin SMS tools.
+ * @param {string} permissionLevel
  * @return {boolean}
  */
-function isAdminRole(role) {
-  return ADMIN_ROLES.includes(role);
+function isAdminPermissionLevel(permissionLevel) {
+  return ADMIN_PERMISSION_LEVELS.includes(permissionLevel);
 }
 
 /**
@@ -146,10 +146,10 @@ function verifyTextbeltSignature({apiKey, timestamp, signature, rawBody, nowMs})
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    ADMIN_ROLES,
+    ADMIN_PERMISSION_LEVELS,
     WEBHOOK_MAX_SKEW_MS,
     toE164US,
-    isAdminRole,
+    isAdminPermissionLevel,
     interpretQuota,
     interpretSend,
     parseInboundReply,

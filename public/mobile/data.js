@@ -30,14 +30,14 @@
       .catch(function () { return {}; })
       .then(function (data) {
         var name = data.name || data.displayName || user.displayName || (user.email ? user.email.split("@")[0] : "Friend");
-        var role = data.role || "viewer";
+        var permissionLevel = data.permissionLevel || data.role || "viewer";
         return {
           uid: user.uid,
           email: user.email || "",
           name: name,
           first: String(name).trim().split(/\s+/)[0],
-          role: role,
-          roleLabel: ROLE_LABELS[role] || "Member",
+          permissionLevel: permissionLevel,
+          roleLabel: ROLE_LABELS[permissionLevel] || "Member",
         };
       });
   }
@@ -54,23 +54,23 @@
   function signOut() { return auth.signOut(); }
 
   // Drawer / home destinations -> desktop pages (page-load nav for now;
-  // in-shell screens override where they exist). `roles` mirrors the card
-  // gating on index.html (:300-320) — an entry is hidden unless the signed-in
-  // user's role is listed. See canSee().
+  // in-shell screens override where they exist). `permissionLevels` mirrors the
+  // card gating on index.html (:300-320) — an entry is hidden unless the signed-in
+  // user's permissionLevel is listed. See canSee().
   var DESTINATIONS = [
     { key: "home", label: "Home", icon: "house", route: "home" },
     { key: "hymn-directory", label: "Hymn Directory", icon: "book-open", route: "hymnDirectory" },
     { key: "calendar", label: "Service Calendar", icon: "calendar", route: "calendar" },
     { key: "directory", label: "Member Directory", icon: "users", route: "people" },
-    { key: "shepherd", label: "Shepherd Dashboard", icon: "shield", route: "shepherd", roles: ["elder", "super_admin"] },
-    { key: "admin", label: "Admin Dashboard", icon: "settings-2", route: "admin", roles: ["admin", "super_admin"] },
+    { key: "shepherd", label: "Shepherd Dashboard", icon: "shield", route: "shepherd", permissionLevels: ["elder", "super_admin"] },
+    { key: "admin", label: "Admin Dashboard", icon: "settings-2", route: "admin", permissionLevels: ["admin", "super_admin"] },
   ];
 
-  // True when a destination/tile with an optional `roles` gate is visible to
-  // this user (no gate = always visible). Matches index.html role checks.
+  // True when a destination/tile with an optional `permissionLevels` gate is visible to
+  // this user (no gate = always visible). Matches index.html permission checks.
   function canSee(item, user) {
-    if (!item || !item.roles) return true;
-    return !!(user && item.roles.indexOf(user.role) >= 0);
+    if (!item || !item.permissionLevels) return true;
+    return !!(user && item.permissionLevels.indexOf(user.permissionLevel) >= 0);
   }
 
   // ── Collection loaders (defensive: tolerate missing fields) ──

@@ -220,7 +220,7 @@ document.addEventListener('alpine:init', () => {
     // spreading would freeze them at their page-load values.
     Alpine.data('shepherdingProfile', () => window.withQuickAssign({
         currentUser: null,
-        currentUserRole: null,
+        currentPermissionLevel: null,
         currentUserName: '',
         // Dev-only blur (shepherding-blur.js): true when this profile is the
         // current user's own Person record, so nothing on it is screened.
@@ -298,8 +298,8 @@ document.addEventListener('alpine:init', () => {
                     return;
                 }
                 const userData = await getUserData(user.uid);
-                this.currentUserRole = (userData && userData.role) || 'viewer';
-                if (!['elder', 'super_admin'].includes(this.currentUserRole)) {
+                this.currentPermissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                if (!['elder', 'super_admin'].includes(this.currentPermissionLevel)) {
                     window.location.href = 'index.html';
                     return;
                 }
@@ -312,7 +312,7 @@ document.addEventListener('alpine:init', () => {
                 // profile is never blurred (it's about them).
                 this.ownProfile = !!(userData && userData.personId && userData.personId === this.personId);
                 ShepherdingBlur.configure({
-                    role: this.currentUserRole,
+                    permissionLevel: this.currentPermissionLevel,
                     uid: user.uid,
                     personId: userData && userData.personId,
                 });
@@ -442,7 +442,7 @@ document.addEventListener('alpine:init', () => {
         // The same Track control the People list has, driven off this Person and
         // committing one Membership Change (silent tag swap) per move. Editors only.
         get canEditMembership() {
-            return ['editor', 'admin', 'elder', 'super_admin'].includes(this.currentUserRole);
+            return ['editor', 'admin', 'elder', 'super_admin'].includes(this.currentPermissionLevel);
         },
         get membershipStages() { return ShepherdingCore.MEMBERSHIP_STAGES; },
         get membershipIndex() {

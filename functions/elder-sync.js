@@ -10,15 +10,15 @@
 // user becomes an elder AND removed when they stop being one (or are unlinked).
 // Super Admins are a distinct office and are NOT elders.
 
-const ELDER_ROLE = "elder";
+const ELDER_PERMISSION_LEVEL = "elder";
 
 // Canonical Elder Tag id/name. Tag identity is the name (ADR-0011), and this
 // matches ShepherdingCore.ELDER_TAG_ID on the client so both surfaces agree.
 const ELDER_TAG = "Elder";
 
-/** True only for the elder role — super_admin is excluded (a distinct office). */
-function isElderRole(role) {
-  return role === ELDER_ROLE;
+/** True only for the elder level — super_admin is excluded (a distinct office). */
+function isElderPermissionLevel(permissionLevel) {
+  return permissionLevel === ELDER_PERMISSION_LEVEL;
 }
 
 /** True when the person already carries the Elder tag (exact-name match). */
@@ -31,8 +31,8 @@ function hasElderTag(personTags) {
  * person doesn't already carry it. The tag-absent check makes the write a no-op
  * once synced, so the trigger doesn't re-fire itself in a loop.
  */
-function shouldAddElderTag(userRole, personTags) {
-  return isElderRole(userRole) && !hasElderTag(personTags);
+function shouldAddElderTag(permissionLevel, personTags) {
+  return isElderPermissionLevel(permissionLevel) && !hasElderTag(personTags);
 }
 
 /**
@@ -41,14 +41,14 @@ function shouldAddElderTag(userRole, personTags) {
  * half the add-only member sync deliberately omits — the Elder Tag is projected,
  * so a stale tag must be cleared.
  */
-function shouldRemoveElderTag(userRole, personTags) {
-  return !isElderRole(userRole) && hasElderTag(personTags);
+function shouldRemoveElderTag(permissionLevel, personTags) {
+  return !isElderPermissionLevel(permissionLevel) && hasElderTag(personTags);
 }
 
 module.exports = {
-  ELDER_ROLE,
+  ELDER_PERMISSION_LEVEL,
   ELDER_TAG,
-  isElderRole,
+  isElderPermissionLevel,
   hasElderTag,
   shouldAddElderTag,
   shouldRemoveElderTag,

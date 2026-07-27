@@ -14,14 +14,14 @@ const MEMBER_OR_HIGHER = ["member", "editor", "elder", "admin", "super_admin"];
 // case-insensitively so we never add a second variant alongside an existing one.
 const MEMBER_TAG = "Member";
 
-// The user-account role granted by the member tag. Roles are lowercase, so this
-// is deliberately distinct from MEMBER_TAG: the two used to share one constant,
-// which conflated a directory tag with an account role.
-const MEMBER_ROLE = "member";
+// The user-account permission level granted by the member tag. Levels are
+// lowercase, so this is deliberately distinct from MEMBER_TAG: the two used to
+// share one constant, which conflated a directory tag with a permission level.
+const MEMBER_PERMISSION_LEVEL = "member";
 
-/** True when a role is "member" or any higher privilege. */
-function isMemberOrHigher(role) {
-  return MEMBER_OR_HIGHER.includes(role);
+/** True when a permission level is "member" or any higher privilege. */
+function isMemberOrHigher(permissionLevel) {
+  return MEMBER_OR_HIGHER.includes(permissionLevel);
 }
 
 /**
@@ -42,8 +42,8 @@ function hasMemberTag(personTags) {
  * reciprocal trigger isn't fired in a loop. Lower roles never tag and never
  * untag (add-only).
  */
-function shouldAddMemberTag(userRole, personTags) {
-  return isMemberOrHigher(userRole) && !hasMemberTag(personTags);
+function shouldAddMemberTag(permissionLevel, personTags) {
+  return isMemberOrHigher(permissionLevel) && !hasMemberTag(personTags);
 }
 
 /**
@@ -51,14 +51,14 @@ function shouldAddMemberTag(userRole, personTags) {
  * user is currently below member. Never demotes; returns false when the user is
  * already member-or-higher, which also skips the write and avoids a loop.
  */
-function shouldPromoteToMember(currentRole) {
-  return !isMemberOrHigher(currentRole);
+function shouldPromoteToMember(currentPermissionLevel) {
+  return !isMemberOrHigher(currentPermissionLevel);
 }
 
 module.exports = {
   MEMBER_OR_HIGHER,
   MEMBER_TAG,
-  MEMBER_ROLE,
+  MEMBER_PERMISSION_LEVEL,
   isMemberOrHigher,
   hasMemberTag,
   shouldAddMemberTag,

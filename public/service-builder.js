@@ -133,7 +133,7 @@ function serviceForm() {
         saving: false,
         canEdit: false,
         isShepherd: false,
-        currentUserRole: 'viewer',
+        currentPermissionLevel: 'viewer',
         // Prayer Request per pastoral-prayer subject, visible to elders only.
         prayerRequests: {
             male: { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false },
@@ -419,10 +419,10 @@ function serviceForm() {
                 if (user) {
                     try {
                         const userData = await getUserData(user.uid);
-                        const role = (userData && userData.role) || 'viewer';
-                        this.currentUserRole = role;
-                        this.canEdit = (['editor', 'elder', 'admin', 'super_admin'].includes(role));
-                        this.isShepherd = ['elder', 'super_admin'].includes(role);
+                        const permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                        this.currentPermissionLevel = permissionLevel;
+                        this.canEdit = (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel));
+                        this.isShepherd = ['elder', 'super_admin'].includes(permissionLevel);
                         this.loadPrayerRequests();
                     } catch (error) {
                         console.error("Error checking user permissions:", error);

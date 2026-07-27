@@ -136,7 +136,7 @@
     return { hidden: hidden, hidePeople: hidePeople };
   }
   function isDirectoryAdmin(user) {
-    return !!user && (user.role === "elder" || user.role === "super_admin");
+    return !!user && (user.permissionLevel === "elder" || user.permissionLevel === "super_admin");
   }
   function PeopleScreen(props) {
     var st = useAsync(data.getPeople, []);
@@ -199,7 +199,7 @@
     var vis = tagVisibility(tagsSt.data);
     var isAdmin = isDirectoryAdmin(props.user);
     var tagsReady = !tagsSt.loading;
-    var canEdit = !!props.user && ["editor", "elder", "admin", "super_admin"].indexOf(props.user.role) >= 0;
+    var canEdit = !!props.user && ["editor", "elder", "admin", "super_admin"].indexOf(props.user.permissionLevel) >= 0;
     var contact = [["mail", p.email], ["phone", p.phone]].filter(function (r) { return r[1]; });
     // Membership tags always resolve via the Track; other tags obey visibility.
     var chipTags = (p.tags || []).filter(function (t) {

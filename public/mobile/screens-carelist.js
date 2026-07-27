@@ -327,7 +327,7 @@
     }
 
     var userKnown = props.user !== undefined;
-    var isElder = userKnown && !!props.user && (props.user.role === "elder" || props.user.role === "super_admin");
+    var isElder = userKnown && !!props.user && (props.user.permissionLevel === "elder" || props.user.permissionLevel === "super_admin");
     var saveStatus = saveStatusS[0];
     var saveLabel = saveStatus === "saving" ? "Saving…" : saveStatus === "unsaved" ? "Unsaved changes" : "Saved";
     var hasActive = !!activeCellS[0];

@@ -150,7 +150,7 @@
     }
 
     var userKnown = props.user !== undefined; // undefined = still resolving auth
-    var isElder = userKnown && !!props.user && (props.user.role === "elder" || props.user.role === "super_admin");
+    var isElder = userKnown && !!props.user && (props.user.permissionLevel === "elder" || props.user.permissionLevel === "super_admin");
     var newTag = newTagS[0];
     var mergeSource = mergeSourceS[0] ? tagById(mergeSourceS[0]) : null;
     var confirmDelete = confirmDeleteS[0] ? tagById(confirmDeleteS[0]) : null;

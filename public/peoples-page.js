@@ -47,9 +47,9 @@ document.addEventListener('alpine:init', () => {
         allTags: [],
         tagMetadata: {}, // { tagName: { hiddenFromOthers: bool, hidePeople: bool } }
         selectedTags: [],
-        currentUserRole: 'viewer',
+        currentPermissionLevel: 'viewer',
         // Super-admin debug: when true, the page behaves as if the user were a plain
-        // member (see effectiveRole). Never affects what a non-super-admin sees.
+        // member (see effectivePermissionLevel). Never affects what a non-super-admin sees.
         viewAsMember: false,
         // Page content stays hidden until the role check passes, so a viewer who
         // navigates straight to the URL never sees the directory shell flash before
@@ -63,10 +63,10 @@ document.addEventListener('alpine:init', () => {
                     return;
                 }
                 const userData = await getUserData(user.uid);
-                this.currentUserRole = (userData && userData.role) || 'viewer';
+                this.currentPermissionLevel = (userData && userData.permissionLevel) || (userData && userData.role) || 'viewer';
                 this.currentUserUid = user.uid;
                 this.currentUserName = (userData && (userData.displayName || userData.name)) || user.email || '';
-                if (!['member', 'editor', 'elder', 'admin', 'super_admin'].includes(this.currentUserRole)) {
+                if (!['member', 'editor', 'elder', 'admin', 'super_admin'].includes(this.currentPermissionLevel)) {
                     alert('Permission denied.');
                     window.location.href = 'index.html';
                     return;
@@ -78,26 +78,26 @@ document.addEventListener('alpine:init', () => {
             });
         },
 
-        // The real account role — used only to decide who gets the debug toggle.
-        // All page gating goes through effectiveRole so "View as Member" is honoured.
+        // The real account permission level — used only to decide who gets the debug toggle.
+        // All page gating goes through effectivePermissionLevel so "View as Member" is honoured.
         get isSuperAdmin() {
-            return this.currentUserRole === 'super_admin';
+            return this.currentPermissionLevel === 'super_admin';
         },
 
-        // The role the page should behave as. A super admin previewing as a member
-        // collapses to 'member'; everyone else is just their real role.
-        get effectiveRole() {
-            return (this.isSuperAdmin && this.viewAsMember) ? 'member' : this.currentUserRole;
+        // The permission level the page should behave as. A super admin previewing as a member
+        // collapses to 'member'; everyone else is just their real permission level.
+        get effectivePermissionLevel() {
+            return (this.isSuperAdmin && this.viewAsMember) ? 'member' : this.currentPermissionLevel;
         },
 
         get isAdmin() {
-            return ['elder', 'super_admin'].includes(this.effectiveRole);
+            return ['elder', 'super_admin'].includes(this.effectivePermissionLevel);
         },
 
         // Members get a read-only view of the directory; editors and above can modify
         // records and see the Tags Manager.
         get canEdit() {
-            return ['editor', 'elder', 'admin', 'super_admin'].includes(this.effectiveRole);
+            return ['editor', 'elder', 'admin', 'super_admin'].includes(this.effectivePermissionLevel);
         },
 
         // Super-admin only: flip the page between the real super-admin view and a
