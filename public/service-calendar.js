@@ -1292,20 +1292,20 @@ function setupInlineEdit(el, dateKey, field) {
                             </button>
                         </div>
                         
-                        <div class="verse-picker-grid h-32" style="grid-template-columns: repeat(4, minmax(0, 1fr))" x-show="step === 'book'">
+                        <div class="verse-picker-grid max-h-56" style="grid-template-columns: repeat(4, minmax(0, 1fr))" x-show="step === 'book'">
                             <template x-for="book in filteredBooks" :key="book">
                                 <button @click="selectBook(book)" class="verse-picker-btn verse-picker-btn-book" :class="activeBook === book ? 'verse-picker-btn-active' : ''" x-text="book"></button>
                             </template>
                         </div>
 
-                        <div class="verse-picker-grid h-32" style="grid-template-columns: repeat(6, minmax(0, 1fr))" x-show="step === 'chapter'">
+                        <div class="verse-picker-grid max-h-56" style="grid-template-columns: repeat(6, minmax(0, 1fr))" x-show="step === 'chapter'">
                             <template x-for="chapter in chapters" :key="chapter">
                                 <button @click="selectChapter(chapter)" class="verse-picker-btn verse-picker-btn-chapter" :class="activeChapter === chapter ? 'verse-picker-btn-active' : ''" x-text="chapter"></button>
                             </template>
                         </div>
 
                         <div class="p-2 flex flex-col" x-show="step === 'verse'">
-                            <div class="verse-picker-grid h-24" style="grid-template-columns: repeat(6, minmax(0, 1fr))">
+                            <div class="verse-picker-grid max-h-56" style="grid-template-columns: repeat(6, minmax(0, 1fr))">
                                 <template x-for="verse in verses" :key="verse">
                                     <button @click="selectVerse(verse)" class="verse-picker-btn verse-picker-btn-verse" 
                                         :class="{

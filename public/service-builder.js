@@ -1224,8 +1224,30 @@ function serviceForm() {
             }));
         },
 
-        // "X of Y set" — counts filled rows over the rows currently in the order
-        // (removed hymns are intentionally blank, so they sit out of the tally).
+        // Fields beyond the liturgy grid that a fully-ready service needs: the two
+        // header references (Theme, Key Verse) and the core people roles. Person
+        // roles count as set once they have an id or a typed-in name. Optional
+        // roles (Sermonette, Elements, Other Involvement) are deliberately left out
+        // so the tally can still reach "complete" on a normal Sunday.
+        _readinessFields: [
+            { label: 'Theme',              get: s => s.theme,            type: 'text'   },
+            { label: 'Key Verse',          get: s => s.keyVerse,         type: 'text'   },
+            { label: 'Service Leader',     get: s => s.serviceLeader,    type: 'person' },
+            { label: 'Music Leader',       get: s => s.musicLeader,      type: 'person' },
+            { label: 'Preacher',           get: s => s.preacher,         type: 'person' },
+            { label: 'Prayer (Praise)',    get: s => s.prayerPraise,     type: 'person' },
+            { label: 'Prayer (Confession)',get: s => s.prayerConfession, type: 'person' },
+        ],
+
+        _isFieldSet(val, type) {
+            if (type === 'person') return !!(val && (val.id || (val.name || '').trim()));
+            return val != null && String(val).trim() !== '';
+        },
+
+        // "X of Y set" — a full-readiness tally: the liturgy rows currently in the
+        // order (removed hymns are intentionally blank, so they sit out) PLUS the
+        // header references and core people roles above. Catches a missing Key
+        // Verse or unassigned leader that the liturgy-only count used to miss.
         get filledLabel() {
             let filled = 0, total = 0;
             for (const mv of this.movements) {
@@ -1234,6 +1256,10 @@ function serviceForm() {
                     total++;
                     if (it.value) filled++;
                 }
+            }
+            for (const f of this._readinessFields) {
+                total++;
+                if (this._isFieldSet(f.get(this.service), f.type)) filled++;
             }
             return `${filled} of ${total} set`;
         },

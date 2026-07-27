@@ -296,10 +296,13 @@
     return html`<span style=${{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 9px", borderRadius: "var(--radius-sm)", background: t.bg, color: t.fg, fontFamily: "var(--font-sans)", fontSize: 11.5, fontWeight: 600 }}>${Ic(props.icon, 12)}${props.children}</span>`;
   }
 
+  // Presentational only — the surrounding row owns the click. (Giving this its own
+  // onClick while the row also had one made every tap fire the toggle twice, so the
+  // switch appeared dead: two flips cancelled out.)
   function CalSwitch(props) {
-    return html`<button onClick=${props.onClick} role="switch" aria-checked=${props.on} style=${{ position: "relative", width: 44, height: 26, flexShrink: 0, border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-full)", cursor: "pointer", background: props.on ? "var(--primary)" : "var(--surface-container)", transition: "background 0.2s" }}>
+    return html`<span role="switch" aria-checked=${props.on} style=${{ position: "relative", display: "inline-block", width: 44, height: 26, flexShrink: 0, border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-full)", background: props.on ? "var(--primary)" : "var(--surface-container)", transition: "background 0.2s" }}>
       <span style=${{ position: "absolute", top: 2, left: props.on ? 20 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", boxShadow: "var(--shadow-xs)", transition: "left 0.2s" }} />
-    </button>`;
+    </span>`;
   }
 
   function CalSheet(props) {
@@ -338,7 +341,7 @@
         <tbody>
           ${props.dates.map(function (d) {
             var s = props.byDate[keyOf(d)] || {};
-            return html`<tr key=${keyOf(d)} onClick=${function () { open(d); }} style=${{ cursor: "pointer" }}>
+            return html`<tr key=${keyOf(d)} id=${"cal-d-" + keyOf(d)} onClick=${function () { open(d); }} style=${{ cursor: "pointer" }}>
               <td style=${Object.assign({}, TD, { color: "var(--on-surface)", fontWeight: 500 })}>${d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</td>
               <td style=${Object.assign({}, TD, { whiteSpace: "normal", minWidth: 160, color: "var(--primary)" })}>${dash(s.theme)}</td>
               <td style=${TD}>${dash(s.serviceLeader)}</td>
@@ -408,12 +411,14 @@
     }
     function openScheduler() { window.location.href = "service-calendar.html?shell=mobile"; }
 
-    // Jump to the upcoming service on first load / view switch.
+    // Jump to the upcoming service on first load, view switch, or whenever the
+    // Historic toggle flips — toggling either way re-anchors the scroll on the
+    // upcoming week rather than stranding the user mid-history.
     useEffect(function () {
       if (st.loading || !upcomingKey) return;
       var el = document.getElementById("cal-d-" + upcomingKey);
       if (el) el.scrollIntoView({ block: "start" });
-    }, [st.loading, view]);
+    }, [st.loading, view, hist]);
 
     function renderCard(d) {
       var key = keyOf(d);
@@ -454,10 +459,10 @@
         `} />
 
         <div style=${{ flexShrink: 0, background: "var(--surface-container-lowest)", borderBottom: "1px solid var(--outline-variant)", padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <label onClick=${function () { histS[1](!hist); }} style=${{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
+          <div role="button" aria-pressed=${hist} onClick=${function () { histS[1](!hist); }} style=${{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
             <span style=${CAL_LABEL}>Historic</span>
-            <${CalSwitch} on=${hist} onClick=${function () { histS[1](!hist); }} />
-          </label>
+            <${CalSwitch} on=${hist} />
+          </div>
           <${Segmented} options=${["List", "Table"]} value=${view} onChange=${function (o) { viewS[1](o); }} />
         </div>
 
