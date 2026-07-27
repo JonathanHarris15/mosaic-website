@@ -146,6 +146,23 @@
                             Terminate Session
                         </button>
                     </div>
+
+                    <!-- Account deletion. Required by both app stores for any app with
+                         accounts. Removes the LOGIN only — the Person record is the
+                         church's membership record and stays put. -->
+                    <div id="delete-account-block" class="pt-sm border-t border-surface-container flex flex-col gap-3">
+                        <span class="font-label-md text-[10px] uppercase tracking-widest text-error">Delete Account</span>
+                        <p class="text-[11px] font-body-md text-on-surface-variant leading-relaxed">
+                            This permanently deletes your login and cannot be undone. Your membership
+                            record stays with the church — to have that removed as well, email
+                            <a href="mailto:jono591737@gmail.com" class="text-primary underline">jono591737@gmail.com</a>.
+                        </p>
+                        <form id="delete-account-form" class="flex flex-col gap-2">
+                            <input type="password" id="delete-account-password" placeholder="Confirm your password" required autocomplete="current-password" class="w-full py-2 px-3 bg-surface border border-outline-variant/30 rounded focus:ring-1 focus:ring-error outline-none transition-all text-sm" />
+                            <button type="submit" id="delete-account-btn" class="w-full py-2 border border-error/40 text-error font-label-md text-[10px] uppercase tracking-widest rounded hover:bg-error-container/20 transition-all disabled:opacity-50">Delete My Account</button>
+                        </form>
+                        <div id="delete-account-status" class="text-[10px] font-body-md"></div>
+                    </div>
                 </div>
 
             </div>

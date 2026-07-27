@@ -114,6 +114,9 @@
         out.push({
           id: doc.id,
           name: name,
+          // sex seats a Person in a Family (husband/wife) and genders the Family
+          // role labels — the quick-assign card on the profile needs it.
+          sex: d.sex || null,
           role: d.role || d.title || "",
           status: d.status || "member",
           membership: d.membership || null,
@@ -529,6 +532,19 @@
       .catch(function () { return []; });
   }
 
+  // Family write-through (ADR-0014 s4). The profile's quick-assign card authors
+  // Family straight into `families` — never a parallel edge — via a FamilyCore
+  // planner. These apply the two shapes a plan produces: create the whole doc, or
+  // patch one field. `families` stays the single source of truth.
+  function addFamily(changes) {
+    return db.collection("families").add(changes)
+      .then(function (ref) { return Object.assign({ id: ref.id, childIds: [] }, changes); });
+  }
+  function updateFamily(familyId, changes) {
+    return db.collection("families").doc(familyId).update(changes)
+      .then(function () { return changes; });
+  }
+
   // Move a Person along the Membership Track (ADR-0012): set the stage/inactive
   // field, re-project the Membership Tags, and append one Membership Change — all
   // atomically. The tag swap is silent (no Tag Changes). Returns the activity id.
@@ -579,17 +595,19 @@
     return db.collection("elder_documents").orderBy("createdAt", "desc").get()
       .then(mapDocs).catch(function () { return []; });
   }
-  function getDocumentStructure() {
-    return db.collection("elder_document_structure").doc("root").get()
+  // MS-98: docId defaults to 'root' (the global Library); a Shepherding-Profile
+  // Documents tab passes 'person_<personId>' for that Person's own tree.
+  function getDocumentStructure(docId) {
+    return db.collection("elder_document_structure").doc(docId || "root").get()
       .then(function (d) {
         var data = d.exists ? d.data() : null;
         return data && data.children ? data : { children: [] };
       }).catch(function () { return { children: [] }; });
   }
-  function saveDocumentStructure(structure) {
+  function saveDocumentStructure(structure, docId) {
     // Plain clone so Firestore never sees Preact/proxy wrappers.
     var plain = JSON.parse(JSON.stringify(structure || { children: [] }));
-    return db.collection("elder_document_structure").doc("root").set(plain).then(function () { return plain; });
+    return db.collection("elder_document_structure").doc(docId || "root").set(plain).then(function () { return plain; });
   }
   function createElderDocument(opts, user) {
     var now = firebase.firestore.FieldValue.serverTimestamp();
@@ -602,6 +620,12 @@
       authorName: name, authorUid: uid,
       createdAt: now, updatedAt: now, updatedByName: name,
     };
+    // MS-98: a document created under a profile is owned by that Person and hidden
+    // from shared surfaces until opted into the Library.
+    if (opts.ownerPersonId) {
+      docData.ownerPersonId = opts.ownerPersonId;
+      docData.inLibrary = false;
+    }
     if (type === "care-list") {
       if (opts.filterId) docData.filterId = opts.filterId;
       else if (opts.filterConfig) docData.filterConfig = opts.filterConfig;
@@ -610,6 +634,36 @@
       docData.contentJson = null;
     }
     return db.collection("elder_documents").add(docData).then(function (ref) { return ref.id; });
+  }
+  // MS-98: opt a profile document into the global Library — reference the same
+  // record from the root tree (no copy) and flag it. targetFolderId '__root__'
+  // drops it at the Library top level.
+  function addElderDocToLibrary(docId, targetFolderId) {
+    var Core = window.ShepherdingDocsCore;
+    return db.collection("elder_document_structure").doc("root").get().then(function (d) {
+      var rootStruct = d.exists && d.data().children ? d.data() : { children: [] };
+      if (Core.containsDoc(rootStruct, docId)) return false;
+      var target = (!targetFolderId || targetFolderId === "__root__") ? rootStruct : Core.getFolderById(rootStruct, targetFolderId);
+      if (!target) return false;
+      if (!target.children) target.children = [];
+      target.children.push({ type: "document", id: docId });
+      return db.collection("elder_document_structure").doc("root").set(JSON.parse(JSON.stringify(rootStruct)))
+        .then(function () { return db.collection("elder_documents").doc(docId).update({ inLibrary: true }); })
+        .then(function () { return true; });
+    });
+  }
+  // MS-98: remove document ids from the Library root tree (used when a profile
+  // deletes docs that had been opted in), so no dangling reference remains.
+  function pruneElderDocsFromLibrary(ids) {
+    var Core = window.ShepherdingDocsCore;
+    if (!ids || !ids.length) return Promise.resolve();
+    return db.collection("elder_document_structure").doc("root").get().then(function (d) {
+      var rootStruct = d.exists && d.data().children ? d.data() : { children: [] };
+      var changed = false;
+      ids.forEach(function (id) { if (Core.removeFromTree(rootStruct, id)) changed = true; });
+      if (!changed) return;
+      return db.collection("elder_document_structure").doc("root").set(JSON.parse(JSON.stringify(rootStruct)));
+    });
   }
   function renameElderDocument(id, title, user) {
     return db.collection("elder_documents").doc(id).update({
@@ -853,6 +907,8 @@
     toggleShepherdingTag: toggleShepherdingTag,
     setMembership: setMembership,
     getFamilies: getFamilies,
+    addFamily: addFamily,
+    updateFamily: updateFamily,
     getRelationships: getRelationships,
     getRelationshipTypes: getRelationshipTypes,
     revertShepherdingStatus: revertShepherdingStatus,
@@ -863,6 +919,8 @@
     getDocumentStructure: getDocumentStructure,
     saveDocumentStructure: saveDocumentStructure,
     createElderDocument: createElderDocument,
+    addElderDocToLibrary: addElderDocToLibrary,
+    pruneElderDocsFromLibrary: pruneElderDocsFromLibrary,
     renameElderDocument: renameElderDocument,
     deleteElderDocuments: deleteElderDocuments,
     getElderDocument: getElderDocument,
