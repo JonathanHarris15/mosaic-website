@@ -55,6 +55,25 @@ service cloud.firestore {
       allow create, update, delete: if isEditor();
     }
 
+    // Servant Role Definitions (ADR-0016, MS-13): name, ordered slots, and
+    // restriction rules read against existing Tags and Relationships. Authored
+    // in the Roles Manager by editors; read like the other config collections so
+    // any surface showing who is serving can name the Role. Liturgical Roles are
+    // NOT here — they are code-defined and locked, so there is nothing to store.
+    match /roles/{roleId} {
+      allow read: if true;
+      allow create, update, delete: if isEditor();
+    }
+
+    // Event series (ADR-0016, MS-13): the recurring things that carry Roles. The
+    // Sunday Service is one locked series; its occurrences remain the date-keyed
+    // `services` documents below until the Calendar (MS-99) adds a per-occurrence
+    // store.
+    match /events/{eventId} {
+      allow read: if true;
+      allow create, update, delete: if isEditor();
+    }
+
     match /services/{dateId} {
       allow read: if true;
       allow create, update, delete: if isEditor();
