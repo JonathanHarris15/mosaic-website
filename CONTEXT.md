@@ -369,7 +369,13 @@ The stored specification of a Servant Role, authored in the Roles Manager. Lives
   - `slug`: Derived from the name **once, at creation**, then fixed. Renaming the Role must not change the slug, or the Involvement already written under the old one would be orphaned. May not take a liturgical slug.
   - `family`: Always `servant`. A stored definition claiming `liturgical` is rejected — it would forge an undeletable Role.
   - `slots`: Ordered `{ id, requirement }`, requirement one of `male` / `female` / `either`. **Three people needed means three slots** — the slot, not a count beside a sex rule, is the unit of assignment, so a person can be pinned to a specific slot. Slot ids are never re-issued, since an assignment points at one.
-  - `restrictions`: Rules read against existing data — `requireTag` / `excludeTag` (a Shepherding Tag), and `notTogether` (a Relationship Type, e.g. no married couple in the same Role on the same Event).
+  - `restrictions`: Rules read against existing data. Five kinds:
+    - `requireTag` / `excludeTag` — a **Shepherding Tag** the Person must, or must not, carry.
+    - `notTogether` — a **pairwise Relationship Type**: two People joined by it may not fill the same Role on the same Event (no married couple in Kids).
+    - `notSameGroup` — a **Group** Relationship Type: no two People from one **Relationship Group** may fill the same Role, so it staffs across the congregation.
+    - `sameGroup` — the inverse: everyone filling the Role must share one Relationship Group, so they already know each other. The only **cohesive** rule — it constrains the combination rather than the individual, so the first Person seated is unconstrained and being in **no** group of that Type is disqualifying (unlike `notSameGroup`, where it is harmless).
+    - A relationship rule may only name a [[Shared Relationship Type]]; one naming an unshared Type is refused rather than left to evaluate to "nobody qualifies".
+  - **A Relationship Group's leader counts as being in the group** for every serving rule. The leader is deliberately *not* inside `memberIds` (ADR-0014 §5), so the plain reading of the roster is wrong here — `RolesCore.inGroup` is the check to use.
 - Eligibility (`RolesCore.candidatesFor`) returns every candidate with a **reason** when ineligible, never a silent omission — the Roles tab and auto-assign both have to explain who they passed over. An **Inactive** Person is never proposed; their Involvement history is untouched.
 
 ### Event series

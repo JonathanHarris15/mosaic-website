@@ -410,6 +410,76 @@
         });
     }
 
+    // ── Validating a restriction against the Types on offer ───────────────────
+    //
+    // A relationship rule may only name a Relationship Type an elder has marked
+    // Shared with Editors (MS-128, ADR-0017).
+    //
+    // The security rules already stop a non-elder READING an unshared Type's
+    // edges and rosters. But if the model let such a rule be built anyway,
+    // evaluation would be handed an empty list and quietly conclude "nobody
+    // qualifies" — a Role that can never be filled, with no clue why. Refusing
+    // up front is the kinder failure.
+
+    const TAG_RULES = [RESTRICTIONS.REQUIRE_TAG, RESTRICTIONS.EXCLUDE_TAG];
+    const GROUP_RULES = [RESTRICTIONS.SAME_GROUP, RESTRICTIONS.NOT_SAME_GROUP];
+    const PAIRWISE_RULES = [RESTRICTIONS.NOT_TOGETHER];
+
+    function validateRestriction(rule, availableTypes) {
+        const errors = [];
+        const kind = rule && rule.kind;
+
+        if (TAG_RULES.indexOf(kind) !== -1) {
+            if (!rule.tagId) errors.push('This rule needs a Tag.');
+            return { valid: errors.length === 0, errors: errors };
+        }
+
+        const wantsGroup = GROUP_RULES.indexOf(kind) !== -1;
+        const wantsPairwise = PAIRWISE_RULES.indexOf(kind) !== -1;
+        if (!wantsGroup && !wantsPairwise) {
+            return { valid: false, errors: ['Unknown restriction: ' + kind] };
+        }
+
+        // Only Types this user can actually see are offered. An unknown Type is
+        // treated as unavailable rather than assumed shared.
+        const type = (availableTypes || []).find(t => t && t.id === rule.typeId);
+        if (!type) {
+            errors.push(
+                'That relationship type is not available. An elder has to share it ' +
+                'with editors before a serving rule can use it.'
+            );
+            return { valid: false, errors: errors };
+        }
+
+        if (type.sharedWithEditors !== true) {
+            errors.push(
+                'The relationship type "' + type.name + '" is not shared with editors. ' +
+                'An elder has to share it before a serving rule can use it.'
+            );
+        }
+
+        // A group rule against a pairwise Type would silently match nothing, and
+        // vice versa — so the mismatch is an error, not a no-op.
+        if (wantsGroup && type.kind !== 'group') {
+            errors.push('"' + type.name + '" connects two people, so it cannot be used as a group rule.');
+        }
+        if (wantsPairwise && type.kind !== 'pairwise') {
+            errors.push('"' + type.name + '" is a group, so it cannot be used as a pair rule.');
+        }
+
+        return { valid: errors.length === 0, errors: errors };
+    }
+
+    // The Role's restrictions that can no longer run — typically because a Type
+    // was shared when the rule was written and has since been made private again.
+    // Reported so the Roles Manager can show the rule as unavailable rather than
+    // dropping it silently or pretending it still applies.
+    function unavailableRestrictions(def, availableTypes) {
+        return restrictionsOf(def)
+            .filter(rule => !validateRestriction(rule, availableTypes).valid)
+            .map(rule => ({ kind: rule.kind, typeId: rule.typeId, tagId: rule.tagId }));
+    }
+
     // ── Validation ────────────────────────────────────────────────────────────
 
     // Returns every problem at once rather than the first — the Roles Manager
@@ -485,6 +555,8 @@
         reorderSlots,
         // validation
         validateDefinition,
+        validateRestriction,
+        unavailableRestrictions,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
