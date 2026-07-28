@@ -21,17 +21,15 @@ const admin = require('firebase-admin');
 const path = require('path');
 const EventsCore = require('../public/events-core.js');
 
-const SERVICE_ACCOUNT_FILE = 'mosaic-hymn-database-firebase-adminsdk-fbsvc-8d55863f5a.json';
 const FIREBASE_PROJECT_ID = 'mosaic-hymn-database';
 const BATCH_SIZE = 400;
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
-const serviceAccountPath = path.join(__dirname, '..', SERVICE_ACCOUNT_FILE);
-const serviceAccount = require(serviceAccountPath);
+const { serviceAccount } = require('./service-account.js');
 
 admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
+    credential: admin.credential.cert(serviceAccount()),
     projectId: FIREBASE_PROJECT_ID,
 });
 
