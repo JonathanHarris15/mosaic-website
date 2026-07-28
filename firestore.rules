@@ -170,19 +170,50 @@ service cloud.firestore {
       allow read, write: if isElder();
     }
 
-    // Relationships (ADR-0012, MS-89; enriched by ADR-0014, MS-97): the elder-only
+    // Relationships (ADR-0012, MS-89; enriched by ADR-0014, MS-97): the
     // Custom Relationship layer. Pairwise Relationships are {fromId,toId,typeId}
     // edges; Relationship Groups are named rosters {typeId,name,leaderId,memberIds}.
-    // Their shared vocabulary is the Relationship Types. Never surfaced in the
-    // member-facing directory, so read is elder-gated too.
+    // Their shared vocabulary is the Relationship Types.
+    //
+    // Elder-only by default, and STILL never surfaced in the member-facing
+    // directory. Since MS-128 there is exactly one door out: an elder may mark a
+    // Relationship Type "Shared with Editors" so serving rules can use it
+    // ("no married couple in Kids", "staff this Role from one house group").
+    // Sharing a Type also shares the edges and rosters carrying it — MS-130
+    // projects the decision onto each record so this rule can read it directly
+    // rather than doing a get() per document, which would hit the rules engine's
+    // lookup limits on any real list query.
+    //
+    // Fail closed: a record that does not say `true` is not shared. An absent
+    // field compares unequal to true, so anything the backfill missed stays
+    // private.
+    //
+    // ⚠ QUERY CONSTRAINT — read this before debugging an "empty" list.
+    // Firestore evaluates these rules PER RETURNED DOCUMENT and fails the whole
+    // query if any document would fail. A non-elder client MUST therefore filter
+    // to shared records itself, e.g.
+    //     .where('sharedWithEditors', '==', true)
+    // An unconstrained query does not return fewer rows — it errors outright,
+    // and the error looks exactly like "this church has no relationship types".
+    function canReadRelationshipRecord() {
+      return isElder() || (isEditor() && resource.data.sharedWithEditors == true);
+    }
+
     match /relationships/{edgeId} {
-      allow read, write: if isElder();
+      allow read: if canReadRelationshipRecord();
+      allow write: if isElder();
     }
     match /relationship_types/{typeId} {
-      allow read, write: if isElder();
+      allow read: if canReadRelationshipRecord();
+      allow write: if isElder();
     }
+    // A roster names everyone in it, so sharing one Group-kind Type is a larger
+    // disclosure than sharing a pairwise Type. Deliberate (MS-141 needs group
+    // membership for same-group / not-same-group serving rules), and still
+    // entirely an elder's choice, Type by Type.
     match /relationship_groups/{groupId} {
-      allow read, write: if isElder();
+      allow read: if canReadRelationshipRecord();
+      allow write: if isElder();
     }
 
     match /shepherding_views/{viewId} {

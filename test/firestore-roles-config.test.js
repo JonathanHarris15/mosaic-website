@@ -72,14 +72,18 @@ test('roles and events are writable by editors only', () => {
     });
 });
 
-test('the new rules introduce no new permission concept', () => {
-    // ADR-0016 builds on what exists; a bespoke helper here would be a second
-    // way to say "editor" that could drift from the first.
-    const helpers = rules.match(/function \w+\(\)/g) || [];
-    assert.deepEqual(
-        helpers.sort(),
-        ['function isAdmin()', 'function isEditor()', 'function isElder()', 'function permissionLevel()']
-    );
+test('the permission tiers are still the only permission concept', () => {
+    // ADR-0016 builds on what exists; a bespoke tier here would be a second way
+    // to say "editor" that could drift from the first. Composition helpers (e.g.
+    // canReadRelationshipRecord, MS-133) are fine — they must be BUILT from
+    // these, never replace them — so this pins the tier helpers specifically
+    // rather than the whole function list.
+    ['permissionLevel', 'isAdmin', 'isEditor', 'isElder'].forEach(name => {
+        assert.ok(rules.includes(`function ${name}()`), `missing ${name}()`);
+    });
+
+    const tierValues = rules.match(/permissionLevel\(\) in \[[^\]]*\]/g) || [];
+    assert.equal(tierValues.length, 3, 'exactly three tier definitions: admin, editor, elder');
 });
 
 // ── No parallel data universe ─────────────────────────────────────────────────
