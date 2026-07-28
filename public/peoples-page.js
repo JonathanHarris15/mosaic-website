@@ -547,15 +547,20 @@ document.addEventListener('alpine:init', () => {
                     const sourceSnap = await sourceRef.collection(collName).get();
                     const targetSnap = await targetRef.collection(collName).get();
                     
-                    const existingKeys = new Set(targetSnap.docs.map(doc => {
-                        const d = doc.data();
-                        return `${d.serviceDate}_${d.type || ''}`;
-                    }));
+                    // Two serves of the same Role on the same date are only the
+                    // same serve if they were the same Event series — so the key
+                    // includes it. Read through seriesIdOf, never the raw field,
+                    // or a pre-backfill record would fail to match its
+                    // already-stamped twin and the merge would duplicate it.
+                    const involvementKey = d =>
+                        `${d.serviceDate}_${d.type || ''}_${EventsCore.seriesIdOf(d)}`;
+
+                    const existingKeys = new Set(targetSnap.docs.map(doc => involvementKey(doc.data())));
 
                     const batch = db.batch();
                     for (const doc of sourceSnap.docs) {
                         const data = doc.data();
-                        const key = `${data.serviceDate}_${data.type || ''}`;
+                        const key = involvementKey(data);
                         if (!existingKeys.has(key)) {
                             batch.set(targetRef.collection(collName).doc(), data);
                         }

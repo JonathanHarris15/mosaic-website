@@ -177,11 +177,14 @@ function calendarPage() {
                                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
                             });
                         } else {
-                            const invData = {
+                            // The series this serve belonged to, so fairness can
+                            // be counted per Event series (ADR-0016 §5). The
+                            // calendar only ever assigns a Sunday.
+                            const invData = EventsCore.stampSeries({
                                 serviceDate: this.selectorDateKey,
                                 type: role,
                                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                            };
+                            }, EventsCore.SUNDAY_SERVICE_ID);
                             if (metadata) invData.metadata = metadata;
                             batch.set(newPersonRef.collection('involvement').doc(), invData);
                             batch.update(newPersonRef, { totalInvolvements: firebase.firestore.FieldValue.increment(1) });
