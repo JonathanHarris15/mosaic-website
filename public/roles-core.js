@@ -48,6 +48,90 @@
         return REQUIREMENT_VALUES.indexOf(value) !== -1;
     }
 
+    // ── The locked, code-defined liturgical Roles ─────────────────────────────
+    //
+    // These six are the `type` values the app already writes as Involvement.
+    // They stay locked (ADR-0016 §1, Option A): unifying the CONCEPT of a Role
+    // costs nothing, but making these editable data would mean rebuilding the
+    // Service entity and the Service Guide component system — destabilising the
+    // artefact that has to print correctly every Sunday.
+    //
+    // The names are user-facing strings the guide and calendar already render.
+    // Changing one here silently changes the printed booklet.
+    const LITURGICAL_ROLES = Object.freeze([
+        { slug: 'service_leader', name: 'Service Leader' },
+        { slug: 'preacher', name: 'Preacher' },
+        { slug: 'worship_leader', name: 'Music Leader' },
+        { slug: 'worship_helper', name: 'Music Helper' },
+        { slug: 'sermonette', name: 'Sermonette' },
+        { slug: 'prayer', name: 'Prayer' },
+    ].map(role => Object.freeze(Object.assign({}, role, {
+        family: FAMILIES.LITURGICAL,
+        locked: true,
+    }))));
+
+    const LITURGICAL_SLUGS = Object.freeze(LITURGICAL_ROLES.map(r => r.slug));
+
+    // A Role is locked when it is one of the code-defined liturgical ones. Locked
+    // Roles have no editable definition — no slots, no restrictions — because
+    // they are assigned through the Service entity, as they always have been.
+    function isLocked(role) {
+        return !!role && (role.locked === true || role.family === FAMILIES.LITURGICAL);
+    }
+
+    function assertEditable(role) {
+        if (isLocked(role)) {
+            throw new Error(
+                'Role "' + ((role && role.name) || '?') + '" is locked: liturgical Roles are ' +
+                'code-defined and cannot be edited.'
+            );
+        }
+    }
+
+    function assertDeletable(role) {
+        if (isLocked(role)) {
+            throw new Error(
+                'Role "' + ((role && role.name) || '?') + '" is locked: liturgical Roles are ' +
+                'always present and cannot be deleted.'
+            );
+        }
+    }
+
+    // Involvement records a Role by slug, so a Servant Role needs one too. It is
+    // derived from the name ONCE, at creation, and then stored — renaming the
+    // Role afterwards must not change the slug, or every Involvement record
+    // already written under the old one would be orphaned.
+    function slugify(name) {
+        return String(name || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '');
+    }
+
+    const slugOf = def => (def && def.slug) || slugify(def && def.name);
+
+    // Every Role that exists, both families, liturgical first. This is the single
+    // list the Roles Manager and the Roles tab render — the whole point of
+    // Option A is that the user sees one roles list, not two.
+    function allRoles(servantDefinitions) {
+        const servant = (servantDefinitions || []).map(def => {
+            const slug = slugOf(def);
+            if (LITURGICAL_SLUGS.indexOf(slug) !== -1) {
+                throw new Error(
+                    'Servant Role "' + def.name + '" would take the liturgical slug "' + slug +
+                    '", which would mix its Involvement history with the liturgical Role\'s.'
+                );
+            }
+            return Object.assign({}, def, { slug: slug, family: FAMILIES.SERVANT, locked: false });
+        });
+        return LITURGICAL_ROLES.concat(servant);
+    }
+
+    function roleBySlug(slug, servantDefinitions) {
+        return allRoles(servantDefinitions).find(role => role.slug === slug) || null;
+    }
+
     // ── Slot identity ─────────────────────────────────────────────────────────
 
     // Slot ids are `s<n>`. The next one is one past the highest `n` ever used in
@@ -83,6 +167,7 @@
     function newDefinition(name) {
         return {
             name: name,
+            slug: slugify(name),
             family: FAMILIES.SERVANT,
             slots: [{ id: 's1', requirement: REQUIREMENTS.EITHER }],
             restrictions: [],
@@ -90,12 +175,15 @@
     }
 
     // Every mutator returns a new definition; none touches its input, so a UI can
-    // hold the previous value for cancel/undo.
+    // hold the previous value for cancel/undo. Each refuses a locked Role: the
+    // guard lives here, in the model, so a UI that forgets to hide the edit
+    // controls still cannot rewrite a liturgical Role.
     function withSlots(def, slots) {
         return Object.assign({}, def, { slots: slots });
     }
 
     function addSlot(def, requirement) {
+        assertEditable(def);
         if (!isRequirement(requirement)) {
             throw new Error('Unknown slot requirement: ' + requirement);
         }
@@ -105,10 +193,12 @@
     }
 
     function removeSlot(def, slotId) {
+        assertEditable(def);
         return withSlots(def, slotsOf(def).filter(slot => slot.id !== slotId));
     }
 
     function setSlotRequirement(def, slotId, requirement) {
+        assertEditable(def);
         if (!isRequirement(requirement)) {
             throw new Error('Unknown slot requirement: ' + requirement);
         }
@@ -120,6 +210,7 @@
     // Move the slot at `from` to sit at `to`. Identity and requirement travel
     // with the slot — reordering re-sequences, it never rewrites a slot.
     function reorderSlots(def, from, to) {
+        assertEditable(def);
         const slots = slotsOf(def);
         const inRange = i => Number.isInteger(i) && i >= 0 && i < slots.length;
         if (!inRange(from) || !inRange(to) || from === to) return withSlots(def, slots.slice());
@@ -292,7 +383,16 @@
         REQUIREMENT_VALUES,
         RESTRICTIONS,
         REASONS,
+        LITURGICAL_ROLES,
+        LITURGICAL_SLUGS,
         isRequirement,
+        // the registry: both families, one list
+        allRoles,
+        roleBySlug,
+        isLocked,
+        assertEditable,
+        assertDeletable,
+        slugify,
         // eligibility
         isInactive,
         candidatesFor,
