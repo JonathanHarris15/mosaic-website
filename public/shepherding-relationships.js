@@ -36,8 +36,11 @@ window.RelationshipsTab = () => ({
         holderLabel: '', counterpartLabel: '',
         leaderLabel: '', memberLabel: '',
         label: '',
+        // Shared with Editors (MS-128). Off unless an elder says otherwise.
+        sharedWithEditors: false,
     },
     showTypeForm: false,
+    resharing: false,
     editingTypeId: null,
 
     pairForm: { holderId: null, holderName: '', counterpartId: null, counterpartName: '' },
@@ -254,9 +257,42 @@ window.RelationshipsTab = () => ({
             holderLabel: '', counterpartLabel: '',
             leaderLabel: '', memberLabel: '',
             label: '',
+            sharedWithEditors: false,
         };
         this.editingTypeId = null;
         this.showTypeForm = false;
+    },
+
+    // Re-project a Type's Shared-with-Editors decision onto its edges, so the
+    // security rules can answer "may this editor see this edge?" without looking
+    // the Type up per document. The plan contains only edges that disagree, so
+    // this is idempotent and usually writes nothing.
+    async reprojectSharing(type) {
+        this.resharing = true;
+        try {
+            const snap = await db.collection('relationships').where('typeId', '==', type.id).get();
+            const edges = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            const updates = RelationshipCore.planSharingReprojection(edges, type);
+            if (!updates.length) return;
+
+            const CHUNK = 400;
+            for (let i = 0; i < updates.length; i += CHUNK) {
+                const batch = db.batch();
+                updates.slice(i, i + CHUNK).forEach(u => {
+                    batch.update(db.collection('relationships').doc(u.id), {
+                        sharedWithEditors: u.sharedWithEditors,
+                    });
+                });
+                await batch.commit();
+            }
+            const verb = RelationshipCore.isSharedWithEditors(type) ? 'shared with editors' : 'made private again';
+            this.showToast(`${updates.length} ${type.name} relationship(s) ${verb}`);
+        } catch (e) {
+            console.error('Error re-projecting relationship sharing:', e);
+            this.showToast('Sharing saved, but updating its relationships failed', 'error');
+        } finally {
+            this.resharing = false;
+        }
     },
 
     startNewType() {
@@ -274,6 +310,7 @@ window.RelationshipsTab = () => ({
             leaderLabel: type.leaderLabel || '',
             memberLabel: type.memberLabel || '',
             label: type.label || '',
+            sharedWithEditors: RelationshipCore.isSharedWithEditors(type),
         };
         this.editingTypeId = type.id;
         this.showTypeForm = true;
@@ -308,6 +345,11 @@ window.RelationshipsTab = () => ({
                     .sort((a, b) => a.name.localeCompare(b.name));
                 this.showToast(`Relationship Type "${doc.name}" created`);
             }
+            // An elder may have just changed what editors can see. Bring this
+            // Type's edges back in line (MS-130) — only the stale ones are
+            // written, so saving an unchanged Type costs nothing. A brand-new
+            // Type has no edges yet, so this only matters on edit.
+            if (existing) await this.reprojectSharing({ id: existing.id, ...doc });
             this.resetTypeForm();
         } catch (e) {
             console.error('Error saving Relationship Type:', e);

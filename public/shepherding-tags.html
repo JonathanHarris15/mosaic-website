@@ -282,6 +282,14 @@
                                         <span class="inline-flex items-center gap-[3px] bg-secondary-container text-on-secondary-container rounded-sm px-[7px] py-[2px] font-sans text-[11px] font-semibold">
                                             <span class="material-symbols-outlined text-[13px]" x-text="kindIcon(type)"></span><span x-text="kindLabel(type)"></span>
                                         </span>
+                                        <!-- Shared with editors (MS-128): the whole list is an audit
+                                             surface, so what has left the shepherding layer has to be
+                                             readable at a glance without opening each type. -->
+                                        <span x-show="RelationshipCore.isSharedWithEditors(type)"
+                                              title="Editors outside the shepherding team can see this relationship type"
+                                              class="inline-flex items-center gap-[3px] bg-tertiary-container text-on-tertiary-container rounded-sm px-[7px] py-[2px] font-sans text-[11px] font-semibold">
+                                            <span class="material-symbols-outlined text-[13px]">visibility</span><span>Editors</span>
+                                        </span>
                                         <span class="inline-flex items-center gap-[3px] bg-tertiary-container text-on-tertiary-container rounded-sm px-[7px] py-[2px] font-sans text-[11px] font-semibold">
                                             <span class="material-symbols-outlined text-[13px]" x-text="priorityIcon(type)"></span><span x-text="priorityLabel(type)"></span>
                                         </span>
@@ -437,6 +445,31 @@
                                 <span class="font-sans text-[10px] font-semibold uppercase tracking-[.14em] text-on-surface-variant">Reads as</span>
                                 <p class="mt-[6px] font-serif italic text-[16px] leading-snug text-navy-900" x-text="previewSentence(typeForm)"></p>
                             </div>
+                        </div>
+
+                        <!-- ─── Shared with Editors (MS-128) ──────────────────
+                             Relationships are elder-only. This is the one door
+                             out of that, opened one Type at a time, so serving
+                             rules like "no married couple in Kids" can work. -->
+                        <div class="mt-md border border-outline-variant rounded-lg p-sm">
+                            <label class="flex items-start gap-[10px] cursor-pointer">
+                                <input type="checkbox" x-model="typeForm.sharedWithEditors"
+                                    class="mt-[3px] h-[16px] w-[16px] accent-ocean shrink-0">
+                                <span>
+                                    <span class="block font-sans text-[13px] font-semibold text-navy-900">Share this type with editors</span>
+                                    <span class="block mt-[3px] font-sans text-[11.5px] leading-snug text-on-surface-variant">
+                                        Lets people outside the shepherding team see this relationship and who it
+                                        connects, so it can be used in serving rules. Nobody below editor can see it,
+                                        and every other relationship type stays elder-only.
+                                    </span>
+                                </span>
+                            </label>
+                            <p x-show="typeForm.sharedWithEditors"
+                                class="mt-[8px] pl-[26px] font-sans text-[11.5px] leading-snug text-tertiary">
+                                Editors will be able to see every
+                                <span class="font-semibold" x-text="typeForm.name || 'relationship of this type'"></span>
+                                in the church.
+                            </p>
                         </div>
 
                         <div class="flex gap-[10px] mt-md">
