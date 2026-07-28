@@ -227,9 +227,11 @@
     // vocabulary it already uses for everything else.
 
     const RESTRICTIONS = Object.freeze({
-        REQUIRE_TAG: 'requireTag',      // only people carrying the Tag
-        EXCLUDE_TAG: 'excludeTag',      // nobody carrying the Tag
-        NOT_TOGETHER: 'notTogether',    // no two people joined by a Relationship Type
+        REQUIRE_TAG: 'requireTag',          // only people carrying the Tag
+        EXCLUDE_TAG: 'excludeTag',          // nobody carrying the Tag
+        NOT_TOGETHER: 'notTogether',        // no two people joined by a Relationship Type
+        NOT_SAME_GROUP: 'notSameGroup',     // no two people from one Relationship Group
+        SAME_GROUP: 'sameGroup',            // everyone from ONE Relationship Group
     });
 
     // Why somebody was passed over. The Roles tab and auto-assign both have to
@@ -243,6 +245,8 @@
         MISSING_REQUIRED_TAG: 'missingRequiredTag',
         EXCLUDED_BY_TAG: 'excludedByTag',
         RELATIONSHIP_CONFLICT: 'relationshipConflict',
+        SAME_GROUP_CONFLICT: 'sameGroupConflict',       // already someone here from their group
+        NOT_IN_REQUIRED_GROUP: 'notInRequiredGroup',    // not in the group this Role is drawn from
     });
 
     // An Inactive Person carries no Membership Stage and is off the Track, so
@@ -268,6 +272,37 @@
                 (edge.fromId === b && edge.toId === a)
             )
         ));
+    }
+
+    // ── Relationship Group membership (MS-141) ────────────────────────────────
+    //
+    // A Relationship Group is a roster: { id, typeId, name, leaderId, memberIds }.
+    //
+    // The LEADER IS NOT IN `memberIds` — deliberately, since the Relations Viewer
+    // draws them outside the bubble with a line to it (ADR-0014 §5). So the
+    // obvious memberIds check silently misses every group leader, and for serving
+    // that is the worst way to be wrong: the house-group leader would read as
+    // being in no group, and a same-group rule would exclude the very person most
+    // likely to be organising the Role.
+    //
+    // RelationshipGroupCore.belongsTo answers this already, but the *-core modules
+    // here are deliberately independent of one another, so the rule is restated.
+    // A test asserts the two agree, precisely because a duplicated domain rule is
+    // a rule that can drift.
+    function inGroup(group, personId) {
+        if (!group || !personId) return false;
+        if (group.leaderId === personId) return true;
+        return (group.memberIds || []).indexOf(personId) !== -1;
+    }
+
+    // The groups of one Type that a Person belongs to.
+    function groupsFor(groups, typeId, personId) {
+        return (groups || []).filter(g => g && g.typeId === typeId && inGroup(g, personId));
+    }
+
+    // The groups of one Type that two People both belong to.
+    function sharedGroups(groups, typeId, a, b) {
+        return groupsFor(groups, typeId, a).filter(g => inGroup(g, b));
     }
 
     const restrictionsOf = def => (def && Array.isArray(def.restrictions) ? def.restrictions : []);
@@ -309,6 +344,44 @@
                     };
                 }
             }
+            // Spread the Role: nobody may sit with someone from their own group.
+            if (rule.kind === RESTRICTIONS.NOT_SAME_GROUP) {
+                for (const seat of seated) {
+                    const shared = sharedGroups(
+                        context.groups, rule.typeId, candidate.id, seat.personId
+                    );
+                    if (shared.length) {
+                        return {
+                            reason: REASONS.SAME_GROUP_CONFLICT,
+                            typeId: rule.typeId,
+                            groupId: shared[0].id,
+                            groupName: shared[0].name,
+                            conflictsWith: seat.personId,
+                        };
+                    }
+                }
+            }
+
+            // Staff the Role from ONE group. The only cohesive rule in the model:
+            // the first person seated is unconstrained, and everyone after them
+            // must share a group with EVERY seat already taken.
+            //
+            // No single group is ever committed to. A candidate passes if any one
+            // group satisfies every seat, so the Role can't get pinned to whichever
+            // group happened to match first and then wrongly exclude the rest.
+            if (rule.kind === RESTRICTIONS.SAME_GROUP) {
+                const own = groupsFor(context.groups, rule.typeId, candidate.id);
+                if (own.length === 0) {
+                    return { reason: REASONS.NOT_IN_REQUIRED_GROUP, typeId: rule.typeId };
+                }
+                const worksForEverySeat = own.some(
+                    group => seated.every(seat => inGroup(group, seat.personId))
+                );
+                if (!worksForEverySeat) {
+                    return { reason: REASONS.NOT_IN_REQUIRED_GROUP, typeId: rule.typeId };
+                }
+            }
+
             // A rule kind we don't know is skipped rather than treated as a
             // blanket exclusion — a typo in the config must not empty the list.
         }
@@ -396,6 +469,10 @@
         // eligibility
         isInactive,
         candidatesFor,
+        // relationship group membership (MS-141)
+        inGroup,
+        groupsFor,
+        sharedGroups,
         // reading
         slotOrder,
         slotCount,
