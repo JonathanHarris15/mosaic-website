@@ -126,6 +126,42 @@
         return (types || []).filter(isSharedWithEditors);
     }
 
+    // ── Projecting sharing onto edges (write-through, ADR-0014 s4) ────────────
+    //
+    // The decision lives on the Type, but the security rule has to answer it
+    // about an EDGE — and an edge stores only { fromId, toId, typeId }. A rule
+    // could look the Type up per edge, but that is a get() for every document a
+    // query returns: slow, and it hits the rules engine's lookup limits on any
+    // real list. So the answer is copied onto each edge, exactly as Membership
+    // Tags, the Elder Tag, and Family relations are already projected.
+    //
+    // The Type remains the source of truth. The edge carries a cache the rules
+    // can read directly, kept honest by re-projection whenever an elder flips it.
+
+    // Fail closed, same as the Type: no projection means not shared. This is what
+    // makes the app safe BEFORE the backfill runs — an edge the script has not
+    // reached yet leaks nothing.
+    function isEdgeSharedWithEditors(edge) {
+        return !!edge && edge.sharedWithEditors === true;
+    }
+
+    // Stamp an edge with its Type's sharing. An unknown Type stamps NOT shared,
+    // so a dangling typeId can never become a hole in the boundary.
+    function withSharing(edge, type) {
+        return Object.assign({}, edge, { sharedWithEditors: isSharedWithEditors(type) });
+    }
+
+    // The edges of `type` whose projection disagrees with it — i.e. exactly the
+    // writes needed to make the graph honest again after an elder toggles it.
+    // Only the stale ones, so re-running the plan is a no-op.
+    function planSharingReprojection(edges, type) {
+        if (!type) return [];
+        const target = isSharedWithEditors(type);
+        return (edges || [])
+            .filter(e => e && e.typeId === type.id && isEdgeSharedWithEditors(e) !== target)
+            .map(e => ({ id: e.id, sharedWithEditors: target }));
+    }
+
     // The doc as it should be STORED for its current kind x priority shape, with
     // the label fields the shape doesn't use stripped out. Editing a Prioritized
     // type down to Non-Prioritized otherwise leaves its old role labels lying in
@@ -348,6 +384,9 @@
         // sharing with editors (MS-128)
         isSharedWithEditors,
         sharedTypes,
+        isEdgeSharedWithEditors,
+        withSharing,
+        planSharingReprojection,
         // validation
         validateType,
         validateEdit,
