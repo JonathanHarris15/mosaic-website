@@ -22,19 +22,19 @@ const edge = (id, typeId, extra) => Object.assign({ id, fromId: 'a', toId: 'b', 
 // ── Reading an edge ───────────────────────────────────────────────────────────
 
 test('an edge that says it is shared, is', () => {
-    assert.equal(Rel.isEdgeSharedWithEditors(edge('e1', 't1', { sharedWithEditors: true })), true);
+    assert.equal(Rel.isSharedRelationship(edge('e1', 't1', { sharedWithEditors: true })), true);
 });
 
 test('an edge with no projection is not shared', () => {
     // The pre-backfill case. It must read closed, so a record the backfill
     // missed leaks nothing rather than leaking everything.
-    assert.equal(Rel.isEdgeSharedWithEditors(edge('e1', 't1')), false);
+    assert.equal(Rel.isSharedRelationship(edge('e1', 't1')), false);
 });
 
 test('only a real boolean true counts on an edge too', () => {
     for (const value of ['true', 1, {}, 'yes']) {
         assert.equal(
-            Rel.isEdgeSharedWithEditors(edge('e1', 't1', { sharedWithEditors: value })),
+            Rel.isSharedRelationship(edge('e1', 't1', { sharedWithEditors: value })),
             false,
             `${JSON.stringify(value)} must not count as shared`
         );
@@ -42,8 +42,8 @@ test('only a real boolean true counts on an edge too', () => {
 });
 
 test('a missing edge is not shared', () => {
-    assert.equal(Rel.isEdgeSharedWithEditors(null), false);
-    assert.equal(Rel.isEdgeSharedWithEditors(undefined), false);
+    assert.equal(Rel.isSharedRelationship(null), false);
+    assert.equal(Rel.isSharedRelationship(undefined), false);
 });
 
 // ── Stamping a new edge ───────────────────────────────────────────────────────
@@ -145,7 +145,7 @@ test('an edge stamped from a Type reads back the same way the Type does', () => 
     for (const type of [shared, secret]) {
         const stamped = Rel.withSharing(edge('e', type.id), type);
         assert.equal(
-            Rel.isEdgeSharedWithEditors(stamped),
+            Rel.isSharedRelationship(stamped),
             Rel.isSharedWithEditors(type),
             type.name
         );

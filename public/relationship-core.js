@@ -138,28 +138,33 @@
     // The Type remains the source of truth. The edge carries a cache the rules
     // can read directly, kept honest by re-projection whenever an elder flips it.
 
+    // Both a pairwise edge and a Relationship Group carry a `typeId` and so both
+    // carry the projection — the two are "relationship records" as far as sharing
+    // is concerned, and the rules read them identically.
+    //
     // Fail closed, same as the Type: no projection means not shared. This is what
-    // makes the app safe BEFORE the backfill runs — an edge the script has not
+    // makes the app safe BEFORE the backfill runs — a record the script has not
     // reached yet leaks nothing.
-    function isEdgeSharedWithEditors(edge) {
-        return !!edge && edge.sharedWithEditors === true;
+    function isSharedRelationship(record) {
+        return !!record && record.sharedWithEditors === true;
     }
 
-    // Stamp an edge with its Type's sharing. An unknown Type stamps NOT shared,
+    // Stamp a record with its Type's sharing. An unknown Type stamps NOT shared,
     // so a dangling typeId can never become a hole in the boundary.
-    function withSharing(edge, type) {
-        return Object.assign({}, edge, { sharedWithEditors: isSharedWithEditors(type) });
+    function withSharing(record, type) {
+        return Object.assign({}, record, { sharedWithEditors: isSharedWithEditors(type) });
     }
 
-    // The edges of `type` whose projection disagrees with it — i.e. exactly the
+    // The records of `type` whose projection disagrees with it — i.e. exactly the
     // writes needed to make the graph honest again after an elder toggles it.
-    // Only the stale ones, so re-running the plan is a no-op.
-    function planSharingReprojection(edges, type) {
+    // Only the stale ones, so re-running the plan is a no-op. Works for edges and
+    // for Relationship Groups alike: both key off `id` and `typeId`.
+    function planSharingReprojection(records, type) {
         if (!type) return [];
         const target = isSharedWithEditors(type);
-        return (edges || [])
-            .filter(e => e && e.typeId === type.id && isEdgeSharedWithEditors(e) !== target)
-            .map(e => ({ id: e.id, sharedWithEditors: target }));
+        return (records || [])
+            .filter(r => r && r.typeId === type.id && isSharedRelationship(r) !== target)
+            .map(r => ({ id: r.id, sharedWithEditors: target }));
     }
 
     // The doc as it should be STORED for its current kind x priority shape, with
@@ -384,7 +389,7 @@
         // sharing with editors (MS-128)
         isSharedWithEditors,
         sharedTypes,
-        isEdgeSharedWithEditors,
+        isSharedRelationship,
         withSharing,
         planSharingReprojection,
         // validation

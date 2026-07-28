@@ -270,23 +270,33 @@ window.RelationshipsTab = () => ({
     async reprojectSharing(type) {
         this.resharing = true;
         try {
-            const snap = await db.collection('relationships').where('typeId', '==', type.id).get();
-            const edges = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            const updates = RelationshipCore.planSharingReprojection(edges, type);
-            if (!updates.length) return;
-
+            // Pairwise edges AND group rosters. Both carry a typeId and project
+            // identically, and a shared Group-kind Type is useless to serving
+            // rules without its rosters coming too.
             const CHUNK = 400;
-            for (let i = 0; i < updates.length; i += CHUNK) {
-                const batch = db.batch();
-                updates.slice(i, i + CHUNK).forEach(u => {
-                    batch.update(db.collection('relationships').doc(u.id), {
-                        sharedWithEditors: u.sharedWithEditors,
+            let touched = 0;
+
+            for (const collection of ['relationships', 'relationship_groups']) {
+                const snap = await db.collection(collection).where('typeId', '==', type.id).get();
+                const records = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                const updates = RelationshipCore.planSharingReprojection(records, type);
+                if (!updates.length) continue;
+
+                for (let i = 0; i < updates.length; i += CHUNK) {
+                    const batch = db.batch();
+                    updates.slice(i, i + CHUNK).forEach(u => {
+                        batch.update(db.collection(collection).doc(u.id), {
+                            sharedWithEditors: u.sharedWithEditors,
+                        });
                     });
-                });
-                await batch.commit();
+                    await batch.commit();
+                }
+                touched += updates.length;
             }
+
+            if (!touched) return;
             const verb = RelationshipCore.isSharedWithEditors(type) ? 'shared with editors' : 'made private again';
-            this.showToast(`${updates.length} ${type.name} relationship(s) ${verb}`);
+            this.showToast(`${touched} ${type.name} record(s) ${verb}`);
         } catch (e) {
             console.error('Error re-projecting relationship sharing:', e);
             this.showToast('Sharing saved, but updating its relationships failed', 'error');
