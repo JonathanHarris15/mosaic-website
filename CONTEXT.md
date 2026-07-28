@@ -334,22 +334,45 @@ A hymn selection within a Service's liturgy.
   - **Literal**: An unlinked name (has a `name` but `id` is null). These typically arise from docx imports where a match wasn't found. They must be resolved (linked to a Canonical hymn) to enable full functionality.
 
 ### Involvement
-A record of a Person's participation in a Service in a specific Role.
+A record of a Person's participation in an Event in a specific Role. The single serve log — there is no separate one (ADR-0016).
 - **Fields**:
-  - `serviceDate`: The date of the service (YYYY-MM-DD).
-  - `type`: The role type (see Roles).
+  - `serviceDate`: The date of the event (YYYY-MM-DD).
+  - `type`: The Role slug (see Roles). **Role-open**: any slug is accepted, so a new Servant Role needs no schema change.
+  - `seriesId`: The **Event series** this serve belonged to (e.g. `sunday_service`). Fairness is counted per series, so this is what lets a Person read as overdue for one Event and fresh for another.
   - `metadata`: Optional extra data (e.g., prayer type, prayer text).
+- A record written before `seriesId` existed **reads as** the Sunday Service (`EventsCore.seriesIdOf`). Without that fallback every historic serve would drop out of fairness the moment the field appeared. `scripts/backfill-involvement-series.js` makes it explicit, because a Firestore query cannot fall back.
 
 ## Roles
-Canonical names for types of involvement.
+A Role is a type of participation assigned on an Event and recorded as Involvement. Two families (ADR-0016) — `RolesCore.allRoles()` composes them into the one list every surface renders.
+
+### Liturgical Roles (locked)
+Code-defined in `RolesCore.LITURGICAL_ROLES`, undeletable and uneditable, and still wired into the Service entity and the Service Guide. They have **no** editable definition and are **not** stored in `/roles` — storing copies would create a second source of truth and, since `/roles` is editor-writable, would make "locked" Roles editable.
 - `service_leader`: The primary facilitator of the service.
 - `preacher`: The person delivering the sermon.
 - `worship_leader`: The person leading the musical worship. Surfaces in the UI as the "Music Leader."
 - `worship_helper`: A person who accompanies the Music Leader (e.g. an accompanist or additional musician). A Service may have several. Surfaces in the UI as a "Music Helper." Distinct from `worship_leader` so helpers are separable in participation history and analytics.
 - `sermonette`: The person delivering a shorter message. In the calendar view, this is displayed as a badge and is editable inline by admins.
-- `baptism`: A liturgical event marked by `hasBaptism: true`. The people being baptized are the Service's Baptism Candidates. Displayed as a read-only badge in the calendar views.
 - `prayer`: The person leading a specific prayer (praise or confession).
+
+Related, but not Roles in the registry:
+- `baptism`: A liturgical event marked by `hasBaptism: true`. The people being baptized are the Service's Baptism Candidates. Displayed as a read-only badge in the calendar views.
 - `pastoral_prayer`: The person being prayed for in the weekly pastoral prayer (subject). Note: These are tracked in the `pastoral_prayer_history` collection, not the `involvement` collection.
+
+### Role Definition (a Servant Role, editable)
+The stored specification of a Servant Role, authored in the Roles Manager. Lives in the `roles` collection; editor-writable.
+- **Fields**:
+  - `name`: What the church calls it ("Kids Ministry").
+  - `slug`: Derived from the name **once, at creation**, then fixed. Renaming the Role must not change the slug, or the Involvement already written under the old one would be orphaned. May not take a liturgical slug.
+  - `family`: Always `servant`. A stored definition claiming `liturgical` is rejected — it would forge an undeletable Role.
+  - `slots`: Ordered `{ id, requirement }`, requirement one of `male` / `female` / `either`. **Three people needed means three slots** — the slot, not a count beside a sex rule, is the unit of assignment, so a person can be pinned to a specific slot. Slot ids are never re-issued, since an assignment points at one.
+  - `restrictions`: Rules read against existing data — `requireTag` / `excludeTag` (a Shepherding Tag), and `notTogether` (a Relationship Type, e.g. no married couple in the same Role on the same Event).
+- Eligibility (`RolesCore.candidatesFor`) returns every candidate with a **reason** when ineligible, never a silent omission — the Roles tab and auto-assign both have to explain who they passed over. An **Inactive** Person is never proposed; their Involvement history is untouched.
+
+### Event series
+The recurring thing that carries Roles, in the `events` collection. The Sunday **Service** is one **locked** series (`sunday_service`): always present, undeletable, its liturgical Roles fixed to it. Servant Roles can be added to a series and removed again — locked protects the liturgical Roles, not the whole roster.
+- **Fields**: `id`, `name`, `locked`, `roleSlugs` (ordered), `lockedRoleSlugs` (the ones that cannot be removed).
+- **Occurrences are not migrated.** An occurrence of the Sunday Service resolves to the date-keyed `services/{date}` document that already exists — no shadow record — so the Service Guide keeps reading what it always read. A general per-occurrence Event store arrives with the Calendar (MS-99); `EventsCore.occurrenceRef` returns `null` for any other series until then.
+- `scripts/seed-events.js` reconciles the Sunday Service series: it restores what must be true and leaves alone what the user owns, so a second run is a no-op.
 
 ## Shepherding System
 
