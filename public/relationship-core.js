@@ -103,6 +103,29 @@
         return needsMigration(type) ? migrateTypeDoc(type) : type;
     }
 
+    // ── Shared with Editors (MS-128) ──────────────────────────────────────────
+    //
+    // The Relationship graph is elder-only (ADR-0013, ADR-0014). Serving
+    // restrictions ("no married couple in Kids") need an editor to see some of
+    // it, so elders open the door one Relationship Type at a time.
+    //
+    // This is a disclosure boundary, so it fails closed: nothing is shared
+    // unless the stored value is the boolean `true`. A truthy string out of a
+    // form, a 1 out of a checkbox, or a missing field all read as NOT shared —
+    // being loose here leaks who is being discipled and who is in which care
+    // group to every editor account, and that cannot be undone.
+    function isSharedWithEditors(type) {
+        return !!type && type.sharedWithEditors === true;
+    }
+
+    // The Types an editor who is not an elder may see. The client must ALSO
+    // constrain its Firestore query to shared Types: rules are evaluated per
+    // returned document, so an unconstrained query fails outright rather than
+    // returning fewer rows. This filter is the in-memory half of that pair.
+    function sharedTypes(types) {
+        return (types || []).filter(isSharedWithEditors);
+    }
+
     // The doc as it should be STORED for its current kind x priority shape, with
     // the label fields the shape doesn't use stripped out. Editing a Prioritized
     // type down to Non-Prioritized otherwise leaves its old role labels lying in
@@ -117,6 +140,12 @@
         delete base.memberLabel;
         delete base.label;
         delete base.directional; // retired (ADR-0014 s1)
+
+        // Always state the sharing decision (MS-128). A stored Type that leaves
+        // this undefined would force the security rule to tell "absent" from
+        // "false" — and a rule that has to make that distinction is a rule
+        // waiting to be got wrong. Normalises DOWN to false, never up.
+        base.sharedWithEditors = isSharedWithEditors(t);
 
         if (!t.priority) return { ...base, label: t.label || '' };
         if (t.kind === KINDS.GROUP) {
@@ -262,6 +291,12 @@
         }
         if (typeof def.priority !== 'boolean') errors.push('priority must be a boolean');
 
+        // Rejected rather than coerced: a truthy string silently becoming `true`
+        // is how a disclosure boundary opens by accident (MS-128).
+        if (def.sharedWithEditors !== undefined && typeof def.sharedWithEditors !== 'boolean') {
+            errors.push('sharedWithEditors must be a boolean');
+        }
+
         if (def.priority === true) {
             if (def.kind === KINDS.PAIRWISE) {
                 if (!isNonEmptyString(def.holderLabel)) errors.push('a Prioritized Pairwise type requires a Holder Label');
@@ -310,6 +345,9 @@
         oppositeSide,
         priorityHolderSide,
         orientedSentence,
+        // sharing with editors (MS-128)
+        isSharedWithEditors,
+        sharedTypes,
         // validation
         validateType,
         validateEdit,
