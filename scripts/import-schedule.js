@@ -5,6 +5,7 @@
 const admin = require('firebase-admin');
 const fs = require('fs');
 const path = require('path');
+const EventsCore = require('../public/events-core.js');
 
 // --- Configuration ---
 const SERVICE_ACCOUNT_FILE = 'mosaic-hymn-database-firebase-adminsdk-fbsvc-8d55863f5a.json';
@@ -209,10 +210,12 @@ async function run() {
                     console.log(`Created new person: ${personName}`);
                 }
 
-                // Create involvement record
+                // Create involvement record. The imported schedule is the Sunday
+                // Service, so every row carries that series (ADR-0016 §5).
                 const invData = {
                     serviceDate,
                     type: role.type,
+                    seriesId: EventsCore.SUNDAY_SERVICE_ID,
                     createdAt: admin.firestore.FieldValue.serverTimestamp()
                 };
 

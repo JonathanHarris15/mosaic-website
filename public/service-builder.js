@@ -1647,11 +1647,13 @@ function serviceForm() {
         async _addInvolvement(batch, personId, role, metadata = null) {
             const personRef = db.collection('people').doc(personId);
             const invRef = personRef.collection('involvement').doc();
-            const invData = {
+            // The series this serve belonged to, so fairness can be counted per
+            // Event series (ADR-0016 §5). The builder only ever edits a Sunday.
+            const invData = EventsCore.stampSeries({
                 serviceDate: this.date,
                 type: role,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            };
+            }, EventsCore.SUNDAY_SERVICE_ID);
             if (metadata) invData.metadata = metadata;
             batch.set(invRef, invData);
             batch.update(personRef, {

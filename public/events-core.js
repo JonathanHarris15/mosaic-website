@@ -112,6 +112,33 @@
         return { collection: SERVICES_COLLECTION, id: date };
     }
 
+    // ── Involvement carries its series ────────────────────────────────────────
+    //
+    // Fairness is counted per series (ADR-0016 §5), so a serving assignment
+    // records which series it belonged to alongside its date and Role.
+    //
+    // Every record written before this existed is a Sunday Service, so a record
+    // with no series READS as one. That fallback is what makes the app correct
+    // before the backfill has run — without it, every historic serve would
+    // vanish from fairness the moment the field was introduced and the whole
+    // congregation would look like they had never served.
+
+    function seriesIdOf(involvement) {
+        return (involvement && involvement.seriesId) || SUNDAY_SERVICE_ID;
+    }
+
+    // One series' slice of a serve history. Order is preserved; nothing is
+    // mutated — this is a read.
+    function forSeries(involvements, seriesId) {
+        return (involvements || []).filter(record => seriesIdOf(record) === seriesId);
+    }
+
+    // Stamp an Involvement payload with its series before writing it. Returns a
+    // new object so a caller can keep building its batch from the original.
+    function stampSeries(data, seriesId) {
+        return Object.assign({}, data, { seriesId: seriesId || SUNDAY_SERVICE_ID });
+    }
+
     // ── Validation ────────────────────────────────────────────────────────────
 
     function validateSeries(series) {
@@ -151,6 +178,10 @@
         assertSeriesDeletable,
         // occurrences
         occurrenceRef,
+        // involvement's series
+        seriesIdOf,
+        forSeries,
+        stampSeries,
         // validation
         validateSeries,
     };

@@ -718,11 +718,15 @@ document.addEventListener('alpine:init', () => {
                 const personRef = db.collection('people').doc(this.selectedPerson.id);
                 const involvementRef = personRef.collection('involvement');
                 
-                const data = {
+                // The series this serve belonged to, so fairness can be counted
+                // per Event series (ADR-0016 §5). Involvement logged by hand
+                // here is a Sunday Service until the Roles tab (MS-16) can log
+                // against another Event.
+                const data = EventsCore.stampSeries({
                     serviceDate: this.newInvolvement.serviceDate,
                     type: this.newInvolvement.type,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                };
+                }, EventsCore.SUNDAY_SERVICE_ID);
                 
                 if (this.newInvolvement.type === 'prayer') {
                     data.metadata = {
