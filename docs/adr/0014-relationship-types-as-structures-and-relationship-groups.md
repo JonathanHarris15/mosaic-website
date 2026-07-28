@@ -68,3 +68,7 @@ The **manager surface** (renamed card + Relationships tab) and the **profile qui
 - The **Relations Viewer** gains a group-bubble layer (hull rendering + colour assignment + leader-to-bubble edge + membership clustering), authored with Cloud Design.
 - **Person delete/merge** must additionally reconcile `relationship_groups` (roster + leader slot).
 - Follow-on (not this round): co-leaders / member roles within a group; mobile Relations Viewer; richer group visuals.
+
+## Amended by
+
+- **[ADR 0017](0017-shared-relationship-types-elder-controlled-editor-disclosure.md)** — adds a per-Type "Shared with Editors" setting so serving restrictions can read the graph without it becoming elder-only-in-name. A Relationship Type gains the setting, and every pairwise edge and Relationship Group carries a projected copy of it (the same write-through pattern as §4). Read access widens to editor+ **for shared Types only**; writes are unchanged.

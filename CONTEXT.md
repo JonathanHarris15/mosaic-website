@@ -115,7 +115,7 @@ A first-class entity (its own `families` collection) that groups a household for
 _Avoid_: Household (use only as prose), family tree (that is the emergent traversal, not a stored structure), relationship (that is the freeform shepherd concept)
 
 **Relationship**:
-A connection among Persons, surfaced on the Shepherding Profile's Relationships panel (never in the member-facing Membership Directory). Two kinds share the panel: a **Custom Relationship** (elder-authored, stored, deletable — a **Pairwise Relationship** or a **Relationship Group**) and a **Projected Relationship** (derived from Family). Elder Assignment is deliberately **not** shown in this panel — it is a relationship in the Relations Viewer graph only. Relationships can cross-cut households.
+A connection among Persons, surfaced on the Shepherding Profile's Relationships panel (never in the member-facing Membership Directory). Elder-only, **except** for Types an elder has made a [[Shared Relationship Type]] — see ADR 0017; the panel itself remains elder-only regardless. Two kinds share the panel: a **Custom Relationship** (elder-authored, stored, deletable — a **Pairwise Relationship** or a **Relationship Group**) and a **Projected Relationship** (derived from Family). Elder Assignment is deliberately **not** shown in this panel — it is a relationship in the Relations Viewer graph only. Relationships can cross-cut households.
 _Avoid_: Family (that is the tidy directory entity), tag (that is a Person label, not a Person-to-Person edge)
 
 **Custom Relationship**:
@@ -125,6 +125,10 @@ _Avoid_: Manual relationship, freeform edge (use Custom Relationship)
 **Pairwise Relationship**:
 A Custom Relationship that is a single typed edge between two Persons, stored in the `relationships` collection as `{fromId, toId, typeId}`. If its Relationship Type is **Prioritized**, `fromId` is the **priority holder** (shown with the type's Holder Label) and `toId` the Counterpart; if **Non-Prioritized** it renders symmetrically.
 _Avoid_: edge, link, directional relationship (use Pairwise Relationship)
+
+**Shared Relationship Type**:
+A **Relationship Type** an elder has marked visible to **editors**, so serving restrictions can use it ("no married couple in this Role", "staff this Role from one house group"). Sharing is per Type and **off by default** — sharing Marriage says nothing about Discipleship — and only an elder can change it. Sharing a Type also shares the **Pairwise Relationships** and **Relationship Groups** carrying it; a shared **Group**-kind Type therefore exposes whole rosters, which is a larger disclosure than a shared pairwise Type. The floor is **editor**: members and viewers see none of it, shared or not. Writes stay elder-only. Fails closed — anything not explicitly shared is private. Decided in [ADR 0017](docs/adr/0017-shared-relationship-types-elder-controlled-editor-disclosure.md).
+_Avoid_: Public relationship, visible relationship, exposed type (use Shared Relationship Type)
 
 **Relationship Group**:
 A Custom Relationship that is a named roster of a **Group**-kind Relationship Type — one record naming the group (e.g. "Tuesday Bible Study") and listing its member Persons. If its type is **Prioritized** it has a single **leader** (the priority holder, shown with the Leader Label) plus members; if **Non-Prioritized** it is a flat roster with no leader. A Person may belong to many. Distinct from a **Care Group** (an Elder's assigned People, derived from Elder Assignment) and from a **Family**.

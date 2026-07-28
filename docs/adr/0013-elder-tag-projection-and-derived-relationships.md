@@ -45,3 +45,7 @@ A Person has at most one assigned Elder; an Elder shepherds many (their Care Gro
 - FamilyCore needs a small addition to resolve **siblings** (the other children of the family of origin) for the panel's projected list.
 - Deleting or merging a Person must consider derived relationships (family membership, assignments pointing at them) as well as stored Custom Relationship edges — the derived ones follow automatically once the source is fixed, but an assignment pointing at a deleted elder-Person needs handling.
 - This feature is **desktop-first**: the Shepherding Profile relationships surface is already desktop-only, so the Assigned Elder section, Family projection, and Relations Viewer ship on desktop; mobile receives only the (essentially free) Elder Tag projection this round, with panel/section/graph parity as a fast-follow.
+
+## Amended by
+
+- **[ADR 0017](0017-shared-relationship-types-elder-controlled-editor-disclosure.md)** — the Relationship graph is no longer unconditionally elder-only for *read*. An elder may mark an individual Relationship Type "Shared with Editors", which makes that Type and the records carrying it readable at editor+. Everything unshared, and every write, stays elder-only as described above.
