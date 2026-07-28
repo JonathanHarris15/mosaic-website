@@ -112,6 +112,57 @@
         return { collection: SERVICES_COLLECTION, id: date };
     }
 
+    // ── Seeding, as a reconcile ───────────────────────────────────────────────
+    //
+    // Seeding has to be safe to run twice, and safe to run against a church that
+    // has already added Servant Roles to its Sunday. So it is not a write — it
+    // is a reconcile: restore what MUST be true (the series exists, is locked,
+    // carries every liturgical Role) without touching what the user owns (the
+    // Servant Roles they added, the order they chose, the name they gave it).
+    //
+    // Returns { series, changed, reason }. `changed: false` is what makes a
+    // second run a no-op.
+    function reconcileSundayService(stored, liturgicalSlugs) {
+        const slugs = (liturgicalSlugs || []).slice();
+
+        if (!stored) {
+            return {
+                series: sundayServiceSeries(slugs),
+                changed: true,
+                reason: 'created the Sunday Service series',
+            };
+        }
+
+        const reasons = [];
+
+        // Liturgical Roles the stored series has lost. Restored at the FRONT, in
+        // liturgical order, so the user's Servant Roles keep their own order
+        // behind them.
+        const existing = rolesOf(stored);
+        const missing = slugs.filter(slug => existing.indexOf(slug) === -1);
+        if (missing.length) {
+            reasons.push('restored liturgical Roles: ' + missing.join(', '));
+        }
+        const servant = existing.filter(slug => slugs.indexOf(slug) === -1);
+        const roleSlugs = slugs.concat(servant);
+
+        if (stored.locked !== true) reasons.push('re-locked the series');
+
+        const lockedNow = lockedRolesOf(stored);
+        const lockDrifted = slugs.some(slug => lockedNow.indexOf(slug) === -1);
+        if (lockDrifted) reasons.push('re-marked the liturgical Roles undeletable');
+
+        return {
+            series: Object.assign({}, stored, {
+                locked: true,
+                roleSlugs: roleSlugs,
+                lockedRoleSlugs: slugs,
+            }),
+            changed: reasons.length > 0,
+            reason: reasons.join('; '),
+        };
+    }
+
     // ── Involvement carries its series ────────────────────────────────────────
     //
     // Fairness is counted per series (ADR-0016 §5), so a serving assignment
@@ -172,6 +223,7 @@
         // building
         newSeries,
         sundayServiceSeries,
+        reconcileSundayService,
         // roles on a series
         addRole,
         removeRole,
