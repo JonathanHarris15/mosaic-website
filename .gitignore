@@ -45,3 +45,6 @@ cmdline-tools.zip
 .claude/settings.json
 .claude/settings.local.json
 .claude/worktrees/
+
+# macOS Finder metadata (icon positions — nothing to do with the project)
+.DS_Store
