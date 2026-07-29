@@ -109,7 +109,7 @@
     // The Home card grid mirrors the drawer's top-level destinations (permission-gated).
     var tiles = [
       { icon: "book-open", label: "Hymn Directory", route: "hymnDirectory" },
-      { icon: "calendar", label: "Services", route: "calendar" },
+      { icon: "church", label: "Services", route: "calendar" },
       { icon: "users", label: "Member Directory", route: "people" },
       { icon: "shield", label: "Shepherd", route: "shepherd", permissionLevels: ["elder", "super_admin"] },
       { icon: "settings-2", label: "Admin", route: "admin", permissionLevels: ["admin", "super_admin"] },
@@ -155,7 +155,7 @@
               : html`
                 <div style=${{ color: "var(--on-surface-variant)", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14 }}>No upcoming service found.</div>
                 <div onClick=${function () { props.nav("calendar"); }} style=${{ marginTop: 14 }}>
-                  <${Button} variant="secondary" size="md" style=${{ width: "100%" }} icon=${Ic("calendar", 17)}>Open Services<//>
+                  <${Button} variant="secondary" size="md" style=${{ width: "100%" }} icon=${Ic("church", 17)}>Open Services<//>
                 </div>`}
           </div>
         </${Body}>
