@@ -453,8 +453,18 @@
                     </div>
                 </div>
 
-                <div x-show="isEditor && !isSunday" class="shrink-0 flex items-center gap-sm">
-                    <button @click="openPattern()" x-show="series"
+                <div class="shrink-0 flex items-center gap-sm">
+                    <!-- The chip in the grid used to come straight here. It now
+                         opens this page instead, so the way through has to be
+                         the most prominent thing on it — the liturgy is still
+                         where a Sunday is actually built. -->
+                    <a x-show="isSunday" :href="servicesHref"
+                       class="flex items-center gap-1 bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs
+                              font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-primary-container">
+                        <span class="material-symbols-outlined text-[18px]">menu_book</span>
+                        Order of service
+                    </a>
+                    <button @click="openPattern()" x-show="isEditor && !isSunday && series"
                             class="border border-secondary text-secondary px-md py-2 rounded-lg font-label-md
                                    text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
                         Edit details

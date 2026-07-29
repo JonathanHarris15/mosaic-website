@@ -85,10 +85,11 @@
             </div>
             <div class="shrink-0 flex items-center gap-sm">
                 <!-- The Sunday Service AS AN EVENT — its time, and which Roles
-                     every Sunday needs. Not its liturgy: that is still built one
-                     Sunday at a time in the order of service, which is what keeps
-                     the printed booklet safe. Clicking a Sunday in the grid still
-                     goes there, and must keep going there. -->
+                     EVERY Sunday needs. Clicking one Sunday in the grid opens
+                     that Sunday; this is the thing above all of them. Neither is
+                     the liturgy: that is still built one Sunday at a time in the
+                     order of service, which is what keeps the printed booklet
+                     safe. -->
                 <a x-show="canCreate" href="calendar-event.html?series=sunday_service"
                    class="flex items-center gap-1 border border-secondary text-secondary px-md py-2 rounded-lg
                           font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
@@ -217,8 +218,11 @@
                                                 'font-bold': chipKind(ev) === 'mine'
                                               }"
                                               x-text="ev.name || ev.seriesName || 'Event'"></span>
+                                        <!-- A Sunday opens the same page as anything else now, so
+                                             there is no leaving-for-another-surface arrow. The
+                                             church icon says which kind of thing it is. -->
                                         <span x-show="ev.isSunday"
-                                              class="material-symbols-outlined text-[13px] text-outline shrink-0 ml-auto">north_east</span>
+                                              class="material-symbols-outlined text-[13px] text-outline shrink-0 ml-auto">church</span>
                                     </button>
                                 </template>
                             </div>
@@ -234,8 +238,8 @@
                         <span class="material-symbols-outlined text-[14px] text-error">priority_high</span> Needs sorting
                     </span>
                     <span class="flex items-center gap-1.5">
-                        <span class="material-symbols-outlined text-[13px] text-outline">north_east</span>
-                        Sunday — opens its order of service
+                        <span class="material-symbols-outlined text-[13px] text-outline">church</span>
+                        Sunday service
                     </span>
                 </div>
             </section>
@@ -270,7 +274,7 @@
                                         <span x-show="ev.isSunday"
                                               class="shrink-0 inline-flex items-center gap-0.5 rounded-md bg-secondary-container
                                                      text-on-secondary-container px-1.5 py-0.5 text-[10.5px] font-label-md uppercase tracking-wider">
-                                            Order of service <span class="material-symbols-outlined text-[12px]">north_east</span>
+                                            <span class="material-symbols-outlined text-[12px]">church</span> Sunday
                                         </span>
                                     </div>
                                     <div class="text-[12.5px] text-on-surface-variant mt-0.5 flex items-center gap-1.5 flex-wrap">

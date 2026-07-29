@@ -254,69 +254,20 @@ test('the dashboard offers the Calendar, and it is not the Services card', () =>
 
 // ── Behaviour the design is explicit about ────────────────────────────────────
 
-test('a Sunday chip links to Services and never opens an Event editor', () => {
-    const component = loadComponent('calendar.js', 'calendarPage');
-    component.open({ id: 'sunday_service_2026-07-12', date: '2026-07-12', isSunday: true });
-    assert.match(component.$el === undefined ? globalThisHref() : '', /^$/);
+// -- Where a chip goes --------------------------------------------------------
+//
+// Every chip opens the Event page, Sundays included. This REVERSES an earlier
+// rule that sent a Sunday straight to its order of service.
+//
+// That rule was defending the LITURGY, and the defence still stands - it just
+// moved to where it belongs. The Event page never draws a liturgical Role as a
+// fillable card ("a liturgical Role is never drawn as a fillable card on a
+// date"), so nothing about the booklet got less safe. What changed is the click:
+// a Sunday now carries Servant Roles like any other date, and sending the chip
+// to the liturgy made the date with the MOST people on it the only one you could
+// not open to see who they were.
 
-    function globalThisHref() { return ''; }
-});
-
-test('opening a Sunday routes to Services, and anything else to the Event page', () => {
-    // Checked through the component's own routing rather than the DOM, so the
-    // rule — the liturgy is edited on Services, which is what keeps the printed
-    // booklet safe — is pinned somewhere a refactor has to notice.
-    const sandbox = {};
-    const component = loadComponent('calendar.js', 'calendarPage');
-
-    const hrefs = [];
-    // The component assigns window.location.href; capture it.
-    const original = Object.getOwnPropertyDescriptor(component, 'open');
-    assert.ok(original, 'the Calendar has no open()');
-
-    // Re-run in a sandbox whose location records assignments.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.js'), 'utf8');
-    const ctx = {
-        console, Promise, Date, Object, Array, Math, String, Number, JSON, Set, Map,
-        encodeURIComponent, URLSearchParams,
-    };
-    ctx.window = ctx;
-    ctx.EventsOccurrenceCore = require('../public/events-occurrence-core.js');
-    ctx.EventsStore = require('../public/events-store.js');
-    ctx.CalendarView = require('../public/calendar-view.js');
-    ctx.DateUtils = require('../public/date-utils.js');
-    ctx.auth = { onAuthStateChanged() {} };
-    ctx.db = {};
-    ctx.location = { set href(v) { hrefs.push(v); }, get href() { return hrefs[hrefs.length - 1]; } };
-    vm.createContext(ctx);
-    vm.runInContext(html, ctx, { filename: 'calendar.js' });
-
-    const page = ctx.calendarPage();
-    page.open({ id: 'sunday_service_2026-07-12', date: '2026-07-12', isSunday: true });
-    page.open({ id: 'midweek_2026-07-15', date: '2026-07-15', isSunday: false });
-
-    // A Sunday goes to its OWN surface — the Order of Service editor, for that
-    // exact date. Not the Services list: you already said which Sunday by
-    // clicking it, so making somebody find the same date again is a step for
-    // nothing.
-    assert.match(hrefs[0], /^service-builder\.html\?date=2026-07-12$/);
-    assert.match(hrefs[1], /^calendar-event\.html\?id=midweek_2026-07-15$/);
-    assert.ok(sandbox !== null);
-});
-
-test('a Sunday CHIP never opens the Event editor, whatever else changes', () => {
-    // The invariant behind the routing, stated on its own so a future change of
-    // destination cannot quietly take a Sunday into the Event model. Sunday
-    // liturgy lives on the Service, and keeping the two apart is what keeps the
-    // printed booklet safe.
-    //
-    // A Sunday's Event page IS now reachable — deliberately, from the Sunday
-    // Service screen, to fill the Servant Roles every Sunday carries. That does
-    // not weaken this: the deeper invariant is that the Event editor never
-    // touches a Sunday's LITURGY, and it is pinned separately by "a liturgical
-    // Role is never drawn as a fillable card on a date". What this test protects
-    // is the CHIP — the thing somebody clicks expecting an order of service.
-    const hrefs = [];
+function calendarIn(hrefs) {
     const ctx = {
         console, Promise, Date, Object, Array, Math, String, Number, JSON, Set, Map,
         encodeURIComponent, URLSearchParams,
@@ -331,22 +282,40 @@ test('a Sunday CHIP never opens the Event editor, whatever else changes', () => 
     ctx.location = { set href(v) { hrefs.push(v); }, get href() { return hrefs[hrefs.length - 1]; } };
     vm.createContext(ctx);
     vm.runInContext(fs.readFileSync(path.join(PUBLIC, 'calendar.js'), 'utf8'), ctx, { filename: 'calendar.js' });
+    return ctx.calendarPage();
+}
 
-    const page = ctx.calendarPage();
-    ['2026-07-05', '2026-07-12', '2026-07-19'].forEach(date => {
-        page.open({ id: 'sunday_service_' + date, date: date, isSunday: true });
-    });
+test('every chip opens its own date, Sundays the same as anything else', () => {
+    const hrefs = [];
+    const page = calendarIn(hrefs);
 
-    hrefs.forEach(href => {
-        assert.ok(!/calendar-event\.html/.test(href),
-            'a Sunday must never route into the Event editor: ' + href);
-    });
+    page.open({ id: 'sunday_service_2026-07-12', date: '2026-07-12', isSunday: true });
+    page.open({ id: 'midweek_2026-07-15', date: '2026-07-15', isSunday: false });
+
+    assert.strictEqual(hrefs[0], 'calendar-event.html?id=sunday_service_2026-07-12');
+    assert.strictEqual(hrefs[1], 'calendar-event.html?id=midweek_2026-07-15');
 });
 
-test('the Event detail page sends a Sunday to that same surface', () => {
+test('the order of service is one click from a Sunday, and unmissable', () => {
+    // The chip no longer lands there, so the way through has to be the most
+    // prominent thing on the page. If this disappears, a Sunday's liturgy has no
+    // route from the Calendar at all.
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    assert.ok(/x-show="isSunday" :href="servicesHref"/.test(html),
+        'a Sunday Event page has no link to its order of service');
+
     const page = loadComponent('calendar-event.js', 'eventDetailPage');
     page.occurrence = { id: 'sunday_service_2026-07-12', seriesId: 'sunday_service', date: '2026-07-12' };
     assert.strictEqual(page.servicesHref, 'service-builder.html?date=2026-07-12');
+});
+
+test('the Calendar never promises a Sunday chip goes somewhere it does not', () => {
+    // The grid, the legend and the list row all used to advertise "opens its
+    // order of service" with a leaves-this-page arrow. A promise the click no
+    // longer keeps is worse than no promise.
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    assert.ok(!/opens its order of service/.test(html));
+    assert.ok(!/north_east/.test(html), 'a chip still advertises leaving for another surface');
 });
 
 test('only an editor and above is offered "New event"', () => {
@@ -773,21 +742,18 @@ test('a liturgical Role is never offered for removal, and refuses if asked', asy
     assert.deepStrictEqual(db.__writes, [], 'wrote anyway');
 });
 
-test('the Calendar offers the Sunday Service without changing where a Sunday chip goes', () => {
+test('the Calendar offers the Sunday Service as a thing above all its dates', () => {
+    // Two different doors, and they must stay different: this one opens the
+    // EVENT - its time, and the Roles every Sunday carries - while a chip opens
+    // one date of it.
     const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
     assert.ok(/calendar-event\.html\?series=sunday_service/.test(html),
         'no way into the Sunday Service as an Event');
 
-    // The chip rule is untouched, and this is the test that proves the new
-    // button did not quietly become a second answer to it.
-    const Core = require('../public/events-occurrence-core.js');
-    const location = { search: '', href: '' };
-    const page = loadComponent('calendar.js', 'calendarPage', { location: location });
-
-    page.open({ id: 'x', date: '2026-07-12', isSunday: true, seriesId: Core.SUNDAY_SERVICE_ID });
-    assert.match(location.href, /^service-builder\.html\?date=2026-07-12$/,
-        'a Sunday chip stopped opening the order of service');
-    assert.doesNotMatch(location.href, /series=/, 'a Sunday chip now opens the Event editor');
+    const hrefs = [];
+    const page = calendarIn(hrefs);
+    page.open({ id: 'sunday_service_2026-07-12', date: '2026-07-12', isSunday: true });
+    assert.doesNotMatch(hrefs[0], /series=/, 'a chip opened the whole series instead of its date');
 });
 
 test('every page that loads the events store loads the series model first', () => {

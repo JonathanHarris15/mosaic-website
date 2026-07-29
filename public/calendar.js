@@ -232,20 +232,24 @@
             nextMonth() { return this.goToMonth(shiftMonth(this.month, 1)); },
             goToToday() { return this.goToMonth(monthOf(todayStr())); },
 
-            // A Sunday NEVER opens the Event editor. Its liturgy is a different
-            // model with a different surface — the Order of Service editor — and
-            // keeping the two apart is what keeps the printed booklet safe.
+            // EVERY chip opens the same page, Sundays included.
             //
-            // It goes straight to that editor rather than to the Services list,
-            // because you already said which Sunday by clicking it; making
-            // somebody find the same date again is a step for nothing. The
-            // builder gates its own editing controls, so a member landing there
-            // reads the order of service without being able to change it.
+            // This used to send a Sunday straight to the Order of Service editor,
+            // on the grounds that a Sunday's liturgy is a different model with a
+            // different surface. That reasoning was about the LITURGY, and it
+            // still holds — the Event page never draws a liturgical Role as a
+            // fillable card, so the booklet is as safe as it ever was.
+            //
+            // What it got wrong was the click. A Sunday now carries Servant Roles
+            // like any other date — welcome team, sound desk — and sending the
+            // chip to the liturgy meant the one date with the MOST people on it
+            // was the only one you could not open to see who they were. The Event
+            // page carries a link to the order of service, so the liturgy is one
+            // step away rather than the only thing there.
             open(occurrence) {
                 if (!occurrence) return;
-                window.location.href = occurrence.isSunday
-                    ? 'service-builder.html?date=' + encodeURIComponent(occurrence.date)
-                    : 'calendar-event.html?id=' + encodeURIComponent(occurrence.id);
+                window.location.href = 'calendar-event.html?id=' +
+                    encodeURIComponent(occurrence.id);
             },
 
             get canCreate() {
