@@ -32,9 +32,11 @@
         .cal-cols { display: grid; grid-template-columns: minmax(0,1fr); gap: 28px; align-items: start; }
         @media (min-width: 900px) { .cal-cols { grid-template-columns: minmax(0,1fr) 372px; } }
 
-        /* A one-off Role is NOT a card. If it ever grows a border, a header, or
-           a count, the design has failed — so the dashed sand hairline is the
-           only container it gets. */
+        /* The dashed sand hairline around the whole strip is what marks one-off
+           work as lighter than a Role we keep. The handoff said a single job may
+           never have a border of its own — that held until a job had seven
+           people on it and ran straight into the next one. Each job now gets an
+           edge; the weight difference lives in the dash, not in the absence. */
         .cal-oneoff-strip { border: 1px dashed #C2B79D; }
     </style>
 
@@ -499,78 +501,96 @@
                             </template>
                         </div>
 
-                        <!-- A one-off Role is NOT a card. A dashed strip, one
-                             plain row per job. No border, no header, no count —
-                             if it ever grows one, this design has failed. -->
+                        <!-- A dashed strip holding one fenced-off box per job,
+                             and inside each, one person per row. -->
                         <div x-show="oneOffRoles.length || isEditor"
                              class="mt-md cal-oneoff-strip rounded-lg bg-surface-container-low p-md">
                             <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
                                 Just for this one
                             </div>
-                            <div class="mt-sm flex flex-col gap-2">
+                            <div class="mt-sm flex flex-col gap-sm">
                                 <template x-for="job in oneOffRoles" :key="job.id">
-                                    <div class="cal-row flex items-center gap-2 flex-wrap">
-                                        <span class="material-symbols-outlined text-[17px] text-outline shrink-0">label</span>
-                                        <span class="text-[14px] text-on-surface" x-text="job.label"></span>
-                                        <!-- Somebody asked for one of these is still a real
-                                             Assignment in a real state — it goes in pending like any
-                                             other. So the chip both shows the state and lets an
-                                             editor set it, using the same three marks as a slot row.
-                                             Declined tones the whole chip, because declined is the
-                                             one state that has to find you. -->
+                                    <!-- Each job is fenced off from the strip it lives in. It stays
+                                         lighter than a managed Role card — no filled header bar, no
+                                         count chip — but a job with seven people on it needs an edge,
+                                         or it runs into the next one. -->
+                                    <div class="rounded-lg border border-outline-variant bg-surface overflow-hidden">
+                                        <div class="flex items-center gap-2 px-3 py-2 border-b border-outline-variant bg-surface-container-lowest">
+                                            <span class="material-symbols-outlined text-[17px] text-outline shrink-0">label</span>
+                                            <span class="text-[14px] text-on-surface flex-grow min-w-0 truncate" x-text="job.label"></span>
+                                            <span x-show="job.people.length"
+                                                  class="shrink-0 text-[11px] text-on-surface-variant"
+                                                  x-text="job.people.length"></span>
+                                            <button x-show="isEditor" @click="askRemoveOneOffRole(job.id)"
+                                                    class="shrink-0 w-[26px] h-[26px] rounded-md flex items-center justify-center
+                                                           text-on-surface-variant hover:bg-surface-container cal-motion cal-focus"
+                                                    aria-label="Remove this job">
+                                                <span class="material-symbols-outlined text-[16px]">delete</span>
+                                            </button>
+                                        </div>
+
+                                        <!-- One person per row. Somebody asked for one of these is
+                                             still a real Assignment in a real state — it goes in
+                                             pending like any other — so each row carries the same
+                                             three marks as a managed slot row. Declined tones the
+                                             whole row, because declined is the one state that has to
+                                             find you. -->
                                         <template x-for="a in job.people" :key="a.personId">
-                                            <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 cal-motion"
-                                                  :class="stateTone(a) === 'attention' ? 'bg-error-container' : 'bg-surface-container'">
-                                                <span class="w-[22px] h-[22px] rounded-full bg-surface-container-high
+                                            <div class="cal-row cal-slot-row flex items-center gap-sm px-3 py-2 border-b border-outline-variant cal-motion"
+                                                 :class="stateTone(a) === 'attention'
+                                                    ? 'bg-error-container border-l-[3px] border-l-error'
+                                                    : 'bg-surface'">
+                                                <span class="w-[26px] h-[26px] rounded-full bg-surface-container-high shrink-0
                                                              flex items-center justify-center text-[10px] font-label-md"
                                                       x-text="initials(personName(a.personId))"></span>
-                                                <span class="text-[12.5px]" x-text="personName(a.personId)"></span>
+                                                <span class="text-[14px] text-on-surface flex-grow min-w-0 truncate"
+                                                      x-text="personName(a.personId)"></span>
 
                                                 <!-- A reader still needs to know where this stands. -->
-                                                <span x-show="!isEditor" class="flex items-center gap-1 pl-0.5">
+                                                <span x-show="!isEditor" class="shrink-0 flex items-center gap-1.5">
                                                     <span class="w-[7px] h-[7px] rounded-full"
                                                           :class="stateTone(a) === 'good' ? 'bg-success'
                                                                 : (stateTone(a) === 'attention' ? 'bg-error' : 'border-[1.5px] border-outline')"></span>
-                                                    <span class="text-[10px] font-label-md tracking-[.1em] uppercase text-on-surface-variant"
+                                                    <span class="text-[10px] font-label-md tracking-[.12em] uppercase"
+                                                          :class="stateTone(a) === 'good' ? 'text-success' : 'text-on-surface-variant'"
                                                           x-text="stateLabel(a)"></span>
                                                 </span>
 
-                                                <span x-show="isEditor" class="flex items-center">
+                                                <span x-show="isEditor" class="shrink-0 flex items-center gap-0.5">
                                                     <button @click="setState(a, 'pending')" :aria-label="'Mark ' + personName(a.personId) + ' pending'"
-                                                            class="w-[22px] h-[22px] rounded-full flex items-center justify-center cal-motion cal-focus hover:bg-surface-container-high"
+                                                            class="w-[28px] h-[28px] rounded-md flex items-center justify-center cal-motion cal-focus hover:bg-surface-container"
                                                             :class="a.state === 'pending' ? 'text-on-surface' : 'text-outline'">
-                                                        <span class="material-symbols-outlined text-[15px]">radio_button_unchecked</span>
+                                                        <span class="material-symbols-outlined text-[17px]">radio_button_unchecked</span>
                                                     </button>
                                                     <button @click="setState(a, 'confirmed')" :aria-label="'Mark ' + personName(a.personId) + ' confirmed'"
-                                                            class="w-[22px] h-[22px] rounded-full flex items-center justify-center cal-motion cal-focus hover:bg-surface-container-high"
+                                                            class="w-[28px] h-[28px] rounded-md flex items-center justify-center cal-motion cal-focus hover:bg-surface-container"
                                                             :class="a.state === 'confirmed' ? 'text-success' : 'text-outline'">
-                                                        <span class="material-symbols-outlined text-[15px]">check_circle</span>
+                                                        <span class="material-symbols-outlined text-[17px]">check_circle</span>
                                                     </button>
                                                     <button @click="setState(a, 'declined')" :aria-label="'Mark ' + personName(a.personId) + ' declined'"
-                                                            class="w-[22px] h-[22px] rounded-full flex items-center justify-center cal-motion cal-focus hover:bg-surface-container-high"
+                                                            class="w-[28px] h-[28px] rounded-md flex items-center justify-center cal-motion cal-focus hover:bg-surface-container"
                                                             :class="a.state === 'declined' ? 'text-error' : 'text-outline'">
-                                                        <span class="material-symbols-outlined text-[15px]">do_not_disturb_on</span>
+                                                        <span class="material-symbols-outlined text-[17px]">do_not_disturb_on</span>
                                                     </button>
                                                     <button @click="removeFromOneOff(job.id, a.personId)"
-                                                            class="w-[22px] h-[22px] rounded-full flex items-center justify-center text-on-surface-variant
-                                                                   hover:bg-surface-container-high cal-motion cal-focus ml-0.5"
+                                                            class="w-[28px] h-[28px] rounded-md flex items-center justify-center text-on-surface-variant
+                                                                   hover:bg-surface-container cal-motion cal-focus"
                                                             :aria-label="'Take ' + personName(a.personId) + ' off'">
-                                                        <span class="material-symbols-outlined text-[15px]">close</span>
+                                                        <span class="material-symbols-outlined text-[17px]">close</span>
                                                     </button>
                                                 </span>
-                                            </span>
+                                            </div>
                                         </template>
-                                        <select x-show="isEditor" @change="addToOneOff(job, $event.target.value); $event.target.value = ''"
-                                                class="cal-focus bg-transparent text-[12.5px] text-secondary border-0 cursor-pointer">
-                                            <option value="">+ Someone</option>
-                                            <template x-for="p in people" :key="p.id">
-                                                <option :value="p.id" x-text="p.name"></option>
-                                            </template>
-                                        </select>
-                                        <button x-show="isEditor" @click="askRemoveOneOffRole(job.id)"
-                                                class="cal-row-actions ml-auto cal-focus rounded" aria-label="Remove this job">
-                                            <span class="material-symbols-outlined text-[16px] text-on-surface-variant">delete</span>
-                                        </button>
+
+                                        <div x-show="isEditor" class="px-3 py-1.5 bg-surface-container-lowest">
+                                            <select @change="addToOneOff(job, $event.target.value); $event.target.value = ''"
+                                                    class="cal-focus bg-transparent text-[12.5px] text-secondary border-0 cursor-pointer py-1">
+                                                <option value="">+ Someone</option>
+                                                <template x-for="p in people" :key="p.id">
+                                                    <option :value="p.id" x-text="p.name"></option>
+                                                </template>
+                                            </select>
+                                        </div>
                                     </div>
                                 </template>
 
