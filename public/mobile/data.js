@@ -60,7 +60,9 @@
   var DESTINATIONS = [
     { key: "home", label: "Home", icon: "house", route: "home" },
     { key: "hymn-directory", label: "Hymn Directory", icon: "book-open", route: "hymnDirectory" },
-    { key: "calendar", label: "Service Calendar", icon: "calendar", route: "calendar" },
+    // Renamed to "Services" in MS-99; the key and route stay put, since they are
+    // what the app stores and navigates by.
+    { key: "calendar", label: "Services", icon: "calendar", route: "calendar" },
     { key: "directory", label: "Member Directory", icon: "users", route: "people" },
     { key: "shepherd", label: "Shepherd Dashboard", icon: "shield", route: "shepherd", permissionLevels: ["elder", "super_admin"] },
     { key: "admin", label: "Admin Dashboard", icon: "settings-2", route: "admin", permissionLevels: ["admin", "super_admin"] },

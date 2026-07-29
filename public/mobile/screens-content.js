@@ -268,7 +268,7 @@
     return { mon: d.toLocaleDateString(undefined, { month: "short" }).toUpperCase(), day: String(d.getDate()), year: String(d.getFullYear()) };
   }
 
-  // ── Service Calendar ─────────────────────────────────────
+  // ── Services ─────────────────────────────────────────────
   // Native port of mobile/screens_calendar.jsx: every Sunday is a slot,
   // grouped Year › Month (blank until scheduled), with a Historic toggle,
   // List / Table views, a month Directory sheet, Jump-to-Upcoming, and per-
@@ -453,7 +453,7 @@
 
     return html`
       <${Screen}>
-        <${TopBar} title="Service Calendar" onMenu=${props.openMenu} right=${html`
+        <${TopBar} title="Services" onMenu=${props.openMenu} right=${html`
           <${BarAction} icon="list-tree" label="Directory" onClick=${function () { dirS[1](true); }} />
           <${BarAction} icon="calendar-plus" label="Inject service" onClick=${openScheduler} />
         `} />

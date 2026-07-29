@@ -53,7 +53,7 @@
     // From a list of Sunday Dates, the ones falling today-or-later, as
     // { value: 'YYYY-MM-DD', label: 'June 14, 2026' }. Comparison is by local
     // calendar day (time-of-day ignored); fromDate defaults to now. Drives the
-    // "upcoming Sundays" picker on the Service Calendar.
+    // "upcoming Sundays" picker on the Services page.
     function upcomingSundays(sundays, fromDate) {
         const from = fromDate ? new Date(fromDate) : new Date();
         from.setHours(0, 0, 0, 0);

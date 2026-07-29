@@ -1,5 +1,5 @@
 // Pastoral-prayer suggestion ranking — shared by the Order of Service Builder
-// and the Service Calendar, which both surface "who to pray for next".
+// and the Services page, which both surface "who to pray for next".
 //
 // The ranking was copied verbatim into service-builder.js and service-calendar.js
 // (the getTop3 closure). It is pure: given the already-fetched member list, the
