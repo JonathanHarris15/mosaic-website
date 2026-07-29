@@ -150,28 +150,61 @@
 
     const occurrenceRef = (db, id) => db.collection(OCCURRENCES).doc(id);
 
+    // What the occurrence DOCUMENT carries. The assignments themselves are
+    // deliberately NOT on it — they live in the roster subcollection, because
+    // Firestore cannot hide a field from someone allowed to read a document, and
+    // putting them here would defeat the whole point of the subcollection
+    // (ADR-0018 §5).
+    //
+    // What does stay is what a security rule and a calendar chip need:
+    //
+    //   participantIds — the rule's only way to answer `participant` visibility.
+    //                    ADR-0018 accepts that this discloses the roster as ids;
+    //                    the person NAMES stay in the subcollection.
+    //   needsAttention — so a calendar cell can show the declined flag without
+    //                    reading a roster it may not be allowed to read.
+    //
+    // Both are DERIVED from the assignments in the same write. Never maintained
+    // by hand, or they drift from the truth security depends on.
+    function occurrencePayload(occurrence) {
+        const assignments = occurrence.assignments || [];
+        const payload = Object.assign({}, occurrence, {
+            participantIds: Core.participantIds(assignments),
+            needsAttention: Core.needsAttention({ assignments: assignments }),
+        });
+        delete payload.assignments;
+        return payload;
+    }
+
     // Write an occurrence, creating it the first time something lands on the
     // date. The id is deterministic (`{seriesId}_{date}`), so two editors saving
     // at once land on one document rather than making a twin.
     //
-    // `participantIds` and the declined flag are DERIVED from the assignments in
-    // the same write — never maintained by hand, or they drift from the truth
-    // that security depends on.
-    function occurrencePayload(occurrence) {
-        const assignments = occurrence.assignments || [];
-        return Object.assign({}, occurrence, {
-            assignments: assignments,
-            participantIds: Core.participantIds(assignments),
-            needsAttention: Core.needsAttention({ assignments: assignments }),
-        });
-    }
-
+    // The document and its roster are written together, so the derived
+    // participant list can never describe a roster that is not there.
     async function saveOccurrence(db, occurrence) {
         const id = occurrence.id || Core.occurrenceId(occurrence.seriesId, occurrence.date);
         if (!id) throw new Error('An occurrence needs either an id or a series and a date.');
+
         const payload = occurrencePayload(Object.assign({}, occurrence, { id: id }));
         await occurrenceRef(db, id).set(payload, { merge: true });
+        if (occurrence.assignments) await saveRoster(db, id, occurrence.assignments);
         return payload;
+    }
+
+    // An occurrence with its roster read back in. The roster read may be refused
+    // for a participant who is not allowed to see who else is coming — that is
+    // the rule working, not an error, so it degrades to just your own row rather
+    // than failing the page.
+    async function loadOccurrence(db, id) {
+        const [doc, roster] = await Promise.all([
+            occurrenceRef(db, id).get(),
+            occurrenceRef(db, id).collection(ROSTER).get().catch(() => ({ docs: [] })),
+        ]);
+        if (!doc.exists) return null;
+        return Object.assign({ id: doc.id }, doc.data(), {
+            assignments: roster.docs.map(d => d.data()),
+        });
     }
 
     // ── Restamping a series' visibility ──────────────────────────────────────
@@ -281,16 +314,140 @@
         return { moved: moved, deleted: deleted };
     }
 
+    // ── The week-shift tool ──────────────────────────────────────────────────
+    //
+    // "Shift everything from here forward a week" already moves Services,
+    // Involvement records, and pastoral prayer history. Occurrences and their
+    // rosters have to move with them — WITHOUT this, shifting a week silently
+    // loses that week's roster: the Event moves and the people assigned to it
+    // do not, or the assignments end up pointing at a date with no Event.
+    //
+    // An occurrence's id encodes its date, so moving it means writing a new
+    // document and deleting the old one — and the roster subcollection has to be
+    // carried across with it, since a subcollection does not follow its parent.
+    //
+    // A one-off Event has an auto-id that says nothing about its date, so it is
+    // simply re-dated in place. Nothing to copy, nothing to lose.
+
+    function shiftDays(dateStr, n) {
+        const parts = String(dateStr).split('-').map(Number);
+        const d = new Date(parts[0], parts[1] - 1, parts[2]);
+        d.setDate(d.getDate() + n);
+        return d.getFullYear() + '-' +
+            String(d.getMonth() + 1).padStart(2, '0') + '-' +
+            String(d.getDate()).padStart(2, '0');
+    }
+
+    // Can this rank see every rung? A shift is schedule-wide, so anyone running
+    // it has to be able to see everything on the schedule.
+    function seesEveryRung(rank) {
+        const rungs = Core.visibilityQueryFor(rank).rungs;
+        return Core.VISIBILITY_ORDER.every(rung => rungs.indexOf(rung) !== -1);
+    }
+
+    async function shiftOccurrences(db, fromDate, days, options) {
+        const step = days == null ? 7 : days;
+        const rank = (options || {}).rank;
+
+        // Refuse BEFORE writing anything. An editor cannot read elder-level
+        // Events, so their query would either error outright or — worse — move
+        // only the Events they can see, leaving the restricted ones sitting on
+        // the old week while everything around them slid forward. A partly
+        // shifted schedule is harder to notice, and harder to undo, than a
+        // refusal.
+        if (!seesEveryRung(rank)) {
+            const err = new Error(
+                'Shifting the schedule has to be done by an elder or an admin. ' +
+                'There may be Events you are not able to see, and moving only some ' +
+                'of them would leave the schedule inconsistent.'
+            );
+            err.code = 'insufficient-visibility';
+            throw err;
+        }
+
+        const snap = await db.collection(OCCURRENCES)
+            .where('visibility', 'in', Core.VISIBILITY_ORDER.slice())
+            .where('date', '>=', fromDate)
+            .get();
+
+        // Read every roster BEFORE planning any write. A roster that is not read
+        // is a roster that is lost when its parent document is deleted.
+        const moving = await Promise.all(snap.docs.map(async doc => {
+            const roster = await doc.ref.collection(ROSTER).get();
+            return {
+                id: doc.id,
+                data: Object.assign({}, doc.data()),
+                roster: roster.docs.map(r => ({ id: r.id, data: r.data() })),
+            };
+        }));
+
+        // Latest date first, so every document is copied forward before the copy
+        // of its predecessor lands on it — the same copy-before-overwrite
+        // ordering the Services shift uses, which keeps a partial failure across
+        // batch boundaries non-destructive.
+        moving.sort((a, b) => (a.data.date < b.data.date ? 1 : a.data.date > b.data.date ? -1 : 0));
+
+        const setsAndUpdates = [];
+        const deletes = [];
+        const newIds = new Set();
+        let rehomed = 0;
+
+        moving.forEach(item => {
+            const newDate = shiftDays(item.data.date, step);
+            const newId = item.data.seriesId ? Core.occurrenceId(item.data.seriesId, newDate) : item.id;
+            newIds.add(newId);
+
+            // The state, who set it and when, and therefore the participant list
+            // all travel untouched — a shift moves a roster, it does not rewrite
+            // one.
+            setsAndUpdates.push({
+                kind: 'set',
+                ref: occurrenceRef(db, newId),
+                data: Object.assign({}, item.data, { id: newId, date: newDate }),
+            });
+            item.roster.forEach(r => {
+                setsAndUpdates.push({
+                    kind: 'set',
+                    ref: occurrenceRef(db, newId).collection(ROSTER).doc(r.id),
+                    data: r.data,
+                });
+            });
+            if (newId !== item.id) rehomed++;
+        });
+
+        // Free only the slots nothing moved INTO. Deletes come last, so an
+        // interrupted run leaves a stale duplicate rather than a lost roster.
+        moving.forEach(item => {
+            if (newIds.has(item.id)) return;
+            item.roster.forEach(r => {
+                deletes.push({ kind: 'delete', ref: occurrenceRef(db, item.id).collection(ROSTER).doc(r.id) });
+            });
+            deletes.push({ kind: 'delete', ref: occurrenceRef(db, item.id) });
+        });
+
+        await commitInBatches(db, setsAndUpdates.concat(deletes));
+
+        return {
+            occurrences: moving.length,
+            assignments: moving.reduce((n, m) => n + m.roster.length, 0),
+            rehomed: rehomed,
+        };
+    }
+
     const EventsStore = {
         SERIES,
         OCCURRENCES,
         ROSTER,
+        shiftOccurrences,
+        shiftDays,
+        seesEveryRung,
         // reading
         loadVisibleOccurrences,
         loadVisibleSeries,
         loadCalendar,
         // writing
         saveOccurrence,
+        loadOccurrence,
         occurrencePayload,
         restampSeriesVisibility,
         saveRoster,

@@ -64,7 +64,19 @@ function fakeDb(collections, viewer) {
                     }
                 }
 
-                return { docs: matches.map(d => ({ id: d.id, data: () => d, ref: { path: name + '/' + d.id } })) };
+                // A real doc ref, so a caller can walk into the subcollection —
+                // which is exactly what carrying a roster across a shift needs.
+                // data() returns the STORED fields only: real Firestore does not
+                // fold the document id into them, and a fake that did would hide
+                // a store quietly writing an id it never meant to.
+                return {
+                    empty: matches.length === 0,
+                    docs: matches.map(d => ({
+                        id: d.id,
+                        data: () => collections[name][d.id],
+                        ref: collection(name).doc(d.id),
+                    })),
+                };
             },
         };
     }
@@ -77,6 +89,11 @@ function fakeDb(collections, viewer) {
             async get() {
                 const d = (collections[name] || {})[id];
                 return { exists: !!d, id: id, data: () => d, ref: { path: name + '/' + id } };
+            },
+            // A direct write, outside a batch. Recorded the same way so a test can
+            // read every write the store made, whichever route it took.
+            async set(data, options) {
+                committed.push([{ kind: 'set', path: name + '/' + id, data, options }]);
             },
             collection: sub => collection(name + '/' + id + '/' + sub),
         });
@@ -303,6 +320,34 @@ test('saving an occurrence derives its participant list from its assignments', (
     assert.strictEqual(payload.needsAttention, true);
 });
 
+test('the occurrence document does not carry the roster — that is the whole point of the subcollection', () => {
+    // Firestore cannot hide a FIELD from someone allowed to read a document. If
+    // the assignments rode along here, "participants can't see who else is
+    // coming" would be a lie that devtools exposes in one click.
+    const payload = Store.occurrencePayload({
+        seriesId: 'midweek', date: '2026-07-01',
+        assignments: [{ personId: 'p1', roleSlug: 'kids', slotId: 's1', state: 'confirmed' }],
+    });
+
+    assert.ok(!('assignments' in payload), 'the roster belongs in the subcollection, not on the document');
+    // The ids DO stay: the rule has no other way to answer `participant`
+    // visibility, and ADR-0018 accepts that disclosure explicitly. The NAMES
+    // stay behind the subcollection's own rule.
+    assert.deepStrictEqual(payload.participantIds, ['p1']);
+});
+
+test('saving an occurrence writes the document and its roster together', async () => {
+    const db = fakeDb({ event_occurrences: {} }, { rank: 'editor' });
+    await Store.saveOccurrence(db, {
+        seriesId: 'midweek', date: '2026-07-01', visibility: 'member',
+        assignments: [{ personId: 'p1', roleSlug: 'kids', slotId: 's1', state: 'pending' }],
+    });
+
+    // The derived participant list must never describe a roster that is not there.
+    const roster = db._flatWrites().filter(w => /\/roster\//.test(w.path));
+    assert.strictEqual(roster.length, 1);
+});
+
 test('an occurrence with no assignments derives an empty participant list, not a missing one', () => {
     const payload = Store.occurrencePayload({ seriesId: 'midweek', date: '2026-07-01' });
     assert.deepStrictEqual(payload.participantIds, []);
@@ -364,6 +409,218 @@ test('two orphans moving never collide onto one date', async () => {
         { from: '2026-07-01', to: '2026-07-02' },
         { from: '2026-07-08', to: '2026-07-09' },
     ]);
+});
+
+// ── The week-shift tool (MS-152) ──────────────────────────────────────────────
+//
+// Without this, shifting a week silently loses that week's roster: the Event
+// moves and the people assigned to it do not.
+
+function dbWithRosters(occurrences, rosters) {
+    // Every real occurrence carries a visibility stamp, so the fixtures do too —
+    // an unstamped one is readable by nobody, which is the rules working.
+    const stamped = {};
+    Object.keys(occurrences).forEach(id => {
+        stamped[id] = Object.assign({ visibility: 'member' }, occurrences[id]);
+    });
+
+    const collections = { event_occurrences: stamped };
+    Object.keys(rosters || {}).forEach(occId => {
+        collections['event_occurrences/' + occId + '/roster'] = rosters[occId];
+    });
+    // An elder: a shift is schedule-wide, so only somebody who can see every
+    // rung may run one.
+    return fakeDb(collections, { rank: 'elder', personId: 'p0' });
+}
+
+const AS_ELDER = { rank: 'elder' };
+
+const ASSIGNMENT = { personId: 'p1', roleSlug: 'kids', slotId: 's1', state: 'confirmed', stateSetBy: 'u9', stateSetAt: 'T2' };
+
+test('shifting moves every occurrence on or after the date, along with its assignments', async () => {
+    const db = dbWithRosters(
+        { 'midweek_2026-07-15': { seriesId: 'midweek', date: '2026-07-15', visibility: 'member', participantIds: ['p1'] } },
+        { 'midweek_2026-07-15': { kids__s1__p1: ASSIGNMENT } }
+    );
+
+    const result = await Store.shiftOccurrences(db, '2026-07-15', 7, AS_ELDER);
+
+    assert.strictEqual(result.occurrences, 1);
+    assert.strictEqual(result.assignments, 1);
+
+    const writes = db._flatWrites();
+    assert.ok(writes.some(w => w.path === 'event_occurrences/midweek_2026-07-22' && w.data.date === '2026-07-22'),
+        'the occurrence lands on the new date');
+    assert.ok(writes.some(w => w.path === 'event_occurrences/midweek_2026-07-22/roster/kids__s1__p1'),
+        'and its roster comes with it — a subcollection does not follow its parent');
+});
+
+test('occurrence ids stay consistent with their new dates', async () => {
+    const db = dbWithRosters(
+        { 'midweek_2026-07-15': { seriesId: 'midweek', date: '2026-07-15', participantIds: [] } }, {}
+    );
+    await Store.shiftOccurrences(db, '2026-07-15', 7, AS_ELDER);
+
+    const setPaths = db._flatWrites().filter(w => w.kind === 'set').map(w => w.path);
+    assert.ok(setPaths.includes('event_occurrences/midweek_2026-07-22'));
+    assert.ok(!setPaths.includes('event_occurrences/midweek_2026-07-15'),
+        'a deterministic id that disagreed with its date would break every later lookup');
+});
+
+test('assignment states, and who set them and when, survive the shift unchanged', async () => {
+    const db = dbWithRosters(
+        { 'midweek_2026-07-15': { seriesId: 'midweek', date: '2026-07-15', participantIds: ['p1'] } },
+        { 'midweek_2026-07-15': { kids__s1__p1: ASSIGNMENT } }
+    );
+    await Store.shiftOccurrences(db, '2026-07-15', 7, AS_ELDER);
+
+    const moved = db._flatWrites().find(w => /\/roster\//.test(w.path));
+    assert.deepStrictEqual(moved.data, ASSIGNMENT, 'a shift moves a roster, it does not rewrite one');
+});
+
+test('participant lists remain correct, so visibility is not broken by a shift', async () => {
+    const db = dbWithRosters(
+        { 'setup_2026-07-18': { seriesId: 'setup', date: '2026-07-18', visibility: 'participant', participantIds: ['p1', 'p2'] } },
+        {}
+    );
+    await Store.shiftOccurrences(db, '2026-07-18', 7, AS_ELDER);
+
+    const moved = db._flatWrites().find(w => w.path === 'event_occurrences/setup_2026-07-25');
+    assert.deepStrictEqual(moved.data.participantIds, ['p1', 'p2']);
+    assert.strictEqual(moved.data.visibility, 'participant');
+});
+
+test('an interrupted shift leaves a stale duplicate, never a destroyed roster', async () => {
+    const db = dbWithRosters(
+        { 'midweek_2026-07-15': { seriesId: 'midweek', date: '2026-07-15', participantIds: ['p1'] } },
+        { 'midweek_2026-07-15': { kids__s1__p1: ASSIGNMENT } }
+    );
+    await Store.shiftOccurrences(db, '2026-07-15', 7, AS_ELDER);
+
+    const writes = db._flatWrites();
+    const lastSet = writes.map(w => w.kind).lastIndexOf('set');
+    const firstDelete = writes.map(w => w.kind).indexOf('delete');
+    assert.ok(firstDelete === -1 || lastSet < firstDelete,
+        'every write must be committed before any delete');
+});
+
+test('a document a later occurrence moved into is not then deleted', async () => {
+    // Shifting 07-15 and 07-22 both forward a week: 07-22 becomes 07-29, and
+    // 07-15 becomes 07-22 — the slot 07-22 just vacated. Deleting it afterwards
+    // would throw away the roster that had just moved in.
+    const db = dbWithRosters({
+        'midweek_2026-07-15': { seriesId: 'midweek', date: '2026-07-15', participantIds: ['p1'] },
+        'midweek_2026-07-22': { seriesId: 'midweek', date: '2026-07-22', participantIds: ['p2'] },
+    }, {});
+
+    await Store.shiftOccurrences(db, '2026-07-15', 7, AS_ELDER);
+
+    const deleted = db._flatWrites().filter(w => w.kind === 'delete').map(w => w.path);
+    assert.ok(!deleted.includes('event_occurrences/midweek_2026-07-22'),
+        'that slot was moved into — deleting it would lose the roster that just arrived');
+    assert.ok(deleted.includes('event_occurrences/midweek_2026-07-15'), 'the vacated slot is freed');
+});
+
+test('a later occurrence is copied forward before its predecessor lands on it', async () => {
+    const db = dbWithRosters({
+        'midweek_2026-07-15': { seriesId: 'midweek', date: '2026-07-15', participantIds: ['p1'] },
+        'midweek_2026-07-22': { seriesId: 'midweek', date: '2026-07-22', participantIds: ['p2'] },
+    }, {});
+
+    await Store.shiftOccurrences(db, '2026-07-15', 7, AS_ELDER);
+
+    const paths = db._flatWrites().filter(w => w.kind === 'set').map(w => w.path);
+    assert.ok(
+        paths.indexOf('event_occurrences/midweek_2026-07-29') < paths.indexOf('event_occurrences/midweek_2026-07-22'),
+        'latest first, or a partial failure overwrites a roster that was never copied'
+    );
+});
+
+test('a one-off Event is re-dated in place — its id says nothing about its date', async () => {
+    const db = dbWithRosters(
+        { aB3xyz: { date: '2026-07-15', name: 'Church picnic', participantIds: [] } }, {}
+    );
+    await Store.shiftOccurrences(db, '2026-07-15', 7, AS_ELDER);
+
+    const writes = db._flatWrites();
+    assert.ok(writes.some(w => w.path === 'event_occurrences/aB3xyz' && w.data.date === '2026-07-22'));
+    assert.ok(!writes.some(w => w.kind === 'delete'), 'nothing to copy means nothing to delete');
+});
+
+test('shifting a range whose Events have no assignments works without error', async () => {
+    const db = dbWithRosters(
+        { 'midweek_2026-07-15': { seriesId: 'midweek', date: '2026-07-15', participantIds: [] } }, {}
+    );
+    const result = await Store.shiftOccurrences(db, '2026-07-15', 7, AS_ELDER);
+    assert.deepStrictEqual(result, { occurrences: 1, assignments: 0, rehomed: 1 });
+});
+
+test('shifting an empty range works without error', async () => {
+    const db = dbWithRosters({}, {});
+    const result = await Store.shiftOccurrences(db, '2026-07-15', 7, AS_ELDER);
+    assert.deepStrictEqual(result, { occurrences: 0, assignments: 0, rehomed: 0 });
+});
+
+test('an occurrence before the chosen date is left alone', async () => {
+    const db = dbWithRosters({
+        'midweek_2026-07-08': { seriesId: 'midweek', date: '2026-07-08', participantIds: [] },
+        'midweek_2026-07-15': { seriesId: 'midweek', date: '2026-07-15', participantIds: [] },
+    }, {});
+
+    const result = await Store.shiftOccurrences(db, '2026-07-15', 7, AS_ELDER);
+    assert.strictEqual(result.occurrences, 1);
+    assert.ok(!db._flatWrites().some(w => /2026-07-08/.test(w.path)));
+});
+
+test('an editor cannot shift the schedule, because they cannot see all of it', async () => {
+    // An editor's rank does not reach the elder rung. Left to run, their query
+    // would either error outright or move only the Events they can see —
+    // leaving the restricted ones on the old week while everything around them
+    // slid forward. A partly shifted schedule is harder to notice, and harder to
+    // undo, than a refusal.
+    const db = dbWithRosters(
+        { 'midweek_2026-07-15': { seriesId: 'midweek', date: '2026-07-15', participantIds: [] } }, {}
+    );
+
+    await assert.rejects(
+        () => Store.shiftOccurrences(db, '2026-07-15', 7, { rank: 'editor' }),
+        err => err.code === 'insufficient-visibility'
+    );
+    assert.deepStrictEqual(db._flatWrites(), [], 'and nothing is written before it refuses');
+});
+
+test('the refusal happens before any read, so nothing is left half-done', async () => {
+    const db = dbWithRosters(
+        { 'midweek_2026-07-15': { seriesId: 'midweek', date: '2026-07-15', participantIds: [] } }, {}
+    );
+    await assert.rejects(() => Store.shiftOccurrences(db, '2026-07-15', 7, { rank: 'member' }));
+    assert.deepStrictEqual(db._queriesRun, []);
+});
+
+test('only a rank that sees every rung may shift the schedule', () => {
+    assert.strictEqual(Store.seesEveryRung('elder'), true);
+    assert.strictEqual(Store.seesEveryRung('super_admin'), true);
+    assert.strictEqual(Store.seesEveryRung('editor'), false);
+    assert.strictEqual(Store.seesEveryRung('admin'), false, 'admin is not elder — it does not reach the elder rung');
+    assert.strictEqual(Store.seesEveryRung('member'), false);
+    assert.strictEqual(Store.seesEveryRung(null), false);
+});
+
+test('the shift query names every rung rather than being left open', async () => {
+    const db = dbWithRosters(
+        { 'midweek_2026-07-15': { seriesId: 'midweek', date: '2026-07-15', participantIds: [] } }, {}
+    );
+    await Store.shiftOccurrences(db, '2026-07-15', 7, AS_ELDER);
+
+    const q = db._queriesRun.find(x => x.collection === 'event_occurrences');
+    const rungs = q.filters.find(f => f.field === 'visibility');
+    assert.ok(rungs, 'even an elder must constrain the query — the rules do not care who you are');
+    assert.deepStrictEqual(rungs.value, Core.VISIBILITY_ORDER.slice());
+});
+
+test('the shift crosses a month boundary correctly', () => {
+    assert.strictEqual(Store.shiftDays('2026-07-29', 7), '2026-08-05');
+    assert.strictEqual(Store.shiftDays('2026-12-28', 7), '2027-01-04');
 });
 
 // ── The roster subcollection ──────────────────────────────────────────────────

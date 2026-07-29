@@ -354,6 +354,13 @@
                                     and <strong x-text="result.prayers"></strong> pastoral-prayer record<span x-show="result.prayers !== 1">s</span></span>.
                                 A blank service is ready on the chosen Sunday.
                             </p>
+                            <!-- Event occurrences moved too (MS-152). Reported
+                                 separately so it is visible that the rosters
+                                 came with them, rather than being assumed. -->
+                            <p x-show="result && result.occurrences > 0">
+                                Also moved <strong x-text="result.occurrences"></strong> other event<span x-show="result.occurrences !== 1">s</span>
+                                <span x-show="result.assignments > 0">, with <strong x-text="result.assignments"></strong> assignment<span x-show="result.assignments !== 1">s</span> intact</span>.
+                            </p>
                             <p x-show="result && result.services === 0">A blank service slot is ready on the chosen Sunday.</p>
                         </div>
                     </div>
@@ -587,6 +594,10 @@
     <script src="guide-engine.js"></script>
     <script src="guide-store.js"></script>
     <script src="events-core.js"></script>
+    <!-- The week-shift tool moves Event occurrences and their rosters too
+         (MS-152); without these it would silently lose the week's roster. -->
+    <script src="events-occurrence-core.js"></script>
+    <script src="events-store.js"></script>
     <script src="service-calendar.js"></script>
 </body>
 

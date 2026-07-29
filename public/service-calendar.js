@@ -499,6 +499,19 @@ window.injectServiceAtDate = async function (fromDate) {
     if (typeof db === 'undefined') throw new Error('Database is not available.');
     if (!fromDate) throw new Error('No date selected.');
 
+    // Refuse before ANYTHING is written (MS-152). Event occurrences carry a
+    // visibility rung, and someone who cannot see every rung would move only
+    // part of the schedule — leaving restricted Events sitting on the old week
+    // while everything around them slid forward. Checked here, at the top, so a
+    // refusal leaves nothing half-done.
+    if (window.EventsStore && !window.EventsStore.seesEveryRung(window.currentPermissionLevel)) {
+        throw new Error(
+            'Shifting the schedule has to be done by an elder or an admin. ' +
+            'There may be Events you are not able to see, and moving only some ' +
+            'of them would leave the schedule inconsistent.'
+        );
+    }
+
     // --- Gather everything that needs to move -----------------------------
     const svcSnap = await db.collection('services').get();
     const affectedServices = [];
@@ -577,6 +590,18 @@ window.injectServiceAtDate = async function (fromDate) {
         await batch.commit();
     }
 
+    // --- Event occurrences and their rosters (MS-152) ----------------------
+    // Occurrences are keyed by date, and their assignments live in a roster
+    // subcollection that does NOT follow its parent. Without this the Event
+    // moves and the people assigned to it do not — the week's roster is
+    // silently lost. Same writes-before-deletes ordering as everything above.
+    let occurrenceResult = { occurrences: 0, assignments: 0 };
+    if (window.EventsStore) {
+        occurrenceResult = await window.EventsStore.shiftOccurrences(db, fromDate, 7, {
+            rank: window.currentPermissionLevel,
+        });
+    }
+
     // --- Recompute lastPastoralPrayerDate for affected people --------------
     const affectedPeopleIds = new Set(affectedPrayers.map(doc => doc.ref.parent.parent.id));
     for (const pid of affectedPeopleIds) {
@@ -590,7 +615,9 @@ window.injectServiceAtDate = async function (fromDate) {
         services: affectedServices.length,
         involvements: affectedInv.length,
         prayers: affectedPrayers.length,
-        people: affectedPeopleIds.size
+        people: affectedPeopleIds.size,
+        occurrences: occurrenceResult.occurrences,
+        assignments: occurrenceResult.assignments
     };
 };
 
