@@ -271,6 +271,18 @@
                 return (p && p.name) || 'Someone';
             },
 
+            // The chip's left bar. This is where a chosen colour actually lands.
+            //
+            // Needs-sorting OVERRIDES it, always. That red is the end of an
+            // escalation that runs through four surfaces, and it has to keep
+            // meaning one thing — so a chosen colour decorates the calendar
+            // without ever being able to shout, or to stop something else
+            // shouting.
+            chipBar(occurrence) {
+                if (occurrence && occurrence.needsAttention) return View.ATTENTION_COLOUR;
+                return View.colourOf(occurrence).bar;
+            },
+
             // The chip's colour family, so the template does not branch on four
             // things at once.
             chipKind(occurrence) {

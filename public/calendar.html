@@ -187,11 +187,12 @@
                                     <button @click="open(ev)"
                                             class="w-full text-left flex items-start gap-[5px] rounded-md
                                                    pl-1 pr-1.5 py-[5px] cal-motion cal-press cal-focus"
+                                            :style="'border-left-color:' + chipBar(ev)"
                                             :class="{
-                                                'border-l-[3px] border-error bg-error-container text-on-error-container': chipKind(ev) === 'declined',
-                                                'border-l-[3px] border-primary bg-surface-container': chipKind(ev) === 'mine',
-                                                'border-l-[3px] border-secondary': chipKind(ev) === 'sunday',
-                                                'border-l-[3px] border-tertiary bg-surface-container-low': chipKind(ev) === 'other'
+                                                'border-l-[3px] bg-error-container text-on-error-container': chipKind(ev) === 'declined',
+                                                'border-l-[3px] bg-surface-container': chipKind(ev) === 'mine',
+                                                'border-l-[3px]': chipKind(ev) === 'sunday',
+                                                'border-l-[3px] bg-surface-container-low': chipKind(ev) === 'other'
                                             }">
                                         <span x-show="chipKind(ev) === 'mine'"
                                               class="mt-[5px] w-[5px] h-[5px] rounded-full bg-primary shrink-0"></span>
@@ -238,7 +239,8 @@
                         <template x-for="ev in group.events" :key="ev.id">
                             <button @click="open(ev)"
                                     class="cal-row w-full text-left flex items-center gap-md px-md py-3
-                                           border-b border-outline-variant cal-motion hover:bg-surface-container-low"
+                                           border-b border-l-[3px] border-outline-variant cal-motion hover:bg-surface-container-low"
+                                    :style="'border-left-color:' + chipBar(ev)"
                                     :class="ev.mine ? 'bg-surface-container-low' : ''">
                                 <div class="w-[52px] shrink-0">
                                     <div class="text-[10.5px] font-label-md tracking-[.12em] uppercase text-on-surface-variant"

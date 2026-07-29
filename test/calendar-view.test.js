@@ -478,3 +478,84 @@ test('a calm month produces no rows at all', () => {
     const calm = [{ id: 'a', date: '2026-07-15', assignments: [{ personId: 'p1', state: 'confirmed' }] }];
     assert.deepStrictEqual(View.needsSorting(calm, PEOPLE), []);
 });
+
+// ── The colour an Event shows up as ───────────────────────────────────────────
+//
+// A fixed palette, not a free colour. A free colour lets somebody pick
+// something unreadable, and — worse here — pick the error red, which is the one
+// colour on this calendar that means something specific and must keep meaning
+// it.
+
+test('the palette is a closed set, each entry usable on its own', () => {
+    assert.ok(View.EVENT_COLOURS.length >= 6, 'too few to be worth choosing between');
+
+    const slugs = View.EVENT_COLOURS.map(c => c.slug);
+    assert.strictEqual(new Set(slugs).size, slugs.length, 'two colours share a slug');
+
+    View.EVENT_COLOURS.forEach(c => {
+        assert.match(c.bar, /^#[0-9A-Fa-f]{6}$/, c.slug + ' has no usable bar colour');
+        assert.ok(c.name && c.name.length, c.slug + ' has no name a person could say');
+    });
+});
+
+test('nothing in the palette is the red that means "needs sorting"', () => {
+    // Red is spoken for. A chip in the error red says one thing on this
+    // calendar, and a chosen colour must never be able to say it by accident.
+    View.EVENT_COLOURS.forEach(c => {
+        assert.notStrictEqual(c.bar.toUpperCase(), '#A8463E', c.slug + ' is the error red');
+    });
+});
+
+test('an Event with no colour chosen looks exactly as it did before', () => {
+    // The whole existing calendar has no colour stored on anything, so the
+    // fallback IS the current appearance. If this changes, every event in the
+    // church silently restyles.
+    assert.strictEqual(View.colourOf({}).bar, '#5D94A9');
+    assert.strictEqual(View.colourOf(null).bar, '#5D94A9');
+});
+
+test('a stored colour nobody recognises falls back rather than blanking the chip', () => {
+    // An old slug, a typo, a hand-edited document. A chip with no left edge
+    // reads as a rendering bug, not as "unknown colour".
+    assert.strictEqual(View.colourOf({ colour: 'chartreuse' }).bar, '#5D94A9');
+    assert.strictEqual(View.colourOf({ colour: 42 }).bar, '#5D94A9');
+});
+
+test('a recurring Event takes its colour from the series, a one-off from itself', () => {
+    const gold = View.EVENT_COLOURS.find(c => c.slug === 'gold');
+
+    // Inherited: every date of the series shows the same colour.
+    assert.strictEqual(View.colourOf({ seriesId: 'midweek', seriesColour: 'gold' }).slug, 'gold');
+    // A one-off Event's occurrence IS the whole Event, so it carries its own.
+    assert.strictEqual(View.colourOf({ seriesId: null, colour: 'gold' }).slug, 'gold');
+    assert.strictEqual(View.colourOf({ colour: 'gold' }).bar, gold.bar);
+});
+
+test('the store and the display layer agree on what the colours are', () => {
+    // events-store.js restates the slugs because it must not depend on a display
+    // module. Restating is fine; drifting is not — a slug the store accepts and
+    // the palette does not know renders as the fallback, so an editor picks a
+    // colour, it saves, and nothing changes.
+    const Store = require('../public/events-store.js');
+    assert.deepStrictEqual(
+        Store.COLOUR_SLUGS.slice().sort(),
+        View.EVENT_COLOURS.map(c => c.slug).sort()
+    );
+});
+
+test('a Sunday keeps the colour it already draws in', () => {
+    const Core = require('../public/events-occurrence-core.js');
+    assert.strictEqual(View.colourOf({ seriesId: Core.SUNDAY_SERVICE_ID }).slug, 'ocean');
+    // But it is only a default. A colour is decoration — unlike a Sunday's
+    // visibility and its liturgy, there is nothing to protect by settling it.
+    assert.strictEqual(
+        View.colourOf({ seriesId: Core.SUNDAY_SERVICE_ID, seriesColour: 'plum' }).slug, 'plum');
+});
+
+test('the red a chip uses for "needs sorting" is the theme\'s error red', () => {
+    // Restated in calendar-view.js so a chip can use it inline. If it drifts
+    // from the token, the loudest thing on the calendar stops matching the same
+    // warning everywhere else it appears.
+    const theme = require('../tailwind.config.js').theme.extend.colors;
+    assert.strictEqual(View.ATTENTION_COLOUR.toUpperCase(), theme.error.toUpperCase());
+});

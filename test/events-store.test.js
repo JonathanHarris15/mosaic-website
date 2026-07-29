@@ -856,3 +856,81 @@ test('one person on two Roles gets two roster documents, not one', () => {
         Store.rosterId({ personId: 'p1', roleSlug: 'setup', slotId: 's1' })
     );
 });
+
+// ── The colour an Event shows up as ───────────────────────────────────────────
+//
+// A recurring Event keeps its colour on the SERIES, so every date matches and
+// one change moves them all. The occurrence never stores an inherited copy:
+// that copy would go stale the moment the series colour changed, and it would
+// go stale INVISIBLY — you would change the colour, half the dates would move
+// and half would not, and nothing would tell you why.
+
+test('every date of a series shows the series colour, without storing it', async () => {
+    const series = {
+        midweek: {
+            name: 'Midweek Gathering', visibility: 'member', colour: 'gold',
+            recurrence: { freq: 'weekly', startDate: '2026-07-01', weekday: 3 },
+        },
+    };
+    const stored = {
+        'midweek_2026-07-15': {
+            seriesId: 'midweek', date: '2026-07-15', visibility: 'member', participantIds: [],
+        },
+    };
+    const viewer = { rank: 'member', personId: 'p1' };
+    const db = fakeDb({ events: series, event_occurrences: stored }, viewer);
+
+    const rows = await Store.loadCalendar(db, Object.assign({}, viewer, RANGE));
+
+    assert.ok(rows.length > 1);
+    rows.forEach(o => {
+        assert.strictEqual(o.seriesColour, 'gold', o.date + ' lost the series colour');
+        assert.strictEqual(o.colour, undefined, o.date + ' stored a copy of it');
+    });
+});
+
+test('an inherited colour is never written back onto the occurrence', async () => {
+    // A page holds a row that was stamped at read time, then saves a roster
+    // change on it. The stamp must not ride along into the document.
+    const db = fakeDb({ event_occurrences: {} }, { rank: 'editor' });
+
+    const payload = await Store.saveOccurrence(db, {
+        seriesId: 'midweek', date: '2026-07-15', visibility: 'member',
+        seriesColour: 'gold', assignments: [],
+    });
+
+    assert.strictEqual(payload.seriesColour, undefined, 'the inherited colour was written to the document');
+});
+
+test('a one-off Event keeps its own colour, because its occurrence is the whole Event', async () => {
+    const db = fakeDb({ event_occurrences: {} }, { rank: 'editor' });
+
+    const payload = await Store.saveOccurrence(db, {
+        id: 'one_off_x', seriesId: null, date: '2026-07-15',
+        visibility: 'public', colour: 'plum', assignments: [],
+    });
+
+    assert.strictEqual(payload.colour, 'plum');
+});
+
+test('setting a series colour touches the series and nothing else', async () => {
+    const series = { midweek: { name: 'Midweek Gathering', visibility: 'member' } };
+    const stored = {
+        'midweek_2026-07-15': { seriesId: 'midweek', date: '2026-07-15', visibility: 'member', participantIds: [] },
+    };
+    const db = fakeDb({ events: series, event_occurrences: stored }, { rank: 'editor' });
+
+    await Store.setSeriesColour(db, 'midweek', 'gold');
+
+    const writes = db._flatWrites();
+    assert.deepStrictEqual(writes.map(w => w.path), ['events/midweek']);
+    assert.strictEqual(writes[0].data.colour, 'gold');
+    // Not a restamp. Visibility has to be written to every occurrence because a
+    // security rule reads it off the document; a colour is read at display time,
+    // so writing it to hundreds of documents would buy nothing and go stale.
+});
+
+test('a colour nobody recognises is refused rather than stored', async () => {
+    const db = fakeDb({ events: { midweek: { name: 'Midweek' } } }, { rank: 'editor' });
+    await assert.rejects(() => Store.setSeriesColour(db, 'midweek', 'chartreuse'), /colour/i);
+});

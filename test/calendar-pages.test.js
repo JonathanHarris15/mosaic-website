@@ -20,7 +20,7 @@ const PUBLIC = path.join(__dirname, '..', 'public');
 
 // ── Loading a page component without a browser ────────────────────────────────
 
-function loadComponent(scriptFile, factoryName) {
+function loadComponent(scriptFile, factoryName, overrides) {
     const sandbox = {
         console: console,
         Promise: Promise,
@@ -53,6 +53,9 @@ function loadComponent(scriptFile, factoryName) {
     sandbox.getUserData = async () => ({});
     sandbox.db = {};
     sandbox.document = { addEventListener() {} };
+
+    // A test that needs to watch what the page writes swaps `db` for a fake.
+    Object.assign(sandbox, overrides || {});
 
     vm.createContext(sandbox);
     vm.runInContext(fs.readFileSync(path.join(PUBLIC, scriptFile), 'utf8'), sandbox, { filename: scriptFile });
@@ -625,4 +628,63 @@ test('the remove buttons go through the question, never straight to the deletion
     assert.ok(!/@click="removeManagedRole\(/.test(html), 'a click removes a Role without asking');
     assert.ok(!/@click="removeOneOffRole\(/.test(html), 'a click deletes a one-off job without asking');
     assert.ok(/askRemoveManagedRole\(/.test(html) && /askRemoveOneOffRole\(/.test(html));
+});
+
+// ── The colour an Event shows up as ───────────────────────────────────────────
+
+test('a chosen colour never overrides "needs sorting"', () => {
+    // The red is the end of an escalation across four surfaces. A colour is
+    // decoration and must never be able to shout, or to stop something shouting.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    const View = require('../public/calendar-view.js');
+
+    assert.strictEqual(page.chipBar({ seriesColour: 'gold' }), View.colourFor('gold').bar);
+    assert.strictEqual(page.chipBar({ seriesColour: 'gold', needsAttention: true }), View.ATTENTION_COLOUR);
+});
+
+test('a recurring Event colours the series, a one-off colours itself', async () => {
+    // Two different documents, and the difference matters: colouring the series
+    // moves every date at once, which is the whole point of choosing it there.
+    const writes = [];
+    const fakeDb = {
+        collection: name => ({
+            doc: id => ({
+                path: name + '/' + id,
+                async set(data, options) { writes.push({ path: name + '/' + id, data, options }); },
+                collection: sub => fakeDb.collection(name + '/' + id + '/' + sub),
+            }),
+            async get() { return { docs: [] }; },
+            where() { return this; },
+        }),
+    };
+
+    const recurring = loadComponent('calendar-event.js', 'eventDetailPage', { db: fakeDb });
+    recurring.rank = 'editor';
+    recurring.occurrence = { id: 'midweek_2026-07-15', seriesId: 'midweek', date: '2026-07-15' };
+    recurring.series = { id: 'midweek', name: 'Midweek Gathering' };
+    await recurring.setColour('gold');
+
+    assert.deepStrictEqual(writes.map(w => w.path), ['events/midweek']);
+    assert.strictEqual(writes[0].data.colour, 'gold');
+    assert.strictEqual(recurring.colour.slug, 'gold');
+
+    writes.length = 0;
+    const oneOff = loadComponent('calendar-event.js', 'eventDetailPage', { db: fakeDb });
+    oneOff.rank = 'editor';
+    oneOff.occurrence = { id: 'harvest_supper', seriesId: null, date: '2026-07-15' };
+    oneOff.series = null;
+    await oneOff.setColour('plum');
+
+    assert.deepStrictEqual(writes.map(w => w.path), ['event_occurrences/harvest_supper']);
+    assert.strictEqual(writes[0].data.colour, 'plum');
+    assert.strictEqual(oneOff.colour.slug, 'plum');
+});
+
+test('the colour section is offered to editors and writes through the store', () => {
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    assert.ok(/Colour on the calendar/.test(html), 'no colour section on the Event page');
+    assert.ok(/setColour\(c\.slug\)/.test(html));
+    // It must say which way the change lands — series-wide or this one — because
+    // both are reasonable to expect and only one is true.
+    assert.ok(/every date of this event/.test(html));
 });

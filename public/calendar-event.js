@@ -348,6 +348,44 @@
                 await this.persist();
             },
 
+            // ── The colour it shows up as ────────────────────────────────────
+            //
+            // A recurring Event keeps this on the SERIES, so every date matches
+            // and one change moves them all. A one-off Event has no series — its
+            // occurrence IS the whole Event — so it carries its own.
+
+            get colours() { return View.EVENT_COLOURS; },
+
+            get colour() {
+                return View.colourOf({
+                    seriesId: this.occurrence && this.occurrence.seriesId,
+                    colour: this.occurrence && this.occurrence.colour,
+                    seriesColour: this.series && this.series.colour,
+                });
+            },
+
+            async setColour(slug) {
+                if (this.saving || this.colour.slug === slug) return;
+                this.saving = true;
+                this.error = '';
+                try {
+                    if (this.series) {
+                        await Store.setSeriesColour(db, this.series.id, slug);
+                        this.series.colour = slug;
+                    } else {
+                        this.occurrence.colour = slug;
+                        await Store.saveOccurrence(db, Object.assign({}, this.occurrence, {
+                            assignments: this.assignments,
+                        }));
+                    }
+                } catch (e) {
+                    console.error('Colour change failed:', e);
+                    this.error = 'That colour could not be saved.';
+                } finally {
+                    this.saving = false;
+                }
+            },
+
             // ── Taking a Role off ────────────────────────────────────────────
             //
             // Removing a Role deletes every Assignment on it. That is right —

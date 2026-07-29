@@ -136,6 +136,69 @@
         return level === 'participant' || level === 'editor' || level === 'elder';
     }
 
+    // ── The colour an Event shows up as ──────────────────────────────────────
+    //
+    // A closed palette, not a colour picker. Two reasons, and the second is the
+    // real one:
+    //
+    //   1. A free colour lets somebody pick something that cannot be read.
+    //   2. Red is SPOKEN FOR. A chip in the error red means "somebody declined
+    //      and this needs sorting" — it is the end of an escalation that runs
+    //      through four surfaces. If an editor can paint an ordinary event that
+    //      red, the loudest signal on the calendar stops meaning anything.
+    //
+    // So there is no red here, and needs-attention keeps overriding whatever was
+    // chosen (see `chipBar` on the Calendar page). Colour decorates; it never
+    // carries a meaning the app depends on.
+    //
+    // `tint` is the soft background the swatch uses when it is the chosen one —
+    // never the chip background, which stays a surface so the label stays legible.
+
+    const EVENT_COLOURS = [
+        { slug: 'steel',  name: 'Steel',  bar: '#5D94A9', tint: '#D7E7EC' },
+        { slug: 'ocean',  name: 'Ocean',  bar: '#3E6181', tint: '#CFE0F1' },
+        { slug: 'navy',   name: 'Navy',   bar: '#182F57', tint: '#D5DCE9' },
+        { slug: 'green',  name: 'Green',  bar: '#4B8A6B', tint: '#D6E7DE' },
+        { slug: 'gold',   name: 'Gold',   bar: '#B89B6A', tint: '#EFE6D5' },
+        { slug: 'amber',  name: 'Amber',  bar: '#B8862E', tint: '#F0E2C6' },
+        { slug: 'plum',   name: 'Plum',   bar: '#7A5578', tint: '#E7DAE6' },
+        { slug: 'rose',   name: 'Rose',   bar: '#B0697C', tint: '#F0DBE0' },
+    ];
+
+    // Steel, because that is what every event on this calendar already looks
+    // like. Nothing has a colour stored on it yet, so the fallback IS the
+    // current appearance — change it and the whole church's calendar restyles
+    // itself overnight for no reason anybody asked for.
+    const DEFAULT_COLOUR = 'steel';
+
+    // Sundays already draw in ocean. Same argument — leaving it alone is the
+    // only way nobody's calendar changes under them. It is still only a default:
+    // the Sunday Service's colour can be changed like any other, because a
+    // colour is decoration and there is no safety reason to settle it the way
+    // its visibility and its liturgy are settled.
+    const SUNDAY_COLOUR = 'ocean';
+
+    // The error red, restated so a chip can use it without importing Tailwind. A
+    // test holds it to the theme token — if they drift, "needs sorting" stops
+    // matching the red used everywhere else it appears.
+    const ATTENTION_COLOUR = '#A8463E';
+
+    function colourFor(slug) {
+        return EVENT_COLOURS.find(c => c.slug === slug)
+            || EVENT_COLOURS.find(c => c.slug === DEFAULT_COLOUR);
+    }
+
+    // A recurring Event keeps its colour on the SERIES, so every date matches and
+    // changing it changes them all at once. A one-off Event has no series — its
+    // occurrence is the whole Event — so it carries its own.
+    function colourOf(occurrence) {
+        const o = occurrence || {};
+        const chosen = o.colour || o.seriesColour;
+        if (chosen) return colourFor(chosen);
+        const sunday = o.seriesId === Core.SUNDAY_SERVICE_ID;
+        return colourFor(sunday ? SUNDAY_COLOUR : DEFAULT_COLOUR);
+    }
+
     // ── The recurrence sentence ──────────────────────────────────────────────
     //
     // The "Reads as" line: the whole pattern as one sentence, so an editor
@@ -523,6 +586,13 @@
         visibilityWho,
         visibilityLadder,
         rosterToggleApplies,
+        // colour
+        EVENT_COLOURS,
+        DEFAULT_COLOUR,
+        SUNDAY_COLOUR,
+        ATTENTION_COLOUR,
+        colourFor,
+        colourOf,
         // recurrence
         recurrenceSentence,
         nextDates,

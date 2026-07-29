@@ -706,6 +706,43 @@
                         </p>
                     </section>
 
+                    <!-- Colour on the calendar -->
+                    <section x-show="isEditor"
+                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">Colour on the calendar</h3>
+                        <p class="text-[12.5px] text-on-surface-variant mt-1">
+                            Just so it's easy to pick out. It doesn't change who can see it.
+                        </p>
+
+                        <div class="mt-sm grid grid-cols-4 gap-2">
+                            <template x-for="c in colours" :key="c.slug">
+                                <button @click="setColour(c.slug)" :disabled="saving"
+                                        class="flex flex-col items-center gap-1 rounded-lg border py-2 cal-motion cal-press cal-focus
+                                               disabled:opacity-40"
+                                        :class="colour.slug === c.slug
+                                            ? 'border-primary bg-surface-container-low'
+                                            : 'border-outline-variant hover:bg-surface-container-low'"
+                                        :aria-label="c.name"
+                                        :aria-pressed="colour.slug === c.slug">
+                                    <span class="w-[22px] h-[22px] rounded-full border border-black/10"
+                                          :style="'background:' + c.bar"></span>
+                                    <span class="text-[10.5px] font-label-md text-on-surface-variant" x-text="c.name"></span>
+                                </button>
+                            </template>
+                        </div>
+
+                        <!-- Says which way this lands before you click, because
+                             the two behave differently and both are reasonable to
+                             expect. -->
+                        <p class="mt-sm text-[11.5px] text-on-surface-variant"
+                           x-text="series
+                             ? 'This applies to every date of this event.'
+                             : 'This event only happens once, so this applies to it alone.'"></p>
+                        <p class="mt-1 text-[11.5px] text-on-surface-variant">
+                            An event that needs sorting still shows red, whatever colour you pick.
+                        </p>
+                    </section>
+
                     <!-- When it happens -->
                     <section x-show="isEditor && series && series.recurrence"
                              class="bg-surface-container-low border border-outline-variant rounded-lg p-md">

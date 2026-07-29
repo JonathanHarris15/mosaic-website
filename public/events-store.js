@@ -183,7 +183,15 @@
             const rule = recurrenceFor(s);
             return rule
                 ? Core.mergeOccurrences(s.id, rule, storedBySeries.get(s.id) || [], opts.from, opts.to)
-                    .map(o => Object.assign({ name: s.name, seriesName: s.name }, o))
+                    // `seriesColour`, not `colour`, and deliberately so. If the
+                    // series colour were stamped as `colour`, then the next time
+                    // anything saved this occurrence the stamp would ride into
+                    // the document — and from then on that one date would keep
+                    // the OLD colour when the series changed. Silently. Half a
+                    // series moving colour and half not is the kind of bug
+                    // nobody ever reports, they just stop trusting the feature.
+                    // `occurrencePayload` strips this key on the way back out.
+                    .map(o => Object.assign({ name: s.name, seriesName: s.name, seriesColour: s.colour }, o))
                 : [];
         });
 
@@ -238,6 +246,10 @@
             needsAttention: Core.needsAttention({ assignments: assignments }),
         });
         delete payload.assignments;
+        // Read-time stamps, not stored fields. `seriesColour` is the series'
+        // colour copied on for display; letting it land here would freeze this
+        // one date at whatever the colour was the last time somebody touched it.
+        delete payload.seriesColour;
         return payload;
     }
 
@@ -368,6 +380,29 @@
 
         await commitInBatches(db, writes);
         return { occurrences: snap.docs.length };
+    }
+
+    // ── The colour a series shows up as ──────────────────────────────────────
+    //
+    // One write, to the series. The contrast with visibility above is the point:
+    // visibility has to be copied onto every occurrence because a SECURITY RULE
+    // reads it off the document, and a rule cannot go and look at the series.
+    // A colour is only ever read at display time, where the series is already in
+    // hand — so copying it down would be hundreds of writes bought nothing, and
+    // every copy another chance to go stale.
+    //
+    // The palette lives in calendar-view.js, which is a display module this one
+    // must not depend on. So the slugs are restated here and a test holds the
+    // two lists together — the same trade the Sunday Service id already makes.
+    const COLOUR_SLUGS = ['steel', 'ocean', 'navy', 'green', 'gold', 'amber', 'plum', 'rose'];
+
+    async function setSeriesColour(db, seriesId, colour) {
+        if (!seriesId) throw new Error('A colour needs an event to belong to.');
+        if (COLOUR_SLUGS.indexOf(colour) === -1) {
+            throw new Error('Unknown colour: ' + colour);
+        }
+        await db.collection(SERIES).doc(seriesId).set({ colour: colour }, { merge: true });
+        return colour;
     }
 
     // ── The roster subcollection ─────────────────────────────────────────────
@@ -585,6 +620,8 @@
         loadOccurrence,
         occurrencePayload,
         restampSeriesVisibility,
+        setSeriesColour,
+        COLOUR_SLUGS,
         saveRoster,
         applyOrphanChoices,
         // internals worth testing
