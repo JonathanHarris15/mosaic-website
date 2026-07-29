@@ -297,6 +297,26 @@
                     grid.insertBefore(card, grid.children[1] || null);
                 }
 
+                // Roles Manager — editors and above (author the serving Roles).
+                // ADR-0016: one roles list, liturgical and servant together. The
+                // page gates itself too — a card can be hidden, a URL can't.
+                if (grid && !document.getElementById('roles-manager-card') &&
+                    ['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
+                    const card = document.createElement('a');
+                    card.id = 'roles-manager-card';
+                    card.dataset.cardKey = 'roles-manager';
+                    card.href = 'roles-manager.html';
+                    card.className = cardClass;
+                    card.innerHTML = `
+                        <div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
+                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>volunteer_activism</span>
+                        </div>
+                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Roles Manager</h2>
+                        <p class="font-body-md text-body-md text-on-surface-variant">Set up serving roles &amp; who fills them.</p>
+                    `;
+                    grid.appendChild(card);
+                }
+
                 // Shepherd Dashboard — elders and super_admins
                 if (grid && !document.getElementById('shepherding-card') &&
                     ['elder', 'super_admin'].includes(permissionLevel)) {

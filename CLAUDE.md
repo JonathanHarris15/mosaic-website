@@ -8,14 +8,14 @@ before any planning or ticket work.
 - **Cloud ID:** `68876fc2-c674-4750-9610-e4c9bb834d8d`
 - **Project:** `MS` — Mosaic Services
 - **Epic type:** `Epic` · **Ticket types:** `Feature`, `Task`, `Bug` · **Sub-task type:** `Subtask`
-- **Board:** To Plan → To Do → On Deck → Night Work → In Progress → In Review → Done
+- **Board:** To Plan → To Do → On Deck → In Progress → In Review → Done
 
 **The board carries level-0 tickets only.** Epics group them (never on the board);
 sub-tasks live inside a card (never their own card).
 
-**A ticket may not sit right of `To Plan` without a PRD on it.** `To Do` / `On Deck` /
-`Night Work` are a promise the thinking is finished. `Night Work` additionally promises
-the ticket is AFK-safe — zero open decisions, an agent can grind it unattended.
+**A ticket may not sit right of `To Plan` without a PRD on it.** `To Do` and `On Deck`
+are a promise the thinking is finished. `To Do` additionally promises the next step is
+buildable without you; `On Deck` means the next step needs your judgment.
 
 - New idea, however rough → file it in **To Plan**.
 - Plan it → `/plan-ticket <KEY>`, or `/plan-ticket ALL` for the whole To Plan column.

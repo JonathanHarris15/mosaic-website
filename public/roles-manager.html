@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Roles Manager | Mosaic</title>
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="auth.js"></script>
+    <script src="relationship-core.js"></script>
+    <script src="roles-core.js"></script>
+    <script src="roles-manager.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+</head>
+
+<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+      x-data="rolesManager" x-cloak>
+
+    <!-- Header -->
+    <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
+        <a href="index.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
+            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+            <span class="text-xs font-label-md uppercase tracking-wider">Dashboard</span>
+        </a>
+        <div id="auth-container" class="flex items-center">
+            <div class="h-10"></div>
+        </div>
+    </header>
+
+    <!-- Loading state -->
+    <div x-show="loading" class="flex-grow flex items-center justify-center">
+        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    </div>
+
+    <main x-show="!loading" class="flex-grow w-full max-w-7xl mx-auto px-4 md:px-margin pb-lg pt-md">
+
+        <!-- Page title -->
+        <div class="pb-md border-b border-outline-variant">
+            <h1 class="font-display text-headline-lg tracking-[.02em] text-primary">Roles Manager</h1>
+            <p class="font-body-md text-body-md text-on-surface-variant mt-xs max-w-[64ch]">
+                Every serving Role in one place. Set how many people a Role needs, who each place is for,
+                and any rules about who can fill it.
+            </p>
+        </div>
+
+        <!-- A definition stored under a liturgical slug can't be shown in the list;
+             say so rather than silently hiding it. -->
+        <div x-show="conflictingDefinitions.length"
+             class="mt-md bg-error-container text-on-error-container border border-outline-variant rounded-lg p-md flex items-start gap-sm">
+            <span class="material-symbols-outlined text-[20px]">warning</span>
+            <p class="font-body-md text-body-md">
+                <template x-for="def in conflictingDefinitions" :key="def.id">
+                    <span x-text="`A saved Role called “${def.name}” clashes with the built-in Role “${def.slug}” and is not shown. `"></span>
+                </template>
+                Ask an admin to remove it.
+            </p>
+        </div>
+
+        <!-- Two panes: the roles, and the one being edited. Below `lg` there is
+             only room for one, so the pane you are not using steps aside — the
+             list until you open a Role, the editor once you have. -->
+        <div class="mt-md grid lg:grid-cols-[360px_minmax(0,1fr)] gap-md items-start">
+
+            <!-- ── The roles ─────────────────────────────────────────────────── -->
+            <div class="flex-col gap-md" :class="draft ? 'hidden lg:flex' : 'flex'">
+
+                <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md flex flex-col gap-sm">
+
+                    <div class="flex items-center justify-between gap-sm">
+                        <h2 class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">Serving Roles</h2>
+                        <span class="text-xs font-label-md tracking-wider text-outline" x-text="roleCountLabel"></span>
+                    </div>
+
+                    <!-- Create -->
+                    <div class="flex gap-base">
+                        <input type="text" x-model="newRoleName" placeholder="New role, e.g. Kids Ministry"
+                               @keydown.enter="createRole(newRoleName)"
+                               class="flex-grow min-w-0 border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary" />
+                        <button @click="createRole(newRoleName)"
+                                :disabled="!newRoleName.trim()"
+                                title="Create role" aria-label="Create role"
+                                class="w-11 flex-shrink-0 flex items-center justify-center bg-primary text-on-primary border border-primary rounded-lg shadow-xs hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                            <span class="material-symbols-outlined text-[20px]">add</span>
+                        </button>
+                    </div>
+
+                    <!-- Empty state — an invitation, not an empty table. -->
+                    <div x-show="!hasServantRoles" class="text-center py-md flex flex-col items-center gap-xs">
+                        <span class="material-symbols-outlined text-[40px] text-outline-variant">volunteer_activism</span>
+                        <p class="font-body-md text-body-md text-on-surface-variant">
+                            No serving roles yet. Name one above — kids ministry, setup, coffee, sound — and say who it needs.
+                        </p>
+                    </div>
+
+                    <!-- The row IS the edit control: opening a Role is the point of the list. -->
+                    <ul x-show="hasServantRoles" class="flex flex-col">
+                        <template x-for="role in servantRoles" :key="role.slug">
+                            <li>
+                                <div class="group relative w-full flex items-center gap-sm pl-[14px] pr-xs py-sm rounded-lg border cursor-pointer transition-colors"
+                                     :class="isSelected(role) ? 'bg-surface-container border-outline-variant' : 'border-transparent hover:bg-surface-container-low'"
+                                     role="button" tabindex="0"
+                                     @click="startEdit(role)"
+                                     @keydown.enter.prevent="startEdit(role)"
+                                     @keydown.space.prevent="startEdit(role)">
+
+                                    <span class="absolute left-0 top-[9px] bottom-[9px] w-[3px] rounded-r-[3px] bg-primary transition-opacity"
+                                          :class="isSelected(role) ? 'opacity-100' : 'opacity-0'"></span>
+
+                                    <div class="flex-grow min-w-0">
+                                        <div class="font-serif text-[18px] leading-tight text-on-surface" x-text="role.name"></div>
+                                        <div class="flex items-center gap-base mt-[3px] text-xs font-label-md uppercase tracking-wider text-on-surface-variant">
+                                            <span x-text="peopleNeededLabel(role)"></span>
+                                            <template x-if="restrictionCount(role)">
+                                                <span class="flex items-center gap-base">
+                                                    <span class="w-[3px] h-[3px] rounded-full bg-outline"></span>
+                                                    <span class="text-secondary" x-text="ruleCountLabel(role)"></span>
+                                                </span>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <!-- Hover-revealed on a pointer; touch has no hover, so always visible below lg. -->
+                                    <div class="flex items-center flex-shrink-0 transition-opacity opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
+                                         :class="isSelected(role) ? 'lg:opacity-100' : ''">
+                                        <button @click.stop="deleteRole(role)" title="Delete this role"
+                                                class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error transition-colors">
+                                            <span class="material-symbols-outlined text-[19px]">delete</span>
+                                        </button>
+                                        <span class="material-symbols-outlined text-[19px] text-outline">chevron_right</span>
+                                    </div>
+                                </div>
+                            </li>
+                        </template>
+                    </ul>
+                </section>
+
+                <!-- ── Liturgical Roles: listed, never editable ───────────────── -->
+                <section class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
+                    <div class="flex items-center gap-base mb-xs">
+                        <span class="material-symbols-outlined text-[17px] text-outline">lock</span>
+                        <h2 class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">Sunday Service Roles</h2>
+                    </div>
+                    <p class="font-body-md text-[13px] leading-normal text-on-surface-variant mb-sm">
+                        Built into the app — filled on the service page and printed in the service guide,
+                        so they can't be changed here. They're listed so you can see all serving in one place.
+                    </p>
+                    <div class="flex flex-wrap gap-xs">
+                        <template x-for="role in liturgicalRoles" :key="role.slug">
+                            <span class="font-serif text-[15px] text-on-surface-variant bg-surface-container-lowest border border-outline-variant rounded-sm px-base py-[5px]"
+                                  x-text="role.name"></span>
+                        </template>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ── The editor ────────────────────────────────────────────────── -->
+            <!-- x-if, not x-show: x-show only hides, it still evaluates every
+                 binding inside, and `draft` is null until a Role is opened. -->
+            <div class="flex-col bg-surface-container-lowest border border-outline-variant rounded-lg"
+                 :class="draft ? 'flex' : 'hidden lg:flex'">
+
+                <template x-if="draft">
+                    <div class="flex flex-col">
+
+                        <!-- Below lg the editor is the whole screen, so it carries its own
+                             way back and its own delete. -->
+                        <div class="lg:hidden sticky top-0 z-10 flex items-center gap-base bg-surface-container-lowest border-b border-outline-variant rounded-t-lg px-sm py-base">
+                            <button @click="cancelEdit()" title="Back to the roles list" aria-label="Back to the roles list"
+                                    class="w-10 h-10 flex items-center justify-center rounded-lg text-on-surface-variant">
+                                <span class="material-symbols-outlined text-[24px]">arrow_back</span>
+                            </button>
+                            <div class="flex-grow min-w-0">
+                                <div class="font-display text-[17px] tracking-[.02em] text-primary truncate" x-text="draft.name"></div>
+                                <div class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant" x-text="draftPeopleNeededLabel"></div>
+                            </div>
+                            <button @click="deleteRole(draftRole)" title="Delete this role" aria-label="Delete this role"
+                                    class="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error transition-colors">
+                                <span class="material-symbols-outlined text-[21px]">delete</span>
+                            </button>
+                        </div>
+
+                        <div class="p-md flex flex-col gap-md">
+
+                            <div class="hidden lg:flex items-start justify-between gap-md pb-sm border-b border-outline-variant">
+                                <div>
+                                    <div class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant mb-xs">Editing Role</div>
+                                    <div class="font-display text-headline-md tracking-[.02em] text-primary" x-text="draft.name"></div>
+                                </div>
+                                <div class="flex items-center gap-base flex-shrink-0">
+                                    <span class="text-xs font-label-md uppercase tracking-wider text-on-secondary-container bg-secondary-container rounded-sm px-base py-xs"
+                                          x-text="draftPeopleNeededLabel"></span>
+                                    <button @click="cancelEdit()"
+                                            class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant border border-outline-variant rounded-lg px-md py-sm hover:bg-surface-container transition-colors">
+                                        Cancel
+                                    </button>
+                                    <button @click="saveDraft()"
+                                            class="text-xs font-label-md uppercase tracking-wider text-on-primary bg-primary border border-primary rounded-lg px-md py-sm shadow-xs hover:bg-primary/90 transition-colors">
+                                        Save
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Name. Renaming changes the label only — the Role keeps its serve history. -->
+                            <label class="flex flex-col gap-base max-w-[440px]">
+                                <span class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">Name</span>
+                                <input type="text" x-model="draft.name"
+                                       class="border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary" />
+                                <span class="font-body-md text-[13px] text-on-surface-variant">
+                                    Renaming changes the label only — the Role keeps its serve history.
+                                </span>
+                            </label>
+
+                            <!-- Slots -->
+                            <div class="flex flex-col gap-base">
+                                <div class="flex items-baseline justify-between gap-sm flex-wrap">
+                                    <span class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">Who it needs</span>
+                                    <span class="font-body-md text-[13px] text-on-surface-variant">
+                                        One line per person — three people means three lines, so you can ask for two women and one man.
+                                    </span>
+                                </div>
+
+                                <ul class="flex flex-col gap-base">
+                                    <template x-for="(slot, index) in draft.slots" :key="slot.id">
+                                        <li class="group flex flex-col lg:flex-row lg:items-center gap-base px-sm py-sm rounded-lg border border-outline-variant bg-surface">
+
+                                            <div class="flex items-center justify-between gap-sm lg:w-20 lg:flex-shrink-0">
+                                                <span class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant"
+                                                      x-text="`Person ${index + 1}`"></span>
+                                                <button @click="removeSlot(slot.id)" title="Remove this person"
+                                                        class="lg:hidden w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error transition-colors">
+                                                    <span class="material-symbols-outlined text-[20px]">close</span>
+                                                </button>
+                                            </div>
+
+                                            <!-- Three named choices, all visible: the requirement is the
+                                                 point of the row, not something to go looking for in a menu. -->
+                                            <div class="flex gap-[2px] p-[3px] bg-surface-container border border-outline-variant rounded-lg">
+                                                <template x-for="value in requirementOptions" :key="value">
+                                                    <button @click="setSlotRequirement(slot.id, value)"
+                                                            :aria-pressed="slot.requirement === value"
+                                                            :class="slot.requirement === value
+                                                                ? 'bg-primary text-on-primary'
+                                                                : 'text-on-surface-variant hover:text-on-surface'"
+                                                            class="flex-1 lg:flex-none lg:min-w-[88px] h-11 lg:h-auto px-sm lg:py-xs rounded-sm text-xs font-label-md uppercase tracking-wider transition-colors"
+                                                            x-text="requirementLabel(value)"></button>
+                                                </template>
+                                            </div>
+
+                                            <span class="hidden lg:block flex-grow"></span>
+
+                                            <div class="hidden lg:flex items-center flex-shrink-0 transition-opacity opacity-0 group-hover:opacity-100">
+                                                <button @click="moveSlot(index, index - 1)" :disabled="index === 0"
+                                                        class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary transition-colors disabled:opacity-30"
+                                                        title="Move up">
+                                                    <span class="material-symbols-outlined text-[19px]">arrow_upward</span>
+                                                </button>
+                                                <button @click="moveSlot(index, index + 1)" :disabled="index === draft.slots.length - 1"
+                                                        class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary transition-colors disabled:opacity-30"
+                                                        title="Move down">
+                                                    <span class="material-symbols-outlined text-[19px]">arrow_downward</span>
+                                                </button>
+                                                <button @click="removeSlot(slot.id)" title="Remove this person"
+                                                        class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error transition-colors">
+                                                    <span class="material-symbols-outlined text-[19px]">close</span>
+                                                </button>
+                                            </div>
+                                        </li>
+                                    </template>
+                                </ul>
+
+                                <button @click="addSlot()"
+                                        class="self-stretch lg:self-start inline-flex items-center justify-center gap-xs px-md py-sm text-xs font-label-md uppercase tracking-wider text-secondary border border-dashed border-outline-variant rounded-lg hover:bg-surface-container-low transition-colors">
+                                    <span class="material-symbols-outlined text-[18px]">add</span>Add another person
+                                </button>
+                            </div>
+
+                            <!-- Restriction rules -->
+                            <div class="flex flex-col gap-base pt-sm border-t border-outline-variant">
+                                <span class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">Rules about who can fill it</span>
+
+                                <ul x-show="draftRestrictions.length" class="flex flex-col gap-base">
+                                    <template x-for="(rule, index) in draftRestrictions" :key="index">
+                                        <li class="group flex items-center gap-sm px-sm py-sm rounded-lg border bg-surface"
+                                            :class="isRuleAvailable(rule) ? 'border-outline-variant' : 'border-error'">
+                                            <span class="material-symbols-outlined text-[19px] flex-shrink-0"
+                                                  :class="isRuleAvailable(rule) ? 'text-secondary' : 'text-error'"
+                                                  x-text="ruleIcon(rule)"></span>
+                                            <span class="flex-grow font-serif text-[16px] leading-snug"
+                                                  :class="isRuleAvailable(rule) ? 'text-on-surface' : 'text-error'"
+                                                  x-text="ruleSentence(rule)"></span>
+                                            <button @click="removeRule(index)" title="Remove this rule"
+                                                    class="w-9 h-9 lg:w-8 lg:h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error transition-opacity transition-colors opacity-100 lg:opacity-0 lg:group-hover:opacity-100">
+                                                <span class="material-symbols-outlined text-[19px]">close</span>
+                                            </button>
+                                        </li>
+                                    </template>
+                                </ul>
+
+                                <div x-show="!draftRestrictions.length"
+                                     class="flex items-center gap-sm p-md border border-dashed border-outline-variant rounded-lg text-on-surface-variant">
+                                    <span class="material-symbols-outlined text-[20px] text-outline">how_to_reg</span>
+                                    <span class="font-body-md text-body-md">No rules — anyone can fill this Role.</span>
+                                </div>
+
+                                <!-- One pair of pickers, reading as a sentence. Only Shared
+                                     Relationship Types are ever offered (ADR-0017). -->
+                                <div class="mt-xs bg-surface-container-low border border-outline-variant rounded-lg p-sm flex flex-col gap-base">
+                                    <span class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">Add a rule</span>
+
+                                    <div class="flex flex-col lg:flex-row lg:items-center gap-base">
+                                        <select x-model="newRuleKind" @change="newRuleValue = ''"
+                                                class="lg:flex-shrink-0 border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary">
+                                            <template x-for="option in ruleKindOptions" :key="option.value">
+                                                <option :value="option.value" x-text="option.label"></option>
+                                            </template>
+                                        </select>
+                                        <select x-model="newRuleValue"
+                                                class="lg:flex-grow lg:min-w-0 border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary">
+                                            <option value="" x-text="ruleValuePlaceholder"></option>
+                                            <template x-for="option in ruleValueOptions" :key="option.id">
+                                                <option :value="option.id" x-text="option.name"></option>
+                                            </template>
+                                        </select>
+                                        <button @click="addComposedRule()"
+                                                class="lg:flex-shrink-0 px-md py-sm text-xs font-label-md uppercase tracking-wider text-secondary border border-secondary rounded-lg hover:bg-secondary hover:text-on-secondary transition-colors">
+                                            Add rule
+                                        </button>
+                                    </div>
+
+                                    <!-- An empty picker and a failed read look identical; say which. -->
+                                    <p x-show="relationshipTypesNotice"
+                                       class="font-body-md text-[13px]"
+                                       :class="relationshipTypesDenied ? 'text-error' : 'text-on-surface-variant'"
+                                       x-text="relationshipTypesNotice"></p>
+                                </div>
+                            </div>
+
+                            <!-- Every problem at once, not one save at a time. -->
+                            <div x-show="saveAttempted && draftErrors.length"
+                                 class="bg-error-container text-on-error-container border border-outline-variant rounded-lg p-md">
+                                <p class="text-xs font-label-md uppercase tracking-wider mb-xs">This role can't be saved yet:</p>
+                                <ul class="list-disc pl-md font-body-md text-body-md">
+                                    <template x-for="problem in draftErrors" :key="problem">
+                                        <li x-text="problem"></li>
+                                    </template>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="lg:hidden sticky bottom-0 flex gap-base bg-surface-container-lowest border-t border-outline-variant rounded-b-lg px-sm py-sm">
+                            <button @click="cancelEdit()"
+                                    class="flex-1 h-12 text-xs font-label-md uppercase tracking-wider text-on-surface-variant border border-outline-variant rounded-lg">
+                                Cancel
+                            </button>
+                            <button @click="saveDraft()"
+                                    class="flex-[2] h-12 text-xs font-label-md uppercase tracking-wider text-on-primary bg-primary border border-primary rounded-lg shadow-xs">
+                                Save Role
+                            </button>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Nothing open: the pane says what it is for rather than sitting blank. -->
+                <template x-if="!draft">
+                    <div class="p-md">
+                        <div class="min-h-[520px] flex flex-col items-center justify-center gap-base border border-dashed border-outline-variant rounded-lg text-on-surface-variant">
+                            <span class="material-symbols-outlined text-[38px] text-outline-variant">volunteer_activism</span>
+                            <span class="font-serif text-[17px]">Choose a Role on the left to set who it needs.</span>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast. Centred by a fixed row rather than a transform, so Alpine's
+         transition (which writes its own transform) can't knock it off-centre.
+         It sits above the narrow-screen action bar. -->
+    <div class="fixed inset-x-0 bottom-[92px] lg:bottom-lg z-50 flex justify-center px-4 pointer-events-none">
+        <div x-show="toast.show" x-transition
+             class="text-center px-md py-sm rounded-lg shadow-md font-body-md text-body-md"
+             :class="toast.type === 'error' ? 'bg-error text-on-error' : 'bg-primary text-on-primary'"
+             x-text="toast.message"></div>
+    </div>
+
+</body>
+</html>
