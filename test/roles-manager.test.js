@@ -522,6 +522,135 @@ test('saved relationship rules round-trip through the eligibility engine', async
     assert.equal(verdicts.find(v => v.personId === 'ben').reason, Roles.REASONS.RELATIONSHIP_CONFLICT);
 });
 
+// ── How the list and the editor read (the two-pane redesign) ─────────────────
+//
+// The list is the navigation now: a row IS the edit control, and it has to say
+// enough at a glance that you know which Role to open. These are the sentences
+// it says.
+
+test('a Role row says how many people it needs and how many rules it carries', async () => {
+    const withRule = kidsDefinition();
+    withRule.restrictions = [{ kind: 'requireTag', tagId: KIDS_CLEARED }];
+    const page = await mountPage({ roles: { r1: withRule, r2: coffeeDefinition() } });
+    const kids = page.roles.find(r => r.slug === 'kids_ministry');
+    const coffee = page.roles.find(r => r.slug === 'coffee');
+
+    assert.equal(page.peopleNeededLabel(kids), 'Needs 3 people');
+    assert.equal(page.peopleNeededLabel(coffee), 'Needs 1 person', 'one person, not "1 people"');
+    assert.equal(page.ruleCountLabel(kids), '1 rule');
+    assert.equal(page.ruleCountLabel(coffee), '0 rules');
+    assert.equal(page.restrictionCount(coffee), 0);
+    assert.equal(page.roleCountLabel, '2 roles');
+});
+
+test('the roles count covers the Servant Roles the list actually shows', async () => {
+    // The liturgical Roles live in their own locked card and are not counted here.
+    const page = await mountPage({ roles: { r1: coffeeDefinition() } });
+    assert.equal(page.roleCountLabel, '1 role');
+    const empty = await mountPage({ roles: {} });
+    assert.equal(empty.roleCountLabel, '0 roles');
+});
+
+test('the open Role is the selected row, so the list shows where you are', async () => {
+    const page = await mountPage({ roles: { r1: kidsDefinition(), r2: coffeeDefinition() } });
+    const kids = page.roleDefinitions.find(d => d.id === 'r1');
+    assert.equal(page.isSelected(kids), false);
+    page.startEdit(kids);
+    assert.equal(page.isSelected(kids), true);
+    assert.equal(page.isSelected(page.roleDefinitions.find(d => d.id === 'r2')), false);
+    page.cancelEdit();
+    assert.equal(page.isSelected(kids), false);
+});
+
+test('delete acts on the stored Role, not on the half-typed draft name', async () => {
+    // The narrow editor carries its own delete button, and by then the only
+    // Role in view is the draft — so the confirmation has to name the Role as
+    // it is actually saved.
+    const page = await mountPage({ roles: { r1: kidsDefinition() } });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.draft.name = 'Half-typed nam';
+    const asked = [];
+    global.confirm = message => { asked.push(message); return true; };
+    await page.deleteRole(page.draftRole);
+    assert.match(asked[0], /Kids Ministry/);
+    assert.deepStrictEqual(stored('roles'), {});
+});
+
+test('deleting nothing does nothing', async () => {
+    const page = await mountPage({ roles: { r1: kidsDefinition() } });
+    assert.equal(page.draftRole, null, 'no Role is open');
+    await page.deleteRole(page.draftRole);
+    assert.equal(Object.keys(stored('roles')).length, 1);
+});
+
+test('each kind of rule gets its own glyph, so a list of rules is scannable', async () => {
+    const page = await mountPage({ roles: {} });
+    const icons = [
+        page.ruleIcon({ kind: 'requireTag', tagId: KIDS_CLEARED }),
+        page.ruleIcon({ kind: 'excludeTag', tagId: SABBATICAL }),
+        page.ruleIcon({ kind: 'notTogether', typeId: 't1' }),
+    ];
+    assert.equal(new Set(icons).size, 3, 'a required tag must not look like an excluded one');
+    icons.forEach(icon => assert.ok(icon && typeof icon === 'string'));
+});
+
+// ── Composing a rule from one pair of pickers ────────────────────────────────
+
+test('the rule kinds on offer include a relationship rule only when a Type is shared', async () => {
+    const withShared = await mountPage({ relationship_types: { t1: MARRIAGE } });
+    assert.deepStrictEqual(
+        withShared.ruleKindOptions.map(o => o.value),
+        ['requireTag', 'excludeTag', 'notTogether']
+    );
+
+    const withNone = await mountPage({ relationship_types: { t2: DISCIPLESHIP } });
+    assert.deepStrictEqual(withNone.ruleKindOptions.map(o => o.value), ['requireTag', 'excludeTag'],
+        'offering a rule there is nothing to build is a dead end');
+    // And every label is a sentence opener, not a field name.
+    withShared.ruleKindOptions.forEach(o => assert.doesNotMatch(o.label, /Tag[A-Z]|kind|typeId/));
+});
+
+test('the second picker follows the first — tags for a tag rule, shared Types for a pair rule', async () => {
+    const page = await mountPage({ relationship_types: { t1: MARRIAGE, t2: DISCIPLESHIP } });
+
+    page.newRuleKind = Roles.RESTRICTIONS.REQUIRE_TAG;
+    assert.deepStrictEqual(page.ruleValueOptions.map(o => o.id).sort(), [KIDS_CLEARED, SABBATICAL].sort());
+    assert.match(page.ruleValuePlaceholder, /tag/i);
+
+    page.newRuleKind = Roles.RESTRICTIONS.NOT_TOGETHER;
+    assert.deepStrictEqual(page.ruleValueOptions.map(o => o.id), ['t1'],
+        'an unshared Type is never offered, whichever picker is asking');
+    assert.match(page.ruleValuePlaceholder, /relationship/i);
+});
+
+test('adding a composed rule routes to the right kind and clears the picker', async () => {
+    const page = await mountPage({ roles: { r1: kidsDefinition() }, relationship_types: { t1: MARRIAGE } });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+
+    page.newRuleKind = Roles.RESTRICTIONS.EXCLUDE_TAG;
+    page.newRuleValue = SABBATICAL;
+    page.addComposedRule();
+
+    page.newRuleKind = Roles.RESTRICTIONS.NOT_TOGETHER;
+    page.newRuleValue = 't1';
+    page.addComposedRule();
+
+    assert.deepStrictEqual(page.draft.restrictions, [
+        { kind: 'excludeTag', tagId: SABBATICAL },
+        { kind: 'notTogether', typeId: 't1' },
+    ]);
+    assert.equal(page.newRuleValue, '', 'the picker resets, ready for the next rule');
+});
+
+test('adding a rule with nothing chosen says so rather than adding a rule about nothing', async () => {
+    const page = await mountPage({ roles: { r1: kidsDefinition() } });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.newRuleValue = '';
+    page.addComposedRule();
+    assert.equal(page.draft.restrictions.length, 0);
+    assert.equal(page.toast.type, 'error');
+});
+
 test('the demo: Kids Ministry with three slots, a Tag rule and a couple rule, reopened unchanged', async () => {
     const page = await mountPage({ roles: {}, relationship_types: { t1: MARRIAGE } });
     await page.createRole('Kids Ministry');

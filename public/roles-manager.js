@@ -44,10 +44,11 @@ window.RolesManager = () => ({
     draftId: null,
     saveAttempted: false,
 
-    // The rule being composed, before it is added to the draft.
-    newRuleTagKind: 'requireTag',
-    newRuleTagId: '',
-    newRuleTypeId: '',
+    // The rule being composed, before it is added to the draft. One pair of
+    // pickers, not one per kind: the kind decides what the second list offers,
+    // so the two read as a sentence — "Cannot serve together if | Marriage".
+    newRuleKind: 'requireTag',
+    newRuleValue: '',
     newRoleName: '',
 
     loading: true,
@@ -163,6 +164,36 @@ window.RolesManager = () => ({
         return RolesCore.slotCount(role);
     },
 
+    // ── What a row in the list says ──────────────────────────────────────────
+    //
+    // The row is the edit control now, so it has to say enough at a glance that
+    // you know which Role to open without opening any of them.
+
+    peopleNeededLabel(role) {
+        const needed = this.peopleNeeded(role);
+        return needed === 1 ? 'Needs 1 person' : `Needs ${needed} people`;
+    },
+
+    restrictionCount(role) {
+        return ((role && role.restrictions) || []).length;
+    },
+
+    ruleCountLabel(role) {
+        const count = this.restrictionCount(role);
+        return count === 1 ? '1 rule' : `${count} rules`;
+    },
+
+    // Servant Roles only — the liturgical ones are counted nowhere, because
+    // they live in their own locked card and are not part of this list.
+    get roleCountLabel() {
+        const count = this.servantRoles.length;
+        return count === 1 ? '1 role' : `${count} roles`;
+    },
+
+    isSelected(role) {
+        return !!role && this.draftId === role.id;
+    },
+
     // ── Create, rename, delete ───────────────────────────────────────────────
 
     async createRole(name) {
@@ -220,6 +251,19 @@ window.RolesManager = () => ({
         this.draftId = role.id;
         this.saveAttempted = false;
         this.resetRuleForm();
+        // On a narrow screen the editor replaces the list rather than sitting
+        // beside it, so the view has to move with it — otherwise opening a Role
+        // lands you halfway down a screen that has just changed underneath you.
+        if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    },
+
+    // The stored definition the draft came from. Delete acts on that, not on the
+    // draft, so the confirmation names the Role as it is saved rather than
+    // whatever half-finished name is currently in the box.
+    get draftRole() {
+        return this.roleDefinitions.find(def => def.id === this.draftId) || null;
     },
 
     cancelEdit() {
@@ -230,12 +274,12 @@ window.RolesManager = () => ({
     },
 
     resetRuleForm() {
-        this.newRuleTagKind = RolesCore.RESTRICTIONS.REQUIRE_TAG;
-        this.newRuleTagId = '';
-        this.newRuleTypeId = '';
+        this.newRuleKind = RolesCore.RESTRICTIONS.REQUIRE_TAG;
+        this.newRuleValue = '';
     },
 
     async deleteRole(role) {
+        if (!role) return;
         if (RolesCore.isLocked(role)) {
             this.showToast('Liturgical Roles are built in and cannot be deleted', 'error');
             return;
@@ -292,6 +336,10 @@ window.RolesManager = () => ({
         return RolesCore.slotCount(this.draft);
     },
 
+    get draftPeopleNeededLabel() {
+        return this.peopleNeededLabel(this.draft);
+    },
+
     // The choices a slot offers, in the model's own order.
     get requirementOptions() {
         return RolesCore.REQUIREMENT_VALUES;
@@ -331,6 +379,52 @@ window.RolesManager = () => ({
         return '';
     },
 
+    // The kinds of rule on offer, as sentence openers. A relationship rule is
+    // offered only when there is a Shared Type to build one from — a choice
+    // whose second picker is always empty is a dead end, and the notice below
+    // the form already explains why it isn't there.
+    get ruleKindOptions() {
+        const options = [
+            { value: RolesCore.RESTRICTIONS.REQUIRE_TAG, label: 'Must be tagged' },
+            { value: RolesCore.RESTRICTIONS.EXCLUDE_TAG, label: 'Cannot be tagged' },
+        ];
+        if (this.relationshipRuleOptions.length) {
+            options.push({ value: RolesCore.RESTRICTIONS.NOT_TOGETHER, label: 'Cannot serve together if' });
+        }
+        return options;
+    },
+
+    get composingRelationshipRule() {
+        return this.newRuleKind === RolesCore.RESTRICTIONS.NOT_TOGETHER;
+    },
+
+    get ruleValueOptions() {
+        const source = this.composingRelationshipRule ? this.relationshipRuleOptions : this.shepherdingTags;
+        return source.map(item => ({ id: item.id, name: item.name }));
+    },
+
+    get ruleValuePlaceholder() {
+        return this.composingRelationshipRule ? 'Choose a relationship…' : 'Choose a tag…';
+    },
+
+    // The form's one action. The kind decides which rule is actually being
+    // built; both routes below still do their own checking, because the form is
+    // a convenience and they are the boundary.
+    addComposedRule() {
+        if (!this.newRuleValue) {
+            this.showToast(
+                this.composingRelationshipRule ? 'Pick a relationship type from the list' : 'Pick a tag from the list',
+                'error'
+            );
+            return;
+        }
+        if (this.composingRelationshipRule) {
+            this.addRelationshipRule(this.newRuleValue);
+        } else {
+            this.addTagRule(this.newRuleKind, this.newRuleValue);
+        }
+    },
+
     hasRule(kind, key, value) {
         return this.draftRestrictions.some(rule => rule.kind === kind && rule[key] === value);
     },
@@ -348,7 +442,7 @@ window.RolesManager = () => ({
         this.draft = Object.assign({}, this.draft, {
             restrictions: this.draftRestrictions.concat([{ kind: kind, tagId: tagId }]),
         });
-        this.newRuleTagId = '';
+        this.newRuleValue = '';
     },
 
     addRelationshipRule(typeId) {
@@ -365,7 +459,7 @@ window.RolesManager = () => ({
         this.draft = Object.assign({}, this.draft, {
             restrictions: this.draftRestrictions.concat([{ kind: kind, typeId: typeId }]),
         });
-        this.newRuleTypeId = '';
+        this.newRuleValue = '';
     },
 
     removeRule(index) {
@@ -382,6 +476,15 @@ window.RolesManager = () => ({
     tagName(tagId) {
         const tag = this.shepherdingTags.find(t => t.id === tagId);
         return tag ? tag.name : null;
+    },
+
+    // A glyph per kind, so a list of rules can be scanned before it is read —
+    // a required tag must never look like an excluded one.
+    ruleIcon(rule) {
+        const kind = rule && rule.kind;
+        if (kind === RolesCore.RESTRICTIONS.REQUIRE_TAG) return 'sell';
+        if (kind === RolesCore.RESTRICTIONS.EXCLUDE_TAG) return 'block';
+        return 'hub';
     },
 
     // A rule the user can check by reading it. Never a data structure, and never
