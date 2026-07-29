@@ -395,6 +395,12 @@ One dated instance of an [[Event series]], or a **one-off Event** that belongs t
 - **`colour`** — which of eight palette colours it draws in on the Calendar. Kept on the [[Event series]] for a recurring Event, so one change moves every date; on the occurrence itself for a one-off, whose occurrence *is* the whole Event. Never copied down: unlike [[Event visibility]] (which a security rule reads off the document and so must be stamped), a colour is only ever read where the series is already in hand. Decoration only — **the red that means "needs sorting" is not in the palette and always overrides it**, so a chosen colour can never shout or stop something else shouting.
 - **A Sunday occurrence is `services/{date}`**, which keeps its liturgical roles as the hardwired fields the Service Guide prints. Assignments sit *alongside* those fields and never over them.
 
+### Event series management
+Managing an [[Event series]] itself rather than one date of it — its time and which Roles every date carries. Reached at `calendar-event.html?series=<id>`, and the only way into the **Sunday Service as an Event**. Distinct from the order of service, which is still built one Sunday at a time: a Sunday chip on the Calendar goes there, never here.
+- **Liturgical Roles are shown and locked.** An editor needs to see the whole shape of a Sunday, but those Roles are filled per-Sunday through the Service entity and print in the booklet, so this screen can never drop one (`lockedRoleSlugs`, MS-13).
+- **The time lives on the recurrence rule**, not beside it, and a date carrying its own time still wins. Setting a Sunday time therefore ends the Sunday Service's reliance on its *implied* rule — so the rule written has to keep saying "every Sunday".
+- Opening the Sunday Service **reconciles** it: created if it never existed, repaired if it drifted, untouched if it is already right.
+
 ### Assignment
 A Person placed in one slot of one Role on an [[Event occurrence]] — **the plan, not the record**. Mutable, and never itself a serve record.
 - A slot holds **one current** Assignment. Assigning a replacement overwrites it.

@@ -83,11 +83,23 @@
             <div>
                 <h1 class="font-display text-headline-lg tracking-[.02em] text-primary">Calendar</h1>
             </div>
-            <a x-show="canCreate" href="calendar-event.html?new=1"
-               class="shrink-0 flex items-center gap-1 bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs
-                      font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-primary-container">
-                <span class="material-symbols-outlined text-[18px]">add</span> New event
-            </a>
+            <div class="shrink-0 flex items-center gap-sm">
+                <!-- The Sunday Service AS AN EVENT — its time, and which Roles
+                     every Sunday needs. Not its liturgy: that is still built one
+                     Sunday at a time in the order of service, which is what keeps
+                     the printed booklet safe. Clicking a Sunday in the grid still
+                     goes there, and must keep going there. -->
+                <a x-show="canCreate" href="calendar-event.html?series=sunday_service"
+                   class="flex items-center gap-1 border border-secondary text-secondary px-md py-2 rounded-lg
+                          font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
+                    <span class="material-symbols-outlined text-[18px]">church</span> Sunday Service
+                </a>
+                <a x-show="canCreate" href="calendar-event.html?new=1"
+                   class="flex items-center gap-1 bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs
+                          font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-primary-container">
+                    <span class="material-symbols-outlined text-[18px]">add</span> New event
+                </a>
+            </div>
         </div>
 
         <!-- Every failure here renders as an empty calendar if you let it, and

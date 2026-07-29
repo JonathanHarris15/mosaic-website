@@ -168,6 +168,14 @@
                 this.loading = true;
                 this.error = '';
                 try {
+                    // Managing the EVENT rather than one date of it: its time,
+                    // and which Roles every date of it carries. This is the only
+                    // way into the Sunday Service as an Event — the liturgy is
+                    // still edited per-Sunday in the order of service, and that
+                    // separation is what keeps the printed booklet safe.
+                    const seriesId = params.get('series');
+                    if (seriesId) return await this.loadSeriesMode(seriesId);
+
                     const id = params.get('id');
 
                     // No id means this is a new Event, not a broken link.
@@ -346,6 +354,140 @@
                 slugs.push(def.slug);
                 this.occurrence.occurrenceRoleSlugs = slugs;
                 await this.persist();
+            },
+
+            // ── Managing the Event itself, not one date of it ────────────────
+            //
+            // The Sunday Service has always been a real series document carrying
+            // real Roles (MS-13), and until now nothing could open it. So this is
+            // where its time is set and where an editor says which Servant Roles
+            // every Sunday needs — welcome team, sound desk — alongside the
+            // liturgical Roles, which are shown but never editable here.
+
+            managingSeries: false,
+
+            async loadSeriesMode(seriesId) {
+                if (!this.isEditor) {
+                    this.error = 'Only an editor can manage an event.';
+                    return;
+                }
+                this.managingSeries = true;
+
+                // Opening the Sunday Service is also the moment it gets repaired
+                // if it has drifted, or created if it has never existed. Safe to
+                // run every time: it writes only when something is actually wrong.
+                this.series = (seriesId === Core.SUNDAY_SERVICE_ID)
+                    ? (await Store.ensureSundayService(db, Roles.LITURGICAL_SLUGS)).series
+                    : await Store.loadSeries(db, seriesId);
+
+                if (!this.series) { this.error = 'That event could not be found.'; return; }
+
+                this.occurrence = { seriesId: seriesId, name: this.series.name };
+                await this.loadEditorData();
+            },
+
+            get isSundaySeries() {
+                return !!this.series && this.series.id === Core.SUNDAY_SERVICE_ID;
+            },
+
+            get seriesTime() {
+                const rule = this.series && this.series.recurrence;
+                return (rule && rule.time) || '';
+            },
+
+            get seriesPattern() {
+                if (!this.series) return '';
+                const rule = this.series.recurrence
+                    || (this.isSundaySeries ? Store.SUNDAY_RULE : null);
+                return rule ? View.recurrenceSentence(rule) : 'No pattern set.';
+            },
+
+            // The Roles this Event carries, every date of it. Liturgical ones
+            // come first and are locked — they are assigned through the order of
+            // service and print in the booklet, so this screen SHOWS them (an
+            // editor needs to see the whole shape of a Sunday) and never lets one
+            // be dropped.
+            get seriesRoles() {
+                const slugs = (this.series && this.series.roleSlugs) || [];
+                const locked = (this.series && this.series.lockedRoleSlugs) || [];
+                return slugs.map(slug => {
+                    const def = this.roleDefinitions.find(d => d.slug === slug);
+                    return {
+                        slug: slug,
+                        name: (def && def.name) || slug,
+                        slots: (def && def.slots) || [],
+                        locked: locked.indexOf(slug) !== -1
+                            || Roles.LITURGICAL_SLUGS.indexOf(slug) !== -1,
+                    };
+                });
+            },
+
+            get liturgicalRoles() { return this.seriesRoles.filter(r => r.locked); },
+            get servantRoles() { return this.seriesRoles.filter(r => !r.locked); },
+
+            // Servant Roles from the Roles Manager not yet on this Event.
+            get seriesRolesAvailable() {
+                const on = (this.series && this.series.roleSlugs) || [];
+                return this.roleDefinitions
+                    .filter(d => Roles.LITURGICAL_SLUGS.indexOf(d.slug) === -1)
+                    .filter(d => on.indexOf(d.slug) === -1);
+            },
+
+            async setSeriesRoles(slugs) {
+                if (this.saving) return;
+                this.saving = true;
+                this.error = '';
+                try {
+                    await Store.setSeriesRoles(db, this.series.id, slugs);
+                    this.series.roleSlugs = slugs;
+                } catch (e) {
+                    console.error('Series roles failed:', e);
+                    this.error = (e && e.message) || 'That change could not be saved.';
+                } finally {
+                    this.saving = false;
+                }
+            },
+
+            addSeriesRole(slug) {
+                const slugs = ((this.series.roleSlugs) || []).concat([slug]);
+                return this.setSeriesRoles(slugs);
+            },
+
+            removeSeriesRole(slug) {
+                const slugs = ((this.series.roleSlugs) || []).filter(s => s !== slug);
+                return this.setSeriesRoles(slugs);
+            },
+
+            async saveSeriesTime(time) {
+                if (this.saving) return;
+                this.saving = true;
+                this.error = '';
+                try {
+                    const rule = await Store.setSeriesTime(db, this.series.id, time);
+                    this.series.recurrence = rule;
+                } catch (e) {
+                    console.error('Series time failed:', e);
+                    this.error = (e && e.message) || 'That time could not be saved.';
+                } finally {
+                    this.saving = false;
+                }
+            },
+
+            // The next few dates, so an editor can jump straight to a Sunday's
+            // order of service — which is where a liturgical Role actually gets
+            // somebody's name against it.
+            get seriesNextDates() {
+                const rule = this.series && (this.series.recurrence
+                    || (this.isSundaySeries ? Store.SUNDAY_RULE : null));
+                if (!rule) return [];
+                return View.nextDates(rule, window.DateUtils.todayStr(), 4);
+            },
+
+            dateHref(date) {
+                return this.isSundaySeries
+                    ? 'service-builder.html?date=' + encodeURIComponent(date)
+                    : 'calendar-event.html?id=' + encodeURIComponent(
+                        Core.occurrenceId(this.series.id, date));
             },
 
             // ── The colour it shows up as ────────────────────────────────────

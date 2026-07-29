@@ -24,6 +24,11 @@
     const Core = (typeof require !== 'undefined')
         ? require('./events-occurrence-core.js')
         : global.EventsOccurrenceCore;
+    // MS-13's series model — locked series, locked Roles, and the reconcile that
+    // repairs a damaged Sunday Service.
+    const Events = (typeof require !== 'undefined')
+        ? require('./events-core.js')
+        : global.EventsCore;
 
     const SERIES = 'events';
     const OCCURRENCES = 'event_occurrences';
@@ -191,7 +196,19 @@
                     // series moving colour and half not is the kind of bug
                     // nobody ever reports, they just stop trusting the feature.
                     // `occurrencePayload` strips this key on the way back out.
-                    .map(o => Object.assign({ name: s.name, seriesName: s.name, seriesColour: s.colour }, o))
+                    //
+                    // `time` is stamped the same way and for the same reason: a
+                    // date that carries its own time (one Sunday starting an
+                    // hour early) still wins, because `o` is assigned last.
+                    .map(o => Object.assign(
+                        {
+                            name: s.name,
+                            seriesName: s.name,
+                            seriesColour: s.colour,
+                        },
+                        rule.time ? { time: rule.time } : {},
+                        o
+                    ))
                 : [];
         });
 
@@ -395,6 +412,80 @@
     // must not depend on. So the slugs are restated here and a test holds the
     // two lists together — the same trade the Sunday Service id already makes.
     const COLOUR_SLUGS = ['steel', 'ocean', 'navy', 'green', 'gold', 'amber', 'plum', 'rose'];
+
+    // ── Managing a series ────────────────────────────────────────────────────
+    //
+    // MS-13 built this model — a locked series carrying locked Roles, and a
+    // reconcile that repairs one — and no screen ever reached it. So the Sunday
+    // Service has been a real document with real Roles on it that nobody could
+    // see, let alone change.
+
+    async function loadSeries(db, seriesId) {
+        const snap = await db.collection(SERIES).doc(seriesId).get();
+        return snap.exists ? Object.assign({ id: snap.id }, snap.data()) : null;
+    }
+
+    // Create the Sunday Service if it has never existed, repair it if it has
+    // drifted, and write nothing at all if it is already right — so this is safe
+    // to call every time the screen opens.
+    async function ensureSundayService(db, liturgicalSlugs) {
+        const stored = await loadSeries(db, Core.SUNDAY_SERVICE_ID);
+        const result = Events.reconcileSundayService(stored, liturgicalSlugs);
+
+        if (result.changed) {
+            const payload = Object.assign({}, result.series);
+            delete payload.id;
+            await db.collection(SERIES).doc(Core.SUNDAY_SERVICE_ID).set(payload, { merge: true });
+        }
+
+        return {
+            series: Object.assign({ id: Core.SUNDAY_SERVICE_ID }, result.series),
+            created: !stored,
+            repaired: !!stored && result.changed,
+            reason: result.reason,
+        };
+    }
+
+    // Which Roles the series carries. A LOCKED Role cannot be dropped: the
+    // liturgical ones are assigned through the Service entity and print in the
+    // booklet, so a series that stopped listing one would leave the Guide
+    // reaching for a Role the Event says it does not have.
+    async function setSeriesRoles(db, seriesId, roleSlugs) {
+        const stored = await loadSeries(db, seriesId);
+        if (!stored) throw new Error('No such event series: ' + seriesId);
+
+        const locked = stored.lockedRoleSlugs || [];
+        const dropped = locked.filter(slug => (roleSlugs || []).indexOf(slug) === -1);
+        if (dropped.length) {
+            throw new Error(
+                'These Roles are locked to "' + (stored.name || seriesId) + '" and cannot be ' +
+                'removed: ' + dropped.join(', ')
+            );
+        }
+
+        await db.collection(SERIES).doc(seriesId).set({ roleSlugs: roleSlugs }, { merge: true });
+        return roleSlugs;
+    }
+
+    // The time it starts. Written onto the RECURRENCE RULE rather than beside it,
+    // because that is where every other date-shaped fact about a series lives and
+    // where `recurrenceSentence` reads it from.
+    //
+    // For the Sunday Service this quietly ends its reliance on the implied rule:
+    // once a rule is stored, `recurrenceFor` prefers it. So the rule written here
+    // has to keep saying "every Sunday" — anything else moves the Sundays.
+    async function setSeriesTime(db, seriesId, time) {
+        if (time && !/^\d{1,2}:\d{2}$/.test(String(time))) {
+            throw new Error('A time reads as HH:MM, not "' + time + '".');
+        }
+        const stored = await loadSeries(db, seriesId);
+        const base = recurrenceFor(stored ? Object.assign({ id: seriesId }, stored) : { id: seriesId })
+            || { freq: 'once', startDate: null };
+
+        const rule = Object.assign({}, base, { time: time || null });
+        await db.collection(SERIES).doc(seriesId).set({ recurrence: rule }, { merge: true });
+        return rule;
+    }
 
     async function setSeriesColour(db, seriesId, colour) {
         if (!seriesId) throw new Error('A colour needs an event to belong to.');
@@ -621,6 +712,10 @@
         occurrencePayload,
         restampSeriesVisibility,
         setSeriesColour,
+        loadSeries,
+        ensureSundayService,
+        setSeriesRoles,
+        setSeriesTime,
         COLOUR_SLUGS,
         saveRoster,
         applyOrphanChoices,

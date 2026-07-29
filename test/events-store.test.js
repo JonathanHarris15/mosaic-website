@@ -934,3 +934,137 @@ test('a colour nobody recognises is refused rather than stored', async () => {
     const db = fakeDb({ events: { midweek: { name: 'Midweek' } } }, { rank: 'editor' });
     await assert.rejects(() => Store.setSeriesColour(db, 'midweek', 'chartreuse'), /colour/i);
 });
+
+// ── Managing a series, the Sunday Service in particular ───────────────────────
+//
+// MS-13 built the model for this (events-core.js: locked series, locked Roles,
+// reconcile) and no screen ever used it. So the Sunday Service has been a real
+// series document with real Roles on it that nobody could look at, let alone
+// change — its time, and which Servant Roles every Sunday needs.
+
+const Events = require('../public/events-core.js');
+const Roles = require('../public/roles-core.js');
+
+test('the Sunday Service series is created if it has never existed', async () => {
+    const db = fakeDb({ events: {} }, { rank: 'elder' });
+
+    const result = await Store.ensureSundayService(db, Roles.LITURGICAL_SLUGS);
+
+    assert.strictEqual(result.created, true);
+    const writes = db._flatWrites();
+    assert.deepStrictEqual(writes.map(w => w.path), ['events/sunday_service']);
+    assert.strictEqual(writes[0].data.name, 'Sunday Service');
+    assert.strictEqual(writes[0].data.locked, true);
+    Roles.LITURGICAL_SLUGS.forEach(slug => {
+        assert.ok(writes[0].data.lockedRoleSlugs.indexOf(slug) !== -1, slug + ' was not locked');
+    });
+});
+
+test('a Sunday Service that already exists is left alone', async () => {
+    const existing = Events.sundayServiceSeries(Roles.LITURGICAL_SLUGS);
+    const db = fakeDb({ events: { sunday_service: existing } }, { rank: 'elder' });
+
+    const result = await Store.ensureSundayService(db, Roles.LITURGICAL_SLUGS);
+
+    assert.strictEqual(result.created, false);
+    assert.deepStrictEqual(db._flatWrites(), [], 'rewrote a series that needed nothing');
+});
+
+test('a liturgical Role that went missing is restored, and the Servant Roles keep their order', async () => {
+    // The reconcile MS-13 wrote, finally reachable from a screen.
+    const damaged = Object.assign(Events.sundayServiceSeries(Roles.LITURGICAL_SLUGS), {
+        roleSlugs: ['welcome_team', 'sound_desk'],
+        locked: false,
+    });
+    const db = fakeDb({ events: { sunday_service: damaged } }, { rank: 'elder' });
+
+    await Store.ensureSundayService(db, Roles.LITURGICAL_SLUGS);
+
+    const written = db._flatWrites()[0].data;
+    assert.strictEqual(written.locked, true, 're-locking is the point of the reconcile');
+    Roles.LITURGICAL_SLUGS.forEach(slug => {
+        assert.ok(written.roleSlugs.indexOf(slug) !== -1, slug + ' was not restored');
+    });
+    // The user's own Roles survive, in the order they chose, behind the
+    // liturgical ones.
+    const servant = written.roleSlugs.filter(s => Roles.LITURGICAL_SLUGS.indexOf(s) === -1);
+    assert.deepStrictEqual(servant, ['welcome_team', 'sound_desk']);
+});
+
+test('a Servant Role can be put on the Sunday Service, and taken off again', async () => {
+    const existing = Events.sundayServiceSeries(Roles.LITURGICAL_SLUGS);
+    const db = fakeDb({ events: { sunday_service: existing } }, { rank: 'elder' });
+
+    await Store.setSeriesRoles(db, 'sunday_service', existing.roleSlugs.concat(['welcome_team']));
+
+    const written = db._flatWrites()[0].data;
+    assert.ok(written.roleSlugs.indexOf('welcome_team') !== -1);
+});
+
+test('a liturgical Role can never be taken off the Sunday Service', async () => {
+    // They are assigned through the Service entity and print in the booklet.
+    // Removing one here would leave the Guide reaching for a Role the series
+    // says it does not have.
+    const existing = Events.sundayServiceSeries(Roles.LITURGICAL_SLUGS);
+    const db = fakeDb({ events: { sunday_service: existing } }, { rank: 'elder' });
+    const without = existing.roleSlugs.filter(s => s !== Roles.LITURGICAL_SLUGS[0]);
+
+    await assert.rejects(
+        () => Store.setSeriesRoles(db, 'sunday_service', without),
+        /locked/i
+    );
+    assert.deepStrictEqual(db._flatWrites(), [], 'wrote anyway');
+});
+
+test('setting the time writes a real rule, so the Sunday stops relying on the implied one', async () => {
+    const db = fakeDb({ events: { sunday_service: { name: 'Sunday Service' } } }, { rank: 'elder' });
+
+    await Store.setSeriesTime(db, 'sunday_service', '10:30');
+
+    const rule = db._flatWrites()[0].data.recurrence;
+    assert.strictEqual(rule.time, '10:30');
+    // Still every Sunday. A stored rule wins over the implied one, so it has to
+    // say the same thing about the pattern or the Sundays move.
+    assert.strictEqual(rule.freq, 'weekly');
+    assert.strictEqual(rule.weekday, 0);
+});
+
+test('a series time shows on every date of it, without being stored on each one', async () => {
+    const series = {
+        midweek: {
+            name: 'Midweek Gathering', visibility: 'member',
+            recurrence: { freq: 'weekly', startDate: '2026-07-01', weekday: 3, time: '19:30' },
+        },
+    };
+    const viewer = { rank: 'member', personId: 'p1' };
+    const db = fakeDb({ events: series, event_occurrences: {} }, viewer);
+
+    const rows = await Store.loadCalendar(db, Object.assign({}, viewer, RANGE));
+
+    assert.ok(rows.length > 1);
+    rows.forEach(o => assert.strictEqual(o.time, '19:30', o.date + ' lost the time'));
+});
+
+test('a date with its own time keeps it when the series time changes', async () => {
+    // One Sunday that starts an hour early is a real thing, and the series must
+    // not stamp over it.
+    const series = {
+        midweek: {
+            name: 'Midweek', visibility: 'member',
+            recurrence: { freq: 'weekly', startDate: '2026-07-01', weekday: 3, time: '19:30' },
+        },
+    };
+    const stored = {
+        'midweek_2026-07-15': {
+            seriesId: 'midweek', date: '2026-07-15', visibility: 'member',
+            participantIds: [], time: '18:00',
+        },
+    };
+    const viewer = { rank: 'member', personId: 'p1' };
+    const db = fakeDb({ events: series, event_occurrences: stored }, viewer);
+
+    const rows = await Store.loadCalendar(db, Object.assign({}, viewer, RANGE));
+
+    assert.strictEqual(rows.find(o => o.date === '2026-07-15').time, '18:00');
+    assert.strictEqual(rows.find(o => o.date === '2026-07-08').time, '19:30');
+});

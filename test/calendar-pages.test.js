@@ -688,3 +688,111 @@ test('the colour section is offered to editors and writes through the store', ()
     // both are reasonable to expect and only one is true.
     assert.ok(/every date of this event/.test(html));
 });
+
+// ── Managing the Sunday Service as an Event ───────────────────────────────────
+//
+// MS-13 built this series — locked, carrying the liturgical Roles — and nothing
+// could ever open it. The Calendar now has a door to it. What must NOT change is
+// where a Sunday CHIP goes: the liturgy is still built one Sunday at a time in
+// the order of service, and that separation is what keeps the printed booklet
+// safe.
+
+function seriesDb(seed) {
+    const docs = Object.assign({}, seed);
+    const writes = [];
+    const db = {
+        collection: name => ({
+            doc: id => ({
+                path: name + '/' + id,
+                async get() {
+                    const d = docs[name + '/' + id];
+                    return { exists: !!d, id: id, data: () => d };
+                },
+                async set(data, options) {
+                    writes.push({ path: name + '/' + id, data: data });
+                    docs[name + '/' + id] = Object.assign({}, docs[name + '/' + id], data);
+                },
+                collection: sub => db.collection(name + '/' + id + '/' + sub),
+            }),
+            where() { return this; },
+            async get() { return { docs: [] }; },
+        }),
+    };
+    db.__writes = writes;
+    db.__docs = docs;
+    return db;
+}
+
+test('opening the Sunday Service creates it if it has never existed', async () => {
+    const Roles = require('../public/roles-core.js');
+    const db = seriesDb({});
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', {
+        db: db,
+        location: { search: '?series=sunday_service', href: '' },
+    });
+    page.rank = 'editor';
+
+    await page.loadSeriesMode('sunday_service');
+
+    assert.strictEqual(page.managingSeries, true);
+    assert.strictEqual(page.series.name, 'Sunday Service');
+    assert.deepStrictEqual(db.__writes.map(w => w.path), ['events/sunday_service']);
+
+    // Every liturgical Role is shown, and every one of them is locked.
+    const shown = page.liturgicalRoles.map(r => r.slug).sort();
+    assert.deepStrictEqual(shown, Roles.LITURGICAL_SLUGS.slice().sort());
+    assert.ok(page.liturgicalRoles.every(r => r.locked));
+});
+
+test('a liturgical Role is never offered for removal, and refuses if asked', async () => {
+    const Roles = require('../public/roles-core.js');
+    const db = seriesDb({});
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', {
+        db: db, location: { search: '?series=sunday_service', href: '' },
+    });
+    page.rank = 'editor';
+    await page.loadSeriesMode('sunday_service');
+
+    // Not in the removable list...
+    assert.deepStrictEqual(page.servantRoles, []);
+    // ...and not offered for adding either, since it is already on and locked.
+    assert.deepStrictEqual(
+        page.seriesRolesAvailable.filter(d => Roles.LITURGICAL_SLUGS.indexOf(d.slug) !== -1), []);
+
+    // And the store refuses even if something reached past the screen.
+    db.__writes.length = 0;
+    await page.removeSeriesRole(Roles.LITURGICAL_SLUGS[0]);
+    assert.match(page.error, /locked/i);
+    assert.deepStrictEqual(db.__writes, [], 'wrote anyway');
+});
+
+test('the Calendar offers the Sunday Service without changing where a Sunday chip goes', () => {
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    assert.ok(/calendar-event\.html\?series=sunday_service/.test(html),
+        'no way into the Sunday Service as an Event');
+
+    // The chip rule is untouched, and this is the test that proves the new
+    // button did not quietly become a second answer to it.
+    const Core = require('../public/events-occurrence-core.js');
+    const location = { search: '', href: '' };
+    const page = loadComponent('calendar.js', 'calendarPage', { location: location });
+
+    page.open({ id: 'x', date: '2026-07-12', isSunday: true, seriesId: Core.SUNDAY_SERVICE_ID });
+    assert.match(location.href, /^service-builder\.html\?date=2026-07-12$/,
+        'a Sunday chip stopped opening the order of service');
+    assert.doesNotMatch(location.href, /series=/, 'a Sunday chip now opens the Event editor');
+});
+
+test('every page that loads the events store loads the series model first', () => {
+    // events-store.js now reaches for window.EventsCore. A classic script that
+    // loads them the other way round leaves it undefined at parse time — and the
+    // page renders, it just cannot manage a series.
+    ['calendar.html', 'calendar-event.html', 'service-calendar.html'].forEach(file => {
+        const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+        if (html.indexOf('events-store.js') === -1) return;
+        const core = html.indexOf('src="events-core.js"');
+        const store = html.indexOf('src="events-store.js"');
+        assert.ok(core !== -1, file + ' loads the events store without the series model');
+        assert.ok(core < store, file + ' loads the events store before the series model');
+    });
+});

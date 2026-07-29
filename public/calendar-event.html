@@ -77,6 +77,176 @@
             <p class="font-body-md text-body-md" x-text="error"></p>
         </div>
 
+        <!-- ── Managing the Event itself, not one date of it ──────────────── -->
+        <!-- Reached from the Calendar's "Sunday Service" button. This is the
+             Event: its time, and which Roles every date of it carries. The
+             liturgy still belongs to the order of service, per Sunday, and that
+             separation is what keeps the printed booklet safe. -->
+        <template x-if="managingSeries && series">
+        <div class="max-w-[860px]">
+            <div class="pb-md border-b border-outline-variant flex items-start gap-sm flex-wrap">
+                <div class="min-w-0 flex-grow">
+                    <h1 class="font-display text-headline-lg tracking-[.02em] text-primary"
+                        x-text="series.name"></h1>
+                    <p class="font-body-md text-body-md text-on-surface-variant mt-xs"
+                       x-text="seriesPattern"></p>
+                </div>
+                <a href="calendar.html"
+                   class="shrink-0 border border-secondary text-secondary px-md py-2 rounded-lg font-label-md
+                          text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
+                    Back to the calendar
+                </a>
+            </div>
+
+            <div class="mt-gutter cal-cols">
+                <div class="flex flex-col gap-gutter min-w-0">
+
+                    <!-- What time it starts -->
+                    <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">What time it starts</h3>
+                        <p class="text-[12.5px] text-on-surface-variant mt-1">
+                            Every date of this event, unless one of them has its own time set.
+                        </p>
+                        <div class="mt-sm flex items-center gap-sm flex-wrap">
+                            <input type="time" :value="seriesTime" @change="saveSeriesTime($event.target.value)"
+                                   :disabled="saving"
+                                   class="bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                          text-[15px] text-on-surface cal-focus disabled:opacity-40" />
+                            <span x-show="!seriesTime" class="text-[12.5px] text-on-surface-variant">
+                                No time set yet.
+                            </span>
+                        </div>
+                    </section>
+
+                    <!-- The Roles it carries -->
+                    <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">The roles it needs</h3>
+
+                        <!-- Liturgical: shown, never editable here. An editor
+                             needs to see the whole shape of a Sunday, and these
+                             are half of it — but they are filled in the order of
+                             service, one Sunday at a time. -->
+                        <div x-show="liturgicalRoles.length" class="mt-sm">
+                            <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
+                                Filled in the order of service
+                            </div>
+                            <p class="text-[12px] text-on-surface-variant mt-1 leading-snug">
+                                These belong to the Sunday itself, not to the event — you put names
+                                against them when you build that Sunday's order of service. They can't
+                                be taken off, because the printed booklet expects them.
+                            </p>
+                            <div class="mt-2 flex flex-col gap-1.5">
+                                <template x-for="role in liturgicalRoles" :key="role.slug">
+                                    <div class="flex items-center gap-sm rounded-lg border border-outline-variant
+                                                bg-surface-container-low px-3 py-2">
+                                        <span class="material-symbols-outlined text-[17px] text-outline shrink-0">lock</span>
+                                        <span class="text-[14px] text-on-surface flex-grow min-w-0 truncate"
+                                              x-text="role.name"></span>
+                                        <span class="shrink-0 text-[10.5px] font-label-md tracking-[.12em]
+                                                     uppercase text-on-surface-variant">Locked</span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Servant Roles: the editor's to choose. -->
+                        <div class="mt-md pt-md border-t border-outline-variant">
+                            <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
+                                Roles you've added
+                            </div>
+                            <p x-show="!servantRoles.length" class="text-[13px] text-on-surface-variant mt-1">
+                                None yet. Add the jobs that come round every time — welcome team,
+                                sound desk, coffee.
+                            </p>
+                            <div class="mt-2 flex flex-col gap-1.5">
+                                <template x-for="role in servantRoles" :key="role.slug">
+                                    <div class="cal-row flex items-center gap-sm rounded-lg border border-outline-variant
+                                                bg-surface px-3 py-2 cal-motion">
+                                        <span class="material-symbols-outlined text-[17px] text-secondary shrink-0">badge</span>
+                                        <span class="text-[14px] text-on-surface flex-grow min-w-0 truncate"
+                                              x-text="role.name"></span>
+                                        <span class="shrink-0 text-[11.5px] text-on-surface-variant"
+                                              x-text="role.slots.length + (role.slots.length === 1 ? ' place' : ' places')"></span>
+                                        <button @click="removeSeriesRole(role.slug)" :disabled="saving"
+                                                class="shrink-0 w-[28px] h-[28px] rounded-md flex items-center justify-center
+                                                       text-on-surface-variant hover:bg-surface-container cal-motion cal-focus"
+                                                :aria-label="'Take ' + role.name + ' off'">
+                                            <span class="material-symbols-outlined text-[17px]">close</span>
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <div x-show="seriesRolesAvailable.length" class="mt-sm">
+                                <select @change="addSeriesRole($event.target.value); $event.target.value = ''"
+                                        :disabled="saving"
+                                        class="cal-focus bg-transparent text-[13px] text-secondary border-0 cursor-pointer py-1">
+                                    <option value="">+ Add a role</option>
+                                    <template x-for="def in seriesRolesAvailable" :key="def.slug">
+                                        <option :value="def.slug" x-text="def.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <aside class="flex flex-col gap-gutter min-w-0">
+                    <!-- The next few dates. A Role only ever gets somebody's name
+                         against it on a DATE, so this screen has to hand you one. -->
+                    <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">The next few</h3>
+                        <p class="text-[12.5px] text-on-surface-variant mt-1"
+                           x-text="isSundaySeries
+                             ? 'Open one to build its order of service and fill its roles.'
+                             : 'Open one to put people in its roles.'"></p>
+                        <div class="mt-sm flex flex-col gap-1.5">
+                            <template x-for="d in seriesNextDates" :key="d">
+                                <a :href="dateHref(d)"
+                                   class="flex items-center gap-sm rounded-lg border border-outline-variant bg-surface
+                                          px-3 py-2 cal-motion cal-focus hover:bg-surface-container-low">
+                                    <span class="material-symbols-outlined text-[17px] text-secondary shrink-0">event</span>
+                                    <span class="text-[14px] text-on-surface flex-grow" x-text="longDate(d)"></span>
+                                    <span class="material-symbols-outlined text-[15px] text-outline shrink-0">north_east</span>
+                                </a>
+                            </template>
+                        </div>
+                    </section>
+
+                    <!-- Colour, same control as any other Event. -->
+                    <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">Colour on the calendar</h3>
+                        <div class="mt-sm grid grid-cols-4 gap-2">
+                            <template x-for="c in colours" :key="c.slug">
+                                <button @click="setColour(c.slug)" :disabled="saving"
+                                        class="flex flex-col items-center gap-1 rounded-lg border py-2 cal-motion cal-press cal-focus
+                                               disabled:opacity-40"
+                                        :class="colour.slug === c.slug
+                                            ? 'border-primary bg-surface-container-low'
+                                            : 'border-outline-variant hover:bg-surface-container-low'"
+                                        :aria-label="c.name">
+                                    <span class="w-[22px] h-[22px] rounded-full border border-black/10"
+                                          :style="'background:' + c.bar"></span>
+                                    <span class="text-[10.5px] font-label-md text-on-surface-variant" x-text="c.name"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </section>
+
+                    <!-- Who can see it: settled for a Sunday, not disabled. -->
+                    <section x-show="isSundaySeries"
+                             class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">Who can see this</h3>
+                        <p class="font-headline-lg text-[16px] leading-[1.55] text-on-surface mt-2">
+                            Anyone at all. A Sunday Service is always public — that is settled,
+                            not a setting.
+                        </p>
+                    </section>
+                </aside>
+            </div>
+        </div>
+        </template>
+
         <!-- ── Creating a new Event ───────────────────────────────────────── -->
         <template x-if="creating">
         <div class="max-w-[720px]">
@@ -231,7 +401,10 @@
         </div>
         </template>
 
-        <template x-if="occurrence">
+        <!-- One date of an Event. `!managingSeries` because series mode sets a
+             stand-in occurrence to carry the name, and both bodies rendering at
+             once would show the same Event twice. -->
+        <template x-if="occurrence && !managingSeries">
         <div>
             <!-- ── Title block ────────────────────────────────────────────── -->
             <div class="pb-md border-b border-outline-variant flex items-start justify-between gap-md flex-wrap">
