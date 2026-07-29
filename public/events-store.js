@@ -140,6 +140,27 @@
         return occurrences;
     }
 
+    // The Sunday Service carries no stored recurrence rule: MS-13 built the
+    // series layer before recurrence existed. Rather than migrate a document to
+    // state something the name already guarantees, the rule is implied here —
+    // the Sunday Service is every Sunday, by definition.
+    //
+    // Without this the Calendar shows no Sundays at all, which is most of what
+    // is on at a church.
+    const SUNDAY_RULE = Object.freeze({
+        freq: 'weekly',
+        weekday: 0,
+        // Early enough to cover every Service the app has ever held; the weekly
+        // anchor snaps forward to the first Sunday on or after it.
+        startDate: '2023-01-01',
+    });
+
+    function recurrenceFor(series) {
+        if (series && series.recurrence) return series.recurrence;
+        if (series && series.id === Core.SUNDAY_SERVICE_ID) return SUNDAY_RULE;
+        return null;
+    }
+
     // The whole Calendar for a month: every series' computed dates merged with
     // whatever occurrence documents exist. An untouched date still appears — it
     // is simply empty. That is the sparse promise (ADR-0018 §3).
@@ -158,12 +179,13 @@
             storedBySeries.get(o.seriesId).push(o);
         });
 
-        const computed = series.flatMap(s => (
-            s.recurrence
-                ? Core.mergeOccurrences(s.id, s.recurrence, storedBySeries.get(s.id) || [], opts.from, opts.to)
+        const computed = series.flatMap(s => {
+            const rule = recurrenceFor(s);
+            return rule
+                ? Core.mergeOccurrences(s.id, rule, storedBySeries.get(s.id) || [], opts.from, opts.to)
                     .map(o => Object.assign({ name: s.name, seriesName: s.name }, o))
-                : []
-        ));
+                : [];
+        });
 
         // A stored occurrence whose series has no rule (or whose date the rule no
         // longer produces) is still a real dated thing somebody put people on. It
@@ -557,6 +579,8 @@
         // writing
         createEvent,
         cancelOccurrence,
+        recurrenceFor,
+        SUNDAY_RULE,
         saveOccurrence,
         loadOccurrence,
         occurrencePayload,

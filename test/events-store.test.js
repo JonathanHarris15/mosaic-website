@@ -353,6 +353,50 @@ test('a signed-out visitor reads no roster at all', async () => {
     assert.ok(!db._queriesRun.some(x => /roster/.test(x.collection)));
 });
 
+// ── Sundays reach the Calendar ────────────────────────────────────────────────
+
+test('the Sunday Service needs no stored rule — it is every Sunday by definition', () => {
+    // MS-13 built the series layer before recurrence existed, so the document
+    // carries no rule. Without an implied one the Calendar shows no Sundays at
+    // all, which is most of what is on at a church.
+    const implied = Store.recurrenceFor({ id: 'sunday_service', name: 'Sunday Service' });
+    assert.strictEqual(implied.freq, 'weekly');
+    assert.strictEqual(implied.weekday, 0);
+});
+
+test('a stored rule always wins over the implied one', () => {
+    const stored = { freq: 'fortnightly', weekday: 3, startDate: '2026-07-01' };
+    assert.strictEqual(Store.recurrenceFor({ id: 'sunday_service', recurrence: stored }), stored);
+});
+
+test('any other series with no rule contributes no dates', () => {
+    assert.strictEqual(Store.recurrenceFor({ id: 'midweek', name: 'Midweek' }), null);
+});
+
+test('Sundays appear in the Calendar without a single occurrence document', async () => {
+    const db = fakeDb({
+        events: { sunday_service: { name: 'Sunday Service', locked: true } },
+        event_occurrences: {},
+    }, { rank: 'member', personId: 'p1' });
+
+    const rows = await Store.loadCalendar(db, { rank: 'member', personId: 'p1', from: '2026-07-01', to: '2026-07-31' });
+
+    // Every Sunday in July 2026.
+    assert.deepStrictEqual(rows.map(o => o.date), ['2026-07-05', '2026-07-12', '2026-07-19', '2026-07-26']);
+    assert.ok(rows.every(o => o.seriesId === 'sunday_service'));
+    assert.ok(rows.every(o => !o.stored), 'a Sunday occurrence IS services/{date} — no shadow record');
+});
+
+test('a signed-out visitor still sees Sundays, because Sunday is public', async () => {
+    const db = fakeDb({
+        events: { sunday_service: { name: 'Sunday Service', locked: true } },
+        event_occurrences: {},
+    }, { rank: null, personId: null });
+
+    const rows = await Store.loadCalendar(db, { rank: null, personId: null, from: '2026-07-01', to: '2026-07-31' });
+    assert.strictEqual(rows.length, 4);
+});
+
 // ── Creating an Event ─────────────────────────────────────────────────────────
 
 test('a one-off Event is a single occurrence document, with no series', async () => {
