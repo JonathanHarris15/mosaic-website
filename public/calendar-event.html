@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Event | Mosaic</title>
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <style>
+        [x-cloak] { display: none !important; }
+
+        /* The one raw value in the design set — the steel-teal focus ring, which
+           already matches the Input component. */
+        .cal-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(93,148,169,.18); }
+
+        .cal-motion { transition: background-color 150ms cubic-bezier(0.2,0,0,1),
+                                  opacity 150ms cubic-bezier(0.2,0,0,1),
+                                  border-color 150ms cubic-bezier(0.2,0,0,1); }
+        .cal-press:active { transform: scale(0.98); }
+
+        /* Row actions reveal on hover on a desktop. There is no hover on touch,
+           so the mobile shell keeps them visible — same as the Tags tab. */
+        .cal-row-actions { opacity: 0; }
+        .cal-row:hover .cal-row-actions,
+        .cal-row:focus-within .cal-row-actions { opacity: 1; }
+        html.shell-mobile .cal-row-actions { opacity: 1; }
+        /* Every tap target stays >= 44px, and a slot row gets room to breathe. */
+        html.shell-mobile .cal-slot-row { min-height: 48px; }
+
+        .cal-cols { display: grid; grid-template-columns: minmax(0,1fr); gap: 28px; align-items: start; }
+        @media (min-width: 900px) { .cal-cols { grid-template-columns: minmax(0,1fr) 372px; } }
+
+        /* A one-off Role is NOT a card. If it ever grows a border, a header, or
+           a count, the design has failed — so the dashed sand hairline is the
+           only container it gets. */
+        .cal-oneoff-strip { border: 1px dashed #C2B79D; }
+    </style>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="auth.js"></script>
+    <script src="date-utils.js"></script>
+    <script src="roles-core.js"></script>
+    <script src="events-core.js"></script>
+    <script src="events-occurrence-core.js"></script>
+    <script src="events-store.js"></script>
+    <script src="calendar-view.js"></script>
+    <script src="calendar-event.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+</head>
+
+<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+      x-data="eventDetailPage()" x-cloak>
+
+    <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
+        <a href="calendar.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary cal-motion">
+            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+            <span class="text-xs font-label-md uppercase tracking-wider">Calendar</span>
+        </a>
+        <div id="auth-container" class="flex items-center"><div class="h-10"></div></div>
+    </header>
+
+    <div x-show="loading" class="flex-grow flex items-center justify-center">
+        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    </div>
+
+    <main x-show="!loading" class="flex-grow w-full max-w-7xl mx-auto px-4 md:px-margin pb-lg pt-md">
+
+        <div x-show="error"
+             class="mb-md bg-error-container text-on-error-container border border-outline-variant rounded-lg p-md flex items-start gap-sm">
+            <span class="material-symbols-outlined text-[20px]">error</span>
+            <p class="font-body-md text-body-md" x-text="error"></p>
+        </div>
+
+        <template x-if="occurrence">
+        <div>
+            <!-- ── Title block ────────────────────────────────────────────── -->
+            <div class="pb-md border-b border-outline-variant flex items-start justify-between gap-md flex-wrap">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2 mb-2 flex-wrap">
+                        <span x-show="series && series.recurrence && series.recurrence.freq !== 'once'"
+                              class="inline-flex items-center gap-1 rounded-md bg-tertiary-container text-on-tertiary-container
+                                     px-2 py-1 text-[10.5px] font-label-md uppercase tracking-wider">
+                            <span class="material-symbols-outlined text-[13px]">repeat</span>
+                            <span x-text="series && series.recurrence ? 'Repeats ' + series.recurrence.freq : ''"></span>
+                        </span>
+                        <span x-show="visibility === 'participant'"
+                              class="inline-flex items-center gap-1 rounded-md bg-secondary-container text-on-secondary-container
+                                     px-2 py-1 text-[10.5px] font-label-md uppercase tracking-wider">
+                            <span class="material-symbols-outlined text-[13px]">assignment_ind</span> Participants
+                        </span>
+                    </div>
+                    <h1 class="font-display text-headline-lg tracking-[.02em] text-primary"
+                        x-text="occurrence.name || (series && series.name) || 'Event'"></h1>
+                    <div class="mt-2 flex items-center gap-md flex-wrap text-[13px] text-on-surface-variant">
+                        <span class="flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[17px]">event</span>
+                            <span x-text="longDate(occurrence.date)"></span>
+                        </span>
+                        <span x-show="occurrence.time" class="flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[17px]">schedule</span>
+                            <span x-text="formatTime(occurrence.time)"></span>
+                        </span>
+                        <span x-show="occurrence.location" class="flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[17px]">location_on</span>
+                            <span x-text="occurrence.location"></span>
+                        </span>
+                    </div>
+                </div>
+
+                <div x-show="isEditor && !isSunday" class="shrink-0 flex items-center gap-sm">
+                    <button @click="openPattern()" x-show="series"
+                            class="border border-secondary text-secondary px-md py-2 rounded-lg font-label-md
+                                   text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
+                        Edit details
+                    </button>
+                    <button @click="$refs.addRole.scrollIntoView({behavior:'smooth'})"
+                            class="flex items-center gap-1 bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs
+                                   font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-primary-container">
+                        <span class="material-symbols-outlined text-[18px]">group_add</span> Add a role
+                    </button>
+                </div>
+            </div>
+
+            <!-- ── Declined banner ────────────────────────────────────────── -->
+            <!-- Declined escalates across four surfaces so a glance finds it:
+                 the slot row, the role card's border, this banner, and the
+                 calendar chip. All from one switch. -->
+            <div x-show="isEditor && needsAttention"
+                 class="mt-md bg-error-container border border-error border-l-4 rounded-lg p-md flex items-start gap-sm">
+                <span class="material-symbols-outlined text-[22px] text-error shrink-0">error</span>
+                <div class="flex-grow min-w-0">
+                    <p class="font-label-md text-[15px] font-semibold text-on-error-container">
+                        <span x-text="declined.length === 1 ? 'One place needs reassigning' : declined.length + ' places need reassigning'"></span>
+                    </p>
+                    <template x-for="a in declined" :key="a.personId + (a.slotId || a.oneOffId)">
+                        <p class="text-[13px] text-on-error-container mt-1">
+                            <span x-text="personName(a.personId)"></span> said no to
+                            <span x-text="a.label || roleName(a.roleSlug)"></span>.
+                            They still hold the place until someone takes it.
+                        </p>
+                    </template>
+                </div>
+                <button @click="openPicker(declined[0].roleSlug, declined[0].slotId)"
+                        x-show="declined.length && declined[0].slotId"
+                        class="shrink-0 bg-error text-on-error px-md py-2 rounded-lg font-label-md
+                               text-xs uppercase tracking-wider cal-motion cal-press cal-focus">
+                    Find someone
+                </button>
+            </div>
+
+            <!-- ── "Did they serve?" ──────────────────────────────────────── -->
+            <!-- Scaffolding, so it is a single row. Not a banner, not a modal,
+                 and no count badge in the nav anywhere. Nothing at all when
+                 there is nothing to ask. -->
+            <button x-show="unconfirmedPrompt" @click="openTidyUp()"
+                    class="mt-md w-full text-left bg-surface-container-low border border-outline-variant border-l-[3px]
+                           rounded-lg px-md py-3 flex items-center gap-sm cal-motion cal-focus hover:bg-surface-container"
+                    style="border-left-color: #B89B6A;">
+                <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">contact_support</span>
+                <div class="flex-grow min-w-0">
+                    <p class="text-[14px] text-on-surface" x-text="unconfirmedPrompt"></p>
+                    <p class="text-[12.5px] text-on-surface-variant mt-0.5">
+                        Takes a moment. Anything you leave stays unanswered.
+                    </p>
+                </div>
+                <span class="shrink-0 flex items-center gap-1 text-[12px] font-label-md uppercase tracking-wider text-on-surface-variant">
+                    Have a look <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                </span>
+            </button>
+
+            <!-- ── Two columns ────────────────────────────────────────────── -->
+            <div class="mt-gutter cal-cols">
+
+                <div class="min-w-0 flex flex-col gap-gutter">
+
+                    <!-- Your part — a member's first answer to "am I in this?" -->
+                    <section x-show="!isEditor && myAssignment"
+                             class="bg-primary rounded-lg p-md">
+                        <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-primary-fixed-dim">Your part</div>
+                        <p class="font-headline-lg text-[24px] text-on-primary mt-1"
+                           x-text="myAssignment ? (myAssignment.label || roleName(myAssignment.roleSlug)) : ''"></p>
+                        <div class="mt-2 flex items-center gap-2">
+                            <span class="w-[8px] h-[8px] rounded-full"
+                                  :class="{
+                                    'border-[1.5px] border-primary-fixed-dim': stateTone(myAssignment) === 'calm',
+                                    'bg-success': stateTone(myAssignment) === 'good',
+                                    'bg-error': stateTone(myAssignment) === 'attention'
+                                  }"></span>
+                            <span class="text-[11px] font-label-md tracking-[.14em] uppercase text-primary-fixed"
+                                  x-text="stateLabel(myAssignment)"></span>
+                        </div>
+                        <p class="text-[13px] text-primary-fixed mt-3">
+                            Let an editor know either way and they'll mark it.
+                        </p>
+                    </section>
+
+                    <section x-show="occurrence.description"
+                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <p class="font-headline-lg text-[17px] leading-[1.55] text-on-surface" x-text="occurrence.description"></p>
+                    </section>
+
+                    <!-- ── Sunday: settled, not disabled ──────────────────── -->
+                    <section x-show="isSunday" class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
+                        <div class="flex items-start gap-sm">
+                            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">public</span>
+                            <p class="text-[14px] text-on-surface">
+                                <strong class="font-label-md">Sunday is public.</strong>
+                                Everyone can see it, signed in or not — that is how Sundays work.
+                            </p>
+                        </div>
+                        <div class="mt-md pt-md border-t border-outline-variant bg-secondary-container -mx-md -mb-md px-md py-3 rounded-b-lg">
+                            <a :href="servicesHref"
+                               class="inline-flex items-center gap-1 text-on-secondary-container font-label-md
+                                      text-xs uppercase tracking-wider cal-focus">
+                                Open on Services <span class="material-symbols-outlined text-[16px]">north_east</span>
+                            </a>
+                        </div>
+                    </section>
+
+                    <!-- ── Roles ──────────────────────────────────────────── -->
+                    <section x-show="!isSunday && (isEditor || canSeeRoster)">
+                        <div class="flex items-baseline justify-between gap-md">
+                            <h2 class="font-display text-[19px] text-primary">Roles</h2>
+                            <p class="text-[12.5px] text-on-surface-variant"
+                               x-text="managedRoles.length + (managedRoles.length === 1 ? ' role' : ' roles') +
+                                       (oneOffRoles.length ? ' · ' + oneOffRoles.length + ' just for this one' : '')"></p>
+                        </div>
+
+                        <!-- A managed Role IS a card: header, rule line, count
+                             badge, numbered slot rows. -->
+                        <div class="mt-sm flex flex-col gap-md">
+                            <template x-for="role in managedRoles" :key="role.def.slug">
+                                <div class="bg-surface-container-lowest rounded-lg border overflow-hidden cal-motion"
+                                     :class="role.needsAttention ? 'border-error' : 'border-outline-variant'">
+
+                                    <div class="bg-surface-container-low px-md py-2.5 flex items-center gap-sm border-b border-outline-variant">
+                                        <span class="material-symbols-outlined text-[18px] text-secondary">badge</span>
+                                        <span class="font-headline-lg text-[19px] text-on-surface flex-grow min-w-0 truncate"
+                                              x-text="role.def.name"></span>
+                                        <span x-show="(role.def.restrictions || []).length"
+                                              class="flex items-center gap-1 text-[11.5px] text-on-surface-variant">
+                                            <span class="material-symbols-outlined text-[14px]" style="color:#B89B6A;">rule</span>
+                                            <span x-text="(role.def.restrictions || []).length + ' rule' + ((role.def.restrictions||[]).length === 1 ? '' : 's')"></span>
+                                        </span>
+                                        <span class="rounded-md px-2 py-0.5 text-[11.5px] font-label-md"
+                                              :class="role.needsAttention
+                                                ? 'bg-error-container text-on-error-container'
+                                                : 'bg-surface-container text-on-surface-variant'"
+                                              x-text="role.filled + ' of ' + role.slots.length"></span>
+                                        <button x-show="isEditor" @click="removeManagedRole(role.def.slug)"
+                                                class="cal-row-actions w-[30px] h-[30px] rounded-md flex items-center justify-center
+                                                       text-on-surface-variant hover:bg-surface-container cal-motion cal-focus"
+                                                aria-label="Remove this role">
+                                            <span class="material-symbols-outlined text-[18px]">close</span>
+                                        </button>
+                                    </div>
+
+                                    <template x-for="row in role.slots" :key="row.slot.id">
+                                        <div class="cal-row cal-slot-row flex items-center gap-sm px-md py-2.5 border-b border-outline-variant last:border-b-0 cal-motion"
+                                             :class="row.assignment && stateTone(row.assignment) === 'attention'
+                                                ? 'bg-error-container border-l-[3px] border-l-error'
+                                                : 'bg-surface'">
+                                            <span class="font-display text-[15px] text-outline w-[18px] shrink-0" x-text="row.index"></span>
+                                            <span class="w-[74px] shrink-0 text-[10px] font-label-md tracking-[.12em] uppercase text-on-surface-variant"
+                                                  x-text="row.requirementLabel"></span>
+
+                                            <template x-if="row.assignment">
+                                                <div class="flex items-center gap-2 flex-grow min-w-0">
+                                                    <span class="w-[28px] h-[28px] rounded-full bg-surface-container-high
+                                                                 flex items-center justify-center text-[11px] font-label-md shrink-0"
+                                                          x-text="initials(personName(row.assignment.personId))"></span>
+                                                    <span class="text-[14.5px] truncate"
+                                                          :class="stateTone(row.assignment) === 'attention'
+                                                            ? 'font-semibold text-on-error-container' : 'text-on-surface'"
+                                                          x-text="personName(row.assignment.personId)"></span>
+                                                </div>
+                                            </template>
+                                            <template x-if="!row.assignment">
+                                                <div class="flex items-center gap-2 flex-grow min-w-0">
+                                                    <span class="w-[28px] h-[28px] rounded-full border border-dashed border-outline
+                                                                 flex items-center justify-center text-outline shrink-0">
+                                                        <span class="material-symbols-outlined text-[15px]">person_add</span>
+                                                    </span>
+                                                    <!-- An empty place is a calm resting state, never an error. -->
+                                                    <span class="text-[14px] text-on-surface-variant">Nobody yet</span>
+                                                </div>
+                                            </template>
+
+                                            <!-- Declined is the only loud state. -->
+                                            <template x-if="row.assignment && stateTone(row.assignment) === 'attention'">
+                                                <span class="shrink-0 inline-flex items-center gap-1 rounded-md bg-error text-on-error
+                                                             px-2 py-1 text-[10px] font-label-md uppercase tracking-wider">
+                                                    <span class="material-symbols-outlined text-[13px]">do_not_disturb_on</span> Reassign
+                                                </span>
+                                            </template>
+                                            <template x-if="row.assignment && stateTone(row.assignment) !== 'attention'">
+                                                <span class="shrink-0 flex items-center gap-1.5">
+                                                    <span class="w-[7px] h-[7px] rounded-full"
+                                                          :class="stateTone(row.assignment) === 'good' ? 'bg-success' : 'border-[1.5px] border-outline'"></span>
+                                                    <span class="text-[10px] font-label-md tracking-[.12em] uppercase"
+                                                          :class="stateTone(row.assignment) === 'good' ? 'text-success' : 'text-on-surface-variant'"
+                                                          x-text="stateLabel(row.assignment)"></span>
+                                                </span>
+                                            </template>
+
+                                            <div x-show="isEditor" class="cal-row-actions shrink-0 flex items-center gap-0.5">
+                                                <!-- Only an editor ever changes a state. Members doing
+                                                     it for themselves is a later ticket. -->
+                                                <template x-if="row.assignment">
+                                                    <div class="flex items-center gap-0.5">
+                                                        <button @click="setState(row.assignment, 'pending')" aria-label="Mark pending"
+                                                                class="w-[30px] h-[30px] rounded-md flex items-center justify-center cal-motion cal-focus hover:bg-surface-container"
+                                                                :class="row.assignment.state === 'pending' ? 'text-on-surface' : 'text-outline'">
+                                                            <span class="material-symbols-outlined text-[18px]">radio_button_unchecked</span>
+                                                        </button>
+                                                        <button @click="setState(row.assignment, 'confirmed')" aria-label="Mark confirmed"
+                                                                class="w-[30px] h-[30px] rounded-md flex items-center justify-center cal-motion cal-focus hover:bg-surface-container"
+                                                                :class="row.assignment.state === 'confirmed' ? 'text-success' : 'text-outline'">
+                                                            <span class="material-symbols-outlined text-[18px]">check_circle</span>
+                                                        </button>
+                                                        <button @click="setState(row.assignment, 'declined')" aria-label="Mark declined"
+                                                                class="w-[30px] h-[30px] rounded-md flex items-center justify-center cal-motion cal-focus hover:bg-surface-container"
+                                                                :class="row.assignment.state === 'declined' ? 'text-error' : 'text-outline'">
+                                                            <span class="material-symbols-outlined text-[18px]">do_not_disturb_on</span>
+                                                        </button>
+                                                    </div>
+                                                </template>
+                                                <button @click="openPicker(role.def.slug, row.slot.id)"
+                                                        class="w-[30px] h-[30px] rounded-md flex items-center justify-center text-on-surface-variant
+                                                               hover:bg-surface-container cal-motion cal-focus"
+                                                        :aria-label="row.assignment ? 'Replace' : 'Put someone in'">
+                                                    <span class="material-symbols-outlined text-[18px]"
+                                                          x-text="row.assignment ? 'swap_horiz' : 'person_add'"></span>
+                                                </button>
+                                                <button x-show="row.assignment" @click="clearSlot(role.def.slug, row.slot.id)"
+                                                        class="w-[30px] h-[30px] rounded-md flex items-center justify-center text-on-surface-variant
+                                                               hover:bg-surface-container cal-motion cal-focus" aria-label="Clear this place">
+                                                    <span class="material-symbols-outlined text-[18px]">close</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- A one-off Role is NOT a card. A dashed strip, one
+                             plain row per job. No border, no header, no count —
+                             if it ever grows one, this design has failed. -->
+                        <div x-show="oneOffRoles.length || isEditor"
+                             class="mt-md cal-oneoff-strip rounded-lg bg-surface-container-low p-md">
+                            <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
+                                Just for this one
+                            </div>
+                            <div class="mt-sm flex flex-col gap-2">
+                                <template x-for="job in oneOffRoles" :key="job.id">
+                                    <div class="cal-row flex items-center gap-2 flex-wrap">
+                                        <span class="material-symbols-outlined text-[17px] text-outline shrink-0">label</span>
+                                        <span class="text-[14px] text-on-surface" x-text="job.label"></span>
+                                        <template x-for="a in job.people" :key="a.personId">
+                                            <span class="inline-flex items-center gap-1 rounded-full bg-surface-container px-2 py-0.5">
+                                                <span class="w-[22px] h-[22px] rounded-full bg-surface-container-high
+                                                             flex items-center justify-center text-[10px] font-label-md"
+                                                      x-text="initials(personName(a.personId))"></span>
+                                                <span class="text-[12.5px]" x-text="personName(a.personId)"></span>
+                                                <button x-show="isEditor" @click="removeFromOneOff(job.id, a.personId)"
+                                                        class="cal-focus rounded-full" aria-label="Remove">
+                                                    <span class="material-symbols-outlined text-[14px] text-on-surface-variant">close</span>
+                                                </button>
+                                            </span>
+                                        </template>
+                                        <select x-show="isEditor" @change="addToOneOff(job, $event.target.value); $event.target.value = ''"
+                                                class="cal-focus bg-transparent text-[12.5px] text-secondary border-0 cursor-pointer">
+                                            <option value="">+ Someone</option>
+                                            <template x-for="p in people" :key="p.id">
+                                                <option :value="p.id" x-text="p.name"></option>
+                                            </template>
+                                        </select>
+                                        <button x-show="isEditor" @click="removeOneOffRole(job.id)"
+                                                class="cal-row-actions ml-auto cal-focus rounded" aria-label="Remove this job">
+                                            <span class="material-symbols-outlined text-[16px] text-on-surface-variant">delete</span>
+                                        </button>
+                                    </div>
+                                </template>
+
+                                <!-- Adding one is a single always-visible input.
+                                     It should take seconds. -->
+                                <div x-show="isEditor" class="flex items-center gap-2 pt-1">
+                                    <span class="material-symbols-outlined text-[17px] text-outline">add</span>
+                                    <input x-model="oneOffDraft" @keydown.enter="addOneOffRole()"
+                                           placeholder="Someone to unlock the hall…"
+                                           class="flex-grow bg-transparent border-0 border-b border-dashed border-outline-variant
+                                                  text-[14px] text-on-surface placeholder:text-outline py-1 cal-focus" />
+                                    <span class="text-[11px] text-outline font-label-md">Press Enter</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Adding a managed Role, at a deliberately heavier weight. -->
+                        <div x-ref="addRole" x-show="isEditor && availableRoles.length"
+                             class="mt-md bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                            <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
+                                A role we keep
+                            </div>
+                            <div class="mt-sm flex flex-col gap-1.5">
+                                <template x-for="def in availableRoles" :key="def.slug">
+                                    <div class="flex items-center gap-sm rounded-lg border border-outline-variant bg-surface px-3 py-2 cal-motion"
+                                         :class="def.alreadyOn ? 'opacity-[.55]' : ''">
+                                        <span class="material-symbols-outlined text-[18px] text-secondary shrink-0">badge</span>
+                                        <div class="min-w-0 flex-grow">
+                                            <div class="font-headline-lg text-[17.5px] text-on-surface truncate" x-text="def.name"></div>
+                                            <div class="text-[12px] text-on-surface-variant">
+                                                <span x-text="(def.slots || []).length + ' place' + ((def.slots||[]).length === 1 ? '' : 's')"></span>
+                                                <span x-show="(def.restrictions || []).length" class="text-secondary"
+                                                      x-text="' · ' + (def.restrictions || []).length + ' rule' + ((def.restrictions||[]).length === 1 ? '' : 's')"></span>
+                                            </div>
+                                        </div>
+                                        <span x-show="def.alreadyOn" class="text-[11.5px] font-label-md text-on-surface-variant">On already</span>
+                                        <button x-show="!def.alreadyOn" @click="addManagedRole(def)"
+                                                class="shrink-0 bg-primary text-on-primary rounded-full px-3 py-1
+                                                       text-[11.5px] font-label-md uppercase tracking-wider cal-motion cal-press cal-focus">
+                                            + Add
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+                            <a href="roles-manager.html"
+                               class="mt-sm inline-flex items-center gap-1 text-secondary text-[12px] font-label-md
+                                      uppercase tracking-wider cal-focus">
+                                Manage roles <span class="material-symbols-outlined text-[14px]">north_east</span>
+                            </a>
+                        </div>
+                    </section>
+
+                    <!-- A member who may not see the roster gets a calm note,
+                         never an error. -->
+                    <section x-show="!isEditor && !canSeeRoster && myAssignment"
+                             class="bg-surface-container-low border border-outline-variant rounded-lg p-md flex items-start gap-sm">
+                        <span class="material-symbols-outlined text-[20px] text-outline shrink-0">visibility_off</span>
+                        <p class="text-[13.5px] text-on-surface">
+                            Only your own part is shown for this event.
+                            Ask an elder if you need to know who else is coming.
+                        </p>
+                    </section>
+                </div>
+
+                <!-- ── Side column ────────────────────────────────────────── -->
+                <aside class="flex flex-col gap-gutter min-w-0">
+
+                    <!-- Who can see this -->
+                    <section x-show="isEditor && !isSunday"
+                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">Who can see this</h3>
+                        <div class="mt-sm flex flex-col">
+                            <template x-for="rung in visibilityLadder" :key="rung.level">
+                                <button @click="setVisibility(rung.level)" :disabled="!visibilityEditable"
+                                        class="text-left flex items-start gap-sm px-2 py-2.5 rounded-lg cal-motion cal-focus
+                                               hover:bg-surface-container-low border-l-[3px]"
+                                        :class="visibility === rung.level ? 'border-l-primary bg-surface-container-low' : 'border-l-transparent'">
+                                    <span class="material-symbols-outlined text-[19px] shrink-0 mt-0.5"
+                                          :class="visibility === rung.level ? 'text-primary' : 'text-on-surface-variant'"
+                                          x-text="rung.icon"></span>
+                                    <div class="min-w-0 flex-grow">
+                                        <div class="text-[13.5px] font-label-md font-semibold text-on-surface" x-text="rung.label"></div>
+                                        <div class="text-[12px] text-on-surface-variant leading-snug" x-text="rung.who"></div>
+                                    </div>
+                                    <span x-show="visibility === rung.level"
+                                          class="material-symbols-outlined text-[18px] text-primary shrink-0">check</span>
+                                </button>
+                            </template>
+                        </div>
+
+                        <!-- The roster toggle drops to 45% where it is
+                             meaningless, and explains rather than silently doing
+                             nothing. -->
+                        <div class="mt-sm pt-sm border-t border-outline-variant cal-motion"
+                             :class="rosterToggleApplies(visibility) ? '' : 'opacity-[.45]'">
+                            <label class="flex items-start gap-2 cursor-pointer">
+                                <input type="checkbox" :checked="occurrence.rosterShared"
+                                       @change="setRosterShared($event.target.checked)"
+                                       :disabled="!rosterToggleApplies(visibility)"
+                                       class="accent-primary mt-0.5 cal-focus" />
+                                <span>
+                                    <span class="text-[13px] text-on-surface">The people serving can see the rest of the roster</span>
+                                    <span x-show="!rosterToggleApplies(visibility)"
+                                          class="block text-[11.5px] text-on-surface-variant mt-0.5">
+                                        Everyone can see this event anyway, so this makes no difference here.
+                                    </span>
+                                </span>
+                            </label>
+                        </div>
+
+                        <p class="mt-sm text-[11.5px] text-on-surface-variant">
+                            Changing this applies to every date of this event, past ones included.
+                        </p>
+                    </section>
+
+                    <!-- When it happens -->
+                    <section x-show="isEditor && series && series.recurrence"
+                             class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">When it happens</h3>
+                        <p class="font-headline-lg text-[17px] text-on-surface mt-2"
+                           x-text="series ? recurrenceSentence(series.recurrence) : ''"></p>
+                        <div class="mt-sm flex items-center gap-sm">
+                            <button @click="openPattern()"
+                                    class="border border-secondary text-secondary px-3 py-1.5 rounded-lg font-label-md
+                                           text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
+                                Change pattern
+                            </button>
+                        </div>
+                    </section>
+
+                    <!-- Serving this evening — the member's roster view -->
+                    <section x-show="!isEditor && canSeeRoster && assignments.length"
+                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">Who's serving</h3>
+                        <div class="mt-sm flex flex-col gap-2">
+                            <template x-for="a in assignments" :key="a.personId + (a.slotId || a.oneOffId)">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-[28px] h-[28px] rounded-full flex items-center justify-center text-[11px] font-label-md shrink-0"
+                                          :class="a.personId === personId ? 'bg-primary-fixed' : 'bg-surface-container-high'"
+                                          x-text="initials(personName(a.personId))"></span>
+                                    <span class="text-[13.5px] flex-grow min-w-0 truncate"
+                                          :class="a.personId === personId ? 'font-semibold' : ''">
+                                        <span x-text="personName(a.personId)"></span><span x-show="a.personId === personId"> (you)</span>
+                                    </span>
+                                    <span class="text-[12px] text-on-surface-variant shrink-0"
+                                          x-text="a.label || roleName(a.roleSlug)"></span>
+                                </div>
+                            </template>
+                        </div>
+                        <p x-show="needsAttention" class="mt-sm text-[12.5px] text-on-surface-variant">
+                            One place is still being sorted out.
+                        </p>
+                    </section>
+                </aside>
+            </div>
+        </div>
+        </template>
+    </main>
+
+    <!-- ── The picker ─────────────────────────────────────────────────────── -->
+    <div x-show="picker.open" @keydown.escape.window="closePicker()"
+         class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
+        <div class="bg-surface-container-lowest rounded-lg border border-outline-variant w-full max-w-[640px] mt-[6vh]">
+            <div class="px-md py-md border-b border-outline-variant">
+                <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant"
+                     x-text="pickerTitle"></div>
+                <h3 class="font-display text-[21px] text-primary mt-1">Who's taking this place?</h3>
+                <div class="mt-2 flex items-center gap-2 flex-wrap">
+                    <span x-show="pickerSlot && pickerSlot.requirement === 'female'"
+                          class="inline-flex items-center gap-1 rounded-md bg-tertiary-container text-on-tertiary-container px-2 py-1 text-[11px] font-label-md">
+                        <span class="material-symbols-outlined text-[13px]">woman</span> Needs a woman
+                    </span>
+                    <span x-show="pickerSlot && pickerSlot.requirement === 'male'"
+                          class="inline-flex items-center gap-1 rounded-md bg-tertiary-container text-on-tertiary-container px-2 py-1 text-[11px] font-label-md">
+                        <span class="material-symbols-outlined text-[13px]">person</span> Needs a man
+                    </span>
+                    <template x-for="rule in (pickerRole && pickerRole.restrictions) || []" :key="rule.kind + (rule.typeId||rule.tagId||'')">
+                        <span class="inline-flex items-center gap-1 rounded-md bg-surface-container text-on-surface-variant px-2 py-1 text-[11px] font-label-md">
+                            <span class="material-symbols-outlined text-[13px]">rule</span>
+                            <span x-text="rule.kind"></span>
+                        </span>
+                    </template>
+                </div>
+            </div>
+
+            <div class="px-md py-sm border-b border-outline-variant">
+                <div class="flex items-center gap-2 rounded-lg border border-outline-variant bg-surface px-3 py-2">
+                    <span class="material-symbols-outlined text-[18px] text-outline">search</span>
+                    <input x-model="picker.query" placeholder="Search people"
+                           class="flex-grow bg-transparent border-0 text-[14px] cal-focus" />
+                </div>
+                <div class="mt-2 flex items-center justify-between gap-sm">
+                    <span class="text-[12.5px] text-on-surface-variant"
+                          x-text="eligibleCount + ' can take it · ' + blockedCount + ' can\'t'"></span>
+                    <!-- OFF by default. Seeing who was passed over is the point. -->
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" x-model="picker.hideBlocked" class="accent-primary cal-focus" />
+                        <span class="text-[12px] text-on-surface-variant">Hide the ones who can't</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="max-h-[45vh] overflow-y-auto">
+                <template x-for="c in candidates" :key="c.personId">
+                    <button @click="pick(c)" :disabled="!c.eligible"
+                            class="w-full text-left flex items-center gap-sm px-md py-2.5 border-b border-outline-variant cal-motion"
+                            :class="{
+                                'opacity-[.45] cursor-not-allowed': !c.eligible,
+                                'bg-surface-container': c.eligible && picker.picked === c.personId,
+                                'hover:bg-surface-container-low': c.eligible && picker.picked !== c.personId
+                            }">
+                        <span class="w-[30px] h-[30px] rounded-full bg-surface-container-high flex items-center
+                                     justify-center text-[11px] font-label-md shrink-0"
+                              x-text="initials(c.name)"></span>
+                        <div class="min-w-0 flex-grow">
+                            <div class="text-[14px] text-on-surface truncate" x-text="c.name"></div>
+                            <!-- The reason, in the same slot a fairness note
+                                 would sit — and where an auto-assign suggestion
+                                 will sit later, with no relayout needed. -->
+                            <div class="text-[12px] text-on-surface-variant truncate" x-text="c.subtitle"></div>
+                        </div>
+                        <span x-show="!c.eligible" class="material-symbols-outlined text-[18px] text-outline shrink-0">block</span>
+                        <span x-show="c.eligible && picker.picked === c.personId"
+                              class="material-symbols-outlined text-[20px] text-primary shrink-0">check_circle</span>
+                    </button>
+                </template>
+            </div>
+
+            <div class="px-md py-md border-t border-outline-variant flex items-center justify-between gap-md flex-wrap">
+                <p class="text-[12.5px] text-on-surface-variant" x-text="pickerConsequence"></p>
+                <div class="flex items-center gap-sm ml-auto">
+                    <button @click="closePicker()"
+                            class="px-md py-2 rounded-lg font-label-md text-xs uppercase tracking-wider
+                                   text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Cancel</button>
+                    <button @click="confirmPick()" :disabled="!picker.picked"
+                            class="bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs font-label-md
+                                   text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">
+                        Put them in
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Changing the pattern ───────────────────────────────────────────── -->
+    <div x-show="pattern.open" @keydown.escape.window="pattern.open = false"
+         class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
+        <div class="bg-surface-container-lowest rounded-lg w-full max-w-[720px] mt-[5vh] border"
+             style="border-color:#B89B6A;">
+            <div class="px-md py-md flex items-start gap-sm">
+                <span class="material-symbols-outlined text-[26px] shrink-0" style="color:#B89B6A;">help</span>
+                <div class="min-w-0">
+                    <h3 class="font-display text-[21px] text-primary">Change the pattern</h3>
+                    <p class="font-headline-lg text-[17px] text-on-surface mt-2" x-text="patternSentence"></p>
+                    <div class="mt-2 flex flex-wrap gap-1.5">
+                        <template x-for="d in patternDates" :key="d">
+                            <span class="rounded-md bg-surface-container px-2 py-0.5 text-[11.5px] text-on-surface-variant"
+                                  x-text="d"></span>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-md pb-md grid gap-sm" style="grid-template-columns: repeat(2, minmax(0,1fr));">
+                <template x-for="opt in [['once','Just once'],['weekly','Every week'],['fortnightly','Every other week'],['monthly','Every month']]" :key="opt[0]">
+                    <button @click="pattern.rule.freq = opt[0]; recomputeOrphans()"
+                            class="rounded-lg border px-3 py-2 text-[13px] font-label-md cal-motion cal-press cal-focus"
+                            :class="pattern.rule && pattern.rule.freq === opt[0]
+                                ? 'border-primary bg-surface-container text-primary'
+                                : 'border-outline-variant text-on-surface-variant'"
+                            x-text="opt[1]"></button>
+                </template>
+            </div>
+
+            <div class="px-md pb-md flex gap-1.5 flex-wrap">
+                <template x-for="(d, i) in ['S','M','T','W','T','F','S']" :key="i">
+                    <button @click="pattern.rule.weekday = i; recomputeOrphans()"
+                            class="w-[48px] h-[40px] rounded-lg border text-[13px] font-label-md cal-motion cal-press cal-focus"
+                            :class="pattern.rule && pattern.rule.weekday === i
+                                ? 'border-primary bg-primary text-on-primary'
+                                : 'border-outline-variant text-on-surface-variant'"
+                            x-text="d"></button>
+                </template>
+            </div>
+
+            <!-- The confrontation. A question in gold, not an error in red. -->
+            <div x-show="pattern.orphans.length" class="border-t border-outline-variant">
+                <div class="px-md py-sm bg-surface-container-low flex items-center justify-between gap-sm flex-wrap">
+                    <p class="text-[13px] text-on-surface">
+                        <strong class="font-label-md" x-text="pattern.orphans.length"></strong>
+                        <span x-text="pattern.orphans.length === 1 ? ' date already has people on it' : ' dates already have people on them'"></span>
+                    </p>
+                    <div class="flex items-center gap-sm text-[11.5px] font-label-md uppercase tracking-wider">
+                        <span class="text-on-surface-variant">All of them:</span>
+                        <button @click="setAllOrphans('move')" class="text-secondary cal-focus rounded">Move</button>
+                        <button @click="setAllOrphans('delete')" class="text-secondary cal-focus rounded">Delete</button>
+                    </div>
+                </div>
+
+                <p class="px-md pt-sm text-[13px] text-on-surface-variant">
+                    These don't fit the new pattern, and each one already has a roster.
+                    We won't guess — tell us what to do with each.
+                </p>
+
+                <div class="px-md py-sm max-h-[30vh] overflow-y-auto flex flex-col gap-sm">
+                    <template x-for="o in pattern.orphans" :key="o.date">
+                        <div class="flex items-start gap-sm border-b border-outline-variant pb-sm last:border-b-0">
+                            <div class="w-[66px] shrink-0"
+                                 :class="pattern.choices[o.date] === 'delete' ? 'opacity-50 line-through' : ''">
+                                <div class="font-display text-[19px] text-on-surface" x-text="o.date"></div>
+                            </div>
+                            <div class="min-w-0 flex-grow">
+                                <div class="flex flex-wrap gap-1"
+                                     :class="pattern.choices[o.date] === 'delete' ? 'opacity-50' : ''">
+                                    <template x-for="a in (o.assignments || [])" :key="a.personId + (a.slotId||a.oneOffId)">
+                                        <span class="inline-flex items-center gap-1 rounded-full bg-surface-container px-2 py-0.5 text-[11.5px]">
+                                            <span x-text="personName(a.personId)"></span>
+                                        </span>
+                                    </template>
+                                </div>
+                                <p class="text-[12px] text-on-surface-variant mt-1" x-text="orphanOutcome(o)"></p>
+                            </div>
+                            <div class="shrink-0 flex gap-0.5 bg-surface-container rounded-lg p-[3px]">
+                                <template x-for="choice in ['move','delete']" :key="choice">
+                                    <button @click="pattern.choices[o.date] = choice"
+                                            class="px-2 py-1 rounded-md text-[11px] font-label-md uppercase tracking-wider cal-motion cal-focus"
+                                            :class="pattern.choices[o.date] === choice
+                                                ? 'bg-surface-container-lowest text-primary' : 'text-on-surface-variant'"
+                                            x-text="choice"></button>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div class="px-md py-md border-t border-outline-variant flex items-center justify-between gap-md flex-wrap">
+                <p class="text-[12.5px] text-on-surface-variant" x-text="orphanSummary"></p>
+                <div class="flex items-center gap-sm ml-auto">
+                    <button @click="pattern.open = false"
+                            class="px-md py-2 rounded-lg font-label-md text-xs uppercase tracking-wider
+                                   text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">
+                        Leave the pattern as it was
+                    </button>
+                    <button @click="applyPattern()" :disabled="saving"
+                            class="bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs font-label-md
+                                   text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">
+                        Go ahead
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Tidying up ─────────────────────────────────────────────────────── -->
+    <div x-show="tidyUp.open" @keydown.escape.window="tidyUp.open = false"
+         class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
+        <div class="bg-surface-container-lowest rounded-lg border border-outline-variant w-full max-w-[600px] mt-[8vh]">
+            <div class="px-md py-md border-b border-outline-variant">
+                <h3 class="font-display text-[21px] text-primary">Who actually served?</h3>
+                <p class="font-headline-lg text-[16.5px] leading-[1.55] text-on-surface mt-2">
+                    These were put down for something and we never heard either way.
+                    Tick anyone who did it — the rest stay an open question and don't count.
+                </p>
+            </div>
+
+            <div class="px-md py-sm bg-surface-container-low flex items-center justify-between gap-sm border-b border-outline-variant">
+                <span class="text-[12.5px] text-on-surface-variant" x-text="tidyUpSummary"></span>
+                <button @click="tickAll(Object.keys(tidyUp.ticks).length !== openQuestions.length)"
+                        class="text-secondary text-[11.5px] font-label-md uppercase tracking-wider cal-focus rounded"
+                        x-text="Object.keys(tidyUp.ticks).length === openQuestions.length ? 'Untick all' : 'All of them served'"></button>
+            </div>
+
+            <div class="max-h-[40vh] overflow-y-auto">
+                <template x-for="q in openQuestions" :key="q.personId + (q.assignment.slotId || q.assignment.oneOffId)">
+                    <label class="flex items-center gap-sm px-md py-2.5 border-b border-outline-variant cursor-pointer cal-motion hover:bg-surface-container-low">
+                        <input type="checkbox" :checked="tidyUp.ticks[q.personId]"
+                               @change="tidyUp.ticks[q.personId] = $event.target.checked"
+                               class="w-[20px] h-[20px] rounded-md accent-primary cal-focus" />
+                        <span class="w-[30px] h-[30px] rounded-full bg-surface-container-high flex items-center
+                                     justify-center text-[11px] font-label-md shrink-0"
+                              x-text="initials(q.name)"></span>
+                        <div class="min-w-0 flex-grow">
+                            <div class="text-[14px] text-on-surface truncate" x-text="q.name"></div>
+                            <div class="text-[12px] text-on-surface-variant truncate" x-text="q.label || roleName(q.roleSlug)"></div>
+                        </div>
+                        <!-- Unanswered is a resting state, not a failure. -->
+                        <span class="shrink-0 text-[10.5px] font-label-md tracking-[.12em] uppercase"
+                              :class="tidyUp.ticks[q.personId] ? 'text-success' : 'text-on-surface-variant'"
+                              x-text="tidyUp.ticks[q.personId] ? 'Served' : 'Unanswered'"></span>
+                    </label>
+                </template>
+            </div>
+
+            <div class="px-md py-md border-t border-outline-variant flex items-center justify-end gap-sm">
+                <button @click="tidyUp.open = false"
+                        class="px-md py-2 rounded-lg font-label-md text-xs uppercase tracking-wider
+                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Not now</button>
+                <button @click="saveTidyUp()" :disabled="saving"
+                        class="bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs font-label-md
+                               text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">Save</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
