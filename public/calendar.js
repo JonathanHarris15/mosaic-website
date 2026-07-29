@@ -232,6 +232,53 @@
             nextMonth() { return this.goToMonth(shiftMonth(this.month, 1)); },
             goToToday() { return this.goToMonth(monthOf(todayStr())); },
 
+            // ── Creating something on a day you clicked ──────────────────────
+            //
+            // The grid is where you already are when you decide something needs
+            // to go on a date, so the date comes from the click. Making somebody
+            // go to "New event" and then type the day they just pointed at is a
+            // step for nothing.
+
+            dayMenu: null,
+            // Overridable so the size and the edges can be tested without a
+            // browser; in a browser both come from the window.
+            viewport: null,
+
+            get menuBox() {
+                const v = this.viewport || {
+                    width: window.innerWidth || 1024,
+                    height: window.innerHeight || 768,
+                };
+                return { width: 236, height: 46, viewport: v };
+            },
+
+            openDayMenu(cell, event) {
+                // Not offered to somebody who would only be refused on the next
+                // screen. A menu that leads nowhere is worse than no menu.
+                if (!this.canCreate || !cell || !cell.date) return;
+
+                const box = this.menuBox;
+                const pad = 8;
+                this.dayMenu = {
+                    date: cell.date,
+                    width: box.width,
+                    height: box.height,
+                    // Clamped back inside, or a click near the bottom-right
+                    // renders the menu where nobody can reach it.
+                    x: Math.max(pad, Math.min(
+                        (event && event.clientX) || 0, box.viewport.width - box.width - pad)),
+                    y: Math.max(pad, Math.min(
+                        (event && event.clientY) || 0, box.viewport.height - box.height - pad)),
+                };
+            },
+
+            closeDayMenu() { this.dayMenu = null; },
+
+            // The date travels in the link, so the form opens already on it.
+            newEventHref(date) {
+                return 'calendar-event.html?new=1&date=' + encodeURIComponent(date);
+            },
+
             // EVERY chip opens the same page, Sundays included.
             //
             // This used to send a Sunday straight to the Order of Service editor,

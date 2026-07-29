@@ -185,7 +185,11 @@
                             return;
                         }
                         this.creating = true;
-                        this.draft.date = window.DateUtils.todayStr();
+                        // The Calendar's day menu puts the day you clicked in the
+                        // link, so the form opens already on it. Today is only the
+                        // fallback for "New event" pressed from the toolbar, where
+                        // no day was named.
+                        this.draft.date = params.get('date') || window.DateUtils.todayStr();
                         return;
                     }
 

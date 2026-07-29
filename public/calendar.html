@@ -178,9 +178,14 @@
 
                 <div class="grid" style="grid-template-columns: repeat(7, minmax(0,1fr));">
                     <template x-for="cell in cells" :key="cell.date">
-                        <div class="min-w-0 overflow-hidden min-h-[128px] px-1.5 pt-[9px] pb-[11px]
+                        <!-- The whole cell is the target, so the empty space under
+                             the chips is what you click to add something to the day.
+                             A chip stops its own click, or the same gesture would
+                             both open an event and offer to create one. -->
+                        <div @click="openDayMenu(cell, $event)"
+                             class="min-w-0 overflow-hidden min-h-[128px] px-1.5 pt-[9px] pb-[11px]
                                     border-r border-b border-outline-variant relative cal-motion hover:bg-surface-container-low"
-                             :class="cell.inMonth ? '' : 'bg-surface-container-low'">
+                             :class="[cell.inMonth ? '' : 'bg-surface-container-low', canCreate ? 'cursor-pointer' : '']">
 
                             <div class="flex items-start justify-between">
                                 <span class="min-w-[23px] h-[23px] inline-flex items-center justify-center rounded-full
@@ -197,7 +202,7 @@
 
                             <div class="mt-1 flex flex-col gap-[3px]">
                                 <template x-for="ev in cell.events" :key="ev.id">
-                                    <button @click="open(ev)"
+                                    <button @click.stop="open(ev)"
                                             class="w-full text-left flex items-start gap-[5px] rounded-md
                                                    pl-1 pr-1.5 py-[5px] cal-motion cal-press cal-focus"
                                             :style="'border-left-color:' + chipBar(ev)"
@@ -253,7 +258,7 @@
                                     tracking-[.14em] uppercase text-on-surface-variant border-b border-outline-variant"
                              x-text="group.label"></div>
                         <template x-for="ev in group.events" :key="ev.id">
-                            <button @click="open(ev)"
+                            <button @click.stop="open(ev)"
                                     class="cal-row w-full text-left flex items-center gap-md px-md py-3
                                            border-b border-l-[3px] border-outline-variant cal-motion hover:bg-surface-container-low"
                                     :style="'border-left-color:' + chipBar(ev)"
@@ -381,6 +386,23 @@
             </aside>
         </div>
     </main>
+
+    <!-- ── The day menu ───────────────────────────────────────────────────── -->
+    <!-- Sits at the mouse, in `fixed` coordinates, so it needs no scroll maths
+         and cannot be clipped by the grid's overflow. Clamped back on screen by
+         openDayMenu, or a click near the bottom-right renders it out of reach. -->
+    <div x-show="dayMenu" @click.outside="closeDayMenu()" @keydown.escape.window="closeDayMenu()"
+         class="fixed z-50" x-cloak
+         :style="dayMenu ? 'left:' + dayMenu.x + 'px; top:' + dayMenu.y + 'px; width:' + dayMenu.width + 'px' : ''">
+        <a :href="dayMenu ? newEventHref(dayMenu.date) : '#'"
+           class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant
+                  rounded-lg shadow-md px-3 py-2.5 cal-motion cal-focus hover:bg-surface-container-low">
+            <span class="material-symbols-outlined text-[18px] text-secondary shrink-0">add</span>
+            <span class="text-[13.5px] text-on-surface whitespace-nowrap">
+                New event on <span x-text="dayMenu ? formatDayMonthShort(dayMenu.date) : ''"></span>
+            </span>
+        </a>
+    </div>
 
 </body>
 </html>

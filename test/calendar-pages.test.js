@@ -892,3 +892,81 @@ test('the Sunday Service screen offers both jobs on a date, and keeps them apart
     assert.strictEqual(page.orderOfServiceHref('2026-08-02'),
         'service-builder.html?date=2026-08-02');
 });
+
+// ── Creating an event on a day you clicked ────────────────────────────────────
+//
+// The month grid is where you already are when you decide something needs to go
+// on a date. Making somebody go to "New event" and then type the date they just
+// pointed at is a step for nothing.
+
+test('clicking a day offers to create an event on that day', () => {
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.rank = 'editor';
+
+    page.openDayMenu({ date: '2026-07-15' }, { clientX: 300, clientY: 200 });
+
+    assert.ok(page.dayMenu, 'clicking a day offered nothing');
+    assert.strictEqual(page.dayMenu.date, '2026-07-15');
+    assert.strictEqual(page.newEventHref('2026-07-15'),
+        'calendar-event.html?new=1&date=2026-07-15');
+});
+
+test('somebody who cannot create events is not offered the menu', () => {
+    // Offering it and then refusing on the next screen would be a worse answer
+    // than not offering it.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.rank = 'member';
+
+    page.openDayMenu({ date: '2026-07-15' }, { clientX: 300, clientY: 200 });
+    assert.strictEqual(page.dayMenu, null);
+});
+
+test('the menu stays on screen when you click near an edge', () => {
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.rank = 'editor';
+    page.viewport = { width: 1000, height: 700 };
+
+    // Bottom-right corner: it has to come back inside, or it renders where
+    // nobody can reach it.
+    page.openDayMenu({ date: '2026-07-15' }, { clientX: 995, clientY: 695 });
+    assert.ok(page.dayMenu.x + page.dayMenu.width <= 1000, 'the menu runs off the right');
+    assert.ok(page.dayMenu.y + page.dayMenu.height <= 700, 'the menu runs off the bottom');
+
+    // Anywhere with room, it sits where the mouse is.
+    page.openDayMenu({ date: '2026-07-15' }, { clientX: 300, clientY: 200 });
+    assert.strictEqual(page.dayMenu.x, 300);
+    assert.strictEqual(page.dayMenu.y, 200);
+});
+
+test('clicking an event opens the event, and never the day menu', () => {
+    // The chip sits INSIDE the day cell, so without stopping the click the same
+    // gesture would both open an event and offer to create one.
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    assert.ok(/@click\.stop="open\(ev\)"/.test(html),
+        'an event chip lets its click reach the day underneath');
+});
+
+test('the day menu closes on Escape and on the next click', () => {
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.rank = 'editor';
+    page.openDayMenu({ date: '2026-07-15' }, { clientX: 10, clientY: 10 });
+
+    page.closeDayMenu();
+    assert.strictEqual(page.dayMenu, null);
+
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    assert.ok(/@keydown\.escape\.window="closeDayMenu\(\)"/.test(html));
+    assert.ok(/@click\.outside="closeDayMenu\(\)"/.test(html));
+});
+
+test('the new-event form starts on the day you clicked, not today', () => {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', {
+        location: { search: '?new=1&date=2026-09-20', href: '' },
+    });
+    page.rank = 'editor';
+
+    return page.load().then(() => {
+        assert.strictEqual(page.creating, true);
+        assert.strictEqual(page.draft.date, '2026-09-20');
+    });
+});
