@@ -86,8 +86,27 @@ function fakeDb(collections, viewer) {
         api.doc = id => ({
             id: id,
             path: name + '/' + id,
+            // A single-document read is rule-checked too, and — the part that
+            // caught a real bug — a MISSING document is DENIED, not returned as
+            // "does not exist". `stampedVisibility()` reads `resource.data`, and
+            // for a document that is not there `resource` is null, so the rule
+            // fails closed. A fake that answered `{exists: false}` was kinder
+            // than production and hid the failure completely.
             async get() {
                 const d = (collections[name] || {})[id];
+                const guarded = name === Store.OCCURRENCES || name === Store.SERIES;
+                // The Sunday Service series is named explicitly in the rules and
+                // is readable by anyone, existing or not.
+                const alwaysReadable = name === Store.SERIES && id === Core.SUNDAY_SERVICE_ID;
+
+                if (guarded && !alwaysReadable && (!d || !mayRead(Object.assign({ id }, d)))) {
+                    const err = new Error(
+                        'Missing or insufficient permissions. (get on ' + name + '/' + id +
+                        (d ? ', which the viewer may not read)' : ', which does not exist)')
+                    );
+                    err.code = 'permission-denied';
+                    throw err;
+                }
                 return { exists: !!d, id: id, data: () => d, ref: { path: name + '/' + id } };
             },
             // A direct write, outside a batch. Recorded the same way so a test can
@@ -1122,7 +1141,27 @@ test('a date the pattern does not produce is genuinely not found', async () => {
     const db = fakeDb({ events: series, event_occurrences: {} }, { rank: 'editor' });
 
     assert.strictEqual(await Store.loadOccurrence(db, 'midweek_2026-07-16'), null);
-    assert.strictEqual(await Store.loadOccurrence(db, 'no_such_series_2026-07-15'), null);
+});
+
+test('a series the viewer may not read is refused, not answered "no such event"', async () => {
+    // The rule cannot tell "does not exist" from "not allowed to see", and it
+    // should not try — a page that said "no such event" for an Elders' Meeting
+    // would be answering a question it was never allowed to hear. So the refusal
+    // travels, and the page says you cannot see it.
+    const series = { elders: { name: "Elders' Meeting", visibility: 'elder',
+        recurrence: { freq: 'weekly', startDate: '2026-07-01', weekday: 3 } } };
+    const db = fakeDb({ events: series, event_occurrences: {} }, { rank: 'member', personId: 'p1' });
+
+    await assert.rejects(
+        () => Store.loadOccurrence(db, 'elders_2026-07-15'),
+        e => e.code === 'permission-denied'
+    );
+    // And an id for nothing at all is refused the same way, which is what stops
+    // the page being a way to probe what exists.
+    await assert.rejects(
+        () => Store.loadOccurrence(db, 'no_such_series_2026-07-15'),
+        e => e.code === 'permission-denied'
+    );
 });
 
 test('a one-off Event that has no document is still not found', async () => {

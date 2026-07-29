@@ -291,10 +291,27 @@
     // the rule working, not an error, so it degrades to just your own row rather
     // than failing the page.
     async function loadOccurrence(db, id) {
+        // ⚠ A MISSING DOCUMENT IS DENIED, NOT ABSENT.
+        //
+        // The rule reads `resource.data.visibility`, and for a document that is
+        // not there `resource` is null — so the read fails closed and throws
+        // permission-denied. `doc.exists` is never reached. Since occurrences are
+        // SPARSE, that is the ordinary case for a date nobody has touched: it is
+        // not an error, it is the design.
+        //
+        // So a refusal here is not an answer, it is a question — and the answer
+        // comes from the series, whose own rule then decides whether this viewer
+        // may see the date at all. A viewer who cannot read the series gets the
+        // denial they should, from `rebuildOccurrence`.
         const [doc, roster] = await Promise.all([
-            occurrenceRef(db, id).get(),
+            occurrenceRef(db, id).get().catch(e => {
+                if (e && e.code === 'permission-denied') return null;
+                throw e;
+            }),
             occurrenceRef(db, id).collection(ROSTER).get().catch(() => ({ docs: [] })),
         ]);
+
+        if (!doc) return rebuildOccurrence(db, id);
         // Occurrences are SPARSE. A date nobody has touched has NO DOCUMENT, so
         // "no document" is not the same as "no such event" — and answering
         // "could not be found" is wrong in the worst way, because the date is
@@ -316,6 +333,9 @@
         const parsed = Core.parseOccurrenceId(id);
         if (!parsed) return null;
 
+        // Deliberately NOT caught. If the viewer may not read the series, they
+        // may not see this date either, and they should be told that rather than
+        // "no such event" — which would be a lie shaped like an answer.
         const series = await loadSeries(db, parsed.seriesId);
         if (!series) return null;
 
