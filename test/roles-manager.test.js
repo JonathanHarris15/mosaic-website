@@ -651,6 +651,126 @@ test('adding a rule with nothing chosen says so rather than adding a rule about 
     assert.equal(page.toast.type, 'error');
 });
 
+// ── Group restriction rules (MS-141 reaching the rule builder) ───────────────
+//
+// The engine has understood same-group / not-same-group since MS-141; this page
+// is what lets anyone author one. A church whose only Shared Type is a Group
+// must not be told "nothing has been shared with editors yet".
+
+test('shared Group-kind Types are offered for group rules, and pairwise ones are not', async () => {
+    const page = await mountPage({ relationship_types: { t1: MARRIAGE, t3: HOUSE_GROUP } });
+    assert.deepStrictEqual(page.groupRuleOptions.map(t => t.id), ['t3']);
+    assert.deepStrictEqual(page.relationshipRuleOptions.map(t => t.id), ['t1'],
+        'the two lists stay separate — a Type is one kind or the other');
+});
+
+test('an unshared Group Type is offered nowhere', async () => {
+    const page = await mountPage({
+        relationship_types: { t3: { ...HOUSE_GROUP, sharedWithEditors: false } },
+    });
+    assert.deepStrictEqual(page.groupRuleOptions, []);
+    assert.doesNotMatch(JSON.stringify(page.ruleKindOptions) + page.relationshipTypesNotice, /House Group/);
+});
+
+test('the rule kinds follow what is actually shared, pairwise and group independently', async () => {
+    const groupOnly = await mountPage({ relationship_types: { t3: HOUSE_GROUP } });
+    assert.deepStrictEqual(groupOnly.ruleKindOptions.map(o => o.value),
+        ['requireTag', 'excludeTag', 'notSameGroup', 'sameGroup'],
+        'a shared Group Type must open the group rules even with no pairwise Type');
+
+    const pairOnly = await mountPage({ relationship_types: { t1: MARRIAGE } });
+    assert.deepStrictEqual(pairOnly.ruleKindOptions.map(o => o.value),
+        ['requireTag', 'excludeTag', 'notTogether']);
+
+    const both = await mountPage({ relationship_types: { t1: MARRIAGE, t3: HOUSE_GROUP } });
+    assert.deepStrictEqual(both.ruleKindOptions.map(o => o.value),
+        ['requireTag', 'excludeTag', 'notTogether', 'notSameGroup', 'sameGroup']);
+});
+
+test('a shared Group Type is not reported as nothing being shared', async () => {
+    // The bug this replaces: the page said "no relationship types have been
+    // shared with editors yet" to a church that had shared exactly one.
+    const page = await mountPage({ relationship_types: { t3: HOUSE_GROUP } });
+    assert.equal(page.relationshipTypesNotice, '', 'there is something to build a rule from');
+
+    const nothing = await mountPage({ relationship_types: { t2: DISCIPLESHIP } });
+    assert.match(nothing.relationshipTypesNotice, /elder/i);
+});
+
+test('the group pickers offer groups, and composing a group rule saves one', async () => {
+    const page = await mountPage({
+        roles: { r1: kidsDefinition() },
+        relationship_types: { t1: MARRIAGE, t3: HOUSE_GROUP },
+    });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+
+    page.newRuleKind = Roles.RESTRICTIONS.SAME_GROUP;
+    assert.deepStrictEqual(page.ruleValueOptions.map(o => o.id), ['t3']);
+    assert.match(page.ruleValuePlaceholder, /group/i);
+    page.newRuleValue = 't3';
+    page.addComposedRule();
+
+    page.newRuleKind = Roles.RESTRICTIONS.NOT_SAME_GROUP;
+    page.newRuleValue = 't3';
+    page.addComposedRule();
+
+    await page.saveDraft();
+    assert.deepStrictEqual(stored('roles').r1.restrictions, [
+        { kind: 'sameGroup', typeId: 't3' },
+        { kind: 'notSameGroup', typeId: 't3' },
+    ]);
+});
+
+test('a group rule against a pairwise Type is refused before it is written', async () => {
+    // RolesCore calls this a mistake rather than a no-op; the page must not
+    // build one in the first place.
+    const page = await mountPage({
+        roles: { r1: kidsDefinition() },
+        relationship_types: { t1: MARRIAGE, t3: HOUSE_GROUP },
+    });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.addGroupRule(Roles.RESTRICTIONS.SAME_GROUP, 't1');
+    assert.equal(page.draft.restrictions.length, 0);
+    assert.equal(page.toast.type, 'error');
+});
+
+test('group rules read as sentences and carry their own glyphs', async () => {
+    const page = await mountPage({ relationship_types: { t1: MARRIAGE, t3: HOUSE_GROUP } });
+    const same = { kind: 'sameGroup', typeId: 't3' };
+    const notSame = { kind: 'notSameGroup', typeId: 't3' };
+
+    assert.match(page.ruleSentence(same), /House Group/);
+    assert.match(page.ruleSentence(notSame), /House Group/);
+    assert.notEqual(page.ruleSentence(same), page.ruleSentence(notSame),
+        'the two rules are opposites and must not read alike');
+
+    const icons = [page.ruleIcon(same), page.ruleIcon(notSame), page.ruleIcon({ kind: 'notTogether', typeId: 't1' })];
+    assert.equal(new Set(icons).size, 3);
+});
+
+test('saved group rules round-trip through the eligibility engine', async () => {
+    const page = await mountPage({ roles: { r1: coffeeDefinition() }, relationship_types: { t3: HOUSE_GROUP } });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.addSlot();
+    page.addGroupRule(Roles.RESTRICTIONS.NOT_SAME_GROUP, 't3');
+    await page.saveDraft();
+
+    const reopened = await mountPage({ roles: stored('roles'), relationship_types: { t3: HOUSE_GROUP } });
+    const def = reopened.roleDefinitions.find(d => d.id === 'r1');
+    assert.equal(Roles.validateDefinition(def).valid, true);
+    assert.equal(reopened.isRuleAvailable(def.restrictions[0]), true);
+
+    // Ann is already seated; Ben shares her group, so he is out.
+    const verdicts = Roles.candidatesFor(def, def.slots[1], {
+        people: [{ id: 'ann', sex: 'female' }, { id: 'ben', sex: 'male' }, { id: 'cal', sex: 'male' }],
+        groups: [{ id: 'g1', typeId: 't3', leaderId: 'ann', memberIds: ['ben'] }],
+        assigned: [{ slotId: 's1', personId: 'ann' }],
+    });
+    assert.equal(verdicts.find(v => v.personId === 'ben').eligible, false,
+        'the leader counts as being in her own group');
+    assert.equal(verdicts.find(v => v.personId === 'cal').eligible, true);
+});
+
 test('the demo: Kids Ministry with three slots, a Tag rule and a couple rule, reopened unchanged', async () => {
     const page = await mountPage({ roles: {}, relationship_types: { t1: MARRIAGE } });
     await page.createRole('Kids Ministry');

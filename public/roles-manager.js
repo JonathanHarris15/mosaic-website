@@ -359,22 +359,30 @@ window.RolesManager = () => ({
         return (this.draft && this.draft.restrictions) || [];
     },
 
-    // Only Shared Relationship Types, and only the pairwise ones: "these two may
-    // not serve together" is a rule about a pair. (Group rules are MS-141.)
+    // A Shared Type is one kind or the other, and each kind builds a different
+    // rule: "these two may not serve together" is about a pair, "no two from one
+    // house group" is about a roster. RolesCore treats the mismatch as an error
+    // rather than a no-op, so the two lists are kept apart here.
     get relationshipRuleOptions() {
         return this.sharedRelationshipTypes.filter(type => type.kind === 'pairwise');
     },
 
+    get groupRuleOptions() {
+        return this.sharedRelationshipTypes.filter(type => type.kind === 'group');
+    },
+
     // Said out loud, because an empty picker and a denied query look identical
-    // from the outside and mean opposite things.
+    // from the outside and mean opposite things. Both kinds count: a church that
+    // has shared one Group Type has shared something, and must not be told
+    // otherwise.
     get relationshipTypesNotice() {
         if (this.relationshipTypesDenied) {
             return 'We couldn\'t load relationship types — this account may not have permission to read them. ' +
                 'Nothing is missing from your Roles; ask an elder or admin to check.';
         }
-        if (this.relationshipRuleOptions.length === 0) {
+        if (this.relationshipRuleOptions.length === 0 && this.groupRuleOptions.length === 0) {
             return 'No relationship types have been shared with editors yet, so there is nothing to build a ' +
-                '"may not serve together" rule from. An elder can share one in Manage Tags and Relationships.';
+                'relationship rule from. An elder can share one in Manage Tags and Relationships.';
         }
         return '';
     },
@@ -391,6 +399,10 @@ window.RolesManager = () => ({
         if (this.relationshipRuleOptions.length) {
             options.push({ value: RolesCore.RESTRICTIONS.NOT_TOGETHER, label: 'Cannot serve together if' });
         }
+        if (this.groupRuleOptions.length) {
+            options.push({ value: RolesCore.RESTRICTIONS.NOT_SAME_GROUP, label: 'No two people from the same' });
+            options.push({ value: RolesCore.RESTRICTIONS.SAME_GROUP, label: 'Everyone from the same' });
+        }
         return options;
     },
 
@@ -398,13 +410,22 @@ window.RolesManager = () => ({
         return this.newRuleKind === RolesCore.RESTRICTIONS.NOT_TOGETHER;
     },
 
+    get composingGroupRule() {
+        return [RolesCore.RESTRICTIONS.SAME_GROUP, RolesCore.RESTRICTIONS.NOT_SAME_GROUP]
+            .indexOf(this.newRuleKind) !== -1;
+    },
+
     get ruleValueOptions() {
-        const source = this.composingRelationshipRule ? this.relationshipRuleOptions : this.shepherdingTags;
+        let source = this.shepherdingTags;
+        if (this.composingGroupRule) source = this.groupRuleOptions;
+        else if (this.composingRelationshipRule) source = this.relationshipRuleOptions;
         return source.map(item => ({ id: item.id, name: item.name }));
     },
 
     get ruleValuePlaceholder() {
-        return this.composingRelationshipRule ? 'Choose a relationship…' : 'Choose a tag…';
+        if (this.composingGroupRule) return 'Choose a group type…';
+        if (this.composingRelationshipRule) return 'Choose a relationship…';
+        return 'Choose a tag…';
     },
 
     // The form's one action. The kind decides which rule is actually being
@@ -412,13 +433,14 @@ window.RolesManager = () => ({
     // a convenience and they are the boundary.
     addComposedRule() {
         if (!this.newRuleValue) {
-            this.showToast(
-                this.composingRelationshipRule ? 'Pick a relationship type from the list' : 'Pick a tag from the list',
-                'error'
-            );
+            if (this.composingGroupRule) this.showToast('Pick a group type from the list', 'error');
+            else if (this.composingRelationshipRule) this.showToast('Pick a relationship type from the list', 'error');
+            else this.showToast('Pick a tag from the list', 'error');
             return;
         }
-        if (this.composingRelationshipRule) {
+        if (this.composingGroupRule) {
+            this.addGroupRule(this.newRuleKind, this.newRuleValue);
+        } else if (this.composingRelationshipRule) {
             this.addRelationshipRule(this.newRuleValue);
         } else {
             this.addTagRule(this.newRuleKind, this.newRuleValue);
@@ -462,6 +484,23 @@ window.RolesManager = () => ({
         this.newRuleValue = '';
     },
 
+    // "No two people from one house group", and its opposite. Both are rules
+    // about a roster, so only a Group-kind Shared Type will do — RolesCore calls
+    // the mismatch a mistake, not a no-op, and the picker never offers one.
+    addGroupRule(kind, typeId) {
+        if (!this.draft) return;
+        if ([RolesCore.RESTRICTIONS.SAME_GROUP, RolesCore.RESTRICTIONS.NOT_SAME_GROUP].indexOf(kind) === -1) return;
+        if (!this.groupRuleOptions.some(type => type.id === typeId)) {
+            this.showToast('Pick a shared group type from the list', 'error');
+            return;
+        }
+        if (this.hasRule(kind, 'typeId', typeId)) return;
+        this.draft = Object.assign({}, this.draft, {
+            restrictions: this.draftRestrictions.concat([{ kind: kind, typeId: typeId }]),
+        });
+        this.newRuleValue = '';
+    },
+
     removeRule(index) {
         if (!this.draft) return;
         this.draft = Object.assign({}, this.draft, {
@@ -484,6 +523,8 @@ window.RolesManager = () => ({
         const kind = rule && rule.kind;
         if (kind === RolesCore.RESTRICTIONS.REQUIRE_TAG) return 'sell';
         if (kind === RolesCore.RESTRICTIONS.EXCLUDE_TAG) return 'block';
+        if (kind === RolesCore.RESTRICTIONS.SAME_GROUP) return 'groups';
+        if (kind === RolesCore.RESTRICTIONS.NOT_SAME_GROUP) return 'group_remove';
         return 'hub';
     },
 
