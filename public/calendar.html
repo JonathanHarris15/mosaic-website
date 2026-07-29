@@ -94,11 +94,20 @@
             </a>
         </div>
 
-        <!-- A permissions failure looks exactly like an empty church. Say which. -->
+        <!-- Every failure here renders as an empty calendar if you let it, and
+             "this church has no events" is what a real one looks like from the
+             outside. So each cause says which it is. -->
         <div x-show="error"
              class="mt-md bg-error-container text-on-error-container border border-outline-variant rounded-lg p-md flex items-start gap-sm">
             <span class="material-symbols-outlined text-[20px]">error</span>
-            <p class="font-body-md text-body-md" x-text="error"></p>
+            <p class="font-body-md text-body-md flex-grow" x-text="error"></p>
+            <!-- A building index fixes itself, so offer to try again rather than
+                 making somebody reload by hand. -->
+            <button x-show="retryable" @click="load()"
+                    class="shrink-0 border border-error text-on-error-container px-3 py-1.5 rounded-lg
+                           font-label-md text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus">
+                Try again
+            </button>
         </div>
 
         <!-- Toolbar -->

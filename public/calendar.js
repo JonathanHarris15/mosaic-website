@@ -42,10 +42,34 @@
         return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
     }
 
+    // Say what actually happened. Every one of these renders as an empty
+    // calendar if you let it, and "this church has no events" is exactly what a
+    // real failure looks like from the outside — which is how it ships
+    // unnoticed. So each cause gets its own sentence.
+    function describeLoadFailure(e) {
+        const code = e && e.code;
+
+        if (code === 'permission-denied') {
+            return 'The calendar could not be read. This is a permissions problem, not an ' +
+                'empty month — please tell an admin rather than assuming there is nothing on.';
+        }
+        // Firestore raises this while a composite index is still building, which
+        // happens for a few minutes after a deploy. It fixes itself.
+        if (code === 'failed-precondition') {
+            return 'The calendar is still being set up — an index it needs is being built. ' +
+                'That usually takes a minute or two, and then this will work.';
+        }
+        if (code === 'unavailable') {
+            return 'The calendar could not be reached. Check your connection and try again.';
+        }
+        return 'The calendar could not be loaded just now.';
+    }
+
     window.calendarPage = function calendarPage() {
         return {
             loading: true,
             error: '',
+            retryable: false,
 
             // Who is looking. Both drive what the queries ask for, so a wrong
             // value here is an empty calendar, not a partial one.
@@ -111,13 +135,10 @@
                     if (!this.people.length) await this.loadPeople();
                 } catch (e) {
                     console.error('Calendar load failed:', e);
-                    // Say what actually happened. A permission error here looks
-                    // exactly like an empty church, and silently rendering an
-                    // empty grid is how that ships unnoticed.
-                    this.error = (e && e.code === 'permission-denied')
-                        ? 'Something went wrong loading the calendar. This is a permissions problem, ' +
-                          'not an empty month — please tell an admin.'
-                        : 'The calendar could not be loaded just now.';
+                    this.error = describeLoadFailure(e);
+                    // A building index fixes itself, so the page offers to try
+                    // again rather than making somebody reload by hand.
+                    this.retryable = !!(e && e.code === 'failed-precondition');
                     this.occurrences = [];
                 } finally {
                     this.loading = false;

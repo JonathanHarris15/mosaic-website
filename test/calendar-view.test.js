@@ -12,6 +12,29 @@ const View = require('../public/calendar-view.js');
 const Core = require('../public/events-occurrence-core.js');
 const Roles = require('../public/roles-core.js');
 
+// ── A failure must never read as an empty church ──────────────────────────────
+
+test('each way the Calendar can fail gets its own sentence', () => {
+    // All of these render as an empty calendar if you let them, and "this church
+    // has no events" is exactly what a real failure looks like from the outside.
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'calendar.js'), 'utf8');
+
+    const CAUSES = [
+        ['permission-denied', /permissions problem/],
+        // Raised while a composite index is still building, for a few minutes
+        // after a deploy. It fixes itself, so the wording must say so.
+        ['failed-precondition', /index it needs is being built/],
+        ['unavailable', /connection/],
+    ];
+
+    CAUSES.forEach(([code, wording]) => {
+        assert.match(src, new RegExp("'" + code + "'"), code + ' is not distinguished');
+        assert.match(src, wording, code + ' has no sentence of its own');
+    });
+});
+
 // ── Small formatting ──────────────────────────────────────────────────────────
 
 test('initials take the first and last name', () => {
