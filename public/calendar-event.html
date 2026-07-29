@@ -271,11 +271,6 @@
                                    text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
                         Edit details
                     </button>
-                    <button @click="$refs.addRole.scrollIntoView({behavior:'smooth'})"
-                            class="flex items-center gap-1 bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs
-                                   font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-primary-container">
-                        <span class="material-symbols-outlined text-[18px]">group_add</span> Add a role
-                    </button>
                 </div>
             </div>
 
@@ -555,10 +550,10 @@
                         </div>
 
                         <!-- Adding a managed Role, at a deliberately heavier weight. -->
-                        <div x-ref="addRole" x-show="isEditor && availableRoles.length"
+                        <div x-show="isEditor && availableRoles.length"
                              class="mt-md bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
                             <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
-                                A role we keep
+                                Recurring roles
                             </div>
                             <div class="mt-sm flex flex-col gap-1.5">
                                 <template x-for="def in availableRoles" :key="def.slug">
