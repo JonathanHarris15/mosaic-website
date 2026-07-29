@@ -73,10 +73,10 @@
 
             async resolveRank() {
                 return new Promise(resolve => {
-                    window.auth.onAuthStateChanged(async user => {
+                    auth.onAuthStateChanged(async user => {
                         if (!user) { this.personId = null; return resolve(null); }
                         try {
-                            const data = await window.getUserData(user.uid);
+                            const data = await getUserData(user.uid);
                             this.personId = (data && data.personId) || null;
                             resolve((data && (data.permissionLevel || data.role)) || 'viewer');
                         } catch (e) {
@@ -92,7 +92,7 @@
                 this.error = '';
                 try {
                     const range = monthRange(this.month);
-                    const rows = await Store.loadCalendar(window.db, {
+                    const rows = await Store.loadCalendar(db, {
                         rank: this.rank,
                         personId: this.personId,
                         from: range.from,
@@ -126,7 +126,7 @@
 
             async loadPeople() {
                 try {
-                    const snap = await window.db.collection('people').get();
+                    const snap = await db.collection('people').get();
                     this.people = snap.docs.map(d => ({ id: d.id, name: (d.data() || {}).name || '' }));
                 } catch (e) {
                     this.people = [];

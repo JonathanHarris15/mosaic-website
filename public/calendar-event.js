@@ -59,11 +59,11 @@
 
             resolveViewer() {
                 return new Promise(resolve => {
-                    window.auth.onAuthStateChanged(async user => {
+                    auth.onAuthStateChanged(async user => {
                         if (!user) { this.rank = null; return resolve(); }
                         this.uid = user.uid;
                         try {
-                            const data = await window.getUserData(user.uid);
+                            const data = await getUserData(user.uid);
                             this.personId = (data && data.personId) || null;
                             this.rank = (data && (data.permissionLevel || data.role)) || 'viewer';
                         } catch (e) {
@@ -121,7 +121,7 @@
                         rule.weekday = window.DateUtils.parseDateStr(this.draft.date).getDay();
                     }
 
-                    const made = await Store.createEvent(window.db, {
+                    const made = await Store.createEvent(db, {
                         name: this.draft.name,
                         date: this.draft.date,
                         time: this.draft.time,
@@ -151,7 +151,7 @@
                 this.saving = true;
                 try {
                     await Store.cancelOccurrence(
-                        window.db, this.series.id, this.occurrence.date, !this.occurrence.cancelled
+                        db, this.series.id, this.occurrence.date, !this.occurrence.cancelled
                     );
                     this.occurrence.cancelled = !this.occurrence.cancelled;
                 } catch (e) {
@@ -179,14 +179,14 @@
                         return;
                     }
 
-                    const loaded = await Store.loadOccurrence(window.db, id);
+                    const loaded = await Store.loadOccurrence(db, id);
                     if (!loaded) { this.error = 'That event could not be found.'; return; }
 
                     this.occurrence = loaded;
                     this.assignments = loaded.assignments || [];
 
                     if (loaded.seriesId) {
-                        const s = await window.db.collection('events').doc(loaded.seriesId).get();
+                        const s = await db.collection('events').doc(loaded.seriesId).get();
                         if (s.exists) this.series = Object.assign({ id: s.id }, s.data());
                     }
 
@@ -203,7 +203,7 @@
             },
 
             async loadPeople() {
-                const snap = await window.db.collection('people').get();
+                const snap = await db.collection('people').get();
                 this.people = snap.docs
                     .map(d => Object.assign({ id: d.id }, d.data()))
                     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
@@ -212,12 +212,12 @@
             async loadEditorData() {
                 await this.loadPeople();
                 const [roles, rels, groups] = await Promise.all([
-                    window.db.collection('roles').get(),
+                    db.collection('roles').get(),
                     // Serving rules may only name a Relationship Type an elder has
                     // shared with editors, so the query is constrained the same way
                     // the Roles Manager constrains it. Unconstrained it would error.
-                    window.db.collection('relationships').where('sharedWithEditors', '==', true).get().catch(() => ({ docs: [] })),
-                    window.db.collection('relationship_groups').where('sharedWithEditors', '==', true).get().catch(() => ({ docs: [] })),
+                    db.collection('relationships').where('sharedWithEditors', '==', true).get().catch(() => ({ docs: [] })),
+                    db.collection('relationship_groups').where('sharedWithEditors', '==', true).get().catch(() => ({ docs: [] })),
                 ]);
                 this.roleDefinitions = roles.docs.map(d => Object.assign({ id: d.id }, d.data()));
                 this.relationships = rels.docs.map(d => d.data());
@@ -324,7 +324,7 @@
             async persist() {
                 this.saving = true;
                 try {
-                    await Store.saveOccurrence(window.db, Object.assign({}, this.occurrence, {
+                    await Store.saveOccurrence(db, Object.assign({}, this.occurrence, {
                         assignments: this.assignments,
                     }));
                     // Keep the derived fields in step locally too, so the banner
@@ -531,7 +531,7 @@
                 // The viewer's OWN rungs, not all five. Asking for a rung this
                 // viewer cannot read fails the whole query, and the failure looks
                 // exactly like "this series has no dates".
-                const snap = await window.db.collection('event_occurrences')
+                const snap = await db.collection('event_occurrences')
                     .where('visibility', 'in', Core.visibilityQueryFor(this.rank).rungs)
                     .where('seriesId', '==', this.series.id)
                     .get();
@@ -577,9 +577,9 @@
                         .filter(d => !stored.some(o => o.date === d));
 
                     await Store.applyOrphanChoices(
-                        window.db, this.series.id, this.pattern.orphans, this.pattern.choices, free
+                        db, this.series.id, this.pattern.orphans, this.pattern.choices, free
                     );
-                    await window.db.collection('events').doc(this.series.id).update({ recurrence: rule });
+                    await db.collection('events').doc(this.series.id).update({ recurrence: rule });
                     this.pattern.open = false;
                     await this.load();
                 } catch (e) {
@@ -604,7 +604,7 @@
                     // Restamps EVERY occurrence, past ones included — otherwise
                     // making something private leaves its history public.
                     await Store.restampSeriesVisibility(
-                        window.db, this.series.id, level, this.occurrence.rosterShared === true
+                        db, this.series.id, level, this.occurrence.rosterShared === true
                     );
                     this.occurrence.visibility = level;
                 } catch (e) {
@@ -617,7 +617,7 @@
 
             async setRosterShared(shared) {
                 if (!this.visibilityEditable || !this.series) return;
-                await Store.restampSeriesVisibility(window.db, this.series.id, this.visibility, shared);
+                await Store.restampSeriesVisibility(db, this.series.id, this.visibility, shared);
                 this.occurrence.rosterShared = shared;
             },
 
@@ -654,7 +654,7 @@
             async saveTidyUp() {
                 this.saving = true;
                 try {
-                    const batch = window.db.batch();
+                    const batch = db.batch();
                     let wrote = 0;
                     this.openQuestions.forEach(q => {
                         if (!this.tidyUp.ticks[q.personId]) return;
@@ -662,7 +662,7 @@
                         // The same deterministic id the scheduled job uses, so
                         // answering twice writes one record rather than two.
                         batch.set(
-                            window.db.collection('people').doc(record.personId)
+                            db.collection('people').doc(record.personId)
                                 .collection('involvement').doc(record.involvementId),
                             {
                                 serviceDate: record.serviceDate,

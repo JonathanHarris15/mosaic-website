@@ -171,6 +171,46 @@ test('the Event detail page only binds to things its component defines', () => {
     checkPage('calendar-event.html', 'calendar-event.js', 'eventDetailPage');
 });
 
+// ── How auth.js actually exposes itself ───────────────────────────────────────
+
+test('auth.js declares auth and db as consts, so they are NOT window properties', () => {
+    // A classic script's top-level `const` creates a global LEXICAL binding, not
+    // a property of window. So `auth` resolves and `window.auth` is undefined.
+    // `function getUserData()` DOES become a window property, which makes the
+    // inconsistency easy to trip over.
+    const authJs = fs.readFileSync(path.join(PUBLIC, 'auth.js'), 'utf8');
+    assert.match(authJs, /^const auth = firebase\.auth\(\);$/m);
+    assert.match(authJs, /^const db = firebase\.firestore\(\);$/m);
+    assert.doesNotMatch(authJs, /window\.auth\s*=/, 'if this changes, the rule below changes with it');
+    assert.doesNotMatch(authJs, /window\.db\s*=/);
+});
+
+test('no page reaches for window.auth, window.db or window.getUserData', () => {
+    // This shipped once: `window.auth.onAuthStateChanged(...)` threw
+    // "Cannot read properties of undefined" on page load, and nothing in the
+    // test suite noticed because the suite stubs these as properties.
+    const PAGES = ['calendar.js', 'calendar-event.js', 'roles-manager.js', 'service-calendar.js'];
+
+    PAGES.forEach(file => {
+        const src = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+        ['auth', 'db', 'getUserData'].forEach(name => {
+            assert.doesNotMatch(
+                src,
+                new RegExp('window\\.' + name + '\\b'),
+                file + ' uses window.' + name + ', which is undefined — use the bare identifier'
+            );
+        });
+    });
+});
+
+test('the Calendar pages resolve the signed-in user the way every other page does', () => {
+    ['calendar.js', 'calendar-event.js'].forEach(file => {
+        const src = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+        assert.match(src, /\bauth\.onAuthStateChanged\(/, file);
+        assert.match(src, /\bgetUserData\(/, file);
+    });
+});
+
 // ── The pages load what they need ─────────────────────────────────────────────
 
 test('each page loads every module its component reaches for', () => {
