@@ -386,7 +386,9 @@
                                 <div class="bg-surface-container-lowest rounded-lg border overflow-hidden cal-motion"
                                      :class="role.needsAttention ? 'border-error' : 'border-outline-variant'">
 
-                                    <div class="bg-surface-container-low px-md py-2.5 flex items-center gap-sm border-b border-outline-variant">
+                                    <!-- `cal-row` is not decoration here: the remove button below is
+                                         hover-revealed, and without a row to hover it never appears. -->
+                                    <div class="cal-row bg-surface-container-low px-md py-2.5 flex items-center gap-sm border-b border-outline-variant">
                                         <span class="material-symbols-outlined text-[18px] text-secondary">badge</span>
                                         <span class="font-headline-lg text-[19px] text-on-surface flex-grow min-w-0 truncate"
                                               x-text="role.def.name"></span>
@@ -400,7 +402,7 @@
                                                 ? 'bg-error-container text-on-error-container'
                                                 : 'bg-surface-container text-on-surface-variant'"
                                               x-text="role.filled + ' of ' + role.slots.length"></span>
-                                        <button x-show="isEditor" @click="removeManagedRole(role.def.slug)"
+                                        <button x-show="isEditor" @click="askRemoveManagedRole(role.def.slug)"
                                                 class="cal-row-actions w-[30px] h-[30px] rounded-md flex items-center justify-center
                                                        text-on-surface-variant hover:bg-surface-container cal-motion cal-focus"
                                                 aria-label="Remove this role">
@@ -510,16 +512,52 @@
                                     <div class="cal-row flex items-center gap-2 flex-wrap">
                                         <span class="material-symbols-outlined text-[17px] text-outline shrink-0">label</span>
                                         <span class="text-[14px] text-on-surface" x-text="job.label"></span>
+                                        <!-- Somebody asked for one of these is still a real
+                                             Assignment in a real state — it goes in pending like any
+                                             other. So the chip both shows the state and lets an
+                                             editor set it, using the same three marks as a slot row.
+                                             Declined tones the whole chip, because declined is the
+                                             one state that has to find you. -->
                                         <template x-for="a in job.people" :key="a.personId">
-                                            <span class="inline-flex items-center gap-1 rounded-full bg-surface-container px-2 py-0.5">
+                                            <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 cal-motion"
+                                                  :class="stateTone(a) === 'attention' ? 'bg-error-container' : 'bg-surface-container'">
                                                 <span class="w-[22px] h-[22px] rounded-full bg-surface-container-high
                                                              flex items-center justify-center text-[10px] font-label-md"
                                                       x-text="initials(personName(a.personId))"></span>
                                                 <span class="text-[12.5px]" x-text="personName(a.personId)"></span>
-                                                <button x-show="isEditor" @click="removeFromOneOff(job.id, a.personId)"
-                                                        class="cal-focus rounded-full" aria-label="Remove">
-                                                    <span class="material-symbols-outlined text-[14px] text-on-surface-variant">close</span>
-                                                </button>
+
+                                                <!-- A reader still needs to know where this stands. -->
+                                                <span x-show="!isEditor" class="flex items-center gap-1 pl-0.5">
+                                                    <span class="w-[7px] h-[7px] rounded-full"
+                                                          :class="stateTone(a) === 'good' ? 'bg-success'
+                                                                : (stateTone(a) === 'attention' ? 'bg-error' : 'border-[1.5px] border-outline')"></span>
+                                                    <span class="text-[10px] font-label-md tracking-[.1em] uppercase text-on-surface-variant"
+                                                          x-text="stateLabel(a)"></span>
+                                                </span>
+
+                                                <span x-show="isEditor" class="flex items-center">
+                                                    <button @click="setState(a, 'pending')" :aria-label="'Mark ' + personName(a.personId) + ' pending'"
+                                                            class="w-[22px] h-[22px] rounded-full flex items-center justify-center cal-motion cal-focus hover:bg-surface-container-high"
+                                                            :class="a.state === 'pending' ? 'text-on-surface' : 'text-outline'">
+                                                        <span class="material-symbols-outlined text-[15px]">radio_button_unchecked</span>
+                                                    </button>
+                                                    <button @click="setState(a, 'confirmed')" :aria-label="'Mark ' + personName(a.personId) + ' confirmed'"
+                                                            class="w-[22px] h-[22px] rounded-full flex items-center justify-center cal-motion cal-focus hover:bg-surface-container-high"
+                                                            :class="a.state === 'confirmed' ? 'text-success' : 'text-outline'">
+                                                        <span class="material-symbols-outlined text-[15px]">check_circle</span>
+                                                    </button>
+                                                    <button @click="setState(a, 'declined')" :aria-label="'Mark ' + personName(a.personId) + ' declined'"
+                                                            class="w-[22px] h-[22px] rounded-full flex items-center justify-center cal-motion cal-focus hover:bg-surface-container-high"
+                                                            :class="a.state === 'declined' ? 'text-error' : 'text-outline'">
+                                                        <span class="material-symbols-outlined text-[15px]">do_not_disturb_on</span>
+                                                    </button>
+                                                    <button @click="removeFromOneOff(job.id, a.personId)"
+                                                            class="w-[22px] h-[22px] rounded-full flex items-center justify-center text-on-surface-variant
+                                                                   hover:bg-surface-container-high cal-motion cal-focus ml-0.5"
+                                                            :aria-label="'Take ' + personName(a.personId) + ' off'">
+                                                        <span class="material-symbols-outlined text-[15px]">close</span>
+                                                    </button>
+                                                </span>
                                             </span>
                                         </template>
                                         <select x-show="isEditor" @change="addToOneOff(job, $event.target.value); $event.target.value = ''"
@@ -529,7 +567,7 @@
                                                 <option :value="p.id" x-text="p.name"></option>
                                             </template>
                                         </select>
-                                        <button x-show="isEditor" @click="removeOneOffRole(job.id)"
+                                        <button x-show="isEditor" @click="askRemoveOneOffRole(job.id)"
                                                 class="cal-row-actions ml-auto cal-focus rounded" aria-label="Remove this job">
                                             <span class="material-symbols-outlined text-[16px] text-on-surface-variant">delete</span>
                                         </button>
@@ -944,6 +982,39 @@
                 <button @click="saveTidyUp()" :disabled="saving"
                         class="bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs font-label-md
                                text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Taking a Role off that people are already on ───────────────────── -->
+    <!-- Small, and it names them. This only ever opens when somebody would
+         actually be dropped — an empty Role comes off without a word. -->
+    <div x-show="pendingRemoval" @keydown.escape.window="cancelRemoval()"
+         class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
+        <div class="bg-surface-container-lowest rounded-lg border border-outline-variant w-full max-w-[460px] mt-[14vh]">
+            <div class="px-md py-md flex items-start gap-sm">
+                <span class="material-symbols-outlined text-[22px] text-error shrink-0 mt-0.5">warning</span>
+                <div class="min-w-0">
+                    <h3 class="font-display text-[20px] text-primary">
+                        Take <span x-text="pendingRemoval && pendingRemoval.name"></span> off this event?
+                    </h3>
+                    <p class="font-headline-lg text-[16px] leading-[1.55] text-on-surface mt-2"
+                       x-text="pendingRemoval && pendingRemoval.sentence"></p>
+                    <p class="text-[13px] text-on-surface-variant mt-2">
+                        Nobody is told. If you're putting them somewhere else, do that first
+                        so they aren't dropped and re-asked.
+                    </p>
+                </div>
+            </div>
+            <div class="px-md py-md border-t border-outline-variant flex items-center justify-end gap-sm">
+                <button @click="cancelRemoval()"
+                        class="px-md py-2 rounded-lg font-label-md text-xs uppercase tracking-wider
+                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Keep it</button>
+                <button @click="confirmRemoval()" :disabled="saving"
+                        class="bg-error text-on-error px-md py-2 rounded-lg shadow-xs font-label-md
+                               text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">
+                    Take it off
+                </button>
             </div>
         </div>
     </div>

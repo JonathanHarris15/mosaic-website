@@ -48,6 +48,8 @@
             picker: { open: false, roleSlug: null, slotId: null, query: '', hideBlocked: false, picked: null },
             pattern: { open: false, rule: null, orphans: [], choices: {} },
             tidyUp: { open: false, ticks: {} },
+            // Set only when a Role being taken off would drop somebody.
+            pendingRemoval: null,
             oneOffDraft: '',
 
             // ── Loading ──────────────────────────────────────────────────────
@@ -344,6 +346,53 @@
                 slugs.push(def.slug);
                 this.occurrence.occurrenceRoleSlugs = slugs;
                 await this.persist();
+            },
+
+            // ── Taking a Role off ────────────────────────────────────────────
+            //
+            // Removing a Role deletes every Assignment on it. That is right —
+            // people left behind would still count as participants of a Role the
+            // Event no longer has, which is also what lets them SEE a restricted
+            // Event. But it is a silent deletion behind one small button, so it
+            // asks first. Only when there is somebody to lose: an empty Role
+            // comes off on the click, because there is nothing to be sure about.
+
+            async askRemoveManagedRole(slug) {
+                const on = this.assignments.filter(a => a.roleSlug === slug && !a.oneOffId);
+                if (!on.length) return this.removeManagedRole(slug);
+                const def = this.roleDefinitions.find(d => d.slug === slug);
+                this.pendingRemoval = this.removalQuestion('managed', slug, (def && def.name) || slug, on);
+            },
+
+            async askRemoveOneOffRole(id) {
+                const on = this.assignments.filter(a => a.oneOffId === id);
+                if (!on.length) return this.removeOneOffRole(id);
+                const job = ((this.occurrence.oneOffRoles) || []).find(j => j.id === id);
+                this.pendingRemoval = this.removalQuestion('oneOff', id, (job && job.label) || 'this job', on);
+            },
+
+            // Names them. "Are you sure?" on its own is a question nobody can
+            // answer well — you answer it by knowing who you are about to drop.
+            removalQuestion(kind, key, name, on) {
+                const names = on.map(a => this.personName(a.personId));
+                return {
+                    kind: kind,
+                    key: key,
+                    name: name,
+                    count: on.length,
+                    sentence: View.listSentence(names) +
+                        (names.length === 1 ? ' loses their place.' : ' lose their places.'),
+                };
+            },
+
+            cancelRemoval() { this.pendingRemoval = null; },
+
+            async confirmRemoval() {
+                const ask = this.pendingRemoval;
+                if (!ask) return;
+                this.pendingRemoval = null;
+                if (ask.kind === 'managed') await this.removeManagedRole(ask.key);
+                else await this.removeOneOffRole(ask.key);
             },
 
             async removeManagedRole(slug) {

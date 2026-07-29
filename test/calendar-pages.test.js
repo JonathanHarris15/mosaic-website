@@ -1,4 +1,5 @@
 const { test } = require('node:test');
+const ONE_OFF = require('../public/events-occurrence-core.js').ONE_OFF_SLUG;
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -450,4 +451,178 @@ test('a declined assignment is never offered as a question to answer', () => {
         { personId: 'p2', roleSlug: 'kids', slotId: 's2', state: 'pending' },
     ];
     assert.deepStrictEqual(page.openQuestions.map(q => q.personId), ['p2']);
+});
+
+// ── Controls that exist in the markup but can never be seen ───────────────────
+//
+// `cal-row-actions` starts at opacity 0 and is revealed by `.cal-row:hover`. A
+// control given that class WITHOUT a `.cal-row` ancestor is therefore invisible
+// on a desktop for ever — it is in the markup, it passes every binding check
+// above, and no one can click it. That shipped once: the button that removes a
+// recurring Role from an Event sat in a card header that was not a `.cal-row`,
+// so an editor who added a Role could never take it off again.
+
+const VOID_TAGS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img',
+    'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+
+// Walk the tags, carrying a stack of "is this ancestor a .cal-row", and report
+// every hover-revealed control that has no row to be revealed by.
+function orphanedRowActions(html) {
+    const body = html.slice(html.indexOf('<body'));
+    const tags = /<(\/?)([a-z][\w-]*)((?:"[^"]*"|'[^']*'|[^>'"])*?)(\/?)>/gi;
+    const stack = [];
+    const orphans = [];
+    let m;
+
+    while ((m = tags.exec(body))) {
+        const [, closing, name, attrs, selfClosed] = m;
+        const tag = name.toLowerCase();
+        if (closing) { stack.pop(); continue; }
+
+        const classes = (/class\s*=\s*"([^"]*)"/.exec(attrs) || [, ''])[1].split(/\s+/);
+        if (classes.indexOf('cal-row-actions') !== -1 && stack.indexOf(true) === -1) {
+            orphans.push((/aria-label\s*=\s*"([^"]*)"/.exec(attrs) || [, tag])[1]);
+        }
+        if (!selfClosed && !VOID_TAGS.has(tag)) stack.push(classes.indexOf('cal-row') !== -1);
+    }
+    return orphans;
+}
+
+test('every hover-revealed control sits in a row that can reveal it', () => {
+    ['calendar-event.html', 'calendar.html'].forEach(file => {
+        const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+        assert.deepStrictEqual(orphanedRowActions(html), [],
+            file + ' hides a control with no .cal-row to reveal it');
+    });
+});
+
+test('the control that removes a recurring Role from an Event is reachable', () => {
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    assert.ok(/askRemoveManagedRole\(/.test(html), 'nothing removes a recurring Role');
+    assert.deepStrictEqual(orphanedRowActions(html).filter(l => /role/i.test(l)), []);
+});
+
+test('an editor can set the state of a one-off assignment, not just remove them', () => {
+    // A one-off Role is still a real Assignment carrying a real state — it goes
+    // in pending like any other. Without a control here an editor can put
+    // somebody on the door and never mark them confirmed, so the strip lies.
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+
+    ['pending', 'confirmed', 'declined'].forEach(state => {
+        assert.ok(html.indexOf("setState(a, '" + state + "')") !== -1,
+            'the one-off strip offers no way to mark someone ' + state);
+    });
+    // And it has to SHOW the state, or the control has nothing to read back.
+    assert.ok(/stateTone\(a\)/.test(html), 'a one-off assignment never shows its state');
+});
+
+// ── Removing a Role that people are already on ────────────────────────────────
+//
+// Taking a Role off an Event deletes every Assignment on it — that is correct
+// (leaving them behind keeps people as participants of a Role the Event no
+// longer has, which is also what lets them SEE a restricted Event). But it is a
+// silent deletion behind a single small button, so it asks first, and only when
+// there is actually somebody to lose. An empty Role removes on the click.
+
+function eventPageWithRole() {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.rank = 'editor';
+    page.occurrence = { id: 'x', date: '2026-07-15', occurrenceRoleSlugs: ['kids'], oneOffRoles: [{ id: 'o1', label: 'Unlock the hall' }] };
+    page.people = [{ id: 'p1', name: 'Dave Rowe' }, { id: 'p2', name: 'Sarah Kent' }];
+    page.roleDefinitions = [{ slug: 'kids', name: 'Kids Ministry', slots: [{ id: 's1', requirement: 'either' }] }];
+    page.saved = 0;
+    page.persist = async () => { page.saved++; };
+    return page;
+}
+
+test('a Role with nobody on it comes off without a question', async () => {
+    const page = eventPageWithRole();
+    page.assignments = [];
+
+    await page.askRemoveManagedRole('kids');
+    assert.strictEqual(page.pendingRemoval, null, 'asked about an empty Role');
+    assert.deepStrictEqual(page.occurrence.occurrenceRoleSlugs, []);
+    assert.strictEqual(page.saved, 1);
+});
+
+test('a Role with people on it is not removed until the question is answered', async () => {
+    const page = eventPageWithRole();
+    page.assignments = [{ personId: 'p1', roleSlug: 'kids', slotId: 's1', state: 'confirmed' }];
+
+    await page.askRemoveManagedRole('kids');
+    assert.ok(page.pendingRemoval, 'removed somebody without asking');
+    assert.deepStrictEqual(page.occurrence.occurrenceRoleSlugs, ['kids'], 'removed it before the answer');
+    assert.strictEqual(page.assignments.length, 1);
+    assert.strictEqual(page.saved, 0, 'wrote to the Event before the answer');
+
+    // The question has to say who is lost, by name — "are you sure?" alone is
+    // a question nobody can answer well.
+    assert.ok(/Dave Rowe/.test(page.pendingRemoval.sentence), page.pendingRemoval.sentence);
+    assert.ok(/Kids Ministry/.test(page.pendingRemoval.name));
+});
+
+test('saying no leaves the Role and everyone on it exactly where they were', async () => {
+    const page = eventPageWithRole();
+    page.assignments = [{ personId: 'p1', roleSlug: 'kids', slotId: 's1', state: 'confirmed' }];
+
+    await page.askRemoveManagedRole('kids');
+    page.cancelRemoval();
+
+    assert.strictEqual(page.pendingRemoval, null);
+    assert.deepStrictEqual(page.occurrence.occurrenceRoleSlugs, ['kids']);
+    assert.strictEqual(page.assignments.length, 1);
+    assert.strictEqual(page.saved, 0);
+});
+
+test('saying yes takes the Role off and their places with it', async () => {
+    const page = eventPageWithRole();
+    page.assignments = [
+        { personId: 'p1', roleSlug: 'kids', slotId: 's1', state: 'confirmed' },
+        { personId: 'p2', roleSlug: ONE_OFF, oneOffId: 'o1', state: 'pending' },
+    ];
+
+    await page.askRemoveManagedRole('kids');
+    await page.confirmRemoval();
+
+    assert.strictEqual(page.pendingRemoval, null);
+    assert.deepStrictEqual(page.occurrence.occurrenceRoleSlugs, []);
+    assert.deepStrictEqual(page.assignments.map(a => a.personId), ['p2'], 'took the wrong people off');
+    assert.strictEqual(page.saved, 1);
+});
+
+test('a one-off job asks the same question, and names the same way', async () => {
+    const page = eventPageWithRole();
+    page.assignments = [
+        { personId: 'p1', roleSlug: ONE_OFF, oneOffId: 'o1', state: 'pending' },
+        { personId: 'p2', roleSlug: ONE_OFF, oneOffId: 'o1', state: 'confirmed' },
+    ];
+
+    await page.askRemoveOneOffRole('o1');
+    assert.ok(page.pendingRemoval, 'deleted a one-off job with two people on it silently');
+    assert.ok(/Dave Rowe/.test(page.pendingRemoval.sentence));
+    assert.ok(/Sarah Kent/.test(page.pendingRemoval.sentence));
+    assert.strictEqual(page.saved, 0);
+
+    await page.confirmRemoval();
+    assert.deepStrictEqual(page.occurrence.oneOffRoles, []);
+    assert.deepStrictEqual(page.assignments, []);
+    assert.strictEqual(page.saved, 1);
+});
+
+test('an empty one-off job goes without a question too', async () => {
+    const page = eventPageWithRole();
+    page.assignments = [];
+
+    await page.askRemoveOneOffRole('o1');
+    assert.strictEqual(page.pendingRemoval, null);
+    assert.deepStrictEqual(page.occurrence.oneOffRoles, []);
+});
+
+test('the remove buttons go through the question, never straight to the deletion', () => {
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    // The unguarded pair still exist — they are what the confirmation calls —
+    // but nothing in the markup may reach them directly.
+    assert.ok(!/@click="removeManagedRole\(/.test(html), 'a click removes a Role without asking');
+    assert.ok(!/@click="removeOneOffRole\(/.test(html), 'a click deletes a one-off job without asking');
+    assert.ok(/askRemoveManagedRole\(/.test(html) && /askRemoveOneOffRole\(/.test(html));
 });
