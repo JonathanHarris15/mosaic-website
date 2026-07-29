@@ -705,8 +705,12 @@
                 return dateStr ? window.DateUtils.formatDateLong(dateStr, 'en-GB') : '';
             },
 
+            // Straight to the Order of Service editor for this exact date — the
+            // Sunday's own surface, and the one that keeps the printed booklet
+            // safe by staying separate from the Event model.
             get servicesHref() {
-                return 'service-calendar.html#' + (this.occurrence ? this.occurrence.date : '');
+                return 'service-builder.html?date=' +
+                    encodeURIComponent(this.occurrence ? this.occurrence.date : '');
             },
         };
     };

@@ -291,10 +291,51 @@ test('opening a Sunday routes to Services, and anything else to the Event page',
     page.open({ id: 'sunday_service_2026-07-12', date: '2026-07-12', isSunday: true });
     page.open({ id: 'midweek_2026-07-15', date: '2026-07-15', isSunday: false });
 
-    assert.match(hrefs[0], /^service-calendar\.html#2026-07-12$/,
-        'a Sunday is a cross-link, never an editor');
+    // A Sunday goes to its OWN surface — the Order of Service editor, for that
+    // exact date. Not the Services list: you already said which Sunday by
+    // clicking it, so making somebody find the same date again is a step for
+    // nothing.
+    assert.match(hrefs[0], /^service-builder\.html\?date=2026-07-12$/);
     assert.match(hrefs[1], /^calendar-event\.html\?id=midweek_2026-07-15$/);
     assert.ok(sandbox !== null);
+});
+
+test('a Sunday NEVER opens the Event editor, whatever else changes', () => {
+    // The invariant behind the routing, stated on its own so a future change of
+    // destination cannot quietly take a Sunday into the Event model. Sunday
+    // liturgy lives on the Service, and keeping the two apart is what keeps the
+    // printed booklet safe.
+    const hrefs = [];
+    const ctx = {
+        console, Promise, Date, Object, Array, Math, String, Number, JSON, Set, Map,
+        encodeURIComponent, URLSearchParams,
+    };
+    ctx.window = ctx;
+    ctx.EventsOccurrenceCore = require('../public/events-occurrence-core.js');
+    ctx.EventsStore = require('../public/events-store.js');
+    ctx.CalendarView = require('../public/calendar-view.js');
+    ctx.DateUtils = require('../public/date-utils.js');
+    ctx.auth = { onAuthStateChanged() {} };
+    ctx.db = {};
+    ctx.location = { set href(v) { hrefs.push(v); }, get href() { return hrefs[hrefs.length - 1]; } };
+    vm.createContext(ctx);
+    vm.runInContext(fs.readFileSync(path.join(PUBLIC, 'calendar.js'), 'utf8'), ctx, { filename: 'calendar.js' });
+
+    const page = ctx.calendarPage();
+    ['2026-07-05', '2026-07-12', '2026-07-19'].forEach(date => {
+        page.open({ id: 'sunday_service_' + date, date: date, isSunday: true });
+    });
+
+    hrefs.forEach(href => {
+        assert.ok(!/calendar-event\.html/.test(href),
+            'a Sunday must never route into the Event editor: ' + href);
+    });
+});
+
+test('the Event detail page sends a Sunday to that same surface', () => {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.occurrence = { id: 'sunday_service_2026-07-12', seriesId: 'sunday_service', date: '2026-07-12' };
+    assert.strictEqual(page.servicesHref, 'service-builder.html?date=2026-07-12');
 });
 
 test('only an editor and above is offered "New event"', () => {

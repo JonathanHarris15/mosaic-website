@@ -232,12 +232,19 @@
             nextMonth() { return this.goToMonth(shiftMonth(this.month, 1)); },
             goToToday() { return this.goToMonth(monthOf(todayStr())); },
 
-            // A Sunday NEVER opens an Event editor — its liturgy lives on the
-            // Services page, and that is what keeps the printed booklet safe.
+            // A Sunday NEVER opens the Event editor. Its liturgy is a different
+            // model with a different surface — the Order of Service editor — and
+            // keeping the two apart is what keeps the printed booklet safe.
+            //
+            // It goes straight to that editor rather than to the Services list,
+            // because you already said which Sunday by clicking it; making
+            // somebody find the same date again is a step for nothing. The
+            // builder gates its own editing controls, so a member landing there
+            // reads the order of service without being able to change it.
             open(occurrence) {
                 if (!occurrence) return;
                 window.location.href = occurrence.isSunday
-                    ? 'service-calendar.html#' + occurrence.date
+                    ? 'service-builder.html?date=' + encodeURIComponent(occurrence.date)
                     : 'calendar-event.html?id=' + encodeURIComponent(occurrence.id);
             },
 
