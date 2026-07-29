@@ -163,9 +163,16 @@
             // Managed Roles come from the Roles Manager and arrive WITH their
             // slots and restriction rules. One-off Roles are a label and some
             // people, and nothing more — no slots, no rules, no count.
+            //
+            // NOTE THE FIELD NAME. `occurrenceRoleSlugs` lives on the OCCURRENCE
+            // and says which Roles THIS DATE needs. The series has its own
+            // `roleSlugs` (EventsCore) saying which Roles the series carries.
+            // They are different lists at different levels, and giving them the
+            // same name — as an earlier pass did — reads as one field to anybody
+            // holding CONTEXT.md's Event series entry in their head.
 
             get managedRoles() {
-                return ((this.occurrence && this.occurrence.roleSlugs) || [])
+                return ((this.occurrence && this.occurrence.occurrenceRoleSlugs) || [])
                     .map(slug => this.roleDefinitions.find(d => d.slug === slug))
                     .filter(Boolean)
                     .map(def => ({
@@ -196,7 +203,7 @@
             // Roles are NOT offered — they stay wired to the Service exactly as
             // they are today, which is what keeps the printed booklet safe.
             get availableRoles() {
-                const on = (this.occurrence && this.occurrence.roleSlugs) || [];
+                const on = (this.occurrence && this.occurrence.occurrenceRoleSlugs) || [];
                 return this.roleDefinitions
                     .filter(d => Roles.LITURGICAL_SLUGS.indexOf(d.slug) === -1)
                     .map(d => Object.assign({}, d, { alreadyOn: on.indexOf(d.slug) !== -1 }));
@@ -234,15 +241,15 @@
             },
 
             async addManagedRole(def) {
-                const slugs = ((this.occurrence.roleSlugs) || []).slice();
+                const slugs = ((this.occurrence.occurrenceRoleSlugs) || []).slice();
                 if (slugs.indexOf(def.slug) !== -1) return;
                 slugs.push(def.slug);
-                this.occurrence.roleSlugs = slugs;
+                this.occurrence.occurrenceRoleSlugs = slugs;
                 await this.persist();
             },
 
             async removeManagedRole(slug) {
-                this.occurrence.roleSlugs = ((this.occurrence.roleSlugs) || []).filter(s => s !== slug);
+                this.occurrence.occurrenceRoleSlugs = ((this.occurrence.occurrenceRoleSlugs) || []).filter(s => s !== slug);
                 // Its assignments go with it — leaving them behind would keep
                 // people as participants of a Role the Event no longer has.
                 this.assignments = this.assignments.filter(a => a.roleSlug !== slug);
@@ -423,8 +430,11 @@
             async openPattern() {
                 if (!this.series) return;
                 const rule = Object.assign({}, this.series.recurrence || {});
+                // The viewer's OWN rungs, not all five. Asking for a rung this
+                // viewer cannot read fails the whole query, and the failure looks
+                // exactly like "this series has no dates".
                 const snap = await window.db.collection('event_occurrences')
-                    .where('visibility', 'in', Core.VISIBILITY_ORDER.slice())
+                    .where('visibility', 'in', Core.visibilityQueryFor(this.rank).rungs)
                     .where('seriesId', '==', this.series.id)
                     .get();
                 const stored = await Promise.all(snap.docs.map(async d => {

@@ -178,6 +178,20 @@ service cloud.firestore {
       }
     }
 
+    // The Calendar needs YOUR OWN assignments across a whole month without
+    // reading anybody else's, so it queries each Event's roster for your Person
+    // id. Your own row is always readable — you are always allowed to know what
+    // you have been asked to do — and everyone else's still depends on the
+    // Event's roster setting via the rule above.
+    //
+    // ⚠ Constrain this query. `.where('personId', '==', myPersonId)` is what
+    // makes it legal; unconstrained it returns other people's rows, they fail,
+    // and the whole read errors.
+    match /{path=**}/roster/{assignmentId} {
+      allow read: if isEditor()
+        || (request.auth != null && resource.data.personId == myPersonId());
+    }
+
     match /services/{dateId} {
       allow read: if true;
       allow create, update, delete: if isEditor();

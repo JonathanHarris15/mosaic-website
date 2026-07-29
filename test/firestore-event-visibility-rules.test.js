@@ -166,6 +166,24 @@ test('only an editor writes the roster — members confirming for themselves is 
     assert.match(rosterBlock(), /allow create, update, delete: if isEditor\(\)/);
 });
 
+// ── The collection-group roster read ──────────────────────────────────────────
+
+test('the collection-group roster rule lets you read your own row and nobody else’s', () => {
+    // The Calendar needs your own assignments across a whole month without
+    // reading anybody else's, so it queries each roster for your Person id.
+    const block = blockFor(/match \/\{path=\*\*\}\/roster\/\{assignmentId\}\s*\{([\s\S]*?)\n    \}/);
+    assert.match(block, /resource\.data\.personId == myPersonId\(\)/);
+    assert.match(block, /isEditor\(\)/);
+    assert.doesNotMatch(block, /allow read: if true/);
+});
+
+test('the collection-group roster grants no writes', () => {
+    // Writing goes through the occurrence's own roster rule. A collection-group
+    // write rule here would be a second, wider door onto the same documents.
+    const block = blockFor(/match \/\{path=\*\*\}\/roster\/\{assignmentId\}\s*\{([\s\S]*?)\n    \}/);
+    assert.doesNotMatch(block, /allow (create|update|delete|write)/);
+});
+
 // ── The rank helpers ──────────────────────────────────────────────────────────
 
 test('the member floor excludes a viewer', () => {

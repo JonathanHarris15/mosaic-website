@@ -261,6 +261,98 @@ test('a stored occurrence the pattern no longer produces still appears, rather t
     assert.ok(rows.some(o => o.date === '2026-07-02'), 'the orphan is still shown');
 });
 
+// ── Putting the rosters back on ───────────────────────────────────────────────
+//
+// The roster is a subcollection, so a list query over occurrences returns none
+// of it. Left there, "Only mine", the You-in-July rail and Needs sorting all
+// come back silently empty — the page renders and never mentions anything you
+// are down for.
+
+test('a member’s own assignment is attached, so the Calendar can answer "am I in it"', async () => {
+    const occ = { id: 'setup_2026-07-18', date: '2026-07-18', visibility: 'participant', participantIds: ['p1'] };
+    const db = fakeDb({
+        event_occurrences: { 'setup_2026-07-18': occ },
+        'event_occurrences/setup_2026-07-18/roster': {
+            kids__s1__p1: { personId: 'p1', roleSlug: 'kids', slotId: 's1', state: 'pending' },
+            kids__s2__p2: { personId: 'p2', roleSlug: 'kids', slotId: 's2', state: 'confirmed' },
+        },
+    }, { rank: 'member', personId: 'p1' });
+
+    const rows = await Store.attachRosters(db, [Object.assign({}, occ)], { rank: 'member', personId: 'p1' });
+
+    assert.strictEqual(rows[0].assignments.length, 1, 'their own row, and nobody else’s');
+    assert.strictEqual(rows[0].assignments[0].personId, 'p1');
+});
+
+test('a member’s roster query is constrained to their own Person id', async () => {
+    const occ = { id: 'x', date: '2026-07-18', visibility: 'participant', participantIds: ['p1'] };
+    const db = fakeDb({ event_occurrences: { x: occ } }, { rank: 'member', personId: 'p1' });
+
+    await Store.attachRosters(db, [Object.assign({}, occ)], { rank: 'member', personId: 'p1' });
+
+    const q = db._queriesRun.find(x => /roster/.test(x.collection));
+    assert.ok(q, 'no roster was read');
+    assert.ok(
+        q.filters.some(f => f.field === 'personId' && f.op === '==' && f.value === 'p1'),
+        'unconstrained, this returns other people’s rows and the whole read errors'
+    );
+});
+
+test('no roster is read for an Event the viewer is not part of', async () => {
+    const occ = { id: 'x', date: '2026-07-18', visibility: 'member', participantIds: ['p9'] };
+    const db = fakeDb({ event_occurrences: { x: occ } }, { rank: 'member', personId: 'p1' });
+
+    await Store.attachRosters(db, [Object.assign({}, occ)], { rank: 'member', personId: 'p1' });
+    assert.ok(!db._queriesRun.some(x => /roster/.test(x.collection)), 'nothing to fetch, so nothing is fetched');
+});
+
+test('an editor gets the whole roster of anything needing sorting, and only that', async () => {
+    // Which is what turns a declined flag into "Bethany Croft declined Kids
+    // Ministry" in the rail.
+    const flagged = { id: 'a', date: '2026-07-18', visibility: 'member', participantIds: ['p1', 'p2'], needsAttention: true };
+    const calm = { id: 'b', date: '2026-07-19', visibility: 'member', participantIds: ['p3'], needsAttention: false };
+
+    const db = fakeDb({
+        event_occurrences: { a: flagged, b: calm },
+        'event_occurrences/a/roster': {
+            kids__s1__p1: { personId: 'p1', roleSlug: 'kids', slotId: 's1', state: 'declined' },
+            kids__s2__p2: { personId: 'p2', roleSlug: 'kids', slotId: 's2', state: 'confirmed' },
+        },
+    }, { rank: 'editor', personId: 'p9' });
+
+    const rows = await Store.attachRosters(
+        db, [Object.assign({}, flagged), Object.assign({}, calm)], { rank: 'editor', personId: 'p9' }
+    );
+
+    assert.strictEqual(rows[0].assignments.length, 2, 'the whole roster of the flagged Event');
+    assert.strictEqual(rows[1].assignments, undefined, 'and nothing for a calm one');
+});
+
+test('a refused roster read degrades to no roster rather than failing the page', async () => {
+    const occ = { id: 'x', date: '2026-07-18', visibility: 'participant', participantIds: ['p1'] };
+    const db = fakeDb({ event_occurrences: { x: occ } }, { rank: 'member', personId: 'p1' });
+    // A roster the rule refuses.
+    const original = db.collection;
+    db.collection = name => {
+        const api = original(name);
+        if (/roster/.test(name)) {
+            api.where = () => ({ get: async () => { throw Object.assign(new Error('denied'), { code: 'permission-denied' }); } });
+        }
+        return api;
+    };
+
+    const rows = await Store.attachRosters(db, [Object.assign({}, occ)], { rank: 'member', personId: 'p1' });
+    assert.deepStrictEqual(rows[0].assignments, [], 'the rule working is not an error');
+});
+
+test('a signed-out visitor reads no roster at all', async () => {
+    const occ = { id: 'x', date: '2026-07-18', visibility: 'public', participantIds: ['p1'] };
+    const db = fakeDb({ event_occurrences: { x: occ } }, { rank: null, personId: null });
+
+    await Store.attachRosters(db, [Object.assign({}, occ)], { rank: null, personId: null });
+    assert.ok(!db._queriesRun.some(x => /roster/.test(x.collection)));
+});
+
 // ── Restamping ────────────────────────────────────────────────────────────────
 
 test('changing a series’ visibility restamps every occurrence, past ones included', async () => {

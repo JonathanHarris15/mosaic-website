@@ -97,6 +97,49 @@
         return list;
     }
 
+    // ── Putting the rosters back on ──────────────────────────────────────────
+    //
+    // The roster is a SUBCOLLECTION, so a list query over occurrences returns
+    // none of it. Left there, the Calendar's "Only mine" filter, the *You in
+    // July* rail and the *Needs sorting* list all come back silently empty —
+    // the page renders, and simply never mentions anything you are down for.
+    //
+    // So the rows that need a roster fetch one, and only those:
+    //
+    //   • Anyone: their OWN row on Events they are a participant of. A query
+    //     for your own personId passes the rule even when the roster is hidden,
+    //     because you are always allowed to know what you were asked to do.
+    //   • An editor: the WHOLE roster of Events that need sorting, which is what
+    //     turns a declined flag into "Bethany Croft declined Kids Ministry".
+    //
+    // Both are bounded by how much is actually going on, not by the month.
+    async function attachRosters(db, occurrences, options) {
+        const opts = options || {};
+        const isEditor = ['editor', 'admin', 'elder', 'super_admin'].indexOf(opts.rank) !== -1;
+
+        await Promise.all(occurrences.map(async o => {
+            const rosterRef = occurrenceRef(db, o.id).collection(ROSTER);
+            const mine = opts.personId && (o.participantIds || []).indexOf(opts.personId) !== -1;
+
+            // An editor reading a whole roster is allowed; a member reading only
+            // their own row is too. Anything refused degrades to no roster rather
+            // than failing the page.
+            const wantsAll = isEditor && o.needsAttention;
+            if (!mine && !wantsAll) return;
+
+            try {
+                const snap = wantsAll
+                    ? await rosterRef.get()
+                    : await rosterRef.where('personId', '==', opts.personId).get();
+                o.assignments = snap.docs.map(d => d.data());
+            } catch (e) {
+                o.assignments = o.assignments || [];
+            }
+        }));
+
+        return occurrences;
+    }
+
     // The whole Calendar for a month: every series' computed dates merged with
     // whatever occurrence documents exist. An untouched date still appears — it
     // is simply empty. That is the sparse promise (ADR-0018 §3).
@@ -104,7 +147,7 @@
         const opts = options || {};
         const [series, stored] = await Promise.all([
             loadVisibleSeries(db, opts),
-            loadVisibleOccurrences(db, opts),
+            loadVisibleOccurrences(db, opts).then(rows => attachRosters(db, rows, opts)),
         ]);
 
         const storedBySeries = new Map();
@@ -445,6 +488,7 @@
         loadVisibleOccurrences,
         loadVisibleSeries,
         loadCalendar,
+        attachRosters,
         // writing
         saveOccurrence,
         loadOccurrence,
