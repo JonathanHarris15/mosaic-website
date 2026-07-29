@@ -338,13 +338,14 @@ A hymn selection within a Service's liturgy.
   - **Literal**: An unlinked name (has a `name` but `id` is null). These typically arise from docx imports where a match wasn't found. They must be resolved (linked to a Canonical hymn) to enable full functionality.
 
 ### Involvement
-A record of a Person's participation in an Event in a specific Role. The single serve log — there is no separate one (ADR-0016).
+A record that a Person **did serve** in a specific Role at an Event. The single serve log — there is no separate one (ADR-0016). It records the past: an Involvement is never written for an Event that has not happened yet (ADR-0018).
 - **Fields**:
   - `serviceDate`: The date of the event (YYYY-MM-DD).
   - `type`: The Role slug (see Roles). **Role-open**: any slug is accepted, so a new Servant Role needs no schema change.
   - `seriesId`: The **Event series** this serve belonged to (e.g. `sunday_service`). Fairness is counted per series, so this is what lets a Person read as overdue for one Event and fresh for another.
-  - `metadata`: Optional extra data (e.g., prayer type, prayer text).
+  - `metadata`: Optional extra data (e.g., prayer type, prayer text; the label of a [[One-off Role]]).
 - A record written before `seriesId` existed **reads as** the Sunday Service (`EventsCore.seriesIdOf`). Without that fallback every historic serve would drop out of fairness the moment the field appeared. `scripts/backfill-involvement-series.js` makes it explicit, because a Firestore query cannot fall back.
+- **An [[Assignment]] is not an Involvement.** The Assignment is the plan and is mutable; the Involvement is the fact and is written only once the date has passed. Only a **Confirmed** Assignment converts automatically.
 
 ## Roles
 A Role is a type of participation assigned on an Event and recorded as Involvement. Two families (ADR-0016) — `RolesCore.allRoles()` composes them into the one list every surface renders.
@@ -380,9 +381,44 @@ The stored specification of a Servant Role, authored in the Roles Manager. Lives
 
 ### Event series
 The recurring thing that carries Roles, in the `events` collection. The Sunday **Service** is one **locked** series (`sunday_service`): always present, undeletable, its liturgical Roles fixed to it. Servant Roles can be added to a series and removed again — locked protects the liturgical Roles, not the whole roster.
-- **Fields**: `id`, `name`, `locked`, `roleSlugs` (ordered), `lockedRoleSlugs` (the ones that cannot be removed).
-- **Occurrences are not migrated.** An occurrence of the Sunday Service resolves to the date-keyed `services/{date}` document that already exists — no shadow record — so the Service Guide keeps reading what it always read. A general per-occurrence Event store arrives with the Calendar (MS-99); `EventsCore.occurrenceRef` returns `null` for any other series until then.
+- **Fields**: `id`, `name`, `locked`, `roleSlugs` (ordered), `lockedRoleSlugs` (the ones that cannot be removed), the **recurrence rule**, and the series' [[Event visibility]].
+- An occurrence of the Sunday Service resolves to the date-keyed `services/{date}` document that already exists — no shadow record — so the Service Guide keeps reading what it always read (`EventsCore.occurrenceRef`).
 - `scripts/seed-events.js` reconciles the Sunday Service series: it restores what must be true and leaves alone what the user owns, so a second run is a no-op.
+
+### Event occurrence
+One dated instance of an [[Event series]], or a **one-off Event** that belongs to no series. What an [[Assignment]] attaches to (ADR-0018).
+- **Sparse**: a document exists only once there is something to say about the date — an assignment, a cancellation, a changed time. The Calendar computes the dates from the series' recurrence rule and merges in whatever documents exist. An untouched date still appears; it is simply empty.
+- **Deterministic id** (`{seriesId}_{date}`), so two editors cannot create the same occurrence twice. A one-off Event has no series and takes an auto-id.
+- Carries its own [[Event visibility]], copied down from the series, and `participantIds` — the denormalised list of People holding a Role on it, which is what makes `participant` visibility checkable in a security rule.
+- **A Sunday occurrence is `services/{date}`**, which keeps its liturgical roles as the hardwired fields the Service Guide prints. Assignments sit *alongside* those fields and never over them.
+
+### Assignment
+A Person placed in one slot of one Role on an [[Event occurrence]] — **the plan, not the record**. Mutable, and never itself a serve record.
+- A slot holds **one current** Assignment. Assigning a replacement overwrites it.
+- **States** — every Assignment is in exactly one:
+  - **Pending**: assigned, not yet heard from. The default.
+  - **Confirmed**: they said yes.
+  - **Declined**: they said no, and the slot is **flagged for reassignment** — visibly needing attention, not silently empty.
+- Carries **who set the state and when**, so the state machine survives being handed to the congregation in MS-20.
+- Only **Servant Roles** and [[One-off Role]]s get Assignments. Liturgical Roles keep their existing wiring into the Service entity (ADR-0018 §2).
+- **Once the date passes**: Confirmed becomes an [[Involvement]] automatically; Declined never does; Pending becomes an open question an editor resolves ("did they serve?"), and an unresolved question never counts as serving.
+
+### One-off Role
+A Role created for a single Event and living only on it — "someone to unlock the hall". Deliberately cheap: a **label and some people**, with no definition, no reuse, no slots, no restrictions and no eligibility checking. Forcing every ad-hoc job through the Roles Manager would make the Roles Manager a junk drawer.
+- Its [[Involvement]] is written under **one reserved slug**, `one_off`, with the label in `metadata` — never an invented slug per job, which `RolesCore.roleBySlug` could not resolve to a name on any surface showing serve history.
+- **Counts as serving** (the person who unlocks the hall every week is not someone who never helps), but is **never a Role to balance** — fairness skips the `one_off` bucket rather than trying to rotate a job that happens once.
+
+### Event visibility
+Who may see an [[Event occurrence]]. One of five rungs, set on the series or the one-off Event and **stamped onto every occurrence** — a security rule cannot afford a lookup per document (ADR-0018 §5, following MS-130).
+- `public` — anyone, signed in or not.
+- `member` — members and above.
+- `participant` — only members holding a Role on **that** Event, plus everyone above. Checked against the occurrence's `participantIds`.
+- `editor` — editors and above.
+- `elder` — elders and super admins.
+- Changing a series' visibility restamps **all** its occurrences, past ones included.
+- **Removed by an editor → sight of the Event is lost instantly. Declined by the person → sight is kept until someone else takes the slot**, so they can still see what they turned down and change their mind.
+- Whether a participant sees the Event's full **roster** is an editor's choice per Event. Firestore cannot hide a field from a reader, so the roster lives in a subcollection with its own rule.
+- **The Sunday Service is permanently `public`** and not editable — its occurrences are what the congregant-facing Service Guide reads.
 
 ## Shepherding System
 
@@ -455,7 +491,8 @@ An `@`-prefixed inline reference inside a TipTap editor. The mention system span
 
 ## User Interface Conventions
 
-### Service Calendar
+### Services
+The week-by-week view of Sunday **Services** — the Sunday Service series and nothing else. **Renamed from "Service Calendar"** (MS-99): unchanged in function, renamed so it is not confused with the [[Calendar]], which is a different view.
 - **Baptism Indicator**: 
   - **List View**: A blue status badge with a `water_drop` icon.
   - **Table View**: A dedicated "Baptism" column showing the Baptism Candidates' names.
@@ -467,3 +504,14 @@ An `@`-prefixed inline reference inside a TipTap editor. The mention system span
 - **Editing Summary**: 
   - Sermonette leaders are linked to People and editable from list/table.
   - Baptism Candidates are linked to People and editable from the Order of Service editor (read-only in the calendar).
+
+### Calendar
+The view over **every** [[Event occurrence]] the signed-in person is allowed to see, not just Sundays (MS-99). Editors and above create Events here; what each person sees is governed by [[Event visibility]].
+- Distinct from [[Services]], which shows Sundays only and remains the surface for editing a Service's liturgy.
+- Loads with **two queries merged client-side** — one filtered by the viewer's rank, one `array-contains` their Person id for `participant`-visible Events. Firestore cannot express that as a single filter, and an unconstrained query **errors outright rather than returning fewer rows** — a failure that looks exactly like "this church has no events". The same trap is documented in `firestore.rules` for the relationship collections.
+
+## Flagged ambiguities
+
+- **"Calendar"** meant the Sunday-only Service Calendar before MS-99. It now means the all-Events [[Calendar]]; the Sunday view is [[Services]]. Code, labels and docs saying "Service Calendar" refer to Services.
+- **"Assignment" vs "Involvement"** were the same act before MS-99 — assigning someone wrote a serve record immediately, even for a future date. They are now distinct: [[Assignment]] is the plan, [[Involvement]] is the fact (ADR-0018).
+- **"Event"** is used for both the recurring [[Event series]] and a single dated [[Event occurrence]]. Prefer the precise term in code; in the UI, "Event" means whichever the user is looking at.
