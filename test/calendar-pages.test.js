@@ -296,12 +296,13 @@ test('every chip opens its own date, Sundays the same as anything else', () => {
     assert.strictEqual(hrefs[1], 'calendar-event.html?id=midweek_2026-07-15');
 });
 
-test('the order of service is one click from a Sunday, and unmissable', () => {
-    // The chip no longer lands there, so the way through has to be the most
-    // prominent thing on the page. If this disappears, a Sunday's liturgy has no
-    // route from the Calendar at all.
+test('the order of service is still one click from a Sunday', () => {
+    // The chip no longer lands there, so this page is the ONLY route to a
+    // Sunday's liturgy from the Calendar. It lives at the top of the side
+    // column rather than in the header, but if it ever disappears entirely the
+    // liturgy becomes unreachable from here.
     const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
-    assert.ok(/x-show="isSunday" :href="servicesHref"/.test(html),
+    assert.ok(/:href="servicesHref"/.test(html),
         'a Sunday Event page has no link to its order of service');
 
     const page = loadComponent('calendar-event.js', 'eventDetailPage');
