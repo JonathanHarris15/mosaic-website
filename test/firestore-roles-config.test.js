@@ -78,12 +78,16 @@ test('the permission tiers are still the only permission concept', () => {
     // canReadRelationshipRecord, MS-133) are fine — they must be BUILT from
     // these, never replace them — so this pins the tier helpers specifically
     // rather than the whole function list.
-    ['permissionLevel', 'isAdmin', 'isEditor', 'isElder'].forEach(name => {
+    // isMember() joined these in MS-99: the `member` visibility rung needs a
+    // floor, and a viewer is signed in but sees only public things. It is a
+    // fourth TIER, read off permissionLevel() exactly like the other three — not
+    // a second way of saying one of them.
+    ['permissionLevel', 'isAdmin', 'isEditor', 'isElder', 'isMember'].forEach(name => {
         assert.ok(rules.includes(`function ${name}()`), `missing ${name}()`);
     });
 
     const tierValues = rules.match(/permissionLevel\(\) in \[[^\]]*\]/g) || [];
-    assert.equal(tierValues.length, 3, 'exactly three tier definitions: admin, editor, elder');
+    assert.equal(tierValues.length, 4, 'exactly four tier definitions: admin, editor, elder, member');
 });
 
 // ── No parallel data universe ─────────────────────────────────────────────────

@@ -16,6 +16,23 @@
         { "fieldPath": "type", "order": "ASCENDING" },
         { "fieldPath": "serviceDate", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "event_occurrences",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "visibility", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "event_occurrences",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "visibility", "order": "ASCENDING" },
+        { "fieldPath": "participantIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
