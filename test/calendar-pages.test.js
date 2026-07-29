@@ -69,7 +69,7 @@ function membersOf(component) {
 
 // ── Pulling the identifiers out of the markup ─────────────────────────────────
 
-const ALPINE_ATTRS = /(?:x-text|x-show|x-if|x-model|x-html|x-for|@click|@change|@keydown[.\w]*|:class|:href|:disabled|:checked|:value|:aria-label|:style)\s*=\s*"([^"]*)"/g;
+const ALPINE_ATTRS = /(?:x-text|x-show|x-if|x-model[.\w]*|x-html|x-for|@click|@change|@keydown[.\w]*|:class|:href|:disabled|:checked|:value|:aria-label|:style)\s*=\s*"([^"]*)"/g;
 
 // Things a template may legitimately name that are not component members.
 const ALLOWED = new Set([

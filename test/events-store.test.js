@@ -353,6 +353,77 @@ test('a signed-out visitor reads no roster at all', async () => {
     assert.ok(!db._queriesRun.some(x => /roster/.test(x.collection)));
 });
 
+// ── Creating an Event ─────────────────────────────────────────────────────────
+
+test('a one-off Event is a single occurrence document, with no series', async () => {
+    const db = fakeDb({ event_occurrences: {} }, { rank: 'editor' });
+    const made = await Store.createEvent(db, {
+        name: 'Church picnic', visibility: 'public',
+        recurrence: { freq: 'once', startDate: '2026-07-11' },
+        location: 'The park',
+    });
+
+    assert.strictEqual(made.kind, 'occurrence');
+    const write = db._flatWrites()[0];
+    assert.match(write.path, /^event_occurrences\//);
+    assert.strictEqual(write.data.date, '2026-07-11');
+    assert.strictEqual(write.data.seriesId, null, 'a one-off belongs to no series');
+    assert.deepStrictEqual(write.data.participantIds, []);
+});
+
+test('a repeating Event writes a series and NO occurrence documents', async () => {
+    // The sparse promise: its dates are computed from the rule, and a document
+    // appears the first time something lands on one. Writing them up front would
+    // mean choosing a horizon and owning a job to extend it.
+    const db = fakeDb({ event_occurrences: {}, events: {} }, { rank: 'editor' });
+    const made = await Store.createEvent(db, {
+        name: 'Midweek Gathering', visibility: 'member',
+        recurrence: { freq: 'weekly', startDate: '2026-07-01', weekday: 3, ends: { kind: 'never' } },
+    });
+
+    assert.strictEqual(made.kind, 'series');
+    const writes = db._flatWrites();
+    assert.strictEqual(writes.length, 1, 'exactly one document — the series');
+    assert.match(writes[0].path, /^events\//);
+    assert.strictEqual(writes[0].data.recurrence.freq, 'weekly');
+    assert.ok(!writes.some(w => /event_occurrences/.test(w.path)),
+        'not one occurrence document is written up front');
+});
+
+test('a new series is stamped with its visibility, or the Calendar cannot query it', async () => {
+    const db = fakeDb({ events: {} }, { rank: 'editor' });
+    await Store.createEvent(db, {
+        name: 'Elders meeting', visibility: 'elder', rosterShared: false,
+        recurrence: { freq: 'monthly', startDate: '2026-07-01', weekday: 3 },
+    });
+    assert.strictEqual(db._flatWrites()[0].data.visibility, 'elder');
+});
+
+test('an Event with no name, or no audience, is refused', async () => {
+    const db = fakeDb({ events: {} }, { rank: 'editor' });
+    await assert.rejects(() => Store.createEvent(db, { visibility: 'member' }), /needs a name/);
+    await assert.rejects(() => Store.createEvent(db, { name: 'X' }), /who can see it/);
+    await assert.rejects(() => Store.createEvent(db, { name: 'X', visibility: 'everyone' }), /who can see it/);
+});
+
+test('cancelling one date leaves the rest of the series untouched', async () => {
+    const db = fakeDb({ event_occurrences: {} }, { rank: 'editor' });
+    await Store.cancelOccurrence(db, 'midweek', '2026-07-15', true);
+
+    const writes = db._flatWrites();
+    assert.strictEqual(writes.length, 1, 'one date, one document');
+    assert.strictEqual(writes[0].path, 'event_occurrences/midweek_2026-07-15');
+    assert.strictEqual(writes[0].data.cancelled, true);
+    // Merged, so a cancellation never wipes a roster that is already there.
+    assert.deepStrictEqual(writes[0].options, { merge: true });
+});
+
+test('a cancelled date can be put back', async () => {
+    const db = fakeDb({ event_occurrences: {} }, { rank: 'editor' });
+    await Store.cancelOccurrence(db, 'midweek', '2026-07-15', false);
+    assert.strictEqual(db._flatWrites()[0].data.cancelled, false);
+});
+
 // ── Restamping ────────────────────────────────────────────────────────────────
 
 test('changing a series’ visibility restamps every occurrence, past ones included', async () => {

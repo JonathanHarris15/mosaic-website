@@ -75,6 +75,160 @@
             <p class="font-body-md text-body-md" x-text="error"></p>
         </div>
 
+        <!-- ── Creating a new Event ───────────────────────────────────────── -->
+        <template x-if="creating">
+        <div class="max-w-[720px]">
+            <div class="pb-md border-b border-outline-variant">
+                <h1 class="font-display text-headline-lg tracking-[.02em] text-primary">New event</h1>
+                <p class="font-body-md text-body-md text-on-surface-variant mt-xs max-w-[64ch]">
+                    Anything that isn't a Sunday — a midweek gathering, an elders' meeting,
+                    a picnic, a workday. You can add the Roles it needs once it exists.
+                </p>
+            </div>
+
+            <div class="mt-gutter flex flex-col gap-md">
+                <label class="block">
+                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">What is it</span>
+                    <input x-model="draft.name" placeholder="Midweek Gathering"
+                           class="mt-1 w-full rounded-lg border border-outline-variant bg-surface px-3 py-2
+                                  text-[15px] text-on-surface cal-focus" />
+                </label>
+
+                <div class="grid gap-md" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+                    <label class="block">
+                        <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">First date</span>
+                        <input type="date" x-model="draft.date"
+                               class="mt-1 w-full rounded-lg border border-outline-variant bg-surface px-3 py-2
+                                      text-[15px] text-on-surface cal-focus" />
+                    </label>
+                    <label class="block">
+                        <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Starts at</span>
+                        <input type="time" x-model="draft.time"
+                               class="mt-1 w-full rounded-lg border border-outline-variant bg-surface px-3 py-2
+                                      text-[15px] text-on-surface cal-focus" />
+                    </label>
+                    <label class="block">
+                        <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Where</span>
+                        <input x-model="draft.location" placeholder="The hall"
+                               class="mt-1 w-full rounded-lg border border-outline-variant bg-surface px-3 py-2
+                                      text-[15px] text-on-surface cal-focus" />
+                    </label>
+                </div>
+
+                <label class="block">
+                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Anything to say about it</span>
+                    <textarea x-model="draft.description" rows="3" placeholder="Optional."
+                              class="mt-1 w-full rounded-lg border border-outline-variant bg-surface px-3 py-2
+                                     text-[15px] text-on-surface cal-focus"></textarea>
+                </label>
+
+                <!-- How often. Weekly, fortnightly, monthly — nothing more.
+                     This is not a general-purpose recurrence editor. -->
+                <div>
+                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">How often</span>
+                    <div class="mt-1 grid gap-sm" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+                        <template x-for="opt in [['once','Just once'],['weekly','Every week'],['fortnightly','Every other week'],['monthly','Every month']]" :key="opt[0]">
+                            <button @click="draft.recurrence.freq = opt[0]"
+                                    class="rounded-lg border px-3 py-2 text-[13px] font-label-md cal-motion cal-press cal-focus"
+                                    :class="draft.recurrence.freq === opt[0]
+                                        ? 'border-primary bg-surface-container text-primary'
+                                        : 'border-outline-variant text-on-surface-variant'"
+                                    x-text="opt[1]"></button>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Carries on. Only meaningful for a repeating Event. -->
+                <div x-show="draft.recurrence.freq !== 'once'">
+                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Carries on</span>
+                    <div class="mt-1 flex flex-col gap-1.5">
+                        <template x-for="opt in [['never','Until further notice'],['onDate','Until a date'],['afterCount','For a set number of times']]" :key="opt[0]">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" :value="opt[0]" x-model="draft.recurrence.ends.kind"
+                                       name="ends" class="accent-primary cal-focus" />
+                                <span class="text-[14px] text-on-surface" x-text="opt[1]"></span>
+                            </label>
+                        </template>
+                        <input x-show="draft.recurrence.ends.kind === 'onDate'" type="date"
+                               x-model="draft.recurrence.ends.date"
+                               class="ml-6 w-[200px] rounded-lg border border-outline-variant bg-surface px-3 py-1.5
+                                      text-[14px] cal-focus" />
+                        <input x-show="draft.recurrence.ends.kind === 'afterCount'" type="number" min="1"
+                               x-model.number="draft.recurrence.ends.count" placeholder="12"
+                               class="ml-6 w-[120px] rounded-lg border border-outline-variant bg-surface px-3 py-1.5
+                                      text-[14px] cal-focus" />
+                    </div>
+                </div>
+
+                <!-- Reads as: the whole pattern as one sentence, so the editor
+                     checks their intent in English rather than reading the form
+                     back to themselves. -->
+                <div x-show="draft.date" class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
+                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Reads as</span>
+                    <p class="font-headline-lg text-[19px] text-on-surface mt-1" x-text="draftSentence"></p>
+                    <div class="mt-2 flex flex-wrap gap-1.5 items-center">
+                        <template x-for="d in draftDates" :key="d">
+                            <span class="rounded-md bg-surface-container px-2 py-0.5 text-[11.5px] text-on-surface-variant"
+                                  x-text="d"></span>
+                        </template>
+                        <span x-show="draft.recurrence.freq !== 'once' && draft.recurrence.ends.kind === 'never'"
+                              class="text-[11.5px] text-outline font-headline-lg">and on</span>
+                    </div>
+                </div>
+
+                <!-- Who can see it -->
+                <div>
+                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Who can see this</span>
+                    <div class="mt-1 flex flex-col">
+                        <template x-for="rung in visibilityLadder" :key="rung.level">
+                            <button @click="draft.visibility = rung.level"
+                                    class="text-left flex items-start gap-sm px-2 py-2.5 rounded-lg cal-motion cal-focus
+                                           hover:bg-surface-container-low border-l-[3px]"
+                                    :class="draft.visibility === rung.level ? 'border-l-primary bg-surface-container-low' : 'border-l-transparent'">
+                                <span class="material-symbols-outlined text-[19px] shrink-0 mt-0.5"
+                                      :class="draft.visibility === rung.level ? 'text-primary' : 'text-on-surface-variant'"
+                                      x-text="rung.icon"></span>
+                                <div class="min-w-0 flex-grow">
+                                    <div class="text-[13.5px] font-label-md font-semibold text-on-surface" x-text="rung.label"></div>
+                                    <div class="text-[12px] text-on-surface-variant leading-snug" x-text="rung.who"></div>
+                                </div>
+                                <span x-show="draft.visibility === rung.level"
+                                      class="material-symbols-outlined text-[18px] text-primary shrink-0">check</span>
+                            </button>
+                        </template>
+                    </div>
+
+                    <div class="mt-sm pt-sm border-t border-outline-variant cal-motion"
+                         :class="rosterToggleApplies(draft.visibility) ? '' : 'opacity-[.45]'">
+                        <label class="flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" x-model="draft.rosterShared"
+                                   :disabled="!rosterToggleApplies(draft.visibility)"
+                                   class="accent-primary mt-0.5 cal-focus" />
+                            <span>
+                                <span class="text-[13px] text-on-surface">The people serving can see the rest of the roster</span>
+                                <span x-show="!rosterToggleApplies(draft.visibility)"
+                                      class="block text-[11.5px] text-on-surface-variant mt-0.5">
+                                    Everyone can see this event anyway, so this makes no difference here.
+                                </span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-sm pt-sm border-t border-outline-variant">
+                    <a href="calendar.html"
+                       class="px-md py-2 rounded-lg font-label-md text-xs uppercase tracking-wider
+                              text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Cancel</a>
+                    <button @click="createEvent()" :disabled="!draftValid || saving"
+                            class="bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs font-label-md
+                                   text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">
+                        Create event
+                    </button>
+                </div>
+            </div>
+        </div>
+        </template>
+
         <template x-if="occurrence">
         <div>
             <!-- ── Title block ────────────────────────────────────────────── -->
@@ -505,12 +659,22 @@
                         <h3 class="font-display text-[17px] text-primary">When it happens</h3>
                         <p class="font-headline-lg text-[17px] text-on-surface mt-2"
                            x-text="series ? recurrenceSentence(series.recurrence) : ''"></p>
-                        <div class="mt-sm flex items-center gap-sm">
+                        <p x-show="occurrence.cancelled" class="text-[12.5px] mt-1" style="color:#B89B6A;">
+                            This one is cancelled. The rest of the series is untouched.
+                        </p>
+                        <div class="mt-sm flex items-center gap-sm flex-wrap">
                             <button @click="openPattern()"
                                     class="border border-secondary text-secondary px-3 py-1.5 rounded-lg font-label-md
                                            text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
                                 Change pattern
                             </button>
+                            <!-- Cancelling ONE date never disturbs the rest. It is
+                                 also the first thing to land on that date, so it is
+                                 the first time a document exists for it. -->
+                            <button @click="skipThisOne()" :disabled="saving"
+                                    class="text-on-surface-variant px-3 py-1.5 rounded-lg font-label-md
+                                           text-[11.5px] uppercase tracking-wider cal-motion cal-focus hover:bg-surface-container"
+                                    x-text="occurrence.cancelled ? 'Put it back' : 'Skip this one'"></button>
                         </div>
                     </section>
 

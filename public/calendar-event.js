@@ -74,12 +74,110 @@
                 });
             },
 
+            // ── Creating ─────────────────────────────────────────────────────
+            //
+            // A one-off Event is a single occurrence document. A repeating one is
+            // a SERIES carrying a rule and NO occurrence documents — its dates
+            // are computed, and a document appears the first time something lands
+            // on one.
+
+            creating: false,
+            draft: {
+                name: '', date: '', time: '', location: '', description: '',
+                visibility: 'member', rosterShared: false,
+                recurrence: { freq: 'once', startDate: '', weekday: null, time: '', ends: { kind: 'never' } },
+            },
+
+            get draftSentence() {
+                const rule = Object.assign({}, this.draft.recurrence, {
+                    startDate: this.draft.date, time: this.draft.time,
+                });
+                return View.recurrenceSentence(rule);
+            },
+
+            get draftDates() {
+                if (!this.draft.date) return [];
+                const rule = Object.assign({}, this.draft.recurrence, { startDate: this.draft.date });
+                if (rule.freq === 'once') return [this.draft.date];
+                return View.nextDates(rule, this.draft.date, 6);
+            },
+
+            get draftValid() {
+                return !!(String(this.draft.name).trim() && this.draft.date);
+            },
+
+            async createEvent() {
+                if (!this.draftValid || this.saving) return;
+                this.saving = true;
+                this.error = '';
+                try {
+                    const rule = Object.assign({}, this.draft.recurrence, {
+                        startDate: this.draft.date,
+                        time: this.draft.time || null,
+                    });
+                    if (rule.freq !== 'once' && !Number.isInteger(rule.weekday)) {
+                        // Derive the weekday from the start date rather than
+                        // making the editor state it twice.
+                        rule.weekday = window.DateUtils.parseDateStr(this.draft.date).getDay();
+                    }
+
+                    const made = await Store.createEvent(window.db, {
+                        name: this.draft.name,
+                        date: this.draft.date,
+                        time: this.draft.time,
+                        location: this.draft.location,
+                        description: this.draft.description,
+                        visibility: this.draft.visibility,
+                        rosterShared: this.draft.rosterShared,
+                        recurrence: rule,
+                    });
+
+                    // A one-off has a document to open. A series does not yet —
+                    // nothing has landed on any of its dates — so the Calendar is
+                    // where you see it.
+                    window.location.href = made.kind === 'occurrence'
+                        ? 'calendar-event.html?id=' + encodeURIComponent(made.id)
+                        : 'calendar.html';
+                } catch (e) {
+                    console.error('Create failed:', e);
+                    this.error = e.message || 'That event could not be created.';
+                    this.saving = false;
+                }
+            },
+
+            // Cancel one date without disturbing the rest of the series.
+            async skipThisOne() {
+                if (!this.series || !this.occurrence) return;
+                this.saving = true;
+                try {
+                    await Store.cancelOccurrence(
+                        window.db, this.series.id, this.occurrence.date, !this.occurrence.cancelled
+                    );
+                    this.occurrence.cancelled = !this.occurrence.cancelled;
+                } catch (e) {
+                    console.error('Cancel failed:', e);
+                    this.error = 'That date could not be changed.';
+                } finally {
+                    this.saving = false;
+                }
+            },
+
             async load() {
                 this.loading = true;
                 this.error = '';
                 try {
                     const id = params.get('id');
-                    if (!id) { this.error = 'No event was named.'; return; }
+
+                    // No id means this is a new Event, not a broken link.
+                    if (!id) {
+                        if (!this.isEditor) {
+                            this.error = 'Only an editor can create an event.';
+                            return;
+                        }
+                        this.creating = true;
+                        this.draft.date = window.DateUtils.todayStr();
+                        return;
+                    }
 
                     const loaded = await Store.loadOccurrence(window.db, id);
                     if (!loaded) { this.error = 'That event could not be found.'; return; }

@@ -250,6 +250,71 @@
         });
     }
 
+    // ── Creating an Event ────────────────────────────────────────────────────
+    //
+    // Two shapes, and the difference matters:
+    //
+    //   A ONE-OFF Event belongs to no series. It is a single occurrence document
+    //   with an auto-id, because there is no rule to compute a date from — the
+    //   date IS the Event.
+    //
+    //   A RECURRING Event is a SERIES carrying a recurrence rule, and NO
+    //   occurrence documents at all. Its dates are computed from the rule, and a
+    //   document is written the first time something lands on one. Writing them
+    //   up front would mean choosing a horizon, writing hundreds of empty
+    //   documents, and owning a job to extend it (ADR-0018 §3).
+    async function createEvent(db, spec) {
+        const s = spec || {};
+        if (!s.name || !String(s.name).trim()) throw new Error('An event needs a name.');
+        if (Core.VISIBILITY_ORDER.indexOf(s.visibility) === -1) {
+            throw new Error('An event needs to say who can see it.');
+        }
+
+        const shared = { rosterShared: s.rosterShared === true, visibility: s.visibility };
+        const rule = s.recurrence || {};
+        const oneOff = !rule.freq || rule.freq === Core.FREQ.ONCE;
+
+        if (oneOff) {
+            const ref = db.collection(OCCURRENCES).doc();
+            const payload = occurrencePayload(Object.assign({
+                id: ref.id,
+                seriesId: null,
+                date: rule.startDate || s.date,
+                name: String(s.name).trim(),
+                time: s.time || null,
+                location: s.location || null,
+                description: s.description || null,
+                assignments: [],
+            }, shared));
+            await ref.set(payload);
+            return { kind: 'occurrence', id: ref.id };
+        }
+
+        const ref = db.collection(SERIES).doc();
+        await ref.set(Object.assign({
+            name: String(s.name).trim(),
+            locked: false,
+            roleSlugs: [],
+            lockedRoleSlugs: [],
+            recurrence: rule,
+            time: s.time || null,
+            location: s.location || null,
+            description: s.description || null,
+        }, shared));
+        // Deliberately no occurrence documents. The Calendar computes the dates.
+        return { kind: 'series', id: ref.id };
+    }
+
+    // Cancel ONE date of a series without touching the rest. This is the first
+    // thing that lands on that date, so it is also the first time a document
+    // exists for it — exactly the sparse rule working.
+    async function cancelOccurrence(db, seriesId, date, cancelled) {
+        const id = Core.occurrenceId(seriesId, date);
+        if (!id) throw new Error('Only a date of a series can be cancelled.');
+        await occurrenceRef(db, id).set({ cancelled: cancelled !== false }, { merge: true });
+        return id;
+    }
+
     // ── Restamping a series' visibility ──────────────────────────────────────
     //
     // Visibility is copied DOWN onto every occurrence, so changing it on the
@@ -490,6 +555,8 @@
         loadCalendar,
         attachRosters,
         // writing
+        createEvent,
+        cancelOccurrence,
         saveOccurrence,
         loadOccurrence,
         occurrencePayload,
