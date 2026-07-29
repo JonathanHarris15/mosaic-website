@@ -279,12 +279,34 @@
             // same name — as an earlier pass did — reads as one field to anybody
             // holding CONTEXT.md's Event series entry in their head.
 
+            // The Roles the whole Event carries, minus the liturgical ones. Those
+            // are filled in the order of service and print in the booklet — a
+            // fillable card here would be a second, silent way to set one.
+            get seriesRoleSlugsHere() {
+                return (((this.series && this.series.roleSlugs) || []))
+                    .filter(slug => Roles.LITURGICAL_SLUGS.indexOf(slug) === -1);
+            },
+
+            // Both lists, the Event's first. Adding "Sound desk" to the Sunday
+            // Service has to mean every Sunday HAS a sound desk to fill —
+            // otherwise the series screen is a list that does nothing.
+            get roleSlugsHere() {
+                const fromSeries = this.seriesRoleSlugsHere;
+                const fromDate = ((this.occurrence && this.occurrence.occurrenceRoleSlugs) || [])
+                    .filter(slug => fromSeries.indexOf(slug) === -1);
+                return fromSeries.concat(fromDate);
+            },
+
             get managedRoles() {
-                return ((this.occurrence && this.occurrence.occurrenceRoleSlugs) || [])
+                const fromSeries = this.seriesRoleSlugsHere;
+                return this.roleSlugsHere
                     .map(slug => this.roleDefinitions.find(d => d.slug === slug))
                     .filter(Boolean)
                     .map(def => ({
                         def: def,
+                        // Where it came from, so the card knows whether taking it
+                        // off this date is a thing that can be meant.
+                        fromSeries: fromSeries.indexOf(def.slug) !== -1,
                         slots: (def.slots || []).map((slot, i) => ({
                             index: i + 1,
                             slot: slot,
@@ -311,7 +333,7 @@
             // Roles are NOT offered — they stay wired to the Service exactly as
             // they are today, which is what keeps the printed booklet safe.
             get availableRoles() {
-                const on = (this.occurrence && this.occurrence.occurrenceRoleSlugs) || [];
+                const on = this.roleSlugsHere;
                 return this.roleDefinitions
                     .filter(d => Roles.LITURGICAL_SLUGS.indexOf(d.slug) === -1)
                     .map(d => Object.assign({}, d, { alreadyOn: on.indexOf(d.slug) !== -1 }));
@@ -483,11 +505,17 @@
                 return View.nextDates(rule, window.DateUtils.todayStr(), 4);
             },
 
+            // Two different jobs on a Sunday, so two different links. Filling the
+            // sound desk and building the order of service are not the same act,
+            // and one screen pretending to be both is how the liturgy ends up
+            // editable from the Event model.
             dateHref(date) {
-                return this.isSundaySeries
-                    ? 'service-builder.html?date=' + encodeURIComponent(date)
-                    : 'calendar-event.html?id=' + encodeURIComponent(
-                        Core.occurrenceId(this.series.id, date));
+                return 'calendar-event.html?id=' + encodeURIComponent(
+                    Core.occurrenceId(this.series.id, date));
+            },
+
+            orderOfServiceHref(date) {
+                return 'service-builder.html?date=' + encodeURIComponent(date);
             },
 
             // ── The colour it shows up as ────────────────────────────────────

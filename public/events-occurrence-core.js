@@ -238,6 +238,24 @@
         return seriesId + '_' + date;
     }
 
+    // The same id read back. Needed because occurrences are SPARSE: a date
+    // nobody has touched has no document at all, so opening one means rebuilding
+    // it from its id and its series rather than reporting it missing.
+    //
+    // Split at the LAST underscore, not the first — `sunday_service_2026-08-02`
+    // is the id this app uses most, and a naive split reads it as the series
+    // "sunday".
+    function parseOccurrenceId(id) {
+        const str = String(id || '');
+        const at = str.lastIndexOf('_');
+        if (at <= 0) return null;
+
+        const date = str.slice(at + 1);
+        const seriesId = str.slice(0, at);
+        if (!seriesId || !isDateStr(date)) return null;
+        return { seriesId: seriesId, date: date };
+    }
+
     // ── Merging computed dates with sparse stored records ─────────────────────
 
     // Every date the rule produces, each carrying its stored record when one
@@ -613,6 +631,7 @@
         // occurrences
         datesBetween,
         occurrenceId,
+        parseOccurrenceId,
         mergeOccurrences,
         orphanedOccurrences,
         // assignments

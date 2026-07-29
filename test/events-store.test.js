@@ -1068,3 +1068,87 @@ test('a date with its own time keeps it when the series time changes', async () 
     assert.strictEqual(rows.find(o => o.date === '2026-07-15').time, '18:00');
     assert.strictEqual(rows.find(o => o.date === '2026-07-08').time, '19:30');
 });
+
+// ── Opening a date nothing has landed on yet ──────────────────────────────────
+//
+// Occurrences are SPARSE: a date nobody has touched has no document. Opening one
+// therefore CANNOT be answered by reading a document — and answering "that event
+// could not be found" is wrong in the worst way, because the date is real, it is
+// on the Calendar, and the editor just clicked it.
+
+test('a date with no document still opens, rebuilt from its id and its series', async () => {
+    const series = {
+        midweek: {
+            name: 'Midweek Gathering', visibility: 'member',
+            recurrence: { freq: 'weekly', startDate: '2026-07-01', weekday: 3, time: '19:30' },
+        },
+    };
+    const db = fakeDb({ events: series, event_occurrences: {} }, { rank: 'editor' });
+
+    const o = await Store.loadOccurrence(db, 'midweek_2026-07-15');
+
+    assert.ok(o, 'a real date on the Calendar reported itself missing');
+    assert.strictEqual(o.id, 'midweek_2026-07-15');
+    assert.strictEqual(o.seriesId, 'midweek');
+    assert.strictEqual(o.date, '2026-07-15');
+    assert.strictEqual(o.stored, false, 'claimed to be a document when none exists');
+    assert.strictEqual(o.visibility, 'member', 'lost the visibility it inherits');
+    assert.strictEqual(o.time, '19:30');
+    assert.deepStrictEqual(o.assignments, []);
+});
+
+test('a Sunday nobody has touched opens too, even with no rule stored', async () => {
+    // The Sunday Service's rule is implied, not stored (MS-13 predates
+    // recurrence). 2026-08-02 is a Sunday.
+    const db = fakeDb({ events: { sunday_service: { name: 'Sunday Service' } }, event_occurrences: {} },
+        { rank: 'editor' });
+
+    const o = await Store.loadOccurrence(db, 'sunday_service_2026-08-02');
+
+    assert.ok(o, 'an untouched Sunday reported itself missing');
+    assert.strictEqual(o.seriesId, 'sunday_service');
+    assert.strictEqual(o.visibility, 'public', 'a Sunday Service is always public');
+});
+
+test('a date the pattern does not produce is genuinely not found', async () => {
+    // Otherwise any id typed into the address bar renders a page for an event
+    // that does not happen. 2026-07-16 is a Thursday; the rule says Wednesday.
+    const series = {
+        midweek: {
+            name: 'Midweek', visibility: 'member',
+            recurrence: { freq: 'weekly', startDate: '2026-07-01', weekday: 3 },
+        },
+    };
+    const db = fakeDb({ events: series, event_occurrences: {} }, { rank: 'editor' });
+
+    assert.strictEqual(await Store.loadOccurrence(db, 'midweek_2026-07-16'), null);
+    assert.strictEqual(await Store.loadOccurrence(db, 'no_such_series_2026-07-15'), null);
+});
+
+test('a one-off Event that has no document is still not found', async () => {
+    // It has an auto-id and no series, so there is nothing to rebuild it from —
+    // it either exists or it does not.
+    const db = fakeDb({ events: {}, event_occurrences: {} }, { rank: 'editor' });
+    assert.strictEqual(await Store.loadOccurrence(db, 'aB3xY9kLm'), null);
+});
+
+test('a stored document always wins over the rebuilt one', async () => {
+    const series = {
+        midweek: {
+            name: 'Midweek', visibility: 'member',
+            recurrence: { freq: 'weekly', startDate: '2026-07-01', weekday: 3, time: '19:30' },
+        },
+    };
+    const stored = {
+        'midweek_2026-07-15': {
+            seriesId: 'midweek', date: '2026-07-15', visibility: 'member',
+            participantIds: [], time: '18:00', location: 'The hall',
+        },
+    };
+    const db = fakeDb({ events: series, event_occurrences: stored }, { rank: 'editor' });
+
+    const o = await Store.loadOccurrence(db, 'midweek_2026-07-15');
+    assert.strictEqual(o.stored, true);
+    assert.strictEqual(o.time, '18:00');
+    assert.strictEqual(o.location, 'The hall');
+});

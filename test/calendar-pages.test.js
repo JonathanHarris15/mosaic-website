@@ -304,11 +304,18 @@ test('opening a Sunday routes to Services, and anything else to the Event page',
     assert.ok(sandbox !== null);
 });
 
-test('a Sunday NEVER opens the Event editor, whatever else changes', () => {
+test('a Sunday CHIP never opens the Event editor, whatever else changes', () => {
     // The invariant behind the routing, stated on its own so a future change of
     // destination cannot quietly take a Sunday into the Event model. Sunday
     // liturgy lives on the Service, and keeping the two apart is what keeps the
     // printed booklet safe.
+    //
+    // A Sunday's Event page IS now reachable — deliberately, from the Sunday
+    // Service screen, to fill the Servant Roles every Sunday carries. That does
+    // not weaken this: the deeper invariant is that the Event editor never
+    // touches a Sunday's LITURGY, and it is pinned separately by "a liturgical
+    // Role is never drawn as a fillable card on a date". What this test protects
+    // is the CHIP — the thing somebody clicks expecting an order of service.
     const hrefs = [];
     const ctx = {
         console, Promise, Date, Object, Array, Math, String, Number, JSON, Set, Map,
@@ -795,4 +802,126 @@ test('every page that loads the events store loads the series model first', () =
         assert.ok(core !== -1, file + ' loads the events store without the series model');
         assert.ok(core < store, file + ' loads the events store before the series model');
     });
+});
+
+// ── Roles the whole Event carries turn up on every date of it ─────────────────
+//
+// Adding "Sound desk" to the Sunday Service has to mean every Sunday has a sound
+// desk to fill. Without this the series screen is a list that does nothing: you
+// add a Role, go to a Sunday, and it is not there.
+
+function eventPageOn(occurrence, series, defs) {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.rank = 'editor';
+    page.occurrence = occurrence;
+    page.series = series;
+    page.roleDefinitions = defs;
+    return page;
+}
+
+const SOUND = { slug: 'sound_desk', name: 'Sound desk', slots: [{ id: 's1', requirement: 'either' }] };
+const COFFEE = { slug: 'coffee', name: 'Coffee', slots: [{ id: 'c1', requirement: 'either' }] };
+
+test('a Role added to the Event shows on every date of it, ready to fill', () => {
+    const page = eventPageOn(
+        { id: 'sunday_service_2026-08-02', seriesId: 'sunday_service', date: '2026-08-02' },
+        { id: 'sunday_service', roleSlugs: ['sound_desk'], lockedRoleSlugs: [] },
+        [SOUND]
+    );
+
+    assert.deepStrictEqual(page.managedRoles.map(r => r.def.slug), ['sound_desk']);
+    assert.strictEqual(page.managedRoles[0].slots.length, 1, 'no place to put anybody');
+    assert.strictEqual(page.managedRoles[0].fromSeries, true);
+});
+
+test('a liturgical Role is never drawn as a fillable card on a date', () => {
+    // It prints in the booklet and is filled in the order of service. A card
+    // here with a picker on it would be a second, silent way to set it.
+    const Roles = require('../public/roles-core.js');
+    const liturgical = Roles.LITURGICAL_SLUGS[0];
+    const page = eventPageOn(
+        { id: 'sunday_service_2026-08-02', seriesId: 'sunday_service', date: '2026-08-02' },
+        { id: 'sunday_service', roleSlugs: [liturgical, 'sound_desk'], lockedRoleSlugs: [liturgical] },
+        [SOUND, { slug: liturgical, name: 'Preacher', slots: [{ id: 'p1' }] }]
+    );
+
+    assert.deepStrictEqual(page.managedRoles.map(r => r.def.slug), ['sound_desk']);
+});
+
+test('a Role added to one date only belongs to that date, and can be taken off there', () => {
+    const page = eventPageOn(
+        { id: 'sunday_service_2026-08-02', seriesId: 'sunday_service', date: '2026-08-02',
+          occurrenceRoleSlugs: ['coffee'] },
+        { id: 'sunday_service', roleSlugs: ['sound_desk'], lockedRoleSlugs: [] },
+        [SOUND, COFFEE]
+    );
+
+    // Both show. The Event's Roles come first, because they are the shape of the
+    // thing; the one-date addition sits behind them.
+    assert.deepStrictEqual(page.managedRoles.map(r => r.def.slug), ['sound_desk', 'coffee']);
+    assert.strictEqual(page.managedRoles[0].fromSeries, true);
+    assert.strictEqual(page.managedRoles[1].fromSeries, false);
+});
+
+test('the same Role on both the Event and the date is drawn once', () => {
+    const page = eventPageOn(
+        { id: 'x_2026-08-02', seriesId: 'x', date: '2026-08-02', occurrenceRoleSlugs: ['sound_desk'] },
+        { id: 'x', roleSlugs: ['sound_desk'] },
+        [SOUND]
+    );
+
+    assert.deepStrictEqual(page.managedRoles.map(r => r.def.slug), ['sound_desk']);
+});
+
+test('assignments on a Sunday Servant Role carry the three states like anywhere else', async () => {
+    const page = eventPageOn(
+        { id: 'sunday_service_2026-08-02', seriesId: 'sunday_service', date: '2026-08-02' },
+        { id: 'sunday_service', roleSlugs: ['sound_desk'], lockedRoleSlugs: [] },
+        [SOUND]
+    );
+    page.people = [{ id: 'p1', name: 'Dave Rowe' }];
+    page.persist = async () => {};
+
+    const Core = require('../public/events-occurrence-core.js');
+    page.assignments = Core.assignToSlot(page.assignments, {
+        personId: 'p1', roleSlug: 'sound_desk', slotId: 's1',
+    }, { actorUid: 'u1', at: 'T1' });
+
+    const row = page.managedRoles[0].slots[0];
+    assert.strictEqual(row.assignment.state, Core.STATES.PENDING, 'did not start pending');
+
+    await page.setState(row.assignment, 'confirmed');
+    assert.strictEqual(page.managedRoles[0].slots[0].assignment.state, 'confirmed');
+
+    await page.setState(page.managedRoles[0].slots[0].assignment, 'declined');
+    assert.strictEqual(page.managedRoles[0].needsAttention, true, 'a declined Sunday Role never flags');
+});
+
+test('a Role that belongs to the whole Event is not removable from one date', () => {
+    // Taking it off here would be silently taking it off every date, or silently
+    // taking it off none. Neither is what the button looks like it does.
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    assert.ok(/role\.fromSeries/.test(html),
+        'the role card does not distinguish an Event Role from a one-date one');
+});
+
+test('a Sunday date shows its Roles section at all', () => {
+    // It once did not: the whole section was hidden on a Sunday, so the welcome
+    // team and the sound desk had nowhere to be asked. The liturgical Roles stay
+    // out of it, which is what made hiding the section look reasonable.
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    assert.ok(!/x-show="!isSunday && \(isEditor \|\| canSeeRoster\)"/.test(html),
+        'the Roles section is hidden on a Sunday, so its Servant Roles cannot be filled');
+});
+
+test('the Sunday Service screen offers both jobs on a date, and keeps them apart', () => {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.series = { id: 'sunday_service', name: 'Sunday Service' };
+
+    // Who's on → the Event page for that Sunday, where Servant Roles are filled.
+    assert.strictEqual(page.dateHref('2026-08-02'),
+        'calendar-event.html?id=sunday_service_2026-08-02');
+    // The liturgy → still the order of service, and only there.
+    assert.strictEqual(page.orderOfServiceHref('2026-08-02'),
+        'service-builder.html?date=2026-08-02');
 });

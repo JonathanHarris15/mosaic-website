@@ -196,19 +196,32 @@
                          against it on a DATE, so this screen has to hand you one. -->
                     <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
                         <h3 class="font-display text-[17px] text-primary">The next few</h3>
-                        <p class="text-[12.5px] text-on-surface-variant mt-1"
-                           x-text="isSundaySeries
-                             ? 'Open one to build its order of service and fill its roles.'
-                             : 'Open one to put people in its roles.'"></p>
-                        <div class="mt-sm flex flex-col gap-1.5">
+                        <p class="text-[12.5px] text-on-surface-variant mt-1">
+                            A role only ever gets somebody's name against it on a date.
+                        </p>
+                        <div class="mt-sm flex flex-col gap-sm">
                             <template x-for="d in seriesNextDates" :key="d">
-                                <a :href="dateHref(d)"
-                                   class="flex items-center gap-sm rounded-lg border border-outline-variant bg-surface
-                                          px-3 py-2 cal-motion cal-focus hover:bg-surface-container-low">
-                                    <span class="material-symbols-outlined text-[17px] text-secondary shrink-0">event</span>
-                                    <span class="text-[14px] text-on-surface flex-grow" x-text="longDate(d)"></span>
-                                    <span class="material-symbols-outlined text-[15px] text-outline shrink-0">north_east</span>
-                                </a>
+                                <div class="rounded-lg border border-outline-variant bg-surface overflow-hidden">
+                                    <div class="px-3 py-2 text-[14px] text-on-surface border-b border-outline-variant
+                                                bg-surface-container-lowest" x-text="longDate(d)"></div>
+                                    <!-- Two jobs, two links. Filling the sound desk and building the
+                                         order of service are not the same act, and one screen
+                                         pretending to be both is how the liturgy ends up editable
+                                         from the Event model. -->
+                                    <a :href="dateHref(d)"
+                                       class="flex items-center gap-sm px-3 py-2 cal-motion cal-focus hover:bg-surface-container-low">
+                                        <span class="material-symbols-outlined text-[16px] text-secondary shrink-0">group</span>
+                                        <span class="text-[13px] text-on-surface flex-grow">Who's on</span>
+                                        <span class="material-symbols-outlined text-[14px] text-outline shrink-0">chevron_right</span>
+                                    </a>
+                                    <a x-show="isSundaySeries" :href="orderOfServiceHref(d)"
+                                       class="flex items-center gap-sm px-3 py-2 border-t border-outline-variant
+                                              cal-motion cal-focus hover:bg-surface-container-low">
+                                        <span class="material-symbols-outlined text-[16px] text-secondary shrink-0">menu_book</span>
+                                        <span class="text-[13px] text-on-surface flex-grow">Order of service</span>
+                                        <span class="material-symbols-outlined text-[14px] text-outline shrink-0">north_east</span>
+                                    </a>
+                                </div>
                             </template>
                         </div>
                     </section>
@@ -546,13 +559,32 @@
                     </section>
 
                     <!-- ── Roles ──────────────────────────────────────────── -->
-                    <section x-show="!isSunday && (isEditor || canSeeRoster)">
+                    <!-- A Sunday gets this too. It only ever draws NON-liturgical
+                         Roles — the liturgical ones are filled in the order of
+                         service and print in the booklet, so a fillable card here
+                         would be a second, silent way to set one. Hiding the whole
+                         section on a Sunday, as this once did, meant the welcome
+                         team and the sound desk had nowhere to be asked at all. -->
+                    <section x-show="isEditor || canSeeRoster">
                         <div class="flex items-baseline justify-between gap-md">
                             <h2 class="font-display text-[19px] text-primary">Roles</h2>
                             <p class="text-[12.5px] text-on-surface-variant"
                                x-text="managedRoles.length + (managedRoles.length === 1 ? ' role' : ' roles') +
                                        (oneOffRoles.length ? ' · ' + oneOffRoles.length + ' just for this one' : '')"></p>
                         </div>
+
+                        <p x-show="isSunday" class="text-[12.5px] text-on-surface-variant mt-1 leading-snug">
+                            Preacher, reader and the rest are set when you build this Sunday's
+                            order of service — not here. This is everything else: welcome team,
+                            sound desk, coffee.
+                        </p>
+
+                        <p x-show="isEditor && !managedRoles.length && !oneOffRoles.length"
+                           class="text-[13px] text-on-surface-variant mt-sm">
+                            Nothing needed yet. Add a role below for this date only, or
+                            <a :href="'calendar-event.html?series=' + occurrence.seriesId" x-show="occurrence.seriesId"
+                               class="text-secondary cal-focus rounded">add one to every date</a>.
+                        </p>
 
                         <!-- A managed Role IS a card: header, rule line, count
                              badge, numbered slot rows. -->
@@ -577,7 +609,18 @@
                                                 ? 'bg-error-container text-on-error-container'
                                                 : 'bg-surface-container text-on-surface-variant'"
                                               x-text="role.filled + ' of ' + role.slots.length"></span>
-                                        <button x-show="isEditor" @click="askRemoveManagedRole(role.def.slug)"
+                                        <!-- A Role the whole Event carries is not removable HERE.
+                                             Taking it off would either silently take it off every
+                                             date or silently take it off none, and neither is what
+                                             the button looks like it does. It says where to go. -->
+                                        <a x-show="role.fromSeries" :href="'calendar-event.html?series=' + occurrence.seriesId"
+                                           class="shrink-0 flex items-center gap-1 text-[11px] font-label-md
+                                                  text-on-surface-variant hover:text-secondary cal-motion cal-focus rounded"
+                                           title="This role is on every date of this event">
+                                            <span class="material-symbols-outlined text-[14px]">repeat</span>
+                                            Every date
+                                        </a>
+                                        <button x-show="isEditor && !role.fromSeries" @click="askRemoveManagedRole(role.def.slug)"
                                                 class="cal-row-actions w-[30px] h-[30px] rounded-md flex items-center justify-center
                                                        text-on-surface-variant hover:bg-surface-container cal-motion cal-focus"
                                                 aria-label="Remove this role">

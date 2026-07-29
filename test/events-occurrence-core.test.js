@@ -587,3 +587,33 @@ test('merging the two queries de-duplicates the Events that satisfy both', () =>
         ['a', 'b', 'c']
     );
 });
+
+// ── Reading an occurrence id back ─────────────────────────────────────────────
+//
+// The id is deterministic (`{seriesId}_{date}`) precisely so it can be built
+// without asking the database. Reading it back matters for the same reason: a
+// date nobody has touched has NO DOCUMENT, so opening one means reconstructing
+// it from its id and its series.
+
+test('an occurrence id reads back into the series and date it was built from', () => {
+    assert.deepStrictEqual(Core.parseOccurrenceId('midweek_2026-07-15'),
+        { seriesId: 'midweek', date: '2026-07-15' });
+    // The Sunday Service's id has an underscore in it, which is exactly what a
+    // naive split would get wrong.
+    assert.deepStrictEqual(Core.parseOccurrenceId('sunday_service_2026-08-02'),
+        { seriesId: 'sunday_service', date: '2026-08-02' });
+});
+
+test('an id that is not a series-and-date reads back as nothing', () => {
+    // A one-off Event has an auto-id and no series, so there is nothing to
+    // reconstruct — it either has a document or it does not exist.
+    assert.strictEqual(Core.parseOccurrenceId('aB3xY9kLm'), null);
+    assert.strictEqual(Core.parseOccurrenceId('midweek_not-a-date'), null);
+    assert.strictEqual(Core.parseOccurrenceId(''), null);
+    assert.strictEqual(Core.parseOccurrenceId(null), null);
+});
+
+test('an id round-trips through the pair it was built from', () => {
+    const back = Core.parseOccurrenceId(Core.occurrenceId('sunday_service', '2026-12-25'));
+    assert.deepStrictEqual(back, { seriesId: 'sunday_service', date: '2026-12-25' });
+});

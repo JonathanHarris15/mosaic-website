@@ -295,10 +295,51 @@
             occurrenceRef(db, id).get(),
             occurrenceRef(db, id).collection(ROSTER).get().catch(() => ({ docs: [] })),
         ]);
-        if (!doc.exists) return null;
-        return Object.assign({ id: doc.id }, doc.data(), {
+        // Occurrences are SPARSE. A date nobody has touched has NO DOCUMENT, so
+        // "no document" is not the same as "no such event" — and answering
+        // "could not be found" is wrong in the worst way, because the date is
+        // real, it is on the Calendar, and somebody just clicked it.
+        //
+        // The id is deterministic for exactly this reason: it carries the series
+        // and the date, so the occurrence can be rebuilt without a document.
+        if (!doc.exists) return rebuildOccurrence(db, id);
+
+        return Object.assign({ id: doc.id, stored: true }, doc.data(), {
             assignments: roster.docs.map(d => d.data()),
         });
+    }
+
+    // An occurrence reconstructed from its id and its series. Returns null unless
+    // the series' rule ACTUALLY PRODUCES that date — otherwise any id typed into
+    // the address bar would render a page for an event that does not happen.
+    async function rebuildOccurrence(db, id) {
+        const parsed = Core.parseOccurrenceId(id);
+        if (!parsed) return null;
+
+        const series = await loadSeries(db, parsed.seriesId);
+        if (!series) return null;
+
+        const rule = recurrenceFor(series);
+        if (!rule) return null;
+        if (Core.datesBetween(rule, parsed.date, parsed.date).indexOf(parsed.date) === -1) return null;
+
+        return {
+            id: id,
+            seriesId: parsed.seriesId,
+            date: parsed.date,
+            stored: false,
+            name: series.name,
+            seriesName: series.name,
+            seriesColour: series.colour,
+            // The Sunday Service is permanently public and carries no stamp of
+            // its own; the rule names it explicitly rather than reading a field.
+            visibility: series.visibility
+                || (parsed.seriesId === Core.SUNDAY_SERVICE_ID ? 'public' : 'member'),
+            rosterShared: series.rosterShared === true,
+            time: rule.time || null,
+            participantIds: [],
+            assignments: [],
+        };
     }
 
     // ── Creating an Event ────────────────────────────────────────────────────
