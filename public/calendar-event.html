@@ -228,7 +228,7 @@
                                         <span class="text-[14px] text-on-surface flex-grow min-w-0 truncate"
                                               x-text="role.name"></span>
                                         <span class="shrink-0 text-[11.5px] text-on-surface-variant"
-                                              x-text="role.slots.length + (role.slots.length === 1 ? ' place' : ' places')"></span>
+                                              x-text="role.needed"></span>
                                         <button @click="askRemoveSeriesRole(role.slug)" :disabled="saving"
                                                 class="shrink-0 w-[28px] h-[28px] rounded-md flex items-center justify-center
                                                        text-on-surface-variant hover:bg-surface-container cal-motion cal-focus"

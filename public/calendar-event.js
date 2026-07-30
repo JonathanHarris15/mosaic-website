@@ -604,10 +604,21 @@
                 const locked = (this.series && this.series.lockedRoleSlugs) || [];
                 return slugs.map(slug => {
                     const def = this.roleDefinitions.find(d => d.slug === slug);
+                    const slots = (def && def.slots) || [];
                     return {
                         slug: slug,
-                        name: (def && def.name) || slug,
-                        slots: (def && def.slots) || [],
+                        // `roleName` searches the code-defined liturgical Roles as
+                        // well as the stored ones. A lookup over stored definitions
+                        // alone falls through to the slug, and the screen reads
+                        // "worship_helper" at somebody.
+                        name: this.roleName(slug),
+                        slots: slots,
+                        // What an editor is deciding is how many people have to be
+                        // there on the day. "Places" is the model's word for it,
+                        // and the model is not who is reading this.
+                        needed: slots.length
+                            ? 'Needs ' + slots.length + (slots.length === 1 ? ' person' : ' people')
+                            : 'Nobody needed yet',
                         locked: locked.indexOf(slug) !== -1
                             || Roles.LITURGICAL_SLUGS.indexOf(slug) !== -1,
                     };

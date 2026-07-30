@@ -1440,3 +1440,50 @@ test('the way through is offered on every date of a repeating Event, Sundays inc
     page.occurrence = { id: 'harvest', seriesId: null, date: '2026-09-20' };
     assert.strictEqual(page.eventHref, null);
 });
+
+test('a liturgical Role on the Event screen is named, not slugged', () => {
+    // They are code-defined, so they are NOT in the `roles` collection — a
+    // lookup that only searches stored definitions falls through to the slug and
+    // the screen reads "worship_helper" at somebody.
+    const Roles = require('../public/roles-core.js');
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.roleDefinitions = [SOUND];
+    page.series = {
+        id: 'sunday_service',
+        roleSlugs: ['worship_helper', 'sermonette', 'prayer', 'sound_desk'],
+        lockedRoleSlugs: ['worship_helper', 'sermonette', 'prayer'],
+    };
+
+    const named = {};
+    page.seriesRoles.forEach(r => { named[r.slug] = r.name; });
+
+    assert.strictEqual(named.worship_helper, 'Music Helper');
+    assert.strictEqual(named.sermonette, 'Sermonette');
+    assert.strictEqual(named.prayer, 'Prayer');
+    assert.strictEqual(named.sound_desk, 'Sound desk');
+
+    // And every liturgical slug resolves, not just these three.
+    page.series = { id: 'sunday_service', roleSlugs: Roles.LITURGICAL_SLUGS.slice(), lockedRoleSlugs: [] };
+    page.seriesRoles.forEach(r => {
+        assert.notStrictEqual(r.name, r.slug, r.slug + ' renders as its slug');
+    });
+});
+
+test('a Role says how many people it needs each time, not how many "places"', () => {
+    // A slot is the model's word. What an editor is deciding is how many people
+    // have to be there on the day.
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.roleDefinitions = [
+        { slug: 'coffee', name: 'Coffee', slots: [{ id: 's1' }] },
+        { slug: 'kids', name: "Children's Ministry", slots: [{ id: 's1' }, { id: 's2' }] },
+        { slug: 'greeter', name: 'Greeter', slots: [] },
+    ];
+    page.series = { id: 'x', roleSlugs: ['coffee', 'kids', 'greeter'], lockedRoleSlugs: [] };
+
+    const need = {};
+    page.seriesRoles.forEach(r => { need[r.slug] = r.needed; });
+
+    assert.strictEqual(need.coffee, 'Needs 1 person');
+    assert.strictEqual(need.kids, 'Needs 2 people');
+    assert.strictEqual(need.greeter, 'Nobody needed yet');
+});
