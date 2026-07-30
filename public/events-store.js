@@ -408,8 +408,10 @@
             locked: false,
             roleSlugs: [],
             lockedRoleSlugs: [],
-            recurrence: rule,
-            time: s.time || null,
+            // The time lives on the RULE and nowhere else. It used to be written
+            // here too, and only the rule was ever read — two homes for one fact
+            // is a fact that can disagree with itself.
+            recurrence: Object.assign({}, rule, { time: rule.time || s.time || null }),
             location: s.location || null,
             description: s.description || null,
         }, shared));
@@ -584,6 +586,34 @@
 
         await commitInBatches(db, writes);
         return { occurrences: snap.docs.length };
+    }
+
+    // What the Event IS: its name, where it happens, what it is for. These live
+    // on the series because they are true of every date of it.
+    //
+    // A PATCH, never a blanket write. A screen that does not know about a field
+    // must not be able to clear it by omission — but a field passed as empty is
+    // cleared, because deleting the location is a thing somebody means to do.
+    const DETAIL_FIELDS = ['name', 'location', 'description'];
+
+    async function saveSeriesDetails(db, seriesId, details) {
+        if (!seriesId) throw new Error('Details need an event to belong to.');
+        const d = details || {};
+
+        if ('name' in d && !String(d.name || '').trim()) {
+            throw new Error('An event needs a name.');
+        }
+
+        const payload = {};
+        DETAIL_FIELDS.forEach(field => {
+            if (!(field in d)) return;
+            const value = String(d[field] == null ? '' : d[field]).trim();
+            payload[field] = value || null;
+        });
+        if (!Object.keys(payload).length) return payload;
+
+        await db.collection(SERIES).doc(seriesId).set(payload, { merge: true });
+        return payload;
     }
 
     // ── The colour a series shows up as ──────────────────────────────────────
@@ -923,6 +953,7 @@
         ensureSundayService,
         setSeriesRoles,
         setSeriesTime,
+        saveSeriesDetails,
         COLOUR_SLUGS,
         saveRoster,
         applyOrphanChoices,

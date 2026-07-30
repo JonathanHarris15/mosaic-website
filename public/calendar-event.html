@@ -101,21 +101,83 @@
             <div class="mt-gutter cal-cols">
                 <div class="flex flex-col gap-gutter min-w-0">
 
-                    <!-- What time it starts -->
+                    <!-- What it IS. These live on the series because they are true
+                         of every date of it, which is exactly why this screen and
+                         not one date's screen is where they are edited. -->
                     <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
-                        <h3 class="font-display text-[17px] text-primary">What time it starts</h3>
+                        <h3 class="font-display text-[17px] text-primary">Details</h3>
                         <p class="text-[12.5px] text-on-surface-variant mt-1">
-                            Every date of this event, unless one of them has its own time set.
+                            True of every date of this event.
                         </p>
-                        <div class="mt-sm flex items-center gap-sm flex-wrap">
-                            <input type="time" :value="seriesTime" @change="saveSeriesTime($event.target.value)"
-                                   :disabled="saving"
-                                   class="bg-surface border border-outline-variant rounded-lg px-3 py-2
-                                          text-[15px] text-on-surface cal-focus disabled:opacity-40" />
-                            <span x-show="!seriesTime" class="text-[12.5px] text-on-surface-variant">
-                                No time set yet.
-                            </span>
+
+                        <div class="mt-sm flex flex-col gap-md">
+                            <label class="block">
+                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">What is it</span>
+                                <input type="text" x-model="seriesDraft.name" :disabled="isSundaySeries"
+                                       placeholder="Midweek Gathering"
+                                       class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                              text-[15px] text-on-surface placeholder:text-outline cal-focus disabled:opacity-[.55]" />
+                                <span x-show="isSundaySeries" class="block text-[11.5px] text-on-surface-variant mt-1">
+                                    The Sunday Service keeps its name — everything else in the app refers to it.
+                                </span>
+                            </label>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-md">
+                                <label class="block">
+                                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Starts at</span>
+                                    <input type="time" :value="seriesTime" @change="saveSeriesTime($event.target.value)"
+                                           :disabled="saving"
+                                           class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                                  text-[15px] text-on-surface cal-focus disabled:opacity-40" />
+                                    <span class="block text-[11.5px] text-on-surface-variant mt-1">
+                                        Unless one date has its own time.
+                                    </span>
+                                </label>
+                                <label class="block">
+                                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Where</span>
+                                    <input type="text" x-model="seriesDraft.location" placeholder="The hall"
+                                           class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                                  text-[15px] text-on-surface placeholder:text-outline cal-focus" />
+                                </label>
+                            </div>
+
+                            <label class="block">
+                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">What it's for</span>
+                                <textarea x-model="seriesDraft.description" rows="3"
+                                          placeholder="A short line for anyone who has not been before."
+                                          class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                                 text-[15px] text-on-surface placeholder:text-outline cal-focus"></textarea>
+                            </label>
+
+                            <!-- The time saves on change; the typed fields need a
+                                 press, because a name is half-typed for most of the
+                                 time somebody is typing it. -->
+                            <div class="flex items-center justify-end gap-sm" x-show="seriesDetailsChanged">
+                                <button @click="startSeriesDraft()"
+                                        class="px-3 py-1.5 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
+                                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Undo</button>
+                                <button @click="saveSeriesDetails()" :disabled="!seriesDetailsValid || saving"
+                                        class="bg-primary text-on-primary px-3 py-1.5 rounded-lg shadow-xs font-label-md
+                                               text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus
+                                               disabled:opacity-40">Save details</button>
+                            </div>
                         </div>
+                    </section>
+
+                    <!-- When it happens -->
+                    <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">When it happens</h3>
+                        <p class="font-headline-lg text-[17px] text-on-surface mt-2" x-text="seriesPattern"></p>
+                        <div x-show="!isSundaySeries" class="mt-sm">
+                            <button @click="openPattern()"
+                                    class="border border-secondary text-secondary px-3 py-1.5 rounded-lg font-label-md
+                                           text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
+                                Change pattern
+                            </button>
+                        </div>
+                        <p x-show="isSundaySeries" class="text-[12.5px] text-on-surface-variant mt-2">
+                            Every Sunday, by definition. That one is settled.
+                        </p>
                     </section>
 
                     <!-- The Roles it carries -->
@@ -246,13 +308,58 @@
                         </div>
                     </section>
 
-                    <!-- Who can see it: settled for a Sunday, not disabled. -->
+                    <!-- Who can see it. Settled for a Sunday — not disabled, settled:
+                         there is no control to grey out. -->
                     <section x-show="isSundaySeries"
                              class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
                         <h3 class="font-display text-[17px] text-primary">Who can see this</h3>
                         <p class="font-headline-lg text-[16px] leading-[1.55] text-on-surface mt-2">
                             Anyone at all. A Sunday Service is always public — that is settled,
                             not a setting.
+                        </p>
+                    </section>
+
+                    <section x-show="!isSundaySeries"
+                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">Who can see this</h3>
+                        <div class="mt-sm flex flex-col">
+                            <template x-for="rung in visibilityLadder" :key="rung.level">
+                                <button @click="setSeriesVisibility(rung.level)" :disabled="saving"
+                                        class="text-left flex items-start gap-sm px-2 py-2.5 rounded-lg cal-motion cal-focus
+                                               hover:bg-surface-container-low border-l-[3px] disabled:opacity-40"
+                                        :class="seriesVisibility === rung.level ? 'border-l-primary bg-surface-container-low' : 'border-l-transparent'">
+                                    <span class="material-symbols-outlined text-[19px] shrink-0 mt-0.5"
+                                          :class="seriesVisibility === rung.level ? 'text-primary' : 'text-on-surface-variant'"
+                                          x-text="rung.icon"></span>
+                                    <div class="min-w-0 flex-grow">
+                                        <div class="text-[13.5px] font-label-md font-semibold text-on-surface" x-text="rung.label"></div>
+                                        <div class="text-[12px] text-on-surface-variant leading-snug" x-text="rung.who"></div>
+                                    </div>
+                                    <span x-show="seriesVisibility === rung.level"
+                                          class="material-symbols-outlined text-[18px] text-primary shrink-0">check</span>
+                                </button>
+                            </template>
+                        </div>
+
+                        <div class="mt-sm pt-sm border-t border-outline-variant cal-motion"
+                             :class="rosterToggleApplies(seriesVisibility) ? '' : 'opacity-[.45]'">
+                            <label class="flex items-start gap-2 cursor-pointer">
+                                <input type="checkbox" :checked="series.rosterShared"
+                                       @change="setSeriesRosterShared($event.target.checked)"
+                                       :disabled="!rosterToggleApplies(seriesVisibility)"
+                                       class="accent-primary mt-0.5 cal-focus" />
+                                <span>
+                                    <span class="text-[13px] text-on-surface">The people serving can see the rest of the roster</span>
+                                    <span x-show="!rosterToggleApplies(seriesVisibility)"
+                                          class="block text-[11.5px] text-on-surface-variant mt-0.5">
+                                        Everyone can see this event anyway, so this makes no difference here.
+                                    </span>
+                                </span>
+                            </label>
+                        </div>
+
+                        <p class="mt-sm text-[11.5px] text-on-surface-variant">
+                            This applies to every date of this event, past ones included.
                         </p>
                     </section>
                 </aside>
@@ -454,11 +561,17 @@
                 </div>
 
                 <div class="shrink-0 flex items-center gap-sm">
-                    <button @click="openPattern()" x-show="isEditor && !isSunday && series"
-                            class="border border-secondary text-secondary px-md py-2 rounded-lg font-label-md
-                                   text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
-                        Edit details
-                    </button>
+                    <!-- The details of a repeating Event live on the EVENT, not
+                         on one date of it — its name, its time, where it is, and
+                         which Roles it carries every time. So this goes there
+                         rather than opening a pattern-only modal, which was the
+                         thinnest possible answer to "edit details". -->
+                    <a x-show="isEditor && !isSunday && series" :href="'calendar-event.html?series=' + occurrence.seriesId"
+                       class="flex items-center gap-1 border border-secondary text-secondary px-md py-2 rounded-lg font-label-md
+                              text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
+                        <span class="material-symbols-outlined text-[18px]">tune</span>
+                        Edit the event
+                    </a>
                 </div>
             </div>
 

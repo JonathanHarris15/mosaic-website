@@ -494,11 +494,92 @@
                 if (!this.series) { this.error = 'That event could not be found.'; return; }
 
                 this.occurrence = { seriesId: seriesId, name: this.series.name };
+                this.startSeriesDraft();
                 await this.loadEditorData();
             },
 
             get isSundaySeries() {
                 return !!this.series && this.series.id === Core.SUNDAY_SERVICE_ID;
+            },
+
+            // The details of a repeating Event live on the SERIES — they are true
+            // of every date of it — so this is where they are edited. Held in a
+            // draft rather than written per keystroke: a name is half-typed for
+            // most of the time somebody is typing it.
+            seriesDraft: { name: '', location: '', description: '' },
+
+            startSeriesDraft() {
+                const s = this.series || {};
+                this.seriesDraft = {
+                    name: s.name || '',
+                    location: s.location || '',
+                    description: s.description || '',
+                };
+            },
+
+            get seriesDetailsChanged() {
+                const s = this.series || {};
+                return ['name', 'location', 'description'].some(
+                    f => String(this.seriesDraft[f] || '') !== String(s[f] || '')
+                );
+            },
+
+            get seriesDetailsValid() { return !!String(this.seriesDraft.name || '').trim(); },
+
+            async saveSeriesDetails() {
+                if (!this.seriesDetailsValid || !this.seriesDetailsChanged || this.saving) return;
+                this.saving = true;
+                this.error = '';
+                try {
+                    const saved = await Store.saveSeriesDetails(db, this.series.id, this.seriesDraft);
+                    Object.keys(saved).forEach(f => { this.series[f] = saved[f]; });
+                    this.startSeriesDraft();
+                } catch (e) {
+                    console.error('Series details failed:', e);
+                    this.error = (e && e.message) || 'Those details could not be saved.';
+                } finally {
+                    this.saving = false;
+                }
+            },
+
+            // Who can see it. Restamped onto every occurrence, PAST ONES
+            // INCLUDED — a security rule reads visibility off the document and
+            // cannot go and look at the series.
+            get seriesVisibility() {
+                return (this.series && this.series.visibility) || 'member';
+            },
+
+            async setSeriesVisibility(level) {
+                if (this.saving || this.isSundaySeries) return;
+                this.saving = true;
+                this.error = '';
+                try {
+                    await Store.restampSeriesVisibility(
+                        db, this.series.id, level, this.series.rosterShared === true
+                    );
+                    this.series.visibility = level;
+                } catch (e) {
+                    console.error('Series visibility failed:', e);
+                    this.error = (e && e.message) || 'That could not be saved.';
+                } finally {
+                    this.saving = false;
+                }
+            },
+
+            async setSeriesRosterShared(shared) {
+                if (this.saving || this.isSundaySeries) return;
+                this.saving = true;
+                try {
+                    await Store.restampSeriesVisibility(
+                        db, this.series.id, this.seriesVisibility, shared === true
+                    );
+                    this.series.rosterShared = shared === true;
+                } catch (e) {
+                    console.error('Roster sharing failed:', e);
+                    this.error = 'That could not be saved.';
+                } finally {
+                    this.saving = false;
+                }
             },
 
             get seriesTime() {

@@ -400,9 +400,9 @@ One dated instance of an [[Event series]], or a **one-off Event** that belongs t
 - **An untouched date has no document, and still opens.** The id carries the series and the date, so opening one rebuilds it rather than reporting it missing — but only if the series' rule actually produces that date.
 
 ### Event series management
-Managing an [[Event series]] itself rather than one date of it — its time and which Roles every date carries. Reached at `calendar-event.html?series=<id>`, and the only way into the **Sunday Service as an Event**. Distinct from the order of service, which is still built one Sunday at a time: a Sunday chip on the Calendar goes there, never here.
+Managing an [[Event series]] itself rather than one date of it — **everything true of every date**: its name, start time, place, description, recurrence pattern, [[Event visibility]], colour, and which Roles it carries every time. Reached at `calendar-event.html?series=<id>`, and the only way into the **Sunday Service as an Event**. Distinct from the order of service, which is still built one Sunday at a time: a Sunday chip on the Calendar goes there, never here.
 - **Liturgical Roles are shown and locked.** An editor needs to see the whole shape of a Sunday, but those Roles are filled per-Sunday through the Service entity and print in the booklet, so this screen can never drop one (`lockedRoleSlugs`, MS-13).
-- **The time lives on the recurrence rule**, not beside it, and a date carrying its own time still wins. Setting a Sunday time therefore ends the Sunday Service's reliance on its *implied* rule — so the rule written has to keep saying "every Sunday".
+- **The time lives on the recurrence rule**, not beside it — one home for one fact — and a date carrying its own time still wins. Setting a Sunday time therefore ends the Sunday Service's reliance on its *implied* rule — so the rule written has to keep saying "every Sunday".
 - Opening the Sunday Service **reconciles** it: created if it never existed, repaired if it drifted, untouched if it is already right.
 
 ### Assignment

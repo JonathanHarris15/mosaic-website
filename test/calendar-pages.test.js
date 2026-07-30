@@ -1186,3 +1186,63 @@ test('the move form refuses the date it is already on before writing anything', 
     page.move.toDate = '2026-08-15';
     assert.strictEqual(page.moveValid, true);
 });
+
+// ── The details of a repeating Event ──────────────────────────────────────────
+//
+// They live on the SERIES, because they are true of every date of it. So the
+// screen that sets which Roles recur is the same screen that sets the name, the
+// time, the place and who can see it — one place for "what this Event IS".
+
+test('editing a repeating Event goes to the Event, not to a pattern-only modal', () => {
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    assert.ok(/'calendar-event\.html\?series=' \+ occurrence\.seriesId/.test(html),
+        'one date of a repeating Event has no way through to the Event itself');
+});
+
+test('the Event screen edits everything that is true of every date', () => {
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    ['seriesDraft.name', 'seriesDraft.location', 'seriesDraft.description',
+     'saveSeriesTime(', 'openPattern()', 'setSeriesVisibility(', 'addSeriesRole(', 'setColour(']
+        .forEach(binding => {
+            assert.ok(html.indexOf(binding) !== -1,
+                'the Event screen cannot set ' + binding);
+        });
+});
+
+test('details are held in a draft, so a half-typed name is never saved', () => {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.series = { id: 'midweek', name: 'Midweek', location: 'The hall', description: '' };
+    page.startSeriesDraft();
+
+    assert.strictEqual(page.seriesDetailsChanged, false);
+    page.seriesDraft.name = 'Midweek Gathering';
+    assert.strictEqual(page.seriesDetailsChanged, true);
+
+    // Undo puts it back rather than leaving a half-edit sitting there.
+    page.startSeriesDraft();
+    assert.strictEqual(page.seriesDraft.name, 'Midweek');
+    assert.strictEqual(page.seriesDetailsChanged, false);
+});
+
+test('an Event cannot be saved with no name', () => {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.series = { id: 'midweek', name: 'Midweek' };
+    page.startSeriesDraft();
+    page.seriesDraft.name = '   ';
+    assert.strictEqual(page.seriesDetailsValid, false);
+});
+
+test('the Sunday Service keeps its name and its pattern', () => {
+    // Everything else in the app refers to both. Renaming it or moving it off
+    // Sundays would break the Service Guide and every Involvement record.
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    assert.ok(/x-model="seriesDraft.name" :disabled="isSundaySeries"/.test(html),
+        'the Sunday Service can be renamed');
+    // The "Change pattern" button must sit inside a !isSundaySeries guard: take
+    // the text before it and check the nearest guard is that one.
+    const before = html.slice(0, html.indexOf('Change pattern'));
+    assert.ok(before.lastIndexOf('x-show="!isSundaySeries"') > before.lastIndexOf('</div>') - 400,
+        'the Sunday Service pattern can be changed');
+    assert.ok(/x-show="!isSundaySeries" class="mt-sm">\s*<button @click="openPattern\(\)"/.test(html),
+        'the Change pattern button is not guarded against the Sunday Service');
+});

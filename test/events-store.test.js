@@ -1336,3 +1336,56 @@ test('the Sunday Service is never moved this way', async () => {
         /Sunday Service/i
     );
 });
+
+// ── Editing a recurring Event's details ───────────────────────────────────────
+//
+// The details of a repeating Event live on the SERIES, so this is the screen
+// where its name, where it is, what it is for, what time it starts, and which
+// Roles it carries every time all belong together.
+
+test('a series keeps its details, and only what was passed', async () => {
+    const db = fakeDb({ events: { midweek: { name: 'Midweek', visibility: 'member' } } }, { rank: 'editor' });
+
+    await Store.saveSeriesDetails(db, 'midweek', {
+        name: '  Midweek Gathering  ', location: 'The hall', description: 'Prayer and a study.',
+    });
+
+    const written = db._flatWrites()[0];
+    assert.strictEqual(written.path, 'events/midweek');
+    assert.strictEqual(written.data.name, 'Midweek Gathering', 'a name kept its stray spaces');
+    assert.strictEqual(written.data.location, 'The hall');
+    assert.strictEqual(written.data.description, 'Prayer and a study.');
+    // Never a blanket overwrite: a field nobody edited is not in the write at
+    // all, so a second screen cannot clear it by not knowing about it.
+    assert.strictEqual('visibility' in written.data, false);
+    assert.strictEqual('recurrence' in written.data, false);
+});
+
+test('an emptied field is cleared, not ignored', async () => {
+    // Deleting the location is a thing somebody means to do.
+    const db = fakeDb({ events: { midweek: { name: 'Midweek', location: 'The hall' } } }, { rank: 'editor' });
+    await Store.saveSeriesDetails(db, 'midweek', { location: '' });
+    assert.strictEqual(db._flatWrites()[0].data.location, null);
+});
+
+test('a series cannot be left with no name', async () => {
+    const db = fakeDb({ events: { midweek: { name: 'Midweek' } } }, { rank: 'editor' });
+    await assert.rejects(() => Store.saveSeriesDetails(db, 'midweek', { name: '   ' }), /name/i);
+    assert.deepStrictEqual(db._flatWrites(), []);
+});
+
+test('a new repeating Event keeps its time in ONE place', async () => {
+    // The time used to be written twice — on the series AND on its recurrence
+    // rule — and only the rule was ever read. Two homes for one fact is a fact
+    // that can disagree with itself.
+    const db = fakeDb({ events: {} }, { rank: 'editor' });
+
+    await Store.createEvent(db, {
+        name: 'Midweek Gathering', visibility: 'member', time: '19:30',
+        recurrence: { freq: 'weekly', startDate: '2026-08-05', weekday: 3, time: '19:30' },
+    });
+
+    const written = db._flatWrites()[0].data;
+    assert.strictEqual(written.recurrence.time, '19:30');
+    assert.strictEqual('time' in written, false, 'the time is stored in two places again');
+});
