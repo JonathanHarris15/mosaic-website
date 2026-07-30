@@ -1098,3 +1098,91 @@ test('the page says so when it could not check which tags hide people', () => {
         assert.match(page.error, /could not be read/i);
     });
 });
+
+// ── A date that is not happening must not look like it is ─────────────────────
+//
+// "Skip this one" has always written a marker and the Calendar has always
+// ignored it, so a skipped date drew a normal chip. Moving an instance makes
+// that worse: the original date would draw the event AND the new date would draw
+// it, so one gathering would appear twice.
+
+test('a skipped or moved date is drawn as not happening', () => {
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.rank = 'editor';
+    page.today = '2026-08-01';
+    page.occurrences = [
+        { id: 'a', date: '2026-08-02', seriesId: 's', name: 'Prayer', cancelled: true },
+        { id: 'b', date: '2026-08-09', seriesId: 's', name: 'Prayer', movedTo: '2026-08-15' },
+        { id: 'c', date: '2026-08-15', seriesId: 's', name: 'Prayer', movedFrom: '2026-08-09' },
+        { id: 'd', date: '2026-08-16', seriesId: 's', name: 'Prayer' },
+    ];
+
+    assert.strictEqual(page.chipKind(page.occurrences[0]), 'off');
+    assert.strictEqual(page.chipKind(page.occurrences[1]), 'off');
+    assert.strictEqual(page.chipKind(page.occurrences[2]), 'other', 'the date it moved TO is happening');
+    assert.strictEqual(page.chipKind(page.occurrences[3]), 'other');
+});
+
+test('a date that moved says where it went', () => {
+    const page = loadComponent('calendar.js', 'calendarPage');
+    assert.strictEqual(page.movedNote({ movedTo: '2026-08-15' }), 'Moved to 15 August');
+    assert.strictEqual(page.movedNote({ movedFrom: '2026-08-09' }), 'Moved from 9 August');
+    assert.strictEqual(page.movedNote({ cancelled: true }), 'Not happening');
+    assert.strictEqual(page.movedNote({}), '');
+});
+
+test('a date not happening never counts as needing sorting', () => {
+    // Nobody has to chase a decline for a gathering that is not taking place.
+    const Core = require('../public/events-occurrence-core.js');
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.rank = 'editor';
+    page.today = '2026-08-01';
+
+    const declined = [{ personId: 'p1', roleSlug: 'kids', slotId: 's1', state: 'declined' }];
+    assert.strictEqual(Core.needsAttention({ assignments: declined }), true);
+    assert.strictEqual(page.chipBar({ cancelled: true, needsAttention: true }),
+        require('../public/calendar-view.js').colourOf({}).bar,
+        'a skipped date still shouts in the error red');
+});
+
+// ── Moving one instance from the Event page ───────────────────────────────────
+
+test('a repeating Event offers to move just this one', () => {
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    assert.ok(/openMove\(\)/.test(html), 'no way to move a single date');
+    assert.ok(/saveMove\(\)/.test(html));
+});
+
+test('moving is offered only where it means something', () => {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.rank = 'editor';
+
+    // A repeating Event: yes — that is the whole case.
+    page.occurrence = { id: 'p_2026-08-02', seriesId: 'p', date: '2026-08-02' };
+    page.series = { id: 'p', recurrence: { freq: 'monthly', startDate: '2026-08-02', weekday: 0, nth: 1 } };
+    assert.strictEqual(page.canMove, true);
+
+    // A one-off has no pattern to leave alone; you just change its date.
+    page.occurrence = { id: 'harvest', seriesId: null, date: '2026-08-02' };
+    page.series = null;
+    assert.strictEqual(page.canMove, false);
+
+    // The Sunday Service: its order of service lives under its own date.
+    page.occurrence = { id: 'sunday_service_2026-08-02', seriesId: 'sunday_service', date: '2026-08-02' };
+    page.series = { id: 'sunday_service' };
+    assert.strictEqual(page.canMove, false);
+});
+
+test('the move form refuses the date it is already on before writing anything', async () => {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.rank = 'editor';
+    page.occurrence = { id: 'p_2026-08-02', seriesId: 'p', date: '2026-08-02' };
+    page.series = { id: 'p', recurrence: { freq: 'monthly', startDate: '2026-08-02', weekday: 0, nth: 1 } };
+
+    page.openMove();
+    assert.strictEqual(page.move.toDate, '2026-08-02', 'the form does not start where it is');
+    assert.strictEqual(page.moveValid, false, 'moving to the same date looked fine');
+
+    page.move.toDate = '2026-08-15';
+    assert.strictEqual(page.moveValid, true);
+});

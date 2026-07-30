@@ -256,6 +256,44 @@
         return { seriesId: seriesId, date: date };
     }
 
+    // ── A date that is not happening ─────────────────────────────────────────
+    //
+    // Two ways one instance stops happening on its own date: it was SKIPPED, or
+    // it was MOVED to another date. Both have to leave a document behind on the
+    // original date — the pattern still produces that date, and something has to
+    // say otherwise — so both are markers on an occurrence rather than an
+    // absence of one.
+    //
+    // A moved instance is deliberately NOT a cancelled one plus a new event. It
+    // is the same instance on a different day, and it carries its roster with it,
+    // because "postponed a fortnight" is not "cancelled, and separately somebody
+    // invented a new gathering".
+
+    function notHappening(occurrence) {
+        const o = occurrence || {};
+        return o.cancelled === true || !!o.movedTo;
+    }
+
+    // Says WHERE it went, not just that it went. "Not happening" on the first
+    // Sunday, with nothing about the fifteenth, is how somebody turns up to an
+    // empty hall.
+    function movedNote(occurrence) {
+        const o = occurrence || {};
+        if (o.movedTo) return 'Moved to ' + dayMonth(o.movedTo);
+        if (o.movedFrom) return 'Moved from ' + dayMonth(o.movedFrom);
+        if (o.cancelled === true) return 'Not happening';
+        return '';
+    }
+
+    const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'];
+
+    function dayMonth(dateStr) {
+        if (!isDateStr(dateStr)) return String(dateStr || '');
+        const d = parseDate(dateStr);
+        return d.getDate() + ' ' + MONTH_NAMES[d.getMonth()];
+    }
+
     // ── Who is already busy on a Sunday ──────────────────────────────────────
     //
     // A Sunday's liturgical Roles are NOT Assignments. They are hardwired fields
@@ -681,6 +719,8 @@
         parseOccurrenceId,
         LITURGICAL_SERVICE_FIELDS,
         liturgicalHolders,
+        notHappening,
+        movedNote,
         mergeOccurrences,
         orphanedOccurrences,
         // assignments

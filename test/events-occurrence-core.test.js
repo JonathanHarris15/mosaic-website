@@ -668,3 +668,31 @@ test('every liturgical Role the model has is one the Service can be read for', (
         assert.ok(covered.has(slug), 'no Service field is read for the ' + slug + ' Role');
     });
 });
+
+// ── A date that is not happening ──────────────────────────────────────────────
+//
+// Two ways an instance stops happening on its own date: it was skipped, or it
+// was MOVED to another date. Both leave a document behind on the original date —
+// they have to, because the pattern still produces that date and something must
+// say otherwise — and a Calendar that ignores the marker draws an event nobody
+// is holding.
+
+test('a skipped date is not happening', () => {
+    assert.strictEqual(Core.notHappening({ cancelled: true }), true);
+    assert.strictEqual(Core.notHappening({ cancelled: false }), false);
+    assert.strictEqual(Core.notHappening({}), false);
+    assert.strictEqual(Core.notHappening(null), false);
+});
+
+test('a date something moved AWAY from is not happening either', () => {
+    assert.strictEqual(Core.notHappening({ movedTo: '2026-08-15' }), true);
+    // The date it moved TO is very much happening.
+    assert.strictEqual(Core.notHappening({ movedFrom: '2026-08-02' }), false);
+});
+
+test('a moved date says where it went, in words', () => {
+    assert.strictEqual(Core.movedNote({ movedTo: '2026-08-15' }), 'Moved to 15 August');
+    assert.strictEqual(Core.movedNote({ movedFrom: '2026-08-02' }), 'Moved from 2 August');
+    assert.strictEqual(Core.movedNote({ cancelled: true }), 'Not happening');
+    assert.strictEqual(Core.movedNote({}), '');
+});

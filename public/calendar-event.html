@@ -968,11 +968,50 @@
                         <p x-show="occurrence.cancelled" class="text-[12.5px] mt-1" style="color:#B89B6A;">
                             This one is cancelled. The rest of the series is untouched.
                         </p>
+                        <!-- Where this instance went, or came from. Somebody looking at
+                             the first Sunday needs to know the gathering is on the
+                             fifteenth, not simply that it is not here. -->
+                        <p x-show="occurrence.movedTo || occurrence.movedFrom"
+                           class="text-[12.5px] mt-1 flex items-center gap-1" style="color:#B89B6A;">
+                            <span class="material-symbols-outlined text-[15px]">event_repeat</span>
+                            <span x-text="movedNote"></span>
+                        </p>
+
+                        <!-- Moving ONE date, with the pattern left alone. Changing the
+                             pattern for a one-month postponement would move every other
+                             month too, and raise the orphan confrontation over a change
+                             nobody meant to make. -->
+                        <div x-show="move.open" class="mt-sm bg-surface-container-lowest border border-outline-variant rounded-lg p-3">
+                            <label class="block">
+                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
+                                    Move this one to
+                                </span>
+                                <input type="date" x-model="move.toDate"
+                                       class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                              text-[15px] text-on-surface cal-focus" />
+                            </label>
+                            <p class="text-[12px] text-on-surface-variant mt-2 leading-snug" x-text="moveSentence"></p>
+                            <div class="mt-sm flex items-center justify-end gap-sm">
+                                <button @click="move.open = false"
+                                        class="px-3 py-1.5 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
+                                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Cancel</button>
+                                <button @click="saveMove()" :disabled="!moveValid || saving"
+                                        class="bg-primary text-on-primary px-3 py-1.5 rounded-lg shadow-xs font-label-md
+                                               text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus
+                                               disabled:opacity-40">Move it</button>
+                            </div>
+                        </div>
+
                         <div class="mt-sm flex items-center gap-sm flex-wrap">
                             <button @click="openPattern()"
                                     class="border border-secondary text-secondary px-3 py-1.5 rounded-lg font-label-md
                                            text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
                                 Change pattern
+                            </button>
+                            <button x-show="canMove" @click="openMove()"
+                                    class="border border-secondary text-secondary px-3 py-1.5 rounded-lg font-label-md
+                                           text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
+                                Move this one
                             </button>
                             <!-- Cancelling ONE date never disturbs the rest. It is
                                  also the first thing to land on that date, so it is

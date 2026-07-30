@@ -392,6 +392,65 @@
                 await this.persist();
             },
 
+            // ── Moving THIS ONE, without touching the pattern ────────────────
+            //
+            // "First Sunday of the month, except in August when it is the
+            // fifteenth." Editing the pattern for that would be wrong twice over:
+            // it would move every other month too, and it would raise the orphan
+            // confrontation over a change nobody meant to make.
+
+            move: { open: false, toDate: '' },
+
+            get canMove() {
+                // A one-off has no pattern to leave alone — you just change its
+                // date. The Sunday Service keeps its order of service under its
+                // own date, so moving the Event would split one Sunday in two.
+                return this.isEditor
+                    && !!this.series
+                    && !this.isSunday
+                    && !!(this.series.recurrence || {}).freq
+                    && this.series.recurrence.freq !== 'once';
+            },
+
+            openMove() {
+                // Starts on the date it is already on, so the field reads as
+                // "change this" rather than as an empty question.
+                this.move = { open: true, toDate: (this.occurrence && this.occurrence.date) || '' };
+            },
+
+            get moveValid() {
+                const to = this.move.toDate;
+                return !!to && !!this.occurrence && to !== this.occurrence.date;
+            },
+
+            get moveSentence() {
+                if (!this.moveValid) return '';
+                return 'This one moves to ' + this.longDate(this.move.toDate) +
+                    '. Every other date stays where it is.';
+            },
+
+            async saveMove() {
+                if (!this.moveValid || this.saving) return;
+                this.saving = true;
+                this.error = '';
+                try {
+                    const to = this.move.toDate;
+                    await Store.moveOccurrence(db, this.series.id, this.occurrence.date, to, {
+                        series: this.series,
+                    });
+                    // The id is derived from the date, so the moved instance is a
+                    // different document — the page has to follow it there.
+                    window.location.href = 'calendar-event.html?id=' +
+                        encodeURIComponent(Core.occurrenceId(this.series.id, to));
+                } catch (e) {
+                    console.error('Move failed:', e);
+                    this.error = (e && e.message) || 'That date could not be changed.';
+                    this.saving = false;
+                }
+            },
+
+            get movedNote() { return Core.movedNote(this.occurrence); },
+
             // ── Who is already down for the liturgy ──────────────────────────
             //
             // A Sunday's liturgical Roles are FIELDS on the Service document, not

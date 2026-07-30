@@ -1191,3 +1191,148 @@ test('a stored document always wins over the rebuilt one', async () => {
     assert.strictEqual(o.time, '18:00');
     assert.strictEqual(o.location, 'The hall');
 });
+
+// ── Moving ONE instance without touching the pattern ──────────────────────────
+//
+// "First Sunday of the month, except in August when it is the fifteenth." The
+// pattern is right; this one month is not. Changing the pattern for it would be
+// wrong twice over — it would move every other month too, and it would raise the
+// orphan confrontation over a change nobody meant to make.
+//
+// A moved instance is NOT a cancellation plus a new event. It is the same
+// instance on a different day and it carries its roster, because "postponed a
+// fortnight" is not "cancelled, and separately somebody invented a gathering".
+
+const MONTHLY = {
+    firstsunday: {
+        name: 'Prayer Meeting', visibility: 'member',
+        recurrence: { freq: 'monthly', startDate: '2026-08-02', weekday: 0, nth: 1 },
+    },
+};
+
+test('moving one instance writes the new date and marks the old one', async () => {
+    const stored = {
+        'firstsunday_2026-08-02': {
+            seriesId: 'firstsunday', date: '2026-08-02', visibility: 'member',
+            participantIds: ['p1'], location: 'The hall',
+        },
+    };
+    const db = fakeDb({ events: MONTHLY, event_occurrences: stored }, { rank: 'editor' });
+
+    await Store.moveOccurrence(db, 'firstsunday', '2026-08-02', '2026-08-15');
+
+    const writes = db._flatWrites();
+    const moved = writes.find(w => w.path === 'event_occurrences/firstsunday_2026-08-15');
+    const origin = writes.find(w => w.path === 'event_occurrences/firstsunday_2026-08-02');
+
+    assert.ok(moved, 'nothing was written on the new date');
+    assert.strictEqual(moved.data.date, '2026-08-15');
+    assert.strictEqual(moved.data.movedFrom, '2026-08-02');
+    assert.strictEqual(moved.data.location, 'The hall', 'the instance lost its details');
+
+    assert.ok(origin, 'the original date says nothing about where it went');
+    assert.strictEqual(origin.data.movedTo, '2026-08-15');
+    // Nobody is serving on a date nothing is happening on.
+    assert.deepStrictEqual(origin.data.participantIds, []);
+});
+
+test('the roster travels with the instance', async () => {
+    const stored = {
+        'firstsunday_2026-08-02': {
+            seriesId: 'firstsunday', date: '2026-08-02', visibility: 'member', participantIds: ['p1'],
+        },
+    };
+    const rosters = {
+        'firstsunday_2026-08-02': {
+            p1_kids_s1: { personId: 'p1', roleSlug: 'kids', slotId: 's1', state: 'confirmed' },
+        },
+    };
+    const db = dbWithRosters(stored, rosters);
+
+    await Store.moveOccurrence(db, 'firstsunday', '2026-08-02', '2026-08-15', { series: MONTHLY.firstsunday });
+
+    const writes = db._flatWrites();
+    const rosterWrite = writes.find(w => /firstsunday_2026-08-15\/roster\//.test(w.path));
+    assert.ok(rosterWrite, 'the people serving were left behind on the old date');
+    assert.strictEqual(rosterWrite.data.personId, 'p1');
+    assert.strictEqual(rosterWrite.data.state, 'confirmed', 'somebody who said yes was reset');
+
+    // And the old date's roster goes, or they are down for two dates at once.
+    const removed = writes.filter(w => w.kind === 'delete' && /firstsunday_2026-08-02\/roster\//.test(w.path));
+    assert.strictEqual(removed.length, 1, 'the old roster was left in place');
+});
+
+test('the new date is written before the old roster is deleted', async () => {
+    // If the delete lands and the write fails, the roster is gone and the
+    // instance is nowhere. The other order loses nothing.
+    const stored = {
+        'firstsunday_2026-08-02': { seriesId: 'firstsunday', date: '2026-08-02', visibility: 'member', participantIds: ['p1'] },
+    };
+    const rosters = { 'firstsunday_2026-08-02': { r1: { personId: 'p1', roleSlug: 'kids', slotId: 's1' } } };
+    const db = dbWithRosters(stored, rosters);
+
+    await Store.moveOccurrence(db, 'firstsunday', '2026-08-02', '2026-08-15', { series: MONTHLY.firstsunday });
+
+    const writes = db._flatWrites();
+    const firstDelete = writes.findIndex(w => w.kind === 'delete');
+    const lastWriteToNewDate = writes.map(w => w.path).lastIndexOf('event_occurrences/firstsunday_2026-08-15');
+    assert.ok(firstDelete === -1 || lastWriteToNewDate < firstDelete,
+        'something was deleted before the new date existed');
+});
+
+test('an instance cannot be moved onto a date the pattern already produces', async () => {
+    // September's first Sunday is a real instance of this series. Moving August
+    // onto it would silently overwrite a roster.
+    const db = fakeDb({ events: MONTHLY, event_occurrences: {} }, { rank: 'editor' });
+
+    await assert.rejects(
+        () => Store.moveOccurrence(db, 'firstsunday', '2026-08-02', '2026-09-06'),
+        /already/i
+    );
+    assert.deepStrictEqual(db._flatWrites(), [], 'wrote anyway');
+});
+
+test('an instance cannot be moved onto a date that already has one', async () => {
+    const stored = {
+        'firstsunday_2026-08-02': { seriesId: 'firstsunday', date: '2026-08-02', visibility: 'member', participantIds: [] },
+        'firstsunday_2026-08-15': { seriesId: 'firstsunday', date: '2026-08-15', visibility: 'member', participantIds: ['p9'] },
+    };
+    const db = fakeDb({ events: MONTHLY, event_occurrences: stored }, { rank: 'editor' });
+
+    await assert.rejects(
+        () => Store.moveOccurrence(db, 'firstsunday', '2026-08-02', '2026-08-15'),
+        /already/i
+    );
+});
+
+test('moving somewhere it already is, or nowhere, is refused rather than half-done', async () => {
+    const db = fakeDb({ events: MONTHLY, event_occurrences: {} }, { rank: 'editor' });
+
+    await assert.rejects(() => Store.moveOccurrence(db, 'firstsunday', '2026-08-02', '2026-08-02'), /same/i);
+    await assert.rejects(() => Store.moveOccurrence(db, 'firstsunday', '2026-08-02', 'soon'), /date/i);
+    assert.deepStrictEqual(db._flatWrites(), []);
+});
+
+test('a date nothing has landed on yet can still be moved', async () => {
+    // Occurrences are sparse: the common case is postponing something before
+    // anybody has been put on it, so there is no document to move.
+    const db = fakeDb({ events: MONTHLY, event_occurrences: {} }, { rank: 'editor' });
+
+    await Store.moveOccurrence(db, 'firstsunday', '2026-08-02', '2026-08-15');
+
+    const writes = db._flatWrites();
+    assert.ok(writes.find(w => w.path === 'event_occurrences/firstsunday_2026-08-15'));
+    assert.ok(writes.find(w => w.path === 'event_occurrences/firstsunday_2026-08-02').data.movedTo);
+});
+
+test('the Sunday Service is never moved this way', async () => {
+    // Its liturgy lives in services/{date}. Moving the Event and leaving the
+    // order of service behind would split one Sunday across two dates.
+    const db = fakeDb({ events: { sunday_service: { name: 'Sunday Service' } }, event_occurrences: {} },
+        { rank: 'elder' });
+
+    await assert.rejects(
+        () => Store.moveOccurrence(db, 'sunday_service', '2026-08-02', '2026-08-09'),
+        /Sunday Service/i
+    );
+});

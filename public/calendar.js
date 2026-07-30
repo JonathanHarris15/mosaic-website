@@ -330,13 +330,25 @@
             // without ever being able to shout, or to stop something else
             // shouting.
             chipBar(occurrence) {
+                // A date nothing is happening on has nothing to chase, so it
+                // never shouts — a red chip for a gathering that was called off
+                // sends somebody looking for a problem that no longer exists.
+                if (Core.notHappening(occurrence)) return View.colourOf(occurrence).bar;
                 if (occurrence && occurrence.needsAttention) return View.ATTENTION_COLOUR;
                 return View.colourOf(occurrence).bar;
             },
 
+            // "Moved to 15 August", not just "not happening". Somebody looking at
+            // the first Sunday needs to know where the gathering went, or they
+            // turn up to an empty hall.
+            movedNote(occurrence) { return Core.movedNote(occurrence); },
+
             // The chip's colour family, so the template does not branch on four
             // things at once.
             chipKind(occurrence) {
+                // Skipped or moved away. First, because everything below it
+                // describes a gathering that is taking place.
+                if (Core.notHappening(occurrence)) return 'off';
                 if (occurrence.needsAttention) return 'declined';
                 if (occurrence.mine) return 'mine';
                 if (occurrence.isSunday) return 'sunday';

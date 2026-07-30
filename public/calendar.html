@@ -210,7 +210,8 @@
                                                 'border-l-[3px] bg-error-container text-on-error-container': chipKind(ev) === 'declined',
                                                 'border-l-[3px] bg-surface-container': chipKind(ev) === 'mine',
                                                 'border-l-[3px]': chipKind(ev) === 'sunday',
-                                                'border-l-[3px] bg-surface-container-low': chipKind(ev) === 'other'
+                                                'border-l-[3px] bg-surface-container-low': chipKind(ev) === 'other',
+                                                'border-l-[3px] border-dashed opacity-[.55] line-through': chipKind(ev) === 'off'
                                             }">
                                         <span x-show="chipKind(ev) === 'mine'"
                                               class="mt-[5px] w-[5px] h-[5px] rounded-full bg-primary shrink-0"></span>

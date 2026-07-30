@@ -427,6 +427,132 @@
         return id;
     }
 
+    // ── Moving ONE instance, without touching the pattern ────────────────────
+    //
+    // "First Sunday of the month, except in August when it is the fifteenth."
+    // The pattern is right; this one month is not. Editing the pattern for it
+    // would be wrong twice over — it would move every other month too, and it
+    // would raise the orphan confrontation over a change nobody meant to make.
+    //
+    // A moved instance is NOT a cancellation plus a new event. It is the same
+    // instance on a different day, and it takes its roster with it, because
+    // "postponed a fortnight" is not "cancelled, and separately somebody
+    // invented a gathering".
+    //
+    // Two documents come out of this, and both are needed: the new date, and a
+    // marker on the ORIGINAL saying where it went. The original cannot simply be
+    // deleted — the pattern still produces that date, so with nothing there the
+    // Calendar would draw the event back again as though nothing had happened.
+    async function moveOccurrence(db, seriesId, fromDate, toDate, options) {
+        const opts = options || {};
+
+        if (seriesId === Core.SUNDAY_SERVICE_ID) {
+            throw new Error(
+                'The Sunday Service cannot be moved this way: its order of service lives ' +
+                'under its own date, and moving the Event would split one Sunday across two.'
+            );
+        }
+        if (!Core.occurrenceId(seriesId, fromDate)) {
+            throw new Error('Only a real date of a series can be moved.');
+        }
+        if (!Core.occurrenceId(seriesId, toDate)) {
+            throw new Error('A new date reads as YYYY-MM-DD.');
+        }
+        if (fromDate === toDate) {
+            throw new Error('That is the same date it is already on.');
+        }
+
+        const series = opts.series || await loadSeries(db, seriesId);
+        const rule = recurrenceFor(Object.assign({ id: seriesId }, series || {}));
+
+        // Moving onto a date the pattern already produces would put two instances
+        // of the same series on one day, and the write would silently land on top
+        // of whatever roster was there.
+        if (rule && Core.datesBetween(rule, toDate, toDate).indexOf(toDate) !== -1) {
+            throw new Error(
+                'This event already happens on ' + toDate + '. Pick a date it does not.'
+            );
+        }
+
+        const fromId = Core.occurrenceId(seriesId, fromDate);
+        const toId = Core.occurrenceId(seriesId, toDate);
+
+        // Read the documents directly rather than through `loadOccurrence`: this
+        // is a question about DOCUMENTS, not about dates, and the rebuild path
+        // would answer a different one. A refusal reads as "no document" for the
+        // same reason it does everywhere else — a missing document is denied, not
+        // absent — and an editor who may write here may read here.
+        const notThere = e => {
+            if (e && e.code === 'permission-denied') return null;
+            throw e;
+        };
+
+        const target = await occurrenceRef(db, toId).get().catch(notThere);
+        if (target && target.exists) {
+            throw new Error('There is already something on ' + toDate + ' for this event.');
+        }
+
+        const sourceDoc = await occurrenceRef(db, fromId).get().catch(notThere);
+        const source = (sourceDoc && sourceDoc.exists)
+            ? Object.assign({ id: fromId, stored: true }, sourceDoc.data())
+            : null;
+
+        const roster = source
+            ? await occurrenceRef(db, fromId).collection(ROSTER).get().catch(() => ({ docs: [] }))
+            : { docs: [] };
+        const assignments = roster.docs.map(d => d.data());
+        const visibility = (source && source.visibility)
+            || (series && series.visibility) || 'member';
+
+        // The instance, on its new day. `movedFrom` is kept so the date can say
+        // where it came from — somebody looking at the fifteenth needs to know it
+        // is the first Sunday's gathering, not an extra one.
+        const moved = occurrencePayload(Object.assign({}, source || {}, {
+            id: toId,
+            seriesId: seriesId,
+            date: toDate,
+            visibility: visibility,
+            movedFrom: fromDate,
+            assignments: assignments,
+        }));
+        delete moved.movedTo;
+        delete moved.stored;
+
+        const writes = [
+            { kind: 'set', ref: occurrenceRef(db, toId), data: moved, options: { merge: true } },
+        ];
+        assignments.forEach(a => {
+            writes.push({
+                kind: 'set',
+                ref: occurrenceRef(db, toId).collection(ROSTER).doc(rosterId(a)),
+                data: a,
+            });
+        });
+
+        // The original date, saying where it went and holding nobody. Written
+        // BEFORE anything is deleted: if a delete landed and the write failed,
+        // the roster would be gone and the instance nowhere.
+        writes.push({
+            kind: 'set',
+            ref: occurrenceRef(db, fromId),
+            data: {
+                seriesId: seriesId,
+                date: fromDate,
+                visibility: visibility,
+                movedTo: toDate,
+                participantIds: [],
+                needsAttention: false,
+            },
+            options: { merge: true },
+        });
+
+        // Deletes LAST, after everything above has been written.
+        roster.docs.forEach(doc => writes.push({ kind: 'delete', ref: doc.ref }));
+
+        await commitInBatches(db, writes);
+        return { from: fromId, to: toId, assignments: assignments.length };
+    }
+
     // ── Restamping a series' visibility ──────────────────────────────────────
     //
     // Visibility is copied DOWN onto every occurrence, so changing it on the
@@ -784,6 +910,7 @@
         // writing
         createEvent,
         cancelOccurrence,
+        moveOccurrence,
         recurrenceFor,
         SUNDAY_RULE,
         saveOccurrence,
