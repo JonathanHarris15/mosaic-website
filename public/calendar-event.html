@@ -229,7 +229,7 @@
                                               x-text="role.name"></span>
                                         <span class="shrink-0 text-[11.5px] text-on-surface-variant"
                                               x-text="role.slots.length + (role.slots.length === 1 ? ' place' : ' places')"></span>
-                                        <button @click="removeSeriesRole(role.slug)" :disabled="saving"
+                                        <button @click="askRemoveSeriesRole(role.slug)" :disabled="saving"
                                                 class="shrink-0 w-[28px] h-[28px] rounded-md flex items-center justify-center
                                                        text-on-surface-variant hover:bg-surface-container cal-motion cal-focus"
                                                 :aria-label="'Take ' + role.name + ' off'">
@@ -722,23 +722,17 @@
                                                 ? 'bg-error-container text-on-error-container'
                                                 : 'bg-surface-container text-on-surface-variant'"
                                               x-text="role.filled + ' of ' + role.slots.length"></span>
-                                        <!-- A Role the whole Event carries is not removable HERE.
-                                             Taking it off would either silently take it off every
-                                             date or silently take it off none, and neither is what
-                                             the button looks like it does. It says where to go. -->
-                                        <a x-show="role.fromSeries" :href="'calendar-event.html?series=' + occurrence.seriesId"
+                                        <!-- WHICH Roles this Event carries is decided on the
+                                             Event, not here. This screen decides who is
+                                             standing in them today. -->
+                                        <a x-show="occurrence.seriesId && !isSunday"
+                                           :href="'calendar-event.html?series=' + occurrence.seriesId"
                                            class="shrink-0 flex items-center gap-1 text-[11px] font-label-md
                                                   text-on-surface-variant hover:text-secondary cal-motion cal-focus rounded"
-                                           title="This role is on every date of this event">
+                                           title="Change which roles this event needs">
                                             <span class="material-symbols-outlined text-[14px]">repeat</span>
                                             Every date
                                         </a>
-                                        <button x-show="isEditor && !role.fromSeries" @click="askRemoveManagedRole(role.def.slug)"
-                                                class="cal-row-actions w-[30px] h-[30px] rounded-md flex items-center justify-center
-                                                       text-on-surface-variant hover:bg-surface-container cal-motion cal-focus"
-                                                aria-label="Remove this role">
-                                            <span class="material-symbols-outlined text-[18px]">close</span>
-                                        </button>
                                     </div>
 
                                     <template x-for="row in role.slots" :key="row.slot.id">
@@ -936,40 +930,17 @@
                             </div>
                         </div>
 
-                        <!-- Adding a managed Role, at a deliberately heavier weight. -->
-                        <div x-show="isEditor && availableRoles.length"
-                             class="mt-md bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
-                            <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
-                                Recurring roles
-                            </div>
-                            <div class="mt-sm flex flex-col gap-1.5">
-                                <template x-for="def in availableRoles" :key="def.slug">
-                                    <div class="flex items-center gap-sm rounded-lg border border-outline-variant bg-surface px-3 py-2 cal-motion"
-                                         :class="def.alreadyOn ? 'opacity-[.55]' : ''">
-                                        <span class="material-symbols-outlined text-[18px] text-secondary shrink-0">badge</span>
-                                        <div class="min-w-0 flex-grow">
-                                            <div class="font-headline-lg text-[17.5px] text-on-surface truncate" x-text="def.name"></div>
-                                            <div class="text-[12px] text-on-surface-variant">
-                                                <span x-text="(def.slots || []).length + ' place' + ((def.slots||[]).length === 1 ? '' : 's')"></span>
-                                                <span x-show="(def.restrictions || []).length" class="text-secondary"
-                                                      x-text="' · ' + (def.restrictions || []).length + ' rule' + ((def.restrictions||[]).length === 1 ? '' : 's')"></span>
-                                            </div>
-                                        </div>
-                                        <span x-show="def.alreadyOn" class="text-[11.5px] font-label-md text-on-surface-variant">On already</span>
-                                        <button x-show="!def.alreadyOn" @click="addManagedRole(def)"
-                                                class="shrink-0 bg-primary text-on-primary rounded-full px-3 py-1
-                                                       text-[11.5px] font-label-md uppercase tracking-wider cal-motion cal-press cal-focus">
-                                            + Add
-                                        </button>
-                                    </div>
-                                </template>
-                            </div>
-                            <a href="roles-manager.html"
-                               class="mt-sm inline-flex items-center gap-1 text-secondary text-[12px] font-label-md
-                                      uppercase tracking-wider cal-focus">
-                                Manage roles <span class="material-symbols-outlined text-[14px]">north_east</span>
-                            </a>
-                        </div>
+                        <!-- WHICH Roles this Event needs is decided on the Event, so
+                             there is nothing to add here — only a way through to
+                             where it IS decided. What this screen adds is a job for
+                             this day alone, which is the strip above. -->
+                        <a x-show="isEditor && occurrence.seriesId && !isSunday"
+                           :href="'calendar-event.html?series=' + occurrence.seriesId"
+                           class="mt-md inline-flex items-center gap-1 text-secondary text-[12px] font-label-md
+                                  uppercase tracking-wider cal-focus">
+                            <span class="material-symbols-outlined text-[15px]">tune</span>
+                            Change the roles this event needs
+                        </a>
                     </section>
 
                     <!-- A member who may not see the roster gets a calm note,
@@ -1050,8 +1021,11 @@
                         </div>
                     </section>
 
-                    <!-- Who can see this -->
-                    <section x-show="isEditor && !isSunday"
+                    <!-- Who can see this. A ONE-OFF only: for a repeating Event this
+                         is true of every date, so it is decided once on the Event.
+                         A ladder here would change every date from a screen that
+                         looks like it is about one of them. -->
+                    <section x-show="isEditor && isOneOff"
                              class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
                         <h3 class="font-display text-[17px] text-primary">Who can see this</h3>
                         <div class="mt-sm flex flex-col">
@@ -1099,8 +1073,9 @@
                              : 'Changing this applies to every date of this event, past ones included.'"></p>
                     </section>
 
-                    <!-- Colour on the calendar -->
-                    <section x-show="isEditor"
+                    <!-- Colour on the calendar. Also the Event's, not one date's —
+                         a colour set here would restyle every other date. -->
+                    <section x-show="isEditor && colourEditable"
                              class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
                         <h3 class="font-display text-[17px] text-primary">Colour on the calendar</h3>
                         <p class="text-[12.5px] text-on-surface-variant mt-1">
@@ -1127,10 +1102,9 @@
                         <!-- Says which way this lands before you click, because
                              the two behave differently and both are reasonable to
                              expect. -->
-                        <p class="mt-sm text-[11.5px] text-on-surface-variant"
-                           x-text="series
-                             ? 'This applies to every date of this event.'
-                             : 'This event only happens once, so this applies to it alone.'"></p>
+                        <p class="mt-sm text-[11.5px] text-on-surface-variant">
+                            This event only happens once, so this applies to it alone.
+                        </p>
                         <p class="mt-1 text-[11.5px] text-on-surface-variant">
                             An event that needs sorting still shows red, whatever colour you pick.
                         </p>

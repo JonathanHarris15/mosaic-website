@@ -373,16 +373,17 @@ test('the Sunday variant offers no visibility control at all', () => {
 
 test('liturgical Roles are never offered on an Event', () => {
     // They stay wired to the Service exactly as they are today, which is what
-    // keeps the printed Sunday booklet safe.
+    // keeps the printed Sunday booklet safe. Offered on the EVENT screen now,
+    // since that is the only place Roles are chosen at all.
     const Roles = require('../public/roles-core.js');
     const page = loadComponent('calendar-event.js', 'eventDetailPage');
-    page.occurrence = { id: 'x', roleSlugs: [] };
+    page.series = { id: 'x', roleSlugs: [] };
     page.roleDefinitions = [
         { slug: 'kids', name: 'Kids Ministry', slots: [{ id: 's1', requirement: 'either' }] },
         { slug: 'preacher', name: 'Preacher', slots: [] },
     ];
 
-    const offered = page.availableRoles.map(r => r.slug);
+    const offered = page.seriesRolesAvailable.map(r => r.slug);
     assert.deepStrictEqual(offered, ['kids']);
     Roles.LITURGICAL_SLUGS.forEach(slug => {
         assert.strictEqual(offered.indexOf(slug), -1, slug + ' must not be offered on an Event');
@@ -477,8 +478,10 @@ test('every hover-revealed control sits in a row that can reveal it', () => {
 });
 
 test('the control that removes a recurring Role from an Event is reachable', () => {
+    // It lives on the EVENT screen now, not on one date — but it is still a
+    // control that once shipped invisible, so it stays pinned.
     const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
-    assert.ok(/askRemoveManagedRole\(/.test(html), 'nothing removes a recurring Role');
+    assert.ok(/askRemoveSeriesRole\(/.test(html), 'nothing removes a recurring Role');
     assert.deepStrictEqual(orphanedRowActions(html).filter(l => /role/i.test(l)), []);
 });
 
@@ -515,60 +518,11 @@ function eventPageWithRole() {
     return page;
 }
 
-test('a Role with nobody on it comes off without a question', async () => {
-    const page = eventPageWithRole();
-    page.assignments = [];
-
-    await page.askRemoveManagedRole('kids');
-    assert.strictEqual(page.pendingRemoval, null, 'asked about an empty Role');
-    assert.deepStrictEqual(page.occurrence.occurrenceRoleSlugs, []);
-    assert.strictEqual(page.saved, 1);
-});
-
-test('a Role with people on it is not removed until the question is answered', async () => {
-    const page = eventPageWithRole();
-    page.assignments = [{ personId: 'p1', roleSlug: 'kids', slotId: 's1', state: 'confirmed' }];
-
-    await page.askRemoveManagedRole('kids');
-    assert.ok(page.pendingRemoval, 'removed somebody without asking');
-    assert.deepStrictEqual(page.occurrence.occurrenceRoleSlugs, ['kids'], 'removed it before the answer');
-    assert.strictEqual(page.assignments.length, 1);
-    assert.strictEqual(page.saved, 0, 'wrote to the Event before the answer');
-
-    // The question has to say who is lost, by name — "are you sure?" alone is
-    // a question nobody can answer well.
-    assert.ok(/Dave Rowe/.test(page.pendingRemoval.sentence), page.pendingRemoval.sentence);
-    assert.ok(/Kids Ministry/.test(page.pendingRemoval.name));
-});
-
-test('saying no leaves the Role and everyone on it exactly where they were', async () => {
-    const page = eventPageWithRole();
-    page.assignments = [{ personId: 'p1', roleSlug: 'kids', slotId: 's1', state: 'confirmed' }];
-
-    await page.askRemoveManagedRole('kids');
-    page.cancelRemoval();
-
-    assert.strictEqual(page.pendingRemoval, null);
-    assert.deepStrictEqual(page.occurrence.occurrenceRoleSlugs, ['kids']);
-    assert.strictEqual(page.assignments.length, 1);
-    assert.strictEqual(page.saved, 0);
-});
-
-test('saying yes takes the Role off and their places with it', async () => {
-    const page = eventPageWithRole();
-    page.assignments = [
-        { personId: 'p1', roleSlug: 'kids', slotId: 's1', state: 'confirmed' },
-        { personId: 'p2', roleSlug: ONE_OFF, oneOffId: 'o1', state: 'pending' },
-    ];
-
-    await page.askRemoveManagedRole('kids');
-    await page.confirmRemoval();
-
-    assert.strictEqual(page.pendingRemoval, null);
-    assert.deepStrictEqual(page.occurrence.occurrenceRoleSlugs, []);
-    assert.deepStrictEqual(page.assignments.map(a => a.personId), ['p2'], 'took the wrong people off');
-    assert.strictEqual(page.saved, 1);
-});
+// The per-date versions of these are gone: WHICH Roles an Event carries is
+// decided once, on the Event. The same guarantees now live on that screen —
+// "taking a Role off the Event asks first when people are on it" and "the
+// question names how many dates and how many people it costs" — where the cost
+// is larger, because it is every date rather than one.
 
 test('a one-off job asks the same question, and names the same way', async () => {
     const page = eventPageWithRole();
@@ -600,11 +554,11 @@ test('an empty one-off job goes without a question too', async () => {
 
 test('the remove buttons go through the question, never straight to the deletion', () => {
     const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
-    // The unguarded pair still exist — they are what the confirmation calls —
+    // The unguarded ones still exist — they are what the confirmation calls —
     // but nothing in the markup may reach them directly.
-    assert.ok(!/@click="removeManagedRole\(/.test(html), 'a click removes a Role without asking');
+    assert.ok(!/@click="removeSeriesRole\(/.test(html), 'a click removes a Role without asking');
     assert.ok(!/@click="removeOneOffRole\(/.test(html), 'a click deletes a one-off job without asking');
-    assert.ok(/askRemoveManagedRole\(/.test(html) && /askRemoveOneOffRole\(/.test(html));
+    assert.ok(/askRemoveSeriesRole\(/.test(html) && /askRemoveOneOffRole\(/.test(html));
 });
 
 // ── The colour an Event shows up as ───────────────────────────────────────────
@@ -864,12 +818,14 @@ test('assignments on a Sunday Servant Role carry the three states like anywhere 
     assert.strictEqual(page.managedRoles[0].needsAttention, true, 'a declined Sunday Role never flags');
 });
 
-test('a Role that belongs to the whole Event is not removable from one date', () => {
-    // Taking it off here would be silently taking it off every date, or silently
-    // taking it off none. Neither is what the button looks like it does.
+test('no managed Role is removable from one date at all', () => {
+    // WHICH Roles an Event carries is decided once, on the Event. A button here
+    // would be silently changing every date, or silently changing none.
     const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
-    assert.ok(/role\.fromSeries/.test(html),
-        'the role card does not distinguish an Event Role from a one-date one');
+    assert.ok(!/askRemoveManagedRole\(/.test(html));
+    assert.ok(!/addManagedRole\(/.test(html));
+    // A way THROUGH to where it is decided, instead.
+    assert.ok(/Change the roles this event needs/.test(html));
 });
 
 test('a Sunday date shows its Roles section at all', () => {
@@ -1322,4 +1278,93 @@ test('a one-off\'s visibility control actually changes its visibility', async ()
     assert.deepStrictEqual(writes.map(w => w.path), ['event_occurrences/harvest']);
     assert.strictEqual(writes[0].data.visibility, 'public');
     assert.strictEqual(page.visibility, 'public');
+});
+
+// ── One date of a repeating Event only decides who is on ─────────────────────
+//
+// What the Event IS — who may see it, what colour it draws, which Roles it
+// carries — is true of every date, so it is decided once, on the Event. One
+// date decides only who is standing in those Roles that day, plus the jobs that
+// exist for that day alone.
+//
+// A control that appears on both would let somebody change every date from a
+// screen that looks like it is about one of them.
+
+test('one date of a repeating Event does not decide who can see it', () => {
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    // The ladder is still on the page — for a ONE-OFF, whose occurrence is the
+    // whole Event — so the guard is what matters.
+    assert.ok(/x-show="isEditor && isOneOff"[\s\S]*?Who can see this/.test(html),
+        'the visibility ladder is offered on one date of a repeating Event');
+});
+
+test('one date of a repeating Event does not decide its colour', () => {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.rank = 'editor';
+
+    page.occurrence = { id: 'midweek_2026-08-05', seriesId: 'midweek', date: '2026-08-05' };
+    page.series = { id: 'midweek' };
+    assert.strictEqual(page.colourEditable, false, 'a colour set here would change every date');
+
+    // A one-off's occurrence IS the whole Event, so it decides its own.
+    page.occurrence = { id: 'harvest', seriesId: null, date: '2026-09-20' };
+    page.series = null;
+    assert.strictEqual(page.colourEditable, true);
+});
+
+test('a Role the Event carries is shown on one date but never changed there', () => {
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    // No way to put a managed Role on one date, and no way to take one off it.
+    assert.ok(!/addManagedRole\(/.test(html),
+        'a managed Role can still be added to one date');
+    assert.ok(!/askRemoveManagedRole\(/.test(html),
+        'a managed Role can still be removed from one date');
+    // The one-off strip is untouched: those jobs exist for that day alone.
+    assert.ok(/addOneOffRole\(\)/.test(html));
+    assert.ok(/askRemoveOneOffRole\(/.test(html));
+});
+
+test('taking a Role off the Event asks first when people are on it', () => {
+    // The guard moved with the control. Removing a Role from the EVENT drops
+    // everybody in it on EVERY date, which is a bigger thing than the per-date
+    // removal this used to guard, not a smaller one.
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    assert.ok(/askRemoveSeriesRole\(/.test(html),
+        'a Role comes off the whole Event with no question asked');
+    assert.ok(!/@click="removeSeriesRole\(/.test(html),
+        'a click removes a Role from every date without asking');
+});
+
+test('the question names how many dates and how many people it costs', async () => {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.rank = 'editor';
+    page.series = { id: 'midweek', name: 'Midweek', roleSlugs: ['sound_desk'], lockedRoleSlugs: [] };
+    page.roleDefinitions = [SOUND];
+    page.people = [{ id: 'p1', name: 'Dave Rowe' }, { id: 'p2', name: 'Sam Hale' }];
+    page.seriesRoleUsage = async () => ([
+        { date: '2026-08-05', personIds: ['p1'] },
+        { date: '2026-08-12', personIds: ['p1', 'p2'] },
+    ]);
+
+    await page.askRemoveSeriesRole('sound_desk');
+
+    assert.ok(page.pendingRemoval, 'removed a Role from every date without asking');
+    assert.match(page.pendingRemoval.sentence, /2 dates/);
+    assert.match(page.pendingRemoval.sentence, /Dave Rowe/);
+    assert.match(page.pendingRemoval.sentence, /Sam Hale/);
+});
+
+test('a Role nobody is on comes off the Event without a question', async () => {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.rank = 'editor';
+    page.series = { id: 'midweek', name: 'Midweek', roleSlugs: ['sound_desk'], lockedRoleSlugs: [] };
+    page.roleDefinitions = [SOUND];
+    page.seriesRoleUsage = async () => [];
+    let saved = null;
+    page.setSeriesRoles = async slugs => { saved = slugs; };
+
+    await page.askRemoveSeriesRole('sound_desk');
+
+    assert.strictEqual(page.pendingRemoval, null);
+    assert.deepStrictEqual(saved, []);
 });

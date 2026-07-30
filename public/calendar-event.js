@@ -344,16 +344,6 @@
                 }));
             },
 
-            // Roles from the Roles Manager not yet on this Event. Liturgical
-            // Roles are NOT offered — they stay wired to the Service exactly as
-            // they are today, which is what keeps the printed booklet safe.
-            get availableRoles() {
-                const on = this.roleSlugsHere;
-                return this.roleDefinitions
-                    .filter(d => Roles.LITURGICAL_SLUGS.indexOf(d.slug) === -1)
-                    .map(d => Object.assign({}, d, { alreadyOn: on.indexOf(d.slug) !== -1 }));
-            },
-
             assignmentAt(roleSlug, slotId) {
                 return this.assignments.find(a => a.roleSlug === roleSlug && a.slotId === slotId && !a.oneOffId) || null;
             },
@@ -383,14 +373,6 @@
                 } finally {
                     this.saving = false;
                 }
-            },
-
-            async addManagedRole(def) {
-                const slugs = ((this.occurrence.occurrenceRoleSlugs) || []).slice();
-                if (slugs.indexOf(def.slug) !== -1) return;
-                slugs.push(def.slug);
-                this.occurrence.occurrenceRoleSlugs = slugs;
-                await this.persist();
             },
 
             // ── Moving THIS ONE, without touching the pattern ────────────────
@@ -626,6 +608,74 @@
                     .filter(d => on.indexOf(d.slug) === -1);
             },
 
+            // Which dates of this Event have people in a Role, and who. Read the
+            // same way `openPattern` reads its orphans — constrained to the
+            // viewer's OWN rungs, because asking for a rung they cannot read
+            // fails the whole query and looks exactly like "nobody is on it".
+            async seriesRoleUsage(slug) {
+                const snap = await db.collection('event_occurrences')
+                    .where('visibility', 'in', Core.visibilityQueryFor(this.rank).rungs)
+                    .where('seriesId', '==', this.series.id)
+                    .get();
+
+                const rows = await Promise.all(snap.docs.map(async d => {
+                    const roster = await d.ref.collection('roster').get().catch(() => ({ docs: [] }));
+                    const personIds = roster.docs
+                        .map(r => r.data())
+                        .filter(a => a.roleSlug === slug && !a.oneOffId)
+                        .map(a => a.personId);
+                    return { date: (d.data() || {}).date, personIds: personIds };
+                }));
+
+                return rows.filter(r => r.personIds.length);
+            },
+
+            // Taking a Role off the EVENT drops everybody in it on EVERY date.
+            // That is a bigger thing than the per-date removal this guard used to
+            // cover, not a smaller one — so the question moved with the control
+            // rather than being left behind on a screen that no longer has it.
+            async askRemoveSeriesRole(slug) {
+                if (this.saving) return;
+                const def = this.roleDefinitions.find(d => d.slug === slug);
+                const name = (def && def.name) || slug;
+
+                this.saving = true;
+                let usage = [];
+                try {
+                    usage = await this.seriesRoleUsage(slug);
+                } catch (e) {
+                    console.error('Could not check who is on that role:', e);
+                    // Could not check is not the same as nobody, so it still asks
+                    // — and says that the count is the part it could not read.
+                    this.saving = false;
+                    this.pendingRemoval = {
+                        kind: 'seriesRole', key: slug, name: name, count: 0,
+                        sentence: 'We could not check who is down for this on other dates. ' +
+                            'Anyone who is loses their place.',
+                    };
+                    return;
+                }
+                this.saving = false;
+
+                if (!usage.length) return this.removeSeriesRole(slug);
+
+                const names = [];
+                usage.forEach(u => u.personIds.forEach(id => {
+                    const n = this.personName(id);
+                    if (names.indexOf(n) === -1) names.push(n);
+                }));
+
+                this.pendingRemoval = {
+                    kind: 'seriesRole',
+                    key: slug,
+                    name: name,
+                    count: usage.length,
+                    sentence: View.listSentence(names) +
+                        (names.length === 1 ? ' loses their place' : ' lose their places') +
+                        ' across ' + usage.length + (usage.length === 1 ? ' date.' : ' dates.'),
+                };
+            },
+
             async setSeriesRoles(slugs) {
                 if (this.saving) return;
                 this.saving = true;
@@ -697,6 +747,13 @@
 
             get colours() { return View.EVENT_COLOURS; },
 
+            // Only where it decides one thing. On a repeating Event the colour is
+            // the SERIES' — a swatch on one date would restyle every other date
+            // from a screen that looks like it is about one of them.
+            get colourEditable() {
+                return this.managingSeries || this.isOneOff;
+            },
+
             get colour() {
                 return View.colourOf({
                     seriesId: this.occurrence && this.occurrence.seriesId,
@@ -736,13 +793,6 @@
             // asks first. Only when there is somebody to lose: an empty Role
             // comes off on the click, because there is nothing to be sure about.
 
-            async askRemoveManagedRole(slug) {
-                const on = this.assignments.filter(a => a.roleSlug === slug && !a.oneOffId);
-                if (!on.length) return this.removeManagedRole(slug);
-                const def = this.roleDefinitions.find(d => d.slug === slug);
-                this.pendingRemoval = this.removalQuestion('managed', slug, (def && def.name) || slug, on);
-            },
-
             async askRemoveOneOffRole(id) {
                 const on = this.assignments.filter(a => a.oneOffId === id);
                 if (!on.length) return this.removeOneOffRole(id);
@@ -770,16 +820,8 @@
                 const ask = this.pendingRemoval;
                 if (!ask) return;
                 this.pendingRemoval = null;
-                if (ask.kind === 'managed') await this.removeManagedRole(ask.key);
+                if (ask.kind === 'seriesRole') await this.removeSeriesRole(ask.key);
                 else await this.removeOneOffRole(ask.key);
-            },
-
-            async removeManagedRole(slug) {
-                this.occurrence.occurrenceRoleSlugs = ((this.occurrence.occurrenceRoleSlugs) || []).filter(s => s !== slug);
-                // Its assignments go with it — leaving them behind would keep
-                // people as participants of a Role the Event no longer has.
-                this.assignments = this.assignments.filter(a => a.roleSlug !== slug);
-                await this.persist();
             },
 
             // Deliberately cheap: a label, and that is the whole interaction.
