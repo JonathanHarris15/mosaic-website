@@ -20,7 +20,12 @@
   var auth = firebase.auth();
   var db = firebase.firestore();
 
-  var ROLE_LABELS = { admin: "Administrator", editor: "Editor", elder: "Elder", viewer: "Member" };
+  // The drawer's destination list, its role labels and its initials rule live in
+  // mobile/destinations.js, because the SHELL's drawer (mobile-shell-header.js,
+  // on a desktop page opened with ?shell=mobile) builds the same drawer and
+  // cannot load this file — it has no Preact, no lucide and no firebase
+  // bootstrap. Two renderings of the chrome; one of everything they say.
+  var Destinations = window.MosaicDestinations;
 
   // Resolve a display profile from the auth user + /users/{uid}.
   function loadProfile(user) {
@@ -37,7 +42,7 @@
           name: name,
           first: String(name).trim().split(/\s+/)[0],
           permissionLevel: permissionLevel,
-          roleLabel: ROLE_LABELS[permissionLevel] || "Member",
+          roleLabel: Destinations.roleLabel(permissionLevel),
         };
       });
   }
@@ -53,11 +58,6 @@
   function signIn(email, password) { return auth.signInWithEmailAndPassword(email, password); }
   function signOut() { return auth.signOut(); }
 
-  // The drawer / home destinations live in mobile/destinations.js, because the
-  // SHELL's drawer (mobile-shell-header.js, on a desktop page opened with
-  // ?shell=mobile) has to build the same list and cannot load this file — it has
-  // no Preact, no lucide and no firebase bootstrap. Two drawers, one list.
-  var Destinations = window.MosaicDestinations;
   var DESTINATIONS = Destinations.DESTINATIONS;
   var canSee = Destinations.canSee;
 

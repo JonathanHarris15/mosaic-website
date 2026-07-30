@@ -1789,6 +1789,52 @@ test('both drawers are built from one list', () => {
         'app.js runs before the list it reads exists');
 });
 
+test('both drawers say the same three things about you', () => {
+    // The chrome is written twice — the app's drawer is Preact inside
+    // mobile.html, the shell's is plain DOM on a desktop page — and the first
+    // thing that drifted was the avatar, present in one and missing from the
+    // other. So the parts are named in the shared file and both are held to it.
+    const D = require('../public/mobile/destinations.js');
+    assert.deepStrictEqual(Array.from(D.DRAWER_HEAD), ['avatar', 'name', 'roleLabel']);
+
+    const shell = fs.readFileSync(path.join(PUBLIC, 'mobile-shell-header.js'), 'utf8');
+    D.DRAWER_HEAD.forEach(part => {
+        assert.ok(shell.indexOf('"data-drawer-part", "' + part + '"') !== -1,
+            'the shell drawer has no ' + part);
+    });
+
+    // The app's drawer draws all three too — its avatar and role label come from
+    // the profile it is handed.
+    const app = fs.readFileSync(path.join(PUBLIC, 'mobile', 'app.js'), 'utf8');
+    const drawer = app.slice(app.indexOf('function Drawer('), app.indexOf('function App('));
+    assert.ok(/<\$\{Avatar\}/.test(drawer), 'the app drawer has no avatar');
+    assert.ok(/user\.name/.test(drawer), 'the app drawer has no name');
+    assert.ok(/user\.roleLabel/.test(drawer), 'the app drawer has no role label');
+});
+
+test('a super admin is not told they are a member', () => {
+    // The label map had no `super_admin` and fell through to "Member" — the
+    // highest rung in the app telling its holder they were the lowest.
+    const D = require('../public/mobile/destinations.js');
+    assert.strictEqual(D.roleLabel('super_admin'), 'Super Admin');
+    assert.strictEqual(D.roleLabel('admin'), 'Administrator');
+    assert.strictEqual(D.roleLabel('elder'), 'Elder');
+    assert.strictEqual(D.roleLabel('editor'), 'Editor');
+    assert.strictEqual(D.roleLabel('member'), 'Member');
+
+    // Every rank the app can actually hold has a name of its own.
+    const RANKS = ['viewer', 'member', 'editor', 'elder', 'admin', 'super_admin'];
+    RANKS.forEach(rank => {
+        assert.ok(Object.prototype.hasOwnProperty.call(D.ROLE_LABELS, rank),
+            rank + ' falls through to the default label');
+    });
+
+    // And both drawers read it from here rather than keeping their own.
+    const data = fs.readFileSync(path.join(PUBLIC, 'mobile', 'data.js'), 'utf8');
+    assert.ok(/Destinations\.roleLabel\(/.test(data), 'the app keeps its own label map');
+    assert.ok(!/var ROLE_LABELS = \{/.test(data), 'the old label map is still in data.js');
+});
+
 test('a gated destination is hidden until we know who is looking', () => {
     // Fails closed. Offering the Shepherd Dashboard to somebody who will be
     // refused on arrival is worse than not offering it.

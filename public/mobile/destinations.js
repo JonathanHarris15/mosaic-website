@@ -36,6 +36,33 @@
         { key: 'admin', label: 'Admin Dashboard', icon: 'settings-2', symbol: 'settings', route: 'admin', permissionLevels: ['admin', 'super_admin'] },
     ];
 
+    // What a permission level is CALLED to the person holding it. Shared for the
+    // same reason the list is: both drawers print it under the name.
+    //
+    // ⚠ EVERY level needs an entry. This map used to fall through to "Member",
+    // so a super_admin's own drawer told them they were a member — the highest
+    // rung in the app, labelled as the lowest.
+    const ROLE_LABELS = {
+        super_admin: 'Super Admin',
+        admin: 'Administrator',
+        elder: 'Elder',
+        editor: 'Editor',
+        member: 'Member',
+        viewer: 'Member',
+    };
+
+    function roleLabel(permissionLevel) {
+        return ROLE_LABELS[permissionLevel] || 'Member';
+    }
+
+    // 1–2 letters for the avatar. Same rule as everywhere else in the app.
+    function initials(name) {
+        const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+        if (!parts.length) return '?';
+        if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+        return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    }
+
     // Routes that open a full desktop page in-place in the same WebView.
     // `?shell=mobile` makes those pages adapt their chrome and keep navigation
     // inside the shell (see mobile-shell.js).
@@ -66,7 +93,18 @@
         return 'mobile.html#/' + route;
     }
 
-    const Destinations = { DESTINATIONS, SHELL_PAGES, canSee, routeHref };
+    // The parts of the drawer's head, so the two renderings cannot disagree
+    // about what a drawer says about you. There is one component's worth of
+    // chrome written twice here — the app's is Preact inside mobile.html, the
+    // shell's is plain DOM on a desktop page — and a test holds them to this
+    // list, because the first thing that drifted was the avatar going missing
+    // from one of them.
+    const DRAWER_HEAD = Object.freeze(['avatar', 'name', 'roleLabel']);
+
+    const Destinations = {
+        DESTINATIONS, SHELL_PAGES, ROLE_LABELS, DRAWER_HEAD,
+        canSee, routeHref, roleLabel, initials,
+    };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = Destinations;
     if (global) global.MosaicDestinations = Destinations;

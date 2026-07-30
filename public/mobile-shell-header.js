@@ -58,11 +58,13 @@
           .then(function (doc) {
             var d = (doc.exists && doc.data()) || {};
             then({
-              name: d.name || d.displayName || (user.email || "").split("@")[0] || "You",
+              // Same fallback chain as the app's own profile loader, so the two
+              // drawers cannot end up calling one person two different things.
+              name: d.name || d.displayName || user.displayName || (user.email || "").split("@")[0] || "Friend",
               permissionLevel: d.permissionLevel || d.role || "viewer",
             });
           })
-          .catch(function () { then({ name: "You", permissionLevel: "viewer" }); });
+          .catch(function () { then({ name: "Friend", permissionLevel: "viewer" }); });
       });
     } catch (e) { then(null); }
   }
@@ -109,16 +111,42 @@
     closeBtn.addEventListener("click", closeDrawer);
     head.appendChild(closeBtn);
 
+    // Avatar, name, role — the drawer's head, and the same three parts the app's
+    // drawer shows. The avatar went missing from this one, which is what a
+    // second rendering costs if nothing holds the two to the same list.
+    var whoRow = document.createElement("div");
+    whoRow.style.cssText = "display:flex;align-items:center;gap:10px;margin-top:6px;";
+
+    var avatar = document.createElement("span");
+    avatar.setAttribute("data-drawer-part", "avatar");
+    avatar.style.cssText = "width:36px;height:36px;border-radius:9999px;background:#D8E2FF;color:#182F57;" +
+      "display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;" +
+      "font-family:var(--font-sans, sans-serif);font-weight:700;font-size:14px;";
+
+    var names = document.createElement("div");
+    names.style.cssText = "min-width:0;";
     var who = document.createElement("div");
-    who.style.cssText = "font-family:var(--font-sans, sans-serif);font-size:14px;font-weight:600;margin-top:6px;";
-    who.textContent = "Guest";
-    head.appendChild(who);
+    who.setAttribute("data-drawer-part", "name");
+    who.style.cssText = "font-family:var(--font-sans, sans-serif);font-size:14px;font-weight:600;" +
+      "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+    var role = document.createElement("div");
+    role.setAttribute("data-drawer-part", "roleLabel");
+    role.style.cssText = "font-family:var(--font-sans, sans-serif);font-size:11px;color:#B2C6F8;";
+
+    names.appendChild(who);
+    names.appendChild(role);
+    whoRow.appendChild(avatar);
+    whoRow.appendChild(names);
+    head.appendChild(whoRow);
 
     var list = document.createElement("div");
     list.style.cssText = "flex:1;overflow-y:auto;padding:10px 12px;";
 
     function draw(user) {
-      who.textContent = (user && user.name) || "Guest";
+      var name = (user && user.name) || "Guest";
+      who.textContent = name;
+      avatar.textContent = D.initials(name);
+      role.textContent = user ? D.roleLabel(user.permissionLevel) : "Not signed in";
       list.textContent = "";
       D.DESTINATIONS.filter(function (d) { return D.canSee(d, user); }).forEach(function (d) {
         var here = d.route === (window.MOBILE_HEADER || {}).route;
