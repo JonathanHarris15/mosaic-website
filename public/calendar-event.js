@@ -249,6 +249,15 @@
                 await this.loadHidingTags();
             },
 
+            // What time this date happens at. Read through the model rather than
+            // off the document, because a date OF A SERIES takes its time from
+            // the rule — a copy on the occurrence is a stale stamp, not a
+            // deliberate per-date time, and letting it win is what made the top
+            // of this screen say 4:30 am while the bottom said 4:30 pm.
+            get eventTime() {
+                return Core.timeOf(this.occurrence, this.series && this.series.recurrence);
+            },
+
             // ── Who is looking ───────────────────────────────────────────────
 
             // Nobody is signed in. Worth saying, because a signed-out Event page

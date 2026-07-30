@@ -274,6 +274,28 @@
         return o.cancelled === true || !!o.movedTo;
     }
 
+    // ── What time a date happens at ──────────────────────────────────────────
+    //
+    // ⚠ A REPEATING EVENT'S TIME LIVES ON ITS RULE, AND NOWHERE ELSE.
+    //
+    // A copy stamped onto the occurrence is INDISTINGUISHABLE from somebody
+    // deliberately giving one date its own time — so the moment one is written,
+    // the series can never move that date again. Change the Event to 4:30 pm and
+    // the pattern sentence says pm while the date itself still says am, which is
+    // exactly what happened: the top of the screen and the bottom disagreed
+    // about the same event, and both were reading real stored data.
+    //
+    // Same trap `seriesColour` was already pulled out of, one line away in
+    // `occurrencePayload`. Time was not, so it froze.
+    //
+    // A ONE-OFF has no rule, and its occurrence IS the whole Event — so its own
+    // `time` is the only home there is, and it wins.
+    function timeOf(occurrence, rule) {
+        const o = occurrence || {};
+        if (o.seriesId) return (rule && rule.time) || null;
+        return o.time || null;
+    }
+
     // Says WHERE it went, not just that it went. "Not happening" on the first
     // Sunday, with nothing about the fifteenth, is how somebody turns up to an
     // empty hall.
@@ -720,6 +742,7 @@
         LITURGICAL_SERVICE_FIELDS,
         liturgicalHolders,
         notHappening,
+        timeOf,
         movedNote,
         mergeOccurrences,
         orphanedOccurrences,

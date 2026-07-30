@@ -606,10 +606,10 @@
                             <span class="cal-when-icon material-symbols-outlined text-[17px]">event</span>
                             <span x-text="longDate(occurrence.date)"></span>
                         </span>
-                        <span x-show="occurrence.time" class="text-outline">·</span>
-                        <span x-show="occurrence.time" class="flex items-center gap-1">
+                        <span x-show="eventTime" class="text-outline">·</span>
+                        <span x-show="eventTime" class="flex items-center gap-1">
                             <span class="cal-when-icon material-symbols-outlined text-[17px]">schedule</span>
-                            <span x-text="formatTime(occurrence.time)"></span>
+                            <span x-text="formatTime(eventTime)"></span>
                         </span>
                         <span x-show="occurrence.location" class="text-outline">·</span>
                         <span x-show="occurrence.location" class="flex items-center gap-1">

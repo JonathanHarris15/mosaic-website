@@ -1064,9 +1064,23 @@ test('a series time shows on every date of it, without being stored on each one'
     rows.forEach(o => assert.strictEqual(o.time, '19:30', o.date + ' lost the time'));
 });
 
-test('a date with its own time keeps it when the series time changes', async () => {
-    // One Sunday that starts an hour early is a real thing, and the series must
-    // not stamp over it.
+test('changing a series time moves every date of it, stamps and all', async () => {
+    // ⚠ THIS TEST USED TO ASSERT THE OPPOSITE, and the reversal is deliberate.
+    //
+    // It read: "one Sunday that starts an hour early is a real thing, and the
+    // series must not stamp over it". The intent is good. The implementation
+    // could not deliver it, because NOTHING SETS A PER-DATE TIME — the only
+    // screen that could was narrowed to one-off Roles, and `saveOccurrenceDetails`
+    // is reachable only for a one-off Event. So every `time` on a date of a
+    // series is a stale COPY of the rule, stamped there by `rebuildOccurrence`
+    // for display and written back by the first save of that date.
+    //
+    // Letting a stamp win meant an editor could change the Event to 4:30 pm and
+    // watch the date keep saying 4:30 am — the top of the screen disagreeing
+    // with the bottom, both reading real stored data.
+    //
+    // To bring the feature back it needs its OWN field. A deliberate override
+    // and an accidental stamp cannot share one, or the accident always wins.
     const series = {
         midweek: {
             name: 'Midweek', visibility: 'member',
@@ -1084,7 +1098,8 @@ test('a date with its own time keeps it when the series time changes', async () 
 
     const rows = await Store.loadCalendar(db, Object.assign({}, viewer, RANGE));
 
-    assert.strictEqual(rows.find(o => o.date === '2026-07-15').time, '18:00');
+    // The stamped date follows the rule like every other one.
+    assert.strictEqual(rows.find(o => o.date === '2026-07-15').time, '19:30');
     assert.strictEqual(rows.find(o => o.date === '2026-07-08').time, '19:30');
 });
 

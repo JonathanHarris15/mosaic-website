@@ -197,17 +197,21 @@
                     // nobody ever reports, they just stop trusting the feature.
                     // `occurrencePayload` strips this key on the way back out.
                     //
-                    // `time` is stamped the same way and for the same reason: a
-                    // date that carries its own time (one Sunday starting an
-                    // hour early) still wins, because `o` is assigned last.
+                    // `time` comes LAST, after `o`, so the rule wins over any
+                    // copy stamped onto the document. It used to be the other
+                    // way round — "a date that carries its own time still
+                    // wins" — which sounds like a feature and is not one:
+                    // nothing can set a per-date time, so every stamp is a
+                    // stale copy of the rule, and letting it win froze that
+                    // date at whatever the series said when it was written.
                     .map(o => Object.assign(
                         {
                             name: s.name,
                             seriesName: s.name,
                             seriesColour: s.colour,
                         },
-                        rule.time ? { time: rule.time } : {},
-                        o
+                        o,
+                        { time: rule.time || null }
                     ))
                 : [];
         });
@@ -267,6 +271,16 @@
         // colour copied on for display; letting it land here would freeze this
         // one date at whatever the colour was the last time somebody touched it.
         delete payload.seriesColour;
+        // And `time`, for exactly the same reason — which this missed, so it
+        // froze. `rebuildOccurrence` stamps the rule's time on for display, and
+        // the first save of the date (a role, a visibility change) wrote it back
+        // as if the date had chosen it. From then on the series could not move
+        // that date's time: the pattern sentence said 4:30 pm while the date
+        // itself still said 4:30 am, both reading real stored data.
+        //
+        // A ONE-OFF keeps its own time — its occurrence IS the whole Event, so
+        // there is no rule for the time to live on.
+        if (payload.seriesId) delete payload.time;
         return payload;
     }
 

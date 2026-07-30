@@ -1696,6 +1696,76 @@ test('changing month lets go of the day that was tapped', async () => {
     assert.strictEqual(page.focusedDate, '2026-08-01');
 });
 
+// ── One fact, one home: what time a repeating Event happens ───────────────────
+//
+// The Event screen said "4:30 am" at the top and "at 4:30 pm" at the bottom, and
+// both were reading real stored data. `rebuildOccurrence` stamps the rule's time
+// onto the occurrence for display; the first save of that date wrote the stamp
+// back as if the date had chosen it, and from then on the series could not move
+// its own time. `seriesColour` was pulled out of this exact trap one line away
+// in the same function — time was not.
+
+test('changing a repeating Event\'s time changes every date of it', () => {
+    const Core = require('../public/events-occurrence-core.js');
+    const rule = { freq: 'monthly', startDate: '2026-08-02', time: '16:30' };
+    // The document still carries the stale stamp. The rule wins anyway, so no
+    // migration is needed for the dates this already happened to.
+    const stamped = { id: 's_2026-08-02', seriesId: 's', date: '2026-08-02', time: '04:30' };
+
+    assert.strictEqual(Core.timeOf(stamped, rule), '16:30');
+});
+
+test('a one-off keeps its own time, because there is no rule to keep it on', () => {
+    const Core = require('../public/events-occurrence-core.js');
+    const oneOff = { id: 'x', seriesId: null, date: '2026-08-02', time: '18:45' };
+    assert.strictEqual(Core.timeOf(oneOff, null), '18:45');
+    // A series date with no time on the rule has no time — the stamp is ignored
+    // rather than resurrected.
+    assert.strictEqual(Core.timeOf({ seriesId: 's', time: '04:30' }, { freq: 'weekly' }), null);
+});
+
+test('a date of a series never stores a time of its own', async () => {
+    // The write half. Without it every save re-froze the stamp.
+    const Store = require('../public/events-store.js');
+    const written = {};
+    const fakeDb = {
+        batch: () => ({ set() {}, update() {}, delete() {}, commit: async () => {} }),
+        collection: () => ({
+            doc: id => ({
+                id: id,
+                set: async payload => { written[id] = payload; },
+                collection: () => ({ get: async () => ({ docs: [] }), doc: () => ({}) }),
+            }),
+        }),
+    };
+
+    await Store.saveOccurrence(fakeDb, {
+        id: 's_2026-08-02', seriesId: 's', date: '2026-08-02', time: '04:30', assignments: [],
+    });
+    assert.ok(!('time' in written['s_2026-08-02']),
+        'a date of a series stored a copy of the series time, which freezes it');
+
+    // A one-off's time is its own and must survive.
+    await Store.saveOccurrence(fakeDb, {
+        id: 'loose', seriesId: null, date: '2026-08-02', time: '18:45', assignments: [],
+    });
+    assert.strictEqual(written['loose'].time, '18:45',
+        'a one-off lost the only time it has');
+});
+
+test('the Event screen reads the time through the model, not off the document', () => {
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    assert.ok(!/occurrence\.time/.test(html),
+        'the title line still reads the stored stamp, so it can disagree with the pattern');
+    assert.ok(/formatTime\(eventTime\)/.test(html), 'the title line shows no time at all');
+
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.occurrence = { id: 's_2026-08-02', seriesId: 's', date: '2026-08-02', time: '04:30' };
+    page.series = { id: 's', recurrence: { freq: 'monthly', startDate: '2026-08-02', time: '16:30' } };
+    assert.strictEqual(page.eventTime, '16:30',
+        'the top of the screen still disagrees with the bottom');
+});
+
 // ── Signed out is not the same as an empty church ─────────────────────────────
 //
 // The phone app opened on its home screen whoever you were. Signed out, that
