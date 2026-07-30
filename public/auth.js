@@ -103,9 +103,82 @@ auth.onAuthStateChanged((user) => {
 /**
  * Helper to check if the current user has a specific role.
  * Roles are stored in /users/{uid}
+ *
+ * ⚠ THE FIRST THING EVERY PAGE AWAITS, AND FIFTEEN OF THEM DO IT UNGUARDED.
+ * Their boot reads `const userData = await getUserData(user.uid)` straight
+ * inside an onAuthStateChanged callback, with `loading = false` further down
+ * the same function and no try/finally around it. So if this rejects, the
+ * callback throws, the flag is never cleared, and the page spins forever —
+ * no error, no retry, nothing to press. That is the "keeps loading for a
+ * really long time" on navigation: every shell page is a NEW document that
+ * must fetch this before it can do anything, and a request in flight while
+ * the WebView swaps documents is exactly what fails transiently.
+ *
+ * So a transient failure is retried here rather than surfaced. Only the
+ * transient ones: permission-denied and not-found mean the same thing on the
+ * third attempt as the first, and retrying them would just make being refused
+ * slower.
+ *
+ * It can still reject after that, deliberately — returning null instead would
+ * read as "no record", which every caller turns into 'viewer', quietly showing
+ * somebody a smaller church than they belong to. Failing loudly is caught by
+ * the boot guard below.
  */
+const RETRYABLE = ['unavailable', 'deadline-exceeded', 'internal', 'resource-exhausted', 'aborted', 'cancelled'];
+
 async function getUserData(uid) {
     if (!uid) return null;
-    const doc = await db.collection('users').doc(uid).get();
-    return doc.exists ? doc.data() : null;
+    let lastError = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            const doc = await db.collection('users').doc(uid).get();
+            return doc.exists ? doc.data() : null;
+        } catch (e) {
+            lastError = e;
+            if (!RETRYABLE.includes(e && e.code)) throw e;
+            await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+        }
+    }
+    throw lastError;
 }
+
+// ── The boot guard ───────────────────────────────────────────────────────────
+//
+// The fix above makes the common failure rarer; this makes the WORST OUTCOME
+// impossible. A page whose boot throws leaves its spinner running with no way
+// out but force-quitting, and every one of those throws lands here as an
+// unhandled rejection — so this is the one place that can catch all fifteen
+// without editing fifteen control flows, which is where the risk of breaking
+// something actually is.
+//
+// It does not guess at recovery. It says the page did not finish and offers to
+// load it again, which is the honest description and the only safe action.
+(function bootGuard() {
+    if (typeof window === 'undefined' || !window.addEventListener) return;
+    let shown = false;
+
+    window.addEventListener('unhandledrejection', (event) => {
+        const reason = event && event.reason;
+        console.error('Unhandled rejection — the page may not have finished loading:', reason);
+        if (shown || !document.body) return;
+        shown = true;
+
+        const bar = document.createElement('div');
+        bar.id = 'mosaic-boot-guard';
+        bar.setAttribute('role', 'alert');
+        bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;' +
+            'display:flex;align-items:center;gap:12px;justify-content:center;flex-wrap:wrap;' +
+            'padding:12px 16px calc(12px + env(safe-area-inset-bottom, 0px));' +
+            'background:#7A2E2E;color:#FFF;font-family:var(--font-sans, system-ui, sans-serif);font-size:13.5px;';
+        bar.innerHTML = '<span>This page didn’t finish loading.</span>';
+
+        const again = document.createElement('button');
+        again.textContent = 'Try again';
+        again.style.cssText = 'border:1px solid rgba(255,255,255,0.6);background:transparent;color:#FFF;' +
+            'padding:6px 14px;border-radius:999px;font:inherit;font-weight:600;cursor:pointer;';
+        again.addEventListener('click', () => window.location.reload());
+        bar.appendChild(again);
+
+        document.body.appendChild(bar);
+    });
+})();
