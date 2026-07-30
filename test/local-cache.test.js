@@ -84,6 +84,25 @@ test('persistence is switched on before anything else touches Firestore', () => 
     }
 });
 
+test('the transport is forced to long polling before the cache is switched on', () => {
+    // Regression, and an expensive one to diagnose: turning the cache on makes
+    // Firestore open a listen stream to keep it in sync. No page here uses
+    // onSnapshot, so nothing had ever opened one — and inside the Capacitor
+    // WebView (origin capacitor://localhost) that stream is refused by CORS.
+    // It does not fail, it HANGS, so the read never settles and the page spins
+    // forever. Long polling is the transport the WebView will actually make.
+    const src = read('local-cache.js');
+    assert.match(src, /experimentalForceLongPolling: true/,
+        'the WebChannel transport is back, and it hangs inside the WebView');
+    assert.ok(!/experimentalAutoDetectLongPolling/.test(src),
+        'auto-detect tries the WebChannel first, and here it hangs rather than failing fast');
+
+    const transport = src.search(/configureTransport\(db\);/);
+    const persist = src.search(/db\.enablePersistence\(/);
+    assert.ok(transport >= 0 && transport < persist,
+        'the transport must be set before persistence, or the first sync uses the blocked one');
+});
+
 test('a cache-first read still asks the server in the background', () => {
     // This is the half that is easy to lose. Reading from the cache and NOT
     // refreshing means the app gets fast and then never updates again — the

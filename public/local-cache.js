@@ -67,9 +67,36 @@
     // documents alive at once; without it the second one loses the race and
     // throws failed-precondition. A failure here is survivable — the app falls
     // back to exactly today's behaviour — so it never rejects.
+    // ⚠ THE CACHE CANNOT BE TURNED ON WITHOUT THIS.
+    //
+    // Firestore's default transport is a streaming WebChannel. Nothing in this
+    // app ever opened one — no page uses onSnapshot — so no page ever needed it
+    // to work, and it never had to. Switching the cache on changes that: the
+    // cache is kept in sync by a listen stream, so the first read opens the
+    // WebChannel.
+    //
+    // Inside the Capacitor WebView the page's origin is capacitor://localhost,
+    // which that stream's CORS check rejects outright ("Fetch API cannot load …
+    // due to access control checks"). The request never completes and never
+    // errors, so the read never settles and the page spins forever. The Roles
+    // Manager did exactly that.
+    //
+    // Long polling is the same Firestore over ordinary requests the WebView will
+    // make. FORCED rather than auto-detected: auto-detect tries the WebChannel
+    // first, and here it does not fail fast — it hangs, which is the bug.
+    function configureTransport(db) {
+        if (!db || !db.settings) return;
+        try {
+            db.settings({ experimentalForceLongPolling: true, merge: true });
+        } catch (e) {
+            console.warn("Could not set the long-polling transport:", e && e.message);
+        }
+    }
+
     function enable(db) {
         if (!isMobile() || !db || !db.enablePersistence) return Promise.resolve(false);
         if (ready) return ready;
+        configureTransport(db);
         ready = db.enablePersistence({ synchronizeTabs: true })
             .then(function () { enabled = true; return true; })
             .catch(function (e) {
