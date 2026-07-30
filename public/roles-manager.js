@@ -103,10 +103,10 @@ window.RolesManager = () => ({
         });
     },
 
-    // The shell draws ONE header for the whole page, so its back arrow has to
-    // mean what this page means by back. The editor's own arrow is hidden there
-    // as a duplicate — without this, the one arrow left would leave the page
-    // mid-edit and the way out of a Role would be gone.
+    // Kept for any shell header that DOES draw a back arrow. This page's no
+    // longer does — it is a drawer destination, so it carries a hamburger, and
+    // leaving a Role is the editor's own arrow. Harmless where nothing fires it,
+    // and still correct if that ever changes.
     listenForShellBack() {
         if (typeof document === 'undefined' || !document.addEventListener) return;
         document.addEventListener('mobile-header:back', () => {

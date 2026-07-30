@@ -34,6 +34,12 @@
         { key: 'directory', label: 'Member Directory', icon: 'users', symbol: 'group', route: 'people' },
         { key: 'shepherd', label: 'Shepherd Dashboard', icon: 'shield', symbol: 'shield', route: 'shepherd', permissionLevels: ['elder', 'super_admin'] },
         { key: 'admin', label: 'Admin Dashboard', icon: 'settings-2', symbol: 'settings', route: 'admin', permissionLevels: ['admin', 'super_admin'] },
+        // On the web the Roles Manager is a dashboard CARD rather than
+        // navigation, and it was kept off this list to match. On a phone that
+        // reasoning does not survive: the drawer IS the navigation, and a page
+        // reachable only by a tile on Home is a page you have to go home to
+        // reach. Same gate as the web card (MS-120) — editor and above.
+        { key: 'roles-manager', label: 'Roles Manager', icon: 'hand-heart', symbol: 'volunteer_activism', route: 'rolesManager', permissionLevels: ['editor', 'elder', 'admin', 'super_admin'] },
     ];
 
     // What a permission level is CALLED to the person holding it. Shared for the

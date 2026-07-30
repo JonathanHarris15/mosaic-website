@@ -161,9 +161,9 @@
       { icon: "users", label: "Member Directory", route: "people" },
       { icon: "shield", label: "Shepherd", route: "shepherd", permissionLevels: ["elder", "super_admin"] },
       { icon: "settings-2", label: "Admin", route: "admin", permissionLevels: ["admin", "super_admin"] },
-      // Not a drawer destination, on purpose: on the web the Roles Manager is a
-      // DASHBOARD CARD, not navigation, and this grid is the phone's dashboard.
-      // Same gate as that card (MS-120) — editor and above.
+      // A drawer destination now as well as a tile here (destinations.js) —
+      // on a phone the drawer IS the navigation, and reachable only from Home
+      // meant going home to reach it. Same gate as the web's card, MS-120.
       { icon: "hand-heart", label: "Roles Manager", route: "rolesManager", permissionLevels: ["editor", "elder", "admin", "super_admin"] },
     ].filter(function (t) { return data.canSee(t, user); });
     return html`
