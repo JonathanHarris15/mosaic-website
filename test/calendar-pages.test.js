@@ -1563,3 +1563,27 @@ test('nothing is left rendering the dot strip that replaced nothing', () => {
     const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
     assert.ok(!/dotStrip/.test(js) && !/dotStrip/.test(html));
 });
+
+test('the shell tells the page how far under the notch it is', () => {
+    // Without `viewport-fit=cover` every env(safe-area-inset-*) reads 0, so the
+    // shell's own header pads itself by nothing and lands under the dynamic
+    // island. Seven pages had forgotten the meta, mobile-shell.css had two
+    // safe-area rules that could never fire, and the symptom reads as "the
+    // header is too thin" rather than as a missing inset. So the shell sets it.
+    const shell = fs.readFileSync(path.join(PUBLIC, 'mobile-shell.js'), 'utf8');
+    assert.ok(/viewport-fit=cover/.test(shell),
+        'the shell never asks iOS for the safe-area insets it styles against');
+    assert.ok(shell.indexOf('viewport-fit') < shell.indexOf('classList.add("shell-mobile")')
+        || /classList\.add\("shell-mobile"\)[\s\S]*viewport-fit/.test(shell),
+        'the viewport is set after the page has already painted');
+});
+
+test('nothing styles a safe-area inset the shell cannot report', () => {
+    // The general form: any file leaning on env(safe-area-inset-*) is relying on
+    // the shell having asked for it.
+    const css = fs.readFileSync(path.join(PUBLIC, 'mobile-shell.css'), 'utf8');
+    const shell = fs.readFileSync(path.join(PUBLIC, 'mobile-shell.js'), 'utf8');
+    if (!/env\(safe-area-inset/.test(css)) return;
+    assert.ok(/viewport-fit=cover/.test(shell),
+        'mobile-shell.css pads by safe-area insets that always read 0');
+});
