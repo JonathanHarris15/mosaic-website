@@ -38,6 +38,15 @@
         .cal-row:focus-within .cal-row-actions { opacity: 1; }
         html.shell-mobile .cal-row-actions { opacity: 1; }
 
+        /* The shell draws its own header with the page title in it, so the page's
+           own <h1> says "Calendar" a second time directly underneath. */
+        html.shell-mobile .cal-page-title { display: none; }
+
+        /* An event name TRUNCATES on a desktop row, where there is room for it to
+           be unusual. On a phone the date block, the Sunday badge and the chevron
+           leave about half the width, and "Sunday S…" is not a name. */
+        html.shell-mobile .cal-list-name { white-space: normal; overflow: visible; }
+
         /* An event label WRAPS rather than truncating — at ~110px cells
            "Midweek Gathering" has to read in full. */
         .cal-chip-label { overflow-wrap: break-word; line-height: 1.22; }
@@ -90,7 +99,7 @@
         <!-- Title block -->
         <div class="pb-md border-b border-outline-variant flex items-start justify-between gap-md">
             <div>
-                <h1 class="font-display text-headline-lg tracking-[.02em] text-primary">Calendar</h1>
+                <h1 class="cal-page-title font-display text-headline-lg tracking-[.02em] text-primary">Calendar</h1>
             </div>
             <div class="shrink-0 flex items-center gap-sm">
                 <!-- The Sunday Service AS AN EVENT — its time, and which Roles
@@ -283,7 +292,7 @@
                                 <div class="w-px self-stretch bg-outline-variant"></div>
                                 <div class="min-w-0 flex-grow">
                                     <div class="flex items-center gap-2">
-                                        <span class="text-[18px] truncate"
+                                        <span class="cal-list-name text-[18px] truncate"
                                               :class="ev.isSunday ? 'font-headline-lg' : 'font-label-md font-medium'"
                                               x-text="ev.name || ev.seriesName || 'Event'"></span>
                                         <span x-show="ev.isSunday"
