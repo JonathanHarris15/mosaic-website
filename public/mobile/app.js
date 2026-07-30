@@ -90,6 +90,12 @@
   M.isGuest = isGuest;
   M.setGuest = setGuest;
 
+  // A shell page's hamburger cannot open this drawer in place — it is a separate
+  // page load. So it navigates here with `?menu=1`, and this remembers that the
+  // trip was only ever to open the drawer, so closing it goes back to the page
+  // that asked rather than stranding you on the home screen.
+  var cameForMenu = false;
+
   // ── Login ────────────────────────────────────────────────
   function LoginScreen(props) {
     var emailS = useState(""), pwS = useState(""), errS = useState(""), busyS = useState(false);
@@ -325,11 +331,34 @@
       return function () { window.removeEventListener("hashchange", onHash); };
     }, []);
 
+    // Arrived from a shell page's hamburger, which cannot open this drawer in
+    // place. Stripped with replaceState rather than by assigning location.hash,
+    // because assigning it fires `hashchange` — whose handler closes the very
+    // drawer this is opening.
+    useEffect(function () {
+      if (currentHashParams().menu !== "1") return;
+      cameForMenu = true;
+      menuState[1](true);
+      try {
+        var bare = (location.hash || "").split("?")[0];
+        history.replaceState(null, "", location.pathname + location.search + bare);
+      } catch (e) {}
+    }, []);
+
+    // Closing the drawer after that trip goes back to the page that asked for
+    // it. Anywhere else, it just closes.
+    function closeMenu() {
+      menuState[1](false);
+      if (!cameForMenu) return;
+      cameForMenu = false;
+      history.back();
+    }
+
     // Android hardware back: close drawer → navigate back → exit at home.
     // Refreshed each render so it always sees current state.
     useEffect(function () {
       M._back = function () {
-        if (menuState[0]) { menuState[1](false); return; }
+        if (menuState[0]) { closeMenu(); return; }
         if (routeState[0] !== "home" && routeState[0] !== "login") { history.back(); return; }
         var CapApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
         if (CapApp && CapApp.exitApp) CapApp.exitApp();
@@ -347,7 +376,7 @@
     return html`
       <div style=${{ height: "100%", position: "relative", overflow: "hidden" }}>
         <${ScreenComp} nav=${nav} openMenu=${function () { menuState[1](true); }} back=${function () { history.length > 1 ? history.back() : nav("home"); }} user=${userState[0]} params=${Object.assign({}, M.navParams || {}, currentHashParams())} />
-        <${Drawer} open=${menuState[0]} current=${routeState[0]} user=${userState[0]} onClose=${function () { menuState[1](false); }} onNavigate=${function (r) { menuState[1](false); nav(r); }} />
+        <${Drawer} open=${menuState[0]} current=${routeState[0]} user=${userState[0]} onClose=${closeMenu} onNavigate=${function (r) { menuState[1](false); cameForMenu = false; nav(r); }} />
       </div>`;
   }
 

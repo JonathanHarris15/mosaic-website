@@ -55,7 +55,16 @@
     btn.innerHTML = isMenu ? MENU : CHEVRON;
     btn.addEventListener("click", function () {
       if (cfg.onBack) { document.dispatchEvent(new CustomEvent("mobile-header:back")); return; }
-      if (isMenu) { window.location.href = "mobile.html#/home"; return; }
+      // A hamburger has to open the drawer, not go home — going home is what a
+      // back arrow does, and drawing one glyph while doing the other's job is
+      // the control lying about itself.
+      //
+      // The drawer is the app's, and this is a separate page load, so it cannot
+      // be opened in place without a second copy of it here — a copy that would
+      // drift from the destination list it is meant to mirror. So the app is
+      // asked to open its own: `menu=1` opens the drawer on arrival, and closing
+      // it comes straight back to this page.
+      if (isMenu) { window.location.href = "mobile.html#/home?menu=1"; return; }
       if (!cfg.back || cfg.back === "#back") { if (history.length > 1) history.back(); else window.location.href = "mobile.html#/home"; return; }
       window.location.href = cfg.back;
     });

@@ -1723,6 +1723,44 @@ test('"continue as guest" is a choice, not a bounce', () => {
     assert.ok(/setGuest\(false\); data\.signOut\(\)/.test(app), 'signing out leaves the guest flag set');
 });
 
+test('the Calendar\'s hamburger opens the drawer rather than going home', () => {
+    // It drew a hamburger and did what a back arrow does. The Calendar is the
+    // only shell page with one — every other sets `back` — so nothing else was
+    // ever going to catch it.
+    const header = fs.readFileSync(path.join(PUBLIC, 'mobile-shell-header.js'), 'utf8');
+    assert.ok(/isMenu\) \{ window\.location\.href = "mobile\.html#\/home\?menu=1"/.test(header),
+        'the hamburger still navigates home instead of asking for the drawer');
+
+    const app = fs.readFileSync(path.join(PUBLIC, 'mobile', 'app.js'), 'utf8');
+    assert.ok(/currentHashParams\(\)\.menu !== "1"\) return/.test(app),
+        'the app ignores the request to open its drawer');
+
+    // ⚠ Assigning location.hash fires `hashchange`, and that handler closes the
+    // drawer — so stripping the param that way would close what it just opened.
+    assert.ok(/history\.replaceState\(null, "", location\.pathname/.test(app),
+        'the menu param is stripped in a way that fires hashchange');
+    const strip = app.slice(app.indexOf('currentHashParams().menu !== "1"'));
+    assert.ok(!/location\.hash\s*=/.test(strip.slice(0, 500)),
+        'the menu param is stripped by assigning location.hash, which closes the drawer');
+});
+
+test('closing that drawer goes back to the page that asked for it', () => {
+    // Otherwise a tap on the Calendar's hamburger, then a change of mind, leaves
+    // you on the home screen having lost the Calendar.
+    const app = fs.readFileSync(path.join(PUBLIC, 'mobile', 'app.js'), 'utf8');
+    const close = app.slice(app.indexOf('function closeMenu()'), app.indexOf('function closeMenu()') + 250);
+    assert.ok(/cameForMenu/.test(close) && /history\.back\(\)/.test(close),
+        'closing the drawer strands you on the home screen');
+
+    // Every way out uses it: the scrim, and Android's back button.
+    assert.ok(/onClose=\$\{closeMenu\}/.test(app), 'the drawer closes without coming back');
+    assert.ok(/if \(menuState\[0\]\) \{ closeMenu\(\); return; \}/.test(app),
+        'the hardware back button closes the drawer the old way');
+    // Picking a destination is a real navigation, so it must NOT come back.
+    assert.ok(/cameForMenu = false; nav\(r\)/.test(app),
+        'choosing a destination would bounce back to the page you left');
+});
+
 test('both Calendar pages say when nobody is signed in', () => {
     ['calendar', 'calendar-event'].forEach(page => {
         const html = fs.readFileSync(path.join(PUBLIC, page + '.html'), 'utf8');
