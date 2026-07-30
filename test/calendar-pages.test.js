@@ -1691,6 +1691,82 @@ test('changing month lets go of the day that was tapped', async () => {
     assert.strictEqual(page.focusedDate, '2026-08-01');
 });
 
+// ── Signed out is not the same as an empty church ─────────────────────────────
+//
+// The phone app opened on its home screen whoever you were. Signed out, that
+// meant every tile, the greeting, and behind them every shell page loading as a
+// stranger. On the Calendar that renders as a church that holds a service on
+// Sunday and does nothing else all week — because a Sunday is fetched BY ID
+// regardless of who is asking, while every other Event is filtered by the rungs
+// your rank may see. Nothing said so, and no control would let you fix it.
+
+test('the phone app sends a signed-out person to sign in', () => {
+    const app = fs.readFileSync(path.join(PUBLIC, 'mobile', 'app.js'), 'utf8');
+
+    assert.ok(/nav\("login"\)/.test(app), 'nothing ever routes to the login screen');
+    // `undefined` is still loading. Redirecting on it bounces a signed-in person
+    // off their own home screen while Firebase restores the session.
+    assert.ok(/userState\[0\] !== null\) return/.test(app),
+        'the redirect fires on the loading value, not on a decision');
+});
+
+test('"continue as guest" is a choice, not a bounce', () => {
+    // Without remembering it, the guest lands on home, the redirect fires again
+    // and throws them straight back — so the button could never work.
+    const app = fs.readFileSync(path.join(PUBLIC, 'mobile', 'app.js'), 'utf8');
+    assert.ok(/setGuest\(true\); props\.nav\("home"\)/.test(app),
+        'choosing guest is not remembered, so the redirect undoes it');
+    assert.ok(/if \(isGuest\(\) \|\| routeState\[0\] === "login"\) return/.test(app),
+        'the redirect ignores a guest who already chose');
+    // And signing in, or out, must not leave the flag behind.
+    assert.ok(/if \(u\) setGuest\(false\)/.test(app), 'signing in leaves the guest flag set');
+    assert.ok(/setGuest\(false\); data\.signOut\(\)/.test(app), 'signing out leaves the guest flag set');
+});
+
+test('both Calendar pages say when nobody is signed in', () => {
+    ['calendar', 'calendar-event'].forEach(page => {
+        const html = fs.readFileSync(path.join(PUBLIC, page + '.html'), 'utf8');
+        assert.ok(/x-show="signedOut"/.test(html), page + ' never says you are signed out');
+        assert.ok(/:href="signInHref"/.test(html), page + ' says so but offers no way in');
+    });
+
+    // And it is a fact about the viewer, not about the month: an editor with
+    // nothing on in August must never see it.
+    const cal = loadComponent('calendar.js', 'calendarPage');
+    cal.loading = false;
+    cal.rank = null;
+    assert.strictEqual(cal.signedOut, true);
+    cal.rank = 'viewer';
+    assert.strictEqual(cal.signedOut, false, 'a signed-in viewer is told they are signed out');
+    cal.rank = null;
+    cal.loading = true;
+    assert.strictEqual(cal.signedOut, false, 'the notice flashes before auth has answered');
+
+    const ev = loadComponent('calendar-event.js', 'eventDetailPage');
+    ev.loading = false;
+    ev.rank = null;
+    assert.strictEqual(ev.signedOut, true);
+    ev.rank = 'member';
+    assert.strictEqual(ev.signedOut, false);
+});
+
+test('a Sunday is the one Event a stranger always sees, so it cannot stand for the rest', () => {
+    // This is what made the bug read as "my recurring event did not save": the
+    // series query filters by visibility rung, and the Sunday Service is added
+    // by an explicit fetch outside it. Pin the asymmetry so nobody "tidies" the
+    // fetch away, or widens it into a hole.
+    const store = fs.readFileSync(path.join(PUBLIC, 'events-store.js'), 'utf8');
+    const fn = store.slice(store.indexOf('async function loadVisibleSeries'),
+        store.indexOf('async function attachRosters'));
+
+    assert.ok(/where\('visibility', 'in', q\.rungs\)/.test(fn),
+        'series are no longer filtered by what the viewer may see');
+    assert.ok(/doc\(Core\.SUNDAY_SERVICE_ID\)/.test(fn),
+        'the Sunday Service is no longer fetched by id, so a public reader loses it');
+    assert.ok(!/doc\((?!Core\.SUNDAY_SERVICE_ID)/.test(fn),
+        'something other than the Sunday Service is being fetched around the visibility filter');
+});
+
 // ── The Event on a phone ──────────────────────────────────────────────────────
 
 test('a member gets the roster, not the editor\'s Role cards', () => {

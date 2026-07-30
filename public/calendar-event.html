@@ -114,6 +114,24 @@
             <p class="font-body-md text-body-md" x-text="error"></p>
         </div>
 
+        <!-- Signed out. The Roles and every control are absent rather than
+             disabled, which reads as a missing feature unless this says so. -->
+        <div x-show="signedOut"
+             class="mb-md bg-surface-container-low border border-outline-variant border-l-[3px] rounded-lg
+                    px-md py-3 flex items-start gap-sm" style="border-left-color:#B89B6A;">
+            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">person_off</span>
+            <div class="flex-grow min-w-0">
+                <p class="text-[14px] text-on-surface">You are not signed in.</p>
+                <p class="text-[12.5px] text-on-surface-variant mt-0.5">
+                    This is the public reading of this event. Signing in shows who is
+                    serving, and lets you change it if that is your job.
+                </p>
+            </div>
+            <a :href="signInHref"
+               class="shrink-0 bg-primary text-on-primary px-3 py-2 rounded-lg font-label-md
+                      text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus">Sign in</a>
+        </div>
+
         <!-- ── Managing the Event itself, not one date of it ──────────────── -->
         <!-- Reached from the Calendar's "Sunday Service" button. This is the
              Event: its time, and which Roles every date of it carries. The

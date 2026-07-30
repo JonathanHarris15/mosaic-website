@@ -137,6 +137,24 @@
             </div>
         </div>
 
+        <!-- Signed out. Says so, because the alternative is a calendar that
+             looks like the church's and is missing everything you are part of. -->
+        <div x-show="signedOut"
+             class="mt-md bg-surface-container-low border border-outline-variant border-l-[3px] rounded-lg
+                    px-md py-3 flex items-start gap-sm" style="border-left-color:#B89B6A;">
+            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">person_off</span>
+            <div class="flex-grow min-w-0">
+                <p class="text-[14px] text-on-surface">You are not signed in.</p>
+                <p class="text-[12.5px] text-on-surface-variant mt-0.5">
+                    This is only what the church shows publicly — anything you serve at,
+                    and anything for members, is missing.
+                </p>
+            </div>
+            <a :href="signInHref"
+               class="shrink-0 bg-primary text-on-primary px-3 py-2 rounded-lg font-label-md
+                      text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus">Sign in</a>
+        </div>
+
         <!-- Every failure here renders as an empty calendar if you let it, and
              "this church has no events" is what a real one looks like from the
              outside. So each cause says which it is. -->

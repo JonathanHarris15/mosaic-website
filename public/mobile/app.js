@@ -67,6 +67,29 @@
     return "Good evening";
   }
 
+  // ── Signed in, or a guest on purpose ─────────────────────
+  //
+  // The app used to open on the home screen whoever you were. Signed out, that
+  // meant every tile, the greeting, and behind them every shell page loading as
+  // a stranger — a Calendar with the Sunday Service on it and nothing else,
+  // because a Sunday is fetched by id regardless of who is asking while every
+  // other Event is filtered by what your rank may see. Nothing said so. You
+  // simply saw a smaller church than the one you belong to, and no control that
+  // would let you fix it.
+  //
+  // So a signed-out launch goes to the login screen. "Continue as guest" is
+  // still there, and now it means something: it is remembered, so it is a choice
+  // rather than a bounce.
+  var GUEST_KEY = "mosaicGuest";
+  function isGuest() {
+    try { return sessionStorage.getItem(GUEST_KEY) === "1"; } catch (e) { return false; }
+  }
+  function setGuest(on) {
+    try { on ? sessionStorage.setItem(GUEST_KEY, "1") : sessionStorage.removeItem(GUEST_KEY); } catch (e) {}
+  }
+  M.isGuest = isGuest;
+  M.setGuest = setGuest;
+
   // ── Login ────────────────────────────────────────────────
   function LoginScreen(props) {
     var emailS = useState(""), pwS = useState(""), errS = useState(""), busyS = useState(false);
@@ -93,7 +116,7 @@
             <div style=${{ marginTop: 4 }}>
               <${Button} variant="primary" size="lg" style=${{ width: "100%" }} icon=${Ic("log-in", 18)} onClick=${submit}>${busyS[0] ? "Signing in…" : "Sign In"}<//>
             </div>
-            <button onClick=${function () { props.nav("home"); }} style=${{ background: "none", border: "none", color: "var(--secondary)", fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 600, letterSpacing: "0.04em", cursor: "pointer", marginTop: 2 }}>Continue as guest</button>
+            <button onClick=${function () { setGuest(true); props.nav("home"); }} style=${{ background: "none", border: "none", color: "var(--secondary)", fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 600, letterSpacing: "0.04em", cursor: "pointer", marginTop: 2 }}>Continue as guest</button>
           </div>
         </div>
         <div style=${{ textAlign: "center", padding: "0 0 34px", fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)" }}>A very present help in trouble.</div>
@@ -272,7 +295,7 @@
             })}
           </div>
           <div style=${{ padding: "12px 12px calc(12px + env(safe-area-inset-bottom, 0px))", borderTop: "1px solid var(--outline-variant)" }}>
-            <button onClick=${function () { data.signOut().then(function () { props.onNavigate("login"); }); }} style=${{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", textAlign: "left", background: "transparent", color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 500 }}>
+            <button onClick=${function () { setGuest(false); data.signOut().then(function () { props.onNavigate("login"); }); }} style=${{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", textAlign: "left", background: "transparent", color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 500 }}>
               ${Ic("log-out", 20)}Sign Out
             </button>
           </div>
@@ -286,7 +309,16 @@
     var menuState = useState(false);
     var userState = useState(undefined); // undefined = loading, null = signed out
 
-    useEffect(function () { return data.onUser(function (u) { userState[1](u); }); }, []);
+    useEffect(function () { return data.onUser(function (u) { userState[1](u); if (u) setGuest(false); }); }, []);
+
+    // `undefined` is still loading; only `null` is a decision. Redirecting on
+    // the loading value would bounce a signed-in person off their own home
+    // screen for the half-second before Firebase restores the session.
+    useEffect(function () {
+      if (userState[0] !== null) return;
+      if (isGuest() || routeState[0] === "login") return;
+      nav("login");
+    });
     useEffect(function () {
       function onHash() { routeState[1](currentRoute()); menuState[1](false); }
       window.addEventListener("hashchange", onHash);

@@ -251,6 +251,16 @@
 
             // ── Who is looking ───────────────────────────────────────────────
 
+            // Nobody is signed in. Worth saying, because a signed-out Event page
+            // is not an error — it is the public reading of it, with the Roles
+            // and every control simply absent. That looks like the feature is
+            // missing rather than like you are.
+            get signedOut() { return !this.loading && !this.rank; },
+
+            get signInHref() {
+                return window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/login' : 'login.html';
+            },
+
             get isEditor() {
                 return ['editor', 'admin', 'elder', 'super_admin'].indexOf(this.rank) !== -1;
             },

@@ -374,6 +374,21 @@
                 return ['editor', 'admin', 'elder', 'super_admin'].indexOf(this.rank) !== -1;
             },
 
+            // Nobody is signed in — which is NOT the same as an empty month, and
+            // the difference is invisible unless the page says it.
+            //
+            // A signed-out Calendar still draws: the Sunday Service is fetched by
+            // id regardless of who is asking, while every other Event is filtered
+            // by the rungs your rank may see. So it renders as a church that
+            // holds a service on Sunday and does nothing else all week — which is
+            // exactly what somebody's own church looks like to them after their
+            // session quietly lapses.
+            get signedOut() { return !this.loading && !this.rank; },
+
+            get signInHref() {
+                return window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/login' : 'login.html';
+            },
+
             // ── Display passthroughs ─────────────────────────────────────────
 
             initials(name) { return View.initials(name); },
