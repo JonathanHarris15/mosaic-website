@@ -26,8 +26,10 @@ browser pointed at the website. That means:
 - **Code changes do not.** New pages, new features or bug fixes need a new build and
   a re-upload. See "Shipping an update" at the bottom.
 
-When the app is running natively, `public/index.html` redirects straight into the
-mobile shell (`mobile.html`). Browsers are unaffected.
+`public/index.html` redirects straight into the mobile shell (`mobile.html`) both
+when the app is running natively **and** when the site is opened in a phone
+browser. Desktop browsers are unaffected. See "Who gets the mobile app" in
+[mobile-tiers.md](mobile-tiers.md).
 
 ---
 

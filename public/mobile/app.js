@@ -148,6 +148,13 @@
   }
 
   // ── Home ─────────────────────────────────────────────────
+  // A phone browser now opens the mobile app rather than the desktop site
+  // (index.html's head script), so the desktop site needs a door out — the app
+  // doesn't cover every screen, and the one it doesn't cover is always the one
+  // you needed. Inside the native app there is no door: index.html would send
+  // us straight back here, so the link is a button that does nothing.
+  function inNativeApp() { return !!window.Capacitor; }
+
   function HomeScreen(props) {
     var user = props.user;
     var svcState = M.useAsync(data.getNextService, []);
@@ -203,6 +210,11 @@
                   <${Button} variant="secondary" size="md" style=${{ width: "100%" }} icon=${Ic("church", 17)}>Open Services<//>
                 </div>`}
           </div>
+
+          ${inNativeApp() ? null : html`
+            <a href="index.html?shell=web" style=${{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 20, padding: "8px 0", color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, textDecoration: "none" }}>
+              ${Ic("monitor", 15)}View desktop site
+            </a>`}
         </${Body}>
       </${Screen}>`;
   }

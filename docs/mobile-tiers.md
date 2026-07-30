@@ -99,6 +99,37 @@ value — accept the manual-sync burden and watch them for drift.*
 
 ---
 
+## Who gets the mobile app
+
+The tiers above say how each *page* reaches the phone. This says who is sent to
+the phone experience in the first place, and it is decided in exactly one place:
+the inline script at the top of `public/index.html`.
+
+| Who | What they get |
+|-----|---------------|
+| The native app (Capacitor) | The mobile app, always. |
+| A phone browser — touch screen at ≤ 820px | The mobile app. |
+| A tablet, or a narrow desktop window | The desktop site. Small ≠ phone. |
+| A phone browser that chose the desktop site | The desktop site, remembered. |
+
+Detection is `(pointer: coarse) and (max-width: 820px)`, **not** the user agent —
+the user agent lies, and it cannot tell a phone from a phone-sized window any
+better than a media query can.
+
+**Both doors have to exist.** The mobile app does not cover every page (see 🔴
+Skip above), so its Home screen carries a *View desktop site* link
+(`index.html?shell=web`) which remembers the choice in `localStorage`; the
+desktop site carries a *Switch to the mobile app* link (`index.html?shell=mobile`)
+that clears it, shown only on a phone. Without the memory the desktop site is
+reachable exactly once; without the second link it is a one-way trip. The native
+app ignores the preference entirely — there is no desktop site inside the WebView
+to prefer, only `index.html` sending you back.
+
+`test/mobile-entry.test.js` runs the real rule out of the real page against each
+row of that table.
+
+---
+
 ## Rule for any new page
 
 1. **Default to 🟡 Shell.** Build the desktop page; add `mobile-shell.js` + a
