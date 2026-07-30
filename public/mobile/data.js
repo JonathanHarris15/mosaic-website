@@ -53,34 +53,13 @@
   function signIn(email, password) { return auth.signInWithEmailAndPassword(email, password); }
   function signOut() { return auth.signOut(); }
 
-  // Drawer / home destinations -> desktop pages (page-load nav for now;
-  // in-shell screens override where they exist). `permissionLevels` mirrors the
-  // card gating on index.html (:300-320) — an entry is hidden unless the signed-in
-  // user's permissionLevel is listed. See canSee().
-  var DESTINATIONS = [
-    { key: "home", label: "Home", icon: "house", route: "home" },
-    { key: "hymn-directory", label: "Hymn Directory", icon: "book-open", route: "hymnDirectory" },
-    // ⚠ TWO CALENDARS, AND THE ROUTE NAMES LIE ABOUT WHICH IS WHICH.
-    //
-    // Route "calendar" is the SERVICES screen — every Sunday and its order of
-    // service. It predates MS-99 and was only relabelled, because the route is
-    // what deep links and the native screen registry navigate by.
-    //
-    // Route "events" is the Calendar proper: everything on at church. Reading
-    // these two the other way round is the mistake this comment exists to stop.
-    { key: "calendar", label: "Services", icon: "church", route: "calendar" },
-    { key: "events", label: "Calendar", icon: "calendar-days", route: "events" },
-    { key: "directory", label: "Member Directory", icon: "users", route: "people" },
-    { key: "shepherd", label: "Shepherd Dashboard", icon: "shield", route: "shepherd", permissionLevels: ["elder", "super_admin"] },
-    { key: "admin", label: "Admin Dashboard", icon: "settings-2", route: "admin", permissionLevels: ["admin", "super_admin"] },
-  ];
-
-  // True when a destination/tile with an optional `permissionLevels` gate is visible to
-  // this user (no gate = always visible). Matches index.html permission checks.
-  function canSee(item, user) {
-    if (!item || !item.permissionLevels) return true;
-    return !!(user && item.permissionLevels.indexOf(user.permissionLevel) >= 0);
-  }
+  // The drawer / home destinations live in mobile/destinations.js, because the
+  // SHELL's drawer (mobile-shell-header.js, on a desktop page opened with
+  // ?shell=mobile) has to build the same list and cannot load this file — it has
+  // no Preact, no lucide and no firebase bootstrap. Two drawers, one list.
+  var Destinations = window.MosaicDestinations;
+  var DESTINATIONS = Destinations.DESTINATIONS;
+  var canSee = Destinations.canSee;
 
   // ── Collection loaders (defensive: tolerate missing fields) ──
   function lc(v) { return String(v == null ? "" : v).toLowerCase(); }

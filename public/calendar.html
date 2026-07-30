@@ -14,7 +14,10 @@
          had no way to enter. -->
     <script src="mobile-shell.js"></script>
     <link rel="stylesheet" href="mobile-shell.css" />
-    <script>window.MOBILE_HEADER = { title: 'Calendar', menu: true };</script>
+    <!-- The drawer the shell header opens is built from this list, which the
+         app's own drawer is built from too. One list, two renderings. -->
+    <script src="mobile/destinations.js"></script>
+    <script>window.MOBILE_HEADER = { title: 'Calendar', menu: true, route: 'events' };</script>
     <script src="mobile-shell-header.js"></script>
 
     <style>

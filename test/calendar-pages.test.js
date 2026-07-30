@@ -1532,15 +1532,20 @@ test('the phone offers the Calendar, and it is not the Services screen', () => {
     // On mobile, route "calendar" is SERVICES — it predates MS-99 and was only
     // relabelled. Reading the two the other way round sends somebody to the
     // wrong screen entirely.
-    const dataJs = fs.readFileSync(path.join(PUBLIC, 'mobile', 'data.js'), 'utf8');
+    // The drawer list lives in mobile/destinations.js — shared with the shell's
+    // own drawer, which is a separate document and cannot load data.js.
+    const D = require('../public/mobile/destinations.js');
     const appJs = fs.readFileSync(path.join(PUBLIC, 'mobile', 'app.js'), 'utf8');
 
-    assert.ok(/\{ key: "events", label: "Calendar", icon: "calendar-days", route: "events" \}/.test(dataJs),
+    const calendar = D.DESTINATIONS.find(d => d.key === 'events');
+    assert.ok(calendar && calendar.label === 'Calendar' && calendar.route === 'events',
         'the phone drawer has no Calendar');
-    assert.ok(/\{ key: "calendar", label: "Services"/.test(dataJs),
+    const services = D.DESTINATIONS.find(d => d.key === 'calendar');
+    assert.ok(services && services.label === 'Services' && services.route === 'calendar',
         'the Services entry moved or was renamed — check nothing navigates by it');
+
     assert.ok(/label: "Calendar", route: "events"/.test(appJs), 'the phone home has no Calendar tile');
-    assert.ok(/events: "calendar\.html"/.test(appJs), 'the Calendar route opens nothing');
+    assert.strictEqual(D.SHELL_PAGES.events, 'calendar.html', 'the Calendar route opens nothing');
 });
 
 test('the Calendar opens as a list on a phone, and a grid on a desktop', () => {
@@ -1723,42 +1728,91 @@ test('"continue as guest" is a choice, not a bounce', () => {
     assert.ok(/setGuest\(false\); data\.signOut\(\)/.test(app), 'signing out leaves the guest flag set');
 });
 
-test('the Calendar\'s hamburger opens the drawer rather than going home', () => {
-    // It drew a hamburger and did what a back arrow does. The Calendar is the
-    // only shell page with one — every other sets `back` — so nothing else was
-    // ever going to catch it.
+test('the Calendar\'s hamburger opens a drawer over the Calendar', () => {
+    // It drew a hamburger and did what a back arrow does — went to the app home.
+    // Borrowing the app's drawer by navigating to it was no better: the page
+    // behind the panel became somewhere else, and closing it was the only way
+    // back. A drawer opens over where you are.
     const header = fs.readFileSync(path.join(PUBLIC, 'mobile-shell-header.js'), 'utf8');
-    assert.ok(/isMenu\) \{ window\.location\.href = "mobile\.html#\/home\?menu=1"/.test(header),
-        'the hamburger still navigates home instead of asking for the drawer');
 
+    assert.ok(/if \(isMenu\) \{ openDrawer\(\); return; \}/.test(header),
+        'the hamburger still navigates somewhere instead of opening a drawer');
+    assert.ok(!/mobile\.html#\/home\?menu=1/.test(header),
+        'the navigate-away drawer is still wired up');
+    assert.ok(/position:fixed;inset:0/.test(header), 'the drawer does not overlay the page');
+
+    // And the app has no leftover machinery for a trip it no longer takes.
     const app = fs.readFileSync(path.join(PUBLIC, 'mobile', 'app.js'), 'utf8');
-    assert.ok(/currentHashParams\(\)\.menu !== "1"\) return/.test(app),
-        'the app ignores the request to open its drawer');
-
-    // ⚠ Assigning location.hash fires `hashchange`, and that handler closes the
-    // drawer — so stripping the param that way would close what it just opened.
-    assert.ok(/history\.replaceState\(null, "", location\.pathname/.test(app),
-        'the menu param is stripped in a way that fires hashchange');
-    const strip = app.slice(app.indexOf('currentHashParams().menu !== "1"'));
-    assert.ok(!/location\.hash\s*=/.test(strip.slice(0, 500)),
-        'the menu param is stripped by assigning location.hash, which closes the drawer');
+    assert.ok(!/cameForMenu|menu !== "1"/.test(app),
+        'the app still carries the come-here-to-open-the-drawer path');
 });
 
-test('closing that drawer goes back to the page that asked for it', () => {
-    // Otherwise a tap on the Calendar's hamburger, then a change of mind, leaves
-    // you on the home screen having lost the Calendar.
-    const app = fs.readFileSync(path.join(PUBLIC, 'mobile', 'app.js'), 'utf8');
-    const close = app.slice(app.indexOf('function closeMenu()'), app.indexOf('function closeMenu()') + 250);
-    assert.ok(/cameForMenu/.test(close) && /history\.back\(\)/.test(close),
-        'closing the drawer strands you on the home screen');
+test('a hamburger is only drawn where a drawer can open', () => {
+    // Without the destination list there is nothing to open, so the header falls
+    // back to a back arrow rather than a control that does nothing.
+    const header = fs.readFileSync(path.join(PUBLIC, 'mobile-shell-header.js'), 'utf8');
+    assert.ok(/isMenu = !!cfg\.menu[^;]*!!window\.MosaicDestinations/.test(header),
+        'a page can ask for a hamburger without loading anything for it to open');
 
-    // Every way out uses it: the scrim, and Android's back button.
-    assert.ok(/onClose=\$\{closeMenu\}/.test(app), 'the drawer closes without coming back');
-    assert.ok(/if \(menuState\[0\]\) \{ closeMenu\(\); return; \}/.test(app),
-        'the hardware back button closes the drawer the old way');
-    // Picking a destination is a real navigation, so it must NOT come back.
-    assert.ok(/cameForMenu = false; nav\(r\)/.test(app),
-        'choosing a destination would bounce back to the page you left');
+    // Every page that asks for one loads the list.
+    fs.readdirSync(PUBLIC).filter(f => f.endsWith('.html')).forEach(file => {
+        const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+        if (!/MOBILE_HEADER\s*=\s*\{[^}]*menu:\s*true/.test(html)) return;
+        assert.ok(/mobile\/destinations\.js/.test(html),
+            file + ' asks for a hamburger but never loads the destinations it would show');
+    });
+});
+
+test('both drawers are built from one list', () => {
+    // Two renderings of the chrome is the price of a desktop page being its own
+    // document. Two LISTS would be the bug — which destinations exist, who may
+    // see them, and where each goes are the things that drift into a lie.
+    const D = require('../public/mobile/destinations.js');
+    assert.ok(D.DESTINATIONS.length, 'the shared list is empty');
+    assert.ok(D.DESTINATIONS.every(d => d.icon && d.symbol),
+        'a destination is missing one of its two renderings');
+
+    const data = fs.readFileSync(path.join(PUBLIC, 'mobile', 'data.js'), 'utf8');
+    const app = fs.readFileSync(path.join(PUBLIC, 'mobile', 'app.js'), 'utf8');
+    assert.ok(/window\.MosaicDestinations/.test(data) && /Destinations\.DESTINATIONS/.test(data),
+        'the app keeps its own copy of the destination list');
+    assert.ok(/window\.MosaicDestinations\.SHELL_PAGES/.test(app),
+        'the app keeps its own copy of which routes are shell pages');
+    assert.ok(!/key: "hymn-directory"/.test(data), 'the old list is still in data.js');
+    assert.ok(!/events: "calendar\.html"/.test(app), 'the old shell-page map is still in app.js');
+
+    // mobile.html must load it before the two files that read it.
+    const mobile = fs.readFileSync(path.join(PUBLIC, 'mobile.html'), 'utf8');
+    assert.ok(mobile.indexOf('mobile/destinations.js') < mobile.indexOf('mobile/data.js'),
+        'data.js runs before the list it reads exists');
+    assert.ok(mobile.indexOf('mobile/destinations.js') < mobile.indexOf('mobile/app.js'),
+        'app.js runs before the list it reads exists');
+});
+
+test('a gated destination is hidden until we know who is looking', () => {
+    // Fails closed. Offering the Shepherd Dashboard to somebody who will be
+    // refused on arrival is worse than not offering it.
+    const D = require('../public/mobile/destinations.js');
+    const shepherd = D.DESTINATIONS.find(d => d.route === 'shepherd');
+
+    assert.strictEqual(D.canSee(shepherd, null), false);
+    assert.strictEqual(D.canSee(shepherd, { permissionLevel: 'editor' }), false);
+    assert.strictEqual(D.canSee(shepherd, { permissionLevel: 'elder' }), true);
+    // Ungated entries are for everyone, signed in or not.
+    assert.strictEqual(D.canSee(D.DESTINATIONS.find(d => d.route === 'events'), null), true);
+});
+
+test('a destination goes to the same place from either drawer', () => {
+    // The shell's drawer sits on a desktop page, so it cannot use the app's
+    // in-memory routing. Every entry still has to resolve to a real URL.
+    const D = require('../public/mobile/destinations.js');
+    assert.strictEqual(D.routeHref('events'), 'calendar.html?shell=mobile',
+        'the Calendar entry does not open the Calendar');
+    assert.strictEqual(D.routeHref('people'), 'mobile.html#/people');
+    D.DESTINATIONS.forEach(d => {
+        const href = D.routeHref(d.route);
+        assert.ok(href && !/undefined/.test(href), d.route + ' resolves to ' + href);
+    });
 });
 
 test('both Calendar pages say when nobody is signed in', () => {

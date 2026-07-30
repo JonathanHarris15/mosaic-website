@@ -28,6 +28,152 @@
   var CHEVRON = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>';
   var MENU = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>';
 
+  // ── The shell's drawer ──────────────────────────────────────────────────────
+  //
+  // The app's drawer is a Preact panel inside mobile.html, and a shell page is a
+  // separate document — so this is a second rendering of the same chrome. What
+  // it is NOT is a second list: which destinations exist, who may see them and
+  // where each goes all come from mobile/destinations.js, which is the only
+  // thing here that could drift into a lie.
+  //
+  // A page opts in by loading that file; without it the hamburger has nothing to
+  // open, so the header draws a back arrow instead of a control that does
+  // nothing.
+
+  var drawer = null;
+
+  // Who is looking, so the gated destinations are gated. Reads `firebase`
+  // directly because auth.js keeps `auth` and `db` as consts — deliberately not
+  // window properties — and this script has no bootstrap of its own.
+  //
+  // FAILS CLOSED: until the answer arrives the user is null, and canSee hides
+  // every gated entry. Offering the Shepherd Dashboard to somebody who will be
+  // refused on arrival is worse than not offering it.
+  function whoIsLooking(then) {
+    try {
+      if (!window.firebase || !firebase.apps || !firebase.apps.length) return then(null);
+      firebase.auth().onAuthStateChanged(function (user) {
+        if (!user) return then(null);
+        firebase.firestore().collection("users").doc(user.uid).get()
+          .then(function (doc) {
+            var d = (doc.exists && doc.data()) || {};
+            then({
+              name: d.name || d.displayName || (user.email || "").split("@")[0] || "You",
+              permissionLevel: d.permissionLevel || d.role || "viewer",
+            });
+          })
+          .catch(function () { then({ name: "You", permissionLevel: "viewer" }); });
+      });
+    } catch (e) { then(null); }
+  }
+
+  function symbol(name, size) {
+    var el = document.createElement("span");
+    el.className = "material-symbols-outlined";
+    el.style.cssText = "font-size:" + size + "px;flex-shrink:0;";
+    el.textContent = name;
+    return el;
+  }
+
+  function buildDrawer() {
+    var D = window.MosaicDestinations;
+    if (!D || drawer) return drawer;
+
+    var root = document.createElement("div");
+    root.id = "mobile-shell-drawer";
+    root.style.cssText = "position:fixed;inset:0;z-index:1200;visibility:hidden;";
+
+    var scrim = document.createElement("div");
+    scrim.style.cssText = "position:absolute;inset:0;background:rgba(14,28,54,0.42);" +
+      "opacity:0;transition:opacity 280ms ease;";
+    scrim.addEventListener("click", closeDrawer);
+
+    var panel = document.createElement("nav");
+    panel.setAttribute("aria-label", "Menu");
+    panel.style.cssText = "position:absolute;top:0;bottom:0;left:0;width:296px;max-width:86vw;" +
+      "background:var(--surface, #FBF7F0);border-right:1px solid var(--outline-variant, #DAD0C0);" +
+      "box-shadow:0 18px 48px rgba(14,28,54,.14);display:flex;flex-direction:column;" +
+      "transform:translateX(-100%);transition:transform 300ms cubic-bezier(0.22, 1, 0.36, 1);";
+
+    // The same navy head the app's drawer wears, including its safe-area pad.
+    var head = document.createElement("div");
+    head.style.cssText = "background:#182F57;color:#F2EAE2;" +
+      "padding:calc(env(safe-area-inset-top, 20px) + 10px) 20px 20px;";
+
+    var closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.setAttribute("aria-label", "Collapse menu");
+    closeBtn.style.cssText = "width:44px;height:44px;margin-left:-14px;display:flex;align-items:center;" +
+      "justify-content:center;border:none;background:transparent;color:#F2EAE2;cursor:pointer;border-radius:10px;";
+    closeBtn.innerHTML = MENU;
+    closeBtn.addEventListener("click", closeDrawer);
+    head.appendChild(closeBtn);
+
+    var who = document.createElement("div");
+    who.style.cssText = "font-family:var(--font-sans, sans-serif);font-size:14px;font-weight:600;margin-top:6px;";
+    who.textContent = "Guest";
+    head.appendChild(who);
+
+    var list = document.createElement("div");
+    list.style.cssText = "flex:1;overflow-y:auto;padding:10px 12px;";
+
+    function draw(user) {
+      who.textContent = (user && user.name) || "Guest";
+      list.textContent = "";
+      D.DESTINATIONS.filter(function (d) { return D.canSee(d, user); }).forEach(function (d) {
+        var here = d.route === (window.MOBILE_HEADER || {}).route;
+        var a = document.createElement("a");
+        a.href = D.routeHref(d.route);
+        a.style.cssText = "display:flex;align-items:center;gap:14px;padding:12px 14px;margin-bottom:2px;" +
+          "border-radius:10px;text-decoration:none;font-family:var(--font-sans, sans-serif);font-size:15px;" +
+          "font-weight:" + (here ? "600" : "500") + ";" +
+          "background:" + (here ? "var(--primary-fixed, #D8E2FF)" : "transparent") + ";" +
+          "color:" + (here ? "#182F57" : "var(--on-surface, #0E1C36)") + ";";
+        a.appendChild(symbol(d.symbol, 20));
+        a.appendChild(document.createTextNode(d.label));
+        list.appendChild(a);
+      });
+    }
+
+    draw(null);
+    whoIsLooking(draw);
+
+    panel.appendChild(head);
+    panel.appendChild(list);
+    root.appendChild(scrim);
+    root.appendChild(panel);
+    document.body.appendChild(root);
+
+    drawer = { root: root, scrim: scrim, panel: panel };
+    return drawer;
+  }
+
+  function openDrawer() {
+    var d = buildDrawer();
+    // No list means nothing to open. Should be unreachable — the header only
+    // draws a hamburger where a drawer exists — but a menu that opens an empty
+    // panel is worse than one that does nothing.
+    if (!d) return;
+    d.root.style.visibility = "visible";
+    // One frame, so the closed state paints before the transition starts.
+    requestAnimationFrame(function () {
+      d.scrim.style.opacity = "1";
+      d.panel.style.transform = "translateX(0)";
+    });
+    document.addEventListener("keydown", onEscape);
+  }
+
+  function closeDrawer() {
+    if (!drawer) return;
+    drawer.scrim.style.opacity = "0";
+    drawer.panel.style.transform = "translateX(-100%)";
+    // Hidden only after the slide-out, or it pops rather than closes.
+    setTimeout(function () { if (drawer) drawer.root.style.visibility = "hidden"; }, 300);
+    document.removeEventListener("keydown", onEscape);
+  }
+
+  function onEscape(e) { if (e.key === "Escape") closeDrawer(); }
+
   function build() {
     if (document.getElementById("mobile-shell-header")) return;
     var cfg = window.MOBILE_HEADER || {};
@@ -37,7 +183,9 @@
       document.querySelectorAll(cfg.hideSelector || "body > header").forEach(function (el) { el.style.display = "none"; });
     } catch (e) {}
 
-    var isMenu = !!cfg.menu && !cfg.back && !cfg.onBack;
+    // A hamburger is only honest where a drawer can actually open, so a page
+    // that asks for one without loading the destination list gets a back arrow.
+    var isMenu = !!cfg.menu && !cfg.back && !cfg.onBack && !!window.MosaicDestinations;
 
     var header = document.createElement("header");
     header.id = "mobile-shell-header";
@@ -55,16 +203,11 @@
     btn.innerHTML = isMenu ? MENU : CHEVRON;
     btn.addEventListener("click", function () {
       if (cfg.onBack) { document.dispatchEvent(new CustomEvent("mobile-header:back")); return; }
-      // A hamburger has to open the drawer, not go home — going home is what a
-      // back arrow does, and drawing one glyph while doing the other's job is
-      // the control lying about itself.
-      //
-      // The drawer is the app's, and this is a separate page load, so it cannot
-      // be opened in place without a second copy of it here — a copy that would
-      // drift from the destination list it is meant to mirror. So the app is
-      // asked to open its own: `menu=1` opens the drawer on arrival, and closing
-      // it comes straight back to this page.
-      if (isMenu) { window.location.href = "mobile.html#/home?menu=1"; return; }
+      // A hamburger opens a drawer OVER THE PAGE YOU ARE ON. Navigating to the
+      // app's home screen to borrow its drawer moved the ground under you —
+      // the page behind the panel became somewhere else, and closing it was the
+      // only way back. So the shell draws its own, from the same list.
+      if (isMenu) { openDrawer(); return; }
       if (!cfg.back || cfg.back === "#back") { if (history.length > 1) history.back(); else window.location.href = "mobile.html#/home"; return; }
       window.location.href = cfg.back;
     });

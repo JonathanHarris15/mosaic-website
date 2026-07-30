@@ -90,11 +90,6 @@
   M.isGuest = isGuest;
   M.setGuest = setGuest;
 
-  // A shell page's hamburger cannot open this drawer in place — it is a separate
-  // page load. So it navigates here with `?menu=1`, and this remembers that the
-  // trip was only ever to open the drawer, so closing it goes back to the page
-  // that asked rather than stranding you on the home screen.
-  var cameForMenu = false;
 
   // ── Login ────────────────────────────────────────────────
   function LoginScreen(props) {
@@ -206,20 +201,15 @@
   // shell=mobile makes those pages adapt their chrome for the phone and keep
   // navigation inside the shell (see mobile-shell.js). Reused wholesale so the
   // mobile app gets every feature + the proven save logic — no reimplementation.
-  var SHELL_PAGES = {
-    profile: "profile.html",
-    // The Calendar (MS-99) is the desktop page opened in-shell. It stacks its
-    // rail above the grid below 900px and keeps row actions visible on touch,
-    // so there is nothing a native port would add except a second thing to keep
-    // in step with the model.
-    events: "calendar.html",
-    // Native screens now cover the drawer pages (home, hymnDirectory, calendar,
-    // people, shepherd, admin) plus the shepherding cluster (including Manage Tags,
-    // route "shepherdTags" → screens-shepherd-tags.js) + both editors. The
-    // remaining shell pages are subpages opened in-place with ?shell=mobile and a
-    // standardized back-arrow header (mobile-shell-header.js): the hymn manager /
-    // service builder / service guide / profile (routed elsewhere in nav()).
-  };
+  // Shared with the shell's own drawer — see mobile/destinations.js.
+  //
+  // Native screens cover the drawer pages (home, hymnDirectory, calendar,
+  // people, shepherd, admin) plus the shepherding cluster (including Manage Tags,
+  // route "shepherdTags" → screens-shepherd-tags.js) + both editors. The
+  // remaining shell pages are subpages opened in-place with ?shell=mobile and a
+  // standardized back-arrow header (mobile-shell-header.js): the hymn manager /
+  // service builder / service guide / profile (routed elsewhere in nav()).
+  var SHELL_PAGES = window.MosaicDestinations.SHELL_PAGES;
 
   function nav(route, params) {
     if (route === "serviceBuilder") {
@@ -331,28 +321,7 @@
       return function () { window.removeEventListener("hashchange", onHash); };
     }, []);
 
-    // Arrived from a shell page's hamburger, which cannot open this drawer in
-    // place. Stripped with replaceState rather than by assigning location.hash,
-    // because assigning it fires `hashchange` — whose handler closes the very
-    // drawer this is opening.
-    useEffect(function () {
-      if (currentHashParams().menu !== "1") return;
-      cameForMenu = true;
-      menuState[1](true);
-      try {
-        var bare = (location.hash || "").split("?")[0];
-        history.replaceState(null, "", location.pathname + location.search + bare);
-      } catch (e) {}
-    }, []);
-
-    // Closing the drawer after that trip goes back to the page that asked for
-    // it. Anywhere else, it just closes.
-    function closeMenu() {
-      menuState[1](false);
-      if (!cameForMenu) return;
-      cameForMenu = false;
-      history.back();
-    }
+    function closeMenu() { menuState[1](false); }
 
     // Android hardware back: close drawer → navigate back → exit at home.
     // Refreshed each render so it always sees current state.
@@ -376,7 +345,7 @@
     return html`
       <div style=${{ height: "100%", position: "relative", overflow: "hidden" }}>
         <${ScreenComp} nav=${nav} openMenu=${function () { menuState[1](true); }} back=${function () { history.length > 1 ? history.back() : nav("home"); }} user=${userState[0]} params=${Object.assign({}, M.navParams || {}, currentHashParams())} />
-        <${Drawer} open=${menuState[0]} current=${routeState[0]} user=${userState[0]} onClose=${closeMenu} onNavigate=${function (r) { menuState[1](false); cameForMenu = false; nav(r); }} />
+        <${Drawer} open=${menuState[0]} current=${routeState[0]} user=${userState[0]} onClose=${closeMenu} onNavigate=${function (r) { menuState[1](false); nav(r); }} />
       </div>`;
   }
 
