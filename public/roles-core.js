@@ -258,6 +258,37 @@
         return m.inactive === true || m.status === 'inactive';
     }
 
+    // ── Who may even be offered ──────────────────────────────────────────────
+    //
+    // DISTINCT FROM ELIGIBILITY, and the difference is the whole design of the
+    // picker. An ineligible Person is SHOWN, blocked, with a reason — seeing who
+    // was passed over is the point. These two are not that:
+    //
+    //   • Somebody no longer active has left. They are not a candidate who lost,
+    //     they are not a candidate, and a blocked row for them is an answer to a
+    //     question nobody asked.
+    //   • Somebody hidden by a tag must not appear AT ALL. A blocked row saying
+    //     why they cannot serve still prints the name the tag exists to hide,
+    //     which is the tag failing at the one job it has.
+    //
+    // `hidingTags` are the tag ids whose `people_tags` document carries
+    // `hidePeople: true`. Elders and super admins are who those tags hide people
+    // FROM everyone else for, so they still see them.
+    const SEES_HIDDEN = Object.freeze(['elder', 'super_admin']);
+
+    function assignablePeople(people, options) {
+        const opts = options || {};
+        const hiding = opts.hidingTags || [];
+        const seesHidden = SEES_HIDDEN.indexOf(opts.rank) !== -1;
+
+        return (people || []).filter(person => {
+            if (isInactive(person)) return false;
+            if (seesHidden) return true;
+            if (person && person.shepherdingHidden) return false;
+            return !((person && person.tags) || []).some(tag => hiding.indexOf(tag) !== -1);
+        });
+    }
+
     function carriesTag(person, tagId) {
         return ((person && person.tags) || []).indexOf(tagId) !== -1;
     }
@@ -529,6 +560,7 @@
         LITURGICAL_ROLES,
         LITURGICAL_SLUGS,
         isRequirement,
+        assignablePeople,
         // the registry: both families, one list
         allRoles,
         roleBySlug,

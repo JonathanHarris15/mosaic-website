@@ -13,6 +13,7 @@ const {
   verifyTextbeltSignature,
 } = require("./sms");
 const pr = require("./prayer-request");
+const ac = require("./assignment-conversion");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -960,6 +961,84 @@ exports.sendPrayerRequestTexts = onSchedule(
           });
         }
       }
+    },
+);
+
+/**
+ * Turns plans into history: once an Event's date has passed, every Confirmed
+ * assignment on it becomes an Involvement record (MS-151, ADR-0018 §1).
+ *
+ * An Assignment is the plan and is mutable. An Involvement is the fact that
+ * somebody served. Before this, assigning wrote a serve record immediately —
+ * including for a Sunday six weeks away — so the serve log already counted
+ * serving that had not happened.
+ *
+ *   Confirmed → written.
+ *   Declined  → never, ever.
+ *   Pending   → not written, and NOT discarded: it stays an open question on the
+ *               past Event for an editor to answer. An unanswered question stays
+ *               unanswered permanently and never counts as serving.
+ *
+ * Idempotent by construction — the Involvement id is derived from the occurrence,
+ * the Role, the slot and the person, so a second run overwrites the same
+ * document instead of writing a duplicate.
+ *
+ * Runs daily, just after midnight church-local, so "the date has passed" is
+ * evaluated where the church is rather than where the server is.
+ */
+exports.convertConfirmedAssignments = onSchedule(
+    {
+      schedule: "every day 00:30",
+      timeZone: ac.CHURCH_TIMEZONE,
+      region: "us-central1",
+    },
+    async () => {
+      const db = admin.firestore();
+      const {today, from, to} = ac.conversionWindow(new Date());
+
+      // Strictly past dates only. An Event happening TODAY has not happened yet,
+      // and converting it would be the very bug this job exists to fix.
+      const snap = await db.collection("event_occurrences")
+          .where("date", ">=", from)
+          .where("date", "<=", to)
+          .get();
+
+      let written = 0;
+      let open = 0;
+
+      for (const doc of snap.docs) {
+        const occurrence = Object.assign({id: doc.id}, doc.data());
+        if (!ac.hasPassed(occurrence.date, today)) continue;
+
+        // The roster lives in a subcollection, not on the document — Firestore
+        // cannot hide a field from a reader, so that is where the assignments
+        // are. The admin SDK reads it regardless of the rules.
+        const roster = await doc.ref.collection("roster").get();
+        if (roster.empty) continue;
+
+        occurrence.assignments = roster.docs.map((r) => r.data());
+        const {serves, questions} = ac.conversion(occurrence);
+        open += questions.length;
+        if (!serves.length) continue;
+
+        const batch = db.batch();
+        serves.forEach((record) => {
+          const ref = db.collection("people").doc(record.personId)
+              .collection("involvement").doc(record.involvementId);
+          batch.set(ref, {
+            serviceDate: record.serviceDate,
+            type: record.type,
+            seriesId: record.seriesId,
+            metadata: record.metadata || null,
+            convertedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, {merge: true});
+        });
+        await batch.commit();
+        written += serves.length;
+      }
+
+      log(`convertConfirmedAssignments: wrote ${written} serve record(s); ` +
+          `${open} assignment(s) left as open questions.`);
     },
 );
 

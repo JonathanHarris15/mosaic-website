@@ -20,7 +20,12 @@
   var auth = firebase.auth();
   var db = firebase.firestore();
 
-  var ROLE_LABELS = { admin: "Administrator", editor: "Editor", elder: "Elder", viewer: "Member" };
+  // The drawer's destination list, its role labels and its initials rule live in
+  // mobile/destinations.js, because the SHELL's drawer (mobile-shell-header.js,
+  // on a desktop page opened with ?shell=mobile) builds the same drawer and
+  // cannot load this file — it has no Preact, no lucide and no firebase
+  // bootstrap. Two renderings of the chrome; one of everything they say.
+  var Destinations = window.MosaicDestinations;
 
   // Resolve a display profile from the auth user + /users/{uid}.
   function loadProfile(user) {
@@ -37,7 +42,7 @@
           name: name,
           first: String(name).trim().split(/\s+/)[0],
           permissionLevel: permissionLevel,
-          roleLabel: ROLE_LABELS[permissionLevel] || "Member",
+          roleLabel: Destinations.roleLabel(permissionLevel),
         };
       });
   }
@@ -53,25 +58,8 @@
   function signIn(email, password) { return auth.signInWithEmailAndPassword(email, password); }
   function signOut() { return auth.signOut(); }
 
-  // Drawer / home destinations -> desktop pages (page-load nav for now;
-  // in-shell screens override where they exist). `permissionLevels` mirrors the
-  // card gating on index.html (:300-320) — an entry is hidden unless the signed-in
-  // user's permissionLevel is listed. See canSee().
-  var DESTINATIONS = [
-    { key: "home", label: "Home", icon: "house", route: "home" },
-    { key: "hymn-directory", label: "Hymn Directory", icon: "book-open", route: "hymnDirectory" },
-    { key: "calendar", label: "Service Calendar", icon: "calendar", route: "calendar" },
-    { key: "directory", label: "Member Directory", icon: "users", route: "people" },
-    { key: "shepherd", label: "Shepherd Dashboard", icon: "shield", route: "shepherd", permissionLevels: ["elder", "super_admin"] },
-    { key: "admin", label: "Admin Dashboard", icon: "settings-2", route: "admin", permissionLevels: ["admin", "super_admin"] },
-  ];
-
-  // True when a destination/tile with an optional `permissionLevels` gate is visible to
-  // this user (no gate = always visible). Matches index.html permission checks.
-  function canSee(item, user) {
-    if (!item || !item.permissionLevels) return true;
-    return !!(user && item.permissionLevels.indexOf(user.permissionLevel) >= 0);
-  }
+  var DESTINATIONS = Destinations.DESTINATIONS;
+  var canSee = Destinations.canSee;
 
   // ── Collection loaders (defensive: tolerate missing fields) ──
   function lc(v) { return String(v == null ? "" : v).toLowerCase(); }

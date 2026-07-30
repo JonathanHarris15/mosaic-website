@@ -67,6 +67,30 @@
     return "Good evening";
   }
 
+  // ── Signed in, or a guest on purpose ─────────────────────
+  //
+  // The app used to open on the home screen whoever you were. Signed out, that
+  // meant every tile, the greeting, and behind them every shell page loading as
+  // a stranger — a Calendar with the Sunday Service on it and nothing else,
+  // because a Sunday is fetched by id regardless of who is asking while every
+  // other Event is filtered by what your rank may see. Nothing said so. You
+  // simply saw a smaller church than the one you belong to, and no control that
+  // would let you fix it.
+  //
+  // So a signed-out launch goes to the login screen. "Continue as guest" is
+  // still there, and now it means something: it is remembered, so it is a choice
+  // rather than a bounce.
+  var GUEST_KEY = "mosaicGuest";
+  function isGuest() {
+    try { return sessionStorage.getItem(GUEST_KEY) === "1"; } catch (e) { return false; }
+  }
+  function setGuest(on) {
+    try { on ? sessionStorage.setItem(GUEST_KEY, "1") : sessionStorage.removeItem(GUEST_KEY); } catch (e) {}
+  }
+  M.isGuest = isGuest;
+  M.setGuest = setGuest;
+
+
   // ── Login ────────────────────────────────────────────────
   function LoginScreen(props) {
     var emailS = useState(""), pwS = useState(""), errS = useState(""), busyS = useState(false);
@@ -93,7 +117,7 @@
             <div style=${{ marginTop: 4 }}>
               <${Button} variant="primary" size="lg" style=${{ width: "100%" }} icon=${Ic("log-in", 18)} onClick=${submit}>${busyS[0] ? "Signing in…" : "Sign In"}<//>
             </div>
-            <button onClick=${function () { props.nav("home"); }} style=${{ background: "none", border: "none", color: "var(--secondary)", fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 600, letterSpacing: "0.04em", cursor: "pointer", marginTop: 2 }}>Continue as guest</button>
+            <button onClick=${function () { setGuest(true); props.nav("home"); }} style=${{ background: "none", border: "none", color: "var(--secondary)", fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 600, letterSpacing: "0.04em", cursor: "pointer", marginTop: 2 }}>Continue as guest</button>
           </div>
         </div>
         <div style=${{ textAlign: "center", padding: "0 0 34px", fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)" }}>A very present help in trouble.</div>
@@ -109,10 +133,16 @@
     // The Home card grid mirrors the drawer's top-level destinations (permission-gated).
     var tiles = [
       { icon: "book-open", label: "Hymn Directory", route: "hymnDirectory" },
-      { icon: "calendar", label: "Service Calendar", route: "calendar" },
+      { icon: "church", label: "Services", route: "calendar" },
+      // Route "events", not "calendar" — see data.js. "calendar" is Services.
+      { icon: "calendar-days", label: "Calendar", route: "events" },
       { icon: "users", label: "Member Directory", route: "people" },
       { icon: "shield", label: "Shepherd", route: "shepherd", permissionLevels: ["elder", "super_admin"] },
       { icon: "settings-2", label: "Admin", route: "admin", permissionLevels: ["admin", "super_admin"] },
+      // Not a drawer destination, on purpose: on the web the Roles Manager is a
+      // DASHBOARD CARD, not navigation, and this grid is the phone's dashboard.
+      // Same gate as that card (MS-120) — editor and above.
+      { icon: "hand-heart", label: "Roles Manager", route: "rolesManager", permissionLevels: ["editor", "elder", "admin", "super_admin"] },
     ].filter(function (t) { return data.canSee(t, user); });
     return html`
       <${Screen}>
@@ -155,7 +185,7 @@
               : html`
                 <div style=${{ color: "var(--on-surface-variant)", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14 }}>No upcoming service found.</div>
                 <div onClick=${function () { props.nav("calendar"); }} style=${{ marginTop: 14 }}>
-                  <${Button} variant="secondary" size="md" style=${{ width: "100%" }} icon=${Ic("calendar", 17)}>Open Service Calendar<//>
+                  <${Button} variant="secondary" size="md" style=${{ width: "100%" }} icon=${Ic("church", 17)}>Open Services<//>
                 </div>`}
           </div>
         </${Body}>
@@ -175,15 +205,15 @@
   // shell=mobile makes those pages adapt their chrome for the phone and keep
   // navigation inside the shell (see mobile-shell.js). Reused wholesale so the
   // mobile app gets every feature + the proven save logic — no reimplementation.
-  var SHELL_PAGES = {
-    profile: "profile.html",
-    // Native screens now cover the drawer pages (home, hymnDirectory, calendar,
-    // people, shepherd, admin) plus the shepherding cluster (including Manage Tags,
-    // route "shepherdTags" → screens-shepherd-tags.js) + both editors. The
-    // remaining shell pages are subpages opened in-place with ?shell=mobile and a
-    // standardized back-arrow header (mobile-shell-header.js): the hymn manager /
-    // service builder / service guide / profile (routed elsewhere in nav()).
-  };
+  // Shared with the shell's own drawer — see mobile/destinations.js.
+  //
+  // Native screens cover the drawer pages (home, hymnDirectory, calendar,
+  // people, shepherd, admin) plus the shepherding cluster (including Manage Tags,
+  // route "shepherdTags" → screens-shepherd-tags.js) + both editors. The
+  // remaining shell pages are subpages opened in-place with ?shell=mobile and a
+  // standardized back-arrow header (mobile-shell-header.js): the hymn manager /
+  // service builder / service guide / profile (routed elsewhere in nav()).
+  var SHELL_PAGES = window.MosaicDestinations.SHELL_PAGES;
 
   function nav(route, params) {
     if (route === "serviceBuilder") {
@@ -265,7 +295,7 @@
             })}
           </div>
           <div style=${{ padding: "12px 12px calc(12px + env(safe-area-inset-bottom, 0px))", borderTop: "1px solid var(--outline-variant)" }}>
-            <button onClick=${function () { data.signOut().then(function () { props.onNavigate("login"); }); }} style=${{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", textAlign: "left", background: "transparent", color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 500 }}>
+            <button onClick=${function () { setGuest(false); data.signOut().then(function () { props.onNavigate("login"); }); }} style=${{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", border: "none", borderRadius: "var(--radius)", cursor: "pointer", textAlign: "left", background: "transparent", color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 500 }}>
               ${Ic("log-out", 20)}Sign Out
             </button>
           </div>
@@ -279,18 +309,29 @@
     var menuState = useState(false);
     var userState = useState(undefined); // undefined = loading, null = signed out
 
-    useEffect(function () { return data.onUser(function (u) { userState[1](u); }); }, []);
+    useEffect(function () { return data.onUser(function (u) { userState[1](u); if (u) setGuest(false); }); }, []);
+
+    // `undefined` is still loading; only `null` is a decision. Redirecting on
+    // the loading value would bounce a signed-in person off their own home
+    // screen for the half-second before Firebase restores the session.
+    useEffect(function () {
+      if (userState[0] !== null) return;
+      if (isGuest() || routeState[0] === "login") return;
+      nav("login");
+    });
     useEffect(function () {
       function onHash() { routeState[1](currentRoute()); menuState[1](false); }
       window.addEventListener("hashchange", onHash);
       return function () { window.removeEventListener("hashchange", onHash); };
     }, []);
 
+    function closeMenu() { menuState[1](false); }
+
     // Android hardware back: close drawer → navigate back → exit at home.
     // Refreshed each render so it always sees current state.
     useEffect(function () {
       M._back = function () {
-        if (menuState[0]) { menuState[1](false); return; }
+        if (menuState[0]) { closeMenu(); return; }
         if (routeState[0] !== "home" && routeState[0] !== "login") { history.back(); return; }
         var CapApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
         if (CapApp && CapApp.exitApp) CapApp.exitApp();
@@ -308,7 +349,7 @@
     return html`
       <div style=${{ height: "100%", position: "relative", overflow: "hidden" }}>
         <${ScreenComp} nav=${nav} openMenu=${function () { menuState[1](true); }} back=${function () { history.length > 1 ? history.back() : nav("home"); }} user=${userState[0]} params=${Object.assign({}, M.navParams || {}, currentHashParams())} />
-        <${Drawer} open=${menuState[0]} current=${routeState[0]} user=${userState[0]} onClose=${function () { menuState[1](false); }} onNavigate=${function (r) { menuState[1](false); nav(r); }} />
+        <${Drawer} open=${menuState[0]} current=${routeState[0]} user=${userState[0]} onClose=${closeMenu} onNavigate=${function (r) { menuState[1](false); nav(r); }} />
       </div>`;
   }
 

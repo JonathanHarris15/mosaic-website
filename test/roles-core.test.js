@@ -182,3 +182,71 @@ test('a slot requirement cannot be set to something outside the three values', (
 test('the number of people a Role needs is its slot count', () => {
     assert.equal(Roles.slotCount(kidsTeam()), 3);
 });
+
+// ── Who may even be offered for a Role ────────────────────────────────────────
+//
+// Distinct from ELIGIBILITY, and the difference matters. An ineligible Person is
+// SHOWN, blocked, with a reason — seeing who was passed over is the whole point
+// of that screen. Somebody who has left, or whom this viewer is not allowed to
+// see at all, is a different thing: they are not a candidate who lost, they are
+// not a candidate. Showing them blocked would be an answer to a question nobody
+// asked, and for a hidden Person it would leak the name the tag exists to hide.
+
+const HIDDEN_TAG = 'safeguarding';
+
+test('somebody no longer active is not offered at all', () => {
+    const people = [
+        { id: 'p1', name: 'Dave Rowe' },
+        { id: 'p2', name: 'Gone Away', membership: { inactive: true } },
+        { id: 'p3', name: 'Also Gone', membership: { status: 'inactive' } },
+    ];
+    const offered = Roles.assignablePeople(people, { rank: 'editor' });
+    assert.deepStrictEqual(offered.map(p => p.id), ['p1']);
+});
+
+test('a Person hidden by a tag is not offered to an editor', () => {
+    // The tag exists to keep them out of sight. A blocked row saying "already
+    // serving here" would still print their name.
+    const people = [
+        { id: 'p1', name: 'Dave Rowe' },
+        { id: 'p2', name: 'Private Person', tags: [HIDDEN_TAG] },
+    ];
+    const opts = { rank: 'editor', hidingTags: [HIDDEN_TAG] };
+    assert.deepStrictEqual(Roles.assignablePeople(people, opts).map(p => p.id), ['p1']);
+});
+
+test('an elder sees the hidden Person, because the tag hides them from everyone else', () => {
+    const people = [
+        { id: 'p1', name: 'Dave Rowe' },
+        { id: 'p2', name: 'Private Person', tags: [HIDDEN_TAG] },
+    ];
+    ['elder', 'super_admin'].forEach(rank => {
+        assert.deepStrictEqual(
+            Roles.assignablePeople(people, { rank: rank, hidingTags: [HIDDEN_TAG] }).map(p => p.id),
+            ['p1', 'p2'], rank + ' lost sight of a hidden Person');
+    });
+});
+
+test('an elder still does not get somebody who has left', () => {
+    // Hiding is about who may look. Inactive is about whether they are here at
+    // all, and no rank changes that.
+    const people = [{ id: 'p2', name: 'Gone Away', membership: { inactive: true } }];
+    assert.deepStrictEqual(Roles.assignablePeople(people, { rank: 'super_admin' }), []);
+});
+
+test('the shepherding system can hide somebody on its own', () => {
+    const people = [
+        { id: 'p1', name: 'Dave Rowe' },
+        { id: 'p2', name: 'Sensitive', shepherdingHidden: true },
+    ];
+    assert.deepStrictEqual(
+        Roles.assignablePeople(people, { rank: 'editor' }).map(p => p.id), ['p1']);
+});
+
+test('with no hiding tags configured, everybody active is offered', () => {
+    const people = [{ id: 'p1', tags: ['member'] }, { id: 'p2' }];
+    assert.deepStrictEqual(Roles.assignablePeople(people, { rank: 'editor' }).map(p => p.id),
+        ['p1', 'p2']);
+    assert.deepStrictEqual(Roles.assignablePeople(people, {}).map(p => p.id), ['p1', 'p2']);
+    assert.deepStrictEqual(Roles.assignablePeople(null, {}), []);
+});

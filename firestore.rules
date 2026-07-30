@@ -21,6 +21,20 @@ service cloud.firestore {
       return request.auth != null && permissionLevel() in ['editor', 'admin', 'elder', 'super_admin'];
     }
 
+    // Helper to check if user is a member or above. The floor of the `member`
+    // visibility rung (MS-99): a viewer is signed in but sees only public things.
+    function isMember() {
+      return request.auth != null
+        && permissionLevel() in ['member', 'editor', 'admin', 'elder', 'super_admin'];
+    }
+
+    // The Person record this signed-in User is linked to, or null. Event
+    // `participant` visibility is answered against Person ids, not User ids.
+    function myPersonId() {
+      let d = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return ('personId' in d) ? d.personId : null;
+    }
+
     // Helper to check if user is elder or super_admin
     function isElder() {
       return request.auth != null && permissionLevel() in ['elder', 'super_admin'];
@@ -65,13 +79,117 @@ service cloud.firestore {
       allow create, update, delete: if isEditor();
     }
 
-    // Event series (ADR-0016, MS-13): the recurring things that carry Roles. The
-    // Sunday Service is one locked series; its occurrences remain the date-keyed
-    // `services` documents below until the Calendar (MS-99) adds a per-occurrence
-    // store.
+    // ── Events, occurrences, and the five-rung visibility ladder ────────────
+    //
+    // ADR-0018 §5. Visibility is `public` → `member` → `participant` → `editor`
+    // → `elder`, and it is STAMPED ONTO EVERY OCCURRENCE rather than looked up
+    // from the series. A rule cannot afford a get() per row without hitting the
+    // rules engine's lookup limits on any real list query — the lesson already
+    // learned in MS-130 for the relationship collections.
+    //
+    // FAILS CLOSED. Every clause tests the stamped value for equality against a
+    // named rung, so a document with no `visibility` field matches nothing and is
+    // readable by nobody. That is deliberate: the failure mode being guarded
+    // against is an occurrence quietly shipping unstamped and going public.
+    //
+    // ⚠ QUERY CONSTRAINT — read this before debugging an "empty" calendar.
+    // Firestore evaluates these rules PER RETURNED DOCUMENT and fails the WHOLE
+    // query if any document would fail. The Calendar MUST therefore constrain its
+    // own reads — one query filtered by the viewer's rank, one `array-contains`
+    // their Person id, merged client-side, because Firestore cannot express that
+    // as a single filter:
+    //     .where('visibility', 'in', rungsForMyRank)
+    //     .where('participantIds', 'array-contains', myPersonId)
+    // An unconstrained query does not return fewer rows — it errors outright, and
+    // the error looks exactly like "this church has no events".
+    // EventsOccurrenceCore.visibilityQueryFor() is the one place that builds them.
+
+    // The stamped rung, or 'none' when the field is absent. 'none' is not a rung,
+    // so an unstamped document is readable by nobody.
+    function stampedVisibility() {
+      return ('visibility' in resource.data) ? resource.data.visibility : 'none';
+    }
+
+    // Rank alone. `participant` is NOT here for a member — it cannot be answered
+    // by rank, which is the whole reason the Calendar runs a second query — but
+    // everyone above participant sees participant-level Events without holding a
+    // Role on them.
+    function rankCanSee(visibility) {
+      return visibility == 'public'
+        || (isMember() && visibility == 'member')
+        || (isEditor() && visibility in ['member', 'participant', 'editor'])
+        || (isElder() && visibility == 'elder');
+    }
+
+    // The one rung rank cannot answer, checked against the occurrence's own
+    // denormalised participant list. Someone who DECLINED is still in that list —
+    // they keep their place, and their sight of the Event, until somebody else
+    // takes the slot. Someone removed by an editor leaves the list in the same
+    // write, and loses sight of it instantly.
+    function isEventParticipant() {
+      return request.auth != null
+        && ('participantIds' in resource.data)
+        && myPersonId() in resource.data.participantIds;
+    }
+
+    // Event series (ADR-0016, MS-13; visibility added by ADR-0018): the recurring
+    // things that carry Roles.
+    //
+    // NO LONGER WORLD-READABLE. Harmless while the only series was the Sunday
+    // Service; the moment "Elders' Meeting" can be a series, its name would be
+    // public to the internet.
+    //
+    // The Sunday Service is permanently public and is named here rather than
+    // relying on a stamp, so the Services page and the congregant-facing Service
+    // Guide keep working exactly as they do today, with no migration in between.
+    //
+    // A series carries no participant list — participation is per occurrence — so
+    // `participant`-level series are reachable by editors and above only. A
+    // participant does not need the series: an Event they hold a Role on always
+    // HAS an occurrence document (that is where their assignment lives), and the
+    // occurrence carries everything the Calendar renders.
     match /events/{eventId} {
-      allow read: if true;
+      allow read: if eventId == 'sunday_service' || rankCanSee(stampedVisibility());
       allow create, update, delete: if isEditor();
+    }
+
+    // Event occurrences (ADR-0018 §3): the dated instances. SPARSE — a document
+    // exists only once something lands on the date, so an untouched date still
+    // appears in the Calendar, computed from the series' recurrence rule.
+    match /event_occurrences/{occurrenceId} {
+      allow read: if rankCanSee(stampedVisibility())
+        || (stampedVisibility() == 'participant' && isEventParticipant());
+      allow create, update, delete: if isEditor();
+
+      // The roster — who else is serving. Firestore cannot hide a FIELD from
+      // someone allowed to read a document, so "participants can't see who else
+      // is coming" only works if the roster is stored separately (ADR-0018 §5).
+      //
+      // Your OWN assignment is always readable — you are always allowed to know
+      // what you have been asked to do. Everyone else's depends on the Event's
+      // roster setting, which is the editor's choice per Event.
+      match /roster/{assignmentId} {
+        allow read: if isEditor()
+          || (request.auth != null && resource.data.personId == myPersonId())
+          || (request.auth != null
+              && get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.rosterShared == true
+              && myPersonId() in get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.participantIds);
+        allow create, update, delete: if isEditor();
+      }
+    }
+
+    // The Calendar needs YOUR OWN assignments across a whole month without
+    // reading anybody else's, so it queries each Event's roster for your Person
+    // id. Your own row is always readable — you are always allowed to know what
+    // you have been asked to do — and everyone else's still depends on the
+    // Event's roster setting via the rule above.
+    //
+    // ⚠ Constrain this query. `.where('personId', '==', myPersonId)` is what
+    // makes it legal; unconstrained it returns other people's rows, they fail,
+    // and the whole read errors.
+    match /{path=**}/roster/{assignmentId} {
+      allow read: if isEditor()
+        || (request.auth != null && resource.data.personId == myPersonId());
     }
 
     match /services/{dateId} {

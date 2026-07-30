@@ -64,6 +64,9 @@
 
   <!-- Mosaic mobile shell -->
   <script src="shepherding-documents-core.js"></script>
+  <!-- The destination list, shared with the shell's own drawer. Must load
+       before data.js and app.js, which both read it. -->
+  <script src="mobile/destinations.js"></script>
   <script src="mobile/core.js"></script>
   <script src="mobile/ui.js"></script>
   <script src="mobile/data.js"></script>

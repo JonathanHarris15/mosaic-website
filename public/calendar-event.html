@@ -1,0 +1,1570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Event | Mosaic</title>
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <!-- Running inside the phone shell. These pages already carried
+         `html.shell-mobile` rules and never loaded the script that sets that
+         class, so none of them could ever fire — styling for a mode the page
+         had no way to enter. -->
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <script>window.MOBILE_HEADER = { title: 'Event', back: '#back' };</script>
+    <script src="mobile-shell-header.js"></script>
+
+    <style>
+        [x-cloak] { display: none !important; }
+
+        /* The one raw value in the design set — the steel-teal focus ring, which
+           already matches the Input component. */
+        .cal-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(93,148,169,.18); }
+
+        .cal-motion { transition: background-color 150ms cubic-bezier(0.2,0,0,1),
+                                  opacity 150ms cubic-bezier(0.2,0,0,1),
+                                  border-color 150ms cubic-bezier(0.2,0,0,1); }
+        .cal-press:active { transform: scale(0.98); }
+
+        /* Row actions reveal on hover on a desktop. There is no hover on touch,
+           so the mobile shell keeps them visible — same as the Tags tab. */
+        .cal-row-actions { opacity: 0; }
+        .cal-row:hover .cal-row-actions,
+        .cal-row:focus-within .cal-row-actions { opacity: 1; }
+        html.shell-mobile .cal-row-actions { opacity: 1; }
+
+        /* ── The phone ────────────────────────────────────────────────────────
+           A slot row is: number · requirement · avatar · name · state · four
+           buttons. That is eight things, and 390px does not hold them — it holds
+           about half, and the rest wrap into a shape nobody designed.
+
+           So on a phone the row keeps what only it can say — the requirement,
+           who is standing in it, and where that stands — and the row's controls
+           drop to a line of their own. The number and the avatar go: the number
+           counts places nobody refers to out loud, and the avatar is decoration
+           beside a name that is right there. */
+        html.shell-mobile .cal-slot-row { min-height: 48px; flex-wrap: wrap; }
+        html.shell-mobile .cal-slot-index,
+        html.shell-mobile .cal-slot-avatar { display: none; }
+        html.shell-mobile .cal-slot-req { width: 62px; }
+        html.shell-mobile .cal-row-actions,
+        html.shell-mobile .cal-slot-actions { width: 100%; justify-content: flex-end; }
+
+        /* A Role card's header carries a badge glyph, a rule count, a fill count
+           and a way through to the Event. The way through is said again in full
+           at the bottom of the section, so on a phone the header keeps the name
+           and the count — which is the header the design draws. */
+        html.shell-mobile .cal-role-glyph,
+        html.shell-mobile .cal-role-everydate { display: none; }
+
+        /* Three icon-and-text pairs across 390px is three lines. The dots that
+           separate them are already in the markup, so dropping the glyphs is
+           enough to bring it back to one. */
+        html.shell-mobile .cal-when-icon { display: none; }
+        html.shell-mobile .cal-event-title { font-size: 23px; }
+
+        .cal-cols { display: grid; grid-template-columns: minmax(0,1fr); gap: 28px; align-items: start; }
+        @media (min-width: 900px) { .cal-cols { grid-template-columns: minmax(0,1fr) 372px; } }
+
+        /* The dashed sand hairline around the whole strip is what marks one-off
+           work as lighter than a Role we keep. The handoff said a single job may
+           never have a border of its own — that held until a job had seven
+           people on it and ran straight into the next one. Each job now gets an
+           edge; the weight difference lives in the dash, not in the absence. */
+        .cal-oneoff-strip { border: 1px dashed #C2B79D; }
+    </style>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="auth.js"></script>
+    <script src="date-utils.js"></script>
+    <script src="roles-core.js"></script>
+    <script src="events-core.js"></script>
+    <script src="events-occurrence-core.js"></script>
+    <script src="events-store.js"></script>
+    <script src="calendar-view.js"></script>
+    <script src="calendar-event.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+</head>
+
+<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+      x-data="eventDetailPage()" x-cloak>
+
+    <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
+        <a href="calendar.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary cal-motion">
+            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+            <span class="text-xs font-label-md uppercase tracking-wider">Calendar</span>
+        </a>
+        <div id="auth-container" class="flex items-center"><div class="h-10"></div></div>
+    </header>
+
+    <div x-show="loading" class="flex-grow flex items-center justify-center">
+        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    </div>
+
+    <main x-show="!loading" class="flex-grow w-full max-w-7xl mx-auto px-4 md:px-margin pb-lg pt-md">
+
+        <div x-show="error"
+             class="mb-md bg-error-container text-on-error-container border border-outline-variant rounded-lg p-md flex items-start gap-sm">
+            <span class="material-symbols-outlined text-[20px]">error</span>
+            <p class="font-body-md text-body-md" x-text="error"></p>
+        </div>
+
+        <!-- Signed out. The Roles and every control are absent rather than
+             disabled, which reads as a missing feature unless this says so. -->
+        <div x-show="signedOut"
+             class="mb-md bg-surface-container-low border border-outline-variant border-l-[3px] rounded-lg
+                    px-md py-3 flex items-start gap-sm" style="border-left-color:#B89B6A;">
+            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">person_off</span>
+            <div class="flex-grow min-w-0">
+                <p class="text-[14px] text-on-surface">You are not signed in.</p>
+                <p class="text-[12.5px] text-on-surface-variant mt-0.5">
+                    This is the public reading of this event. Signing in shows who is
+                    serving, and lets you change it if that is your job.
+                </p>
+            </div>
+            <a :href="signInHref"
+               class="shrink-0 bg-primary text-on-primary px-3 py-2 rounded-lg font-label-md
+                      text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus">Sign in</a>
+        </div>
+
+        <!-- ── Managing the Event itself, not one date of it ──────────────── -->
+        <!-- Reached from the Calendar's "Sunday Service" button. This is the
+             Event: its time, and which Roles every date of it carries. The
+             liturgy still belongs to the order of service, per Sunday, and that
+             separation is what keeps the printed booklet safe. -->
+        <template x-if="managingSeries && series">
+        <div class="max-w-[860px]">
+            <div class="pb-md border-b border-outline-variant flex items-start gap-sm flex-wrap">
+                <div class="min-w-0 flex-grow">
+                    <h1 class="font-display text-headline-lg tracking-[.02em] text-primary"
+                        x-text="series.name"></h1>
+                    <p class="font-body-md text-body-md text-on-surface-variant mt-xs"
+                       x-text="seriesPattern"></p>
+                </div>
+                <a href="calendar.html"
+                   class="shrink-0 border border-secondary text-secondary px-md py-2 rounded-lg font-label-md
+                          text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
+                    Back to the calendar
+                </a>
+            </div>
+
+            <div class="mt-gutter cal-cols">
+                <div class="flex flex-col gap-gutter min-w-0">
+
+                    <!-- What it IS. These live on the series because they are true
+                         of every date of it, which is exactly why this screen and
+                         not one date's screen is where they are edited. -->
+                    <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">Details</h3>
+                        <p class="text-[12.5px] text-on-surface-variant mt-1">
+                            True of every date of this event.
+                        </p>
+
+                        <div class="mt-sm flex flex-col gap-md">
+                            <label class="block">
+                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">What is it</span>
+                                <input type="text" x-model="seriesDraft.name" :disabled="isSundaySeries"
+                                       placeholder="Midweek Gathering"
+                                       class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                              text-[15px] text-on-surface placeholder:text-outline cal-focus disabled:opacity-[.55]" />
+                                <span x-show="isSundaySeries" class="block text-[11.5px] text-on-surface-variant mt-1">
+                                    The Sunday Service keeps its name — everything else in the app refers to it.
+                                </span>
+                            </label>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-md">
+                                <label class="block">
+                                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Starts at</span>
+                                    <input type="time" :value="seriesTime" @change="saveSeriesTime($event.target.value)"
+                                           :disabled="saving"
+                                           class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                                  text-[15px] text-on-surface cal-focus disabled:opacity-40" />
+                                    <span class="block text-[11.5px] text-on-surface-variant mt-1">
+                                        Unless one date has its own time.
+                                    </span>
+                                </label>
+                                <label class="block">
+                                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Where</span>
+                                    <input type="text" x-model="seriesDraft.location" placeholder="The hall"
+                                           class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                                  text-[15px] text-on-surface placeholder:text-outline cal-focus" />
+                                </label>
+                            </div>
+
+                            <label class="block">
+                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">What it's for</span>
+                                <textarea x-model="seriesDraft.description" rows="3"
+                                          placeholder="A short line for anyone who has not been before."
+                                          class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                                 text-[15px] text-on-surface placeholder:text-outline cal-focus"></textarea>
+                            </label>
+
+                            <!-- The time saves on change; the typed fields need a
+                                 press, because a name is half-typed for most of the
+                                 time somebody is typing it. -->
+                            <div class="flex items-center justify-end gap-sm" x-show="seriesDetailsChanged">
+                                <button @click="startSeriesDraft()"
+                                        class="px-3 py-1.5 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
+                                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Undo</button>
+                                <button @click="saveSeriesDetails()" :disabled="!seriesDetailsValid || saving"
+                                        class="bg-primary text-on-primary px-3 py-1.5 rounded-lg shadow-xs font-label-md
+                                               text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus
+                                               disabled:opacity-40">Save details</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- When it happens -->
+                    <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">When it happens</h3>
+                        <p class="font-headline-lg text-[17px] text-on-surface mt-2" x-text="seriesPattern"></p>
+                        <div x-show="!isSundaySeries" class="mt-sm">
+                            <button @click="openPattern()"
+                                    class="border border-secondary text-secondary px-3 py-1.5 rounded-lg font-label-md
+                                           text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
+                                Change pattern
+                            </button>
+                        </div>
+                        <p x-show="isSundaySeries" class="text-[12.5px] text-on-surface-variant mt-2">
+                            Every Sunday, by definition. That one is settled.
+                        </p>
+                    </section>
+
+                    <!-- The Roles it carries -->
+                    <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">The roles it needs</h3>
+
+                        <!-- Liturgical: shown, never editable here. An editor
+                             needs to see the whole shape of a Sunday, and these
+                             are half of it — but they are filled in the order of
+                             service, one Sunday at a time. -->
+                        <div x-show="liturgicalRoles.length" class="mt-sm">
+                            <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
+                                Filled in the order of service
+                            </div>
+                            <p class="text-[12px] text-on-surface-variant mt-1 leading-snug">
+                                These belong to the Sunday itself, not to the event — you put names
+                                against them when you build that Sunday's order of service. They can't
+                                be taken off, because the printed booklet expects them.
+                            </p>
+                            <div class="mt-2 flex flex-col gap-1.5">
+                                <template x-for="role in liturgicalRoles" :key="role.slug">
+                                    <div class="flex items-center gap-sm rounded-lg border border-outline-variant
+                                                bg-surface-container-low px-3 py-2">
+                                        <span class="material-symbols-outlined text-[17px] text-outline shrink-0">lock</span>
+                                        <span class="text-[14px] text-on-surface flex-grow min-w-0 truncate"
+                                              x-text="role.name"></span>
+                                        <span class="shrink-0 text-[10.5px] font-label-md tracking-[.12em]
+                                                     uppercase text-on-surface-variant">Locked</span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Servant Roles: the editor's to choose. -->
+                        <div class="mt-md pt-md border-t border-outline-variant">
+                            <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
+                                Roles you've added
+                            </div>
+                            <p x-show="!servantRoles.length" class="text-[13px] text-on-surface-variant mt-1">
+                                None yet. Add the jobs that come round every time — welcome team,
+                                sound desk, coffee.
+                            </p>
+                            <div class="mt-2 flex flex-col gap-1.5">
+                                <template x-for="role in servantRoles" :key="role.slug">
+                                    <div class="cal-row flex items-center gap-sm rounded-lg border border-outline-variant
+                                                bg-surface px-3 py-2 cal-motion">
+                                        <span class="material-symbols-outlined text-[17px] text-secondary shrink-0">badge</span>
+                                        <span class="text-[14px] text-on-surface flex-grow min-w-0 truncate"
+                                              x-text="role.name"></span>
+                                        <span class="shrink-0 text-[11.5px] text-on-surface-variant"
+                                              x-text="role.needed"></span>
+                                        <button @click="askRemoveSeriesRole(role.slug)" :disabled="saving"
+                                                class="shrink-0 w-[28px] h-[28px] rounded-md flex items-center justify-center
+                                                       text-on-surface-variant hover:bg-surface-container cal-motion cal-focus"
+                                                :aria-label="'Take ' + role.name + ' off'">
+                                            <span class="material-symbols-outlined text-[17px]">close</span>
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <div x-show="seriesRolesAvailable.length" class="mt-sm">
+                                <select @change="addSeriesRole($event.target.value); $event.target.value = ''"
+                                        :disabled="saving"
+                                        class="cal-focus bg-transparent text-[13px] text-secondary border-0 cursor-pointer py-1">
+                                    <option value="">+ Add a role</option>
+                                    <template x-for="def in seriesRolesAvailable" :key="def.slug">
+                                        <option :value="def.slug" x-text="def.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <aside class="flex flex-col gap-gutter min-w-0">
+                    <!-- The next few dates. A Role only ever gets somebody's name
+                         against it on a DATE, so this screen has to hand you one. -->
+                    <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">The next few</h3>
+                        <p class="text-[12.5px] text-on-surface-variant mt-1">
+                            A role only ever gets somebody's name against it on a date.
+                        </p>
+                        <div class="mt-sm flex flex-col gap-sm">
+                            <template x-for="d in seriesNextDates" :key="d">
+                                <div class="rounded-lg border border-outline-variant bg-surface overflow-hidden">
+                                    <div class="px-3 py-2 text-[14px] text-on-surface border-b border-outline-variant
+                                                bg-surface-container-lowest" x-text="longDate(d)"></div>
+                                    <!-- Two jobs, two links. Filling the sound desk and building the
+                                         order of service are not the same act, and one screen
+                                         pretending to be both is how the liturgy ends up editable
+                                         from the Event model. -->
+                                    <a :href="dateHref(d)"
+                                       class="flex items-center gap-sm px-3 py-2 cal-motion cal-focus hover:bg-surface-container-low">
+                                        <span class="material-symbols-outlined text-[16px] text-secondary shrink-0">group</span>
+                                        <span class="text-[13px] text-on-surface flex-grow">Who's on</span>
+                                        <span class="material-symbols-outlined text-[14px] text-outline shrink-0">chevron_right</span>
+                                    </a>
+                                    <a x-show="isSundaySeries" :href="orderOfServiceHref(d)"
+                                       class="flex items-center gap-sm px-3 py-2 border-t border-outline-variant
+                                              cal-motion cal-focus hover:bg-surface-container-low">
+                                        <span class="material-symbols-outlined text-[16px] text-secondary shrink-0">menu_book</span>
+                                        <span class="text-[13px] text-on-surface flex-grow">Order of service</span>
+                                        <span class="material-symbols-outlined text-[14px] text-outline shrink-0">north_east</span>
+                                    </a>
+                                </div>
+                            </template>
+                        </div>
+                    </section>
+
+                    <!-- Colour, same control as any other Event. -->
+                    <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">Colour on the calendar</h3>
+                        <div class="mt-sm grid grid-cols-4 gap-2">
+                            <template x-for="c in colours" :key="c.slug">
+                                <button @click="setColour(c.slug)" :disabled="saving"
+                                        class="flex flex-col items-center gap-1 rounded-lg border py-2 cal-motion cal-press cal-focus
+                                               disabled:opacity-40"
+                                        :class="colour.slug === c.slug
+                                            ? 'border-primary bg-surface-container-low'
+                                            : 'border-outline-variant hover:bg-surface-container-low'"
+                                        :aria-label="c.name">
+                                    <span class="w-[22px] h-[22px] rounded-full border border-black/10"
+                                          :style="'background:' + c.bar"></span>
+                                    <span class="text-[10.5px] font-label-md text-on-surface-variant" x-text="c.name"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </section>
+
+                    <!-- Who can see it. Settled for a Sunday — not disabled, settled:
+                         there is no control to grey out. -->
+                    <section x-show="isSundaySeries"
+                             class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">Who can see this</h3>
+                        <p class="font-headline-lg text-[16px] leading-[1.55] text-on-surface mt-2">
+                            Anyone at all. A Sunday Service is always public — that is settled,
+                            not a setting.
+                        </p>
+                    </section>
+
+                    <section x-show="!isSundaySeries"
+                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">Who can see this</h3>
+                        <div class="mt-sm flex flex-col">
+                            <template x-for="rung in visibilityLadder" :key="rung.level">
+                                <button @click="setSeriesVisibility(rung.level)" :disabled="saving"
+                                        class="text-left flex items-start gap-sm px-2 py-2.5 rounded-lg cal-motion cal-focus
+                                               hover:bg-surface-container-low border-l-[3px] disabled:opacity-40"
+                                        :class="seriesVisibility === rung.level ? 'border-l-primary bg-surface-container-low' : 'border-l-transparent'">
+                                    <span class="material-symbols-outlined text-[19px] shrink-0 mt-0.5"
+                                          :class="seriesVisibility === rung.level ? 'text-primary' : 'text-on-surface-variant'"
+                                          x-text="rung.icon"></span>
+                                    <div class="min-w-0 flex-grow">
+                                        <div class="text-[13.5px] font-label-md font-semibold text-on-surface" x-text="rung.label"></div>
+                                        <div class="text-[12px] text-on-surface-variant leading-snug" x-text="rung.who"></div>
+                                    </div>
+                                    <span x-show="seriesVisibility === rung.level"
+                                          class="material-symbols-outlined text-[18px] text-primary shrink-0">check</span>
+                                </button>
+                            </template>
+                        </div>
+
+                        <div class="mt-sm pt-sm border-t border-outline-variant cal-motion"
+                             :class="rosterToggleApplies(seriesVisibility) ? '' : 'opacity-[.45]'">
+                            <label class="flex items-start gap-2 cursor-pointer">
+                                <input type="checkbox" :checked="series.rosterShared"
+                                       @change="setSeriesRosterShared($event.target.checked)"
+                                       :disabled="!rosterToggleApplies(seriesVisibility)"
+                                       class="accent-primary mt-0.5 cal-focus" />
+                                <span>
+                                    <span class="text-[13px] text-on-surface">The people serving can see the rest of the roster</span>
+                                    <span x-show="!rosterToggleApplies(seriesVisibility)"
+                                          class="block text-[11.5px] text-on-surface-variant mt-0.5">
+                                        Everyone can see this event anyway, so this makes no difference here.
+                                    </span>
+                                </span>
+                            </label>
+                        </div>
+
+                        <p class="mt-sm text-[11.5px] text-on-surface-variant">
+                            This applies to every date of this event, past ones included.
+                        </p>
+                    </section>
+                </aside>
+            </div>
+        </div>
+        </template>
+
+        <!-- ── Creating a new Event ───────────────────────────────────────── -->
+        <template x-if="creating">
+        <div class="max-w-[720px]">
+            <div class="pb-md border-b border-outline-variant">
+                <h1 class="font-display text-headline-lg tracking-[.02em] text-primary">New event</h1>
+                <p class="font-body-md text-body-md text-on-surface-variant mt-xs max-w-[64ch]">
+                    Anything that isn't a Sunday — a midweek gathering, an elders' meeting,
+                    a picnic, a workday. You can add the Roles it needs once it exists.
+                </p>
+            </div>
+
+            <div class="mt-gutter flex flex-col gap-md">
+                <label class="block">
+                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">What is it</span>
+                    <input x-model="draft.name" placeholder="Midweek Gathering"
+                           class="mt-1 w-full rounded-lg border border-outline-variant bg-surface px-3 py-2
+                                  text-[15px] text-on-surface cal-focus" />
+                </label>
+
+                <div class="grid gap-md" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+                    <label class="block">
+                        <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">First date</span>
+                        <input type="date" x-model="draft.date"
+                               class="mt-1 w-full rounded-lg border border-outline-variant bg-surface px-3 py-2
+                                      text-[15px] text-on-surface cal-focus" />
+                    </label>
+                    <label class="block">
+                        <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Starts at</span>
+                        <input type="time" x-model="draft.time"
+                               class="mt-1 w-full rounded-lg border border-outline-variant bg-surface px-3 py-2
+                                      text-[15px] text-on-surface cal-focus" />
+                    </label>
+                    <label class="block">
+                        <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Where</span>
+                        <input x-model="draft.location" placeholder="The hall"
+                               class="mt-1 w-full rounded-lg border border-outline-variant bg-surface px-3 py-2
+                                      text-[15px] text-on-surface cal-focus" />
+                    </label>
+                </div>
+
+                <label class="block">
+                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Anything to say about it</span>
+                    <textarea x-model="draft.description" rows="3" placeholder="Optional."
+                              class="mt-1 w-full rounded-lg border border-outline-variant bg-surface px-3 py-2
+                                     text-[15px] text-on-surface cal-focus"></textarea>
+                </label>
+
+                <!-- How often. Weekly, fortnightly, monthly — nothing more.
+                     This is not a general-purpose recurrence editor. -->
+                <div>
+                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">How often</span>
+                    <div class="mt-1 grid gap-sm" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+                        <template x-for="opt in [['once','Just once'],['weekly','Every week'],['fortnightly','Every other week'],['monthly','Every month']]" :key="opt[0]">
+                            <button @click="draft.recurrence.freq = opt[0]"
+                                    class="rounded-lg border px-3 py-2 text-[13px] font-label-md cal-motion cal-press cal-focus"
+                                    :class="draft.recurrence.freq === opt[0]
+                                        ? 'border-primary bg-surface-container text-primary'
+                                        : 'border-outline-variant text-on-surface-variant'"
+                                    x-text="opt[1]"></button>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Carries on. Only meaningful for a repeating Event. -->
+                <div x-show="draft.recurrence.freq !== 'once'">
+                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Carries on</span>
+                    <div class="mt-1 flex flex-col gap-1.5">
+                        <template x-for="opt in [['never','Until further notice'],['onDate','Until a date'],['afterCount','For a set number of times']]" :key="opt[0]">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" :value="opt[0]" x-model="draft.recurrence.ends.kind"
+                                       name="ends" class="accent-primary cal-focus" />
+                                <span class="text-[14px] text-on-surface" x-text="opt[1]"></span>
+                            </label>
+                        </template>
+                        <input x-show="draft.recurrence.ends.kind === 'onDate'" type="date"
+                               x-model="draft.recurrence.ends.date"
+                               class="ml-6 w-[200px] rounded-lg border border-outline-variant bg-surface px-3 py-1.5
+                                      text-[14px] cal-focus" />
+                        <input x-show="draft.recurrence.ends.kind === 'afterCount'" type="number" min="1"
+                               x-model.number="draft.recurrence.ends.count" placeholder="12"
+                               class="ml-6 w-[120px] rounded-lg border border-outline-variant bg-surface px-3 py-1.5
+                                      text-[14px] cal-focus" />
+                    </div>
+                </div>
+
+                <!-- Reads as: the whole pattern as one sentence, so the editor
+                     checks their intent in English rather than reading the form
+                     back to themselves. -->
+                <div x-show="draft.date" class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
+                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Reads as</span>
+                    <p class="font-headline-lg text-[19px] text-on-surface mt-1" x-text="draftSentence"></p>
+                    <div class="mt-2 flex flex-wrap gap-1.5 items-center">
+                        <template x-for="d in draftDates" :key="d">
+                            <span class="rounded-md bg-surface-container px-2 py-0.5 text-[11.5px] text-on-surface-variant"
+                                  x-text="d"></span>
+                        </template>
+                        <span x-show="draft.recurrence.freq !== 'once' && draft.recurrence.ends.kind === 'never'"
+                              class="text-[11.5px] text-outline font-headline-lg">and on</span>
+                    </div>
+                </div>
+
+                <!-- Who can see it -->
+                <div>
+                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Who can see this</span>
+                    <div class="mt-1 flex flex-col">
+                        <template x-for="rung in visibilityLadder" :key="rung.level">
+                            <button @click="draft.visibility = rung.level"
+                                    class="text-left flex items-start gap-sm px-2 py-2.5 rounded-lg cal-motion cal-focus
+                                           hover:bg-surface-container-low border-l-[3px]"
+                                    :class="draft.visibility === rung.level ? 'border-l-primary bg-surface-container-low' : 'border-l-transparent'">
+                                <span class="material-symbols-outlined text-[19px] shrink-0 mt-0.5"
+                                      :class="draft.visibility === rung.level ? 'text-primary' : 'text-on-surface-variant'"
+                                      x-text="rung.icon"></span>
+                                <div class="min-w-0 flex-grow">
+                                    <div class="text-[13.5px] font-label-md font-semibold text-on-surface" x-text="rung.label"></div>
+                                    <div class="text-[12px] text-on-surface-variant leading-snug" x-text="rung.who"></div>
+                                </div>
+                                <span x-show="draft.visibility === rung.level"
+                                      class="material-symbols-outlined text-[18px] text-primary shrink-0">check</span>
+                            </button>
+                        </template>
+                    </div>
+
+                    <div class="mt-sm pt-sm border-t border-outline-variant cal-motion"
+                         :class="rosterToggleApplies(draft.visibility) ? '' : 'opacity-[.45]'">
+                        <label class="flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" x-model="draft.rosterShared"
+                                   :disabled="!rosterToggleApplies(draft.visibility)"
+                                   class="accent-primary mt-0.5 cal-focus" />
+                            <span>
+                                <span class="text-[13px] text-on-surface">The people serving can see the rest of the roster</span>
+                                <span x-show="!rosterToggleApplies(draft.visibility)"
+                                      class="block text-[11.5px] text-on-surface-variant mt-0.5">
+                                    Everyone can see this event anyway, so this makes no difference here.
+                                </span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-sm pt-sm border-t border-outline-variant">
+                    <a href="calendar.html"
+                       class="px-md py-2 rounded-lg font-label-md text-xs uppercase tracking-wider
+                              text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Cancel</a>
+                    <button @click="createEvent()" :disabled="!draftValid || saving"
+                            class="bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs font-label-md
+                                   text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">
+                        Create event
+                    </button>
+                </div>
+            </div>
+        </div>
+        </template>
+
+        <!-- One date of an Event. `!managingSeries` because series mode sets a
+             stand-in occurrence to carry the name, and both bodies rendering at
+             once would show the same Event twice. -->
+        <template x-if="occurrence && !managingSeries">
+        <div>
+            <!-- ── Title block ────────────────────────────────────────────── -->
+            <div class="pb-md border-b border-outline-variant flex items-start justify-between gap-md flex-wrap">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2 mb-2 flex-wrap">
+                        <span x-show="series && series.recurrence && series.recurrence.freq !== 'once'"
+                              class="inline-flex items-center gap-1 rounded-md bg-tertiary-container text-on-tertiary-container
+                                     px-2 py-1 text-[10.5px] font-label-md uppercase tracking-wider">
+                            <span class="material-symbols-outlined text-[13px]">repeat</span>
+                            <span x-text="series && series.recurrence ? 'Repeats ' + series.recurrence.freq : ''"></span>
+                        </span>
+                        <span x-show="visibility === 'participant'"
+                              class="inline-flex items-center gap-1 rounded-md bg-secondary-container text-on-secondary-container
+                                     px-2 py-1 text-[10.5px] font-label-md uppercase tracking-wider">
+                            <span class="material-symbols-outlined text-[13px]">assignment_ind</span> Participants
+                        </span>
+                    </div>
+                    <h1 class="cal-event-title font-display text-headline-lg tracking-[.02em] text-primary"
+                        x-text="occurrence.name || (series && series.name) || 'Event'"></h1>
+                    <!-- Date, time and place, dot-separated. On a phone the
+                         glyphs drop out and the dots carry it on one line. -->
+                    <div class="mt-2 flex items-center gap-2 flex-wrap text-[13px] text-on-surface-variant">
+                        <span class="flex items-center gap-1">
+                            <span class="cal-when-icon material-symbols-outlined text-[17px]">event</span>
+                            <span x-text="longDate(occurrence.date)"></span>
+                        </span>
+                        <span x-show="eventTime" class="text-outline">·</span>
+                        <span x-show="eventTime" class="flex items-center gap-1">
+                            <span class="cal-when-icon material-symbols-outlined text-[17px]">schedule</span>
+                            <span x-text="formatTime(eventTime)"></span>
+                        </span>
+                        <span x-show="occurrence.location" class="text-outline">·</span>
+                        <span x-show="occurrence.location" class="flex items-center gap-1">
+                            <span class="cal-when-icon material-symbols-outlined text-[17px]">location_on</span>
+                            <span x-text="occurrence.location"></span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="shrink-0 flex items-center gap-sm">
+                    <!-- The details of a repeating Event live on the EVENT, not
+                         on one date of it — its name, its time, where it is, and
+                         which Roles it carries every time. So this goes there
+                         rather than opening a pattern-only modal, which was the
+                         thinnest possible answer to "edit details". -->
+                    <a x-show="isEditor && !isSunday && eventHref" :href="eventHref"
+                       class="flex items-center gap-1 border border-secondary text-secondary px-md py-2 rounded-lg font-label-md
+                              text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
+                        <span class="material-symbols-outlined text-[18px]">tune</span>
+                        Edit the event
+                    </a>
+                </div>
+            </div>
+
+            <!-- ── Declined banner ────────────────────────────────────────── -->
+            <!-- Declined escalates across four surfaces so a glance finds it:
+                 the slot row, the role card's border, this banner, and the
+                 calendar chip. All from one switch. -->
+            <div x-show="isEditor && needsAttention"
+                 class="mt-md bg-error-container border border-error border-l-4 rounded-lg p-md flex items-start gap-sm">
+                <span class="material-symbols-outlined text-[22px] text-error shrink-0">error</span>
+                <div class="flex-grow min-w-0">
+                    <p class="font-label-md text-[15px] font-semibold text-on-error-container">
+                        <span x-text="declined.length === 1 ? 'One place needs reassigning' : declined.length + ' places need reassigning'"></span>
+                    </p>
+                    <template x-for="a in declined" :key="a.personId + (a.slotId || a.oneOffId)">
+                        <p class="text-[13px] text-on-error-container mt-1">
+                            <span x-text="personName(a.personId)"></span> said no to
+                            <span x-text="a.label || roleName(a.roleSlug)"></span>.
+                            They still hold the place until someone takes it.
+                        </p>
+                    </template>
+                </div>
+                <button @click="openPicker(declined[0].roleSlug, declined[0].slotId)"
+                        x-show="declined.length && declined[0].slotId"
+                        class="shrink-0 bg-error text-on-error px-md py-2 rounded-lg font-label-md
+                               text-xs uppercase tracking-wider cal-motion cal-press cal-focus">
+                    Find someone
+                </button>
+            </div>
+
+            <!-- ── "Did they serve?" ──────────────────────────────────────── -->
+            <!-- Scaffolding, so it is a single row. Not a banner, not a modal,
+                 and no count badge in the nav anywhere. Nothing at all when
+                 there is nothing to ask. -->
+            <button x-show="unconfirmedPrompt" @click="openTidyUp()"
+                    class="mt-md w-full text-left bg-surface-container-low border border-outline-variant border-l-[3px]
+                           rounded-lg px-md py-3 flex items-center gap-sm cal-motion cal-focus hover:bg-surface-container"
+                    style="border-left-color: #B89B6A;">
+                <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">contact_support</span>
+                <div class="flex-grow min-w-0">
+                    <p class="text-[14px] text-on-surface" x-text="unconfirmedPrompt"></p>
+                    <p class="text-[12.5px] text-on-surface-variant mt-0.5">
+                        Takes a moment. Anything you leave stays unanswered.
+                    </p>
+                </div>
+                <span class="shrink-0 flex items-center gap-1 text-[12px] font-label-md uppercase tracking-wider text-on-surface-variant">
+                    Have a look <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                </span>
+            </button>
+
+            <!-- ── Two columns ────────────────────────────────────────────── -->
+            <div class="mt-gutter cal-cols">
+
+                <div class="min-w-0 flex flex-col gap-gutter">
+
+                    <!-- Your part — a member's first answer to "am I in this?" -->
+                    <section x-show="!isEditor && myAssignment"
+                             class="bg-primary rounded-lg p-md">
+                        <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-primary-fixed-dim">Your part</div>
+                        <p class="font-headline-lg text-[24px] text-on-primary mt-1"
+                           x-text="myAssignment ? (myAssignment.label || roleName(myAssignment.roleSlug)) : ''"></p>
+                        <div class="mt-2 flex items-center gap-2">
+                            <span class="w-[8px] h-[8px] rounded-full"
+                                  :class="{
+                                    'border-[1.5px] border-primary-fixed-dim': stateTone(myAssignment) === 'calm',
+                                    'bg-success': stateTone(myAssignment) === 'good',
+                                    'bg-error': stateTone(myAssignment) === 'attention'
+                                  }"></span>
+                            <span class="text-[11px] font-label-md tracking-[.14em] uppercase text-primary-fixed"
+                                  x-text="stateLabel(myAssignment)"></span>
+                        </div>
+                        <p class="text-[13px] text-primary-fixed mt-3">
+                            Let an editor know either way and they'll mark it.
+                        </p>
+                    </section>
+
+                    <section x-show="occurrence.description"
+                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <p class="font-headline-lg text-[17px] leading-[1.55] text-on-surface" x-text="occurrence.description"></p>
+                    </section>
+
+                    <!-- ── Sunday: settled, not disabled ──────────────────── -->
+                    <section x-show="isSunday" class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
+                        <div class="flex items-start gap-sm">
+                            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">public</span>
+                            <p class="text-[14px] text-on-surface">
+                                <strong class="font-label-md">Sunday is public.</strong>
+                                Everyone can see it, signed in or not — that is how Sundays work.
+                            </p>
+                        </div>
+                        <!-- Two doors, and they lead to different things. The liturgy
+                             is built per Sunday; the time and the Roles every Sunday
+                             needs are set once, above all of them. -->
+                        <div x-show="isEditor" class="mt-md pt-md border-t border-outline-variant">
+                            <a :href="eventHref"
+                               class="inline-flex items-center gap-1 text-secondary font-label-md
+                                      text-xs uppercase tracking-wider cal-focus">
+                                <span class="material-symbols-outlined text-[16px]">tune</span>
+                                Edit the Sunday Service
+                            </a>
+                        </div>
+                        <div class="mt-md pt-md border-t border-outline-variant bg-secondary-container -mx-md -mb-md px-md py-3 rounded-b-lg">
+                            <a :href="servicesHref"
+                               class="inline-flex items-center gap-1 text-on-secondary-container font-label-md
+                                      text-xs uppercase tracking-wider cal-focus">
+                                Open the order of service <span class="material-symbols-outlined text-[16px]">north_east</span>
+                            </a>
+                        </div>
+                    </section>
+
+                    <!-- Who's serving — the whole roster, flat, for a member the
+                         editor shared it with.
+
+                         A member used to get the editor's Role cards instead:
+                         numbered places, empty-slot rows, per-person state
+                         controls they cannot use — AND this list in the side
+                         column, so the same people were named twice on one
+                         screen. Administering an Event is the editor's job; a
+                         member is answering "who else is coming". -->
+                    <section x-show="!isEditor && canSeeRoster && assignments.length"
+                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h2 class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant
+                                   pb-sm border-b border-outline-variant">Who's serving</h2>
+                        <div class="flex flex-col">
+                            <template x-for="a in assignments" :key="a.personId + (a.slotId || a.oneOffId)">
+                                <div class="flex items-center gap-sm py-2.5 border-b border-outline-variant last:border-b-0">
+                                    <span class="w-[28px] h-[28px] rounded-full flex items-center justify-center
+                                                 text-[10.5px] font-label-md border border-outline-variant shrink-0"
+                                          :class="a.personId === personId ? 'bg-primary-fixed' : 'bg-surface-container-high'"
+                                          x-text="initials(personName(a.personId))"></span>
+                                    <span class="text-[14.5px] flex-grow min-w-0 truncate"
+                                          :class="a.personId === personId ? 'font-semibold' : ''">
+                                        <span x-text="personName(a.personId)"></span><span x-show="a.personId === personId"> (you)</span>
+                                    </span>
+                                    <span class="text-[13px] text-on-surface-variant shrink-0"
+                                          x-text="a.label || roleName(a.roleSlug)"></span>
+                                </div>
+                            </template>
+                        </div>
+                        <p x-show="needsAttention" class="mt-sm text-[12.5px] text-on-surface-variant">
+                            One place is still being sorted out.
+                        </p>
+                    </section>
+
+                    <!-- ── Roles ──────────────────────────────────────────── -->
+                    <!-- A Sunday gets this too. It only ever draws NON-liturgical
+                         Roles — the liturgical ones are filled in the order of
+                         service and print in the booklet, so a fillable card here
+                         would be a second, silent way to set one. Hiding the whole
+                         section on a Sunday, as this once did, meant the welcome
+                         team and the sound desk had nowhere to be asked at all. -->
+                    <section x-show="isEditor">
+                        <div class="flex items-baseline justify-between gap-md">
+                            <h2 class="font-display text-[19px] text-primary">Roles</h2>
+                            <p class="text-[12.5px] text-on-surface-variant"
+                               x-text="managedRoles.length + (managedRoles.length === 1 ? ' role' : ' roles') +
+                                       (oneOffRoles.length ? ' · ' + oneOffRoles.length + ' just for this one' : '')"></p>
+                        </div>
+
+                        <p x-show="isSunday" class="text-[12.5px] text-on-surface-variant mt-1 leading-snug">
+                            Preacher, reader and the rest are set when you build this Sunday's
+                            order of service — not here. This is everything else: welcome team,
+                            sound desk, coffee.
+                        </p>
+
+                        <p x-show="isEditor && !managedRoles.length && !oneOffRoles.length"
+                           class="text-[13px] text-on-surface-variant mt-sm">
+                            Nothing needed yet. Add a role below for this date only, or
+                            <a :href="'calendar-event.html?series=' + occurrence.seriesId" x-show="occurrence.seriesId"
+                               class="text-secondary cal-focus rounded">add one to every date</a>.
+                        </p>
+
+                        <!-- A managed Role IS a card: header, rule line, count
+                             badge, numbered slot rows. -->
+                        <div class="mt-sm flex flex-col gap-md">
+                            <template x-for="role in managedRoles" :key="role.def.slug">
+                                <div class="bg-surface-container-lowest rounded-lg border overflow-hidden cal-motion"
+                                     :class="role.needsAttention ? 'border-error' : 'border-outline-variant'">
+
+                                    <!-- `cal-row` is not decoration here: the remove button below is
+                                         hover-revealed, and without a row to hover it never appears. -->
+                                    <div class="cal-row bg-surface-container-low px-md py-2.5 flex items-center gap-sm border-b border-outline-variant">
+                                        <span class="cal-role-glyph material-symbols-outlined text-[18px] text-secondary">badge</span>
+                                        <span class="font-headline-lg text-[19px] text-on-surface flex-grow min-w-0 truncate"
+                                              x-text="role.def.name"></span>
+                                        <span x-show="(role.def.restrictions || []).length"
+                                              class="flex items-center gap-1 text-[11.5px] text-on-surface-variant">
+                                            <span class="material-symbols-outlined text-[14px]" style="color:#B89B6A;">rule</span>
+                                            <span x-text="(role.def.restrictions || []).length + ' rule' + ((role.def.restrictions||[]).length === 1 ? '' : 's')"></span>
+                                        </span>
+                                        <span class="rounded-md px-2 py-0.5 text-[11.5px] font-label-md"
+                                              :class="role.needsAttention
+                                                ? 'bg-error-container text-on-error-container'
+                                                : 'bg-surface-container text-on-surface-variant'"
+                                              x-text="role.filled + ' of ' + role.slots.length"></span>
+                                        <!-- WHICH Roles this Event carries is decided on the
+                                             Event, not here. This screen decides who is
+                                             standing in them today. -->
+                                        <a x-show="eventHref" :href="eventHref"
+                                           class="cal-role-everydate shrink-0 flex items-center gap-1 text-[11px] font-label-md
+                                                  text-on-surface-variant hover:text-secondary cal-motion cal-focus rounded"
+                                           title="Change which roles this event needs">
+                                            <span class="material-symbols-outlined text-[14px]">repeat</span>
+                                            Every date
+                                        </a>
+                                    </div>
+
+                                    <template x-for="row in role.slots" :key="row.slot.id">
+                                        <div class="cal-row cal-slot-row flex items-center gap-sm px-md py-2.5 border-b border-outline-variant last:border-b-0 cal-motion"
+                                             :class="row.assignment && stateTone(row.assignment) === 'attention'
+                                                ? 'bg-error-container border-l-[3px] border-l-error'
+                                                : 'bg-surface'">
+                                            <span class="cal-slot-index font-display text-[15px] text-outline w-[18px] shrink-0" x-text="row.index"></span>
+                                            <span class="cal-slot-req w-[74px] shrink-0 text-[10px] font-label-md tracking-[.12em] uppercase text-on-surface-variant"
+                                                  x-text="row.requirementLabel"></span>
+
+                                            <template x-if="row.assignment">
+                                                <div class="flex items-center gap-2 flex-grow min-w-0">
+                                                    <span class="cal-slot-avatar w-[28px] h-[28px] rounded-full bg-surface-container-high
+                                                                 flex items-center justify-center text-[11px] font-label-md shrink-0"
+                                                          x-text="initials(personName(row.assignment.personId))"></span>
+                                                    <span class="text-[14.5px] truncate"
+                                                          :class="stateTone(row.assignment) === 'attention'
+                                                            ? 'font-semibold text-on-error-container' : 'text-on-surface'"
+                                                          x-text="personName(row.assignment.personId)"></span>
+                                                </div>
+                                            </template>
+                                            <template x-if="!row.assignment">
+                                                <div class="flex items-center gap-2 flex-grow min-w-0">
+                                                    <span class="cal-slot-avatar w-[28px] h-[28px] rounded-full border border-dashed border-outline
+                                                                 flex items-center justify-center text-outline shrink-0">
+                                                        <span class="material-symbols-outlined text-[15px]">person_add</span>
+                                                    </span>
+                                                    <!-- An empty place is a calm resting state, never an error. -->
+                                                    <span class="text-[14px] text-on-surface-variant">Nobody yet</span>
+                                                </div>
+                                            </template>
+
+                                            <!-- Declined is the only loud state. -->
+                                            <template x-if="row.assignment && stateTone(row.assignment) === 'attention'">
+                                                <span class="shrink-0 inline-flex items-center gap-1 rounded-md bg-error text-on-error
+                                                             px-2 py-1 text-[10px] font-label-md uppercase tracking-wider">
+                                                    <span class="material-symbols-outlined text-[13px]">do_not_disturb_on</span> Reassign
+                                                </span>
+                                            </template>
+                                            <template x-if="row.assignment && stateTone(row.assignment) !== 'attention'">
+                                                <span class="shrink-0 flex items-center gap-1.5">
+                                                    <span class="w-[7px] h-[7px] rounded-full"
+                                                          :class="stateTone(row.assignment) === 'good' ? 'bg-success' : 'border-[1.5px] border-outline'"></span>
+                                                    <span class="text-[10px] font-label-md tracking-[.12em] uppercase"
+                                                          :class="stateTone(row.assignment) === 'good' ? 'text-success' : 'text-on-surface-variant'"
+                                                          x-text="stateLabel(row.assignment)"></span>
+                                                </span>
+                                            </template>
+
+                                            <div x-show="isEditor" class="cal-row-actions shrink-0 flex items-center gap-0.5">
+                                                <!-- Only an editor ever changes a state. Members doing
+                                                     it for themselves is a later ticket. -->
+                                                <template x-if="row.assignment">
+                                                    <div class="flex items-center gap-0.5">
+                                                        <button @click="setState(row.assignment, 'pending')" aria-label="Mark pending"
+                                                                class="w-[30px] h-[30px] rounded-md flex items-center justify-center cal-motion cal-focus hover:bg-surface-container"
+                                                                :class="row.assignment.state === 'pending' ? 'text-on-surface' : 'text-outline'">
+                                                            <span class="material-symbols-outlined text-[18px]">radio_button_unchecked</span>
+                                                        </button>
+                                                        <button @click="setState(row.assignment, 'confirmed')" aria-label="Mark confirmed"
+                                                                class="w-[30px] h-[30px] rounded-md flex items-center justify-center cal-motion cal-focus hover:bg-surface-container"
+                                                                :class="row.assignment.state === 'confirmed' ? 'text-success' : 'text-outline'">
+                                                            <span class="material-symbols-outlined text-[18px]">check_circle</span>
+                                                        </button>
+                                                        <button @click="setState(row.assignment, 'declined')" aria-label="Mark declined"
+                                                                class="w-[30px] h-[30px] rounded-md flex items-center justify-center cal-motion cal-focus hover:bg-surface-container"
+                                                                :class="row.assignment.state === 'declined' ? 'text-error' : 'text-outline'">
+                                                            <span class="material-symbols-outlined text-[18px]">do_not_disturb_on</span>
+                                                        </button>
+                                                    </div>
+                                                </template>
+                                                <button @click="openPicker(role.def.slug, row.slot.id)"
+                                                        class="w-[30px] h-[30px] rounded-md flex items-center justify-center text-on-surface-variant
+                                                               hover:bg-surface-container cal-motion cal-focus"
+                                                        :aria-label="row.assignment ? 'Replace' : 'Put someone in'">
+                                                    <span class="material-symbols-outlined text-[18px]"
+                                                          x-text="row.assignment ? 'swap_horiz' : 'person_add'"></span>
+                                                </button>
+                                                <button x-show="row.assignment" @click="clearSlot(role.def.slug, row.slot.id)"
+                                                        class="w-[30px] h-[30px] rounded-md flex items-center justify-center text-on-surface-variant
+                                                               hover:bg-surface-container cal-motion cal-focus" aria-label="Clear this place">
+                                                    <span class="material-symbols-outlined text-[18px]">close</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- A dashed strip holding one fenced-off box per job,
+                             and inside each, one person per row. -->
+                        <div x-show="oneOffRoles.length || isEditor"
+                             class="mt-md cal-oneoff-strip rounded-lg bg-surface-container-low p-md">
+                            <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
+                                Just for this one
+                            </div>
+                            <div class="mt-sm flex flex-col gap-sm">
+                                <template x-for="job in oneOffRoles" :key="job.id">
+                                    <!-- Each job is fenced off from the strip it lives in. It stays
+                                         lighter than a managed Role card — no filled header bar, no
+                                         count chip — but a job with seven people on it needs an edge,
+                                         or it runs into the next one. -->
+                                    <div class="rounded-lg border border-outline-variant bg-surface overflow-hidden">
+                                        <div class="flex items-center gap-2 px-3 py-2 border-b border-outline-variant bg-surface-container-lowest">
+                                            <span class="material-symbols-outlined text-[17px] text-outline shrink-0">label</span>
+                                            <span class="text-[14px] text-on-surface flex-grow min-w-0 truncate" x-text="job.label"></span>
+                                            <span x-show="job.people.length"
+                                                  class="shrink-0 text-[11px] text-on-surface-variant"
+                                                  x-text="job.people.length"></span>
+                                            <button x-show="isEditor" @click="askRemoveOneOffRole(job.id)"
+                                                    class="shrink-0 w-[26px] h-[26px] rounded-md flex items-center justify-center
+                                                           text-on-surface-variant hover:bg-surface-container cal-motion cal-focus"
+                                                    aria-label="Remove this job">
+                                                <span class="material-symbols-outlined text-[16px]">delete</span>
+                                            </button>
+                                        </div>
+
+                                        <!-- One person per row. Somebody asked for one of these is
+                                             still a real Assignment in a real state — it goes in
+                                             pending like any other — so each row carries the same
+                                             three marks as a managed slot row. Declined tones the
+                                             whole row, because declined is the one state that has to
+                                             find you. -->
+                                        <template x-for="a in job.people" :key="a.personId">
+                                            <div class="cal-row cal-slot-row flex items-center gap-sm px-3 py-2 border-b border-outline-variant cal-motion"
+                                                 :class="stateTone(a) === 'attention'
+                                                    ? 'bg-error-container border-l-[3px] border-l-error'
+                                                    : 'bg-surface'">
+                                                <span class="cal-slot-avatar w-[26px] h-[26px] rounded-full bg-surface-container-high shrink-0
+                                                             flex items-center justify-center text-[10px] font-label-md"
+                                                      x-text="initials(personName(a.personId))"></span>
+                                                <span class="text-[14px] text-on-surface flex-grow min-w-0 truncate"
+                                                      x-text="personName(a.personId)"></span>
+
+                                                <!-- A reader still needs to know where this stands. -->
+                                                <span x-show="!isEditor" class="shrink-0 flex items-center gap-1.5">
+                                                    <span class="w-[7px] h-[7px] rounded-full"
+                                                          :class="stateTone(a) === 'good' ? 'bg-success'
+                                                                : (stateTone(a) === 'attention' ? 'bg-error' : 'border-[1.5px] border-outline')"></span>
+                                                    <span class="text-[10px] font-label-md tracking-[.12em] uppercase"
+                                                          :class="stateTone(a) === 'good' ? 'text-success' : 'text-on-surface-variant'"
+                                                          x-text="stateLabel(a)"></span>
+                                                </span>
+
+                                                <span x-show="isEditor" class="cal-slot-actions shrink-0 flex items-center gap-0.5">
+                                                    <button @click="setState(a, 'pending')" :aria-label="'Mark ' + personName(a.personId) + ' pending'"
+                                                            class="w-[28px] h-[28px] rounded-md flex items-center justify-center cal-motion cal-focus hover:bg-surface-container"
+                                                            :class="a.state === 'pending' ? 'text-on-surface' : 'text-outline'">
+                                                        <span class="material-symbols-outlined text-[17px]">radio_button_unchecked</span>
+                                                    </button>
+                                                    <button @click="setState(a, 'confirmed')" :aria-label="'Mark ' + personName(a.personId) + ' confirmed'"
+                                                            class="w-[28px] h-[28px] rounded-md flex items-center justify-center cal-motion cal-focus hover:bg-surface-container"
+                                                            :class="a.state === 'confirmed' ? 'text-success' : 'text-outline'">
+                                                        <span class="material-symbols-outlined text-[17px]">check_circle</span>
+                                                    </button>
+                                                    <button @click="setState(a, 'declined')" :aria-label="'Mark ' + personName(a.personId) + ' declined'"
+                                                            class="w-[28px] h-[28px] rounded-md flex items-center justify-center cal-motion cal-focus hover:bg-surface-container"
+                                                            :class="a.state === 'declined' ? 'text-error' : 'text-outline'">
+                                                        <span class="material-symbols-outlined text-[17px]">do_not_disturb_on</span>
+                                                    </button>
+                                                    <button @click="removeFromOneOff(job.id, a.personId)"
+                                                            class="w-[28px] h-[28px] rounded-md flex items-center justify-center text-on-surface-variant
+                                                                   hover:bg-surface-container cal-motion cal-focus"
+                                                            :aria-label="'Take ' + personName(a.personId) + ' off'">
+                                                        <span class="material-symbols-outlined text-[17px]">close</span>
+                                                    </button>
+                                                </span>
+                                            </div>
+                                        </template>
+
+                                        <div x-show="isEditor" class="px-3 py-1.5 bg-surface-container-lowest">
+                                            <select @change="addToOneOff(job, $event.target.value); $event.target.value = ''"
+                                                    class="cal-focus bg-transparent text-[12.5px] text-secondary border-0 cursor-pointer py-1">
+                                                <option value="">+ Someone</option>
+                                                <template x-for="p in people" :key="p.id">
+                                                    <option :value="p.id" x-text="p.name"></option>
+                                                </template>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- Adding one is a single always-visible input.
+                                     It should take seconds. -->
+                                <div x-show="isEditor" class="flex items-center gap-2 pt-1">
+                                    <span class="material-symbols-outlined text-[17px] text-outline">add</span>
+                                    <input x-model="oneOffDraft" @keydown.enter="addOneOffRole()"
+                                           placeholder="Someone to unlock the hall…"
+                                           class="flex-grow bg-transparent border-0 border-b border-dashed border-outline-variant
+                                                  text-[14px] text-on-surface placeholder:text-outline py-1 cal-focus" />
+                                    <span class="text-[11px] text-outline font-label-md">Press Enter</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- WHICH Roles this Event needs is decided on the Event, so
+                             there is nothing to add here — only a way through to
+                             where it IS decided. What this screen adds is a job for
+                             this day alone, which is the strip above. -->
+                        <a x-show="isEditor && eventHref" :href="eventHref"
+                           class="mt-md inline-flex items-center gap-1 text-secondary text-[12px] font-label-md
+                                  uppercase tracking-wider cal-focus">
+                            <span class="material-symbols-outlined text-[15px]">tune</span>
+                            <span x-text="isSunday
+                              ? 'Change the roles every Sunday needs'
+                              : 'Change the roles this event needs'"></span>
+                        </a>
+                    </section>
+
+                    <!-- A member who may not see the roster gets a calm note,
+                         never an error. -->
+                    <section x-show="!isEditor && !canSeeRoster && myAssignment"
+                             class="bg-surface-container-low border border-outline-variant rounded-lg p-md flex items-start gap-sm">
+                        <span class="material-symbols-outlined text-[20px] text-outline shrink-0">visibility_off</span>
+                        <p class="text-[13.5px] text-on-surface">
+                            Only your own part is shown for this event.
+                            Ask an elder if you need to know who else is coming.
+                        </p>
+                    </section>
+                </div>
+
+                <!-- ── Side column ────────────────────────────────────────── -->
+                <aside class="flex flex-col gap-gutter min-w-0">
+
+                    <!-- A one-off Event's details live HERE, on its single
+                         occurrence, because there is no series for them to live
+                         on. Its date is editable too — a one-off's id is an
+                         auto-id, not the date, so changing it is just a field.
+                         (One date OF A SERIES is "Move this one", which has to
+                         rewrite the id and leave a note behind.) -->
+                    <section x-show="isEditor && isOneOff"
+                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">Details</h3>
+                        <p class="text-[12.5px] text-on-surface-variant mt-1">
+                            This event happens once, so this is all of it.
+                        </p>
+
+                        <div class="mt-sm flex flex-col gap-md">
+                            <label class="block">
+                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">What is it</span>
+                                <input type="text" x-model="occurrenceDraft.name" placeholder="Harvest Supper"
+                                       class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                              text-[15px] text-on-surface placeholder:text-outline cal-focus" />
+                            </label>
+
+                            <div class="grid grid-cols-2 gap-md">
+                                <label class="block">
+                                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">When</span>
+                                    <input type="date" x-model="occurrenceDraft.date"
+                                           class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                                  text-[15px] text-on-surface cal-focus" />
+                                </label>
+                                <label class="block">
+                                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Starts at</span>
+                                    <input type="time" x-model="occurrenceDraft.time"
+                                           class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                                  text-[15px] text-on-surface cal-focus" />
+                                </label>
+                            </div>
+
+                            <label class="block">
+                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Where</span>
+                                <input type="text" x-model="occurrenceDraft.location" placeholder="The hall"
+                                       class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                              text-[15px] text-on-surface placeholder:text-outline cal-focus" />
+                            </label>
+
+                            <label class="block">
+                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">What it's for</span>
+                                <textarea x-model="occurrenceDraft.description" rows="3"
+                                          placeholder="A short line for anyone who has not been before."
+                                          class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                                 text-[15px] text-on-surface placeholder:text-outline cal-focus"></textarea>
+                            </label>
+
+                            <div class="flex items-center justify-end gap-sm" x-show="occurrenceDetailsChanged">
+                                <button @click="startOccurrenceDraft()"
+                                        class="px-3 py-1.5 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
+                                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Undo</button>
+                                <button @click="saveOccurrenceDetails()" :disabled="!occurrenceDetailsValid || saving"
+                                        class="bg-primary text-on-primary px-3 py-1.5 rounded-lg shadow-xs font-label-md
+                                               text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus
+                                               disabled:opacity-40">Save details</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Who can see this. A ONE-OFF only: for a repeating Event this
+                         is true of every date, so it is decided once on the Event.
+                         A ladder here would change every date from a screen that
+                         looks like it is about one of them. -->
+                    <section x-show="isEditor && isOneOff"
+                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">Who can see this</h3>
+                        <div class="mt-sm flex flex-col">
+                            <template x-for="rung in visibilityLadder" :key="rung.level">
+                                <button @click="setVisibility(rung.level)" :disabled="!visibilityEditable"
+                                        class="text-left flex items-start gap-sm px-2 py-2.5 rounded-lg cal-motion cal-focus
+                                               hover:bg-surface-container-low border-l-[3px]"
+                                        :class="visibility === rung.level ? 'border-l-primary bg-surface-container-low' : 'border-l-transparent'">
+                                    <span class="material-symbols-outlined text-[19px] shrink-0 mt-0.5"
+                                          :class="visibility === rung.level ? 'text-primary' : 'text-on-surface-variant'"
+                                          x-text="rung.icon"></span>
+                                    <div class="min-w-0 flex-grow">
+                                        <div class="text-[13.5px] font-label-md font-semibold text-on-surface" x-text="rung.label"></div>
+                                        <div class="text-[12px] text-on-surface-variant leading-snug" x-text="rung.who"></div>
+                                    </div>
+                                    <span x-show="visibility === rung.level"
+                                          class="material-symbols-outlined text-[18px] text-primary shrink-0">check</span>
+                                </button>
+                            </template>
+                        </div>
+
+                        <!-- The roster toggle drops to 45% where it is
+                             meaningless, and explains rather than silently doing
+                             nothing. -->
+                        <div class="mt-sm pt-sm border-t border-outline-variant cal-motion"
+                             :class="rosterToggleApplies(visibility) ? '' : 'opacity-[.45]'">
+                            <label class="flex items-start gap-2 cursor-pointer">
+                                <input type="checkbox" :checked="occurrence.rosterShared"
+                                       @change="setRosterShared($event.target.checked)"
+                                       :disabled="!rosterToggleApplies(visibility)"
+                                       class="accent-primary mt-0.5 cal-focus" />
+                                <span>
+                                    <span class="text-[13px] text-on-surface">The people serving can see the rest of the roster</span>
+                                    <span x-show="!rosterToggleApplies(visibility)"
+                                          class="block text-[11.5px] text-on-surface-variant mt-0.5">
+                                        Everyone can see this event anyway, so this makes no difference here.
+                                    </span>
+                                </span>
+                            </label>
+                        </div>
+
+                        <p class="mt-sm text-[11.5px] text-on-surface-variant"
+                           x-text="isOneOff
+                             ? 'This event happens once, so this applies to it alone.'
+                             : 'Changing this applies to every date of this event, past ones included.'"></p>
+                    </section>
+
+                    <!-- Colour on the calendar. Also the Event's, not one date's —
+                         a colour set here would restyle every other date. -->
+                    <section x-show="isEditor && colourEditable"
+                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">Colour on the calendar</h3>
+                        <p class="text-[12.5px] text-on-surface-variant mt-1">
+                            Just so it's easy to pick out. It doesn't change who can see it.
+                        </p>
+
+                        <div class="mt-sm grid grid-cols-4 gap-2">
+                            <template x-for="c in colours" :key="c.slug">
+                                <button @click="setColour(c.slug)" :disabled="saving"
+                                        class="flex flex-col items-center gap-1 rounded-lg border py-2 cal-motion cal-press cal-focus
+                                               disabled:opacity-40"
+                                        :class="colour.slug === c.slug
+                                            ? 'border-primary bg-surface-container-low'
+                                            : 'border-outline-variant hover:bg-surface-container-low'"
+                                        :aria-label="c.name"
+                                        :aria-pressed="colour.slug === c.slug">
+                                    <span class="w-[22px] h-[22px] rounded-full border border-black/10"
+                                          :style="'background:' + c.bar"></span>
+                                    <span class="text-[10.5px] font-label-md text-on-surface-variant" x-text="c.name"></span>
+                                </button>
+                            </template>
+                        </div>
+
+                        <!-- Says which way this lands before you click, because
+                             the two behave differently and both are reasonable to
+                             expect. -->
+                        <p class="mt-sm text-[11.5px] text-on-surface-variant">
+                            This event only happens once, so this applies to it alone.
+                        </p>
+                        <p class="mt-1 text-[11.5px] text-on-surface-variant">
+                            An event that needs sorting still shows red, whatever colour you pick.
+                        </p>
+                    </section>
+
+                    <!-- When it happens -->
+                    <!-- Not a Sunday's. Every Sunday BY DEFINITION, so there is no
+                         pattern to change — and skipping one here would mark the
+                         Event off while its order of service sat untouched under
+                         its own date, so one Sunday would say two things. -->
+                    <section x-show="isEditor && patternEditable"
+                             class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">When it happens</h3>
+                        <p class="font-headline-lg text-[17px] text-on-surface mt-2"
+                           x-text="series ? recurrenceSentence(series.recurrence) : ''"></p>
+                        <p x-show="occurrence.cancelled" class="text-[12.5px] mt-1" style="color:#B89B6A;">
+                            This one is cancelled. The rest of the series is untouched.
+                        </p>
+                        <!-- Where this instance went, or came from. Somebody looking at
+                             the first Sunday needs to know the gathering is on the
+                             fifteenth, not simply that it is not here. -->
+                        <p x-show="occurrence.movedTo || occurrence.movedFrom"
+                           class="text-[12.5px] mt-1 flex items-center gap-1" style="color:#B89B6A;">
+                            <span class="material-symbols-outlined text-[15px]">event_repeat</span>
+                            <span x-text="movedNote"></span>
+                        </p>
+
+                        <!-- Moving ONE date, with the pattern left alone. Changing the
+                             pattern for a one-month postponement would move every other
+                             month too, and raise the orphan confrontation over a change
+                             nobody meant to make. -->
+                        <div x-show="move.open" class="mt-sm bg-surface-container-lowest border border-outline-variant rounded-lg p-3">
+                            <label class="block">
+                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
+                                    Move this one to
+                                </span>
+                                <input type="date" x-model="move.toDate"
+                                       class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                              text-[15px] text-on-surface cal-focus" />
+                            </label>
+                            <p class="text-[12px] text-on-surface-variant mt-2 leading-snug" x-text="moveSentence"></p>
+                            <div class="mt-sm flex items-center justify-end gap-sm">
+                                <button @click="move.open = false"
+                                        class="px-3 py-1.5 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
+                                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Cancel</button>
+                                <button @click="saveMove()" :disabled="!moveValid || saving"
+                                        class="bg-primary text-on-primary px-3 py-1.5 rounded-lg shadow-xs font-label-md
+                                               text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus
+                                               disabled:opacity-40">Move it</button>
+                            </div>
+                        </div>
+
+                        <div class="mt-sm flex items-center gap-sm flex-wrap">
+                            <button @click="openPattern()"
+                                    class="border border-secondary text-secondary px-3 py-1.5 rounded-lg font-label-md
+                                           text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
+                                Change pattern
+                            </button>
+                            <button x-show="canMove" @click="openMove()"
+                                    class="border border-secondary text-secondary px-3 py-1.5 rounded-lg font-label-md
+                                           text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
+                                Move this one
+                            </button>
+                            <!-- Cancelling ONE date never disturbs the rest. It is
+                                 also the first thing to land on that date, so it is
+                                 the first time a document exists for it. -->
+                            <button @click="skipThisOne()" :disabled="saving"
+                                    class="text-on-surface-variant px-3 py-1.5 rounded-lg font-label-md
+                                           text-[11.5px] uppercase tracking-wider cal-motion cal-focus hover:bg-surface-container"
+                                    x-text="occurrence.cancelled ? 'Put it back' : 'Skip this one'"></button>
+                        </div>
+                    </section>
+
+                </aside>
+            </div>
+        </div>
+        </template>
+    </main>
+
+    <!-- ── The picker ─────────────────────────────────────────────────────── -->
+    <div x-show="picker.open" @keydown.escape.window="closePicker()"
+         class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
+        <div class="bg-surface-container-lowest rounded-lg border border-outline-variant w-full max-w-[640px] mt-[6vh]">
+            <div class="px-md py-md border-b border-outline-variant">
+                <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant"
+                     x-text="pickerTitle"></div>
+                <h3 class="font-display text-[21px] text-primary mt-1">Who's taking this place?</h3>
+                <div class="mt-2 flex items-center gap-2 flex-wrap">
+                    <span x-show="pickerSlot && pickerSlot.requirement === 'female'"
+                          class="inline-flex items-center gap-1 rounded-md bg-tertiary-container text-on-tertiary-container px-2 py-1 text-[11px] font-label-md">
+                        <span class="material-symbols-outlined text-[13px]">woman</span> Needs a woman
+                    </span>
+                    <span x-show="pickerSlot && pickerSlot.requirement === 'male'"
+                          class="inline-flex items-center gap-1 rounded-md bg-tertiary-container text-on-tertiary-container px-2 py-1 text-[11px] font-label-md">
+                        <span class="material-symbols-outlined text-[13px]">person</span> Needs a man
+                    </span>
+                    <template x-for="rule in (pickerRole && pickerRole.restrictions) || []" :key="rule.kind + (rule.typeId||rule.tagId||'')">
+                        <span class="inline-flex items-center gap-1 rounded-md bg-surface-container text-on-surface-variant px-2 py-1 text-[11px] font-label-md">
+                            <span class="material-symbols-outlined text-[13px]">rule</span>
+                            <span x-text="rule.kind"></span>
+                        </span>
+                    </template>
+                </div>
+            </div>
+
+            <div class="px-md py-sm border-b border-outline-variant">
+                <div class="flex items-center gap-2 rounded-lg border border-outline-variant bg-surface px-3 py-2">
+                    <span class="material-symbols-outlined text-[18px] text-outline">search</span>
+                    <input x-model="picker.query" placeholder="Search people"
+                           class="flex-grow bg-transparent border-0 text-[14px] cal-focus" />
+                </div>
+                <div class="mt-2 flex items-center justify-between gap-sm">
+                    <span class="text-[12.5px] text-on-surface-variant"
+                          x-text="eligibleCount + ' can take it · ' + blockedCount + ' can\'t'"></span>
+                    <!-- OFF by default. Seeing who was passed over is the point. -->
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" x-model="picker.hideBlocked" class="accent-primary cal-focus" />
+                        <span class="text-[12px] text-on-surface-variant">Hide the ones who can't</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="max-h-[45vh] overflow-y-auto">
+                <template x-for="c in candidates" :key="c.personId">
+                    <button @click="pick(c)" :disabled="!c.eligible"
+                            class="w-full text-left flex items-center gap-sm px-md py-2.5 border-b border-outline-variant cal-motion"
+                            :class="{
+                                'opacity-[.45] cursor-not-allowed': !c.eligible,
+                                'bg-surface-container': c.eligible && picker.picked === c.personId,
+                                'hover:bg-surface-container-low': c.eligible && picker.picked !== c.personId
+                            }">
+                        <span class="w-[30px] h-[30px] rounded-full bg-surface-container-high flex items-center
+                                     justify-center text-[11px] font-label-md shrink-0"
+                              x-text="initials(c.name)"></span>
+                        <div class="min-w-0 flex-grow">
+                            <div class="text-[14px] text-on-surface truncate" x-text="c.name"></div>
+                            <!-- The reason, in the same slot a fairness note
+                                 would sit — and where an auto-assign suggestion
+                                 will sit later, with no relayout needed. -->
+                            <div class="text-[12px] text-on-surface-variant truncate" x-text="c.subtitle"></div>
+                        </div>
+                        <span x-show="!c.eligible" class="material-symbols-outlined text-[18px] text-outline shrink-0">block</span>
+                        <span x-show="c.eligible && picker.picked === c.personId"
+                              class="material-symbols-outlined text-[20px] text-primary shrink-0">check_circle</span>
+                    </button>
+                </template>
+            </div>
+
+            <div class="px-md py-md border-t border-outline-variant flex items-center justify-between gap-md flex-wrap">
+                <p class="text-[12.5px] text-on-surface-variant" x-text="pickerConsequence"></p>
+                <div class="flex items-center gap-sm ml-auto">
+                    <button @click="closePicker()"
+                            class="px-md py-2 rounded-lg font-label-md text-xs uppercase tracking-wider
+                                   text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Cancel</button>
+                    <button @click="confirmPick()" :disabled="!picker.picked"
+                            class="bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs font-label-md
+                                   text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">
+                        Put them in
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Changing the pattern ───────────────────────────────────────────── -->
+    <div x-show="pattern.open" @keydown.escape.window="pattern.open = false"
+         class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
+        <div class="bg-surface-container-lowest rounded-lg w-full max-w-[720px] mt-[5vh] border"
+             style="border-color:#B89B6A;">
+            <div class="px-md py-md flex items-start gap-sm">
+                <span class="material-symbols-outlined text-[26px] shrink-0" style="color:#B89B6A;">help</span>
+                <div class="min-w-0">
+                    <h3 class="font-display text-[21px] text-primary">Change the pattern</h3>
+                    <p class="font-headline-lg text-[17px] text-on-surface mt-2" x-text="patternSentence"></p>
+                    <div class="mt-2 flex flex-wrap gap-1.5">
+                        <template x-for="d in patternDates" :key="d">
+                            <span class="rounded-md bg-surface-container px-2 py-0.5 text-[11.5px] text-on-surface-variant"
+                                  x-text="d"></span>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-md pb-md grid gap-sm" style="grid-template-columns: repeat(2, minmax(0,1fr));">
+                <template x-for="opt in [['once','Just once'],['weekly','Every week'],['fortnightly','Every other week'],['monthly','Every month']]" :key="opt[0]">
+                    <button @click="pattern.rule.freq = opt[0]; recomputeOrphans()"
+                            class="rounded-lg border px-3 py-2 text-[13px] font-label-md cal-motion cal-press cal-focus"
+                            :class="pattern.rule && pattern.rule.freq === opt[0]
+                                ? 'border-primary bg-surface-container text-primary'
+                                : 'border-outline-variant text-on-surface-variant'"
+                            x-text="opt[1]"></button>
+                </template>
+            </div>
+
+            <div class="px-md pb-md flex gap-1.5 flex-wrap">
+                <template x-for="(d, i) in ['S','M','T','W','T','F','S']" :key="i">
+                    <button @click="pattern.rule.weekday = i; recomputeOrphans()"
+                            class="w-[48px] h-[40px] rounded-lg border text-[13px] font-label-md cal-motion cal-press cal-focus"
+                            :class="pattern.rule && pattern.rule.weekday === i
+                                ? 'border-primary bg-primary text-on-primary'
+                                : 'border-outline-variant text-on-surface-variant'"
+                            x-text="d"></button>
+                </template>
+            </div>
+
+            <!-- The confrontation. A question in gold, not an error in red. -->
+            <div x-show="pattern.orphans.length" class="border-t border-outline-variant">
+                <div class="px-md py-sm bg-surface-container-low flex items-center justify-between gap-sm flex-wrap">
+                    <p class="text-[13px] text-on-surface">
+                        <strong class="font-label-md" x-text="pattern.orphans.length"></strong>
+                        <span x-text="pattern.orphans.length === 1 ? ' date already has people on it' : ' dates already have people on them'"></span>
+                    </p>
+                    <div class="flex items-center gap-sm text-[11.5px] font-label-md uppercase tracking-wider">
+                        <span class="text-on-surface-variant">All of them:</span>
+                        <button @click="setAllOrphans('move')" class="text-secondary cal-focus rounded">Move</button>
+                        <button @click="setAllOrphans('delete')" class="text-secondary cal-focus rounded">Delete</button>
+                    </div>
+                </div>
+
+                <p class="px-md pt-sm text-[13px] text-on-surface-variant">
+                    These don't fit the new pattern, and each one already has a roster.
+                    We won't guess — tell us what to do with each.
+                </p>
+
+                <div class="px-md py-sm max-h-[30vh] overflow-y-auto flex flex-col gap-sm">
+                    <template x-for="o in pattern.orphans" :key="o.date">
+                        <div class="flex items-start gap-sm border-b border-outline-variant pb-sm last:border-b-0">
+                            <div class="w-[66px] shrink-0"
+                                 :class="pattern.choices[o.date] === 'delete' ? 'opacity-50 line-through' : ''">
+                                <div class="font-display text-[19px] text-on-surface" x-text="o.date"></div>
+                            </div>
+                            <div class="min-w-0 flex-grow">
+                                <div class="flex flex-wrap gap-1"
+                                     :class="pattern.choices[o.date] === 'delete' ? 'opacity-50' : ''">
+                                    <template x-for="a in (o.assignments || [])" :key="a.personId + (a.slotId||a.oneOffId)">
+                                        <span class="inline-flex items-center gap-1 rounded-full bg-surface-container px-2 py-0.5 text-[11.5px]">
+                                            <span x-text="personName(a.personId)"></span>
+                                        </span>
+                                    </template>
+                                </div>
+                                <p class="text-[12px] text-on-surface-variant mt-1" x-text="orphanOutcome(o)"></p>
+                            </div>
+                            <div class="shrink-0 flex gap-0.5 bg-surface-container rounded-lg p-[3px]">
+                                <template x-for="choice in ['move','delete']" :key="choice">
+                                    <button @click="pattern.choices[o.date] = choice"
+                                            class="px-2 py-1 rounded-md text-[11px] font-label-md uppercase tracking-wider cal-motion cal-focus"
+                                            :class="pattern.choices[o.date] === choice
+                                                ? 'bg-surface-container-lowest text-primary' : 'text-on-surface-variant'"
+                                            x-text="choice"></button>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div class="px-md py-md border-t border-outline-variant flex items-center justify-between gap-md flex-wrap">
+                <p class="text-[12.5px] text-on-surface-variant" x-text="orphanSummary"></p>
+                <div class="flex items-center gap-sm ml-auto">
+                    <button @click="pattern.open = false"
+                            class="px-md py-2 rounded-lg font-label-md text-xs uppercase tracking-wider
+                                   text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">
+                        Leave the pattern as it was
+                    </button>
+                    <button @click="applyPattern()" :disabled="saving"
+                            class="bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs font-label-md
+                                   text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">
+                        Go ahead
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Tidying up ─────────────────────────────────────────────────────── -->
+    <div x-show="tidyUp.open" @keydown.escape.window="tidyUp.open = false"
+         class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
+        <div class="bg-surface-container-lowest rounded-lg border border-outline-variant w-full max-w-[600px] mt-[8vh]">
+            <div class="px-md py-md border-b border-outline-variant">
+                <h3 class="font-display text-[21px] text-primary">Who actually served?</h3>
+                <p class="font-headline-lg text-[16.5px] leading-[1.55] text-on-surface mt-2">
+                    These were put down for something and we never heard either way.
+                    Tick anyone who did it — the rest stay an open question and don't count.
+                </p>
+            </div>
+
+            <div class="px-md py-sm bg-surface-container-low flex items-center justify-between gap-sm border-b border-outline-variant">
+                <span class="text-[12.5px] text-on-surface-variant" x-text="tidyUpSummary"></span>
+                <button @click="tickAll(Object.keys(tidyUp.ticks).length !== openQuestions.length)"
+                        class="text-secondary text-[11.5px] font-label-md uppercase tracking-wider cal-focus rounded"
+                        x-text="Object.keys(tidyUp.ticks).length === openQuestions.length ? 'Untick all' : 'All of them served'"></button>
+            </div>
+
+            <div class="max-h-[40vh] overflow-y-auto">
+                <template x-for="q in openQuestions" :key="q.personId + (q.assignment.slotId || q.assignment.oneOffId)">
+                    <label class="flex items-center gap-sm px-md py-2.5 border-b border-outline-variant cursor-pointer cal-motion hover:bg-surface-container-low">
+                        <input type="checkbox" :checked="tidyUp.ticks[q.personId]"
+                               @change="tidyUp.ticks[q.personId] = $event.target.checked"
+                               class="w-[20px] h-[20px] rounded-md accent-primary cal-focus" />
+                        <span class="w-[30px] h-[30px] rounded-full bg-surface-container-high flex items-center
+                                     justify-center text-[11px] font-label-md shrink-0"
+                              x-text="initials(q.name)"></span>
+                        <div class="min-w-0 flex-grow">
+                            <div class="text-[14px] text-on-surface truncate" x-text="q.name"></div>
+                            <div class="text-[12px] text-on-surface-variant truncate" x-text="q.label || roleName(q.roleSlug)"></div>
+                        </div>
+                        <!-- Unanswered is a resting state, not a failure. -->
+                        <span class="shrink-0 text-[10.5px] font-label-md tracking-[.12em] uppercase"
+                              :class="tidyUp.ticks[q.personId] ? 'text-success' : 'text-on-surface-variant'"
+                              x-text="tidyUp.ticks[q.personId] ? 'Served' : 'Unanswered'"></span>
+                    </label>
+                </template>
+            </div>
+
+            <div class="px-md py-md border-t border-outline-variant flex items-center justify-end gap-sm">
+                <button @click="tidyUp.open = false"
+                        class="px-md py-2 rounded-lg font-label-md text-xs uppercase tracking-wider
+                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Not now</button>
+                <button @click="saveTidyUp()" :disabled="saving"
+                        class="bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs font-label-md
+                               text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Taking a Role off that people are already on ───────────────────── -->
+    <!-- Small, and it names them. This only ever opens when somebody would
+         actually be dropped — an empty Role comes off without a word. -->
+    <div x-show="pendingRemoval" @keydown.escape.window="cancelRemoval()"
+         class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
+        <div class="bg-surface-container-lowest rounded-lg border border-outline-variant w-full max-w-[460px] mt-[14vh]">
+            <div class="px-md py-md flex items-start gap-sm">
+                <span class="material-symbols-outlined text-[22px] text-error shrink-0 mt-0.5">warning</span>
+                <div class="min-w-0">
+                    <h3 class="font-display text-[20px] text-primary">
+                        Take <span x-text="pendingRemoval && pendingRemoval.name"></span> off this event?
+                    </h3>
+                    <p class="font-headline-lg text-[16px] leading-[1.55] text-on-surface mt-2"
+                       x-text="pendingRemoval && pendingRemoval.sentence"></p>
+                    <p class="text-[13px] text-on-surface-variant mt-2">
+                        Nobody is told. If you're putting them somewhere else, do that first
+                        so they aren't dropped and re-asked.
+                    </p>
+                </div>
+            </div>
+            <div class="px-md py-md border-t border-outline-variant flex items-center justify-end gap-sm">
+                <button @click="cancelRemoval()"
+                        class="px-md py-2 rounded-lg font-label-md text-xs uppercase tracking-wider
+                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Keep it</button>
+                <button @click="confirmRemoval()" :disabled="saving"
+                        class="bg-error text-on-error px-md py-2 rounded-lg shadow-xs font-label-md
+                               text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">
+                    Take it off
+                </button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

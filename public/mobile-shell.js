@@ -42,6 +42,36 @@
   if (!isMobile) return;
 
   document.documentElement.classList.add("shell-mobile");
+
+  // ⚠ WITHOUT `viewport-fit=cover`, EVERY env(safe-area-inset-*) READS 0.
+  //
+  // The shell's WebView is full-screen, so the page lays out under the status
+  // bar and the home indicator either way. What viewport-fit=cover changes is
+  // whether iOS will TELL the page how far under — and with it absent, every
+  // safe-area rule silently computes to zero padding. mobile-shell.css has had
+  // two of those since it was written (its top and bottom insets), and the
+  // standard header pads itself the same way; none of it could ever fire.
+  //
+  // The symptom is a header sitting under the dynamic island, which reads as
+  // "the header is too thin" rather than as a missing inset.
+  //
+  // Set here rather than in each page's <meta>, because seven pages had already
+  // forgotten it and a page cannot be expected to remember something it only
+  // needs in a mode it does not know it is in.
+  try {
+    var vp = document.querySelector('meta[name="viewport"]');
+    if (!vp) {
+      vp = document.createElement("meta");
+      vp.setAttribute("name", "viewport");
+      vp.setAttribute("content", "width=device-width, initial-scale=1.0");
+      document.head.appendChild(vp);
+    }
+    var content = vp.getAttribute("content") || "";
+    if (content.indexOf("viewport-fit") === -1) {
+      vp.setAttribute("content", content.replace(/\s*$/, "") + ", viewport-fit=cover");
+    }
+  } catch (e) {}
+
   function markBody() { if (document.body) document.body.classList.add("shell-mobile"); }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", markBody);
   else markBody();

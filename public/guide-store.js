@@ -202,7 +202,7 @@
         return 'v2';
     }
 
-    // The single routing rule shared by the Service Calendar and the Order of
+    // The single routing rule shared by the Services page and the Order of
     // Service editor's "Generate Service Guide" action, so the two never drift.
     function guideHref(service, date) {
         const enc = encodeURIComponent(date);

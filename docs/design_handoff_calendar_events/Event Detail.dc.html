@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/tokens/fonts.css">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/tokens/colors.css">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/tokens/typography.css">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/tokens/spacing.css">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/tokens/base.css">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/styles.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&amp;display=swap">
+  <script src="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/_ds_bundle.js"></script>
+  <style>
+    a{color:var(--secondary);text-decoration:none}
+    a:hover{color:var(--primary)}
+    .ed-in{font-family:var(--font-sans);font-size:14px;color:var(--on-surface);background:var(--surface);border:1px solid var(--outline-variant);border-radius:10px;padding:11px 13px}
+    .ed-in:focus{outline:none;border-color:var(--tertiary);box-shadow:0 0 0 3px rgba(93,148,169,.18)}
+    .ed-in::placeholder{color:var(--on-surface-variant);opacity:.5}
+    .ed-vis:hover{background:var(--surface-container-low)}
+    .ed-slot:hover .ed-act{opacity:1}
+  </style>
+</helmet>
+
+<section style="display:flex;flex-direction:column;gap:20px;padding:40px;background:var(--background);font-family:var(--font-sans);color:var(--on-surface)">
+  <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+    <span style="font-family:var(--font-display);font-size:22px;letter-spacing:.02em;color:var(--primary)">Event detail — MS-99</span>
+    <span style="font-size:12.5px;color:var(--on-surface-variant)">Editor <a href="#2a">2a</a> · Member, roster shared <a href="#2b">2b</a> · Member, own part only <a href="#2c">2c</a> · Sunday <a href="#2d">2d</a> · Phone <a href="#2e">2e</a></span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:48px">
+
+    <!-- ════════ 2a · EDITOR ════════ -->
+    <div id="2a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">2a</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Editor · everything editable</span>
+      </div>
+
+      <div style="width:1280px;background:var(--background);border:1px solid var(--outline-variant);border-radius:14px;overflow:hidden">
+        <div style="max-width:1200px;margin:0 auto;padding:22px 40px 48px">
+          <span style="display:flex;align-items:center;gap:5px;color:var(--on-surface-variant);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:22px">
+            <span class="material-symbols-outlined" style="font-size:19px">arrow_back</span>Calendar
+          </span>
+
+          <!-- title block -->
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:32px;padding-bottom:20px;border-bottom:1px solid var(--outline-variant)">
+            <div>
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                <span style="font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-tertiary-container);background:var(--tertiary-container);border-radius:6px;padding:4px 8px">Repeats weekly</span>
+                <span style="display:flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-secondary-container);background:var(--secondary-container);border-radius:6px;padding:4px 8px"><span class="material-symbols-outlined" style="font-size:14px">assignment_ind</span>Participants</span>
+              </div>
+              <h1 style="margin:0;font-family:var(--font-display);font-weight:600;font-size:32px;letter-spacing:.02em;color:var(--primary)">Midweek Gathering</h1>
+              <div style="display:flex;align-items:center;gap:12px;margin-top:10px;font-size:14px;color:var(--on-surface-variant)">
+                <span style="display:flex;align-items:center;gap:6px"><span class="material-symbols-outlined" style="font-size:18px">event</span>Wednesday 29 July 2026</span>
+                <span style="width:3px;height:3px;border-radius:50%;background:var(--outline)"></span>
+                <span style="display:flex;align-items:center;gap:6px"><span class="material-symbols-outlined" style="font-size:18px">schedule</span>7:00 – 8:30 pm</span>
+                <span style="width:3px;height:3px;border-radius:50%;background:var(--outline)"></span>
+                <span style="display:flex;align-items:center;gap:6px"><span class="material-symbols-outlined" style="font-size:18px">location_on</span>Fellowship Hall</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+              <button type="button" style="font-family:var(--font-sans);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-surface-variant);background:transparent;border:1px solid var(--outline-variant);border-radius:10px;padding:10px 16px;cursor:pointer">Edit details</button>
+              <button type="button" style="display:flex;align-items:center;gap:7px;font-family:var(--font-sans);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border:1px solid var(--primary);border-radius:10px;padding:10px 18px;cursor:pointer;box-shadow:var(--shadow-xs)"><span class="material-symbols-outlined" style="font-size:18px">group_add</span>Add a role</button>
+            </div>
+          </div>
+
+          <!-- declined banner -->
+          <div style="display:flex;align-items:center;gap:14px;margin-top:22px;padding:15px 18px;background:var(--error-container);border:1px solid var(--error);border-left:4px solid var(--error);border-radius:10px">
+            <span class="material-symbols-outlined" style="font-size:22px;color:var(--error)">error</span>
+            <div style="flex:1">
+              <div style="font-size:14px;font-weight:700;color:var(--on-error-container)">One place needs reassigning</div>
+              <div style="font-size:13px;color:var(--on-error-container);margin-top:2px">Bethany Croft said no to Kids Ministry. She still holds the place until someone takes it.</div>
+            </div>
+            <button type="button" style="font-family:var(--font-sans);font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--on-error);background:var(--error);border:1px solid var(--error);border-radius:10px;padding:9px 15px;cursor:pointer;flex-shrink:0">Find someone</button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 372px;gap:28px;align-items:start;margin-top:26px">
+
+            <!-- ── main: description + roles ── -->
+            <div style="display:flex;flex-direction:column;gap:22px">
+              <div style="background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:10px;padding:22px">
+                <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:10px">Description</div>
+                <p style="margin:0;font-family:var(--font-serif);font-size:17px;line-height:1.55;color:var(--on-surface);text-wrap:pretty">Supper together at seven, then teaching and prayer in the hall. Children are looked after next door for the second half.</p>
+              </div>
+
+              <div>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding-bottom:12px;border-bottom:1px solid var(--outline-variant)">
+                  <span style="font-family:var(--font-display);font-size:19px;letter-spacing:.02em;color:var(--primary)">Roles</span>
+                  <span style="font-size:12.5px;color:var(--on-surface-variant)">{{ rolesSummary }}</span>
+                </div>
+
+                <!-- managed roles -->
+                <div style="display:flex;flex-direction:column;gap:14px;margin-top:16px">
+                  <sc-for list="{{ managed }}" as="r" hint-placeholder-count="3">
+                    <div style="background:var(--surface-container-lowest);border:1px solid {{ r.border }};border-radius:10px;overflow:hidden">
+                      <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;background:var(--surface-container-low);border-bottom:1px solid var(--outline-variant)">
+                        <span class="material-symbols-outlined" style="font-size:20px;color:var(--secondary)">badge</span>
+                        <div style="flex:1;min-width:0">
+                          <div style="font-family:var(--font-serif);font-size:19px;line-height:1.2;color:var(--on-surface)">{{ r.name }}</div>
+                          <sc-if value="{{ r.hasRule }}" hint-placeholder-val="{{ false }}">
+                            <div style="display:flex;align-items:center;gap:6px;margin-top:3px;font-size:11.5px;color:var(--on-surface-variant)">
+                              <span class="material-symbols-outlined" style="font-size:14px;color:var(--gold)">rule</span>{{ r.rule }}
+                            </div>
+                          </sc-if>
+                        </div>
+                        <span style="font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:{{ r.countFg }};background:{{ r.countBg }};border-radius:6px;padding:5px 9px">{{ r.count }}</span>
+                      </div>
+                      <div style="display:flex;flex-direction:column">
+                        <sc-for list="{{ r.slots }}" as="s" hint-placeholder-count="2">
+                          <div class="ed-slot" style="display:flex;align-items:center;gap:14px;padding:12px 18px;border-top:1px solid var(--outline-variant);background:{{ s.bg }};border-left:3px solid {{ s.bar }}">
+                            <span style="width:20px;flex-shrink:0;font-family:var(--font-display);font-size:14px;color:var(--outline)">{{ s.n }}</span>
+                            <span style="width:74px;flex-shrink:0;font-size:10px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--on-surface-variant)">{{ s.req }}</span>
+                            <sc-if value="{{ s.filled }}" hint-placeholder-val="{{ true }}">
+                              <span style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+                                <span style="width:28px;height:28px;border-radius:50%;background:var(--surface-container-high);border:1px solid var(--outline-variant);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:var(--navy-900);flex-shrink:0">{{ s.initials }}</span>
+                                <span style="font-size:14.5px;color:var(--on-surface);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.person }}</span>
+                              </span>
+                            </sc-if>
+                            <sc-if value="{{ s.empty }}" hint-placeholder-val="{{ false }}">
+                              <span style="flex:1;display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--on-surface-variant)">
+                                <span style="width:28px;height:28px;border-radius:50%;border:1px dashed var(--outline);display:flex;align-items:center;justify-content:center;flex-shrink:0"><span class="material-symbols-outlined" style="font-size:16px;color:var(--outline)">person_add</span></span>
+                                Nobody yet
+                              </span>
+                            </sc-if>
+                            <sc-if value="{{ s.declined }}" hint-placeholder-val="{{ false }}">
+                              <span style="display:flex;align-items:center;gap:7px;flex-shrink:0;padding:5px 10px;border-radius:6px;background:var(--error);color:var(--on-error)">
+                                <span class="material-symbols-outlined" style="font-size:16px">do_not_disturb_on</span>
+                                <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase">Said no — reassign</span>
+                              </span>
+                            </sc-if>
+                            <sc-if value="{{ s.calm }}" hint-placeholder-val="{{ true }}">
+                              <span style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+                                <span style="width:7px;height:7px;border-radius:50%;background:{{ s.dotBg }};border:1.5px solid {{ s.dotBorder }}"></span>
+                                <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:{{ s.stateFg }}">{{ s.state }}</span>
+                              </span>
+                            </sc-if>
+                            <span class="ed-act" style="display:flex;gap:2px;flex-shrink:0;opacity:0;transition:opacity 150ms cubic-bezier(0.2,0,0,1)">
+                              <button type="button" title="Change state" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:none;border:none;border-radius:8px;cursor:pointer;color:var(--on-surface-variant)"><span class="material-symbols-outlined" style="font-size:18px">how_to_reg</span></button>
+                              <button type="button" title="Replace this person" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:none;border:none;border-radius:8px;cursor:pointer;color:var(--on-surface-variant)"><span class="material-symbols-outlined" style="font-size:18px">swap_horiz</span></button>
+                              <button type="button" title="Clear this place" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:none;border:none;border-radius:8px;cursor:pointer;color:var(--on-surface-variant)"><span class="material-symbols-outlined" style="font-size:18px">close</span></button>
+                            </span>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+
+                <!-- one-off roles: deliberately lighter -->
+                <div style="margin-top:24px;padding-top:18px;border-top:1px dashed var(--sand)">
+                  <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px">
+                    <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant)">Just for this evening</span>
+                    <span style="font-size:12.5px;color:var(--on-surface-variant)">No places, no rules — a label and whoever's doing it.</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    <sc-for list="{{ oneOffs }}" as="o" hint-placeholder-count="2">
+                      <div style="display:flex;align-items:center;gap:12px;padding:8px 4px">
+                        <span class="material-symbols-outlined" style="font-size:17px;color:var(--outline);flex-shrink:0">label</span>
+                        <span style="font-size:14.5px;color:var(--on-surface);flex-shrink:0">{{ o.label }}</span>
+                        <span style="display:flex;align-items:center;gap:6px;flex:1;flex-wrap:wrap">
+                          <sc-for list="{{ o.people }}" as="p" hint-placeholder-count="1">
+                            <span style="display:flex;align-items:center;gap:7px;padding:3px 10px 3px 4px;background:var(--surface-container-low);border:1px solid var(--outline-variant);border-radius:999px">
+                              <span style="width:22px;height:22px;border-radius:50%;background:var(--surface-container-high);display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;color:var(--navy-900)">{{ p.initials }}</span>
+                              <span style="font-size:13px;color:var(--on-surface)">{{ p.name }}</span>
+                              <span class="material-symbols-outlined" style="font-size:14px;color:var(--outline);cursor:pointer">close</span>
+                            </span>
+                          </sc-for>
+                          <span style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--secondary);cursor:pointer"><span class="material-symbols-outlined" style="font-size:15px">add</span>Someone</span>
+                        </span>
+                        <span class="material-symbols-outlined" style="font-size:17px;color:var(--outline);cursor:pointer;flex-shrink:0">delete</span>
+                      </div>
+                    </sc-for>
+                    <div style="display:flex;align-items:center;gap:10px;padding:4px">
+                      <span class="material-symbols-outlined" style="font-size:17px;color:var(--outline)">add</span>
+                      <input class="ed-in" type="text" placeholder="Someone to unlock the hall…" style="flex:1;background:transparent;border:none;border-bottom:1px dashed var(--sand);border-radius:0;padding:8px 2px;font-size:14.5px">
+                      <span style="font-size:12px;color:var(--outline)">Press Enter</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── side: visibility + when ── -->
+            <div style="display:flex;flex-direction:column;gap:20px">
+              <div style="background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:10px;padding:22px">
+                <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:4px">Who can see this</div>
+                <p style="margin:0 0 14px;font-size:12.5px;line-height:1.5;color:var(--on-surface-variant);text-wrap:pretty">Pick the widest circle that should know about it.</p>
+                <div style="display:flex;flex-direction:column;gap:3px">
+                  <sc-for list="{{ visLevels }}" as="v" hint-placeholder-count="5">
+                    <label class="ed-vis" onClick="{{ v.onPick }}" style="position:relative;display:flex;align-items:flex-start;gap:11px;padding:11px 12px 11px 14px;border-radius:10px;cursor:pointer;background:{{ v.bg }};transition:background 150ms cubic-bezier(0.2,0,0,1)">
+                      <span style="position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0;background:var(--primary);opacity:{{ v.accent }}"></span>
+                      <span class="material-symbols-outlined" style="font-size:19px;color:{{ v.iconFg }};margin-top:1px;flex-shrink:0">{{ v.icon }}</span>
+                      <span style="flex:1;min-width:0">
+                        <span style="display:block;font-size:13.5px;font-weight:{{ v.weight }};color:{{ v.nameFg }}">{{ v.name }}</span>
+                        <span style="display:block;font-size:12.5px;line-height:1.45;color:var(--on-surface-variant);text-wrap:pretty">{{ v.who }}</span>
+                      </span>
+                      <span class="material-symbols-outlined" style="font-size:19px;color:var(--primary);opacity:{{ v.accent }};flex-shrink:0">check</span>
+                    </label>
+                  </sc-for>
+                </div>
+
+                <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--outline-variant)">
+                  <label style="display:flex;align-items:flex-start;gap:11px;cursor:pointer;opacity:{{ rosterOpacity }}">
+                    <input type="checkbox" checked="{{ rosterShared }}" onChange="{{ onToggleRoster }}" style="width:16px;height:16px;margin-top:2px;accent-color:var(--primary);cursor:pointer">
+                    <span>
+                      <span style="display:block;font-size:13.5px;font-weight:600;color:var(--on-surface)">Everyone serving can see who else is serving</span>
+                      <span style="display:block;font-size:12.5px;line-height:1.45;color:var(--on-surface-variant);margin-top:2px;text-wrap:pretty">{{ rosterHint }}</span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <div style="background:var(--surface-container-low);border:1px solid var(--outline-variant);border-radius:10px;padding:22px">
+                <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:12px">When it happens</div>
+                <div style="font-family:var(--font-serif);font-size:17px;line-height:1.4;color:var(--on-surface)">Every Wednesday at 7:00 pm</div>
+                <div style="font-size:12.5px;color:var(--on-surface-variant);margin-top:4px">Until further notice · 14 dates ahead</div>
+                <div style="display:flex;gap:9px;margin-top:16px">
+                  <button type="button" style="font-family:var(--font-sans);font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--secondary);background:transparent;border:1px solid var(--secondary);border-radius:10px;padding:9px 14px;cursor:pointer">Change pattern</button>
+                  <button type="button" style="font-family:var(--font-sans);font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--on-surface-variant);background:transparent;border:1px solid var(--outline-variant);border-radius:10px;padding:9px 14px;cursor:pointer">Skip this one</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ 2b / 2c · MEMBER ════════ -->
+    <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">
+      <div id="2b" style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">2b</span>
+          <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Member · roster shared</span>
+        </div>
+        <div style="width:620px;background:var(--background);border:1px solid var(--outline-variant);border-radius:14px;padding:30px 32px 34px">
+          <div style="padding-bottom:18px;border-bottom:1px solid var(--outline-variant)">
+            <h2 style="margin:0;font-family:var(--font-display);font-weight:600;font-size:27px;letter-spacing:.02em;color:var(--primary)">Midweek Gathering</h2>
+            <div style="font-size:13.5px;color:var(--on-surface-variant);margin-top:8px">Wednesday 29 July · 7:00 pm · Fellowship Hall</div>
+          </div>
+
+          <div style="margin-top:20px;background:var(--primary);border-radius:10px;padding:20px 22px">
+            <div style="font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--primary-fixed-dim)">Your part</div>
+            <div style="font-family:var(--font-serif);font-size:24px;line-height:1.25;color:var(--on-primary);margin-top:6px">Sound</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+              <span style="width:8px;height:8px;border-radius:50%;border:1.5px solid var(--primary-fixed-dim)"></span>
+              <span style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--primary-fixed)">Pending — not heard from you yet</span>
+            </div>
+            <div style="font-size:13px;line-height:1.5;color:var(--primary-fixed-dim);margin-top:10px;text-wrap:pretty">Let Caleb know either way and he'll mark it.</div>
+          </div>
+
+          <p style="margin:20px 0 0;font-family:var(--font-serif);font-size:16.5px;line-height:1.55;color:var(--on-surface);text-wrap:pretty">Supper together at seven, then teaching and prayer in the hall. Children are looked after next door for the second half.</p>
+
+          <div style="margin-top:24px">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant);padding-bottom:12px;border-bottom:1px solid var(--outline-variant)">Serving this evening</div>
+            <div style="display:flex;flex-direction:column;gap:0">
+              <sc-for list="{{ memberRoster }}" as="m" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:14px;padding:13px 2px;border-bottom:1px solid var(--outline-variant)">
+                  <span style="width:28px;height:28px;border-radius:50%;background:{{ m.avBg }};border:1px solid var(--outline-variant);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:var(--navy-900);flex-shrink:0">{{ m.initials }}</span>
+                  <span style="flex:1;min-width:0;font-size:14.5px;font-weight:{{ m.weight }};color:var(--on-surface)">{{ m.person }}</span>
+                  <span style="font-size:13px;color:var(--on-surface-variant)">{{ m.role }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="font-size:12.5px;color:var(--on-surface-variant);margin-top:14px;text-wrap:pretty">One place is still being sorted.</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="2c" style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">2c</span>
+          <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Member · own part only</span>
+        </div>
+        <div style="width:520px;background:var(--background);border:1px solid var(--outline-variant);border-radius:14px;padding:30px 32px 34px">
+          <div style="padding-bottom:18px;border-bottom:1px solid var(--outline-variant)">
+            <h2 style="margin:0;font-family:var(--font-display);font-weight:600;font-size:27px;letter-spacing:.02em;color:var(--primary)">Elders' Meeting</h2>
+            <div style="font-size:13.5px;color:var(--on-surface-variant);margin-top:8px">Tuesday 14 July · 6:30 pm · The Study</div>
+          </div>
+
+          <div style="margin-top:20px;background:var(--primary);border-radius:10px;padding:20px 22px">
+            <div style="font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--primary-fixed-dim)">Your part</div>
+            <div style="font-family:var(--font-serif);font-size:24px;line-height:1.25;color:var(--on-primary);margin-top:6px">Refreshments</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+              <span class="material-symbols-outlined" style="font-size:17px;color:var(--success)">check_circle</span>
+              <span style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--primary-fixed)">Confirmed</span>
+            </div>
+          </div>
+
+          <div style="margin-top:22px;display:flex;align-items:flex-start;gap:12px;padding:16px 18px;background:var(--surface-container-low);border:1px solid var(--outline-variant);border-radius:10px">
+            <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline);margin-top:1px">visibility_off</span>
+            <div style="font-size:13px;line-height:1.5;color:var(--on-surface-variant);text-wrap:pretty">Only your own part is shown for this event. Ask an elder if you need to know who else is coming.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ 2d · SUNDAY ════════ -->
+    <div id="2d" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">2d</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Sunday · settled, not disabled</span>
+      </div>
+      <div style="width:620px;background:var(--background);border:1px solid var(--outline-variant);border-radius:14px;padding:30px 32px 34px">
+        <div style="padding-bottom:18px;border-bottom:1px solid var(--outline-variant)">
+          <h2 style="margin:0;font-family:var(--font-display);font-weight:600;font-size:27px;letter-spacing:.02em;color:var(--primary)">Sunday Service</h2>
+          <div style="font-size:13.5px;color:var(--on-surface-variant);margin-top:8px">Sunday 26 July · 10:30 am · Sanctuary</div>
+        </div>
+
+        <div style="margin-top:20px;display:flex;align-items:center;gap:12px;padding:15px 18px;background:var(--surface-container-low);border:1px solid var(--outline-variant);border-radius:10px">
+          <span class="material-symbols-outlined" style="font-size:20px;color:var(--gold)">public</span>
+          <div style="flex:1;font-size:13.5px;line-height:1.5;color:var(--on-surface-variant);text-wrap:pretty"><span style="font-weight:700;color:var(--on-surface)">Sunday is public.</span> Everyone can see it, signed in or not — that is how Sundays work.</div>
+        </div>
+
+        <div style="margin-top:22px;display:flex;flex-direction:column;gap:0">
+          <sc-for list="{{ sundayRoles }}" as="s" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;gap:16px;padding:13px 2px;border-bottom:1px solid var(--outline-variant)">
+              <span style="width:120px;flex-shrink:0;font-size:10.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--on-surface-variant)">{{ s.role }}</span>
+              <span style="flex:1;font-family:var(--font-serif);font-size:17px;color:var(--on-surface)">{{ s.person }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="margin-top:22px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;background:var(--secondary-container);border-radius:10px">
+          <div style="font-size:13.5px;line-height:1.5;color:var(--on-secondary-container);text-wrap:pretty">Sundays are put together on the Services page, with the order of service and the guide.</div>
+          <button type="button" style="display:flex;align-items:center;gap:7px;flex-shrink:0;font-family:var(--font-sans);font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border:1px solid var(--primary);border-radius:10px;padding:10px 15px;cursor:pointer">Open on Services<span class="material-symbols-outlined" style="font-size:16px">north_east</span></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ 2e · PHONE ════════ -->
+    <div id="2e" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">2e</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Phone · member (left) and editor (right)</span>
+      </div>
+      <div style="display:flex;gap:24px">
+        <div style="width:390px;background:var(--background);border:1px solid var(--outline-variant);border-radius:22px;padding:18px 18px 26px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+            <span class="material-symbols-outlined" style="font-size:22px;color:var(--on-surface-variant)">arrow_back</span>
+            <span style="font-family:var(--font-display);font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--primary)">Event</span>
+            <span style="width:22px"></span>
+          </div>
+          <h3 style="margin:0;font-family:var(--font-display);font-weight:600;font-size:23px;letter-spacing:.02em;color:var(--primary)">Midweek Gathering</h3>
+          <div style="font-size:13px;color:var(--on-surface-variant);margin-top:7px">Wed 29 July · 7:00 pm · Fellowship Hall</div>
+
+          <div style="margin-top:18px;background:var(--primary);border-radius:10px;padding:18px">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--primary-fixed-dim)">Your part</div>
+            <div style="font-family:var(--font-serif);font-size:22px;color:var(--on-primary);margin-top:5px">Sound</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+              <span style="width:8px;height:8px;border-radius:50%;border:1.5px solid var(--primary-fixed-dim)"></span>
+              <span style="font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--primary-fixed)">Pending</span>
+            </div>
+          </div>
+
+          <p style="margin:18px 0 0;font-family:var(--font-serif);font-size:16px;line-height:1.55;color:var(--on-surface);text-wrap:pretty">Supper together at seven, then teaching and prayer in the hall.</p>
+
+          <div style="margin-top:20px;font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant);padding-bottom:10px;border-bottom:1px solid var(--outline-variant)">Serving</div>
+          <sc-for list="{{ memberRoster }}" as="m" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--outline-variant)">
+              <span style="width:26px;height:26px;border-radius:50%;background:{{ m.avBg }};border:1px solid var(--outline-variant);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--navy-900);flex-shrink:0">{{ m.initials }}</span>
+              <span style="flex:1;min-width:0;font-size:14px;font-weight:{{ m.weight }};color:var(--on-surface);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.person }}</span>
+              <span style="font-size:12.5px;color:var(--on-surface-variant);flex-shrink:0">{{ m.role }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="width:390px;background:var(--background);border:1px solid var(--outline-variant);border-radius:22px;padding:18px 18px 26px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+            <span class="material-symbols-outlined" style="font-size:22px;color:var(--on-surface-variant)">arrow_back</span>
+            <span style="font-family:var(--font-display);font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--primary)">Event</span>
+            <span class="material-symbols-outlined" style="font-size:22px;color:var(--on-surface-variant)">more_vert</span>
+          </div>
+          <h3 style="margin:0;font-family:var(--font-display);font-weight:600;font-size:23px;letter-spacing:.02em;color:var(--primary)">Midweek Gathering</h3>
+          <div style="font-size:13px;color:var(--on-surface-variant);margin-top:7px">Wed 29 July · 7:00 pm · Fellowship Hall</div>
+
+          <div style="display:flex;align-items:center;gap:12px;margin-top:16px;padding:13px 14px;background:var(--error-container);border:1px solid var(--error);border-left:4px solid var(--error);border-radius:10px">
+            <span class="material-symbols-outlined" style="font-size:20px;color:var(--error)">error</span>
+            <div style="flex:1;font-size:12.5px;line-height:1.45;color:var(--on-error-container);text-wrap:pretty"><span style="font-weight:700">Kids Ministry</span> — Bethany said no. Needs someone.</div>
+          </div>
+
+          <div style="margin-top:18px;display:flex;flex-direction:column;gap:12px">
+            <sc-for list="{{ managed }}" as="r" hint-placeholder-count="3">
+              <div style="border:1px solid {{ r.border }};border-radius:10px;overflow:hidden;background:var(--surface-container-lowest)">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;background:var(--surface-container-low);border-bottom:1px solid var(--outline-variant)">
+                  <span style="font-family:var(--font-serif);font-size:17px;color:var(--on-surface)">{{ r.name }}</span>
+                  <span style="font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:{{ r.countFg }};background:{{ r.countBg }};border-radius:6px;padding:4px 7px">{{ r.count }}</span>
+                </div>
+                <sc-for list="{{ r.slots }}" as="s" hint-placeholder-count="2">
+                  <div style="display:flex;align-items:center;gap:10px;padding:11px 13px;border-top:1px solid var(--outline-variant);background:{{ s.bg }};border-left:3px solid {{ s.bar }};min-height:48px">
+                    <span style="width:62px;flex-shrink:0;font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant)">{{ s.req }}</span>
+                    <span style="flex:1;min-width:0;font-size:14px;color:{{ s.mFg }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.mLabel }}</span>
+                    <sc-if value="{{ s.declined }}" hint-placeholder-val="{{ false }}">
+                      <span class="material-symbols-outlined" style="font-size:19px;color:var(--error);flex-shrink:0">do_not_disturb_on</span>
+                    </sc-if>
+                    <sc-if value="{{ s.calm }}" hint-placeholder-val="{{ true }}">
+                      <span style="width:8px;height:8px;border-radius:50%;background:{{ s.dotBg }};border:1.5px solid {{ s.dotBorder }};flex-shrink:0"></span>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="margin-top:18px;padding-top:14px;border-top:1px dashed var(--sand)">
+            <div style="font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:10px">Just for this evening</div>
+            <sc-for list="{{ oneOffs }}" as="o" hint-placeholder-count="2">
+              <div style="display:flex;align-items:center;gap:10px;padding:7px 0">
+                <span class="material-symbols-outlined" style="font-size:16px;color:var(--outline)">label</span>
+                <span style="font-size:14px;color:var(--on-surface);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ o.label }}</span>
+                <span style="font-size:12.5px;color:var(--on-surface-variant);flex-shrink:0">{{ o.names }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:1200}}">
+const initials = n => n.split(' ').map(w => w[0]).slice(0, 2).join('');
+
+const MANAGED = [
+  {
+    name: 'Kids Ministry', rule: 'No married couple together in this role', count: '3 places · 1 to sort',
+    urgent: true,
+    slots: [
+      { req: 'Either', person: 'Caleb Munro', state: 'Confirmed' },
+      { req: 'A woman', person: 'Bethany Croft', state: 'Declined' },
+      { req: 'A woman', person: null, state: 'Empty' },
+    ],
+  },
+  {
+    name: 'Setup', rule: null, count: '2 places · full',
+    slots: [
+      { req: 'Either', person: 'Nathan Ward', state: 'Confirmed' },
+      { req: 'Either', person: 'Sam Teague', state: 'Pending' },
+    ],
+  },
+  {
+    name: 'Sound', rule: 'Sound team only', count: '1 place · full',
+    slots: [
+      { req: 'Either', person: 'Nathan Ward', state: 'Pending' },
+    ],
+  },
+];
+
+const ONE_OFFS = [
+  { label: 'Someone to unlock the hall', people: ['Alan Ferris'] },
+  { label: 'Bring milk', people: ['Grace Whitlock', 'Priya Anand'] },
+];
+
+class Component extends DCLogic {
+  state = { visibility: 'participant', rosterShared: true };
+
+  chrome(state) {
+    if (state === 'Confirmed') return { dotBg: 'var(--success)', dotBorder: 'var(--success)', stateFg: 'var(--success)' };
+    if (state === 'Declined') return { dotBg: 'var(--error)', dotBorder: 'var(--error)', stateFg: 'var(--error)' };
+    if (state === 'Empty') return { dotBg: 'transparent', dotBorder: 'var(--outline-variant)', stateFg: 'var(--outline)' };
+    return { dotBg: 'transparent', dotBorder: 'var(--outline)', stateFg: 'var(--on-surface-variant)' };
+  }
+
+  renderVals() {
+    const vis = this.state.visibility;
+    const rosterMeaningful = ['participant', 'editor', 'elder'].indexOf(vis) !== -1;
+
+    const managed = MANAGED.map(r => ({
+      name: r.name,
+      rule: r.rule || '',
+      hasRule: !!r.rule,
+      count: r.count,
+      border: r.urgent ? 'var(--error)' : 'var(--outline-variant)',
+      countBg: r.urgent ? 'var(--error-container)' : 'var(--surface-container)',
+      countFg: r.urgent ? 'var(--on-error-container)' : 'var(--on-surface-variant)',
+      slots: r.slots.map((s, i) => {
+        const declined = s.state === 'Declined';
+        const empty = s.state === 'Empty';
+        const c = this.chrome(s.state);
+        return Object.assign({
+          n: i + 1,
+          req: s.req,
+          person: s.person || '',
+          initials: s.person ? initials(s.person) : '',
+          filled: !!s.person,
+          empty: empty,
+          declined: declined,
+          calm: !declined,
+          state: empty ? 'Open' : s.state,
+          bg: declined ? 'var(--error-container)' : 'transparent',
+          bar: declined ? 'var(--error)' : 'transparent',
+          mLabel: s.person || 'Nobody yet',
+          mFg: s.person ? 'var(--on-surface)' : 'var(--on-surface-variant)',
+        }, c);
+      }),
+    }));
+
+    const levels = [
+      { id: 'public', name: 'Public', icon: 'public', who: 'Anyone, signed in or not' },
+      { id: 'member', name: 'Members', icon: 'groups', who: 'Members and above' },
+      { id: 'participant', name: 'Participants', icon: 'assignment_ind', who: 'Only people given a role on this event, plus editors and elders' },
+      { id: 'editor', name: 'Editors', icon: 'edit_note', who: 'Editors and above' },
+      { id: 'elder', name: 'Elders', icon: 'shield', who: 'Elders and super admins' },
+    ].map(l => ({
+      name: l.name, icon: l.icon, who: l.who,
+      onPick: () => this.setState({ visibility: l.id }),
+      accent: vis === l.id ? '1' : '0',
+      bg: vis === l.id ? 'var(--surface-container)' : 'transparent',
+      weight: vis === l.id ? '700' : '600',
+      nameFg: vis === l.id ? 'var(--primary)' : 'var(--on-surface)',
+      iconFg: vis === l.id ? 'var(--primary)' : 'var(--on-surface-variant)',
+    }));
+
+    const roster = [
+      { person: 'Caleb Munro', role: 'Kids Ministry' },
+      { person: 'Nathan Ward', role: 'Setup', me: true },
+      { person: 'Sam Teague', role: 'Setup' },
+      { person: 'Nathan Ward', role: 'Sound', me: true },
+      { person: 'Alan Ferris', role: 'Unlock the hall' },
+      { person: 'Grace Whitlock', role: 'Bring milk' },
+    ].map(m => ({
+      person: m.me ? m.person + ' (you)' : m.person,
+      role: m.role,
+      initials: initials(m.person),
+      weight: m.me ? '700' : '500',
+      avBg: m.me ? 'var(--primary-fixed)' : 'var(--surface-container-high)',
+    }));
+
+    return {
+      rolesSummary: '3 roles from the Roles Manager, 2 just for this evening',
+      managed: managed,
+      oneOffs: ONE_OFFS.map(o => ({
+        label: o.label,
+        names: o.people.join(', '),
+        people: o.people.map(p => ({ name: p, initials: initials(p) })),
+      })),
+      visLevels: levels,
+      rosterShared: this.state.rosterShared,
+      onToggleRoster: () => this.setState(s => ({ rosterShared: !s.rosterShared })),
+      rosterOpacity: rosterMeaningful ? '1' : '.45',
+      rosterHint: rosterMeaningful
+        ? (this.state.rosterShared ? 'On — they see the whole list of who is serving.' : 'Off — each person sees only their own part.')
+        : 'Only matters from Participants upwards — at this level everyone can already see the whole event.',
+      sundayRoles: [
+        { role: 'Service Leader', person: 'Esther Lund' },
+        { role: 'Preacher', person: 'David Okonkwo' },
+        { role: 'Music Leader', person: 'Ruth Kessler' },
+        { role: 'Prayer', person: 'Nathan Ward' },
+      ],
+      memberRoster: roster,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

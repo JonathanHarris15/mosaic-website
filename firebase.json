@@ -5,6 +5,22 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "//": "Firebase's default is an hour's cache on everything. Nothing here is content-hashed — calendar.js is always calendar.js — so for an hour after a deploy a browser can run the NEW page against the OLD script. Alpine swallows a binding to a member the old script never had, so the symptom is a screen that renders blank rather than an error: exactly the bug that hid this. no-cache still caches, it just revalidates first, so the cost is one 304 per file.",
+        "source": "**/*.@(html|js|css)",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache" }
+        ]
+      },
+      {
+        "//": "Fonts and images ARE stable — a woff2 that changes gets a new name.",
+        "source": "**/*.@(woff|woff2|ttf|otf|png|jpg|jpeg|svg|webp|ico)",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=604800" }
+        ]
+      }
     ]
   },
   "functions": [

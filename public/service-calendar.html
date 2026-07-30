@@ -4,10 +4,10 @@
 <head>
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-    <title>Service Calendar - Mosaic Services</title>
+    <title>Services - Mosaic Services</title>
 
     <!-- Mobile shell: adapt this page when opened inside the Capacitor WebView
-         (the native Service Calendar routes its "Inject service" action here). -->
+         (the native Services screen routes its "Inject service" action here). -->
     <script src="mobile-shell.js"></script>
     <link rel="stylesheet" href="mobile-shell.css" />
     <script>
@@ -354,6 +354,13 @@
                                     and <strong x-text="result.prayers"></strong> pastoral-prayer record<span x-show="result.prayers !== 1">s</span></span>.
                                 A blank service is ready on the chosen Sunday.
                             </p>
+                            <!-- Event occurrences moved too (MS-152). Reported
+                                 separately so it is visible that the rosters
+                                 came with them, rather than being assumed. -->
+                            <p x-show="result && result.occurrences > 0">
+                                Also moved <strong x-text="result.occurrences"></strong> other event<span x-show="result.occurrences !== 1">s</span>
+                                <span x-show="result.assignments > 0">, with <strong x-text="result.assignments"></strong> assignment<span x-show="result.assignments !== 1">s</span> intact</span>.
+                            </p>
                             <p x-show="result && result.services === 0">A blank service slot is ready on the chosen Sunday.</p>
                         </div>
                     </div>
@@ -395,7 +402,7 @@
                     <span class="hidden md:inline">Back to Dashboard</span>
                 </a>
                 <div class="h-6 w-[1px] bg-surface-variant/50 hidden md:block flex-shrink-0"></div>
-                <h1 class="font-headline-md text-primary truncate">Service Calendar</h1>
+                <h1 class="font-headline-md text-primary truncate">Services</h1>
                 
                 <!-- Moved Import Docx Button -->
                 <button id="import-docx-btn" class="hidden shrink-0 border border-outline text-secondary px-4 py-1.5 rounded-full font-label-md text-xs hover:bg-secondary hover:text-on-secondary transition-colors flex items-center gap-2 group/btn ml-2" title="Import from docx">
@@ -587,6 +594,10 @@
     <script src="guide-engine.js"></script>
     <script src="guide-store.js"></script>
     <script src="events-core.js"></script>
+    <!-- The week-shift tool moves Event occurrences and their rosters too
+         (MS-152); without these it would silently lose the week's roster. -->
+    <script src="events-occurrence-core.js"></script>
+    <script src="events-store.js"></script>
     <script src="service-calendar.js"></script>
 </body>
 

@@ -168,6 +168,8 @@ _Avoid_: Meeting, appointment (use Event); do not conflate with Service (a Servi
 
 **Roles Manager**:
 The editor+ dashboard card where **Role Definitions** are authored and managed, and where a date range of a recurring **Event** is **auto-assigned** — the system drafts a fair, rule-valid lineup for the user to review and accept (propose-then-approve). Distinct from the per-Event **Roles tab**, which assigns a single service by hand.
+- **One Roles Manager, opened on both.** The phone does not get a port of this screen; it opens the same page inside the shell (`?shell=mobile`), reachable from the phone's home grid, which is the phone's dashboard. This screen is where a Role's slots and restriction rules are decided, so a second copy of it would be a second place for those rules to drift from the model.
+- **On a phone it is a list, then an editor** — never both, because there is only room for one. The list's rows become cards you tap; delete moves into the editor's own bar, and the only back arrow is the shell's, which the page answers: out of the Role you have open, or out of the page if you have none.
 _Avoid_: Scheduler page, role admin
 
 **Permission Level**:
@@ -338,13 +340,14 @@ A hymn selection within a Service's liturgy.
   - **Literal**: An unlinked name (has a `name` but `id` is null). These typically arise from docx imports where a match wasn't found. They must be resolved (linked to a Canonical hymn) to enable full functionality.
 
 ### Involvement
-A record of a Person's participation in an Event in a specific Role. The single serve log — there is no separate one (ADR-0016).
+A record that a Person **did serve** in a specific Role at an Event. The single serve log — there is no separate one (ADR-0016). It records the past: an Involvement is never written for an Event that has not happened yet (ADR-0018).
 - **Fields**:
   - `serviceDate`: The date of the event (YYYY-MM-DD).
   - `type`: The Role slug (see Roles). **Role-open**: any slug is accepted, so a new Servant Role needs no schema change.
   - `seriesId`: The **Event series** this serve belonged to (e.g. `sunday_service`). Fairness is counted per series, so this is what lets a Person read as overdue for one Event and fresh for another.
-  - `metadata`: Optional extra data (e.g., prayer type, prayer text).
+  - `metadata`: Optional extra data (e.g., prayer type, prayer text; the label of a [[One-off Role]]).
 - A record written before `seriesId` existed **reads as** the Sunday Service (`EventsCore.seriesIdOf`). Without that fallback every historic serve would drop out of fairness the moment the field appeared. `scripts/backfill-involvement-series.js` makes it explicit, because a Firestore query cannot fall back.
+- **An [[Assignment]] is not an Involvement.** The Assignment is the plan and is mutable; the Involvement is the fact and is written only once the date has passed. Only a **Confirmed** Assignment converts automatically.
 
 ## Roles
 A Role is a type of participation assigned on an Event and recorded as Involvement. Two families (ADR-0016) — `RolesCore.allRoles()` composes them into the one list every surface renders.
@@ -380,9 +383,63 @@ The stored specification of a Servant Role, authored in the Roles Manager. Lives
 
 ### Event series
 The recurring thing that carries Roles, in the `events` collection. The Sunday **Service** is one **locked** series (`sunday_service`): always present, undeletable, its liturgical Roles fixed to it. Servant Roles can be added to a series and removed again — locked protects the liturgical Roles, not the whole roster.
-- **Fields**: `id`, `name`, `locked`, `roleSlugs` (ordered), `lockedRoleSlugs` (the ones that cannot be removed).
-- **Occurrences are not migrated.** An occurrence of the Sunday Service resolves to the date-keyed `services/{date}` document that already exists — no shadow record — so the Service Guide keeps reading what it always read. A general per-occurrence Event store arrives with the Calendar (MS-99); `EventsCore.occurrenceRef` returns `null` for any other series until then.
+- **Fields**: `id`, `name`, `locked`, `roleSlugs` (ordered), `lockedRoleSlugs` (the ones that cannot be removed), the **recurrence rule**, and the series' [[Event visibility]].
+- An occurrence of the Sunday Service resolves to the date-keyed `services/{date}` document that already exists — no shadow record — so the Service Guide keeps reading what it always read (`EventsCore.occurrenceRef`).
 - `scripts/seed-events.js` reconciles the Sunday Service series: it restores what must be true and leaves alone what the user owns, so a second run is a no-op.
+
+### Event occurrence
+One dated instance of an [[Event series]], or a **one-off Event** that belongs to no series. What an [[Assignment]] attaches to (ADR-0018).
+- **Sparse**: a document exists only once there is something to say about the date — an assignment, a cancellation, a changed time. The Calendar computes the dates from the series' recurrence rule and merges in whatever documents exist. An untouched date still appears; it is simply empty.
+- **Deterministic id** (`{seriesId}_{date}`), so two editors cannot create the same occurrence twice. A one-off Event has no series and takes an auto-id.
+- Carries its own [[Event visibility]], copied down from the series, and `participantIds` — the denormalised list of People holding a Role on it, which is what makes `participant` visibility checkable in a security rule.
+- **One date decides WHO; the Event decides WHAT.** A **Sunday** is the same rule taken furthest: its pattern is settled by definition, its visibility by rule, and its liturgy belongs to the order of service — so one Sunday offers no pattern controls and no *Skip this one*, only who is serving and its own [[One-off Role]]s.
+   Which Roles an Event carries, who may see it, and what colour it draws are true of every date, so they are set once in [[Event series management]]. One date of a repeating Event sets only who is standing in those Roles that day, plus its own [[One-off Role]]s. A control on both would change every date from a screen that looks like it is about one of them.
+- **Roles come from two levels.** The [[Event series]]' `roleSlugs` apply to *every* date of it, minus the liturgical ones; `occurrenceRoleSlugs` are added to *this date alone*. Both draw as fillable cards with the full Assignment state machine, and neither can be added or removed from one date — `occurrenceRoleSlugs` is now legacy, read but no longer written.
+- **`occurrenceRoleSlugs`** — which **managed** Roles *this date* needs, chosen on the Event detail screen. Deliberately **not** named `roleSlugs`: that is the [[Event series]]' field, saying which Roles the series carries. Two lists, two levels, two names — sharing one would read as a single field to anyone holding the series entry in their head. `oneOffRoles` sits beside it as `{ id, label }`, since a [[One-off Role]] exists only here.
+- **The roster is a subcollection, not a field.** Firestore cannot hide a field from someone allowed to read the document, so "participants can't see who else is coming" only works if each [[Assignment]] is its own document under the occurrence. The occurrence itself carries only `participantIds` and the declined flag — both **derived** from the roster on every write, never maintained by hand.
+- **`colour`** — which of eight palette colours it draws in on the Calendar. Kept on the [[Event series]] for a recurring Event, so one change moves every date; on the occurrence itself for a one-off, whose occurrence *is* the whole Event. Never copied down: unlike [[Event visibility]] (which a security rule reads off the document and so must be stamped), a colour is only ever read where the series is already in hand. Decoration only — **the red that means "needs sorting" is not in the palette and always overrides it**, so a chosen colour can never shout or stop something else shouting.
+- **A Sunday occurrence is `services/{date}`**, which keeps its liturgical roles as the hardwired fields the Service Guide prints. Assignments sit *alongside* those fields and never over them. A Sunday's chip on the Calendar opens its **Event page** like any other date, where its **Servant** Roles are filled; the liturgy is one prominent click further on. **A liturgical Role is never drawn as a fillable card on an Event page** — that, not the routing, is what keeps the printed booklet safe.
+- **One instance can be MOVED to another date without touching the recurrence rule** — "first Sunday of the month, except in August when it is the fifteenth". It is the same instance on a different day and **it carries its roster**, not a cancellation plus a new Event. Two documents result: the new date carries `movedFrom`, and the original carries `movedTo` — the original cannot simply be deleted, because the rule still produces that date and an absent document would draw the Event straight back. Refused onto a date the pattern already produces, onto a date that already has an instance, and for the Sunday Service (whose order of service lives under its own date).
+- **A date that is not happening** — skipped (`cancelled`) or moved away (`movedTo`) — draws struck through and quiet on the Calendar, never in the error red, because a gathering that is not taking place has nothing to chase.
+- **A one-off Event's details are edited on its occurrence**, because it has no series for them to live on — including its **date**, which is simply a field: a one-off's id is an auto-id, not the date. (One date *of a series* is [[Event series management]]'s move, which must rewrite the id.)
+- **An untouched date has no document, and still opens.** The id carries the series and the date, so opening one rebuilds it rather than reporting it missing — but only if the series' rule actually produces that date.
+- **Two readings of the same date, not one screen with things greyed out.** An **editor** gets the Role cards: numbered places, empty rows, and each person's state to set. A **member** the roster was shared with gets the roster flat — who is serving, at what — because they are answering "who else is coming", not administering. A member used to get both at once, which named the same people twice on one screen and offered controls they could never use.
+
+### Event series management
+Managing an [[Event series]] itself rather than one date of it — **everything true of every date**: its name, start time, place, description, recurrence pattern, [[Event visibility]], colour, and which Roles it carries every time. Reached at `calendar-event.html?series=<id>`, and the only way into the **Sunday Service as an Event**. Distinct from the order of service, which is still built one Sunday at a time: a Sunday chip on the Calendar goes there, never here.
+- **Liturgical Roles are shown and locked.** An editor needs to see the whole shape of a Sunday, but those Roles are filled per-Sunday through the Service entity and print in the booklet, so this screen can never drop one (`lockedRoleSlugs`, MS-13).
+- **The time lives on the recurrence rule**, not beside it — one home for one fact — and a date carrying its own time still wins. Setting a Sunday time therefore ends the Sunday Service's reliance on its *implied* rule — so the rule written has to keep saying "every Sunday".
+- Opening the Sunday Service **reconciles** it: created if it never existed, repaired if it drifted, untouched if it is already right.
+
+### Assignment
+A Person placed in one slot of one Role on an [[Event occurrence]] — **the plan, not the record**. Mutable, and never itself a serve record.
+- A slot holds **one current** Assignment. Assigning a replacement overwrites it.
+- **States** — every Assignment is in exactly one:
+  - **Pending**: assigned, not yet heard from. The default.
+  - **Confirmed**: they said yes.
+  - **Declined**: they said no, and the slot is **flagged for reassignment** — visibly needing attention, not silently empty.
+- Carries **who set the state and when**, so the state machine survives being handed to the congregation in MS-20.
+- Only **Servant Roles** and [[One-off Role]]s get Assignments. Liturgical Roles keep their existing wiring into the Service entity (ADR-0018 §2).
+- **Being *offered* is a different question from being *eligible*.** An ineligible Person is shown, blocked, with a reason — seeing who was passed over is the point of the picker. Somebody **Inactive**, or hidden by a tag carrying `hidePeople` (or `shepherdingHidden`), is not offered *at all*: they are not a candidate who lost. For a hidden Person a blocked row would print the very name the tag exists to hide. Elders and super admins still see them, since that is who the tag hides people from everyone else *for*.
+- **On a Sunday, holding a liturgical Role blocks you from a Servant Role on the same date.** You cannot preach and run the sound desk at once. Because the liturgy is stored as *fields on the Service*, not as Assignments, the picker reads that document to find out — and shows those people blocked, naming the liturgical Role, rather than hiding them.
+- **Once the date passes**: Confirmed becomes an [[Involvement]] automatically; Declined never does; Pending becomes an open question an editor resolves ("did they serve?"), and an unresolved question never counts as serving.
+
+### One-off Role
+A Role created for a single Event and living only on it — "someone to unlock the hall". Deliberately cheap: a **label and some people**, with no definition, no reuse, no slots, no restrictions and no eligibility checking. Forcing every ad-hoc job through the Roles Manager would make the Roles Manager a junk drawer.
+- Its [[Involvement]] is written under **one reserved slug**, `one_off`, with the label in `metadata` — never an invented slug per job, which `RolesCore.roleBySlug` could not resolve to a name on any surface showing serve history.
+- **Counts as serving** (the person who unlocks the hall every week is not someone who never helps), but is **never a Role to balance** — fairness skips the `one_off` bucket rather than trying to rotate a job that happens once.
+
+### Event visibility
+Who may see an [[Event occurrence]]. One of five rungs, set on the series or the one-off Event and **stamped onto every occurrence** — a security rule cannot afford a lookup per document (ADR-0018 §5, following MS-130).
+- `public` — anyone, signed in or not.
+- `member` — members and above.
+- `participant` — only members holding a Role on **that** Event, plus everyone above. Checked against the occurrence's `participantIds`.
+- `editor` — editors and above.
+- `elder` — elders and super admins.
+- Changing a series' visibility restamps **all** its occurrences, past ones included.
+- **Removed by an editor → sight of the Event is lost instantly. Declined by the person → sight is kept until someone else takes the slot**, so they can still see what they turned down and change their mind.
+- Whether a participant sees the Event's full **roster** is an editor's choice per Event. Firestore cannot hide a field from a reader, so the roster lives in a subcollection with its own rule.
+- **The Sunday Service is permanently `public`** and not editable — its occurrences are what the congregant-facing Service Guide reads.
 
 ## Shepherding System
 
@@ -455,7 +512,8 @@ An `@`-prefixed inline reference inside a TipTap editor. The mention system span
 
 ## User Interface Conventions
 
-### Service Calendar
+### Services
+The week-by-week view of Sunday **Services** — the Sunday Service series and nothing else. **Renamed from "Service Calendar"** (MS-99): unchanged in function, renamed so it is not confused with the [[Calendar]], which is a different view.
 - **Baptism Indicator**: 
   - **List View**: A blue status badge with a `water_drop` icon.
   - **Table View**: A dedicated "Baptism" column showing the Baptism Candidates' names.
@@ -467,3 +525,20 @@ An `@`-prefixed inline reference inside a TipTap editor. The mention system span
 - **Editing Summary**: 
   - Sermonette leaders are linked to People and editable from list/table.
   - Baptism Candidates are linked to People and editable from the Order of Service editor (read-only in the calendar).
+
+### Calendar
+The view over **every** [[Event occurrence]] the signed-in person is allowed to see, not just Sundays (MS-99). Editors and above create Events here; what each person sees is governed by [[Event visibility]].
+- Distinct from [[Services]], which shows Sundays only and remains the surface for editing a Service's liturgy.
+- Loads with **two queries merged client-side** — one filtered by the viewer's rank, one `array-contains` their Person id for `participant`-visible Events. Firestore cannot express that as a single filter, and an unconstrained query **errors outright rather than returning fewer rows** — a failure that looks exactly like "this church has no events". The same trap is documented in `firestore.rules` for the relationship collections.
+- **Signed out is not an empty month, and the two look identical unless the page says so.** A signed-out Calendar still draws, because the Sunday Service is fetched **by id** regardless of who is asking while every other Event is filtered by the rungs the viewer's rank may see. So a lapsed session renders as a church that holds a service on Sunday and does nothing else all week. Both Calendar pages say when nobody is signed in and offer the way back; the phone app asks for a sign-in on launch rather than opening on a stranger's home screen (**"continue as guest" is remembered**, or the redirect would undo it).
+- **On a phone it is a different screen, not a narrower one.** Seven columns across 390px gives about 50px a day, which fits a number and nothing else — so inside the mobile shell the desktop grid, toolbar and rail panel stand down and the phone draws its own: *You in July* in navy at the top, then the **month strip**, then the day or the month underneath it. Swapped on the shell rather than on a media query, because the same 390px window on a desktop still has a mouse and gets the desktop screen.
+
+#### Month strip
+The phone's month: seven columns of day numbers, each carrying up to **three dots** — one per Event on that day, in the Event's own `colour`, with the needs-sorting red overriding it exactly as a chip's bar does. A glance, not a list: the count lives in the cards underneath. Tapping a day shows that day; tapping into a neighbouring month's corner goes to that month, because those dates are not loaded and drawing "nothing on this day" for one of them would be a lie rather than an empty day.
+
+## Flagged ambiguities
+
+- **"Calendar"** meant the Sunday-only Service Calendar before MS-99. It now means the all-Events [[Calendar]]; the Sunday view is [[Services]]. Code, labels and docs saying "Service Calendar" refer to Services.
+- **"Assignment" vs "Involvement"** were the same act before MS-99 — assigning someone wrote a serve record immediately, even for a future date. They are now distinct: [[Assignment]] is the plan, [[Involvement]] is the fact (ADR-0018).
+- **"Event"** is used for both the recurring [[Event series]] and a single dated [[Event occurrence]]. Prefer the precise term in code; in the UI, "Event" means whichever the user is looking at.
+- **[[Permission Level]] is not one straight line.** The tier list reads `viewer → member → editor → elder → admin → super_admin`, which suggests `admin` sees everything `elder` does. It does not, and never has: `firestore.rules` has always defined `isElder()` as `['elder', 'super_admin']` and `isAdmin()` as `['admin', 'super_admin']`, so shepherding data is closed to admins. [[Event visibility]] follows the rules rather than the list — an `elder`-visibility Event is invisible to an admin. **One consequence, surfaced in MS-99:** the week-shift tool now refuses for anyone who cannot see every rung, so it is `elder`/`super_admin` only. Reading the tier list as a hierarchy is the mistake; `admin` is an operational tier, not a pastoral one.

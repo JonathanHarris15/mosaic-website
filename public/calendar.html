@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Calendar | Mosaic</title>
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <!-- Running inside the phone shell. These pages already carried
+         `html.shell-mobile` rules and never loaded the script that sets that
+         class, so none of them could ever fire — styling for a mode the page
+         had no way to enter. -->
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <!-- The drawer the shell header opens is built from this list, which the
+         app's own drawer is built from too. One list, two renderings. -->
+    <script src="mobile/destinations.js"></script>
+    <script>window.MOBILE_HEADER = { title: 'Calendar', menu: true, route: 'events' };</script>
+    <script src="mobile-shell-header.js"></script>
+
+    <style>
+        [x-cloak] { display: none !important; }
+
+        /* The one raw value in the whole design set — the steel-teal focus ring,
+           which already matches the Input component. */
+        .cal-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(93,148,169,.18); }
+
+        /* Motion: background, opacity and filter only. No bounces, no loops. */
+        .cal-motion { transition: background-color 150ms cubic-bezier(0.2,0,0,1),
+                                  opacity 150ms cubic-bezier(0.2,0,0,1),
+                                  border-color 150ms cubic-bezier(0.2,0,0,1); }
+        .cal-press:active { transform: scale(0.98); }
+
+        /* Row actions reveal on hover on a desktop. On touch there is no hover,
+           so the mobile shell keeps them visible — same approach as the Tags and
+           Relationships tabs. */
+        .cal-row-actions { opacity: 0; }
+        .cal-row:hover .cal-row-actions,
+        .cal-row:focus-within .cal-row-actions { opacity: 1; }
+        html.shell-mobile .cal-row-actions { opacity: 1; }
+
+        /* The shell draws its own header with the page title in it, so the page's
+           own <h1> says "Calendar" a second time directly underneath. */
+        html.shell-mobile .cal-page-title { display: none; }
+
+        /* With the title hidden, its block's bottom rule floats alone under the
+           shell header — a divider dividing nothing from nothing. */
+        html.shell-mobile .cal-title-block { border-bottom: none; padding-bottom: 0; }
+
+        /* An event name TRUNCATES on a desktop row, where there is room for it to
+           be unusual. On a phone the date block, the Sunday badge and the chevron
+           leave about half the width, and "Sunday S…" is not a name. */
+        html.shell-mobile .cal-list-name { white-space: normal; overflow: visible; }
+
+        /* The phone gets its OWN month, not a squeezed copy of the desktop one.
+           Seven columns across 390px is about 50px a day, which fits a number and
+           nothing else — so the grid, the desktop toolbar and the rail's "You in
+           July" panel all stand down, and the block below replaces them.
+
+           Written as a swap rather than a media query because the shell is the
+           thing that knows it is a phone: the same 390px browser window on a
+           desktop still has a mouse and hover, and gets the desktop screen. */
+        .cal-phone-only { display: none; }
+        html.shell-mobile .cal-phone-only { display: flex; }
+        html.shell-mobile .cal-desktop-only { display: none !important; }
+
+        /* An event label WRAPS rather than truncating — at ~110px cells
+           "Midweek Gathering" has to read in full. */
+        .cal-chip-label { overflow-wrap: break-word; line-height: 1.22; }
+
+        /* minmax(0,1fr) is REQUIRED. With a plain 1fr the event chips give the
+           track a min-content floor and the grid overflows its container by
+           ~120px. Below the breakpoint there is no room for a rail, so the
+           layout stacks and the rail comes FIRST — on a phone the answer to
+           "am I serving?" matters more than the month at a glance. */
+        .cal-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+        .cal-layout > .cal-rail { order: -1; }
+        @media (min-width: 900px) {
+            .cal-layout { grid-template-columns: minmax(0, 1fr) 300px; }
+            .cal-layout > .cal-rail { order: 0; }
+        }
+    </style>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="auth.js"></script>
+    <script src="date-utils.js"></script>
+    <script src="roles-core.js"></script>
+    <script src="events-core.js"></script>
+    <script src="events-occurrence-core.js"></script>
+    <script src="events-store.js"></script>
+    <script src="calendar-view.js"></script>
+    <script src="calendar.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+</head>
+
+<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+      x-data="calendarPage()" x-cloak>
+
+    <!-- Header -->
+    <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
+        <a href="index.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary cal-motion">
+            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+            <span class="text-xs font-label-md uppercase tracking-wider">Dashboard</span>
+        </a>
+        <div id="auth-container" class="flex items-center"><div class="h-10"></div></div>
+    </header>
+
+    <div x-show="loading" class="flex-grow flex items-center justify-center">
+        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    </div>
+
+    <main x-show="!loading" class="flex-grow w-full max-w-7xl mx-auto px-4 md:px-margin pb-lg pt-md">
+
+        <!-- Title block -->
+        <div class="cal-title-block pb-md border-b border-outline-variant flex items-start justify-between gap-md">
+            <div>
+                <h1 class="cal-page-title font-display text-headline-lg tracking-[.02em] text-primary">Calendar</h1>
+            </div>
+            <div class="shrink-0 flex items-center gap-sm">
+                <!-- The Sunday Service AS AN EVENT — its time, and which Roles
+                     EVERY Sunday needs. Clicking one Sunday in the grid opens
+                     that Sunday; this is the thing above all of them. Neither is
+                     the liturgy: that is still built one Sunday at a time in the
+                     order of service, which is what keeps the printed booklet
+                     safe. -->
+                <a x-show="canCreate" href="calendar-event.html?series=sunday_service"
+                   class="flex items-center gap-1 border border-secondary text-secondary px-md py-2 rounded-lg
+                          font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
+                    <span class="material-symbols-outlined text-[18px]">church</span> Sunday Service
+                </a>
+                <a x-show="canCreate" href="calendar-event.html?new=1"
+                   class="flex items-center gap-1 bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs
+                          font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-primary-container">
+                    <span class="material-symbols-outlined text-[18px]">add</span> New event
+                </a>
+            </div>
+        </div>
+
+        <!-- Signed out. Says so, because the alternative is a calendar that
+             looks like the church's and is missing everything you are part of. -->
+        <div x-show="signedOut"
+             class="mt-md bg-surface-container-low border border-outline-variant border-l-[3px] rounded-lg
+                    px-md py-3 flex items-start gap-sm" style="border-left-color:#B89B6A;">
+            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">person_off</span>
+            <div class="flex-grow min-w-0">
+                <p class="text-[14px] text-on-surface">You are not signed in.</p>
+                <p class="text-[12.5px] text-on-surface-variant mt-0.5">
+                    This is only what the church shows publicly — anything you serve at,
+                    and anything for members, is missing.
+                </p>
+            </div>
+            <a :href="signInHref"
+               class="shrink-0 bg-primary text-on-primary px-3 py-2 rounded-lg font-label-md
+                      text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus">Sign in</a>
+        </div>
+
+        <!-- Every failure here renders as an empty calendar if you let it, and
+             "this church has no events" is what a real one looks like from the
+             outside. So each cause says which it is. -->
+        <div x-show="error"
+             class="mt-md bg-error-container text-on-error-container border border-outline-variant rounded-lg p-md flex items-start gap-sm">
+            <span class="material-symbols-outlined text-[20px]">error</span>
+            <p class="font-body-md text-body-md flex-grow" x-text="error"></p>
+            <!-- A building index fixes itself, so offer to try again rather than
+                 making somebody reload by hand. -->
+            <button x-show="retryable" @click="load()"
+                    class="shrink-0 border border-error text-on-error-container px-3 py-1.5 rounded-lg
+                           font-label-md text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus">
+                Try again
+            </button>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="cal-desktop-only mt-gutter flex flex-wrap items-center justify-between gap-sm">
+            <div class="flex items-center gap-sm">
+                <div class="flex rounded-lg border border-outline-variant overflow-hidden">
+                    <button @click="prevMonth()" aria-label="Previous month"
+                            class="w-[34px] h-[34px] flex items-center justify-center text-on-surface-variant
+                                   hover:bg-surface-container cal-motion cal-focus">
+                        <span class="material-symbols-outlined text-[20px]">chevron_left</span>
+                    </button>
+                    <button @click="nextMonth()" aria-label="Next month"
+                            class="w-[34px] h-[34px] flex items-center justify-center text-on-surface-variant
+                                   border-l border-outline-variant hover:bg-surface-container cal-motion cal-focus">
+                        <span class="material-symbols-outlined text-[20px]">chevron_right</span>
+                    </button>
+                </div>
+                <h2 class="font-display text-[21px] text-primary" x-text="monthLabel"></h2>
+                <button @click="goToToday()"
+                        class="text-secondary font-label-md text-xs uppercase tracking-wider px-2 py-1
+                               rounded hover:bg-surface-container cal-motion cal-focus">Today</button>
+            </div>
+
+            <div class="flex items-center gap-sm">
+                <label class="flex items-center gap-2 rounded-lg border border-outline-variant px-3 py-1.5 cursor-pointer cal-motion"
+                       :class="onlyMine ? 'bg-surface-container' : 'bg-surface-container-lowest'">
+                    <input type="checkbox" x-model="onlyMine" class="accent-primary cal-focus" />
+                    <span class="font-label-md text-xs uppercase tracking-wider text-on-surface-variant">Only mine</span>
+                </label>
+
+                <div class="flex gap-0.5 bg-surface-container rounded-lg p-[3px]">
+                    <template x-for="opt in [['month','Month','calendar_month'],['list','List','view_agenda']]" :key="opt[0]">
+                        <button @click="view = opt[0]"
+                                class="min-w-[96px] rounded-lg px-3 py-1 flex items-center justify-center gap-1
+                                       font-label-md text-xs uppercase tracking-wider cal-motion cal-focus"
+                                :class="view === opt[0]
+                                    ? 'bg-surface-container-lowest text-primary'
+                                    : 'text-on-surface-variant'">
+                            <span class="material-symbols-outlined text-[16px]" x-text="opt[2]"></span>
+                            <span x-text="opt[1]"></span>
+                        </button>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── The phone ──────────────────────────────────────────────────────
+             Drawn only inside the shell, and the desktop toolbar, grid, list and
+             "You in July" panel stand down when it is. Top to bottom: what YOU
+             are doing this month, the month itself as a strip of dots, then the
+             day you tapped — or the whole month, if you asked for the list. -->
+        <div class="cal-phone-only mt-md flex-col gap-md">
+
+            <!-- Navy, because it is the one thing on this screen that is about
+                 the person holding it rather than about the church's diary. -->
+            <section class="bg-primary rounded-lg px-[18px] py-4">
+                <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-primary-fixed-dim"
+                     x-text="'You in ' + monthLabel.split(' ')[0]"></div>
+                <p class="font-headline-lg text-[19px] leading-[1.35] mt-1.5 text-on-primary" x-text="mySentence"></p>
+            </section>
+
+            <div class="flex items-center justify-between gap-sm">
+                <div class="flex items-center gap-1">
+                    <button @click="prevMonth()" aria-label="Previous month"
+                            class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
+                        <span class="material-symbols-outlined text-[20px]">chevron_left</span>
+                    </button>
+                    <h2 class="font-display text-[17px] text-primary" x-text="monthLabel"></h2>
+                    <button @click="nextMonth()" aria-label="Next month"
+                            class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
+                        <span class="material-symbols-outlined text-[20px]">chevron_right</span>
+                    </button>
+                </div>
+
+                <!-- Icon only. The words that ride alongside them on a desktop
+                     cost a third of the row here, and the two glyphs are the
+                     same two everywhere else in the app. -->
+                <div class="shrink-0 flex gap-[3px] bg-surface-container border border-outline-variant rounded-lg p-[3px]">
+                    <template x-for="opt in [['month','calendar_month','Month'],['list','view_agenda','List']]" :key="opt[0]">
+                        <button @click="view = opt[0]" :aria-label="opt[2]"
+                                class="w-9 h-[30px] flex items-center justify-center rounded-lg cal-motion cal-focus"
+                                :class="view === opt[0] ? 'bg-surface-container-lowest text-primary' : 'text-on-surface-variant'">
+                            <span class="material-symbols-outlined text-[18px]" x-text="opt[1]"></span>
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <!-- The month, as a strip. A dot per event, the day's own colour,
+                 and the same red for needs-sorting as everywhere else.
+
+                 Only in Month. List means a list: the strip above one is a
+                 second answer to a question already answered underneath, and it
+                 pushes the first card most of a screen down. -->
+            <div x-show="view === 'month'" class="grid gap-0.5"
+                 style="grid-template-columns: repeat(7, minmax(0,1fr));">
+                <template x-for="(d, i) in ['S','M','T','W','T','F','S']" :key="i">
+                    <div class="text-center pb-1 text-[9.5px] font-label-md tracking-[.1em] uppercase text-outline"
+                         x-text="d"></div>
+                </template>
+                <template x-for="cell in cells" :key="cell.date">
+                    <button @click="focusDay(cell)"
+                            class="flex flex-col items-center gap-[3px] py-1.5 rounded-lg cal-motion cal-focus"
+                            :class="cell.date === focusedDate ? 'bg-surface-container' : ''">
+                        <span class="text-[12px] font-label-md"
+                              :class="cell.date === focusedDate
+                                ? 'text-primary font-bold'
+                                : (cell.inMonth ? 'text-on-surface' : 'text-outline')"
+                              x-text="cell.day"></span>
+                        <span class="flex gap-0.5 h-[5px]">
+                            <template x-for="(colour, i) in stripDots(cell)" :key="i">
+                                <span class="w-[5px] h-[5px] rounded-full" :style="'background:' + colour"></span>
+                            </template>
+                        </span>
+                    </button>
+                </template>
+            </div>
+
+            <!-- One body for both views, so the card is written once. Month is
+                 the day you tapped; List is the whole month, grouped by week. -->
+            <div class="flex flex-col gap-md">
+                <template x-for="group in phoneGroups" :key="group.weekStart">
+                    <div>
+                        <div class="pb-2 text-[10px] font-label-md tracking-[.14em] uppercase text-on-surface-variant"
+                             x-text="group.label"></div>
+                        <div class="flex flex-col gap-2">
+                            <template x-for="ev in group.events" :key="ev.id">
+                                <button @click="open(ev)"
+                                        class="w-full text-left flex gap-[14px] p-[14px] rounded-lg cal-motion cal-press cal-focus
+                                               bg-surface-container-lowest border border-l-[3px]"
+                                        :style="'border-left-color:' + chipBar(ev)"
+                                        :class="ev.needsAttention ? 'border-error' : 'border-outline-variant'">
+                                    <div class="w-[34px] shrink-0 text-center">
+                                        <div class="text-[9.5px] font-label-md tracking-[.12em] uppercase text-on-surface-variant"
+                                             x-text="weekdayShort(ev.date)"></div>
+                                        <div class="font-display text-[19px]"
+                                             :class="ev.date === today ? 'text-primary' : 'text-on-surface'"
+                                             x-text="dayNumber(ev.date)"></div>
+                                    </div>
+                                    <div class="min-w-0 flex-grow">
+                                        <div class="text-[17px] leading-[1.25] text-on-surface"
+                                             :class="{
+                                                'font-headline-lg': ev.isSunday,
+                                                'font-label-md font-medium': !ev.isSunday,
+                                                'line-through opacity-[.55]': chipKind(ev) === 'off'
+                                             }"
+                                             x-text="ev.name || ev.seriesName || 'Event'"></div>
+                                        <div class="mt-[3px] flex items-center gap-1.5 flex-wrap text-[12.5px] text-on-surface-variant">
+                                            <span x-show="ev.time" x-text="formatTime(ev.time)"></span>
+                                            <span x-show="ev.time && ev.location" class="opacity-60">·</span>
+                                            <span x-show="ev.location" x-text="ev.location"></span>
+                                        </div>
+
+                                        <!-- "Moved to 15 August", not just gone. Somebody
+                                             looking at the first Sunday needs to know where
+                                             the gathering went, or they turn up to an empty hall. -->
+                                        <div x-show="movedNote(ev)"
+                                             class="mt-2 text-[11px] font-label-md tracking-[.08em] uppercase text-on-surface-variant"
+                                             x-text="movedNote(ev)"></div>
+
+                                        <div x-show="ev.mine"
+                                             class="mt-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5
+                                                    bg-surface-container border border-outline-variant">
+                                            <!-- Pending is a hollow ring: the resting state,
+                                                 and quiet on purpose. -->
+                                            <span class="w-[6px] h-[6px] rounded-full"
+                                                  :class="{
+                                                    'border-[1.5px] border-outline': ev.mine && ev.mine.tone === 'calm',
+                                                    'bg-success': ev.mine && ev.mine.tone === 'good',
+                                                    'bg-error': ev.mine && ev.mine.tone === 'attention'
+                                                  }"></span>
+                                            <span class="text-[10.5px] font-label-md tracking-[.1em] uppercase text-primary"
+                                                  x-text="ev.mine ? 'You · ' + ev.mine.label + ' · ' + ev.mine.stateLabel : ''"></span>
+                                        </div>
+
+                                        <div x-show="ev.needsAttention"
+                                             class="mt-2 flex items-center gap-1.5 rounded-md bg-error-container px-2.5 py-2">
+                                            <span class="material-symbols-outlined text-[17px] text-error">error</span>
+                                            <span class="text-[11px] font-label-md tracking-[.08em] uppercase text-on-error-container">
+                                                Needs sorting
+                                            </span>
+                                        </div>
+
+                                        <!-- "Sunday", not "Sunday service" — the name
+                                             directly above it already says that, and a
+                                             card that says the same thing twice reads
+                                             as a bug. -->
+                                        <div x-show="ev.isSunday"
+                                             class="mt-2 flex items-center gap-1 text-[11px] font-label-md tracking-[.1em] uppercase text-secondary">
+                                            <span class="material-symbols-outlined text-[14px]">church</span> Sunday
+                                        </div>
+                                    </div>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- An empty day and an empty month are different facts. -->
+                <p x-show="!phoneGroups.length"
+                   class="py-md text-center font-headline-lg text-[16.5px] text-on-surface-variant"
+                   x-text="phoneEmptyLine"></p>
+            </div>
+        </div>
+
+        <div class="mt-gutter cal-layout">
+
+            <!-- ── The month grid ─────────────────────────────────────────── -->
+            <section x-show="view === 'month'"
+                     class="cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden min-w-0">
+                <div class="grid bg-surface-container-low border-b border-outline-variant"
+                     style="grid-template-columns: repeat(7, minmax(0,1fr));">
+                    <template x-for="d in ['SUN','MON','TUE','WED','THU','FRI','SAT']" :key="d">
+                        <div class="px-2 py-2.5 text-[10.5px] font-label-md tracking-[.12em] uppercase
+                                    text-on-surface-variant" x-text="d"></div>
+                    </template>
+                </div>
+
+                <div class="grid" style="grid-template-columns: repeat(7, minmax(0,1fr));">
+                    <template x-for="cell in cells" :key="cell.date">
+                        <!-- The whole cell is the target, so the empty space under
+                             the chips is what you click to add something to the day.
+                             A chip stops its own click, or the same gesture would
+                             both open an event and offer to create one. -->
+                        <div @click="openDayMenu(cell, $event)"
+                             class="min-w-0 overflow-hidden min-h-[128px] px-1.5 pt-[9px] pb-[11px]
+                                    border-r border-b border-outline-variant relative cal-motion hover:bg-surface-container-low"
+                             :class="[cell.inMonth ? '' : 'bg-surface-container-low', canCreate ? 'cursor-pointer' : '']">
+
+                            <div class="flex items-start justify-between">
+                                <span class="min-w-[23px] h-[23px] inline-flex items-center justify-center rounded-full
+                                             text-[12.5px] font-label-md"
+                                      :class="cell.isToday
+                                        ? 'bg-primary text-on-primary font-bold'
+                                        : (cell.inMonth ? 'text-on-surface' : 'text-outline')"
+                                      x-text="cell.day"></span>
+                                <!-- One glyph, from the same switch every other
+                                     surface uses, so they cannot disagree. -->
+                                <span x-show="cell.needsAttention"
+                                      class="material-symbols-outlined text-[17px] text-error">error</span>
+                            </div>
+
+                            <div class="mt-1 flex flex-col gap-[3px]">
+                                <template x-for="ev in cell.events" :key="ev.id">
+                                    <button @click.stop="open(ev)"
+                                            class="w-full text-left flex items-start gap-[5px] rounded-md
+                                                   pl-1 pr-1.5 py-[5px] cal-motion cal-press cal-focus"
+                                            :style="'border-left-color:' + chipBar(ev)"
+                                            :class="{
+                                                'border-l-[3px] bg-error-container text-on-error-container': chipKind(ev) === 'declined',
+                                                'border-l-[3px] bg-surface-container': chipKind(ev) === 'mine',
+                                                'border-l-[3px]': chipKind(ev) === 'sunday',
+                                                'border-l-[3px] bg-surface-container-low': chipKind(ev) === 'other',
+                                                'border-l-[3px] border-dashed opacity-[.55] line-through': chipKind(ev) === 'off'
+                                            }">
+                                        <span x-show="chipKind(ev) === 'mine'"
+                                              class="mt-[5px] w-[5px] h-[5px] rounded-full bg-primary shrink-0"></span>
+                                        <span x-show="chipKind(ev) === 'declined'"
+                                              class="material-symbols-outlined text-[14px] shrink-0">priority_high</span>
+                                        <span class="cal-chip-label min-w-0"
+                                              :class="{
+                                                'font-headline-lg text-[13.5px]': ev.isSunday,
+                                                'font-label-md text-[12px] font-medium': !ev.isSunday,
+                                                'font-bold': chipKind(ev) === 'mine'
+                                              }"
+                                              x-text="ev.name || ev.seriesName || 'Event'"></span>
+                                        <!-- A Sunday opens the same page as anything else now, so
+                                             there is no leaving-for-another-surface arrow. The
+                                             church icon says which kind of thing it is. -->
+                                        <span x-show="ev.isSunday"
+                                              class="material-symbols-outlined text-[13px] text-outline shrink-0 ml-auto">church</span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="flex flex-wrap gap-[18px] px-md py-sm text-[11.5px] text-on-surface-variant border-t border-outline-variant">
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-[5px] h-[5px] rounded-full bg-primary"></span> You are serving
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="material-symbols-outlined text-[14px] text-error">priority_high</span> Needs sorting
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="material-symbols-outlined text-[13px] text-outline">church</span>
+                        Sunday service
+                    </span>
+                </div>
+            </section>
+
+            <!-- ── The list view ──────────────────────────────────────────── -->
+            <section x-show="view === 'list'"
+                     class="cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden min-w-0">
+                <template x-for="group in groups" :key="group.weekStart">
+                    <div>
+                        <div class="bg-surface-container-low px-md py-2 text-[10.5px] font-label-md
+                                    tracking-[.14em] uppercase text-on-surface-variant border-b border-outline-variant"
+                             x-text="group.label"></div>
+                        <template x-for="ev in group.events" :key="ev.id">
+                            <button @click.stop="open(ev)"
+                                    class="cal-row w-full text-left flex items-center gap-md px-md py-3
+                                           border-b border-l-[3px] border-outline-variant cal-motion hover:bg-surface-container-low"
+                                    :style="'border-left-color:' + chipBar(ev)"
+                                    :class="ev.mine ? 'bg-surface-container-low' : ''">
+                                <div class="w-[52px] shrink-0">
+                                    <div class="text-[10.5px] font-label-md tracking-[.12em] uppercase text-on-surface-variant"
+                                         x-text="weekdayShort(ev.date)"></div>
+                                    <div class="font-display text-[23px]"
+                                         :class="ev.date === today ? 'text-primary' : 'text-on-surface'"
+                                         x-text="dayNumber(ev.date)"></div>
+                                </div>
+                                <div class="w-px self-stretch bg-outline-variant"></div>
+                                <div class="min-w-0 flex-grow">
+                                    <div class="flex items-center gap-2">
+                                        <span class="cal-list-name text-[18px] truncate"
+                                              :class="ev.isSunday ? 'font-headline-lg' : 'font-label-md font-medium'"
+                                              x-text="ev.name || ev.seriesName || 'Event'"></span>
+                                        <span x-show="ev.isSunday"
+                                              class="shrink-0 inline-flex items-center gap-0.5 rounded-md bg-secondary-container
+                                                     text-on-secondary-container px-1.5 py-0.5 text-[10.5px] font-label-md uppercase tracking-wider">
+                                            <span class="material-symbols-outlined text-[12px]">church</span> Sunday
+                                        </span>
+                                    </div>
+                                    <div class="text-[12.5px] text-on-surface-variant mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                        <span x-show="ev.time" x-text="formatTime(ev.time)"></span>
+                                        <span x-show="ev.time && ev.location" class="opacity-60">·</span>
+                                        <span x-show="ev.location" x-text="ev.location"></span>
+                                    </div>
+                                </div>
+                                <div class="shrink-0 flex items-center gap-sm">
+                                    <span x-show="ev.mine"
+                                          class="rounded-md bg-surface-container px-2 py-1 text-[11.5px] font-label-md
+                                                 text-on-surface-variant whitespace-nowrap"
+                                          x-text="'You · ' + ev.mine.label"></span>
+                                    <span x-show="ev.needsAttention"
+                                          class="inline-flex items-center gap-1 rounded-md bg-error-container border border-error
+                                                 text-on-error-container px-2 py-1 text-[11.5px] font-label-md whitespace-nowrap">
+                                        <span class="material-symbols-outlined text-[14px]">error</span> Needs sorting
+                                    </span>
+                                    <span class="material-symbols-outlined text-[20px] text-outline">chevron_right</span>
+                                </div>
+                            </button>
+                        </template>
+                    </div>
+                </template>
+                <!-- An empty month shows the shape, not an apology. -->
+                <div x-show="!groups.length" class="px-md py-lg text-center text-on-surface-variant font-headline-lg text-[16.5px]">
+                    Nothing on this month.
+                </div>
+            </section>
+
+            <!-- ── The right rail ─────────────────────────────────────────── -->
+            <aside class="cal-rail flex flex-col gap-gutter min-w-0">
+
+                <!-- The phone says this at the top of its own screen, in navy.
+                     Two of them on one page is the same sentence twice. -->
+                <section class="cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                    <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant"
+                         x-text="'You in ' + monthLabel.split(' ')[0]"></div>
+                    <p class="font-headline-lg text-[16.5px] leading-[1.4] mt-2 text-on-surface" x-text="mySentence"></p>
+
+                    <div class="mt-md flex flex-col gap-2.5">
+                        <template x-for="c in myCommitments" :key="c.occurrenceId + c.roleLabel">
+                            <div class="flex items-start gap-sm">
+                                <div class="w-[34px] shrink-0 text-center">
+                                    <div class="text-[10px] font-label-md tracking-wider uppercase text-on-surface-variant"
+                                         x-text="weekdayShort(c.date)"></div>
+                                    <div class="font-display text-[17px] text-on-surface" x-text="dayNumber(c.date)"></div>
+                                </div>
+                                <div class="min-w-0 flex-grow">
+                                    <div class="text-[13.5px] font-label-md font-semibold truncate" x-text="c.roleLabel"></div>
+                                    <div class="text-[12px] text-on-surface-variant truncate" x-text="c.eventName"></div>
+                                </div>
+                                <div class="shrink-0 flex items-center gap-1.5 pt-0.5">
+                                    <!-- Pending is a hollow ring: the resting
+                                         state, and quiet on purpose. -->
+                                    <span class="w-[7px] h-[7px] rounded-full"
+                                          :class="{
+                                            'border-[1.5px] border-outline': c.tone === 'calm',
+                                            'bg-success': c.tone === 'good',
+                                            'bg-error': c.tone === 'attention'
+                                          }"></span>
+                                    <span class="text-[10px] font-label-md tracking-[.12em] uppercase"
+                                          :class="{
+                                            'text-on-surface-variant': c.tone === 'calm',
+                                            'text-success': c.tone === 'good',
+                                            'text-error': c.tone === 'attention'
+                                          }"
+                                          x-text="c.stateLabel"></span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </section>
+
+                <section x-show="needsSorting.length"
+                         class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
+                    <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Needs sorting</div>
+                    <div class="mt-sm flex flex-col gap-sm">
+                        <template x-for="row in needsSorting" :key="row.occurrenceId + row.sentence">
+                            <button @click="open(occurrences.find(o => o.id === row.occurrenceId))"
+                                    class="text-left flex items-start gap-2 cal-focus rounded">
+                                <span class="material-symbols-outlined text-[18px] text-error shrink-0" x-text="row.icon"></span>
+                                <p class="text-[12.5px] text-on-surface">
+                                    <strong class="font-label-md" x-text="formatDayMonthShort(row.date)"></strong>
+                                    <span x-text="' ' + row.sentence"></span>
+                                </p>
+                            </button>
+                        </template>
+                    </div>
+                </section>
+
+                <section x-show="seriesFilters.length > 1"
+                         class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                    <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Show</div>
+                    <div class="mt-sm flex flex-col gap-1.5">
+                        <template x-for="s in seriesFilters" :key="s.id">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" :checked="isShown(s.id)" @change="toggleSeries(s.id)"
+                                       class="accent-primary cal-focus" />
+                                <span class="text-[13px] text-on-surface flex-grow truncate" x-text="s.name"></span>
+                                <span class="text-[12px] text-outline" x-text="s.count"></span>
+                            </label>
+                        </template>
+                    </div>
+                </section>
+            </aside>
+        </div>
+    </main>
+
+    <!-- ── The day menu ───────────────────────────────────────────────────── -->
+    <!-- Sits at the mouse, in `fixed` coordinates, so it needs no scroll maths
+         and cannot be clipped by the grid's overflow. Clamped back on screen by
+         openDayMenu, or a click near the bottom-right renders it out of reach. -->
+    <div x-show="dayMenu" @click.outside="closeDayMenu()" @keydown.escape.window="closeDayMenu()"
+         class="fixed z-50" x-cloak
+         :style="dayMenu ? 'left:' + dayMenu.x + 'px; top:' + dayMenu.y + 'px; width:' + dayMenu.width + 'px' : ''">
+        <a :href="dayMenu ? newEventHref(dayMenu.date) : '#'"
+           class="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant
+                  rounded-lg shadow-md px-3 py-2.5 cal-motion cal-focus hover:bg-surface-container-low">
+            <span class="material-symbols-outlined text-[18px] text-secondary shrink-0">add</span>
+            <span class="text-[13.5px] text-on-surface whitespace-nowrap">
+                New event on <span x-text="dayMenu ? formatDayMonthShort(dayMenu.date) : ''"></span>
+            </span>
+        </a>
+    </div>
+
+</body>
+</html>

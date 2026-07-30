@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/tokens/fonts.css">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/tokens/colors.css">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/tokens/typography.css">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/tokens/spacing.css">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/tokens/base.css">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/styles.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&amp;display=swap">
+  <script src="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/_ds_bundle.js"></script>
+  <style>
+    a{color:var(--secondary);text-decoration:none}
+    a:hover{color:var(--primary)}
+    .dts-row:hover{background:var(--surface-container-low)}
+  </style>
+</helmet>
+
+<section style="display:flex;flex-direction:column;gap:20px;padding:40px;background:var(--background);font-family:var(--font-sans);color:var(--on-surface)">
+  <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+    <span style="font-family:var(--font-display);font-size:22px;letter-spacing:.02em;color:var(--primary)">"Did they serve?" — MS-99</span>
+    <span style="font-size:12.5px;color:var(--on-surface-variant)">Where it turns up <a href="#5a">5a</a> · Tidying up <a href="#5b">5b</a> · Afterwards <a href="#5c">5c</a></span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:40px">
+
+    <!-- ════════ 5a · WHERE IT TURNS UP ════════ -->
+    <div id="5a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">5a</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">On the past event · scaffolding, so it stays small</span>
+      </div>
+
+      <div style="width:600px;background:var(--background);border:1px solid var(--outline-variant);border-radius:14px;padding:28px 30px 32px">
+        <div style="padding-bottom:16px;border-bottom:1px solid var(--outline-variant)">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">
+            <span style="font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant);background:var(--surface-container);border:1px solid var(--outline-variant);border-radius:6px;padding:4px 8px">Has happened</span>
+          </div>
+          <h2 style="margin:0;font-family:var(--font-display);font-weight:600;font-size:25px;letter-spacing:.02em;color:var(--primary)">Midweek Gathering</h2>
+          <div style="font-size:13.5px;color:var(--on-surface-variant);margin-top:7px">Wednesday 15 July · 7:00 pm · Fellowship Hall</div>
+        </div>
+
+        <div class="dts-row" style="display:flex;align-items:center;gap:14px;margin-top:20px;padding:16px 18px;background:var(--surface-container-low);border:1px solid var(--outline-variant);border-left:3px solid var(--gold);border-radius:10px;cursor:pointer;transition:background 150ms cubic-bezier(0.2,0,0,1)">
+          <span class="material-symbols-outlined" style="font-size:21px;color:var(--gold);flex-shrink:0">contact_support</span>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:600;color:var(--on-surface)">Four people were never confirmed. Did they serve?</div>
+            <div style="font-size:12.5px;color:var(--on-surface-variant);margin-top:2px">Takes a moment. Anything you leave stays unanswered.</div>
+          </div>
+          <span style="display:flex;align-items:center;gap:5px;flex-shrink:0;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--secondary)">Have a look<span class="material-symbols-outlined" style="font-size:16px">chevron_right</span></span>
+        </div>
+
+        <div style="margin-top:22px;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant);padding-bottom:10px;border-bottom:1px solid var(--outline-variant)">Who was on</div>
+        <sc-for list="{{ allRoster }}" as="r" hint-placeholder-count="6">
+          <div style="display:flex;align-items:center;gap:13px;padding:12px 2px;border-bottom:1px solid var(--outline-variant)">
+            <span style="width:28px;height:28px;border-radius:50%;background:var(--surface-container-high);border:1px solid var(--outline-variant);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:var(--navy-900);flex-shrink:0">{{ r.initials }}</span>
+            <span style="flex:1;min-width:0;font-size:14.5px;color:var(--on-surface)">{{ r.name }}</span>
+            <span style="font-size:12.5px;color:var(--on-surface-variant);flex-shrink:0">{{ r.role }}</span>
+            <span style="display:flex;align-items:center;gap:6px;width:112px;justify-content:flex-end;flex-shrink:0">
+              <span style="width:7px;height:7px;border-radius:50%;background:{{ r.dotBg }};border:1.5px solid {{ r.dotBorder }}"></span>
+              <span style="font-size:10px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:{{ r.fg }}">{{ r.state }}</span>
+            </span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- ════════ 5b · TIDYING UP ════════ -->
+    <div id="5b" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">5b</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Tidying up · silence is never a yes</span>
+      </div>
+
+      <div style="width:600px;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:14px;overflow:hidden">
+        <div style="padding:26px 30px 20px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:7px">Wednesday 15 July</div>
+          <h2 style="margin:0;font-family:var(--font-display);font-weight:600;font-size:24px;letter-spacing:.02em;color:var(--primary)">Who actually served?</h2>
+          <p style="margin:11px 0 0;font-family:var(--font-serif);font-size:16.5px;line-height:1.55;color:var(--on-surface);text-wrap:pretty">These four were put down for something and we never heard either way. Tick anyone who did it — the rest stay an open question and don't count.</p>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:11px 30px;background:var(--surface-container-low);border-top:1px solid var(--outline-variant);border-bottom:1px solid var(--outline-variant)">
+          <span style="font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant)">{{ tickSummary }}</span>
+          <button type="button" onClick="{{ onAll }}" style="display:flex;align-items:center;gap:6px;font-family:var(--font-sans);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--secondary);background:transparent;border:1px solid var(--secondary);border-radius:10px;padding:7px 12px;cursor:pointer">
+            <span class="material-symbols-outlined" style="font-size:16px">done_all</span>{{ allLabel }}
+          </button>
+        </div>
+
+        <div style="display:flex;flex-direction:column">
+          <sc-for list="{{ unconfirmed }}" as="u" hint-placeholder-count="4">
+            <label class="dts-row" onClick="{{ u.onToggle }}" style="display:flex;align-items:center;gap:14px;padding:15px 30px;border-bottom:1px solid var(--outline-variant);cursor:pointer;background:{{ u.bg }};transition:background 150ms cubic-bezier(0.2,0,0,1)">
+              <span style="width:20px;height:20px;border-radius:6px;border:1.5px solid {{ u.boxBorder }};background:{{ u.boxBg }};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <span class="material-symbols-outlined" style="font-size:16px;color:var(--on-primary);opacity:{{ u.tick }}">check</span>
+              </span>
+              <span style="width:30px;height:30px;border-radius:50%;background:var(--surface-container-high);border:1px solid var(--outline-variant);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--navy-900);flex-shrink:0">{{ u.initials }}</span>
+              <span style="flex:1;min-width:0">
+                <span style="display:block;font-size:14.5px;font-weight:600;color:var(--on-surface)">{{ u.name }}</span>
+                <span style="display:block;font-size:12.5px;color:var(--on-surface-variant);margin-top:1px">{{ u.role }}</span>
+              </span>
+              <span style="font-size:10px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:{{ u.stateFg }};flex-shrink:0">{{ u.stateLabel }}</span>
+            </label>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;padding:22px 30px 26px;background:var(--surface-container-low)">
+          <div style="font-size:13px;line-height:1.55;color:var(--on-surface-variant);max-width:32ch;text-wrap:pretty">{{ outcome }}</div>
+          <div style="display:flex;gap:10px;flex-shrink:0">
+            <button type="button" style="font-family:var(--font-sans);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-surface-variant);background:transparent;border:1px solid var(--outline-variant);border-radius:10px;padding:11px 16px;cursor:pointer">Not now</button>
+            <button type="button" style="font-family:var(--font-sans);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border:1px solid var(--primary);border-radius:10px;padding:11px 19px;cursor:pointer;box-shadow:var(--shadow-xs)">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ 5c · AFTERWARDS ════════ -->
+    <div id="5c" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">5c</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Afterwards · unanswered is a resting state, not a failure</span>
+      </div>
+
+      <div style="width:520px;background:var(--background);border:1px solid var(--outline-variant);border-radius:14px;padding:28px 30px 32px">
+        <div style="padding-bottom:16px;border-bottom:1px solid var(--outline-variant)">
+          <h2 style="margin:0;font-family:var(--font-display);font-weight:600;font-size:24px;letter-spacing:.02em;color:var(--primary)">Midweek Gathering</h2>
+          <div style="font-size:13.5px;color:var(--on-surface-variant);margin-top:7px">Wednesday 15 July · tidied up by Caleb Munro</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;margin-top:18px">
+          <sc-for list="{{ settled }}" as="s" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;gap:13px;padding:13px 2px;border-bottom:1px solid var(--outline-variant)">
+              <span class="material-symbols-outlined" style="font-size:19px;color:{{ s.iconFg }};flex-shrink:0">{{ s.icon }}</span>
+              <span style="flex:1;min-width:0;font-size:14.5px;color:var(--on-surface)">{{ s.name }}</span>
+              <span style="font-size:12.5px;color:var(--on-surface-variant);flex-shrink:0">{{ s.role }}</span>
+              <span style="width:120px;text-align:right;font-size:10px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:{{ s.fg }};flex-shrink:0">{{ s.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="margin-top:20px;display:flex;align-items:flex-start;gap:12px;padding:16px 18px;background:var(--surface-container-low);border:1px solid var(--outline-variant);border-radius:10px">
+          <span class="material-symbols-outlined" style="font-size:19px;color:var(--outline);margin-top:1px">balance</span>
+          <div style="font-size:13px;line-height:1.55;color:var(--on-surface-variant);text-wrap:pretty">Two are recorded as having served. Two stay unanswered — they don't count towards their turn, and nobody will be asked about them again.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:900}}">
+const initials = n => n.split(' ').map(w => w[0]).slice(0, 2).join('');
+
+const UNCONFIRMED = [
+  { name: 'Sam Teague', role: 'Setup' },
+  { name: 'Priya Anand', role: 'Coffee' },
+  { name: 'Tom Ellery', role: 'Sound' },
+  { name: 'Grace Whitlock', role: 'Bring milk' },
+];
+
+const CONFIRMED = [
+  { name: 'Caleb Munro', role: 'Kids Ministry' },
+  { name: 'Hannah Bright', role: 'Kids Ministry' },
+];
+
+class Component extends DCLogic {
+  state = { ticked: [true, false, true, false] };
+
+  renderVals() {
+    const ticked = this.state.ticked;
+    const count = ticked.filter(Boolean).length;
+    const all = count === ticked.length;
+
+    const allRoster = CONFIRMED.map(c => ({
+      name: c.name, role: c.role, initials: initials(c.name), state: 'Confirmed',
+      dotBg: 'var(--success)', dotBorder: 'var(--success)', fg: 'var(--success)',
+    })).concat(UNCONFIRMED.map(u => ({
+      name: u.name, role: u.role, initials: initials(u.name), state: 'Never confirmed',
+      dotBg: 'transparent', dotBorder: 'var(--outline)', fg: 'var(--on-surface-variant)',
+    })));
+
+    return {
+      allRoster: allRoster,
+      unconfirmed: UNCONFIRMED.map((u, i) => {
+        const on = ticked[i];
+        return {
+          name: u.name, role: u.role, initials: initials(u.name),
+          onToggle: () => this.setState(s => {
+            const next = s.ticked.slice();
+            next[i] = !next[i];
+            return { ticked: next };
+          }),
+          tick: on ? '1' : '0',
+          boxBg: on ? 'var(--primary)' : 'var(--surface)',
+          boxBorder: on ? 'var(--primary)' : 'var(--outline)',
+          bg: on ? 'var(--surface-container-low)' : 'transparent',
+          stateLabel: on ? 'Served' : 'Unanswered',
+          stateFg: on ? 'var(--success)' : 'var(--on-surface-variant)',
+        };
+      }),
+      tickSummary: count === 0 ? 'Nobody ticked yet' : count + ' of 4 served',
+      allLabel: all ? 'Untick all' : 'All four served',
+      onAll: () => this.setState(s => {
+        const on = s.ticked.every(Boolean);
+        return { ticked: s.ticked.map(() => !on) };
+      }),
+      outcome: count === 0
+        ? 'Nothing recorded. All four stay an open question.'
+        : count + (count === 1 ? ' serve is recorded. ' : ' serves are recorded. ') + (ticked.length - count === 0 ? 'Nothing left over.' : (ticked.length - count) + ' stay unanswered, for good.'),
+      settled: UNCONFIRMED.map((u, i) => {
+        const on = ticked[i];
+        return {
+          name: u.name, role: u.role,
+          icon: on ? 'check_circle' : 'remove',
+          iconFg: on ? 'var(--success)' : 'var(--outline)',
+          label: on ? 'Served' : 'Unanswered',
+          fg: on ? 'var(--success)' : 'var(--on-surface-variant)',
+        };
+      }),
+    };
+  }
+}
+
+</script>
+</body>
+</html>
