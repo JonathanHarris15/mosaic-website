@@ -8,6 +8,15 @@
     <link rel="stylesheet" href="mosaic.css" />
     <link rel="stylesheet" href="fonts.css" />
 
+    <!-- Running inside the phone shell. These pages already carried
+         `html.shell-mobile` rules and never loaded the script that sets that
+         class, so none of them could ever fire — styling for a mode the page
+         had no way to enter. -->
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <script>window.MOBILE_HEADER = { title: 'Calendar', menu: true };</script>
+    <script src="mobile-shell-header.js"></script>
+
     <style>
         [x-cloak] { display: none !important; }
 

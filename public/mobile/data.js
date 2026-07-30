@@ -60,9 +60,16 @@
   var DESTINATIONS = [
     { key: "home", label: "Home", icon: "house", route: "home" },
     { key: "hymn-directory", label: "Hymn Directory", icon: "book-open", route: "hymnDirectory" },
-    // Renamed to "Services" in MS-99; the key and route stay put, since they are
-    // what the app stores and navigates by.
+    // ⚠ TWO CALENDARS, AND THE ROUTE NAMES LIE ABOUT WHICH IS WHICH.
+    //
+    // Route "calendar" is the SERVICES screen — every Sunday and its order of
+    // service. It predates MS-99 and was only relabelled, because the route is
+    // what deep links and the native screen registry navigate by.
+    //
+    // Route "events" is the Calendar proper: everything on at church. Reading
+    // these two the other way round is the mistake this comment exists to stop.
     { key: "calendar", label: "Services", icon: "church", route: "calendar" },
+    { key: "events", label: "Calendar", icon: "calendar-days", route: "events" },
     { key: "directory", label: "Member Directory", icon: "users", route: "people" },
     { key: "shepherd", label: "Shepherd Dashboard", icon: "shield", route: "shepherd", permissionLevels: ["elder", "super_admin"] },
     { key: "admin", label: "Admin Dashboard", icon: "settings-2", route: "admin", permissionLevels: ["admin", "super_admin"] },

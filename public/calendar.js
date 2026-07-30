@@ -76,7 +76,11 @@
             rank: null,
             personId: null,
 
-            view: 'month',          // 'month' | 'list'
+            // 'month' | 'list'. Seven columns across a 390px screen gives about
+            // 50px a day, which fits a number and nothing else — so the phone
+            // starts on the list, which was already built and reads well one
+            // finger-width at a time. Month is still one tap away.
+            view: window.MOSAIC_SHELL === 'mobile' ? 'list' : 'month',
             onlyMine: false,
             month: monthOf(todayStr()),
             today: todayStr(),
@@ -183,16 +187,6 @@
             get cells() { return View.monthGrid(this.month, this.visible, this.today); },
             get groups() { return View.weekGroups(this.visible, this.today); },
             get monthLabel() { return monthLabel(this.month); },
-
-            // The dot-strip the phone shows instead of the grid: one row per
-            // week, each day a number over up to a few dots.
-            get dotStrip() {
-                return this.cells.map(cell => Object.assign({}, cell, {
-                    dots: cell.events.slice(0, 3).map(o => (
-                        o.needsAttention ? 'error' : (o.mine ? 'mine' : 'other')
-                    )),
-                }));
-            },
 
             // ── The right rail ───────────────────────────────────────────────
 

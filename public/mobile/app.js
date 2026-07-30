@@ -110,6 +110,8 @@
     var tiles = [
       { icon: "book-open", label: "Hymn Directory", route: "hymnDirectory" },
       { icon: "church", label: "Services", route: "calendar" },
+      // Route "events", not "calendar" — see data.js. "calendar" is Services.
+      { icon: "calendar-days", label: "Calendar", route: "events" },
       { icon: "users", label: "Member Directory", route: "people" },
       { icon: "shield", label: "Shepherd", route: "shepherd", permissionLevels: ["elder", "super_admin"] },
       { icon: "settings-2", label: "Admin", route: "admin", permissionLevels: ["admin", "super_admin"] },
@@ -177,6 +179,11 @@
   // mobile app gets every feature + the proven save logic — no reimplementation.
   var SHELL_PAGES = {
     profile: "profile.html",
+    // The Calendar (MS-99) is the desktop page opened in-shell. It stacks its
+    // rail above the grid below 900px and keeps row actions visible on touch,
+    // so there is nothing a native port would add except a second thing to keep
+    // in step with the model.
+    events: "calendar.html",
     // Native screens now cover the drawer pages (home, hymnDirectory, calendar,
     // people, shepherd, admin) plus the shepherding cluster (including Manage Tags,
     // route "shepherdTags" → screens-shepherd-tags.js) + both editors. The

@@ -1487,3 +1487,79 @@ test('a Role says how many people it needs each time, not how many "places"', ()
     assert.strictEqual(need.kids, 'Needs 2 people');
     assert.strictEqual(need.greeter, 'Nobody needed yet');
 });
+
+// ── The Calendar on a phone ───────────────────────────────────────────────────
+//
+// Both Calendar pages were WRITTEN for the phone shell — they carry
+// `html.shell-mobile` rules and a layout that stacks the rail above the grid —
+// and neither loaded the script that sets that class. So every one of those
+// rules was dead: styling for a mode the page had no way to enter.
+
+test('both Calendar pages can actually enter the phone shell', () => {
+    ['calendar.html', 'calendar-event.html'].forEach(file => {
+        const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+        assert.ok(/src="mobile-shell\.js"/.test(html), file + ' cannot enter the shell');
+        assert.ok(/href="mobile-shell\.css"/.test(html), file + ' has no shell stylesheet');
+        assert.ok(/window\.MOBILE_HEADER/.test(html), file + ' has no shell header');
+        assert.ok(/src="mobile-shell-header\.js"/.test(html), file + ' never builds its header');
+    });
+});
+
+test('the shell script loads before anything that reads the class', () => {
+    // It sets `.shell-mobile` on the documentElement, and the page's own styles
+    // and scripts branch on it. Loaded late, the first paint is the desktop one.
+    ['calendar.html', 'calendar-event.html'].forEach(file => {
+        const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+        assert.ok(html.indexOf('mobile-shell.js') < html.indexOf('mobile-shell-header.js'),
+            file + ' builds its header before it knows it is in the shell');
+        assert.ok(html.indexOf('mobile-shell.js') < html.indexOf('src="calendar'),
+            file + ' runs its page script before the shell class is set');
+    });
+});
+
+test('a Calendar page carrying shell-mobile rules is a page that loads the shell', () => {
+    // The general form of the bug, so the next page to add one of these rules
+    // cannot forget the script that makes it mean anything.
+    fs.readdirSync(PUBLIC).filter(f => f.endsWith('.html')).forEach(file => {
+        const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+        if (!/html\.shell-mobile|body\.shell-mobile/.test(html)) return;
+        assert.ok(/src="mobile-shell\.js"/.test(html),
+            file + ' styles the phone shell but never loads it, so none of those rules fire');
+    });
+});
+
+test('the phone offers the Calendar, and it is not the Services screen', () => {
+    // On mobile, route "calendar" is SERVICES — it predates MS-99 and was only
+    // relabelled. Reading the two the other way round sends somebody to the
+    // wrong screen entirely.
+    const dataJs = fs.readFileSync(path.join(PUBLIC, 'mobile', 'data.js'), 'utf8');
+    const appJs = fs.readFileSync(path.join(PUBLIC, 'mobile', 'app.js'), 'utf8');
+
+    assert.ok(/\{ key: "events", label: "Calendar", icon: "calendar-days", route: "events" \}/.test(dataJs),
+        'the phone drawer has no Calendar');
+    assert.ok(/\{ key: "calendar", label: "Services"/.test(dataJs),
+        'the Services entry moved or was renamed — check nothing navigates by it');
+    assert.ok(/label: "Calendar", route: "events"/.test(appJs), 'the phone home has no Calendar tile');
+    assert.ok(/events: "calendar\.html"/.test(appJs), 'the Calendar route opens nothing');
+});
+
+test('the Calendar opens as a list on a phone, and a grid on a desktop', () => {
+    // Seven columns across a 390px screen gives ~50px a day, which fits a number
+    // and nothing else. The list view was already built and reads well one
+    // finger-width at a time — so the phone starts there rather than on a grid
+    // nobody can use. Month is still one tap away.
+    const wide = loadComponent('calendar.js', 'calendarPage');
+    assert.strictEqual(wide.view, 'month');
+
+    const phone = loadComponent('calendar.js', 'calendarPage', { MOSAIC_SHELL: 'mobile' });
+    assert.strictEqual(phone.view, 'list');
+});
+
+test('nothing is left rendering the dot strip that replaced nothing', () => {
+    // `dotStrip` was built for a phone month view the templates never drew. The
+    // list view answers the same question better, so it goes rather than sitting
+    // there looking like a feature.
+    const js = fs.readFileSync(path.join(PUBLIC, 'calendar.js'), 'utf8');
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    assert.ok(!/dotStrip/.test(js) && !/dotStrip/.test(html));
+});
