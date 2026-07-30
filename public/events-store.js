@@ -616,6 +616,60 @@
         return payload;
     }
 
+    // ── Editing a one-off Event ──────────────────────────────────────────────
+    //
+    // A one-off has no series, so everything true of it is true of its single
+    // occurrence — and nothing could edit any of it. It was creatable and then
+    // frozen: wrong time, wrong hall, wrong name, no way back.
+    //
+    // A PATCH, for the same reason the series one is. The roster and the derived
+    // participant list are not in `OCCURRENCE_DETAIL_FIELDS`, so a screen that
+    // does not know about them cannot clear them by omission.
+    const OCCURRENCE_DETAIL_FIELDS = ['name', 'location', 'description', 'time', 'date'];
+
+    async function saveOccurrenceDetails(db, id, details) {
+        if (!id) throw new Error('Details need an event to belong to.');
+        const d = details || {};
+
+        if ('name' in d && !String(d.name || '').trim()) {
+            throw new Error('An event needs a name.');
+        }
+        if ('visibility' in d && Core.VISIBILITY_ORDER.indexOf(d.visibility) === -1) {
+            // An unrecognised stamp is readable by NOBODY once the rule reads it,
+            // so a typo here makes the Event vanish for everyone including the
+            // editor who caused it.
+            throw new Error('Unknown visibility: ' + d.visibility);
+        }
+
+        // Changing the date of a date OF A SERIES would leave a document called
+        // midweek_2026-08-05 claiming to be the twelfth, because the id is
+        // derived from the date. `moveOccurrence` is the operation for that, and
+        // it rewrites the id.
+        if ('date' in d) {
+            const parsed = Core.parseOccurrenceId(id);
+            if (parsed) {
+                throw new Error(
+                    'One date of a repeating event cannot be re-dated here — use "Move this one", ' +
+                    'which moves it properly and leaves a note on the original date.'
+                );
+            }
+        }
+
+        const payload = {};
+        OCCURRENCE_DETAIL_FIELDS.forEach(field => {
+            if (!(field in d)) return;
+            const value = String(d[field] == null ? '' : d[field]).trim();
+            payload[field] = value || null;
+        });
+        if ('visibility' in d) payload.visibility = d.visibility;
+        if ('rosterShared' in d) payload.rosterShared = d.rosterShared === true;
+
+        if (!Object.keys(payload).length) return payload;
+
+        await occurrenceRef(db, id).set(payload, { merge: true });
+        return payload;
+    }
+
     // ── The colour a series shows up as ──────────────────────────────────────
     //
     // One write, to the series. The contrast with visibility above is the point:
@@ -954,6 +1008,7 @@
         setSeriesRoles,
         setSeriesTime,
         saveSeriesDetails,
+        saveOccurrenceDetails,
         COLOUR_SLUGS,
         saveRoster,
         applyOrphanChoices,

@@ -987,6 +987,69 @@
                 <!-- ── Side column ────────────────────────────────────────── -->
                 <aside class="flex flex-col gap-gutter min-w-0">
 
+                    <!-- A one-off Event's details live HERE, on its single
+                         occurrence, because there is no series for them to live
+                         on. Its date is editable too — a one-off's id is an
+                         auto-id, not the date, so changing it is just a field.
+                         (One date OF A SERIES is "Move this one", which has to
+                         rewrite the id and leave a note behind.) -->
+                    <section x-show="isEditor && isOneOff"
+                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h3 class="font-display text-[17px] text-primary">Details</h3>
+                        <p class="text-[12.5px] text-on-surface-variant mt-1">
+                            This event happens once, so this is all of it.
+                        </p>
+
+                        <div class="mt-sm flex flex-col gap-md">
+                            <label class="block">
+                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">What is it</span>
+                                <input type="text" x-model="occurrenceDraft.name" placeholder="Harvest Supper"
+                                       class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                              text-[15px] text-on-surface placeholder:text-outline cal-focus" />
+                            </label>
+
+                            <div class="grid grid-cols-2 gap-md">
+                                <label class="block">
+                                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">When</span>
+                                    <input type="date" x-model="occurrenceDraft.date"
+                                           class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                                  text-[15px] text-on-surface cal-focus" />
+                                </label>
+                                <label class="block">
+                                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Starts at</span>
+                                    <input type="time" x-model="occurrenceDraft.time"
+                                           class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                                  text-[15px] text-on-surface cal-focus" />
+                                </label>
+                            </div>
+
+                            <label class="block">
+                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Where</span>
+                                <input type="text" x-model="occurrenceDraft.location" placeholder="The hall"
+                                       class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                              text-[15px] text-on-surface placeholder:text-outline cal-focus" />
+                            </label>
+
+                            <label class="block">
+                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">What it's for</span>
+                                <textarea x-model="occurrenceDraft.description" rows="3"
+                                          placeholder="A short line for anyone who has not been before."
+                                          class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                                 text-[15px] text-on-surface placeholder:text-outline cal-focus"></textarea>
+                            </label>
+
+                            <div class="flex items-center justify-end gap-sm" x-show="occurrenceDetailsChanged">
+                                <button @click="startOccurrenceDraft()"
+                                        class="px-3 py-1.5 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
+                                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Undo</button>
+                                <button @click="saveOccurrenceDetails()" :disabled="!occurrenceDetailsValid || saving"
+                                        class="bg-primary text-on-primary px-3 py-1.5 rounded-lg shadow-xs font-label-md
+                                               text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus
+                                               disabled:opacity-40">Save details</button>
+                            </div>
+                        </div>
+                    </section>
+
                     <!-- Who can see this -->
                     <section x-show="isEditor && !isSunday"
                              class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
@@ -1030,9 +1093,10 @@
                             </label>
                         </div>
 
-                        <p class="mt-sm text-[11.5px] text-on-surface-variant">
-                            Changing this applies to every date of this event, past ones included.
-                        </p>
+                        <p class="mt-sm text-[11.5px] text-on-surface-variant"
+                           x-text="isOneOff
+                             ? 'This event happens once, so this applies to it alone.'
+                             : 'Changing this applies to every date of this event, past ones included.'"></p>
                     </section>
 
                     <!-- Colour on the calendar -->

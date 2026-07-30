@@ -1246,3 +1246,80 @@ test('the Sunday Service keeps its name and its pattern', () => {
     assert.ok(/x-show="!isSundaySeries" class="mt-sm">\s*<button @click="openPattern\(\)"/.test(html),
         'the Change pattern button is not guarded against the Sunday Service');
 });
+
+// ── A one-off Event was creatable and then frozen ─────────────────────────────
+
+test('a one-off Event can have its details changed after it exists', () => {
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    ['occurrenceDraft.name', 'occurrenceDraft.date', 'occurrenceDraft.time',
+     'occurrenceDraft.location', 'occurrenceDraft.description', 'saveOccurrenceDetails()']
+        .forEach(binding => {
+            assert.ok(html.indexOf(binding) !== -1, 'a one-off cannot set ' + binding);
+        });
+});
+
+test('the details panel is a one-off\'s, not every Event\'s', () => {
+    // One date of a repeating Event must not offer these: its name and time
+    // belong to the whole Event, and its date needs "Move this one".
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.rank = 'editor';
+
+    page.occurrence = { id: 'harvest', seriesId: null, date: '2026-09-20' };
+    assert.strictEqual(page.isOneOff, true);
+
+    page.occurrence = { id: 'midweek_2026-08-05', seriesId: 'midweek', date: '2026-08-05' };
+    assert.strictEqual(page.isOneOff, false);
+});
+
+test('a one-off holds its edits in a draft and can undo them', () => {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.occurrence = { id: 'harvest', seriesId: null, date: '2026-09-20', name: 'Harvest', time: '' };
+    page.startOccurrenceDraft();
+
+    assert.strictEqual(page.occurrenceDetailsChanged, false);
+    page.occurrenceDraft.time = '18:30';
+    assert.strictEqual(page.occurrenceDetailsChanged, true);
+    page.startOccurrenceDraft();
+    assert.strictEqual(page.occurrenceDraft.time, '');
+});
+
+test('a one-off cannot be saved with no name or no date', () => {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.occurrence = { id: 'harvest', seriesId: null, date: '2026-09-20', name: 'Harvest' };
+    page.startOccurrenceDraft();
+
+    page.occurrenceDraft.name = '  ';
+    assert.strictEqual(page.occurrenceDetailsValid, false);
+    page.occurrenceDraft.name = 'Harvest';
+    page.occurrenceDraft.date = '';
+    assert.strictEqual(page.occurrenceDetailsValid, false);
+});
+
+test('a one-off\'s visibility control actually changes its visibility', async () => {
+    // It used to render, take the click, and do NOTHING: the handler returned
+    // early on `!this.series`, and a one-off has none.
+    const writes = [];
+    const fakeDb = {
+        collection: name => ({
+            doc: id => ({
+                path: name + '/' + id,
+                async get() { return { exists: true, id: id, data: () => ({}) }; },
+                async set(data) { writes.push({ path: name + '/' + id, data: data }); },
+                collection: sub => fakeDb.collection(name + '/' + id + '/' + sub),
+            }),
+            where() { return this; },
+            async get() { return { docs: [] }; },
+        }),
+    };
+
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', { db: fakeDb });
+    page.rank = 'editor';
+    page.occurrence = { id: 'harvest', seriesId: null, date: '2026-09-20', visibility: 'member' };
+    page.series = null;
+
+    await page.setVisibility('public');
+
+    assert.deepStrictEqual(writes.map(w => w.path), ['event_occurrences/harvest']);
+    assert.strictEqual(writes[0].data.visibility, 'public');
+    assert.strictEqual(page.visibility, 'public');
+});

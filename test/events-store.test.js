@@ -1389,3 +1389,79 @@ test('a new repeating Event keeps its time in ONE place', async () => {
     assert.strictEqual(written.recurrence.time, '19:30');
     assert.strictEqual('time' in written, false, 'the time is stored in two places again');
 });
+
+// ── Editing a one-off Event ───────────────────────────────────────────────────
+//
+// A one-off has no series, so its details live on the occurrence itself — and
+// nothing could edit them. It was creatable and then frozen: wrong time, wrong
+// hall, wrong name, no way back.
+
+test('a one-off keeps its details on the occurrence', async () => {
+    const stored = {
+        harvest: { seriesId: null, date: '2026-09-20', name: 'Harvest Supper', visibility: 'member', participantIds: [] },
+    };
+    const db = fakeDb({ event_occurrences: stored }, { rank: 'editor' });
+
+    await Store.saveOccurrenceDetails(db, 'harvest', {
+        name: '  Harvest Supper  ', time: '18:30', location: 'The hall', description: 'Bring a dish.',
+    });
+
+    const written = db._flatWrites()[0];
+    assert.strictEqual(written.path, 'event_occurrences/harvest');
+    assert.strictEqual(written.data.name, 'Harvest Supper');
+    assert.strictEqual(written.data.time, '18:30');
+    assert.strictEqual(written.data.location, 'The hall');
+    // A patch: nothing it was not asked about is in the write, so the roster and
+    // the participant list cannot be cleared by a screen that forgot them.
+    assert.strictEqual('participantIds' in written.data, false);
+    assert.strictEqual('assignments' in written.data, false);
+});
+
+test('a one-off can be moved to another date, because its id is not its date', async () => {
+    const stored = { harvest: { seriesId: null, date: '2026-09-20', name: 'Harvest', visibility: 'member' } };
+    const db = fakeDb({ event_occurrences: stored }, { rank: 'editor' });
+
+    await Store.saveOccurrenceDetails(db, 'harvest', { date: '2026-09-27' });
+    assert.strictEqual(db._flatWrites()[0].data.date, '2026-09-27');
+});
+
+test('one date OF A SERIES cannot have its date edited this way', async () => {
+    // Its id is derived from its date, so writing a new date here would leave a
+    // document called midweek_2026-08-05 claiming to be the twelfth. That is
+    // what "Move this one" is for, and it rewrites the id.
+    const stored = {
+        'midweek_2026-08-05': { seriesId: 'midweek', date: '2026-08-05', visibility: 'member' },
+    };
+    const db = fakeDb({ event_occurrences: stored }, { rank: 'editor' });
+
+    await assert.rejects(
+        () => Store.saveOccurrenceDetails(db, 'midweek_2026-08-05', { date: '2026-08-12' }),
+        /move/i
+    );
+    assert.deepStrictEqual(db._flatWrites(), [], 'wrote anyway');
+});
+
+test('a one-off cannot be left with no name', async () => {
+    const stored = { harvest: { seriesId: null, date: '2026-09-20', name: 'Harvest', visibility: 'member' } };
+    const db = fakeDb({ event_occurrences: stored }, { rank: 'editor' });
+    await assert.rejects(() => Store.saveOccurrenceDetails(db, 'harvest', { name: ' ' }), /name/i);
+});
+
+test('a one-off can change who sees it, with no series to restamp', async () => {
+    const stored = { harvest: { seriesId: null, date: '2026-09-20', name: 'Harvest', visibility: 'member' } };
+    const db = fakeDb({ event_occurrences: stored }, { rank: 'editor' });
+
+    await Store.saveOccurrenceDetails(db, 'harvest', { visibility: 'public', rosterShared: true });
+
+    const written = db._flatWrites()[0].data;
+    assert.strictEqual(written.visibility, 'public');
+    assert.strictEqual(written.rosterShared, true);
+});
+
+test('a visibility nobody recognises is refused rather than stored', async () => {
+    // An unrecognised stamp is readable by NOBODY once the rule reads it, so a
+    // typo here would make the Event vanish for everyone including its editor.
+    const stored = { harvest: { seriesId: null, date: '2026-09-20', name: 'Harvest', visibility: 'member' } };
+    const db = fakeDb({ event_occurrences: stored }, { rank: 'editor' });
+    await assert.rejects(() => Store.saveOccurrenceDetails(db, 'harvest', { visibility: 'staff' }), /visibility/i);
+});

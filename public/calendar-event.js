@@ -202,6 +202,7 @@
 
                     this.occurrence = loaded;
                     this.assignments = loaded.assignments || [];
+                    this.startOccurrenceDraft();
 
                     if (loaded.seriesId) {
                         const s = await db.collection('events').doc(loaded.seriesId).get();
@@ -1075,14 +1076,26 @@
             rosterToggleApplies(level) { return View.rosterToggleApplies(level); },
 
             async setVisibility(level) {
-                if (!this.visibilityEditable || !this.series) return;
+                if (!this.visibilityEditable) return;
                 this.saving = true;
                 try {
-                    // Restamps EVERY occurrence, past ones included — otherwise
-                    // making something private leaves its history public.
-                    await Store.restampSeriesVisibility(
-                        db, this.series.id, level, this.occurrence.rosterShared === true
-                    );
+                    if (this.series) {
+                        // Restamps EVERY occurrence, past ones included —
+                        // otherwise making something private leaves its history
+                        // public.
+                        await Store.restampSeriesVisibility(
+                            db, this.series.id, level, this.occurrence.rosterShared === true
+                        );
+                    } else {
+                        // A one-off has no series to restamp. This control used
+                        // to return early here and do NOTHING — it rendered, it
+                        // took the click, and the Event stayed exactly as visible
+                        // as it had been.
+                        await Store.saveOccurrenceDetails(db, this.occurrence.id, {
+                            visibility: level,
+                            rosterShared: this.occurrence.rosterShared === true,
+                        });
+                    }
                     this.occurrence.visibility = level;
                 } catch (e) {
                     console.error('Visibility change failed:', e);
@@ -1093,9 +1106,70 @@
             },
 
             async setRosterShared(shared) {
-                if (!this.visibilityEditable || !this.series) return;
-                await Store.restampSeriesVisibility(db, this.series.id, this.visibility, shared);
+                if (!this.visibilityEditable) return;
+                if (this.series) {
+                    await Store.restampSeriesVisibility(db, this.series.id, this.visibility, shared);
+                } else {
+                    await Store.saveOccurrenceDetails(db, this.occurrence.id, {
+                        visibility: this.visibility, rosterShared: shared === true,
+                    });
+                }
                 this.occurrence.rosterShared = shared;
+            },
+
+            // ── Editing a one-off Event ──────────────────────────────────────
+            //
+            // A one-off has no series, so everything true of it is true of this
+            // one occurrence — including its date, which can simply be changed,
+            // because a one-off's id is an auto-id rather than the date. (One
+            // date OF A SERIES is a different operation: see "Move this one".)
+            //
+            // It was creatable and then frozen. Wrong time, wrong hall, wrong
+            // name, and no way back to any of it.
+
+            occurrenceDraft: { name: '', date: '', time: '', location: '', description: '' },
+
+            get isOneOff() { return !!this.occurrence && !this.occurrence.seriesId; },
+
+            startOccurrenceDraft() {
+                const o = this.occurrence || {};
+                this.occurrenceDraft = {
+                    name: o.name || '',
+                    date: o.date || '',
+                    time: o.time || '',
+                    location: o.location || '',
+                    description: o.description || '',
+                };
+            },
+
+            get occurrenceDetailsChanged() {
+                const o = this.occurrence || {};
+                return ['name', 'date', 'time', 'location', 'description'].some(
+                    f => String(this.occurrenceDraft[f] || '') !== String(o[f] || '')
+                );
+            },
+
+            get occurrenceDetailsValid() {
+                return !!String(this.occurrenceDraft.name || '').trim()
+                    && !!this.occurrenceDraft.date;
+            },
+
+            async saveOccurrenceDetails() {
+                if (!this.occurrenceDetailsValid || !this.occurrenceDetailsChanged || this.saving) return;
+                this.saving = true;
+                this.error = '';
+                try {
+                    const saved = await Store.saveOccurrenceDetails(
+                        db, this.occurrence.id, this.occurrenceDraft
+                    );
+                    Object.keys(saved).forEach(f => { this.occurrence[f] = saved[f]; });
+                    this.startOccurrenceDraft();
+                } catch (e) {
+                    console.error('Event details failed:', e);
+                    this.error = (e && e.message) || 'Those details could not be saved.';
+                } finally {
+                    this.saving = false;
+                }
             },
 
             // ── "Did they serve?" ────────────────────────────────────────────
