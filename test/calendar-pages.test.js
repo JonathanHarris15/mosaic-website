@@ -1583,6 +1583,25 @@ test('the phone has a month of its own, and the desktop grid never runs there', 
     assert.ok(/stripDots\(cell\)/.test(html), 'the strip renders no dots');
 });
 
+test('List means a list — the strip belongs to Month', () => {
+    // A strip above a list is a second answer to a question the list already
+    // answers, and it pushes the first card most of a screen down.
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+
+    // Anchored on stripDots, which only the phone's strip calls — three grids on
+    // this page share the seven-column style, and matching on that would test
+    // whichever one happened to come first in the file.
+    const dots = html.indexOf('stripDots(cell)');
+    assert.ok(dots !== -1, 'the strip moved — this test no longer looks at it');
+
+    // The seven-column grid nearest above that call IS the strip, and its own
+    // opening tag is what has to carry the gate.
+    const columns = html.lastIndexOf('grid-template-columns', dots);
+    const tag = html.slice(html.lastIndexOf('<div', columns), columns);
+    assert.ok(/x-show="view === 'month'"/.test(tag),
+        'the phone draws its month strip in List as well as Month');
+});
+
 test('the phone says "You in July" once, not twice', () => {
     // The rail's panel and the phone's navy hero are the same sentence. Both on
     // one screen reads as a bug, because it is one.

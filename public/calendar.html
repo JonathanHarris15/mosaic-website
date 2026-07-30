@@ -240,8 +240,13 @@
             </div>
 
             <!-- The month, as a strip. A dot per event, the day's own colour,
-                 and the same red for needs-sorting as everywhere else. -->
-            <div class="grid gap-0.5" style="grid-template-columns: repeat(7, minmax(0,1fr));">
+                 and the same red for needs-sorting as everywhere else.
+
+                 Only in Month. List means a list: the strip above one is a
+                 second answer to a question already answered underneath, and it
+                 pushes the first card most of a screen down. -->
+            <div x-show="view === 'month'" class="grid gap-0.5"
+                 style="grid-template-columns: repeat(7, minmax(0,1fr));">
                 <template x-for="(d, i) in ['S','M','T','W','T','F','S']" :key="i">
                     <div class="text-center pb-1 text-[9.5px] font-label-md tracking-[.1em] uppercase text-outline"
                          x-text="d"></div>

@@ -207,9 +207,10 @@
             // which fits a number and nothing else. So the phone gets its own
             // month: a strip of dots, and the day you tapped underneath it.
             //
-            // The two views share that strip and share the card, so a phone
-            // never has a second copy of a row to drift from the first. Month is
-            // one day; List is the whole month grouped by week.
+            // The two views share the card, so a phone never has a second copy
+            // of a row to drift from the first. Month is the strip and the day
+            // you tapped on it; List is the whole month grouped by week, and no
+            // strip — a list is a list.
 
             get focusedDate() {
                 if (this.focusDate) return this.focusDate;
