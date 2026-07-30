@@ -384,6 +384,23 @@
 
             move: { open: false, toDate: '' },
 
+            // Whether the pattern of this Event is one date's business at all.
+            // Never a Sunday's: it is every Sunday BY DEFINITION, so there is no
+            // pattern to change — and skipping one here would mark the Event off
+            // while its order of service sat untouched under its own date, so one
+            // Sunday would say two different things.
+            get patternEditable() {
+                return this.isEditor && !!this.series && !this.isSunday;
+            },
+
+            // The Event above this date. A one-off has none — it IS the Event.
+            get eventHref() {
+                const seriesId = this.occurrence && this.occurrence.seriesId;
+                return seriesId
+                    ? 'calendar-event.html?series=' + encodeURIComponent(seriesId)
+                    : null;
+            },
+
             get canMove() {
                 // A one-off has no pattern to leave alone — you just change its
                 // date. The Sunday Service keeps its order of service under its

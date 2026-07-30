@@ -1368,3 +1368,75 @@ test('a Role nobody is on comes off the Event without a question', async () => {
     assert.strictEqual(page.pendingRemoval, null);
     assert.deepStrictEqual(saved, []);
 });
+
+// ── One Sunday decides who is on, and nothing else ────────────────────────────
+//
+// Same split as any repeating Event, and a Sunday needs it more: what a Sunday
+// IS is settled in three different places — its pattern by definition, its
+// visibility by rule, its liturgy in the order of service. None of that is one
+// date's to change, so none of it is offered here.
+
+function sundayDate() {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.rank = 'editor';
+    page.occurrence = { id: 'sunday_service_2026-08-02', seriesId: 'sunday_service', date: '2026-08-02' };
+    page.series = { id: 'sunday_service', recurrence: { freq: 'weekly', weekday: 0, startDate: '2023-01-01', time: '10:30' } };
+    return page;
+}
+
+test('one Sunday does not decide its colour or who can see it', () => {
+    const page = sundayDate();
+    assert.strictEqual(page.colourEditable, false);
+    assert.strictEqual(page.isOneOff, false);
+    // Its visibility is settled by rule, not by a control that could be wrong.
+    assert.strictEqual(page.visibilityEditable, false);
+});
+
+test('one Sunday does not decide the pattern, and is not skippable here', () => {
+    // Every Sunday, by definition — there is no pattern to change. And skipping
+    // one here would mark the EVENT off while its order of service sat
+    // untouched under its own date, so one Sunday would say two things.
+    const page = sundayDate();
+    assert.strictEqual(page.canMove, false);
+    assert.strictEqual(page.patternEditable, false);
+
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    assert.ok(/x-show="isEditor && patternEditable"/.test(html),
+        'the pattern controls are not guarded for a Sunday');
+});
+
+test('a repeating Event that is not a Sunday keeps all of that', () => {
+    // The guard has to be about Sundays, not about repeating Events.
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.rank = 'editor';
+    page.occurrence = { id: 'midweek_2026-08-05', seriesId: 'midweek', date: '2026-08-05' };
+    page.series = { id: 'midweek', recurrence: { freq: 'weekly', weekday: 3, startDate: '2026-08-05' } };
+
+    assert.strictEqual(page.patternEditable, true);
+    assert.strictEqual(page.canMove, true);
+});
+
+test('one Sunday has a way through to the Sunday Service itself', () => {
+    // Without it, the only door to the Sunday Service as an Event is a button on
+    // the Calendar — so from a Sunday you would have to go back to find it.
+    const page = sundayDate();
+    assert.strictEqual(page.eventHref, 'calendar-event.html?series=sunday_service');
+
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    assert.ok(/:href="eventHref"/.test(html), 'no way through to the Event from one date of it');
+});
+
+test('the way through is offered on every date of a repeating Event, Sundays included', () => {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.rank = 'editor';
+
+    page.occurrence = { id: 'sunday_service_2026-08-02', seriesId: 'sunday_service', date: '2026-08-02' };
+    assert.strictEqual(page.eventHref, 'calendar-event.html?series=sunday_service');
+
+    page.occurrence = { id: 'midweek_2026-08-05', seriesId: 'midweek', date: '2026-08-05' };
+    assert.strictEqual(page.eventHref, 'calendar-event.html?series=midweek');
+
+    // A one-off has no Event above it — it IS the Event.
+    page.occurrence = { id: 'harvest', seriesId: null, date: '2026-09-20' };
+    assert.strictEqual(page.eventHref, null);
+});

@@ -566,7 +566,7 @@
                          which Roles it carries every time. So this goes there
                          rather than opening a pattern-only modal, which was the
                          thinnest possible answer to "edit details". -->
-                    <a x-show="isEditor && !isSunday && series" :href="'calendar-event.html?series=' + occurrence.seriesId"
+                    <a x-show="isEditor && !isSunday && eventHref" :href="eventHref"
                        class="flex items-center gap-1 border border-secondary text-secondary px-md py-2 rounded-lg font-label-md
                               text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
                         <span class="material-symbols-outlined text-[18px]">tune</span>
@@ -662,6 +662,17 @@
                                 Everyone can see it, signed in or not — that is how Sundays work.
                             </p>
                         </div>
+                        <!-- Two doors, and they lead to different things. The liturgy
+                             is built per Sunday; the time and the Roles every Sunday
+                             needs are set once, above all of them. -->
+                        <div x-show="isEditor" class="mt-md pt-md border-t border-outline-variant">
+                            <a :href="eventHref"
+                               class="inline-flex items-center gap-1 text-secondary font-label-md
+                                      text-xs uppercase tracking-wider cal-focus">
+                                <span class="material-symbols-outlined text-[16px]">tune</span>
+                                Edit the Sunday Service
+                            </a>
+                        </div>
                         <div class="mt-md pt-md border-t border-outline-variant bg-secondary-container -mx-md -mb-md px-md py-3 rounded-b-lg">
                             <a :href="servicesHref"
                                class="inline-flex items-center gap-1 text-on-secondary-container font-label-md
@@ -725,8 +736,7 @@
                                         <!-- WHICH Roles this Event carries is decided on the
                                              Event, not here. This screen decides who is
                                              standing in them today. -->
-                                        <a x-show="occurrence.seriesId && !isSunday"
-                                           :href="'calendar-event.html?series=' + occurrence.seriesId"
+                                        <a x-show="eventHref" :href="eventHref"
                                            class="shrink-0 flex items-center gap-1 text-[11px] font-label-md
                                                   text-on-surface-variant hover:text-secondary cal-motion cal-focus rounded"
                                            title="Change which roles this event needs">
@@ -934,12 +944,13 @@
                              there is nothing to add here — only a way through to
                              where it IS decided. What this screen adds is a job for
                              this day alone, which is the strip above. -->
-                        <a x-show="isEditor && occurrence.seriesId && !isSunday"
-                           :href="'calendar-event.html?series=' + occurrence.seriesId"
+                        <a x-show="isEditor && eventHref" :href="eventHref"
                            class="mt-md inline-flex items-center gap-1 text-secondary text-[12px] font-label-md
                                   uppercase tracking-wider cal-focus">
                             <span class="material-symbols-outlined text-[15px]">tune</span>
-                            Change the roles this event needs
+                            <span x-text="isSunday
+                              ? 'Change the roles every Sunday needs'
+                              : 'Change the roles this event needs'"></span>
                         </a>
                     </section>
 
@@ -1111,7 +1122,11 @@
                     </section>
 
                     <!-- When it happens -->
-                    <section x-show="isEditor && series && series.recurrence"
+                    <!-- Not a Sunday's. Every Sunday BY DEFINITION, so there is no
+                         pattern to change — and skipping one here would mark the
+                         Event off while its order of service sat untouched under
+                         its own date, so one Sunday would say two things. -->
+                    <section x-show="isEditor && patternEditable"
                              class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
                         <h3 class="font-display text-[17px] text-primary">When it happens</h3>
                         <p class="font-headline-lg text-[17px] text-on-surface mt-2"
