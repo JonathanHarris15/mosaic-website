@@ -412,6 +412,7 @@ A Person placed in one slot of one Role on an [[Event occurrence]] — **the pla
   - **Declined**: they said no, and the slot is **flagged for reassignment** — visibly needing attention, not silently empty.
 - Carries **who set the state and when**, so the state machine survives being handed to the congregation in MS-20.
 - Only **Servant Roles** and [[One-off Role]]s get Assignments. Liturgical Roles keep their existing wiring into the Service entity (ADR-0018 §2).
+- **Being *offered* is a different question from being *eligible*.** An ineligible Person is shown, blocked, with a reason — seeing who was passed over is the point of the picker. Somebody **Inactive**, or hidden by a tag carrying `hidePeople` (or `shepherdingHidden`), is not offered *at all*: they are not a candidate who lost. For a hidden Person a blocked row would print the very name the tag exists to hide. Elders and super admins still see them, since that is who the tag hides people from everyone else *for*.
 - **On a Sunday, holding a liturgical Role blocks you from a Servant Role on the same date.** You cannot preach and run the sound desk at once. Because the liturgy is stored as *fields on the Service*, not as Assignments, the picker reads that document to find out — and shows those people blocked, naming the liturgical Role, rather than hiding them.
 - **Once the date passes**: Confirmed becomes an [[Involvement]] automatically; Declined never does; Pending becomes an open question an editor resolves ("did they serve?"), and an unresolved question never counts as serving.
 

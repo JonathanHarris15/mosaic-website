@@ -1040,3 +1040,61 @@ test('a midweek event never consults the liturgy', () => {
 
     assert.strictEqual(page.candidates.find(c => c.personId === 'p2').eligible, true);
 });
+
+// ── Who the picker will not even offer ────────────────────────────────────────
+
+function pickerWith(people, extra) {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.rank = (extra && extra.rank) || 'editor';
+    page.occurrence = { id: 'midweek_2026-08-05', seriesId: 'midweek', date: '2026-08-05' };
+    page.series = { id: 'midweek', roleSlugs: ['sound_desk'] };
+    page.roleDefinitions = [SOUND];
+    page.people = people;
+    page.hidingTags = (extra && extra.hidingTags) || [];
+    page.picker = { open: true, roleSlug: 'sound_desk', slotId: 's1', query: '', hideBlocked: false, picked: null };
+    return page;
+}
+
+test('somebody no longer active never appears in the picker, not even blocked', () => {
+    const page = pickerWith([
+        { id: 'p1', name: 'Dave Rowe' },
+        { id: 'p2', name: 'Gone Away', membership: { inactive: true } },
+    ]);
+    assert.deepStrictEqual(page.candidates.map(c => c.personId), ['p1']);
+});
+
+test('somebody hidden by a tag never appears, because a blocked row prints their name', () => {
+    const page = pickerWith([
+        { id: 'p1', name: 'Dave Rowe' },
+        { id: 'p2', name: 'Private Person', tags: ['safeguarding'] },
+    ], { hidingTags: ['safeguarding'] });
+
+    assert.deepStrictEqual(page.candidates.map(c => c.personId), ['p1']);
+    assert.strictEqual(page.blockedCount, 0, 'a hidden Person was shown as blocked');
+});
+
+test('an elder sees the hidden Person, since the tag hides them from everyone else', () => {
+    const page = pickerWith([
+        { id: 'p1', name: 'Dave Rowe' },
+        { id: 'p2', name: 'Private Person', tags: ['safeguarding'] },
+    ], { rank: 'elder', hidingTags: ['safeguarding'] });
+
+    assert.deepStrictEqual(page.candidates.map(c => c.personId).sort(), ['p1', 'p2']);
+});
+
+test('the page says so when it could not check which tags hide people', () => {
+    // Failing open here would offer hidden people to an editor and look like
+    // nothing had gone wrong, which is the one outcome a privacy rule must not
+    // produce quietly.
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', {
+        db: { collection: () => ({ async get() { throw new Error('nope'); } }) },
+    });
+
+    return page.loadHidingTags().then(() => {
+        // strictEqual on the length, not deepStrictEqual on the array: the
+        // component is built inside a vm realm, so its [] is not reference-equal
+        // to this file's Array.prototype.
+        assert.strictEqual(page.hidingTags.length, 0);
+        assert.match(page.error, /could not be read/i);
+    });
+});

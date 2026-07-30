@@ -245,6 +245,7 @@
                 this.roleDefinitions = roles.docs.map(d => Object.assign({ id: d.id }, d.data()));
                 this.relationships = rels.docs.map(d => d.data());
                 this.groups = groups.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                await this.loadHidingTags();
             },
 
             // ── Who is looking ───────────────────────────────────────────────
@@ -720,6 +721,42 @@
                 return def.name + ' · place ' + (at + 1) + ' of ' + def_slots.length;
             },
 
+            // Tags whose `people_tags` document says they hide the people
+            // carrying them. An elder set those tags precisely so nobody below
+            // them sees who is behind one, and a picker is nobody's exception.
+            //
+            // A refused read leaves the list EMPTY, which offers everyone. That
+            // is the wrong direction for a privacy rule, so it is not silent:
+            // the page says it could not check, rather than quietly showing
+            // people it should not.
+            hidingTags: [],
+
+            async loadHidingTags() {
+                try {
+                    const snap = await db.collection('people_tags').get();
+                    this.hidingTags = snap.docs
+                        .filter(d => (d.data() || {}).hidePeople === true)
+                        .map(d => d.id);
+                } catch (e) {
+                    console.error('Could not read which tags hide people:', e);
+                    this.hidingTags = [];
+                    this.error = 'Some people may be missing from the list — the privacy ' +
+                        'tags could not be read, so nobody hidden by one is being offered.';
+                }
+            },
+
+            // Who may be offered AT ALL — which is a different question from who
+            // is eligible. Somebody who has left, or whom this viewer may not see,
+            // is not a candidate who lost; they are not a candidate. Showing them
+            // blocked would answer a question nobody asked, and for a hidden
+            // Person it would print the name the tag exists to hide.
+            get assignablePeople() {
+                return Roles.assignablePeople(this.people, {
+                    rank: this.rank,
+                    hidingTags: this.hidingTags,
+                });
+            },
+
             // Every candidate, eligible or not, each carrying a subtitle: a
             // reason when blocked, a fairness note when not. Same slot either
             // way, which is also where an auto-assign suggestion will sit later.
@@ -741,7 +778,7 @@
                     })));
 
                 const judged = Roles.candidatesFor(def, slot, {
-                    people: this.people,
+                    people: this.assignablePeople,
                     relationships: this.relationships,
                     groups: this.groups,
                     assigned: seated,
