@@ -8,8 +8,64 @@
     <link rel="stylesheet" href="mosaic.css" />
     <link rel="stylesheet" href="fonts.css" />
 
+    <!-- Running inside the phone shell. The page is opened whole with
+         ?shell=mobile rather than ported to a native screen, because this is the
+         authoring home for what a Role IS — a second copy of it is a second
+         place for the rules about slots and restrictions to drift.
+         `mobile-shell.js` must load first: it sets `html.shell-mobile`, and
+         every rule below branches on it. -->
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <!-- `onBack`, not a URL: the shell draws ONE header, so its arrow has to
+         mean what this page means by back — out of the Role you have open, or
+         out of the page if you have none. The page answers on
+         `mobile-header:back` (roles-manager.js). -->
+    <script>window.MOBILE_HEADER = { title: 'Roles Manager', onBack: true };</script>
+    <script src="mobile-shell-header.js"></script>
+
     <style>
         [x-cloak] { display: none !important; }
+
+        /* ── The Roles Manager on a phone ────────────────────────────────────
+           The two-pane / one-pane switch is already a `lg:` question and needs
+           nothing here. What the shell changes is the CHROME: it draws the
+           header, so the page must not draw a second one. */
+
+        /* The shell header already says "Roles Manager". */
+        html.shell-mobile .rm-page-heading { display: none; }
+        /* Which leaves a rule under a paragraph, under the shell's own rule. */
+        html.shell-mobile .rm-title-block { border-bottom: none; padding-bottom: 0; }
+
+        /* The editor's own bar keeps what the shell header cannot say — the
+           Role's name, how many people it needs, and delete. Its duplicate back
+           arrow is not styled away, it is not rendered (see the markup): a
+           control that is only invisible can still be pressed.
+
+           Sticky at 0 would pin it UNDER the shell header (z-index 1000) and it
+           would never be seen again. */
+        html.shell-mobile .rm-editor-bar { top: var(--msh-height, 62px); }
+
+        /* Sticky to the bottom of the WebView means sticky over the home
+           indicator. The body inset can't help: the bar is pinned to the
+           scrollport, not to the end of the document. */
+        html.shell-mobile .rm-editor-actions { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); }
+
+        /* A row you tap is a card. On a desktop these are a quiet list that
+           lights up under the pointer; a phone has no pointer, so each row
+           carries its own edge instead of waiting for a hover that never comes.
+
+           Border only — NOT background: the selected row says so with
+           `bg-surface-container`, and a background set here would win on
+           specificity and paint that difference out.
+
+           ⚠ THE FALLBACK IS THE VALUE HERE. `--outline-variant` and the rest of
+           the token variables live in mobile/tokens.css, which only mobile.html
+           loads — a DESKTOP page running in the shell is a different document
+           and has none of them. Written bare, this rule computes to nothing and
+           the row falls back to `border-transparent`: an invisible border,
+           which is what shipped for one build. */
+        html.shell-mobile .rm-role-row { min-height: 64px; border-color: var(--outline-variant, #DAD0C0); }
+        html.shell-mobile .rm-role-list { gap: 8px; }
     </style>
 
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -44,8 +100,8 @@
     <main x-show="!loading" class="flex-grow w-full max-w-7xl mx-auto px-4 md:px-margin pb-lg pt-md">
 
         <!-- Page title -->
-        <div class="pb-md border-b border-outline-variant">
-            <h1 class="font-display text-headline-lg tracking-[.02em] text-primary">Roles Manager</h1>
+        <div class="rm-title-block pb-md border-b border-outline-variant">
+            <h1 class="rm-page-heading font-display text-headline-lg tracking-[.02em] text-primary">Roles Manager</h1>
             <p class="font-body-md text-body-md text-on-surface-variant mt-xs max-w-[64ch]">
                 Every serving Role in one place. Set how many people a Role needs, who each place is for,
                 and any rules about who can fill it.
@@ -102,10 +158,10 @@
                     </div>
 
                     <!-- The row IS the edit control: opening a Role is the point of the list. -->
-                    <ul x-show="hasServantRoles" class="flex flex-col">
+                    <ul x-show="hasServantRoles" class="rm-role-list flex flex-col">
                         <template x-for="role in servantRoles" :key="role.slug">
                             <li>
-                                <div class="group relative w-full flex items-center gap-sm pl-[14px] pr-xs py-sm rounded-lg border cursor-pointer transition-colors"
+                                <div class="rm-role-row group relative w-full flex items-center gap-sm pl-[14px] pr-xs py-sm rounded-lg border cursor-pointer transition-colors"
                                      :class="isSelected(role) ? 'bg-surface-container border-outline-variant' : 'border-transparent hover:bg-surface-container-low'"
                                      role="button" tabindex="0"
                                      @click="startEdit(role)"
@@ -131,10 +187,20 @@
                                     <!-- Hover-revealed on a pointer; touch has no hover, so always visible below lg. -->
                                     <div class="flex items-center flex-shrink-0 transition-opacity opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
                                          :class="isSelected(role) ? 'lg:opacity-100' : ''">
-                                        <button @click.stop="deleteRole(role)" title="Delete this role"
-                                                class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error transition-colors">
-                                            <span class="material-symbols-outlined text-[19px]">delete</span>
-                                        </button>
+                                        <!-- ⚠ x-if, NOT a CSS `display: none`.
+                                             On a phone delete belongs in the editor's header (design 1b) —
+                                             a destructive control a thumb-width from the tap that OPENS a
+                                             Role is how you delete the Role you meant to edit. It was hidden
+                                             with CSS first, and inside the WebView a tap anywhere on the row
+                                             still arrived here as a synthesized click (clientX/Y 0,0) on the
+                                             hidden button: every tap on a Role asked to delete it. A control
+                                             that is only invisible can still be pressed. -->
+                                        <template x-if="!inShell">
+                                            <button @click.stop="deleteRole(role)" title="Delete this role"
+                                                    class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error transition-colors">
+                                                <span class="material-symbols-outlined text-[19px]">delete</span>
+                                            </button>
+                                        </template>
                                         <span class="material-symbols-outlined text-[19px] text-outline">chevron_right</span>
                                     </div>
                                 </div>
@@ -173,11 +239,17 @@
 
                         <!-- Below lg the editor is the whole screen, so it carries its own
                              way back and its own delete. -->
-                        <div class="lg:hidden sticky top-0 z-10 flex items-center gap-base bg-surface-container-lowest border-b border-outline-variant rounded-t-lg px-sm py-base">
-                            <button @click="cancelEdit()" title="Back to the roles list" aria-label="Back to the roles list"
-                                    class="w-10 h-10 flex items-center justify-center rounded-lg text-on-surface-variant">
-                                <span class="material-symbols-outlined text-[24px]">arrow_back</span>
-                            </button>
+                        <div class="rm-editor-bar lg:hidden sticky top-0 z-10 flex items-center gap-base bg-surface-container-lowest border-b border-outline-variant rounded-t-lg px-sm py-base">
+                            <!-- Same rule as the row's delete: inside the shell this arrow is a
+                                 DUPLICATE of the shell header's, so it is not rendered at all
+                                 rather than hidden. The shell's arrow asks the page what back
+                                 means (roles-manager.js), so nothing is lost. -->
+                            <template x-if="!inShell">
+                                <button @click="cancelEdit()" title="Back to the roles list" aria-label="Back to the roles list"
+                                        class="w-10 h-10 flex items-center justify-center rounded-lg text-on-surface-variant">
+                                    <span class="material-symbols-outlined text-[24px]">arrow_back</span>
+                                </button>
+                            </template>
                             <div class="flex-grow min-w-0">
                                 <div class="font-display text-[17px] tracking-[.02em] text-primary truncate" x-text="draft.name"></div>
                                 <div class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant" x-text="draftPeopleNeededLabel"></div>
@@ -356,7 +428,7 @@
                             </div>
                         </div>
 
-                        <div class="lg:hidden sticky bottom-0 flex gap-base bg-surface-container-lowest border-t border-outline-variant rounded-b-lg px-sm py-sm">
+                        <div class="rm-editor-actions lg:hidden sticky bottom-0 flex gap-base bg-surface-container-lowest border-t border-outline-variant rounded-b-lg px-sm py-sm">
                             <button @click="cancelEdit()"
                                     class="flex-1 h-12 text-xs font-label-md uppercase tracking-wider text-on-surface-variant border border-outline-variant rounded-lg">
                                 Cancel

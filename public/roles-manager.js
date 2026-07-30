@@ -62,16 +62,36 @@ window.RolesManager = () => ({
         return ['editor', 'elder', 'admin', 'super_admin'].indexOf(permissionLevel) !== -1;
     },
 
+    // ── Where "away from here" is ────────────────────────────────────────────
+    //
+    // Inside the phone shell this page is running in the app's WebView, and
+    // login.html and index.html are both OUTSIDE the app — a refusal that
+    // dumps you onto the website is a refusal you can't come back from. Both
+    // gates below fire before anything renders, so they have to know.
+
+    get inShell() {
+        return typeof window !== 'undefined' && window.MOSAIC_SHELL === 'mobile';
+    },
+
+    get signInHref() {
+        return this.inShell ? 'mobile.html#/login' : 'login.html';
+    },
+
+    get homeHref() {
+        return this.inShell ? 'mobile.html#/home' : 'index.html';
+    },
+
     async init() {
+        this.listenForShellBack();
         auth.onAuthStateChanged(async (user) => {
             if (!user) {
-                window.location.href = 'login.html';
+                window.location.href = this.signInHref;
                 return;
             }
             const userData = await getUserData(user.uid);
             this.currentPermissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
             if (!this.mayManageRoles(this.currentPermissionLevel)) {
-                window.location.href = 'index.html';
+                window.location.href = this.homeHref;
                 return;
             }
             this.currentUser = user;
@@ -80,6 +100,21 @@ window.RolesManager = () => ({
             } finally {
                 this.loading = false;
             }
+        });
+    },
+
+    // The shell draws ONE header for the whole page, so its back arrow has to
+    // mean what this page means by back. The editor's own arrow is hidden there
+    // as a duplicate — without this, the one arrow left would leave the page
+    // mid-edit and the way out of a Role would be gone.
+    listenForShellBack() {
+        if (typeof document === 'undefined' || !document.addEventListener) return;
+        document.addEventListener('mobile-header:back', () => {
+            if (this.draft) {
+                this.cancelEdit();
+                return;
+            }
+            window.location.href = this.homeHref;
         });
     },
 

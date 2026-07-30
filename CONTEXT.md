@@ -168,6 +168,8 @@ _Avoid_: Meeting, appointment (use Event); do not conflate with Service (a Servi
 
 **Roles Manager**:
 The editor+ dashboard card where **Role Definitions** are authored and managed, and where a date range of a recurring **Event** is **auto-assigned** — the system drafts a fair, rule-valid lineup for the user to review and accept (propose-then-approve). Distinct from the per-Event **Roles tab**, which assigns a single service by hand.
+- **One Roles Manager, opened on both.** The phone does not get a port of this screen; it opens the same page inside the shell (`?shell=mobile`), reachable from the phone's home grid, which is the phone's dashboard. This screen is where a Role's slots and restriction rules are decided, so a second copy of it would be a second place for those rules to drift from the model.
+- **On a phone it is a list, then an editor** — never both, because there is only room for one. The list's rows become cards you tap; delete moves into the editor's own bar, and the only back arrow is the shell's, which the page answers: out of the Role you have open, or out of the page if you have none.
 _Avoid_: Scheduler page, role admin
 
 **Permission Level**:

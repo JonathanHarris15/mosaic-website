@@ -72,6 +72,10 @@
         // native port, so there is only one Calendar to keep in step with the
         // model.
         events: 'calendar.html',
+        // The Roles Manager the same way, and for a stronger reason: it is the
+        // authoring home for what a Role IS. A second copy of that screen is a
+        // second place for the rules about slots and restrictions to drift.
+        rolesManager: 'roles-manager.html',
     };
 
     // True when a destination is visible to this user. No gate means everyone.

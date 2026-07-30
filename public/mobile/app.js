@@ -139,6 +139,10 @@
       { icon: "users", label: "Member Directory", route: "people" },
       { icon: "shield", label: "Shepherd", route: "shepherd", permissionLevels: ["elder", "super_admin"] },
       { icon: "settings-2", label: "Admin", route: "admin", permissionLevels: ["admin", "super_admin"] },
+      // Not a drawer destination, on purpose: on the web the Roles Manager is a
+      // DASHBOARD CARD, not navigation, and this grid is the phone's dashboard.
+      // Same gate as that card (MS-120) — editor and above.
+      { icon: "hand-heart", label: "Roles Manager", route: "rolesManager", permissionLevels: ["editor", "elder", "admin", "super_admin"] },
     ].filter(function (t) { return data.canSee(t, user); });
     return html`
       <${Screen}>

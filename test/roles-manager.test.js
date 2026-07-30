@@ -797,3 +797,249 @@ test('the demo: Kids Ministry with three slots, a Tag rule and a couple rule, re
     ]);
     assert.equal(Roles.validateDefinition(def).valid, true);
 });
+
+// ── The Roles Manager on a phone (MS-99) ─────────────────────────────────────
+//
+// The page is opened whole inside the app's WebView with ?shell=mobile rather
+// than ported to a native screen: it is the authoring home for what a Role IS,
+// and a second copy of it is a second place for slots and restriction rules to
+// drift from RolesCore.
+//
+// What that costs is chrome. The shell draws the header, the page must not draw
+// a second one, and every gate the page had was written for a browser tab where
+// "away from here" meant index.html. These hold both ends of that.
+
+const fs = require('node:fs');
+const path = require('node:path');
+const PUBLIC = path.join(__dirname, '..', 'public');
+
+const rolesManagerHtml = () => fs.readFileSync(path.join(PUBLIC, 'roles-manager.html'), 'utf8');
+const rolesManagerJs = () => fs.readFileSync(path.join(PUBLIC, 'roles-manager.js'), 'utf8');
+
+test('the Roles Manager can actually enter the phone shell', () => {
+    // A page can carry every `html.shell-mobile` rule in the world and never
+    // load the one script that sets the class. That has shipped before.
+    const html = rolesManagerHtml();
+    assert.match(html, /src="mobile-shell\.js"/, 'the page cannot enter the shell');
+    assert.match(html, /href="mobile-shell\.css"/, 'the page has no shell stylesheet');
+    assert.match(html, /window\.MOBILE_HEADER/, 'the page has no shell header');
+    assert.match(html, /src="mobile-shell-header\.js"/, 'the page never builds its header');
+
+    assert.ok(html.indexOf('mobile-shell.js') < html.indexOf('mobile-shell-header.js'),
+        'the header is built before the page knows it is in the shell');
+    assert.ok(html.indexOf('mobile-shell.js') < html.indexOf('src="roles-manager.js"'),
+        'the page script runs before the shell class is set');
+});
+
+test('every phone rule on the Roles Manager has something to style', () => {
+    // The general form of a whole family of bugs: a rule for a class nothing
+    // carries is styling that can never fire, and it reads in review as done.
+    const html = rolesManagerHtml();
+    const hooks = new Set();
+    const re = /html\.shell-mobile\s+\.([\w-]+)/g;
+    let m;
+    while ((m = re.exec(html))) hooks.add(m[1]);
+
+    assert.ok(hooks.size, 'the phone rules moved off this page');
+    hooks.forEach(hook => {
+        assert.ok(new RegExp('class="[^"]*\\b' + hook + '\\b').test(html),
+            'no element carries ' + hook + ', so that phone rule can never fire');
+    });
+});
+
+test('the phone never draws two headers, or two back arrows', () => {
+    const html = rolesManagerHtml();
+
+    // The shell header says "Roles Manager", so the page's own h1 stands down.
+    assert.match(html, /html\.shell-mobile \.rm-page-heading\s*{\s*display:\s*none/,
+        'the page still prints its own title under the shell\'s');
+
+    // The editor's bar keeps the Role's name, its count and delete — the shell
+    // header can say none of those — but not a second arrow, and it is not
+    // rendered rather than hidden (see the next test for why that matters).
+    const back = html.slice(0, html.indexOf('Back to the roles list'));
+    assert.match(back.slice(-400), /<template x-if="!inShell">/,
+        'the editor still draws its own back arrow beside the shell\'s');
+
+    // Which makes the shell's arrow the ONLY way out of an open Role, so it has
+    // to be the page that decides what it does.
+    assert.match(html, /MOBILE_HEADER\s*=\s*{[^}]*onBack:\s*true/,
+        'the shell header takes back into its own hands');
+    assert.match(rolesManagerJs(), /mobile-header:back/,
+        'nothing on the page ever answers the shell\'s back arrow');
+});
+
+test('the editor bar clears the shell header instead of hiding behind it', () => {
+    // Both are sticky at the top of the same scrollport and the shell's sits at
+    // z-index 1000. Pinned at 0 the editor's bar — the Role\'s name, its count,
+    // and the only delete on a phone — would never be seen again.
+    assert.match(rolesManagerHtml(), /html\.shell-mobile \.rm-editor-bar\s*{\s*top:\s*var\(--msh-height/);
+});
+
+test('a phone row is a card, and it does not offer delete next to open', () => {
+    const html = rolesManagerHtml();
+    // No pointer means no hover, so a row that only shows its edge on hover
+    // shows nothing at all.
+    assert.match(html, /html\.shell-mobile \.rm-role-row\s*{[^}]*border-color/,
+        'the rows are an undifferentiated stack on a phone');
+    // Delete lives in the editor's header there (design 1b), and the row's copy
+    // is NOT RENDERED rather than hidden — see the next test.
+    const upto = html.slice(0, html.indexOf('deleteRole(role)'));
+    assert.match(upto.slice(-500), /<template x-if="!inShell">/,
+        'a phone still offers delete beside the tap that opens a Role');
+
+    // And it must not paint over the selected row: `bg-surface-container` is one
+    // class, this rule is two, so a background set here would win and the
+    // selection would vanish.
+    const rule = html.match(/html\.shell-mobile \.rm-role-row\s*{([^}]*)}/)[1];
+    assert.doesNotMatch(rule, /background/,
+        'the phone row rule repaints the selected row as unselected');
+});
+
+test('being refused never throws you out of the app', () => {
+    // Both gates fire before anything renders. In a browser tab "away from here"
+    // is login.html / index.html; inside the WebView those are the WEBSITE, and
+    // landing there is a refusal you cannot come back from.
+    const page = window.RolesManager();
+
+    delete global.MOSAIC_SHELL;
+    assert.equal(page.signInHref, 'login.html');
+    assert.equal(page.homeHref, 'index.html');
+
+    global.MOSAIC_SHELL = 'mobile';
+    try {
+        assert.equal(page.signInHref, 'mobile.html#/login');
+        assert.equal(page.homeHref, 'mobile.html#/home');
+    } finally {
+        delete global.MOSAIC_SHELL;
+    }
+
+    // And the gates use them rather than the literals they replaced.
+    const js = rolesManagerJs();
+    assert.doesNotMatch(js, /href = 'login\.html'/, 'the sign-in gate still leaves the app');
+    assert.doesNotMatch(js, /href = 'index\.html'/, 'the permission gate still leaves the app');
+});
+
+test('the shell\'s one back arrow closes the Role first, and leaves the page second', async () => {
+    const handlers = {};
+    const realDocument = global.document;
+    global.MOSAIC_SHELL = 'mobile';
+    global.document = { addEventListener(name, fn) { (handlers[name] = handlers[name] || []).push(fn); } };
+    global.location = { href: '' };
+
+    try {
+        const page = await mountPage({ roles: { r1: coffeeDefinition() } });
+        page.listenForShellBack();
+        const back = () => handlers['mobile-header:back'].forEach(fn => fn());
+
+        page.startEdit(page.roleDefinitions[0]);
+        back();
+        assert.equal(page.draft, null, 'back left the page instead of closing the Role');
+        assert.equal(global.location.href, '', 'back left the page with a Role still open');
+
+        back();
+        assert.equal(global.location.href, 'mobile.html#/home',
+            'with nothing open, back does nothing at all');
+    } finally {
+        delete global.MOSAIC_SHELL;
+        if (realDocument === undefined) delete global.document; else global.document = realDocument;
+    }
+});
+
+test('an editor can actually reach the Roles Manager from a phone', () => {
+    // The page gates itself, but a page nothing links to is a page nobody opens.
+    const D = require('../public/mobile/destinations.js');
+    assert.equal(D.SHELL_PAGES.rolesManager, 'roles-manager.html',
+        'the phone has no route to the Roles Manager');
+    assert.equal(D.routeHref('rolesManager'), 'roles-manager.html?shell=mobile',
+        'the route opens the page outside the shell');
+
+    const appJs = fs.readFileSync(path.join(PUBLIC, 'mobile', 'app.js'), 'utf8');
+    const tile = appJs.match(/{[^{}]*route: "rolesManager"[^{}]*}/);
+    assert.ok(tile, 'the phone home has no Roles Manager tile');
+
+    // The same gate as the dashboard card it mirrors — a tile offered to
+    // somebody the page will bounce is worse than no tile.
+    const gate = ['editor', 'elder', 'admin', 'super_admin'];
+    gate.forEach(level => assert.ok(tile[0].indexOf('"' + level + '"') !== -1,
+        level + ' is offered the Roles Manager on the web but not on a phone'));
+    ['member', 'viewer'].forEach(level => assert.equal(tile[0].indexOf('"' + level + '"'), -1,
+        level + ' is offered a page they will be refused'));
+
+    const page = window.RolesManager();
+    gate.forEach(level => assert.equal(page.mayManageRoles(level), true));
+});
+
+test('a desktop page in the shell never reaches for a token it does not have', () => {
+    // The token variables (--outline-variant and the rest) are defined in
+    // mobile/tokens.css, and ONLY mobile.html loads it. A desktop page opened
+    // with ?shell=mobile is a different document with none of them, so a bare
+    // `var(--outline-variant)` computes to nothing and the declaration is
+    // dropped — silently, leaving whatever the utility class already said.
+    // That shipped once as a row border nobody could see.
+    const html = rolesManagerHtml();
+    const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+    const defined = new Set([...style.matchAll(/(--[\w-]+):/g)].map(m => m[1]));
+
+    [...style.matchAll(/var\(\s*(--[\w-]+)\s*([,)])/g)].forEach(m => {
+        if (defined.has(m[1])) return;
+        assert.equal(m[2], ',',
+            m[1] + ' has no fallback, and nothing on this page defines it');
+    });
+});
+
+test('the page\'s own styles are all still inside the stylesheet', () => {
+    // A stray `*/` ends a comment that was never open, and everything after it
+    // up to the next `*/` is parsed as garbage — the browser drops the rules in
+    // between WITHOUT a word. That is how the row border above went missing on a
+    // build where the rule was right there in the file, and why reading the CSS
+    // as text is not enough to know it fires.
+    const html = rolesManagerHtml();
+    const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+    const opens = (style.match(/\/\*/g) || []).length;
+    const closes = (style.match(/\*\//g) || []).length;
+    assert.equal(opens, closes, 'a comment in the page\'s <style> is unbalanced');
+
+    // And nothing outside a comment may start with prose.
+    const code = style.replace(/\/\*[\s\S]*?\*\//g, '');
+    code.split('\n').map(l => l.trim()).filter(Boolean).forEach(line => {
+        assert.ok(/[{}:;,]|^<style>$|^[.\w#\[@]/.test(line),
+            'this line is neither CSS nor a comment: ' + line);
+    });
+});
+
+test('a phone control that must not be pressed is not rendered, not hidden', () => {
+    // This one cost a day. Both duplicate controls were hidden with
+    // `display: none` inside the shell, and they still fired: a tap anywhere on
+    // a Role row arrived at the hidden delete button as a SYNTHESIZED click —
+    // clientX/clientY 0,0, not a pointer — so every tap meant to open a Role
+    // asked to delete it instead. getBoundingClientRect on the button read
+    // 0,0,0x0 and elementFromPoint over the row returned the row's own name,
+    // which is exactly why this was invisible from the outside.
+    //
+    // So the rule is: a control that must not be pressed on a phone does not
+    // exist on a phone. An invisible control is still a control.
+    const html = rolesManagerHtml();
+
+    // A heading may be hidden — it does nothing when pressed. Anything that
+    // ACTS may not be.
+    [...html.matchAll(/html\.shell-mobile\s+\.([\w-]+)\s*{([^}]*)}/g)].forEach(([, hook, body]) => {
+        if (!/display:\s*none/.test(body)) return;
+        const tag = html.slice(html.lastIndexOf('<', html.indexOf('class="' + hook)));
+        const opening = tag.slice(0, tag.indexOf('>'));
+        assert.doesNotMatch(opening, /^<(button|a)\b|@click/,
+            hook + ' is a control hidden by CSS — hidden is not the same as gone');
+    });
+
+    // Both gates read the same fact, and it is the page's own.
+    assert.equal((html.match(/x-if="!inShell"/g) || []).length, 2,
+        'the row\'s delete and the editor\'s back arrow are not both gated');
+    const page = window.RolesManager();
+    global.MOSAIC_SHELL = 'mobile';
+    try {
+        assert.equal(page.inShell, true);
+    } finally {
+        delete global.MOSAIC_SHELL;
+    }
+    assert.equal(page.inShell, false, 'the web page would lose its own controls');
+});
