@@ -527,6 +527,10 @@ The week-by-week view of Sunday **Services** — the Sunday Service series and n
 The view over **every** [[Event occurrence]] the signed-in person is allowed to see, not just Sundays (MS-99). Editors and above create Events here; what each person sees is governed by [[Event visibility]].
 - Distinct from [[Services]], which shows Sundays only and remains the surface for editing a Service's liturgy.
 - Loads with **two queries merged client-side** — one filtered by the viewer's rank, one `array-contains` their Person id for `participant`-visible Events. Firestore cannot express that as a single filter, and an unconstrained query **errors outright rather than returning fewer rows** — a failure that looks exactly like "this church has no events". The same trap is documented in `firestore.rules` for the relationship collections.
+- **On a phone it is a different screen, not a narrower one.** Seven columns across 390px gives about 50px a day, which fits a number and nothing else — so inside the mobile shell the desktop grid, toolbar and rail panel stand down and the phone draws its own: *You in July* in navy at the top, then the **month strip**, then the day or the month underneath it. Swapped on the shell rather than on a media query, because the same 390px window on a desktop still has a mouse and gets the desktop screen.
+
+#### Month strip
+The phone's month: seven columns of day numbers, each carrying up to **three dots** — one per Event on that day, in the Event's own `colour`, with the needs-sorting red overriding it exactly as a chip's bar does. A glance, not a list: the count lives in the cards underneath. Tapping a day shows that day; tapping into a neighbouring month's corner goes to that month, because those dates are not loaded and drawing "nothing on this day" for one of them would be a lie rather than an empty day.
 
 ## Flagged ambiguities
 

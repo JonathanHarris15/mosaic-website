@@ -51,6 +51,18 @@
            leave about half the width, and "Sunday S…" is not a name. */
         html.shell-mobile .cal-list-name { white-space: normal; overflow: visible; }
 
+        /* The phone gets its OWN month, not a squeezed copy of the desktop one.
+           Seven columns across 390px is about 50px a day, which fits a number and
+           nothing else — so the grid, the desktop toolbar and the rail's "You in
+           July" panel all stand down, and the block below replaces them.
+
+           Written as a swap rather than a media query because the shell is the
+           thing that knows it is a phone: the same 390px browser window on a
+           desktop still has a mouse and hover, and gets the desktop screen. */
+        .cal-phone-only { display: none; }
+        html.shell-mobile .cal-phone-only { display: flex; }
+        html.shell-mobile .cal-desktop-only { display: none !important; }
+
         /* An event label WRAPS rather than truncating — at ~110px cells
            "Midweek Gathering" has to read in full. */
         .cal-chip-label { overflow-wrap: break-word; line-height: 1.22; }
@@ -142,7 +154,7 @@
         </div>
 
         <!-- Toolbar -->
-        <div class="mt-gutter flex flex-wrap items-center justify-between gap-sm">
+        <div class="cal-desktop-only mt-gutter flex flex-wrap items-center justify-between gap-sm">
             <div class="flex items-center gap-sm">
                 <div class="flex rounded-lg border border-outline-variant overflow-hidden">
                     <button @click="prevMonth()" aria-label="Previous month"
@@ -185,11 +197,165 @@
             </div>
         </div>
 
+        <!-- ── The phone ──────────────────────────────────────────────────────
+             Drawn only inside the shell, and the desktop toolbar, grid, list and
+             "You in July" panel stand down when it is. Top to bottom: what YOU
+             are doing this month, the month itself as a strip of dots, then the
+             day you tapped — or the whole month, if you asked for the list. -->
+        <div class="cal-phone-only mt-md flex-col gap-md">
+
+            <!-- Navy, because it is the one thing on this screen that is about
+                 the person holding it rather than about the church's diary. -->
+            <section class="bg-primary rounded-lg px-[18px] py-4">
+                <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-primary-fixed-dim"
+                     x-text="'You in ' + monthLabel.split(' ')[0]"></div>
+                <p class="font-headline-lg text-[19px] leading-[1.35] mt-1.5 text-on-primary" x-text="mySentence"></p>
+            </section>
+
+            <div class="flex items-center justify-between gap-sm">
+                <div class="flex items-center gap-1">
+                    <button @click="prevMonth()" aria-label="Previous month"
+                            class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
+                        <span class="material-symbols-outlined text-[20px]">chevron_left</span>
+                    </button>
+                    <h2 class="font-display text-[17px] text-primary" x-text="monthLabel"></h2>
+                    <button @click="nextMonth()" aria-label="Next month"
+                            class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
+                        <span class="material-symbols-outlined text-[20px]">chevron_right</span>
+                    </button>
+                </div>
+
+                <!-- Icon only. The words that ride alongside them on a desktop
+                     cost a third of the row here, and the two glyphs are the
+                     same two everywhere else in the app. -->
+                <div class="shrink-0 flex gap-[3px] bg-surface-container border border-outline-variant rounded-lg p-[3px]">
+                    <template x-for="opt in [['month','calendar_month','Month'],['list','view_agenda','List']]" :key="opt[0]">
+                        <button @click="view = opt[0]" :aria-label="opt[2]"
+                                class="w-9 h-[30px] flex items-center justify-center rounded-lg cal-motion cal-focus"
+                                :class="view === opt[0] ? 'bg-surface-container-lowest text-primary' : 'text-on-surface-variant'">
+                            <span class="material-symbols-outlined text-[18px]" x-text="opt[1]"></span>
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <!-- The month, as a strip. A dot per event, the day's own colour,
+                 and the same red for needs-sorting as everywhere else. -->
+            <div class="grid gap-0.5" style="grid-template-columns: repeat(7, minmax(0,1fr));">
+                <template x-for="(d, i) in ['S','M','T','W','T','F','S']" :key="i">
+                    <div class="text-center pb-1 text-[9.5px] font-label-md tracking-[.1em] uppercase text-outline"
+                         x-text="d"></div>
+                </template>
+                <template x-for="cell in cells" :key="cell.date">
+                    <button @click="focusDay(cell)"
+                            class="flex flex-col items-center gap-[3px] py-1.5 rounded-lg cal-motion cal-focus"
+                            :class="cell.date === focusedDate ? 'bg-surface-container' : ''">
+                        <span class="text-[12px] font-label-md"
+                              :class="cell.date === focusedDate
+                                ? 'text-primary font-bold'
+                                : (cell.inMonth ? 'text-on-surface' : 'text-outline')"
+                              x-text="cell.day"></span>
+                        <span class="flex gap-0.5 h-[5px]">
+                            <template x-for="(colour, i) in stripDots(cell)" :key="i">
+                                <span class="w-[5px] h-[5px] rounded-full" :style="'background:' + colour"></span>
+                            </template>
+                        </span>
+                    </button>
+                </template>
+            </div>
+
+            <!-- One body for both views, so the card is written once. Month is
+                 the day you tapped; List is the whole month, grouped by week. -->
+            <div class="flex flex-col gap-md">
+                <template x-for="group in phoneGroups" :key="group.weekStart">
+                    <div>
+                        <div class="pb-2 text-[10px] font-label-md tracking-[.14em] uppercase text-on-surface-variant"
+                             x-text="group.label"></div>
+                        <div class="flex flex-col gap-2">
+                            <template x-for="ev in group.events" :key="ev.id">
+                                <button @click="open(ev)"
+                                        class="w-full text-left flex gap-[14px] p-[14px] rounded-lg cal-motion cal-press cal-focus
+                                               bg-surface-container-lowest border border-l-[3px]"
+                                        :style="'border-left-color:' + chipBar(ev)"
+                                        :class="ev.needsAttention ? 'border-error' : 'border-outline-variant'">
+                                    <div class="w-[34px] shrink-0 text-center">
+                                        <div class="text-[9.5px] font-label-md tracking-[.12em] uppercase text-on-surface-variant"
+                                             x-text="weekdayShort(ev.date)"></div>
+                                        <div class="font-display text-[19px]"
+                                             :class="ev.date === today ? 'text-primary' : 'text-on-surface'"
+                                             x-text="dayNumber(ev.date)"></div>
+                                    </div>
+                                    <div class="min-w-0 flex-grow">
+                                        <div class="text-[17px] leading-[1.25] text-on-surface"
+                                             :class="{
+                                                'font-headline-lg': ev.isSunday,
+                                                'font-label-md font-medium': !ev.isSunday,
+                                                'line-through opacity-[.55]': chipKind(ev) === 'off'
+                                             }"
+                                             x-text="ev.name || ev.seriesName || 'Event'"></div>
+                                        <div class="mt-[3px] flex items-center gap-1.5 flex-wrap text-[12.5px] text-on-surface-variant">
+                                            <span x-show="ev.time" x-text="formatTime(ev.time)"></span>
+                                            <span x-show="ev.time && ev.location" class="opacity-60">·</span>
+                                            <span x-show="ev.location" x-text="ev.location"></span>
+                                        </div>
+
+                                        <!-- "Moved to 15 August", not just gone. Somebody
+                                             looking at the first Sunday needs to know where
+                                             the gathering went, or they turn up to an empty hall. -->
+                                        <div x-show="movedNote(ev)"
+                                             class="mt-2 text-[11px] font-label-md tracking-[.08em] uppercase text-on-surface-variant"
+                                             x-text="movedNote(ev)"></div>
+
+                                        <div x-show="ev.mine"
+                                             class="mt-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5
+                                                    bg-surface-container border border-outline-variant">
+                                            <!-- Pending is a hollow ring: the resting state,
+                                                 and quiet on purpose. -->
+                                            <span class="w-[6px] h-[6px] rounded-full"
+                                                  :class="{
+                                                    'border-[1.5px] border-outline': ev.mine && ev.mine.tone === 'calm',
+                                                    'bg-success': ev.mine && ev.mine.tone === 'good',
+                                                    'bg-error': ev.mine && ev.mine.tone === 'attention'
+                                                  }"></span>
+                                            <span class="text-[10.5px] font-label-md tracking-[.1em] uppercase text-primary"
+                                                  x-text="ev.mine ? 'You · ' + ev.mine.label + ' · ' + ev.mine.stateLabel : ''"></span>
+                                        </div>
+
+                                        <div x-show="ev.needsAttention"
+                                             class="mt-2 flex items-center gap-1.5 rounded-md bg-error-container px-2.5 py-2">
+                                            <span class="material-symbols-outlined text-[17px] text-error">error</span>
+                                            <span class="text-[11px] font-label-md tracking-[.08em] uppercase text-on-error-container">
+                                                Needs sorting
+                                            </span>
+                                        </div>
+
+                                        <!-- "Sunday", not "Sunday service" — the name
+                                             directly above it already says that, and a
+                                             card that says the same thing twice reads
+                                             as a bug. -->
+                                        <div x-show="ev.isSunday"
+                                             class="mt-2 flex items-center gap-1 text-[11px] font-label-md tracking-[.1em] uppercase text-secondary">
+                                            <span class="material-symbols-outlined text-[14px]">church</span> Sunday
+                                        </div>
+                                    </div>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- An empty day and an empty month are different facts. -->
+                <p x-show="!phoneGroups.length"
+                   class="py-md text-center font-headline-lg text-[16.5px] text-on-surface-variant"
+                   x-text="phoneEmptyLine"></p>
+            </div>
+        </div>
+
         <div class="mt-gutter cal-layout">
 
             <!-- ── The month grid ─────────────────────────────────────────── -->
             <section x-show="view === 'month'"
-                     class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden min-w-0">
+                     class="cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden min-w-0">
                 <div class="grid bg-surface-container-low border-b border-outline-variant"
                      style="grid-template-columns: repeat(7, minmax(0,1fr));">
                     <template x-for="d in ['SUN','MON','TUE','WED','THU','FRI','SAT']" :key="d">
@@ -274,7 +440,7 @@
 
             <!-- ── The list view ──────────────────────────────────────────── -->
             <section x-show="view === 'list'"
-                     class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden min-w-0">
+                     class="cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden min-w-0">
                 <template x-for="group in groups" :key="group.weekStart">
                     <div>
                         <div class="bg-surface-container-low px-md py-2 text-[10.5px] font-label-md
@@ -336,7 +502,9 @@
             <!-- ── The right rail ─────────────────────────────────────────── -->
             <aside class="cal-rail flex flex-col gap-gutter min-w-0">
 
-                <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                <!-- The phone says this at the top of its own screen, in navy.
+                     Two of them on one page is the same sentence twice. -->
+                <section class="cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
                     <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant"
                          x-text="'You in ' + monthLabel.split(' ')[0]"></div>
                     <p class="font-headline-lg text-[16.5px] leading-[1.4] mt-2 text-on-surface" x-text="mySentence"></p>

@@ -89,6 +89,11 @@
             people: [],
             hiddenSeries: [],       // series unticked in the "Show" filters
 
+            // The day tapped in the phone's strip. Null means "today, or the
+            // first of whichever month is up" — the strip always has a day
+            // selected, because the list underneath it is that day.
+            focusDate: null,
+
             // ── Loading ──────────────────────────────────────────────────────
 
             async init() {
@@ -196,6 +201,74 @@
             },
             get needsSorting() { return View.needsSorting(this.visible, this.people); },
 
+            // ── The phone ────────────────────────────────────────────────────
+            //
+            // The desktop grid is seven columns across 390px — about 50px a day,
+            // which fits a number and nothing else. So the phone gets its own
+            // month: a strip of dots, and the day you tapped underneath it.
+            //
+            // The two views share that strip and share the card, so a phone
+            // never has a second copy of a row to drift from the first. Month is
+            // one day; List is the whole month grouped by week.
+
+            get focusedDate() {
+                if (this.focusDate) return this.focusDate;
+                // Today, but only while today is in the month being shown —
+                // otherwise the strip would highlight a day that is not on it.
+                return monthOf(this.today) === this.month ? this.today : this.month + '-01';
+            },
+
+            get focusedEvents() {
+                return this.visible.filter(o => o.date === this.focusedDate);
+            },
+
+            // "Wednesday 29 July" — the heading over the one day.
+            get focusedLabel() {
+                return window.DateUtils.parseDateStr(this.focusedDate)
+                    .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+            },
+
+            // One body for both phone views, so the card is written once.
+            get phoneGroups() {
+                if (this.view !== 'month') return this.groups;
+                const events = this.focusedEvents;
+                return events.length
+                    ? [{ weekStart: this.focusedDate, label: this.focusedLabel, events: events }]
+                    : [];
+            },
+
+            // An empty day and an empty month are different facts, and saying
+            // "nothing on this month" over one quiet Tuesday would be wrong.
+            get phoneEmptyLine() {
+                return this.view === 'month' ? 'Nothing on this day.' : 'Nothing on this month.';
+            },
+
+            async focusDay(cell) {
+                if (!cell || !cell.date) return;
+                this.view = 'month';
+                // The strip's corners belong to the neighbouring months, which
+                // are not loaded. Drawing "nothing on this day" for one of those
+                // would be a lie rather than an empty day, so tapping it goes
+                // there. goToMonth clears the focus, so it is set after.
+                if (!cell.inMonth) await this.goToMonth(monthOf(cell.date));
+                this.focusDate = cell.date;
+            },
+
+            // The dots under a day number. At most three: a fourth 5px dot in a
+            // ~46px cell has nowhere to go, and the strip is a glance — the
+            // count lives in the list underneath it.
+            stripDots(cell) {
+                return ((cell && cell.events) || []).slice(0, 3).map(ev => {
+                    const kind = this.chipKind(ev);
+                    // Same order as the chip, so the strip and the card can
+                    // never disagree about what a day looks like.
+                    if (kind === 'off') return '#DAD0C0';                 // outline-variant
+                    if (kind === 'declined') return View.ATTENTION_COLOUR;
+                    if (kind === 'mine') return '#182F57';                // primary
+                    return View.colourOf(ev).bar;
+                });
+            },
+
             // One row per series, with a count, for the "Show" filters.
             get seriesFilters() {
                 const counts = new Map();
@@ -220,6 +293,9 @@
 
             async goToMonth(month) {
                 this.month = month;
+                // A day tapped in July means nothing in August, and leaving it
+                // set would highlight a day the strip is no longer showing.
+                this.focusDate = null;
                 await this.load();
             },
             prevMonth() { return this.goToMonth(shiftMonth(this.month, -1)); },

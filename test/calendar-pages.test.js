@@ -1555,13 +1555,146 @@ test('the Calendar opens as a list on a phone, and a grid on a desktop', () => {
     assert.strictEqual(phone.view, 'list');
 });
 
-test('nothing is left rendering the dot strip that replaced nothing', () => {
-    // `dotStrip` was built for a phone month view the templates never drew. The
-    // list view answers the same question better, so it goes rather than sitting
-    // there looking like a feature.
-    const js = fs.readFileSync(path.join(PUBLIC, 'calendar.js'), 'utf8');
+// ── The phone's own month ─────────────────────────────────────────────────────
+//
+// A `dotStrip` helper was once built for a phone month view the templates never
+// drew, and was deleted for exactly that reason: it was a feature that could not
+// be seen. The design asks for it back — so this time the tests hold BOTH ends,
+// the helper and the markup that renders it.
+
+test('the phone has a month of its own, and the desktop grid never runs there', () => {
+    // Seven columns across 390px is about 50px a day, which fits a number and
+    // nothing else. So the grid stands down and the strip replaces it — rather
+    // than the phone showing a squeezed copy nobody can use.
     const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
-    assert.ok(!/dotStrip/.test(js) && !/dotStrip/.test(html));
+
+    assert.ok(/html\.shell-mobile \.cal-desktop-only\s*{\s*display:\s*none/.test(html),
+        'the desktop layout still draws on a phone');
+    assert.ok(/html\.shell-mobile \.cal-phone-only\s*{\s*display:\s*flex/.test(html),
+        'the phone block never becomes visible');
+    assert.ok(/\.cal-phone-only\s*{\s*display:\s*none/.test(html),
+        'the phone block draws on a desktop too');
+
+    // The grid, the desktop toolbar and the desktop list all stand down.
+    ['cal-desktop-only mt-gutter flex flex-wrap', 'cal-desktop-only bg-surface-container-lowest']
+        .forEach(marker => assert.ok(html.indexOf(marker) !== -1,
+            'a desktop-only block was never marked as one: ' + marker));
+
+    assert.ok(/stripDots\(cell\)/.test(html), 'the strip renders no dots');
+});
+
+test('the phone says "You in July" once, not twice', () => {
+    // The rail's panel and the phone's navy hero are the same sentence. Both on
+    // one screen reads as a bug, because it is one.
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    const said = html.split(/'You in ' \+ monthLabel/).length - 1;
+    assert.strictEqual(said, 2, 'the sentence moved or was duplicated again');
+
+    // The rail's copy is the one that stands down.
+    const rail = html.indexOf('cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg p-md');
+    assert.ok(rail !== -1, 'the rail panel is drawn on a phone as well as the hero');
+});
+
+test('the strip shows at most three dots a day', () => {
+    // A fourth 5px dot in a ~46px cell has nowhere to go. The strip is a glance;
+    // the count lives in the list underneath it.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    const dots = page.stripDots({ events: [{}, {}, {}, {}, {}] });
+    assert.strictEqual(dots.length, 3);
+});
+
+test('a day with something to sort shows the same red the chip does', () => {
+    const View = require('../public/calendar-view.js');
+    const page = loadComponent('calendar.js', 'calendarPage');
+
+    const declined = { needsAttention: true, colour: 'green' };
+    assert.strictEqual(page.stripDots({ events: [declined] })[0], View.ATTENTION_COLOUR,
+        'a chosen colour was allowed to hide "needs sorting" on the strip');
+
+    // A date nothing is happening on never shouts, exactly as its chip does not.
+    const cancelled = { cancelled: true, needsAttention: true };
+    assert.notStrictEqual(page.stripDots({ events: [cancelled] })[0], View.ATTENTION_COLOUR);
+});
+
+test('the phone body is one day in Month and the whole month in List', () => {
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.month = '2026-07';
+    page.today = '2026-07-29';
+    page.occurrences = [
+        { id: 'a', date: '2026-07-29', name: 'Midweek', assignments: [] },
+        { id: 'b', date: '2026-07-30', name: "Women's Study", assignments: [] },
+    ];
+
+    page.view = 'month';
+    assert.strictEqual(page.phoneGroups.length, 1);
+    assert.deepStrictEqual(page.phoneGroups[0].events.map(e => e.id), ['a']);
+    assert.ok(/Wednesday/.test(page.phoneGroups[0].label), 'the day is not named');
+
+    page.view = 'list';
+    assert.strictEqual(
+        page.phoneGroups.reduce((n, g) => n + g.events.length, 0), 2);
+});
+
+test('an empty day and an empty month say different things', () => {
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.view = 'month';
+    assert.strictEqual(page.phoneEmptyLine, 'Nothing on this day.');
+    page.view = 'list';
+    assert.strictEqual(page.phoneEmptyLine, 'Nothing on this month.');
+});
+
+test('tapping a corner day of the strip goes to that month', async () => {
+    // The strip's first and last cells belong to the neighbouring months, which
+    // are not loaded. Showing "nothing on this day" for one of those would be a
+    // lie rather than an empty day.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.month = '2026-07';
+    page.load = async () => {};
+
+    await page.focusDay({ date: '2026-06-30', inMonth: false });
+    assert.strictEqual(page.month, '2026-06');
+    assert.strictEqual(page.focusedDate, '2026-06-30');
+    assert.strictEqual(page.view, 'month');
+});
+
+test('changing month lets go of the day that was tapped', async () => {
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.month = '2026-07';
+    page.today = '2026-07-29';
+    page.load = async () => {};
+
+    await page.focusDay({ date: '2026-07-15', inMonth: true });
+    assert.strictEqual(page.focusedDate, '2026-07-15');
+
+    await page.nextMonth();
+    // August has no 15th selected, and today is not in it — so the strip falls
+    // back to the first, which is a day it is actually showing.
+    assert.strictEqual(page.focusedDate, '2026-08-01');
+});
+
+test('a phone card names a Sunday once', () => {
+    // The name directly above the marker already says "Sunday Service". A card
+    // that says the same thing twice reads as a bug, because it is one.
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    assert.ok(!/Sunday service\s*\n?\s*<\/div>/i.test(html),
+        'the phone card repeats the event name back at itself');
+});
+
+test('a deployed page is never left running against yesterday\'s script', () => {
+    // Nothing here is content-hashed — calendar.js is always calendar.js — and
+    // Firebase caches everything for an hour by default. So for an hour after a
+    // deploy a browser can run the NEW page against the OLD script. Alpine
+    // swallows a binding to a member the old script never had, so the symptom is
+    // a blank screen rather than an error: this cost an hour to find once.
+    const config = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'firebase.json'), 'utf8'));
+    const headers = (config.hosting && config.hosting.headers) || [];
+
+    const code = headers.find(h => /html\|js\|css|js\|css/.test(h.source || ''));
+    assert.ok(code, 'nothing tells hosting to revalidate the pages and scripts');
+
+    const cacheControl = (code.headers || []).find(h => h.key === 'Cache-Control');
+    assert.ok(cacheControl && /no-cache|no-store|max-age=0/.test(cacheControl.value),
+        'the pages and scripts are still cached without revalidating');
 });
 
 test('the shell tells the page how far under the notch it is', () => {
