@@ -1,7 +1,7 @@
 /* ============================================================
    mobile-shell-header.js — one standardized mobile header for desktop
    pages rendered inside the mobile shell (?shell=mobile). Matches the
-   native shell's M.ui.TopBar exactly (52px row + safe-area, serif title,
+   native shell's M.ui.TopBar exactly (46px row + safe-area, serif title,
    44px lucide chevron-left / menu button) so every mobile page — native
    or shell — reads the same.
 
@@ -114,8 +114,11 @@
     // Avatar, name, role — the drawer's head, and the same three parts the app's
     // drawer shows. The avatar went missing from this one, which is what a
     // second rendering costs if nothing holds the two to the same list.
-    var whoRow = document.createElement("div");
-    whoRow.style.cssText = "display:flex;align-items:center;gap:10px;margin-top:6px;";
+    // Tapping the head opens your profile — the same as the app's drawer. It
+    // only becomes a link once there is a you (draw() sets the href).
+    var whoRow = document.createElement("a");
+    whoRow.style.cssText = "display:flex;align-items:center;gap:10px;margin-top:6px;" +
+      "text-decoration:none;color:inherit;";
 
     var avatar = document.createElement("span");
     avatar.setAttribute("data-drawer-part", "avatar");
@@ -133,10 +136,14 @@
     role.setAttribute("data-drawer-part", "roleLabel");
     role.style.cssText = "font-family:var(--font-sans, sans-serif);font-size:11px;color:#B2C6F8;";
 
+    names.style.flex = "1";
     names.appendChild(who);
     names.appendChild(role);
+    var whoChevron = symbol("chevron_right", 18);
+    whoChevron.style.cssText += "color:#B2C6F8;";
     whoRow.appendChild(avatar);
     whoRow.appendChild(names);
+    whoRow.appendChild(whoChevron);
     head.appendChild(whoRow);
 
     var list = document.createElement("div");
@@ -147,6 +154,15 @@
       who.textContent = name;
       avatar.textContent = D.initials(name);
       role.textContent = user ? D.roleLabel(user.permissionLevel) : "Not signed in";
+      if (user) {
+        whoRow.href = D.routeHref("profile");
+        whoRow.setAttribute("aria-label", "Open your profile");
+        whoChevron.style.display = "";
+      } else {
+        whoRow.removeAttribute("href");
+        whoRow.removeAttribute("aria-label");
+        whoChevron.style.display = "none";
+      }
       list.textContent = "";
       D.DESTINATIONS.filter(function (d) { return D.canSee(d, user); }).forEach(function (d) {
         var here = d.route === (window.MOBILE_HEADER || {}).route;
@@ -218,11 +234,11 @@
     var header = document.createElement("header");
     header.id = "mobile-shell-header";
     header.style.cssText = "position:sticky;top:0;left:0;right:0;z-index:1000;flex-shrink:0;" +
-      "padding-top:calc(env(safe-area-inset-top, 20px) + 10px);" +
+      "padding-top:calc(env(safe-area-inset-top, 20px) + 4px);" +
       "background:var(--surface-container-lowest, #ffffff);border-bottom:1px solid var(--outline-variant, rgba(0,0,0,0.12));";
 
     var row = document.createElement("div");
-    row.style.cssText = "display:flex;align-items:center;gap:6px;height:52px;padding:0 8px 0 6px;";
+    row.style.cssText = "display:flex;align-items:center;gap:6px;height:46px;padding:0 8px 0 6px;";
 
     var btn = document.createElement("button");
     btn.type = "button";

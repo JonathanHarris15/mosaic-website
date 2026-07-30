@@ -22,6 +22,9 @@
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
     <script src="vendor/firebase/firebase-firestore-compat.js"></script>
     <script src="vendor/firebase/firebase-functions-compat.js"></script>
+    <!-- On-device cache for the phone app (no-op on the web). Must load before
+         auth.js, which builds the Firestore handle persistence attaches to. -->
+    <script src="local-cache.js"></script>
     <script src="auth.js"></script>
 
     <style>
@@ -48,7 +51,7 @@
          the desktop page to the "User Profile" screen from the Mosaic
          Mobile design (mobile/screens_user.jsx): a clean top bar, the text
          hero, one identity card (avatar · role · security · sign out), then
-         the staff-management panel for admins. Desktop layout is untouched;
+         the account-management panel for admins. Desktop layout is untouched;
          the page has no --token CSS vars so colours are the theme hexes.
          ============================================================ -->
     <style>
@@ -102,7 +105,7 @@
         <!-- Profile Hero Section -->
         <section id="profile-hero" class="flex flex-col gap-sm border-b border-surface-variant/20 pb-lg">
             <div class="flex items-center gap-3">
-                <span class="px-2 py-0.5 bg-primary/5 text-primary text-[10px] font-label-md uppercase tracking-[0.2em] rounded-sm">Staff Identity</span>
+                <span class="px-2 py-0.5 bg-primary/5 text-primary text-[10px] font-label-md uppercase tracking-[0.2em] rounded-sm">Account Identity</span>
                 <div class="h-px flex-grow bg-surface-variant/30"></div>
             </div>
             <h1 class="font-display-lg text-display-lg text-primary tracking-tight">User Profile</h1>
@@ -218,9 +221,9 @@
                         <div class="p-md bg-surface-container-low/50 border-b border-outline-variant/20">
                             <h2 class="font-headline-md text-headline-md text-primary flex items-center gap-3">
                                 <span class="material-symbols-outlined">shield_person</span>
-                                Staff Access Management
+                                Account Management
                             </h2>
-                            <p class="text-on-surface-variant font-body-md mt-1 text-sm">Provision and audit internal accounts for the Mosaic Service Portal.</p>
+                            <p class="text-on-surface-variant font-body-md mt-1 text-sm">Provision and audit accounts for the Mosaic Service Portal.</p>
                         </div>
                         
                         <div class="p-md">
@@ -265,7 +268,7 @@
                         <div class="p-md bg-surface-container-low/30 border-b border-outline-variant/10 flex justify-between items-center">
                             <h3 class="font-label-md text-on-surface uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
                                 <span class="w-1.5 h-1.5 rounded-full bg-outline-variant"></span>
-                                Authorized Staff Directory
+                                Authorized Account Directory
                             </h3>
                             <span id="user-count" class="text-[10px] font-label-md text-on-surface-variant uppercase tracking-widest"></span>
                         </div>

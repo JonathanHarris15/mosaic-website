@@ -47,6 +47,13 @@
   <script src="vendor/htm-3.1.1.umd.js"></script>
   <script src="vendor/lucide.js"></script>
 
+  <!-- This IS the phone app, which is what local-cache.js keys its on-device
+       cache off. Set before it loads. -->
+  <script>window.MOSAIC_MOBILE_APP = true;</script>
+  <!-- On-device cache + cache-first reads. Must load before data.js, which
+       switches persistence on the moment it builds its Firestore handle. -->
+  <script src="local-cache.js"></script>
+
   <!-- Firebase (vendored) -->
   <script src="vendor/firebase/firebase-app-compat.js"></script>
   <script src="vendor/firebase/firebase-auth-compat.js"></script>

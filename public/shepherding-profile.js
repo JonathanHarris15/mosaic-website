@@ -1,3 +1,10 @@
+// A read whose RESULT DECIDES A WRITE — a merge, a re-point, a batch of
+// deletes. In the phone app ordinary reads are answered from the device
+// (local-cache.js); these must not be. Stale input to a write does not show
+// you old data, it destroys new data: a merge planned from a people list a
+// minute old silently drops whoever was added in that minute. Ignored on the
+// web, where reads were always live.
+var FRESH_READ = { source: 'server' };
 const NOTE_TYPES = ['Elder Check-in', 'Elder Interview', 'Elder Meeting', 'Life Update', 'Prayer Request', 'Other'];
 
 // Shepherding Status value model — single source of truth in shepherding-core.js.
@@ -1102,8 +1109,8 @@ document.addEventListener('alpine:init', () => {
             try {
                 // Delete all notes and activity records first
                 const [notesSnap, activitySnap] = await Promise.all([
-                    db.collection('people').doc(this.personId).collection('shepherding_notes').get(),
-                    db.collection('people').doc(this.personId).collection('shepherding_activity').get(),
+                    db.collection('people').doc(this.personId).collection('shepherding_notes').get(FRESH_READ),
+                    db.collection('people').doc(this.personId).collection('shepherding_activity').get(FRESH_READ),
                 ]);
                 const batch = db.batch();
                 notesSnap.docs.forEach(doc => batch.delete(doc.ref));
@@ -1128,7 +1135,7 @@ document.addEventListener('alpine:init', () => {
                 const snap = await db.collection('people').doc(this.personId)
                     .collection('shepherding_activity')
                     .where('kind', 'in', ['status_change', 'tag_change'])
-                    .get();
+                    .get(FRESH_READ);
 
                 if (snap.empty) {
                     this.showToast('No status or tag history to delete.');

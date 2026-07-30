@@ -108,10 +108,25 @@
                 return new Promise(resolve => {
                     auth.onAuthStateChanged(async user => {
                         if (!user) { this.personId = null; return resolve(null); }
+
+                        // In the phone app your rank was remembered when you
+                        // signed in, so the page starts its real query now
+                        // instead of spending a round trip re-asking Firestore
+                        // something that changes about once a year. The web has
+                        // no cache and takes the trip, exactly as before.
+                        const Cache = window.MosaicLocalCache;
+                        const known = Cache && Cache.readIdentity(user.uid);
+                        if (known && known.permissionLevel) {
+                            this.personId = known.personId || null;
+                            return resolve(known.permissionLevel);
+                        }
+
                         try {
                             const data = await getUserData(user.uid);
                             this.personId = (data && data.personId) || null;
-                            resolve((data && (data.permissionLevel || data.role)) || 'viewer');
+                            const rank = (data && (data.permissionLevel || data.role)) || 'viewer';
+                            if (Cache) Cache.writeIdentity(user.uid, { personId: this.personId, permissionLevel: rank });
+                            resolve(rank);
                         } catch (e) {
                             this.personId = null;
                             resolve('viewer');
@@ -156,7 +171,11 @@
 
             async loadPeople() {
                 try {
-                    const snap = await db.collection('people').get();
+                    // The same `people` read the app warms at launch, so on a
+                    // phone this is answered from the device.
+                    const Cache = window.MosaicLocalCache;
+                    const q = db.collection('people');
+                    const snap = await (Cache ? Cache.read(q) : q.get());
                     this.people = snap.docs.map(d => ({ id: d.id, name: (d.data() || {}).name || '' }));
                 } catch (e) {
                     this.people = [];

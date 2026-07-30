@@ -17,6 +17,13 @@
 // every getter and copies the resulting value — so `selectedType` and
 // `pickerOptions` would be frozen at whatever they returned on page load (null and
 // []), and never recompute. Copying the property descriptors keeps them live.
+// A read whose RESULT DECIDES A WRITE — a merge, a re-point, a batch of
+// deletes. In the phone app ordinary reads are answered from the device
+// (local-cache.js); these must not be. Stale input to a write does not show
+// you old data, it destroys new data: a merge planned from a people list a
+// minute old silently drops whoever was added in that minute. Ignored on the
+// web, where reads were always live.
+var FRESH_READ = { source: 'server' };
 window.withRelationshipsTab = (component) =>
     Object.defineProperties(component, Object.getOwnPropertyDescriptors(window.RelationshipsTab()));
 
@@ -277,7 +284,7 @@ window.RelationshipsTab = () => ({
             let touched = 0;
 
             for (const collection of ['relationships', 'relationship_groups']) {
-                const snap = await db.collection(collection).where('typeId', '==', type.id).get();
+                const snap = await db.collection(collection).where('typeId', '==', type.id).get(FRESH_READ);
                 const records = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 const updates = RelationshipCore.planSharingReprojection(records, type);
                 if (!updates.length) continue;

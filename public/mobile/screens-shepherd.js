@@ -236,9 +236,6 @@
       { icon: "folder-open", title: "Documents", desc: "Elder notes & meeting minutes.", go: function () { props.nav("documents"); } },
       { icon: "users", title: "People", desc: "View & manage member profiles.", go: function () { props.nav("shepherdPeople"); } },
       { icon: "tag", title: "Manage Tags and Relationships", desc: "Create, rename & merge shepherding tags.", go: function () { props.nav("shepherdTags"); } },
-      // Relations Viewer: placeholder card, intentionally not linked yet — the
-      // visual relationship dashboard is still being designed (see PRD).
-      { icon: "waypoints", title: "Relations Viewer", desc: "See how members are connected.", soon: true, go: function () {} },
     ];
 
     var userKnown = props.user !== undefined; // undefined = still resolving auth
@@ -265,13 +262,13 @@
 
           <div style=${{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
             ${navCards.map(function (c) {
-              return html`<button key=${c.title} onClick=${c.go} disabled=${!!c.soon} style=${{ display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", padding: 16, cursor: c.soon ? "default" : "pointer", background: "var(--surface-container-lowest)", border: c.soon ? "1px dashed var(--outline-variant)" : "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", opacity: c.soon ? 0.65 : 1 }}>
+              return html`<button key=${c.title} onClick=${c.go} style=${{ display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", padding: 16, cursor: "pointer", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)" }}>
                 <span style=${{ width: 48, height: 48, borderRadius: "var(--radius-full)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--surface-container)", color: "var(--primary)" }}>${Ic(c.icon, 24)}</span>
                 <div style=${{ flex: 1, minWidth: 0 }}>
-                  <div style=${{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--on-surface)" }}>${c.title}${c.soon ? html`<span style=${{ fontFamily: "var(--font-sans)", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--on-surface-variant)", background: "var(--surface-container)", padding: "2px 7px", borderRadius: "var(--radius-full)" }}>Soon</span>` : null}</div>
+                  <div style=${{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--on-surface)" }}>${c.title}</div>
                   <div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 2 }}>${c.desc}</div>
                 </div>
-                ${c.soon ? null : html`<span style=${{ color: "var(--outline)" }}>${Ic("chevron-right", 18)}</span>`}
+                <span style=${{ color: "var(--outline)" }}>${Ic("chevron-right", 18)}</span>
               </button>`;
             })}
           </div>

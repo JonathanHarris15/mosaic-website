@@ -2,6 +2,13 @@
  * @fileoverview Administrative logic for managing people and their involvement.
  */
 
+// A read whose RESULT DECIDES A WRITE — a merge, a re-point, a batch of
+// deletes. In the phone app ordinary reads are answered from the device
+// (local-cache.js); these must not be. Stale input to a write does not show
+// you old data, it destroys new data: a merge planned from a people list a
+// minute old silently drops whoever was added in that minute. Ignored on the
+// web, where reads were always live.
+var FRESH_READ = { source: 'server' };
 document.addEventListener('alpine:init', () => {
     const db = firebase.firestore();
 
@@ -544,8 +551,8 @@ document.addEventListener('alpine:init', () => {
 
                 // 3. Migrate Sub-collections
                 const migrateSub = async (collName) => {
-                    const sourceSnap = await sourceRef.collection(collName).get();
-                    const targetSnap = await targetRef.collection(collName).get();
+                    const sourceSnap = await sourceRef.collection(collName).get(FRESH_READ);
+                    const targetSnap = await targetRef.collection(collName).get(FRESH_READ);
                     
                     // Two serves of the same Role on the same date are only the
                     // same serve if they were the same Event series — so the key

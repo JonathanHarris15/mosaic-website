@@ -20,6 +20,16 @@
   var auth = firebase.auth();
   var db = firebase.firestore();
 
+  // On-device cache, before any read or write touches this handle — see
+  // local-cache.js for why a plain .get() isn't enough on its own.
+  var Cache = window.MosaicLocalCache;
+  var cacheReady = Cache ? Cache.enable(db) : Promise.resolve(false);
+  if (Cache) Cache.interceptReads(firebase);
+
+  // Every list read on a screen goes through here rather than .get(), so it is
+  // answered from the device when we already have it.
+  function get(query) { return Cache ? Cache.read(query) : query.get(); }
+
   // The drawer's destination list, its role labels and its initials rule live in
   // mobile/destinations.js, because the SHELL's drawer (mobile-shell-header.js,
   // on a desktop page opened with ?shell=mobile) builds the same drawer and
@@ -30,9 +40,19 @@
   // Resolve a display profile from the auth user + /users/{uid}.
   function loadProfile(user) {
     if (!user || user.isAnonymous) return Promise.resolve(null);
-    return db.collection("users").doc(user.uid).get()
+    return get(db.collection("users").doc(user.uid))
       .then(function (doc) { return doc.exists ? doc.data() : {}; })
       .catch(function () { return {}; })
+      // Remembered so the SHELL pages (calendar, roles manager, profile) can
+      // start their real query immediately instead of each re-asking who you
+      // are and waiting a round trip for an answer that never changes.
+      .then(function (data) {
+        if (Cache) Cache.writeIdentity(user.uid, {
+          personId: data.personId || null,
+          permissionLevel: data.permissionLevel || data.role || "viewer",
+        });
+        return data;
+      })
       .then(function (data) {
         var name = data.name || data.displayName || user.displayName || (user.email ? user.email.split("@")[0] : "Friend");
         var permissionLevel = data.permissionLevel || data.role || "viewer";
@@ -56,16 +76,85 @@
   }
 
   function signIn(email, password) { return auth.signInWithEmailAndPassword(email, password); }
-  function signOut() { return auth.signOut(); }
+  // Signing out forgets who you were, or the next person to use this phone
+  // starts their first page holding your rank.
+  function signOut() {
+    if (Cache) Cache.clearIdentity();
+    return auth.signOut();
+  }
 
   var DESTINATIONS = Destinations.DESTINATIONS;
   var canSee = Destinations.canSee;
 
+  // ── Remembering what a screen just loaded ────────────────────
+  //
+  // Home fetches the WHOLE services collection to work out the next Sunday,
+  // and did it again every single time you came back to Home — including
+  // when you had been there ten seconds earlier and nothing had changed.
+  //
+  // This is NOT the Firestore cache (local-cache.js, off — it hangs the
+  // WebView). It is a plain object in this document plus a copy in
+  // sessionStorage, so it involves no Firestore machinery at all and cannot
+  // bring that problem back. Two levels because there are two ways back to
+  // Home: a native screen (Hymn Directory, Shepherd…) keeps this document
+  // alive and hits the object; a shell page (Calendar, Roles Manager) is a
+  // whole new document, and only sessionStorage survives that.
+  //
+  // Deliberately SHORT. This exists to make "I was just there" instant, not
+  // to hold data — anything older than a minute is fetched again.
+  var TTL_MS = 60 * 1000;
+  var memo = {};
+
+  function sessionGet(key) {
+    try {
+      var raw = window.sessionStorage.getItem("mosaicMemo:" + key);
+      if (!raw) return null;
+      var saved = JSON.parse(raw);
+      if (!saved || (Date.now() - saved.at) > TTL_MS) return null;
+      return saved.value;
+    } catch (e) { return null; }
+  }
+
+  function sessionPut(key, value) {
+    try {
+      window.sessionStorage.setItem("mosaicMemo:" + key, JSON.stringify({ at: Date.now(), value: value }));
+    } catch (e) {}   // quota, private mode — the memory half still works
+  }
+
+  // The promise is what's stored, not the result, so two screens asking at
+  // once share one fetch rather than racing two.
+  function remembered(key, load) {
+    if (memo[key] && (Date.now() - memo[key].at) <= TTL_MS) return memo[key].promise;
+
+    var warm = sessionGet(key);
+    if (warm) {
+      memo[key] = { at: Date.now(), promise: Promise.resolve(warm) };
+      return memo[key].promise;
+    }
+
+    var p = load().then(function (value) {
+      sessionPut(key, value);
+      return value;
+    }).catch(function (e) {
+      delete memo[key];   // a failure must not be remembered as an answer
+      throw e;
+    });
+    memo[key] = { at: Date.now(), promise: p };
+    return p;
+  }
+
+  // Anything that CHANGES one of these has to say so, or you would come back
+  // to Home and read your own edit as it was before you made it.
+  function forget(key) {
+    delete memo[key];
+    try { window.sessionStorage.removeItem("mosaicMemo:" + key); } catch (e) {}
+  }
+
   // ── Collection loaders (defensive: tolerate missing fields) ──
   function lc(v) { return String(v == null ? "" : v).toLowerCase(); }
 
-  function getHymns() {
-    return db.collection("hymns").get().then(function (snap) {
+  function loadHymns() {
+    return get(db.collection("hymns")).then(function (snap) {
       var out = [];
       snap.forEach(function (doc) {
         var d = doc.data() || {};
@@ -92,9 +181,10 @@
       return out;
     });
   }
+  function getHymns() { return remembered("hymns", loadHymns); }
 
   function getPeople() {
-    return db.collection("people").get().then(function (snap) {
+    return get(db.collection("people")).then(function (snap) {
       var out = [];
       snap.forEach(function (doc) {
         var d = doc.data() || {};
@@ -126,8 +216,8 @@
     });
   }
 
-  function getServices() {
-    return db.collection("services").get().then(function (snap) {
+  function loadServices() {
+    return get(db.collection("services")).then(function (snap) {
       var out = [];
       snap.forEach(function (doc) {
         var d = doc.data() || {};
@@ -147,6 +237,9 @@
       return out;
     });
   }
+  // Home asks for this on every visit; `remembered` is why that stopped
+  // meaning "fetch every service the church has ever had", every time.
+  function getServices() { return remembered("services", loadServices); }
 
   // ── Shepherding (native Shepherd Dashboard) ──────────────────
   // Reads/writes the same collections as the desktop page
@@ -157,19 +250,19 @@
 
   function getShepherdingReminders() {
     var now = firebase.firestore.Timestamp.now();
-    return db.collection("shepherding_reminders")
-      .where("dueDatetime", ">=", now).orderBy("dueDatetime", "asc").get()
+    return get(db.collection("shepherding_reminders")
+      .where("dueDatetime", ">=", now).orderBy("dueDatetime", "asc"))
       .then(mapDocs).catch(function () { return []; });
   }
   function getShepherdingViews() {
-    return db.collection("shepherding_views").orderBy("createdAt", "asc").get()
+    return get(db.collection("shepherding_views").orderBy("createdAt", "asc"))
       .then(mapDocs).catch(function () { return []; });
   }
   function getShepherdingPeople() {
-    return db.collection("people").get().then(mapDocs).catch(function () { return []; });
+    return get(db.collection("people")).then(mapDocs).catch(function () { return []; });
   }
   function getShepherdingTags() {
-    return db.collection("people_tags").orderBy("name", "asc").get()
+    return get(db.collection("people_tags").orderBy("name", "asc"))
       .then(function (snap) {
         return snap.docs.map(function (d) {
           var t = d.data() || {};
@@ -181,7 +274,7 @@
   // activity, grouped by person, derived via ShepherdingCore. Only needed when a
   // view uses a Hold-Duration filter — call lazily.
   function getShepherdingTagHolds(people) {
-    return db.collectionGroup("shepherding_activity").where("kind", "==", "tag_change").get()
+    return get(db.collectionGroup("shepherding_activity").where("kind", "==", "tag_change"))
       .then(function (snap) {
         var byPerson = {};
         snap.docs.forEach(function (doc) {
@@ -227,7 +320,7 @@
   // Latest shepherding-note timestamp per person (one collection-group pass),
   // powering the People list's "Needs Attention" sort + Last Note column.
   function getShepherdingLastNoteDates() {
-    return db.collectionGroup("shepherding_notes").orderBy("createdAt", "desc").get()
+    return get(db.collectionGroup("shepherding_notes").orderBy("createdAt", "desc"))
       .then(function (snap) {
         var latest = {};
         snap.docs.forEach(function (doc) {
@@ -438,12 +531,12 @@
   // Relationships (ADR-0012, MS-89) — the elder-only edge graph and its reusable
   // types. Small collections; fetched whole for RelationshipCore to render.
   function getRelationships() {
-    return db.collection("relationships").get()
+    return get(db.collection("relationships"))
       .then(function (snap) { return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); })
       .catch(function () { return []; });
   }
   function getRelationshipTypes() {
-    return db.collection("relationship_types").get()
+    return get(db.collection("relationship_types"))
       .then(function (snap) { return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); })
       .catch(function () { return []; });
   }
@@ -454,7 +547,7 @@
   // RelationshipCore / RelationshipGroupCore — this layer only reads and writes.
 
   function getRelationshipGroups() {
-    return db.collection("relationship_groups").get()
+    return get(db.collection("relationship_groups"))
       .then(function (snap) {
         return snap.docs.map(function (d) {
           return Object.assign({ id: d.id, leaderId: null, memberIds: [] }, d.data());
@@ -851,9 +944,36 @@
     });
   }
 
+  // ── Warming the cache at launch ──────────────────────────────
+  // The point of the whole exercise: spend the wait ONCE, while the app is
+  // starting and you already expect to wait, rather than a slice of it on
+  // every screen you open afterwards.
+  //
+  // What's here is what a first tap actually hits — people, services, hymns —
+  // and no more. Warming everything would trade the per-screen wait for a
+  // launch that never ends, and the shepherding collections are both large
+  // and elder-only, so they stay lazy.
+  //
+  // Never rejects and is never awaited by the UI. A cold cache costs you the
+  // old behaviour on one screen, which is not worth a failed launch.
+  var warmed = false;
+  function warmCache(user) {
+    if (warmed || !Cache || !Cache.isMobile() || !user) return Promise.resolve();
+    warmed = true;
+    return cacheReady.then(function (on) {
+      if (!on) return;
+      return Promise.all([
+        getPeople().catch(function () {}),
+        getServices().catch(function () {}),
+        getHymns().catch(function () {}),
+      ]);
+    }).catch(function () {});
+  }
+
   M.data = {
     auth: auth, db: db,
-    onUser: onUser, loadProfile: loadProfile,
+    onUser: onUser, loadProfile: loadProfile, warmCache: warmCache,
+    forget: forget,
     signIn: signIn, signOut: signOut,
     DESTINATIONS: DESTINATIONS, canSee: canSee,
     getHymns: getHymns, getPeople: getPeople, getServices: getServices,

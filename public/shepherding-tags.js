@@ -11,6 +11,13 @@
 // (ADR-0011), so a Rename touches only the name field and a Merge re-points
 // carriers and their Tag Changes onto the survivor.
 
+// A read whose RESULT DECIDES A WRITE — a merge, a re-point, a batch of
+// deletes. In the phone app ordinary reads are answered from the device
+// (local-cache.js); these must not be. Stale input to a write does not show
+// you old data, it destroys new data: a merge planned from a people list a
+// minute old silently drops whoever was added in that minute. Ignored on the
+// web, where reads were always live.
+var FRESH_READ = { source: 'server' };
 document.addEventListener('alpine:init', () => {
     // withRelationshipsTab, not object spread: the Relationships tab exposes getters
     // (selectedType, pickerOptions) and spreading would freeze them at their
@@ -183,13 +190,13 @@ document.addEventListener('alpine:init', () => {
             try {
                 const carriers = await db.collection('people')
                     .where('tags', 'array-contains', sourceId)
-                    .get();
+                    .get(FRESH_READ);
                 // Gather each carrier's Tag Changes for the merged tag so they can be
                 // re-pointed at the survivor (which then inherits the earlier hold).
                 const people = await Promise.all(carriers.docs.map(async doc => {
                     const actSnap = await doc.ref.collection('shepherding_activity')
                         .where('tagId', '==', sourceId)
-                        .get();
+                        .get(FRESH_READ);
                     return {
                         id: doc.id,
                         tags: doc.data().tags || [],
@@ -253,7 +260,7 @@ document.addEventListener('alpine:init', () => {
             try {
                 const peopleWithTag = await db.collection('people')
                     .where('tags', 'array-contains', id)
-                    .get();
+                    .get(FRESH_READ);
                 const otherHidePeopleTagIds = this.shepherdingTags
                     .filter(t => t.id !== id && t.hidePeople)
                     .map(t => t.id);
@@ -290,7 +297,7 @@ document.addEventListener('alpine:init', () => {
                 if (field === 'hidePeople') {
                     const peopleWithTag = await db.collection('people')
                         .where('tags', 'array-contains', id)
-                        .get();
+                        .get(FRESH_READ);
                     if (peopleWithTag.size > 0) {
                         const otherHidePeopleTagIds = this.shepherdingTags
                             .filter(t => t.id !== id && t.hidePeople)

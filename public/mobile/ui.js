@@ -15,8 +15,13 @@
     var serif = props.serif !== false;
     var onLeft = props.onBack || props.onMenu;
     return html`
-      <header style=${{ flexShrink: 0, paddingTop: "calc(env(safe-area-inset-top, 20px) + 10px)", background: "var(--surface-container-lowest)", borderBottom: "1px solid var(--outline-variant)" }}>
-        <div style=${{ display: "flex", alignItems: "center", gap: 6, height: 52, padding: "0 8px 0 6px" }}>
+      <!-- The +4 and the 46px row are the whole header's height budget. They sit
+           as close under the safe-area inset as they can without tucking the
+           title beneath the island — the inset itself is never reduced.
+           mobile-shell-header.js draws this same bar for the desktop pages the
+           phone opens, and carries the same two numbers. -->
+      <header style=${{ flexShrink: 0, paddingTop: "calc(env(safe-area-inset-top, 20px) + 4px)", background: "var(--surface-container-lowest)", borderBottom: "1px solid var(--outline-variant)" }}>
+        <div style=${{ display: "flex", alignItems: "center", gap: 6, height: 46, padding: "0 8px 0 6px" }}>
           <button onClick=${onLeft} aria-label=${props.onBack ? "Back" : "Menu"}
             style=${{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-surface)", cursor: "pointer", borderRadius: 10 }}>
             ${Ic(props.onBack ? "chevron-left" : "menu", 24)}
@@ -139,7 +144,8 @@
       <label style=${{ display: "block" }}>
         ${props.label ? html`<span style=${{ display: "block", fontFamily: "var(--font-sans)", fontSize: 11.5, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--on-surface-variant)", marginBottom: 6 }}>${props.label}</span>` : null}
         <input type=${props.type || "text"} placeholder=${props.placeholder} value=${props.value} defaultValue=${props.defaultValue} onInput=${props.onInput}
-          style=${{ width: "100%", height: 48, padding: "0 14px", borderRadius: "var(--radius)", border: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)", fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--on-surface)", outline: "none" }} />
+          onKeyDown=${props.onKeyDown} aria-invalid=${props.invalid ? "true" : null}
+          style=${{ width: "100%", height: 48, padding: "0 14px", borderRadius: "var(--radius)", border: props.invalid ? "1.5px solid var(--error)" : "1px solid var(--outline-variant)", background: props.invalid ? "var(--error-container)" : "var(--surface-container-lowest)", fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--on-surface)", outline: "none" }} />
       </label>`;
   }
 

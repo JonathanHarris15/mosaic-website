@@ -855,19 +855,22 @@ test('the phone never draws two headers, or two back arrows', () => {
     assert.match(html, /html\.shell-mobile \.rm-title-block\s*{\s*display:\s*none/,
         'the page still prints its own title under the shell\'s');
 
-    // The editor's bar keeps the Role's name, its count and delete — the shell
-    // header can say none of those — but not a second arrow, and it is not
-    // rendered rather than hidden (see the next test for why that matters).
-    const back = html.slice(0, html.indexOf('Back to the roles list'));
-    assert.match(back.slice(-400), /<template x-if="!inShell">/,
-        'the editor still draws its own back arrow beside the shell\'s');
+    // The page is a DRAWER DESTINATION, so its header carries a hamburger like
+    // every other one. It used to carry a back arrow that asked the page what
+    // back meant, and the editor skipped drawing its own as a duplicate.
+    assert.match(html, /MOBILE_HEADER\s*=\s*{[^}]*menu:\s*true/,
+        'the header is back to an arrow, so this page is not in the drawer');
+    assert.match(html, /MOBILE_HEADER\s*=\s*{[^}]*route:\s*'rolesManager'/,
+        'the drawer cannot show which row you are on without the route');
 
-    // Which makes the shell's arrow the ONLY way out of an open Role, so it has
-    // to be the page that decides what it does.
-    assert.match(html, /MOBILE_HEADER\s*=\s*{[^}]*onBack:\s*true/,
-        'the shell header takes back into its own hands');
-    assert.match(rolesManagerJs(), /mobile-header:back/,
-        'nothing on the page ever answers the shell\'s back arrow');
+    // ⚠ WHICH MAKES THE EDITOR'S OWN ARROW THE ONLY WAY OUT OF AN OPEN ROLE.
+    // A hamburger opens the drawer; it does not close a Role. So this arrow
+    // must render in the shell too — gating it behind !inShell, which is what
+    // it did while the header had an arrow to borrow, now strands you in the
+    // editor with the list unreachable.
+    const back = html.slice(0, html.indexOf('Back to the roles list'));
+    assert.doesNotMatch(back.slice(-400), /<template x-if="!inShell">/,
+        'an open Role has no way back to the list on a phone');
 });
 
 test('the editor bar clears the shell header instead of hiding behind it', () => {
@@ -921,7 +924,11 @@ test('being refused never throws you out of the app', () => {
     assert.doesNotMatch(js, /href = 'index\.html'/, 'the permission gate still leaves the app');
 });
 
-test('the shell\'s one back arrow closes the Role first, and leaves the page second', async () => {
+// The header on this page is a hamburger now, so nothing fires this today.
+// The handler is kept for any shell header that DOES draw a back arrow, and
+// this holds it to meaning what the page means by back rather than leaving
+// mid-edit.
+test('a shell back arrow, where one exists, closes the Role first and leaves the page second', async () => {
     const handlers = {};
     const realDocument = global.document;
     global.MOSAIC_SHELL = 'mobile';
@@ -1032,9 +1039,12 @@ test('a phone control that must not be pressed is not rendered, not hidden', () 
             hook + ' is a control hidden by CSS — hidden is not the same as gone');
     });
 
-    // Both gates read the same fact, and it is the page's own.
-    assert.equal((html.match(/x-if="!inShell"/g) || []).length, 2,
-        'the row\'s delete and the editor\'s back arrow are not both gated');
+    // One gate now: the row's delete. The editor's back arrow used to be the
+    // second, and stopped being gated when this page joined the drawer — a
+    // hamburger cannot close a Role, so that arrow is the only way out and
+    // always renders.
+    assert.equal((html.match(/x-if="!inShell"/g) || []).length, 1,
+        'the row\'s delete is no longer gated, or the back arrow has been gated again');
     const page = window.RolesManager();
     global.MOSAIC_SHELL = 'mobile';
     try {

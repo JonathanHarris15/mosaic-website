@@ -60,17 +60,11 @@
     });
     return parts.length ? "?" + parts.join("&") : "";
   }
-  function greeting() {
-    var h = new Date().getHours();
-    if (h >= 5 && h < 12) return "Good morning";
-    if (h >= 12 && h < 17) return "Good afternoon";
-    return "Good evening";
-  }
 
   // ── Signed in, or a guest on purpose ─────────────────────
   //
   // The app used to open on the home screen whoever you were. Signed out, that
-  // meant every tile, the greeting, and behind them every shell page loading as
+  // meant every tile, and behind them every shell page loading as
   // a stranger — a Calendar with the Sunday Service on it and nothing else,
   // because a Sunday is fetched by id regardless of who is asking while every
   // other Event is filtered by what your rank may see. Nothing said so. You
@@ -92,14 +86,42 @@
 
 
   // ── Login ────────────────────────────────────────────────
-  function LoginScreen(props) {
-    var emailS = useState(""), pwS = useState(""), errS = useState(""), busyS = useState(false);
-    function submit() {
-      busyS[1](true); errS[1]("");
-      data.signIn(emailS[0], pwS[0])
-        .then(function () { busyS[1](false); props.nav("home"); })
-        .catch(function (err) { busyS[1](false); errS[1](err && err.message ? err.message : "Sign in failed"); });
+  // Firebase deliberately doesn't say which half was wrong (telling you an email
+  // exists is an account-enumeration leak), so neither do we — one sentence for
+  // the whole "that pair isn't right" family, and both fields go red. `fields`
+  // is what turns them red, so a network failure says its piece without blaming
+  // what you typed.
+  function signInMessage(err) {
+    switch (err && err.code) {
+      case "auth/invalid-email": return { text: "That doesn't look like an email address.", fields: true };
+      case "auth/user-disabled": return { text: "That account has been disabled. Ask an admin for help.", fields: false };
+      case "auth/too-many-requests": return { text: "Too many attempts. Wait a moment and try again.", fields: false };
+      case "auth/network-request-failed": return { text: "Can't reach Mosaic. Check your connection and try again.", fields: false };
+      case "auth/invalid-credential":
+      case "auth/wrong-password":
+      case "auth/user-not-found":
+        return { text: "That email and password don't match an account.", fields: true };
+      default: return { text: "Sign in failed. Please try again.", fields: false };
     }
+  }
+
+  function LoginScreen(props) {
+    var emailS = useState(""), pwS = useState(""), errS = useState(null), busyS = useState(false);
+    function submit() {
+      if (busyS[0]) return;
+      if (!emailS[0].trim() || !pwS[0]) { errS[1]({ text: "Enter your email and password.", fields: true }); return; }
+      busyS[1](true); errS[1](null);
+      data.signIn(emailS[0].trim(), pwS[0])
+        .then(function () { busyS[1](false); props.nav("home"); })
+        .catch(function (err) { busyS[1](false); errS[1](signInMessage(err)); });
+    }
+    // Typing is the person answering the complaint — clear it so the red doesn't
+    // outlive the mistake.
+    function onEdit(setter) {
+      return function (ev) { if (errS[0]) errS[1](null); setter(ev.target.value); };
+    }
+    function onEnter(ev) { if (ev.key === "Enter") submit(); }
+    var err = errS[0], bad = !!(err && err.fields);
     return html`
       <div style=${{ height: "100%", background: "var(--background)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
         <div style=${{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "80px 28px 40px", position: "relative" }}>
@@ -111,23 +133,23 @@
             <div style=${{ fontFamily: "var(--font-serif)", fontSize: 15, fontStyle: "italic", color: "var(--on-surface-variant)", marginTop: 2 }}>Services · College Station</div>
           </div>
           <div style=${{ display: "flex", flexDirection: "column", gap: 16, position: "relative" }}>
-            <${Input} label="Email Address" type="email" placeholder="you@example.com" value=${emailS[0]} onInput=${function (ev) { emailS[1](ev.target.value); }} />
-            <${Input} label="Password" type="password" placeholder="••••••••" value=${pwS[0]} onInput=${function (ev) { pwS[1](ev.target.value); }} />
-            ${errS[0] ? html`<div style=${{ color: "var(--error)", fontFamily: "var(--font-sans)", fontSize: 13 }}>${errS[0]}</div>` : null}
+            <${Input} label="Email Address" type="email" placeholder="you@example.com" value=${emailS[0]} invalid=${bad} onKeyDown=${onEnter} onInput=${onEdit(emailS[1])} />
+            <${Input} label="Password" type="password" placeholder="••••••••" value=${pwS[0]} invalid=${bad} onKeyDown=${onEnter} onInput=${onEdit(pwS[1])} />
+            ${err ? html`<div role="alert" style=${{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: "var(--radius)", background: "var(--error-container)", color: "var(--on-error-container)", fontFamily: "var(--font-sans)", fontSize: 13, lineHeight: 1.35 }}>
+              <span style=${{ display: "flex", flexShrink: 0, color: "var(--error)" }}>${Ic("circle-alert", 16)}</span>${err.text}
+            </div>` : null}
             <div style=${{ marginTop: 4 }}>
               <${Button} variant="primary" size="lg" style=${{ width: "100%" }} icon=${Ic("log-in", 18)} onClick=${submit}>${busyS[0] ? "Signing in…" : "Sign In"}<//>
             </div>
             <button onClick=${function () { setGuest(true); props.nav("home"); }} style=${{ background: "none", border: "none", color: "var(--secondary)", fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 600, letterSpacing: "0.04em", cursor: "pointer", marginTop: 2 }}>Continue as guest</button>
           </div>
         </div>
-        <div style=${{ textAlign: "center", padding: "0 0 34px", fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)" }}>A very present help in trouble.</div>
       </div>`;
   }
 
   // ── Home ─────────────────────────────────────────────────
   function HomeScreen(props) {
     var user = props.user;
-    var first = (user && user.first) || "friend";
     var svcState = M.useAsync(data.getNextService, []);
     var svc = svcState.data;
     // The Home card grid mirrors the drawer's top-level destinations (permission-gated).
@@ -139,33 +161,26 @@
       { icon: "users", label: "Member Directory", route: "people" },
       { icon: "shield", label: "Shepherd", route: "shepherd", permissionLevels: ["elder", "super_admin"] },
       { icon: "settings-2", label: "Admin", route: "admin", permissionLevels: ["admin", "super_admin"] },
-      // Not a drawer destination, on purpose: on the web the Roles Manager is a
-      // DASHBOARD CARD, not navigation, and this grid is the phone's dashboard.
-      // Same gate as that card (MS-120) — editor and above.
+      // A drawer destination now as well as a tile here (destinations.js) —
+      // on a phone the drawer IS the navigation, and reachable only from Home
+      // meant going home to reach it. Same gate as the web's card, MS-120.
       { icon: "hand-heart", label: "Roles Manager", route: "rolesManager", permissionLevels: ["editor", "elder", "admin", "super_admin"] },
     ].filter(function (t) { return data.canSee(t, user); });
     return html`
       <${Screen}>
         <${TopBar} title="Mosaic Services" onMenu=${props.openMenu} right=${html`<${BarAction} icon="user-round" label="Profile" onClick=${function () { props.nav("profile"); }} />`} />
-        <${Body} style=${{ padding: "18px 16px calc(40px + env(safe-area-inset-bottom, 0px))" }}>
-          <div style=${{ position: "relative", overflow: "hidden", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: "20px 18px", marginBottom: 18 }}>
-            <div style=${{ position: "absolute", right: -36, top: -48, width: 130, height: 130, border: "1px solid var(--outline-variant)", borderRadius: "50%", opacity: 0.4 }}></div>
-            <${Overline}>${new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}<//>
-            <div style=${{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 600, color: "var(--primary)", letterSpacing: "0.02em", marginTop: 6 }}>${greeting()}, ${first}</div>
-            <div style=${{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 13 }}>${Ic("clock", 15)}<span>Welcome back to Mosaic Services</span></div>
-          </div>
-
-          <div style=${{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+        <${Body} style=${{ padding: "12px 16px calc(32px + env(safe-area-inset-bottom, 0px))" }}>
+          <div style=${{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
             ${tiles.map(function (t) {
               return html`
-                <button key=${t.route} onClick=${function () { props.nav(t.route); }} style=${{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: "22px 12px", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", cursor: "pointer" }}>
-                  <${Medallion} icon=${t.icon} size=${52} />
-                  <span style=${{ fontFamily: "var(--font-serif)", fontSize: 15.5, fontWeight: 600, color: "var(--on-surface)", textAlign: "center", lineHeight: 1.2 }}>${t.label}</span>
+                <button key=${t.route} onClick=${function () { props.nav(t.route); }} style=${{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "16px 10px", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", cursor: "pointer" }}>
+                  <${Medallion} icon=${t.icon} size=${46} />
+                  <span style=${{ fontFamily: "var(--font-serif)", fontSize: 15, fontWeight: 600, color: "var(--on-surface)", textAlign: "center", lineHeight: 1.2 }}>${t.label}</span>
                 </button>`;
             })}
           </div>
 
-          <${Overline} style=${{ marginBottom: 10, paddingLeft: 2 }}>Sunday at a Glance<//>
+          <${Overline} style=${{ marginBottom: 8, paddingLeft: 2 }}>Sunday at a Glance<//>
           <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: 18 }}>
             ${svcState.loading ? html`<div style=${{ color: "var(--on-surface-variant)", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14 }}>Loading service…</div>`
               : svc ? html`
@@ -193,7 +208,7 @@
   }
 
   // Profile is shell-adapted (see SHELL_PAGES below): the real profile.html
-  // (password change, staff management) runs inside the WebView with
+  // (password change, account management) runs inside the WebView with
   // ?shell=mobile so the mobile app inherits every feature. The Admin Dashboard
   // is now a native screen (screens-admin.js, route "admin").
 
@@ -216,13 +231,20 @@
   var SHELL_PAGES = window.MosaicDestinations.SHELL_PAGES;
 
   function nav(route, params) {
+    // Opening an editor is the last moment we know the thing being edited is
+    // about to change. What data.js remembered about it has to go now — the
+    // editor is a whole new document, so nothing here runs again to do it
+    // afterwards, and coming back to Home would show the version you just
+    // finished editing away.
     if (route === "serviceBuilder") {
+      if (data.forget) data.forget("services");
       var d = (params && params.date) || "";
       if (!d) { M.navParams = {}; location.hash = "#/calendar"; return; }
       window.location.href = "service-builder.html?date=" + encodeURIComponent(d) + "&shell=mobile";
       return;
     }
     if (route === "hymnManager") {
+      if (data.forget) data.forget("hymns");
       // The hymn manager is the real desktop page (manager.html) opened in-shell:
       // ?edit=<id> from a hymn's "Manage Hymn" button, ?new=1 from the directory's
       // add-a-hymn FAB. No separate mobile "manager" list — the directory is the list.
@@ -265,6 +287,9 @@
 
     if (!render) return null;
     var user = props.user || {};
+    // The head is your row: tapping it opens your profile. Only when there is a
+    // you — signed out it stays a plain label, not a button to nowhere.
+    var signedIn = !!props.user;
     return html`
       <${M.Fragment}>
         <div onClick=${props.onClose} style=${{ position: "absolute", inset: 0, zIndex: 40, background: "rgba(14,28,54,0.42)", backdropFilter: "blur(1.5px)", opacity: vis ? 1 : 0, transition: "opacity 0.28s ease" }}></div>
@@ -277,13 +302,16 @@
                 ${Ic("menu", 24)}
               </button>
             </div>
-            <div style=${{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, position: "relative" }}>
+            <${signedIn ? "button" : "div"} onClick=${signedIn ? function () { props.onNavigate("profile"); } : null}
+              aria-label=${signedIn ? "Open your profile" : null}
+              style=${{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, position: "relative", width: "100%", padding: 0, border: "none", background: "transparent", textAlign: "left", cursor: signedIn ? "pointer" : "default" }}>
               <${Avatar} name=${user.name || "Guest"} size=${36} />
-              <div style=${{ minWidth: 0 }}>
+              <div style=${{ minWidth: 0, flex: 1 }}>
                 <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--on-primary)" }}>${user.name || "Guest"}</div>
                 <div style=${{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--primary-fixed-dim)" }}>${user.roleLabel || "Not signed in"}</div>
               </div>
-            </div>
+              ${signedIn ? html`<span style=${{ display: "flex", color: "var(--primary-fixed-dim)" }}>${Ic("chevron-right", 18)}</span>` : null}
+            <//>
           </div>
           <div style=${{ flex: 1, overflowY: "auto", padding: "10px 12px" }}>
             ${data.DESTINATIONS.filter(function (d) { return data.canSee(d, user); }).map(function (d) {
@@ -309,7 +337,17 @@
     var menuState = useState(false);
     var userState = useState(undefined); // undefined = loading, null = signed out
 
-    useEffect(function () { return data.onUser(function (u) { userState[1](u); if (u) setGuest(false); }); }, []);
+    // Signing in is the moment to fill the on-device cache: you are already
+    // watching the app start, and every screen after this reads from it rather
+    // than the network. Deliberately not awaited — it warms behind the home
+    // screen instead of holding it back.
+    useEffect(function () {
+      return data.onUser(function (u) {
+        userState[1](u);
+        if (u) setGuest(false);
+        if (u && data.warmCache) data.warmCache(u);
+      });
+    }, []);
 
     // `undefined` is still loading; only `null` is a decision. Redirecting on
     // the loading value would bounce a signed-in person off their own home

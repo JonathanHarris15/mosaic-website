@@ -47,36 +47,23 @@
         <div class="h-10"></div> <!-- Placeholder to prevent layout shift -->
     </header>
     <main class="flex-grow max-w-7xl w-full mx-auto px-margin pb-md flex flex-col gap-margin pt-base md:min-h-0 md:overflow-hidden">
-        <!-- Logo -->
-        <div class="w-full flex justify-center py-sm shrink-0">
-            <img alt="Mosaic Liturgy Logo" class="h-24 w-24 object-contain"
+        <!-- Logo. Smaller and tight to the top: this is a wordless mark you have
+             already recognised by the time the page paints, and every pixel it
+             holds is one the cards below it do not get. -->
+        <div class="w-full flex justify-center shrink-0">
+            <img alt="Mosaic Liturgy Logo" class="h-16 w-16 object-contain"
                 src="assets/mosaic-logo.png" />
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-12 md:grid-rows-1 gap-margin flex-grow min-h-0">
             <!-- Left Column -->
             <div class="md:col-span-8 flex flex-col gap-margin md:min-h-0 md:overflow-hidden">
-                <div
-                    class="bg-surface-container-lowest rounded-xl border border-outline-variant py-sm px-lg flex flex-row items-center justify-between gap-md relative overflow-hidden shrink-0">
-                    <div class="relative z-10">
-                        <h1 class="font-display-lg text-headline-lg text-primary mb-0" id="greeting">Good Morning</h1>
-                    </div>
-                    <p class="font-body-md text-body-md text-on-surface-variant hidden items-center gap-xs relative z-10" id="upcoming-box">
-                        <span class="material-symbols-outlined text-[20px]">schedule</span>
-                        <span id="upcoming-text"></span>
-                    </p>
-
-                    <div
-                        class="absolute -right-12 -top-16 w-40 h-40 border-[1px] border-outline-variant rounded-full opacity-20 pointer-events-none">
-                    </div>
-                </div>
-
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-md content-start md:flex-1 md:min-h-0 md:overflow-y-auto md:pr-1 md:pb-1" id="nav-cards-grid">
                     <!-- Hymn Directory Button -->
                     <a href="hymn-directory.html" data-card-key="hymn-directory"
-                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
+                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
                         <div
-                            class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
+                            class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
                             <span class="material-symbols-outlined text-[32px] text-primary"
                                 style='font-variation-settings: "FILL" 1;'>menu_book</span>
                         </div>
@@ -88,9 +75,9 @@
                     <!-- Calendar — every Event the viewer is allowed to see (MS-99).
                          Distinct from Services, which shows Sundays only. -->
                     <a href="calendar.html" data-card-key="calendar"
-                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
+                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
                         <div
-                            class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
+                            class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
                             <span class="material-symbols-outlined text-[32px] text-primary"
                                 style='font-variation-settings: "FILL" 1;'>event</span>
                         </div>
@@ -103,9 +90,9 @@
                          word. The data-card-key is the STORED key behind every user's
                          saved dashboard arrangement, so it keeps its old value. -->
                     <a href="service-calendar.html" data-card-key="service-calendar"
-                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
+                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
                         <div
-                            class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
+                            class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
                             <!-- A church with a cross, not a calendar. Services and
                                  the Calendar stopped competing for the same word in
                                  MS-99; they should not compete for the same glyph
@@ -120,9 +107,9 @@
 
                     <!-- Service Analytics -->
                     <a href="analytics.html" data-card-key="service-analytics"
-                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
+                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
                         <div
-                            class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
+                            class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
                             <span class="material-symbols-outlined text-[32px] text-primary"
                                 style='font-variation-settings: "FILL" 1;'>monitoring</span>
                         </div>
@@ -146,13 +133,6 @@
         </div>
     </main>
     <script>
-        function getGreeting() {
-            const hour = new Date().getHours();
-            if (hour >= 5 && hour < 12) return "Good morning";
-            if (hour >= 12 && hour < 17) return "Good afternoon";
-            if (hour >= 17 && hour < 21) return "Good evening";
-            return "Good night";
-        }
 
         // ---- Dashboard card reordering -------------------------------------
         // Each feature card carries a stable data-card-key. The user's preferred
@@ -223,22 +203,19 @@
         }
 
         async function updateDashboard() {
-            const greetingEl = document.getElementById('greeting');
-            const upcomingBox = document.getElementById('upcoming-box');
-            const upcomingText = document.getElementById('upcoming-text');
             const glanceContent = document.getElementById('glance-content');
 
-            if (!greetingEl || !upcomingBox || !upcomingText || !glanceContent) {
+            // This retries forever if it does not find what it is looking for,
+            // so it must only ever look for things that are still on the page —
+            // a stale id here doesn't warn, it silently stops the whole
+            // dashboard from ever drawing its permission-gated cards.
+            if (!glanceContent) {
                 console.warn("Dashboard elements not found, retrying...");
                 setTimeout(updateDashboard, 100);
                 return;
             }
-            
-            // 1. Set Time-based Greeting
-            const baseGreeting = getGreeting();
-            greetingEl.textContent = baseGreeting;
 
-            // 2. Handle User Auth and Role
+            // 1. Handle User Auth and Role
             const user = await new Promise(resolve => {
                 const unsubscribe = auth.onAuthStateChanged(u => {
                     unsubscribe();
@@ -275,9 +252,7 @@
                 } catch (e) {
                     console.error("Error fetching user data:", e);
                 }
-                greetingEl.textContent = `${baseGreeting}, ${name}`;
-
-                const cardClass = 'bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300';
+                const cardClass = 'bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300';
                 const grid = document.getElementById('nav-cards-grid');
 
                 // People's Directory — members and above (members get a read-only view)
@@ -289,7 +264,7 @@
                     dirCard.href = 'peoples-page.html';
                     dirCard.className = cardClass;
                     dirCard.innerHTML = `
-                        <div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
+                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
                             <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>groups</span>
                         </div>
                         <h2 class="font-headline-md text-headline-md text-on-surface mb-base">People's Directory</h2>
@@ -308,7 +283,7 @@
                     card.href = 'manager.html';
                     card.className = cardClass;
                     card.innerHTML = `
-                        <div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
+                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
                             <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>library_music</span>
                         </div>
                         <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Hymn Manager</h2>
@@ -329,7 +304,7 @@
                     card.href = 'roles-manager.html';
                     card.className = cardClass;
                     card.innerHTML = `
-                        <div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
+                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
                             <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>volunteer_activism</span>
                         </div>
                         <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Roles Manager</h2>
@@ -347,7 +322,7 @@
                     card.href = 'shepherding-dashboard.html';
                     card.className = cardClass;
                     card.innerHTML = `
-                        <div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
+                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
                             <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>shield_person</span>
                         </div>
                         <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Shepherd Dashboard</h2>
@@ -365,7 +340,7 @@
                     card.href = 'admin-dashboard.html';
                     card.className = cardClass;
                     card.innerHTML = `
-                        <div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
+                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
                             <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>admin_panel_settings</span>
                         </div>
                         <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Admin Dashboard</h2>
@@ -379,11 +354,9 @@
                 // newly unlocked by a promotion) fall to the end automatically.
                 applyDashboardOrder(grid, savedCardOrder);
                 setupCardReordering(user.uid, grid);
-            } else {
-                greetingEl.textContent = baseGreeting;
             }
 
-            // 3. Fetch Next Sunday's Service
+            // 2. Fetch Next Sunday's Service
             try {
                 const today = new Date();
                 const nextSunday = new Date(today);
@@ -423,20 +396,6 @@
                     const svc = _norm;
                     console.log("Service data found:", svc);
                     
-                    // Update Upcoming Text (under greeting)
-                    if (svc.liturgy?.sermon || svc.preacher) {
-                        const parts = [];
-                        if (svc.liturgy?.sermon) parts.push(svc.liturgy.sermon);
-                        if (svc.preacher) parts.push(svc.preacher);
-                        
-                        upcomingText.textContent = `Upcoming: ${parts.join(', ')}`;
-                        upcomingBox.classList.remove('hidden');
-                        upcomingBox.classList.add('flex');
-                    } else {
-                        upcomingBox.classList.add('hidden');
-                        upcomingBox.classList.remove('flex');
-                    }
-
                     // Update Sunday at a Glance Panel
                     let glanceHtml = '';
                     
@@ -636,8 +595,6 @@
                         glanceContent.appendChild(createBtn);
                     }
 
-                    upcomingBox.classList.add('hidden');
-                    upcomingBox.classList.remove('flex');
                 }
             } catch (e) {
                 console.error("Error updating dashboard data:", e);

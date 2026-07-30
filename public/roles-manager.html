@@ -16,11 +16,15 @@
          every rule below branches on it. -->
     <script src="mobile-shell.js"></script>
     <link rel="stylesheet" href="mobile-shell.css" />
-    <!-- `onBack`, not a URL: the shell draws ONE header, so its arrow has to
-         mean what this page means by back — out of the Role you have open, or
-         out of the page if you have none. The page answers on
-         `mobile-header:back` (roles-manager.js). -->
-    <script>window.MOBILE_HEADER = { title: 'Roles Manager', onBack: true };</script>
+    <!-- The drawer's own list. Required for the hamburger below: without it
+         mobile-shell-header.js has nothing to put in the drawer and quietly
+         draws a back arrow instead. -->
+    <script src="mobile/destinations.js"></script>
+    <!-- A drawer destination, so the header carries the hamburger the rest of
+         them do. `route` is what makes the drawer show this row as the one you
+         are on. Leaving the Role editor is the EDITOR's own arrow now (see the
+         markup) — the header's arrow used to be that, and a menu cannot be. -->
+    <script>window.MOBILE_HEADER = { title: 'Roles Manager', menu: true, route: 'rolesManager' };</script>
     <script src="mobile-shell-header.js"></script>
 
     <style>
@@ -37,9 +41,9 @@
         html.shell-mobile .rm-title-block { display: none; }
 
         /* The editor's own bar keeps what the shell header cannot say — the
-           Role's name, how many people it needs, and delete. Its duplicate back
-           arrow is not styled away, it is not rendered (see the markup): a
-           control that is only invisible can still be pressed.
+           Role's name, how many people it needs, delete, and the way back to
+           the list. It carries that last one in the shell as well now: the
+           header is a hamburger here, so its arrow is not there to borrow.
 
            Sticky at 0 would pin it UNDER the shell header (z-index 1000) and it
            would never be seen again. */
@@ -71,6 +75,9 @@
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
     <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <!-- On-device cache for the phone app (no-op on the web). Must load before
+         auth.js, which builds the Firestore handle persistence attaches to. -->
+    <script src="local-cache.js"></script>
     <script src="auth.js"></script>
     <script src="relationship-core.js"></script>
     <script src="roles-core.js"></script>
@@ -240,16 +247,16 @@
                         <!-- Below lg the editor is the whole screen, so it carries its own
                              way back and its own delete. -->
                         <div class="rm-editor-bar lg:hidden sticky top-0 z-10 flex items-center gap-base bg-surface-container-lowest border-b border-outline-variant rounded-t-lg px-sm py-base">
-                            <!-- Same rule as the row's delete: inside the shell this arrow is a
-                                 DUPLICATE of the shell header's, so it is not rendered at all
-                                 rather than hidden. The shell's arrow asks the page what back
-                                 means (roles-manager.js), so nothing is lost. -->
-                            <template x-if="!inShell">
-                                <button @click="cancelEdit()" title="Back to the roles list" aria-label="Back to the roles list"
-                                        class="w-10 h-10 flex items-center justify-center rounded-lg text-on-surface-variant">
-                                    <span class="material-symbols-outlined text-[24px]">arrow_back</span>
-                                </button>
-                            </template>
+                            <!-- ⚠ THE ONLY WAY OUT OF AN OPEN ROLE, and it must render in the
+                                 shell too. It used to be skipped there as a duplicate of the
+                                 shell header's back arrow, which asked the page what back
+                                 meant. The header is a hamburger now — this page is a drawer
+                                 destination — so that arrow is gone, and skipping this one
+                                 would leave an open Role with no way back to the list. -->
+                            <button @click="cancelEdit()" title="Back to the roles list" aria-label="Back to the roles list"
+                                    class="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-lg text-on-surface-variant">
+                                <span class="material-symbols-outlined text-[24px]">arrow_back</span>
+                            </button>
                             <div class="flex-grow min-w-0">
                                 <div class="font-display text-[17px] tracking-[.02em] text-primary truncate" x-text="draft.name"></div>
                                 <div class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant" x-text="draftPeopleNeededLabel"></div>
