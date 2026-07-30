@@ -42,6 +42,10 @@
            own <h1> says "Calendar" a second time directly underneath. */
         html.shell-mobile .cal-page-title { display: none; }
 
+        /* With the title hidden, its block's bottom rule floats alone under the
+           shell header — a divider dividing nothing from nothing. */
+        html.shell-mobile .cal-title-block { border-bottom: none; padding-bottom: 0; }
+
         /* An event name TRUNCATES on a desktop row, where there is room for it to
            be unusual. On a phone the date block, the Sunday badge and the chevron
            leave about half the width, and "Sunday S…" is not a name. */
@@ -97,7 +101,7 @@
     <main x-show="!loading" class="flex-grow w-full max-w-7xl mx-auto px-4 md:px-margin pb-lg pt-md">
 
         <!-- Title block -->
-        <div class="pb-md border-b border-outline-variant flex items-start justify-between gap-md">
+        <div class="cal-title-block pb-md border-b border-outline-variant flex items-start justify-between gap-md">
             <div>
                 <h1 class="cal-page-title font-display text-headline-lg tracking-[.02em] text-primary">Calendar</h1>
             </div>
