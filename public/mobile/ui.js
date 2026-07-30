@@ -15,8 +15,13 @@
     var serif = props.serif !== false;
     var onLeft = props.onBack || props.onMenu;
     return html`
-      <header style=${{ flexShrink: 0, paddingTop: "calc(env(safe-area-inset-top, 20px) + 10px)", background: "var(--surface-container-lowest)", borderBottom: "1px solid var(--outline-variant)" }}>
-        <div style=${{ display: "flex", alignItems: "center", gap: 6, height: 52, padding: "0 8px 0 6px" }}>
+      <!-- The +4 and the 46px row are the whole header's height budget. They sit
+           as close under the safe-area inset as they can without tucking the
+           title beneath the island — the inset itself is never reduced.
+           mobile-shell-header.js draws this same bar for the desktop pages the
+           phone opens, and carries the same two numbers. -->
+      <header style=${{ flexShrink: 0, paddingTop: "calc(env(safe-area-inset-top, 20px) + 4px)", background: "var(--surface-container-lowest)", borderBottom: "1px solid var(--outline-variant)" }}>
+        <div style=${{ display: "flex", alignItems: "center", gap: 6, height: 46, padding: "0 8px 0 6px" }}>
           <button onClick=${onLeft} aria-label=${props.onBack ? "Back" : "Menu"}
             style=${{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-surface)", cursor: "pointer", borderRadius: 10 }}>
             ${Ic(props.onBack ? "chevron-left" : "menu", 24)}

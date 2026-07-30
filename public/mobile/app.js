@@ -60,17 +60,11 @@
     });
     return parts.length ? "?" + parts.join("&") : "";
   }
-  function greeting() {
-    var h = new Date().getHours();
-    if (h >= 5 && h < 12) return "Good morning";
-    if (h >= 12 && h < 17) return "Good afternoon";
-    return "Good evening";
-  }
 
   // ── Signed in, or a guest on purpose ─────────────────────
   //
   // The app used to open on the home screen whoever you were. Signed out, that
-  // meant every tile, the greeting, and behind them every shell page loading as
+  // meant every tile, and behind them every shell page loading as
   // a stranger — a Calendar with the Sunday Service on it and nothing else,
   // because a Sunday is fetched by id regardless of who is asking while every
   // other Event is filtered by what your rank may see. Nothing said so. You
@@ -156,7 +150,6 @@
   // ── Home ─────────────────────────────────────────────────
   function HomeScreen(props) {
     var user = props.user;
-    var first = (user && user.first) || "friend";
     var svcState = M.useAsync(data.getNextService, []);
     var svc = svcState.data;
     // The Home card grid mirrors the drawer's top-level destinations (permission-gated).
@@ -176,25 +169,18 @@
     return html`
       <${Screen}>
         <${TopBar} title="Mosaic Services" onMenu=${props.openMenu} right=${html`<${BarAction} icon="user-round" label="Profile" onClick=${function () { props.nav("profile"); }} />`} />
-        <${Body} style=${{ padding: "18px 16px calc(40px + env(safe-area-inset-bottom, 0px))" }}>
-          <div style=${{ position: "relative", overflow: "hidden", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: "20px 18px", marginBottom: 18 }}>
-            <div style=${{ position: "absolute", right: -36, top: -48, width: 130, height: 130, border: "1px solid var(--outline-variant)", borderRadius: "50%", opacity: 0.4 }}></div>
-            <${Overline}>${new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}<//>
-            <div style=${{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 600, color: "var(--primary)", letterSpacing: "0.02em", marginTop: 6 }}>${greeting()}, ${first}</div>
-            <div style=${{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, color: "var(--on-surface-variant)", fontFamily: "var(--font-sans)", fontSize: 13 }}>${Ic("clock", 15)}<span>Welcome back to Mosaic Services</span></div>
-          </div>
-
-          <div style=${{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+        <${Body} style=${{ padding: "12px 16px calc(32px + env(safe-area-inset-bottom, 0px))" }}>
+          <div style=${{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
             ${tiles.map(function (t) {
               return html`
-                <button key=${t.route} onClick=${function () { props.nav(t.route); }} style=${{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: "22px 12px", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", cursor: "pointer" }}>
-                  <${Medallion} icon=${t.icon} size=${52} />
-                  <span style=${{ fontFamily: "var(--font-serif)", fontSize: 15.5, fontWeight: 600, color: "var(--on-surface)", textAlign: "center", lineHeight: 1.2 }}>${t.label}</span>
+                <button key=${t.route} onClick=${function () { props.nav(t.route); }} style=${{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "16px 10px", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", cursor: "pointer" }}>
+                  <${Medallion} icon=${t.icon} size=${46} />
+                  <span style=${{ fontFamily: "var(--font-serif)", fontSize: 15, fontWeight: 600, color: "var(--on-surface)", textAlign: "center", lineHeight: 1.2 }}>${t.label}</span>
                 </button>`;
             })}
           </div>
 
-          <${Overline} style=${{ marginBottom: 10, paddingLeft: 2 }}>Sunday at a Glance<//>
+          <${Overline} style=${{ marginBottom: 8, paddingLeft: 2 }}>Sunday at a Glance<//>
           <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", padding: 18 }}>
             ${svcState.loading ? html`<div style=${{ color: "var(--on-surface-variant)", fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: 14 }}>Loading service…</div>`
               : svc ? html`

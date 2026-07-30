@@ -1,7 +1,7 @@
 /* ============================================================
    mobile-shell-header.js — one standardized mobile header for desktop
    pages rendered inside the mobile shell (?shell=mobile). Matches the
-   native shell's M.ui.TopBar exactly (52px row + safe-area, serif title,
+   native shell's M.ui.TopBar exactly (46px row + safe-area, serif title,
    44px lucide chevron-left / menu button) so every mobile page — native
    or shell — reads the same.
 
@@ -234,11 +234,11 @@
     var header = document.createElement("header");
     header.id = "mobile-shell-header";
     header.style.cssText = "position:sticky;top:0;left:0;right:0;z-index:1000;flex-shrink:0;" +
-      "padding-top:calc(env(safe-area-inset-top, 20px) + 10px);" +
+      "padding-top:calc(env(safe-area-inset-top, 20px) + 4px);" +
       "background:var(--surface-container-lowest, #ffffff);border-bottom:1px solid var(--outline-variant, rgba(0,0,0,0.12));";
 
     var row = document.createElement("div");
-    row.style.cssText = "display:flex;align-items:center;gap:6px;height:52px;padding:0 8px 0 6px;";
+    row.style.cssText = "display:flex;align-items:center;gap:6px;height:46px;padding:0 8px 0 6px;";
 
     var btn = document.createElement("button");
     btn.type = "button";
