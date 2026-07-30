@@ -1,6 +1,11 @@
 /* ============================================================
    local-cache.js — what the app already knows, kept on the device.
 
+   ⚠ CURRENTLY OFF. See CACHE_ENABLED below: switching the cache on hangs
+   every page inside the Capacitor WebView, and that is unsolved. Read that
+   comment before touching anything here. The rest of this describes what
+   the file is FOR, which is still what it is for.
+
    THE PROBLEM THIS EXISTS FOR. In the phone app every screen re-fetched
    everything from the network every time you opened it. Nothing was kept:
    Firestore's own on-device cache was never switched on, and no screen
@@ -39,6 +44,29 @@
     "use strict";
 
     if (!global) return;
+
+    // ⚠ OFF, because switching it on breaks the app inside the WebView.
+    //
+    // The cache is kept in sync by a Firestore listen stream. No page here has
+    // ever used onSnapshot, so no page had ever opened one — and inside the
+    // Capacitor WebView that stream is refused:
+    //
+    //   Fetch API cannot load https://firestore.googleapis.com/…/Listen/channel
+    //   … due to access control checks
+    //
+    // It does not error, it HANGS, so the read never settles and the page spins
+    // forever. The Roles Manager did exactly that. Forcing long polling did not
+    // help — long polling and the WebChannel use the same Listen/channel
+    // endpoint, and the refusal is of the fetch itself, not of the transport
+    // layered on it. The next thing to try is useFetchStreams: false, which
+    // moves the stream onto XMLHttpRequest; it is untested, which is why this
+    // is off rather than set to it.
+    //
+    // Everything below is intact and tested. Flipping this back on is the whole
+    // change — but it MUST be verified in the native app, on the Roles Manager,
+    // before it ships again. It cannot be judged from a browser: a browser on
+    // localhost is a normal origin and never sees this.
+    var CACHE_ENABLED = false;
 
     // ── Where are we? ────────────────────────────────────────────────────────
     // Three ways to be the phone app, because there are three ways in: the
@@ -94,6 +122,7 @@
     }
 
     function enable(db) {
+        if (!CACHE_ENABLED) return Promise.resolve(false);
         if (!isMobile() || !db || !db.enablePersistence) return Promise.resolve(false);
         if (ready) return ready;
         configureTransport(db);
@@ -178,6 +207,9 @@
     // fresh() below is for. Writes, transactions (Transaction.get is a separate
     // method) and live listeners are all untouched.
     function interceptReads(firebase) {
+        // With the cache off there is nothing to read from, so leave Firestore's
+        // own prototypes alone rather than wrapping every read to no purpose.
+        if (!CACHE_ENABLED) return false;
         if (!isMobile() || !firebase || !firebase.firestore) return false;
         var ns = firebase.firestore;
         var patched = 0;

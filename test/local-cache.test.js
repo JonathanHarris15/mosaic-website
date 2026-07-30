@@ -15,10 +15,21 @@ const read = (...p) => fs.readFileSync(path.join(PUBLIC, ...p), 'utf8');
 
 // Rebuild the module in isolation with a fake `window`, so the pure parts can
 // be exercised without Firebase.
-function load(win) {
+//
+// The cache ships OFF (see CACHE_ENABLED in local-cache.js — it hangs the
+// WebView). The behaviour it gates still has to be right for the day it goes
+// back on, so tests that exercise it flip the flag in the source they load.
+// Nothing else can reach it: it is a local inside the module's closure.
+function load(win, opts) {
+    let src = read('local-cache.js');
+    if (opts && opts.cacheOn) {
+        const flag = 'var CACHE_ENABLED = false;';
+        assert.ok(src.includes(flag), 'the CACHE_ENABLED switch has been renamed or reshaped');
+        src = src.replace(flag, 'var CACHE_ENABLED = true;');
+    }
     const globals = Object.assign({ localStorage: mockStorage() }, win);
     const module = { exports: {} };
-    const fn = new Function('window', 'module', read('local-cache.js') + '\nreturn window.MosaicLocalCache;');
+    const fn = new Function('window', 'module', src + '\nreturn window.MosaicLocalCache;');
     return fn(globals, module);
 }
 
@@ -141,7 +152,7 @@ test('a read that states what it wants is never intercepted', () => {
     // This is the whole safety valve. Every read whose result decides a write
     // opts out by passing { source: 'server' }; if the patch stopped honouring
     // that, those reads would silently start planning writes from cached data.
-    const Cache = load({ MOSAIC_MOBILE_APP: true });
+    const Cache = load({ MOSAIC_MOBILE_APP: true }, { cacheOn: true });
     const fb = fakeFirebase();
     assert.equal(Cache.interceptReads(fb), true, 'nothing was patched');
 
@@ -155,12 +166,12 @@ test('a read that states what it wants is never intercepted', () => {
 
 test('the interception is phone-only and never double-wraps', () => {
     const web = fakeFirebase();
-    assert.equal(load({}).interceptReads(web), false, 'the web got patched');
+    assert.equal(load({}, { cacheOn: true }).interceptReads(web), false, 'the web got patched');
 
     // A collection reference INHERITS Query.get. Patching the inherited copy as
     // though it were its own would wrap every collection read twice.
     const fb = fakeFirebase();
-    const Cache = load({ MOSAIC_MOBILE_APP: true });
+    const Cache = load({ MOSAIC_MOBILE_APP: true }, { cacheOn: true });
     Cache.interceptReads(fb);
     Cache.interceptReads(fb); // a second page load must be a no-op
     assert.ok(fb.firestore.Query.prototype.get.__mosaicCacheFirst);
@@ -216,4 +227,25 @@ test('launch warms the cache, and never blocks the app on it', () => {
         'signing in no longer warms the cache');
     assert.ok(!/await data\.warmCache|warmCache\(u\)\.then/.test(app),
         'the UI waits on the warm instead of letting it run behind the app');
+});
+
+test('the cache ships off, and nothing touches Firestore while it is', () => {
+    // It hangs the WebView (see CACHE_ENABLED). Until that is solved and
+    // verified in the native app, both halves must stay inert — persistence
+    // unset AND Firestore's prototypes unpatched, so the app behaves exactly
+    // as it did before any of this existed.
+    const src = read('local-cache.js');
+    assert.match(src, /var CACHE_ENABLED = false;/,
+        'the cache is on again — it must be verified on the Roles Manager in the native app first');
+
+    const Cache = load({ MOSAIC_MOBILE_APP: true });
+    assert.equal(Cache.interceptReads(fakeFirebase()), false, 'reads are still being intercepted');
+
+    let touched = false;
+    const db = { enablePersistence: () => { touched = true; return Promise.resolve(); },
+                 settings: () => { touched = true; } };
+    return Cache.enable(db).then(on => {
+        assert.equal(on, false, 'persistence was switched on');
+        assert.equal(touched, false, 'the Firestore handle was configured anyway');
+    });
 });
