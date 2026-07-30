@@ -1691,6 +1691,68 @@ test('changing month lets go of the day that was tapped', async () => {
     assert.strictEqual(page.focusedDate, '2026-08-01');
 });
 
+// ── The Event on a phone ──────────────────────────────────────────────────────
+
+test('a member gets the roster, not the editor\'s Role cards', () => {
+    // A member used to get numbered places, empty-slot rows and per-person state
+    // controls they cannot use — AND the flat list, so the same people were named
+    // twice on one screen. Administering is the editor's job; a member is
+    // answering "who else is coming".
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+
+    const roles = html.indexOf('<!-- ── Roles ──');
+    assert.ok(roles !== -1, 'the Roles section moved');
+    const gate = html.slice(roles, html.indexOf('>', html.indexOf('<section', roles)));
+    assert.ok(/x-show="isEditor"/.test(gate) && !/canSeeRoster/.test(gate),
+        'a member is still shown the editor\'s Role cards');
+
+    // And the list they DO get is named once.
+    assert.strictEqual(html.split(">Who's serving<").length - 1, 1,
+        'the roster is drawn twice, or its heading moved');
+});
+
+test('a slot row is survivable on a 390px screen', () => {
+    // Number, requirement, avatar, name, state and four buttons is eight things.
+    // 390px holds about half, and the rest wrap into a shape nobody designed.
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+
+    [
+        ['cal-slot-index', 'the place number'],
+        ['cal-slot-avatar', 'the avatar'],
+        ['cal-role-glyph', 'the badge glyph'],
+        ['cal-role-everydate', 'the per-card way through to the Event'],
+        ['cal-when-icon', 'the date/time/place glyphs'],
+    ].forEach(([hook, what]) => {
+        assert.ok(html.indexOf('class="' + hook) !== -1 || html.indexOf(' ' + hook + ' ') !== -1,
+            'nothing carries ' + hook + ', so ' + what + ' cannot stand down on a phone');
+        assert.ok(new RegExp('html\\.shell-mobile[^{]*\\.' + hook).test(html),
+            hook + ' is on an element but no phone rule ever hides it');
+    });
+
+    // The controls drop to a line of their own rather than squeezing the name.
+    assert.ok(/html\.shell-mobile \.cal-slot-row \{[^}]*flex-wrap: wrap/.test(html),
+        'a slot row cannot wrap, so its controls squeeze the name off the screen');
+});
+
+test('every phone rule on the Event page has something to style', () => {
+    // The general form of the bug this page keeps hitting: a rule for a class
+    // nothing carries is styling for an element that does not exist.
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+    const body = html.slice(html.indexOf('</style>'));
+
+    const hooks = new Set();
+    const re = /html\.shell-mobile\s+\.([\w-]+)/g;
+    let m;
+    while ((m = re.exec(style))) hooks.add(m[1]);
+    assert.ok(hooks.size, 'the phone rules moved out of this page');
+
+    hooks.forEach(hook => {
+        assert.ok(new RegExp('class="[^"]*\\b' + hook + '\\b').test(body),
+            'no element carries ' + hook + ', so that phone rule can never fire');
+    });
+});
+
 test('a phone card names a Sunday once', () => {
     // The name directly above the marker already says "Sunday Service". A card
     // that says the same thing twice reads as a bug, because it is one.

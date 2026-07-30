@@ -35,8 +35,36 @@
         .cal-row:hover .cal-row-actions,
         .cal-row:focus-within .cal-row-actions { opacity: 1; }
         html.shell-mobile .cal-row-actions { opacity: 1; }
-        /* Every tap target stays >= 44px, and a slot row gets room to breathe. */
-        html.shell-mobile .cal-slot-row { min-height: 48px; }
+
+        /* ── The phone ────────────────────────────────────────────────────────
+           A slot row is: number · requirement · avatar · name · state · four
+           buttons. That is eight things, and 390px does not hold them — it holds
+           about half, and the rest wrap into a shape nobody designed.
+
+           So on a phone the row keeps what only it can say — the requirement,
+           who is standing in it, and where that stands — and the row's controls
+           drop to a line of their own. The number and the avatar go: the number
+           counts places nobody refers to out loud, and the avatar is decoration
+           beside a name that is right there. */
+        html.shell-mobile .cal-slot-row { min-height: 48px; flex-wrap: wrap; }
+        html.shell-mobile .cal-slot-index,
+        html.shell-mobile .cal-slot-avatar { display: none; }
+        html.shell-mobile .cal-slot-req { width: 62px; }
+        html.shell-mobile .cal-row-actions,
+        html.shell-mobile .cal-slot-actions { width: 100%; justify-content: flex-end; }
+
+        /* A Role card's header carries a badge glyph, a rule count, a fill count
+           and a way through to the Event. The way through is said again in full
+           at the bottom of the section, so on a phone the header keeps the name
+           and the count — which is the header the design draws. */
+        html.shell-mobile .cal-role-glyph,
+        html.shell-mobile .cal-role-everydate { display: none; }
+
+        /* Three icon-and-text pairs across 390px is three lines. The dots that
+           separate them are already in the markup, so dropping the glyphs is
+           enough to bring it back to one. */
+        html.shell-mobile .cal-when-icon { display: none; }
+        html.shell-mobile .cal-event-title { font-size: 23px; }
 
         .cal-cols { display: grid; grid-template-columns: minmax(0,1fr); gap: 28px; align-items: start; }
         @media (min-width: 900px) { .cal-cols { grid-template-columns: minmax(0,1fr) 372px; } }
@@ -551,19 +579,23 @@
                             <span class="material-symbols-outlined text-[13px]">assignment_ind</span> Participants
                         </span>
                     </div>
-                    <h1 class="font-display text-headline-lg tracking-[.02em] text-primary"
+                    <h1 class="cal-event-title font-display text-headline-lg tracking-[.02em] text-primary"
                         x-text="occurrence.name || (series && series.name) || 'Event'"></h1>
-                    <div class="mt-2 flex items-center gap-md flex-wrap text-[13px] text-on-surface-variant">
+                    <!-- Date, time and place, dot-separated. On a phone the
+                         glyphs drop out and the dots carry it on one line. -->
+                    <div class="mt-2 flex items-center gap-2 flex-wrap text-[13px] text-on-surface-variant">
                         <span class="flex items-center gap-1">
-                            <span class="material-symbols-outlined text-[17px]">event</span>
+                            <span class="cal-when-icon material-symbols-outlined text-[17px]">event</span>
                             <span x-text="longDate(occurrence.date)"></span>
                         </span>
+                        <span x-show="occurrence.time" class="text-outline">·</span>
                         <span x-show="occurrence.time" class="flex items-center gap-1">
-                            <span class="material-symbols-outlined text-[17px]">schedule</span>
+                            <span class="cal-when-icon material-symbols-outlined text-[17px]">schedule</span>
                             <span x-text="formatTime(occurrence.time)"></span>
                         </span>
+                        <span x-show="occurrence.location" class="text-outline">·</span>
                         <span x-show="occurrence.location" class="flex items-center gap-1">
-                            <span class="material-symbols-outlined text-[17px]">location_on</span>
+                            <span class="cal-when-icon material-symbols-outlined text-[17px]">location_on</span>
                             <span x-text="occurrence.location"></span>
                         </span>
                     </div>
@@ -691,6 +723,40 @@
                         </div>
                     </section>
 
+                    <!-- Who's serving — the whole roster, flat, for a member the
+                         editor shared it with.
+
+                         A member used to get the editor's Role cards instead:
+                         numbered places, empty-slot rows, per-person state
+                         controls they cannot use — AND this list in the side
+                         column, so the same people were named twice on one
+                         screen. Administering an Event is the editor's job; a
+                         member is answering "who else is coming". -->
+                    <section x-show="!isEditor && canSeeRoster && assignments.length"
+                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <h2 class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant
+                                   pb-sm border-b border-outline-variant">Who's serving</h2>
+                        <div class="flex flex-col">
+                            <template x-for="a in assignments" :key="a.personId + (a.slotId || a.oneOffId)">
+                                <div class="flex items-center gap-sm py-2.5 border-b border-outline-variant last:border-b-0">
+                                    <span class="w-[28px] h-[28px] rounded-full flex items-center justify-center
+                                                 text-[10.5px] font-label-md border border-outline-variant shrink-0"
+                                          :class="a.personId === personId ? 'bg-primary-fixed' : 'bg-surface-container-high'"
+                                          x-text="initials(personName(a.personId))"></span>
+                                    <span class="text-[14.5px] flex-grow min-w-0 truncate"
+                                          :class="a.personId === personId ? 'font-semibold' : ''">
+                                        <span x-text="personName(a.personId)"></span><span x-show="a.personId === personId"> (you)</span>
+                                    </span>
+                                    <span class="text-[13px] text-on-surface-variant shrink-0"
+                                          x-text="a.label || roleName(a.roleSlug)"></span>
+                                </div>
+                            </template>
+                        </div>
+                        <p x-show="needsAttention" class="mt-sm text-[12.5px] text-on-surface-variant">
+                            One place is still being sorted out.
+                        </p>
+                    </section>
+
                     <!-- ── Roles ──────────────────────────────────────────── -->
                     <!-- A Sunday gets this too. It only ever draws NON-liturgical
                          Roles — the liturgical ones are filled in the order of
@@ -698,7 +764,7 @@
                          would be a second, silent way to set one. Hiding the whole
                          section on a Sunday, as this once did, meant the welcome
                          team and the sound desk had nowhere to be asked at all. -->
-                    <section x-show="isEditor || canSeeRoster">
+                    <section x-show="isEditor">
                         <div class="flex items-baseline justify-between gap-md">
                             <h2 class="font-display text-[19px] text-primary">Roles</h2>
                             <p class="text-[12.5px] text-on-surface-variant"
@@ -729,7 +795,7 @@
                                     <!-- `cal-row` is not decoration here: the remove button below is
                                          hover-revealed, and without a row to hover it never appears. -->
                                     <div class="cal-row bg-surface-container-low px-md py-2.5 flex items-center gap-sm border-b border-outline-variant">
-                                        <span class="material-symbols-outlined text-[18px] text-secondary">badge</span>
+                                        <span class="cal-role-glyph material-symbols-outlined text-[18px] text-secondary">badge</span>
                                         <span class="font-headline-lg text-[19px] text-on-surface flex-grow min-w-0 truncate"
                                               x-text="role.def.name"></span>
                                         <span x-show="(role.def.restrictions || []).length"
@@ -746,7 +812,7 @@
                                              Event, not here. This screen decides who is
                                              standing in them today. -->
                                         <a x-show="eventHref" :href="eventHref"
-                                           class="shrink-0 flex items-center gap-1 text-[11px] font-label-md
+                                           class="cal-role-everydate shrink-0 flex items-center gap-1 text-[11px] font-label-md
                                                   text-on-surface-variant hover:text-secondary cal-motion cal-focus rounded"
                                            title="Change which roles this event needs">
                                             <span class="material-symbols-outlined text-[14px]">repeat</span>
@@ -759,13 +825,13 @@
                                              :class="row.assignment && stateTone(row.assignment) === 'attention'
                                                 ? 'bg-error-container border-l-[3px] border-l-error'
                                                 : 'bg-surface'">
-                                            <span class="font-display text-[15px] text-outline w-[18px] shrink-0" x-text="row.index"></span>
-                                            <span class="w-[74px] shrink-0 text-[10px] font-label-md tracking-[.12em] uppercase text-on-surface-variant"
+                                            <span class="cal-slot-index font-display text-[15px] text-outline w-[18px] shrink-0" x-text="row.index"></span>
+                                            <span class="cal-slot-req w-[74px] shrink-0 text-[10px] font-label-md tracking-[.12em] uppercase text-on-surface-variant"
                                                   x-text="row.requirementLabel"></span>
 
                                             <template x-if="row.assignment">
                                                 <div class="flex items-center gap-2 flex-grow min-w-0">
-                                                    <span class="w-[28px] h-[28px] rounded-full bg-surface-container-high
+                                                    <span class="cal-slot-avatar w-[28px] h-[28px] rounded-full bg-surface-container-high
                                                                  flex items-center justify-center text-[11px] font-label-md shrink-0"
                                                           x-text="initials(personName(row.assignment.personId))"></span>
                                                     <span class="text-[14.5px] truncate"
@@ -776,7 +842,7 @@
                                             </template>
                                             <template x-if="!row.assignment">
                                                 <div class="flex items-center gap-2 flex-grow min-w-0">
-                                                    <span class="w-[28px] h-[28px] rounded-full border border-dashed border-outline
+                                                    <span class="cal-slot-avatar w-[28px] h-[28px] rounded-full border border-dashed border-outline
                                                                  flex items-center justify-center text-outline shrink-0">
                                                         <span class="material-symbols-outlined text-[15px]">person_add</span>
                                                     </span>
@@ -882,7 +948,7 @@
                                                  :class="stateTone(a) === 'attention'
                                                     ? 'bg-error-container border-l-[3px] border-l-error'
                                                     : 'bg-surface'">
-                                                <span class="w-[26px] h-[26px] rounded-full bg-surface-container-high shrink-0
+                                                <span class="cal-slot-avatar w-[26px] h-[26px] rounded-full bg-surface-container-high shrink-0
                                                              flex items-center justify-center text-[10px] font-label-md"
                                                       x-text="initials(personName(a.personId))"></span>
                                                 <span class="text-[14px] text-on-surface flex-grow min-w-0 truncate"
@@ -898,7 +964,7 @@
                                                           x-text="stateLabel(a)"></span>
                                                 </span>
 
-                                                <span x-show="isEditor" class="shrink-0 flex items-center gap-0.5">
+                                                <span x-show="isEditor" class="cal-slot-actions shrink-0 flex items-center gap-0.5">
                                                     <button @click="setState(a, 'pending')" :aria-label="'Mark ' + personName(a.personId) + ' pending'"
                                                             class="w-[28px] h-[28px] rounded-md flex items-center justify-center cal-motion cal-focus hover:bg-surface-container"
                                                             :class="a.state === 'pending' ? 'text-on-surface' : 'text-outline'">
@@ -1198,29 +1264,6 @@
                         </div>
                     </section>
 
-                    <!-- Serving this evening — the member's roster view -->
-                    <section x-show="!isEditor && canSeeRoster && assignments.length"
-                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
-                        <h3 class="font-display text-[17px] text-primary">Who's serving</h3>
-                        <div class="mt-sm flex flex-col gap-2">
-                            <template x-for="a in assignments" :key="a.personId + (a.slotId || a.oneOffId)">
-                                <div class="flex items-center gap-2">
-                                    <span class="w-[28px] h-[28px] rounded-full flex items-center justify-center text-[11px] font-label-md shrink-0"
-                                          :class="a.personId === personId ? 'bg-primary-fixed' : 'bg-surface-container-high'"
-                                          x-text="initials(personName(a.personId))"></span>
-                                    <span class="text-[13.5px] flex-grow min-w-0 truncate"
-                                          :class="a.personId === personId ? 'font-semibold' : ''">
-                                        <span x-text="personName(a.personId)"></span><span x-show="a.personId === personId"> (you)</span>
-                                    </span>
-                                    <span class="text-[12px] text-on-surface-variant shrink-0"
-                                          x-text="a.label || roleName(a.roleSlug)"></span>
-                                </div>
-                            </template>
-                        </div>
-                        <p x-show="needsAttention" class="mt-sm text-[12.5px] text-on-surface-variant">
-                            One place is still being sorted out.
-                        </p>
-                    </section>
                 </aside>
             </div>
         </div>
