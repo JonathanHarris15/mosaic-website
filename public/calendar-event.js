@@ -24,6 +24,10 @@
     const View = window.CalendarView;
     const Roles = window.RolesCore;
 
+    // A slot id no real slot uses, so somebody blocked because they are down for
+    // the liturgy can never be mistaken for somebody sitting in a place here.
+    const LITURGICAL_SLOT = '__liturgical__';
+
     const params = new URLSearchParams(window.location.search);
 
     window.eventDetailPage = function eventDetailPage() {
@@ -206,6 +210,11 @@
 
                     if (this.isEditor) await this.loadEditorData();
                     else await this.loadPeople();
+
+                    if (this.isSunday) {
+                        this.liturgicalHolders =
+                            await Store.loadLiturgicalHolders(db, this.occurrence.date);
+                    }
                 } catch (e) {
                     console.error('Event load failed:', e);
                     this.error = (e && e.code === 'permission-denied')
@@ -380,6 +389,22 @@
                 slugs.push(def.slug);
                 this.occurrence.occurrenceRoleSlugs = slugs;
                 await this.persist();
+            },
+
+            // ── Who is already down for the liturgy ──────────────────────────
+            //
+            // A Sunday's liturgical Roles are FIELDS on the Service document, not
+            // Assignments — the ones the printed booklet reads. So nothing in the
+            // Assignment model knows about them, and without this the picker for
+            // the sound desk cheerfully offers you the preacher.
+            //
+            // Loaded on a Sunday only. There is no Service document for a
+            // Wednesday, and asking for one would be a question about the wrong
+            // kind of day.
+            liturgicalHolders: [],
+
+            get liturgicalBlocks() {
+                return this.isSunday ? (this.liturgicalHolders || []) : [];
             },
 
             // ── Managing the Event itself, not one date of it ────────────────
@@ -705,7 +730,15 @@
 
                 const seated = this.assignments
                     .filter(a => a.roleSlug === def.slug && !a.oneOffId)
-                    .map(a => ({ slotId: a.slotId, personId: a.personId }));
+                    .map(a => ({ slotId: a.slotId, personId: a.personId }))
+                    // Somebody already down for the liturgy cannot also do this.
+                    // They are fed in as though seated in a slot that is not this
+                    // one, which is exactly what they are: busy elsewhere on the
+                    // same Sunday. The slot id is a name no real slot uses, so it
+                    // can never be mistaken for a place in this Role.
+                    .concat(this.liturgicalBlocks.map(h => ({
+                        slotId: LITURGICAL_SLOT, personId: h.personId,
+                    })));
 
                 const judged = Roles.candidatesFor(def, slot, {
                     people: this.people,
@@ -721,7 +754,13 @@
                         const person = this.people.find(p => p.id === c.personId) || {};
                         const otherRoles = this.assignments
                             .filter(a => a.personId === c.personId && a.roleSlug !== def.slug)
-                            .map(a => a.label || this.roleName(a.roleSlug));
+                            .map(a => a.label || this.roleName(a.roleSlug))
+                            // Named, not just counted. "Already serving here"
+                            // alone leaves the editor hunting for where, and
+                            // hunting is the thing showing blocked people avoids.
+                            .concat(this.liturgicalBlocks
+                                .filter(h => h.personId === c.personId)
+                                .map(h => this.roleName(h.roleSlug)));
                         return Object.assign({}, c, {
                             name: person.name || 'Someone',
                             subtitle: c.eligible

@@ -474,6 +474,24 @@
     // two lists together — the same trade the Sunday Service id already makes.
     const COLOUR_SLUGS = ['steel', 'ocean', 'navy', 'green', 'gold', 'amber', 'plum', 'rose'];
 
+    // Who already holds a liturgical Role on this Sunday. Read from the SERVICE
+    // document, because that is where a Sunday's liturgy lives — the fields the
+    // printed booklet reads, not Assignments.
+    //
+    // A refusal degrades to nobody rather than failing the page. That direction
+    // is deliberate but worth naming: the cost is that somebody preaching stays
+    // assignable for a reader who cannot see the Service, which is a worse
+    // suggestion, not a wrong write. Failing the page instead would stop the
+    // whole Sunday being staffed.
+    async function loadLiturgicalHolders(db, date) {
+        try {
+            const snap = await db.collection('services').doc(String(date || '')).get();
+            return snap.exists ? Core.liturgicalHolders(snap.data()) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
     // ── Managing a series ────────────────────────────────────────────────────
     //
     // MS-13 built this model — a locked series carrying locked Roles, and a
@@ -774,6 +792,7 @@
         restampSeriesVisibility,
         setSeriesColour,
         loadSeries,
+        loadLiturgicalHolders,
         ensureSundayService,
         setSeriesRoles,
         setSeriesTime,

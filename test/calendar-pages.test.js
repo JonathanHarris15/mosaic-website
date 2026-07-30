@@ -970,3 +970,73 @@ test('the new-event form starts on the day you clicked, not today', () => {
         assert.strictEqual(page.draft.date, '2026-09-20');
     });
 });
+
+// ── Somebody preaching cannot also be on the welcome team ─────────────────────
+//
+// A Sunday's liturgical Roles are fields on the Service, not Assignments, so
+// nothing in the Assignment model knows about them. Without this, the picker for
+// the sound desk cheerfully offers you the preacher.
+
+function sundayPicker(holders) {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.rank = 'editor';
+    page.occurrence = { id: 'sunday_service_2026-08-02', seriesId: 'sunday_service', date: '2026-08-02' };
+    page.series = { id: 'sunday_service', roleSlugs: ['sound_desk'], lockedRoleSlugs: [] };
+    page.roleDefinitions = [SOUND];
+    page.people = [
+        { id: 'p1', name: 'Dave Rowe', status: 'active' },
+        { id: 'p2', name: 'Sam Hale', status: 'active' },
+    ];
+    page.liturgicalHolders = holders;
+    page.picker = { open: true, roleSlug: 'sound_desk', slotId: 's1', query: '', hideBlocked: false, picked: null };
+    return page;
+}
+
+test('somebody holding a liturgical Role is blocked from a Sunday Servant Role', () => {
+    const page = sundayPicker([{ personId: 'p2', roleSlug: 'preacher' }]);
+
+    const sam = page.candidates.find(c => c.personId === 'p2');
+    const dave = page.candidates.find(c => c.personId === 'p1');
+
+    assert.strictEqual(sam.eligible, false, 'the preacher was offered the sound desk');
+    assert.strictEqual(dave.eligible, true, 'somebody free was blocked');
+});
+
+test('the reason says which liturgical Role they are already down for', () => {
+    // "Already serving here" alone leaves the editor hunting for where. This is
+    // the whole point of showing blocked people rather than hiding them.
+    const page = sundayPicker([{ personId: 'p2', roleSlug: 'preacher' }]);
+
+    const sam = page.candidates.find(c => c.personId === 'p2');
+    assert.match(sam.subtitle, /Preacher/,
+        'the reason does not name the liturgical Role: ' + sam.subtitle);
+});
+
+test('a blocked liturgical holder is still SHOWN, not hidden', () => {
+    // Seeing who was passed over, and why, is the feature. Quietly dropping them
+    // from the list looks like they do not exist.
+    const page = sundayPicker([{ personId: 'p2', roleSlug: 'preacher' }]);
+    assert.deepStrictEqual(page.candidates.map(c => c.personId).sort(), ['p1', 'p2']);
+    assert.strictEqual(page.blockedCount, 1);
+});
+
+test('nothing is blocked on a Sunday with nobody down for the liturgy yet', () => {
+    const page = sundayPicker([]);
+    assert.strictEqual(page.candidates.filter(c => c.eligible).length, 2);
+});
+
+test('a midweek event never consults the liturgy', () => {
+    // There is no Service document for a Wednesday, and reading one would be
+    // asking a question about the wrong kind of day.
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.rank = 'editor';
+    page.occurrence = { id: 'midweek_2026-08-05', seriesId: 'midweek', date: '2026-08-05' };
+    page.series = { id: 'midweek', roleSlugs: ['sound_desk'] };
+    page.roleDefinitions = [SOUND];
+    page.people = [{ id: 'p2', name: 'Sam Hale', status: 'active' }];
+    // Even if something put holders here, a non-Sunday must not act on them.
+    page.liturgicalHolders = [{ personId: 'p2', roleSlug: 'preacher' }];
+    page.picker = { open: true, roleSlug: 'sound_desk', slotId: 's1', query: '', hideBlocked: false, picked: null };
+
+    assert.strictEqual(page.candidates.find(c => c.personId === 'p2').eligible, true);
+});

@@ -256,6 +256,53 @@
         return { seriesId: seriesId, date: date };
     }
 
+    // ── Who is already busy on a Sunday ──────────────────────────────────────
+    //
+    // A Sunday's liturgical Roles are NOT Assignments. They are hardwired fields
+    // on the Service document — the ones the printed booklet reads — and that is
+    // deliberate (ADR-0018 §2). But somebody preaching cannot also be on the
+    // welcome team, so the picker for a Sunday's Servant Roles has to be able to
+    // see them, which means reading those fields.
+    //
+    // The field names are the Service's, restated here rather than imported:
+    // service-builder.js owns that document and this module depends on nothing.
+    // A test holds this list against `RolesCore.LITURGICAL_SLUGS`, because a
+    // liturgical Role with no field here would leave whoever holds it silently
+    // assignable — the exact hole this closes.
+    const LITURGICAL_SERVICE_FIELDS = Object.freeze([
+        { field: 'serviceLeaderId', roleSlug: 'service_leader' },
+        { field: 'musicLeaderId', roleSlug: 'worship_leader' },
+        { field: 'preacherId', roleSlug: 'preacher' },
+        { field: 'sermonetteId', roleSlug: 'sermonette' },
+        { field: 'prayerPraiseId', roleSlug: 'prayer' },
+        { field: 'prayerConfessionId', roleSlug: 'prayer' },
+        // Music helpers are a list of {name, id}, not a single field.
+        { field: 'musicHelpers', roleSlug: 'worship_helper', list: true },
+    ]);
+
+    // Everyone holding a liturgical Role on this Service, once each. A NAME with
+    // no id is not a person — a visiting speaker typed in by hand blocks nobody,
+    // because there is nobody to block.
+    function liturgicalHolders(service) {
+        const doc = service || {};
+        const seen = new Set();
+        const held = [];
+
+        LITURGICAL_SERVICE_FIELDS.forEach(f => {
+            const ids = f.list
+                ? (Array.isArray(doc[f.field]) ? doc[f.field] : []).map(h => h && h.id)
+                : [doc[f.field]];
+
+            ids.filter(Boolean).forEach(personId => {
+                if (seen.has(personId)) return;
+                seen.add(personId);
+                held.push({ personId: personId, roleSlug: f.roleSlug });
+            });
+        });
+
+        return held;
+    }
+
     // ── Merging computed dates with sparse stored records ─────────────────────
 
     // Every date the rule produces, each carrying its stored record when one
@@ -632,6 +679,8 @@
         datesBetween,
         occurrenceId,
         parseOccurrenceId,
+        LITURGICAL_SERVICE_FIELDS,
+        liturgicalHolders,
         mergeOccurrences,
         orphanedOccurrences,
         // assignments

@@ -617,3 +617,54 @@ test('an id round-trips through the pair it was built from', () => {
     const back = Core.parseOccurrenceId(Core.occurrenceId('sunday_service', '2026-12-25'));
     assert.deepStrictEqual(back, { seriesId: 'sunday_service', date: '2026-12-25' });
 });
+
+// ── Who is already busy on a Sunday ───────────────────────────────────────────
+//
+// A Sunday's liturgical Roles are not Assignments — they are hardwired fields on
+// the Service document, which is what the printed booklet reads. But somebody
+// preaching cannot also be on the welcome team, so the picker for a Sunday's
+// Servant Roles has to know who they are.
+
+test('the people holding liturgical Roles on a Sunday are read off the Service', () => {
+    const service = {
+        serviceLeaderId: 'p1', serviceLeader: 'Dave Rowe',
+        preacherId: 'p2', preacher: 'Sam Hale',
+        musicLeaderId: 'p3',
+        musicHelpers: [{ id: 'p4' }, { id: 'p5' }],
+        sermonetteId: 'p6',
+        prayerPraiseId: 'p7',
+        prayerConfessionId: 'p8',
+    };
+
+    const held = Core.liturgicalHolders(service);
+    assert.deepStrictEqual(held.map(h => h.personId).sort(),
+        ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8']);
+    assert.strictEqual(held.find(h => h.personId === 'p2').roleSlug, 'preacher');
+    assert.strictEqual(held.find(h => h.personId === 'p4').roleSlug, 'worship_helper');
+});
+
+test('an empty or half-filled Service holds nobody', () => {
+    assert.deepStrictEqual(Core.liturgicalHolders(null), []);
+    assert.deepStrictEqual(Core.liturgicalHolders({}), []);
+    // A name typed with nobody chosen is not a person — it cannot block anyone,
+    // because there is no id to block.
+    assert.deepStrictEqual(Core.liturgicalHolders({ preacher: 'A visiting speaker' }), []);
+    assert.deepStrictEqual(Core.liturgicalHolders({ musicHelpers: [{ name: 'x' }, null] }), []);
+});
+
+test('somebody down for two liturgical Roles is listed once', () => {
+    // Both prayers, say. Blocking them twice would show them twice in the
+    // picker, which reads as a bug rather than as emphasis.
+    const held = Core.liturgicalHolders({ prayerPraiseId: 'p1', prayerConfessionId: 'p1' });
+    assert.deepStrictEqual(held.map(h => h.personId), ['p1']);
+});
+
+test('every liturgical Role the model has is one the Service can be read for', () => {
+    // If a liturgical Role existed that this could not see, somebody holding it
+    // would silently stay assignable — the exact hole this closes.
+    const Roles = require('../public/roles-core.js');
+    const covered = new Set(Core.LITURGICAL_SERVICE_FIELDS.map(f => f.roleSlug));
+    Roles.LITURGICAL_SLUGS.forEach(slug => {
+        assert.ok(covered.has(slug), 'no Service field is read for the ' + slug + ' Role');
+    });
+});
