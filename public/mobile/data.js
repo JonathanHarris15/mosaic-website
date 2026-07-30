@@ -86,10 +86,74 @@
   var DESTINATIONS = Destinations.DESTINATIONS;
   var canSee = Destinations.canSee;
 
+  // ── Remembering what a screen just loaded ────────────────────
+  //
+  // Home fetches the WHOLE services collection to work out the next Sunday,
+  // and did it again every single time you came back to Home — including
+  // when you had been there ten seconds earlier and nothing had changed.
+  //
+  // This is NOT the Firestore cache (local-cache.js, off — it hangs the
+  // WebView). It is a plain object in this document plus a copy in
+  // sessionStorage, so it involves no Firestore machinery at all and cannot
+  // bring that problem back. Two levels because there are two ways back to
+  // Home: a native screen (Hymn Directory, Shepherd…) keeps this document
+  // alive and hits the object; a shell page (Calendar, Roles Manager) is a
+  // whole new document, and only sessionStorage survives that.
+  //
+  // Deliberately SHORT. This exists to make "I was just there" instant, not
+  // to hold data — anything older than a minute is fetched again.
+  var TTL_MS = 60 * 1000;
+  var memo = {};
+
+  function sessionGet(key) {
+    try {
+      var raw = window.sessionStorage.getItem("mosaicMemo:" + key);
+      if (!raw) return null;
+      var saved = JSON.parse(raw);
+      if (!saved || (Date.now() - saved.at) > TTL_MS) return null;
+      return saved.value;
+    } catch (e) { return null; }
+  }
+
+  function sessionPut(key, value) {
+    try {
+      window.sessionStorage.setItem("mosaicMemo:" + key, JSON.stringify({ at: Date.now(), value: value }));
+    } catch (e) {}   // quota, private mode — the memory half still works
+  }
+
+  // The promise is what's stored, not the result, so two screens asking at
+  // once share one fetch rather than racing two.
+  function remembered(key, load) {
+    if (memo[key] && (Date.now() - memo[key].at) <= TTL_MS) return memo[key].promise;
+
+    var warm = sessionGet(key);
+    if (warm) {
+      memo[key] = { at: Date.now(), promise: Promise.resolve(warm) };
+      return memo[key].promise;
+    }
+
+    var p = load().then(function (value) {
+      sessionPut(key, value);
+      return value;
+    }).catch(function (e) {
+      delete memo[key];   // a failure must not be remembered as an answer
+      throw e;
+    });
+    memo[key] = { at: Date.now(), promise: p };
+    return p;
+  }
+
+  // Anything that CHANGES one of these has to say so, or you would come back
+  // to Home and read your own edit as it was before you made it.
+  function forget(key) {
+    delete memo[key];
+    try { window.sessionStorage.removeItem("mosaicMemo:" + key); } catch (e) {}
+  }
+
   // ── Collection loaders (defensive: tolerate missing fields) ──
   function lc(v) { return String(v == null ? "" : v).toLowerCase(); }
 
-  function getHymns() {
+  function loadHymns() {
     return get(db.collection("hymns")).then(function (snap) {
       var out = [];
       snap.forEach(function (doc) {
@@ -117,6 +181,7 @@
       return out;
     });
   }
+  function getHymns() { return remembered("hymns", loadHymns); }
 
   function getPeople() {
     return get(db.collection("people")).then(function (snap) {
@@ -151,7 +216,7 @@
     });
   }
 
-  function getServices() {
+  function loadServices() {
     return get(db.collection("services")).then(function (snap) {
       var out = [];
       snap.forEach(function (doc) {
@@ -172,6 +237,9 @@
       return out;
     });
   }
+  // Home asks for this on every visit; `remembered` is why that stopped
+  // meaning "fetch every service the church has ever had", every time.
+  function getServices() { return remembered("services", loadServices); }
 
   // ── Shepherding (native Shepherd Dashboard) ──────────────────
   // Reads/writes the same collections as the desktop page
@@ -905,6 +973,7 @@
   M.data = {
     auth: auth, db: db,
     onUser: onUser, loadProfile: loadProfile, warmCache: warmCache,
+    forget: forget,
     signIn: signIn, signOut: signOut,
     DESTINATIONS: DESTINATIONS, canSee: canSee,
     getHymns: getHymns, getPeople: getPeople, getServices: getServices,

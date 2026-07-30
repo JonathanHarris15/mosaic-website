@@ -231,13 +231,20 @@
   var SHELL_PAGES = window.MosaicDestinations.SHELL_PAGES;
 
   function nav(route, params) {
+    // Opening an editor is the last moment we know the thing being edited is
+    // about to change. What data.js remembered about it has to go now — the
+    // editor is a whole new document, so nothing here runs again to do it
+    // afterwards, and coming back to Home would show the version you just
+    // finished editing away.
     if (route === "serviceBuilder") {
+      if (data.forget) data.forget("services");
       var d = (params && params.date) || "";
       if (!d) { M.navParams = {}; location.hash = "#/calendar"; return; }
       window.location.href = "service-builder.html?date=" + encodeURIComponent(d) + "&shell=mobile";
       return;
     }
     if (route === "hymnManager") {
+      if (data.forget) data.forget("hymns");
       // The hymn manager is the real desktop page (manager.html) opened in-shell:
       // ?edit=<id> from a hymn's "Manage Hymn" button, ?new=1 from the directory's
       // add-a-hymn FAB. No separate mobile "manager" list — the directory is the list.
