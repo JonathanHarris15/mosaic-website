@@ -92,14 +92,42 @@
 
 
   // ── Login ────────────────────────────────────────────────
-  function LoginScreen(props) {
-    var emailS = useState(""), pwS = useState(""), errS = useState(""), busyS = useState(false);
-    function submit() {
-      busyS[1](true); errS[1]("");
-      data.signIn(emailS[0], pwS[0])
-        .then(function () { busyS[1](false); props.nav("home"); })
-        .catch(function (err) { busyS[1](false); errS[1](err && err.message ? err.message : "Sign in failed"); });
+  // Firebase deliberately doesn't say which half was wrong (telling you an email
+  // exists is an account-enumeration leak), so neither do we — one sentence for
+  // the whole "that pair isn't right" family, and both fields go red. `fields`
+  // is what turns them red, so a network failure says its piece without blaming
+  // what you typed.
+  function signInMessage(err) {
+    switch (err && err.code) {
+      case "auth/invalid-email": return { text: "That doesn't look like an email address.", fields: true };
+      case "auth/user-disabled": return { text: "That account has been disabled. Ask an admin for help.", fields: false };
+      case "auth/too-many-requests": return { text: "Too many attempts. Wait a moment and try again.", fields: false };
+      case "auth/network-request-failed": return { text: "Can't reach Mosaic. Check your connection and try again.", fields: false };
+      case "auth/invalid-credential":
+      case "auth/wrong-password":
+      case "auth/user-not-found":
+        return { text: "That email and password don't match an account.", fields: true };
+      default: return { text: "Sign in failed. Please try again.", fields: false };
     }
+  }
+
+  function LoginScreen(props) {
+    var emailS = useState(""), pwS = useState(""), errS = useState(null), busyS = useState(false);
+    function submit() {
+      if (busyS[0]) return;
+      if (!emailS[0].trim() || !pwS[0]) { errS[1]({ text: "Enter your email and password.", fields: true }); return; }
+      busyS[1](true); errS[1](null);
+      data.signIn(emailS[0].trim(), pwS[0])
+        .then(function () { busyS[1](false); props.nav("home"); })
+        .catch(function (err) { busyS[1](false); errS[1](signInMessage(err)); });
+    }
+    // Typing is the person answering the complaint — clear it so the red doesn't
+    // outlive the mistake.
+    function onEdit(setter) {
+      return function (ev) { if (errS[0]) errS[1](null); setter(ev.target.value); };
+    }
+    function onEnter(ev) { if (ev.key === "Enter") submit(); }
+    var err = errS[0], bad = !!(err && err.fields);
     return html`
       <div style=${{ height: "100%", background: "var(--background)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
         <div style=${{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "80px 28px 40px", position: "relative" }}>
@@ -111,16 +139,17 @@
             <div style=${{ fontFamily: "var(--font-serif)", fontSize: 15, fontStyle: "italic", color: "var(--on-surface-variant)", marginTop: 2 }}>Services · College Station</div>
           </div>
           <div style=${{ display: "flex", flexDirection: "column", gap: 16, position: "relative" }}>
-            <${Input} label="Email Address" type="email" placeholder="you@example.com" value=${emailS[0]} onInput=${function (ev) { emailS[1](ev.target.value); }} />
-            <${Input} label="Password" type="password" placeholder="••••••••" value=${pwS[0]} onInput=${function (ev) { pwS[1](ev.target.value); }} />
-            ${errS[0] ? html`<div style=${{ color: "var(--error)", fontFamily: "var(--font-sans)", fontSize: 13 }}>${errS[0]}</div>` : null}
+            <${Input} label="Email Address" type="email" placeholder="you@example.com" value=${emailS[0]} invalid=${bad} onKeyDown=${onEnter} onInput=${onEdit(emailS[1])} />
+            <${Input} label="Password" type="password" placeholder="••••••••" value=${pwS[0]} invalid=${bad} onKeyDown=${onEnter} onInput=${onEdit(pwS[1])} />
+            ${err ? html`<div role="alert" style=${{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: "var(--radius)", background: "var(--error-container)", color: "var(--on-error-container)", fontFamily: "var(--font-sans)", fontSize: 13, lineHeight: 1.35 }}>
+              <span style=${{ display: "flex", flexShrink: 0, color: "var(--error)" }}>${Ic("circle-alert", 16)}</span>${err.text}
+            </div>` : null}
             <div style=${{ marginTop: 4 }}>
               <${Button} variant="primary" size="lg" style=${{ width: "100%" }} icon=${Ic("log-in", 18)} onClick=${submit}>${busyS[0] ? "Signing in…" : "Sign In"}<//>
             </div>
             <button onClick=${function () { setGuest(true); props.nav("home"); }} style=${{ background: "none", border: "none", color: "var(--secondary)", fontFamily: "var(--font-sans)", fontSize: 13.5, fontWeight: 600, letterSpacing: "0.04em", cursor: "pointer", marginTop: 2 }}>Continue as guest</button>
           </div>
         </div>
-        <div style=${{ textAlign: "center", padding: "0 0 34px", fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--on-surface-variant)" }}>A very present help in trouble.</div>
       </div>`;
   }
 
@@ -193,7 +222,7 @@
   }
 
   // Profile is shell-adapted (see SHELL_PAGES below): the real profile.html
-  // (password change, staff management) runs inside the WebView with
+  // (password change, account management) runs inside the WebView with
   // ?shell=mobile so the mobile app inherits every feature. The Admin Dashboard
   // is now a native screen (screens-admin.js, route "admin").
 
@@ -265,6 +294,9 @@
 
     if (!render) return null;
     var user = props.user || {};
+    // The head is your row: tapping it opens your profile. Only when there is a
+    // you — signed out it stays a plain label, not a button to nowhere.
+    var signedIn = !!props.user;
     return html`
       <${M.Fragment}>
         <div onClick=${props.onClose} style=${{ position: "absolute", inset: 0, zIndex: 40, background: "rgba(14,28,54,0.42)", backdropFilter: "blur(1.5px)", opacity: vis ? 1 : 0, transition: "opacity 0.28s ease" }}></div>
@@ -277,13 +309,16 @@
                 ${Ic("menu", 24)}
               </button>
             </div>
-            <div style=${{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, position: "relative" }}>
+            <${signedIn ? "button" : "div"} onClick=${signedIn ? function () { props.onNavigate("profile"); } : null}
+              aria-label=${signedIn ? "Open your profile" : null}
+              style=${{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, position: "relative", width: "100%", padding: 0, border: "none", background: "transparent", textAlign: "left", cursor: signedIn ? "pointer" : "default" }}>
               <${Avatar} name=${user.name || "Guest"} size=${36} />
-              <div style=${{ minWidth: 0 }}>
+              <div style=${{ minWidth: 0, flex: 1 }}>
                 <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--on-primary)" }}>${user.name || "Guest"}</div>
                 <div style=${{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--primary-fixed-dim)" }}>${user.roleLabel || "Not signed in"}</div>
               </div>
-            </div>
+              ${signedIn ? html`<span style=${{ display: "flex", color: "var(--primary-fixed-dim)" }}>${Ic("chevron-right", 18)}</span>` : null}
+            <//>
           </div>
           <div style=${{ flex: 1, overflowY: "auto", padding: "10px 12px" }}>
             ${data.DESTINATIONS.filter(function (d) { return data.canSee(d, user); }).map(function (d) {

@@ -237,7 +237,7 @@ if (createUserForm) {
         const password = document.getElementById('new-user-password').value;
         const permissionLevel = document.getElementById('new-user-role').value;
 
-        createUserStatus.textContent = 'Provisionsing staff account...';
+        createUserStatus.textContent = 'Provisioning account...';
         createUserStatus.className = 'mt-sm text-xs font-body-md text-primary animate-pulse';
 
         try {
@@ -273,7 +273,7 @@ async function loadUsersList() {
         if (userCount) userCount.textContent = `${snapshot.size} Active Accounts`;
 
         if (snapshot.empty) {
-            usersList.innerHTML = '<div class="p-md text-sm text-on-surface-variant italic">No staff accounts found.</div>';
+            usersList.innerHTML = '<div class="p-md text-sm text-on-surface-variant italic">No accounts found.</div>';
             return;
         }
 
@@ -371,7 +371,7 @@ async function loadUsersList() {
         console.error("Error loading user directory:", error);
         usersList.innerHTML = `<div class="p-md text-error text-sm font-body-md flex items-center gap-2">
             <span class="material-symbols-outlined text-sm">error</span>
-            Failed to load staff directory: ${error.message}
+            Failed to load account directory: ${error.message}
         </div>`;
     }
 }

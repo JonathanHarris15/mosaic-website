@@ -653,6 +653,15 @@ function serviceForm() {
                 this.service.liturgy.prayerMale : this.service.liturgy.prayerFemale;
         },
 
+        // A Prayer Request is read far more often than it is typed, and a texted
+        // reply can arrive at any length — so the box grows to its whole content
+        // rather than hiding it behind a two-row scroll.
+        autoResize(el) {
+            if (!el) return;
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
+        },
+
         async loadPrayerRequests() {
             if (!this.isShepherd || !this.date) return;
             for (const which of ['male', 'female']) {

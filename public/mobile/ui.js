@@ -139,7 +139,8 @@
       <label style=${{ display: "block" }}>
         ${props.label ? html`<span style=${{ display: "block", fontFamily: "var(--font-sans)", fontSize: 11.5, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--on-surface-variant)", marginBottom: 6 }}>${props.label}</span>` : null}
         <input type=${props.type || "text"} placeholder=${props.placeholder} value=${props.value} defaultValue=${props.defaultValue} onInput=${props.onInput}
-          style=${{ width: "100%", height: 48, padding: "0 14px", borderRadius: "var(--radius)", border: "1px solid var(--outline-variant)", background: "var(--surface-container-lowest)", fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--on-surface)", outline: "none" }} />
+          onKeyDown=${props.onKeyDown} aria-invalid=${props.invalid ? "true" : null}
+          style=${{ width: "100%", height: 48, padding: "0 14px", borderRadius: "var(--radius)", border: props.invalid ? "1.5px solid var(--error)" : "1px solid var(--outline-variant)", background: props.invalid ? "var(--error-container)" : "var(--surface-container-lowest)", fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--on-surface)", outline: "none" }} />
       </label>`;
   }
 

@@ -114,8 +114,11 @@
     // Avatar, name, role — the drawer's head, and the same three parts the app's
     // drawer shows. The avatar went missing from this one, which is what a
     // second rendering costs if nothing holds the two to the same list.
-    var whoRow = document.createElement("div");
-    whoRow.style.cssText = "display:flex;align-items:center;gap:10px;margin-top:6px;";
+    // Tapping the head opens your profile — the same as the app's drawer. It
+    // only becomes a link once there is a you (draw() sets the href).
+    var whoRow = document.createElement("a");
+    whoRow.style.cssText = "display:flex;align-items:center;gap:10px;margin-top:6px;" +
+      "text-decoration:none;color:inherit;";
 
     var avatar = document.createElement("span");
     avatar.setAttribute("data-drawer-part", "avatar");
@@ -133,10 +136,14 @@
     role.setAttribute("data-drawer-part", "roleLabel");
     role.style.cssText = "font-family:var(--font-sans, sans-serif);font-size:11px;color:#B2C6F8;";
 
+    names.style.flex = "1";
     names.appendChild(who);
     names.appendChild(role);
+    var whoChevron = symbol("chevron_right", 18);
+    whoChevron.style.cssText += "color:#B2C6F8;";
     whoRow.appendChild(avatar);
     whoRow.appendChild(names);
+    whoRow.appendChild(whoChevron);
     head.appendChild(whoRow);
 
     var list = document.createElement("div");
@@ -147,6 +154,15 @@
       who.textContent = name;
       avatar.textContent = D.initials(name);
       role.textContent = user ? D.roleLabel(user.permissionLevel) : "Not signed in";
+      if (user) {
+        whoRow.href = D.routeHref("profile");
+        whoRow.setAttribute("aria-label", "Open your profile");
+        whoChevron.style.display = "";
+      } else {
+        whoRow.removeAttribute("href");
+        whoRow.removeAttribute("aria-label");
+        whoChevron.style.display = "none";
+      }
       list.textContent = "";
       D.DESTINATIONS.filter(function (d) { return D.canSee(d, user); }).forEach(function (d) {
         var here = d.route === (window.MOBILE_HEADER || {}).route;

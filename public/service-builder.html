@@ -755,8 +755,8 @@
 
                                                                         <!-- Prayer Requests (Elders/super admins only) -->
                                                                         <template x-if="showPrayerSubjects && isShepherd && (service.liturgy.prayerMale.id || service.liturgy.prayerFemale.id)">
-                                                                            <div class="mt-3 rounded-xl border border-secondary/30 bg-secondary-container/15 p-4" x-cloak>
-                                                                                <div class="flex items-center gap-1.5 mb-3">
+                                                                            <div class="mt-3 -mx-4 sm:mx-0 rounded-xl border border-secondary/30 bg-secondary-container/15 p-3 sm:p-4" x-cloak>
+                                                                                <div class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mb-3">
                                                                                     <span class="material-symbols-outlined text-[16px] text-secondary">lock</span>
                                                                                     <h4 class="field-label !text-[11px] !mb-0 text-secondary">Prayer Requests</h4>
                                                                                     <span class="text-[9px] normal-case text-secondary/80">Private — visible to Elders only</span>
@@ -767,7 +767,7 @@
                                                                                             <span class="text-[10px] uppercase tracking-wider font-bold text-primary" x-text="subjectFor(which).name"></span>
                                                                                             <span class="text-[9px] uppercase tracking-wider text-secondary font-bold" x-text="prayerRequestStatus(which)"></span>
                                                                                         </div>
-                                                                                        <textarea x-model="prayerRequests[which].text" :disabled="!canEdit" rows="2" placeholder="What they'd like prayer about. Texted replies fill this in automatically." class="w-full text-sm rounded-lg border border-outline-variant bg-white px-3 py-2 focus:ring-1 focus:ring-primary outline-none"></textarea>
+                                                                                        <textarea x-model="prayerRequests[which].text" :disabled="!canEdit" rows="2" x-effect="prayerRequests[which].text; $nextTick(() => autoResize($el))" @input="autoResize($el)" placeholder="What they'd like prayer about. Texted replies fill this in automatically." class="w-full text-sm leading-relaxed rounded-lg border border-outline-variant bg-white px-3 py-2 focus:ring-1 focus:ring-primary outline-none resize-none overflow-hidden"></textarea>
                                                                                         <div x-show="canEdit" class="flex justify-end items-center gap-2 mt-1">
                                                                                             <button @click="sendPrayerRequestNow(which)" :disabled="!canSendPrayerText(which) || prayerSending[which]" :title="prayerSendTitle(which)" class="text-[10px] uppercase tracking-widest border border-primary text-primary px-3 py-1 rounded-full hover:bg-primary/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
                                                                                                 <span class="material-symbols-outlined text-[12px]" :class="prayerSending[which] ? 'animate-spin' : ''" x-text="prayerSending[which] ? 'progress_activity' : 'sms'"></span>
