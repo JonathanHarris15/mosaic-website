@@ -31,10 +31,10 @@
            nothing here. What the shell changes is the CHROME: it draws the
            header, so the page must not draw a second one. */
 
-        /* The shell header already says "Roles Manager". */
-        html.shell-mobile .rm-page-heading { display: none; }
-        /* Which leaves a rule under a paragraph, under the shell's own rule. */
-        html.shell-mobile .rm-title-block { border-bottom: none; padding-bottom: 0; }
+        /* The whole title block goes: the shell header already says "Roles
+           Manager", and a paragraph explaining the page costs most of a phone
+           screen before the first Role. The list says what this is. */
+        html.shell-mobile .rm-title-block { display: none; }
 
         /* The editor's own bar keeps what the shell header cannot say — the
            Role's name, how many people it needs, and delete. Its duplicate back
@@ -101,7 +101,7 @@
 
         <!-- Page title -->
         <div class="rm-title-block pb-md border-b border-outline-variant">
-            <h1 class="rm-page-heading font-display text-headline-lg tracking-[.02em] text-primary">Roles Manager</h1>
+            <h1 class="font-display text-headline-lg tracking-[.02em] text-primary">Roles Manager</h1>
             <p class="font-body-md text-body-md text-on-surface-variant mt-xs max-w-[64ch]">
                 Every serving Role in one place. Set how many people a Role needs, who each place is for,
                 and any rules about who can fill it.

@@ -850,8 +850,9 @@ test('every phone rule on the Roles Manager has something to style', () => {
 test('the phone never draws two headers, or two back arrows', () => {
     const html = rolesManagerHtml();
 
-    // The shell header says "Roles Manager", so the page's own h1 stands down.
-    assert.match(html, /html\.shell-mobile \.rm-page-heading\s*{\s*display:\s*none/,
+    // The shell header says "Roles Manager", so the page's own title block —
+    // heading and the paragraph explaining the page — stands down entirely.
+    assert.match(html, /html\.shell-mobile \.rm-title-block\s*{\s*display:\s*none/,
         'the page still prints its own title under the shell\'s');
 
     // The editor's bar keeps the Role's name, its count and delete — the shell
