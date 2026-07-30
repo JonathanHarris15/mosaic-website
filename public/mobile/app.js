@@ -344,7 +344,17 @@
     var menuState = useState(false);
     var userState = useState(undefined); // undefined = loading, null = signed out
 
-    useEffect(function () { return data.onUser(function (u) { userState[1](u); if (u) setGuest(false); }); }, []);
+    // Signing in is the moment to fill the on-device cache: you are already
+    // watching the app start, and every screen after this reads from it rather
+    // than the network. Deliberately not awaited — it warms behind the home
+    // screen instead of holding it back.
+    useEffect(function () {
+      return data.onUser(function (u) {
+        userState[1](u);
+        if (u) setGuest(false);
+        if (u && data.warmCache) data.warmCache(u);
+      });
+    }, []);
 
     // `undefined` is still loading; only `null` is a decision. Redirecting on
     // the loading value would bounce a signed-in person off their own home

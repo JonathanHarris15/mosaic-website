@@ -3,6 +3,13 @@
  * Logic for the profile page, including admin user management.
  */
 
+// A read whose RESULT DECIDES A WRITE — a merge, a re-point, a batch of
+// deletes. In the phone app ordinary reads are answered from the device
+// (local-cache.js); these must not be. Stale input to a write does not show
+// you old data, it destroys new data: a merge planned from a people list a
+// minute old silently drops whoever was added in that minute. Ignored on the
+// web, where reads were always live.
+var FRESH_READ = { source: 'server' };
 let currentUserUid = null;
 
 let isInitialAuthCheck = true;
@@ -467,14 +474,14 @@ async function unlinkPerson(uid) {
 async function setUserPersonLink(uid, personId) {
     const del = firebase.firestore.FieldValue.delete();
     const userRef = db.collection('users').doc(uid);
-    const userSnap = await userRef.get();
+    const userSnap = await userRef.get(FRESH_READ);
     const oldPersonId = userSnap.exists ? (userSnap.data().personId || null) : null;
 
     const batch = db.batch();
 
     // Clear the back-reference on the person this user used to point at.
     if (oldPersonId && oldPersonId !== personId) {
-        const oldPersonSnap = await db.collection('people').doc(oldPersonId).get();
+        const oldPersonSnap = await db.collection('people').doc(oldPersonId).get(FRESH_READ);
         if (oldPersonSnap.exists) {
             batch.update(db.collection('people').doc(oldPersonId), { userId: del });
         }
@@ -482,7 +489,7 @@ async function setUserPersonLink(uid, personId) {
 
     if (personId) {
         const personRef = db.collection('people').doc(personId);
-        const personSnap = await personRef.get();
+        const personSnap = await personRef.get(FRESH_READ);
         if (!personSnap.exists) throw new Error('Selected person no longer exists.');
 
         // If that person was already linked to a different user, clear that user's link.

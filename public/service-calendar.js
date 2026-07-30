@@ -1,3 +1,10 @@
+// A read whose RESULT DECIDES A WRITE — a merge, a re-point, a batch of
+// deletes. In the phone app ordinary reads are answered from the device
+// (local-cache.js); these must not be. Stale input to a write does not show
+// you old data, it destroys new data: a merge planned from a people list a
+// minute old silently drops whoever was added in that minute. Ignored on the
+// web, where reads were always live.
+var FRESH_READ = { source: 'server' };
 function calendarPage() {
     return {
         view: localStorage.getItem('calendarView') || 'list',
@@ -161,7 +168,7 @@ function calendarPage() {
                                 .where('serviceDate', '==', this.selectorDateKey)
                                 .where('type', '==', role);
                             if (metadata && metadata.prayer_type) query = query.where('metadata.prayer_type', '==', metadata.prayer_type);
-                            const invSnap = await query.get();
+                            const invSnap = await query.get(FRESH_READ);
                             invSnap.forEach(d => batch.delete(d.ref));
                             if (!invSnap.empty) {
                                 batch.update(oldPersonRef, { totalInvolvements: firebase.firestore.FieldValue.increment(-invSnap.size) });

@@ -1,3 +1,10 @@
+// A read whose RESULT DECIDES A WRITE — a merge, a re-point, a batch of
+// deletes. In the phone app ordinary reads are answered from the device
+// (local-cache.js); these must not be. Stale input to a write does not show
+// you old data, it destroys new data: a merge planned from a people list a
+// minute old silently drops whoever was added in that minute. Ignored on the
+// web, where reads were always live.
+var FRESH_READ = { source: 'server' };
 const CANONICAL_MAPPING = {
     'Theme': { field: 'theme', type: 'text' },
     'Key Verse': { field: 'keyVerse', type: 'text' },
@@ -1678,7 +1685,7 @@ function serviceForm() {
             if (metadata && metadata.prayer_type) {
                 query = query.where('metadata.prayer_type', '==', metadata.prayer_type);
             }
-            const snap = await query.get();
+            const snap = await query.get(FRESH_READ);
             snap.forEach(doc => batch.delete(doc.ref));
             if (!snap.empty) {
                 batch.update(personRef, {
@@ -1691,7 +1698,7 @@ function serviceForm() {
             // Only clear when the recorded baptismDate is this service's date, so a
             // baptism recorded at a different service is never wiped by this edit.
             const personRef = db.collection('people').doc(personId);
-            const snap = await personRef.get();
+            const snap = await personRef.get(FRESH_READ);
             if (snap.exists && snap.data().baptismDate === this.date) {
                 batch.update(personRef, { baptismDate: firebase.firestore.FieldValue.delete() });
             }

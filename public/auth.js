@@ -21,6 +21,18 @@ if (!firebase.apps.length) {
 const auth = firebase.auth();
 const db = firebase.firestore();
 
+// On-device cache for the phone app only — see local-cache.js. Must run before
+// anything else touches `db`, which is why it sits on the line after it. On the
+// web this is a no-op and every read stays live.
+//
+// interceptReads is what reaches the fifteen desktop pages the phone opens in
+// its shell: they were all written against a plain .get(), and this is what
+// makes those reads answer from the device without editing every one of them.
+if (window.MosaicLocalCache) {
+    window.MosaicLocalCache.enable(db);
+    window.MosaicLocalCache.interceptReads(firebase);
+}
+
 // Connect to emulators if running locally and emulators are detected
 if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
     // You can manually toggle this if you want to test against production or emulators

@@ -24,6 +24,9 @@
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
     <script src="vendor/firebase/firebase-firestore-compat.js"></script>
     <script src="vendor/firebase/firebase-functions-compat.js"></script>
+    <!-- On-device cache for the phone app (no-op on the web). Must load before
+         auth.js, which builds the Firestore handle persistence attaches to. -->
+    <script src="local-cache.js"></script>
     <script src="auth.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
