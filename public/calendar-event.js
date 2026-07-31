@@ -226,18 +226,29 @@
                     this.assignments = loaded.assignments || [];
                     this.startOccurrenceDraft();
 
-                    if (loaded.seriesId) {
-                        const s = await db.collection('events').doc(loaded.seriesId).get();
-                        if (s.exists) this.series = Object.assign({ id: s.id }, s.data());
-                    }
+                    // The rest in one wave. None of these three needs anything
+                    // from the others — they were only sequential because they
+                    // were written in the order somebody thought of them, and
+                    // each `await` is a whole round trip. On a phone that was the
+                    // difference between the screen appearing and the screen
+                    // arriving in instalments.
+                    await Promise.all([
+                        loaded.seriesId
+                            ? db.collection('events').doc(loaded.seriesId).get().then(s => {
+                                if (s.exists) this.series = Object.assign({ id: s.id }, s.data());
+                            })
+                            : null,
 
-                    if (this.isEditor) await this.loadEditorData();
-                    else await this.loadPeople();
+                        this.isEditor ? this.loadEditorData() : this.loadPeople(),
 
-                    if (this.isSunday) {
-                        this.liturgicalHolders =
-                            await Store.loadLiturgicalHolders(db, this.occurrence.date);
-                    }
+                        // A Sunday's liturgy lives on the Service document, not
+                        // in assignments, and the picker has to see it to know
+                        // who is already busy.
+                        this.isSunday
+                            ? Store.loadLiturgicalHolders(db, loaded.date)
+                                .then(held => { this.liturgicalHolders = held; })
+                            : null,
+                    ]);
                 } catch (e) {
                     console.error('Event load failed:', e);
                     this.error = (e && e.code === 'permission-denied')
@@ -264,8 +275,10 @@
             // and three chances of a dropped one, paid by every editor who only
             // came to look at the roster.
             async loadEditorData() {
-                await this.loadPeople();
-                const roles = await db.collection('roles').get();
+                const [, roles] = await Promise.all([
+                    this.loadPeople(),
+                    db.collection('roles').get(),
+                ]);
                 this.roleDefinitions = roles.docs.map(d => Object.assign({ id: d.id }, d.data()));
             },
 

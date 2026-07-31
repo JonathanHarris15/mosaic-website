@@ -473,7 +473,7 @@
                 { key: 'order', label: 'Order of Service', icon: 'list_alt' },
                 { key: 'roles', label: 'Roles', icon: 'groups' }
             ]" :key="pane.key">
-                <button @click="tab = pane.key"
+                <button @click="openTab(pane.key)"
                         :class="tab === pane.key
                             ? 'border-primary text-primary'
                             : 'border-transparent text-on-surface-variant hover:text-primary'"
@@ -1079,14 +1079,26 @@
              Service that the printed booklet reads (ADR-0018 §2), they are set
              in the card above, and a second way to set them would be a second
              source of truth for who is preaching. -->
-        <!-- x-if, not x-show. Alpine evaluates x-data the moment it walks the
-             page, and at that point `date` is still empty — the Service loads
-             asynchronously. A panel built then would ask for the occurrence
-             `sunday_service_` and find nothing. Behind an x-if it is built when
-             the tab is opened and the Sunday is known, which also means the
-             Calendar's data is not fetched by anyone who never opens Roles. -->
-        <template x-if="tab === 'roles' && date">
-            <div x-data="eventDetailPage({ occurrenceId: sundayOccurrenceId, rolesOnly: true })"
+        <!-- Built once, on the first visit to the tab, and then kept.
+
+             Not `x-data` on a plain div: Alpine evaluates that as it walks the
+             page, when `date` is still empty because the Service loads
+             asynchronously — the panel would ask for the occurrence
+             `sunday_service_` and find nothing.
+
+             But not `x-if="tab === 'roles'"` either, which was the first attempt
+             and was worse than it looked. x-if DESTROYS what it built when the
+             condition goes false, so every switch back to Roles re-ran the whole
+             load — the occurrence, the series, the people, the Roles and the
+             Service document. Five round trips, every tap, for a panel that was
+             already correct a second ago.
+
+             `rolesOpened` latches instead. Nothing is fetched for somebody who
+             never opens the tab, and nothing is fetched twice for somebody who
+             does. Visibility is then just x-show. -->
+        <template x-if="rolesOpened && date">
+            <div x-show="tab === 'roles'"
+                 x-data="eventDetailPage({ occurrenceId: sundayOccurrenceId, rolesOnly: true })"
                  x-init="init()">
 
                 <div x-show="loading" class="py-12 text-center text-on-surface-variant font-label-md text-label-md">

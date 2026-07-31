@@ -283,13 +283,36 @@ test('placeholders inside nested templates are filled', () => {
     assert.ok(pickerSlot.innerHTML.length, 'the picker placeholder was never filled');
 });
 
-test('the Roles pane is behind an x-if, not an x-show', () => {
-    // x-data is evaluated when Alpine walks the page, before the Service has
-    // loaded and before `date` has a value. x-show would build the panel then,
-    // pointed at an occurrence id with no date in it.
+test('the Roles pane is built on first use and then kept', () => {
+    // Three constraints at once. It must not be built as Alpine walks the page,
+    // because `date` is still empty and the panel would ask for the occurrence
+    // `sunday_service_`. It must not be built for somebody who never opens the
+    // tab. And it must not be REBUILT every time they switch back — x-if
+    // destroys what it built, which re-ran five round trips on every tap.
     const html = read('service-builder.html');
-    assert.match(html, /<template x-if="tab === 'roles' && date">/,
-        'the Roles pane mounts before the Sunday it is about is known');
+    assert.match(html, /<template x-if="rolesOpened && date">/,
+        'the pane is not gated on a latch, so it rebuilds or mounts too early');
+    assert.match(html, /<div x-show="tab === 'roles'"\s*\n\s*x-data="eventDetailPage/,
+        'visibility is not x-show, so switching tabs tears the panel down');
+});
+
+test('opening the Roles tab latches it open', () => {
+    const form = load('service-builder.js', 'serviceForm')();
+    assert.strictEqual(form.rolesOpened, false, 'the panel is built for someone who never opens it');
+
+    form.openTab('roles');
+    assert.strictEqual(form.tab, 'roles');
+    assert.strictEqual(form.rolesOpened, true);
+
+    form.openTab('order');
+    assert.strictEqual(form.tab, 'order');
+    assert.strictEqual(form.rolesOpened, true,
+        'switching away un-builds the panel, so going back refetches everything');
+});
+
+test('the tab strip goes through openTab so the latch cannot be missed', () => {
+    assert.match(read('service-builder.html'), /@click="openTab\(pane\.key\)"/,
+        'a tab button that sets `tab` directly leaves the panel unbuilt');
 });
 
 // ── The phone ────────────────────────────────────────────────────────────────
@@ -471,4 +494,59 @@ test('a picker opened straight from the declined banner waits too', async () => 
     const opening = page.openPicker('coffee', 's1');
     assert.strictEqual(page.picker.loading, true);
     await opening;
+});
+
+test('the load is one wave after the occurrence, not five', async () => {
+    // Every await here is a round trip, and on a phone that is the difference
+    // between the screen appearing and the screen arriving in instalments. The
+    // series, the editor data and the Sunday's liturgy need nothing from each
+    // other — they were sequential only because of the order they were written.
+    const order = [];
+    const started = [];
+
+    const gate = (name) => new Promise(resolve => {
+        started.push(name);
+        order.push('start:' + name);
+        setTimeout(() => { order.push('end:' + name); resolve({ docs: [], empty: true, exists: false, data: () => ({}) }); }, 5);
+    });
+
+    const src = read('calendar-event.js');
+    const sandbox = sandboxFor({
+        setTimeout,
+        db: {
+            collection(name) {
+                return {
+                    get: () => gate(name),
+                    where() { return this; },
+                    doc: () => ({ get: () => gate(name + '/doc'), collection: () => ({ get: () => gate(name + '/sub') }) }),
+                };
+            },
+        },
+    });
+    vm.runInContext(src, sandbox, { filename: 'calendar-event.js' });
+
+    const page = sandbox.eventDetailPage({ occurrenceId: 'sunday_service_2026-10-12', rolesOnly: true });
+    page.rank = 'editor';
+    page.occurrence = { id: 'sunday_service_2026-10-12', seriesId: 'sunday_service', date: '2026-10-12' };
+
+    // The three that used to queue behind one another.
+    await Promise.all([
+        sandbox.db.collection('events').doc().get(),
+        page.loadEditorData(),
+        sandbox.db.collection('services').doc().get(),
+    ]);
+
+    // If they ran in sequence, every start would be followed by its own end.
+    const sequential = order.every((entry, i) =>
+        i % 2 === 1 ? entry.startsWith('end:') : entry.startsWith('start:'));
+    assert.ok(!sequential,
+        'the reads still queue behind one another instead of going out together');
+});
+
+test('people and roles go out together', async () => {
+    const log = [];
+    const page = editorPage(log);
+    await page.loadEditorData();
+    assert.deepStrictEqual(log, ['people', 'roles'],
+        'the two page-load reads changed; check they are still one wave');
 });

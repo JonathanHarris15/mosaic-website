@@ -145,6 +145,11 @@ function serviceForm() {
         // standing in its Roles (MS-16). Opens on the order of service, which is
         // what this page has always been.
         tab: 'order',
+        // Latches on the first visit to the Roles tab and never clears. It is
+        // what builds the panel — so nothing is fetched for somebody who never
+        // opens it, and nothing is re-fetched for somebody who switches back and
+        // forth. Switching tabs after that is only a matter of what is shown.
+        rolesOpened: false,
         // Prayer Request per pastoral-prayer subject, visible to elders only.
         prayerRequests: {
             male: { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false },
@@ -434,6 +439,15 @@ function serviceForm() {
                 ? window.EventsOccurrenceCore.occurrenceId(
                     window.EventsOccurrenceCore.SUNDAY_SERVICE_ID, this.date)
                 : null;
+        },
+
+        openTab(key) {
+            this.tab = key;
+            // Latch on the way in, not on a watcher, so the panel is built by
+            // the tap that asked for it. If `date` has not landed yet the
+            // template simply waits for it rather than building a panel pointed
+            // at no Sunday.
+            if (key === 'roles') this.rolesOpened = true;
         },
 
         // The shell's back arrow, answered by the page (MS-16). A tab is not a
