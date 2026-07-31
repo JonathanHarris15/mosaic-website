@@ -1000,23 +1000,63 @@ function serviceForm() {
 
                 const peopleToRecalculate = new Set();
 
-                // 1. Process Standard Roles
-                for (const { field, role, metadata } of roles) {
-                    const oldId = original[field] ? original[field].id : null;
-                    const newId = this.service[field].id;
-                    if (oldId !== newId) {
-                        if (oldId) await this._removeInvolvement(batch, oldId, role, metadata);
-                        if (newId) await this._addInvolvement(batch, newId, role, metadata);
-                    }
-                }
+                // An Involvement is the fact that somebody served, so it is not
+                // written until the day has been (MS-160, ADR-0018 §1). Putting a
+                // preacher down for a Sunday six weeks out used to count as
+                // serving the moment you saved, and a fairness engine reading
+                // that log ranks people by what was hoped for.
+                //
+                // A Sunday still ahead therefore writes nothing and is stamped
+                // `involvementDeferred`, which is the Service saying its records
+                // are still owed. The scheduled job pays them the night the date
+                // passes, and clears the flag.
+                //
+                // Pastoral prayer below is untouched: it records being prayed
+                // FOR, not serving, and it drives lastPastoralPrayerDate for the
+                // prayer rotation.
+                const hasHappened = ServiceInvolvementCore.hasPassed(
+                    this.date, window.DateUtils.todayStr());
 
-                // 1b. Process Music Helpers (a set of worship_helper involvements)
-                const helperChanges = worshipHelperInvolvementChanges(original.musicHelpers, this.service.musicHelpers);
-                for (const personId of helperChanges.removed) {
-                    await this._removeInvolvement(batch, personId, 'worship_helper');
-                }
-                for (const personId of helperChanges.added) {
-                    await this._addInvolvement(batch, personId, 'worship_helper');
+                if (hasHappened) {
+                    // 1. Process Standard Roles
+                    for (const { field, role, metadata } of roles) {
+                        const oldId = original[field] ? original[field].id : null;
+                        const newId = this.service[field].id;
+                        if (oldId !== newId) {
+                            if (oldId) await this._removeInvolvement(batch, oldId, role, metadata);
+                            if (newId) await this._addInvolvement(batch, newId, role, metadata);
+                        }
+                    }
+
+                    // 1b. Process Music Helpers (a set of worship_helper involvements)
+                    const helperChanges = worshipHelperInvolvementChanges(original.musicHelpers, this.service.musicHelpers);
+                    for (const personId of helperChanges.removed) {
+                        await this._removeInvolvement(batch, personId, 'worship_helper');
+                    }
+                    for (const personId of helperChanges.added) {
+                        await this._addInvolvement(batch, personId, 'worship_helper');
+                    }
+                } else {
+                    // Nothing is owed yet — and anything already here is a record
+                    // of something that has not happened, whether this save put it
+                    // there or the old write-on-save behaviour did. Clearing it on
+                    // the way past means a Sunday heals itself the next time it is
+                    // touched, rather than waiting on the migration.
+                    for (const { field, role, metadata } of roles) {
+                        const oldId = original[field] ? original[field].id : null;
+                        const newId = this.service[field].id;
+                        if (oldId) await this._removeInvolvement(batch, oldId, role, metadata);
+                        if (newId && newId !== oldId) {
+                            await this._removeInvolvement(batch, newId, role, metadata);
+                        }
+                    }
+
+                    const helperIds = new Set(
+                        [...(original.musicHelpers || []), ...(this.service.musicHelpers || [])]
+                            .map(h => h && h.id).filter(Boolean));
+                    for (const personId of helperIds) {
+                        await this._removeInvolvement(batch, personId, 'worship_helper');
+                    }
                 }
 
                 // In the new system baptism presence is derived from the chosen
@@ -1091,6 +1131,12 @@ function serviceForm() {
                     irregularElements: this.service.irregularElements,
                     notes: this.service.notes,
                     liturgy: this.service.liturgy,
+                    // Whether this Sunday still owes its serve records. The
+                    // scheduled job converts only Services carrying it, which is
+                    // what stops it re-crediting every Sunday in the archive —
+                    // those were written the old way under auto-generated ids, so
+                    // a second pass would add a duplicate rather than overwrite.
+                    involvementDeferred: !hasHappened,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
                 // Only persist the guide system once the editor has engaged the new
