@@ -239,18 +239,23 @@
     function roleIntensity(series, roleSlug, options) {
         const opts = options || {};
 
-        if (opts.oneOff) {
-            const own = intensityValue(opts.oneOff.intensity);
-            return own === null ? DEFAULT_INTENSITY : own;
-        }
+        // A one-off Role IS the whole Role, so its own value is the only one
+        // there is. A Servant Role has a definition, and that definition is the
+        // Roles Manager's answer — it must win over the series map, or a stray
+        // `liturgicalIntensity: { setup: 3 }` would silently override a Setup
+        // definition saying 4, with the Manager showing one number and fairness
+        // using another. Only a Role with NO definition falls through to the
+        // map, which is exactly the liturgical case the map exists for.
+        const own = opts.oneOff
+            ? intensityValue(opts.oneOff.intensity)
+            : intensityValue(opts.definition && opts.definition.intensity);
+        if (own !== null) return own;
+        if (opts.oneOff || opts.definition) return DEFAULT_INTENSITY;
 
         const liturgical = intensityValue(
             ((series && series.liturgicalIntensity) || {})[roleSlug]
         );
-        if (liturgical !== null) return liturgical;
-
-        const servant = intensityValue(opts.definition && opts.definition.intensity);
-        return servant === null ? DEFAULT_INTENSITY : servant;
+        return liturgical === null ? DEFAULT_INTENSITY : liturgical;
     }
 
     // ── Validation ────────────────────────────────────────────────────────────

@@ -283,12 +283,34 @@
         const best = { seats: [], score: -1 };
         let lastReason = null;
 
+        // The order candidates are tried in NEVER CHANGES within a Role: both
+        // keys — this Role's recency, and the tie-break — depend only on the
+        // person, not on who else is already seated. So it is computed once here
+        // rather than rebuilt (and re-hashed) at every node of the search.
+        const order = o.people
+            .map(person => ({ personId: person.id, recency: o.recencyFor(person.id) }))
+            .sort((a, b) => (
+                b.recency - a.recency ||
+                o.tieBreak(a.personId) - o.tieBreak(b.personId)
+            ));
+
+        // The best score the next `n` slots could possibly reach: the n highest
+        // recencies on offer. Bounding with `n × windowSize` instead would be
+        // correct but far looser, and it goes slack in exactly the case the
+        // bound exists for — a Role with several slots and a varied history,
+        // where recencies differ and nothing saturates at the window.
+        const bestRemaining = [0];
+        order.forEach(candidate => {
+            bestRemaining.push(bestRemaining[bestRemaining.length - 1] + candidate.recency);
+        });
+        const ceilingFor = n => bestRemaining[Math.min(n, order.length)];
+
         const better = (seats, score) => (
             seats.length > best.seats.length ||
             (seats.length === best.seats.length && score > best.score)
         );
 
-        const walk = (index, seats, taken, score) => {
+        const walk = (index, seats, score) => {
             if (index === slots.length) {
                 if (better(seats, score)) {
                     best.seats = seats.slice();
@@ -304,53 +326,51 @@
             const left = slots.length - index;
             if (seats.length + left < best.seats.length) return;
             if (seats.length + left === best.seats.length &&
-                score + left * o.windowSize <= best.score) return;
+                score + ceilingFor(left) <= best.score) return;
 
             const slot = slots[index];
+            // `seats` is passed straight through as `assigned`: roles-core reads
+            // only slotId and personId off it, and it is what makes anyone
+            // already seated in this Role come back ALREADY_ASSIGNED — so there
+            // is no second list of taken people to keep in step with it.
             const judged = o.candidatesFor(role, slot, {
-                people: o.people.filter(p => taken.indexOf(p.id) === -1),
+                people: o.people,
                 relationships: o.relationships,
                 groups: o.groups,
-                assigned: seats.map(s => ({ slotId: s.slotId, personId: s.personId })),
+                assigned: seats,
                 assignedElsewhere: o.assignedElsewhere,
             });
 
-            const eligible = judged.filter(c => c.eligible);
-            if (!eligible.length) {
-                // Remember why, so the unfilled slot can name the rule rather
-                // than shrugging.
-                const blocked = judged.find(c => !c.eligible);
-                if (blocked) lastReason = blocked;
-            }
+            const allowed = {};
+            let blocked = null;
+            judged.forEach(c => {
+                if (c.eligible) allowed[c.personId] = true;
+                else if (!blocked) blocked = c;
+            });
 
-            eligible
-                .map(c => ({
-                    personId: c.personId,
-                    recency: o.recencyFor(o.recency[role.slug], c.personId),
-                }))
-                .sort((a, b) => (
-                    b.recency - a.recency ||
-                    o.tieBreak(a.personId) - o.tieBreak(b.personId)
-                ))
-                .forEach(candidate => {
-                    walk(
-                        index + 1,
-                        seats.concat([{
-                            roleSlug: role.slug,
-                            slotId: slot.id,
-                            personId: candidate.personId,
-                            recency: candidate.recency,
-                        }]),
-                        taken.concat([candidate.personId]),
-                        score + candidate.recency
-                    );
-                });
+            // Remember why, so an unfilled slot can name the rule rather than
+            // shrugging.
+            if (!Object.keys(allowed).length && blocked) lastReason = blocked;
+
+            order.forEach(candidate => {
+                if (!allowed[candidate.personId]) return;
+                walk(
+                    index + 1,
+                    seats.concat([{
+                        roleSlug: role.slug,
+                        slotId: slot.id,
+                        personId: candidate.personId,
+                        recency: candidate.recency,
+                    }]),
+                    score + candidate.recency
+                );
+            });
 
             // …and the branch where this slot stays empty.
-            walk(index + 1, seats, taken, score);
+            walk(index + 1, seats, score);
         };
 
-        walk(0, [], [], 0);
+        walk(0, [], 0);
 
         const filledIds = best.seats.map(s => s.slotId);
         return {
@@ -363,8 +383,27 @@
     function solve(options) {
         const o = options || {};
         const roles = o.roles || [];
-        const windowSize = o.windowSize === undefined ? 12 : o.windowSize;
-        const allows = role => !!role && role.allowsAnotherRole === true;
+        // Not defaulted. The window is the unit load is measured against, so a
+        // second copy of the number here would let "spent" quietly mean two
+        // different things depending on which module you read.
+        const windowSize = o.windowSize;
+        if (typeof windowSize !== 'number') {
+            throw new Error(
+                'FairnessCore.solve needs options.windowSize — use ' +
+                'EventsCore.fairnessWindowOf(series), which owns the default.'
+            );
+        }
+
+        // The tie-break hashes a string, and the search asks for the same few
+        // people over and over. Memoised per solve, since seriesId and date are
+        // fixed for the whole run.
+        const seeds = {};
+        const memoTieBreak = personId => {
+            if (seeds[personId] === undefined) {
+                seeds[personId] = tieBreak(personId, o.seriesId, o.date);
+            }
+            return seeds[personId];
+        };
 
         // Injected, not imported. Like every other *-core module here this one
         // requires nothing — and passing the judge in makes the relationship
@@ -426,23 +465,19 @@
                     people: people,
                     relationships: o.relationships,
                     groups: o.groups,
-                    windowSize: windowSize,
-                    recency: recency,
-                    recencyFor: (map, personId) => recencyFor(map, personId, windowSize),
+                    recencyFor: personId => recencyFor(recency[role.slug], personId, windowSize),
                     candidatesFor: candidatesFor,
-                    tieBreak: personId => tieBreak(personId, o.seriesId, o.date),
+                    tieBreak: memoTieBreak,
                     // Exclusivity is the one thread tying the Roles together, so
                     // it is the only cross-Role state the per-Role search sees.
-                    assignedElsewhere: seated.map(s => ({
-                        personId: s.personId,
-                        roleSlug: s.roleSlug,
-                        allowsAnotherRole: allows(
-                            roles.find(r => r.slug === s.roleSlug)
-                        ),
-                    })),
+                    // Each seat carries its own Role's flag, stamped when it was
+                    // taken — nothing has to look a Role back up by slug.
+                    assignedElsewhere: seated,
                 });
 
-                attempt.seats.forEach(seat => seated.push(seat));
+                attempt.seats.forEach(seat => seated.push(Object.assign({
+                    allowsAnotherRole: role.allowsAnotherRole === true,
+                }, seat)));
                 attempt.gaps.forEach(slot => gaps.push({
                     roleSlug: role.slug,
                     slotId: slot.id,

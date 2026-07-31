@@ -267,13 +267,42 @@ test('the sex requirement is named as the design words it', () => {
     );
 });
 
-test('already serving names where, rather than leaving the editor hunting', () => {
+// The two "already busy" reasons are deliberately separate (ADR-0020).
+// ALREADY_ASSIGNED is a second slot of THIS Role; SERVING_ELSEWHERE is another
+// Role the same morning. They used to be one, which is how the liturgy ended up
+// faked in as a seat and tripping this Role's relationship rules.
+
+test('already assigned means this Role, and needs no list of elsewhere', () => {
     assert.strictEqual(
         View.blockReason(
             { eligible: false, reason: Roles.REASONS.ALREADY_ASSIGNED },
             { otherRoles: ['Setup', 'Sound'] }
         ),
-        'Already serving here — Setup and Sound'
+        'Already in this Role'
+    );
+});
+
+test('serving elsewhere names where, rather than leaving the editor hunting', () => {
+    assert.strictEqual(
+        View.blockReason(
+            { eligible: false, reason: Roles.REASONS.SERVING_ELSEWHERE },
+            { otherRoles: ['Setup', 'Sound'] }
+        ),
+        'Already serving this morning — Setup and Sound'
+    );
+});
+
+test('serving elsewhere still says so when the Roles cannot be named', () => {
+    assert.strictEqual(
+        View.blockReason({ eligible: false, reason: Roles.REASONS.SERVING_ELSEWHERE }, {}),
+        'Already serving this morning'
+    );
+});
+
+test('being off an allowlist says so plainly, never "cannot take this place"', () => {
+    assert.strictEqual(
+        View.blockReason({ eligible: false, reason: Roles.REASONS.NOT_ON_ALLOWLIST }, {}),
+        'Not on the list of people who do this Role'
     );
 });
 

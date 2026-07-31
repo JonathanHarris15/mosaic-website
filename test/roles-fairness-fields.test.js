@@ -240,6 +240,61 @@ test('a definition carrying an empty allowlist is invalid', () => {
     assert.equal(Roles.validateDefinition(def).valid, false);
 });
 
+// ── Busy elsewhere must not leak into this Role's relationship rules ─────────
+//
+// Before `assignedElsewhere` existed, the picker faked liturgy holders into
+// `assigned` — as though they were seated in this Role — which is what the
+// relationship rules read. On a Sunday where Dave preached, a notTogether rule
+// then blocked Dave's WIFE from Kids for being married to someone "already in
+// this Role", and a sameGroup Role demanded everyone share a group with Dave,
+// usually emptying the rota. The two lists exist to keep that separation.
+
+test('someone busy elsewhere does not trip this Role\'s notTogether rule for others', () => {
+    const kids = roleWith({
+        slots: [eitherSlot],
+        restrictions: [{ kind: Roles.RESTRICTIONS.NOT_TOGETHER, typeId: 'marriage' }],
+    });
+    const results = Roles.candidatesFor(kids, eitherSlot, {
+        people: [alice, brenda],
+        relationships: [{ fromId: 'carl', toId: 'alice', typeId: 'marriage' }],
+        assigned: [],
+        // Carl is preaching. He is busy — his wife is not.
+        assignedElsewhere: elsewhere([{ personId: 'carl', roleSlug: 'preacher' }]),
+    });
+
+    assert.deepEqual(eligibleIds(results), ['alice', 'brenda']);
+});
+
+test('someone busy elsewhere does not drag a sameGroup Role into their group', () => {
+    const cohesive = roleWith({
+        slots: [eitherSlot],
+        restrictions: [{ kind: Roles.RESTRICTIONS.SAME_GROUP, typeId: 'house-group' }],
+    });
+    const results = Roles.candidatesFor(cohesive, eitherSlot, {
+        people: [alice],
+        groups: [{ id: 'g1', typeId: 'house-group', leaderId: 'alice', memberIds: [] }],
+        assigned: [],
+        assignedElsewhere: elsewhere([{ personId: 'carl', roleSlug: 'preacher' }]),
+    });
+
+    assert.deepEqual(eligibleIds(results), ['alice']);
+});
+
+test('being busy elsewhere is a different reason from being in this Role twice', () => {
+    const busy = Roles.candidatesFor(exclusive, eitherSlot, {
+        people: [alice],
+        assigned: [],
+        assignedElsewhere: elsewhere([{ personId: 'alice', roleSlug: 'sound' }]),
+    });
+    const twice = Roles.candidatesFor(roleWith({ slots: [eitherSlot, { id: 's2', requirement: 'either' }] }), eitherSlot, {
+        people: [alice],
+        assigned: [{ slotId: 's2', personId: 'alice' }],
+    });
+
+    assert.equal(resultFor(busy, 'alice').reason, Roles.REASONS.SERVING_ELSEWHERE);
+    assert.equal(resultFor(twice, 'alice').reason, Roles.REASONS.ALREADY_ASSIGNED);
+});
+
 // ── The two stay separate ────────────────────────────────────────────────────
 
 test('intensity and exclusivity are independent — a light job can still occupy you', () => {

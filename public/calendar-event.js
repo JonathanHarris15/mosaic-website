@@ -1111,33 +1111,47 @@
                 const slot = this.pickerSlot;
                 if (!def || !slot) return [];
 
+                // This Role's own seats, and nothing else. `assigned` is what the
+                // RELATIONSHIP rules read — "no married couple in Kids" — so
+                // anyone in it is treated as being in this Role.
+                const mine = a => a.roleSlug === def.slug && !a.oneOffId;
                 const seated = this.assignments
-                    .filter(a => a.roleSlug === def.slug && !a.oneOffId)
-                    .map(a => ({ slotId: a.slotId, personId: a.personId }))
-                    // Somebody already down for the liturgy cannot also do this.
-                    // They are fed in as though seated in a slot that is not this
-                    // one, which is exactly what they are: busy elsewhere on the
-                    // same Sunday. The slot id is a name no real slot uses, so it
-                    // can never be mistaken for a place in this Role.
-                    .concat(this.liturgicalBlocks.map(h => ({
-                        slotId: LITURGICAL_SLOT, personId: h.personId,
-                    })));
+                    .filter(mine)
+                    .map(a => ({ slotId: a.slotId, personId: a.personId }));
 
-                // Holding another Role this morning normally rules you out
-                // (ADR-0020). Exclusive is the default, so a Role nobody has
-                // configured blocks — including a one-off, which carries no
-                // toggle until it is given one on the Event page.
+                // Busy elsewhere this morning — which now has a mechanism of its
+                // own (ADR-0020) instead of being faked as a seat in this Role.
+                //
+                // ⚠ The fake seat was a real bug, not just untidy: on a Sunday
+                // where Dave preaches it made a notTogether rule block Dave's
+                // wife from Kids for being married to someone "already in this
+                // Role", and made a sameGroup Role demand everyone share a group
+                // with Dave — usually emptying the rota. Liturgy belongs here,
+                // where it blocks the person and nobody else.
+                //
+                // Exclusive is the default, so a Role nobody has configured
+                // blocks; liturgical Roles are always exclusive.
+                const oneOffJobs = (this.occurrence && this.occurrence.oneOffRoles) || [];
                 const elsewhere = this.assignments
-                    .filter(a => a.personId && (a.roleSlug !== def.slug || a.oneOffId))
+                    .filter(a => a.personId && !mine(a))
                     .map(a => ({
                         personId: a.personId,
                         roleSlug: a.oneOffId || a.roleSlug,
                         allowsAnotherRole: Roles.allowsAnotherRole(
                             a.oneOffId
-                                ? this.oneOffRoles.find(j => j.id === a.oneOffId)
+                                // The stored job, not the `oneOffRoles` getter,
+                                // which projects away everything but id, label
+                                // and people — so the flag would read as absent
+                                // for ever once the Event page can set it.
+                                ? oneOffJobs.find(j => j.id === a.oneOffId)
                                 : this.roleDefinitions.find(d => d.slug === a.roleSlug)
                         ),
-                    }));
+                    }))
+                    .concat(this.liturgicalBlocks.map(h => ({
+                        personId: h.personId,
+                        roleSlug: h.roleSlug,
+                        allowsAnotherRole: false,
+                    })));
 
                 const judged = Roles.candidatesFor(def, slot, {
                     people: this.assignablePeople,

@@ -88,6 +88,20 @@ test('intensity 0 survives resolution — it is a real value, not an absent one'
     assert.equal(EventsCore.roleIntensity(series(), 'one_off', { oneOff: { intensity: 0 } }), 0);
 });
 
+test('a Role Definition wins over a stray entry in the liturgical map', () => {
+    // The map is for Roles that have NO definition. A stray `setup` key in it
+    // must not quietly override the Roles Manager, or the Manager would show 4
+    // while fairness used 3 and nothing would say which was real.
+    const s = series({ liturgicalIntensity: { setup: 3 } });
+    const definition = { slug: 'setup', name: 'Setup', intensity: 4 };
+    assert.equal(EventsCore.roleIntensity(s, 'setup', { definition: definition }), 4);
+});
+
+test('a definition with no intensity still beats the map to the default', () => {
+    const s = series({ liturgicalIntensity: { setup: 3 } });
+    assert.equal(EventsCore.roleIntensity(s, 'setup', { definition: { slug: 'setup' } }), 1);
+});
+
 test('a one-off Role wins over anything else, because it is the whole Role', () => {
     const s = series({ liturgicalIntensity: { one_off: 9 } });
     const oneOff = { id: 'job-1', intensity: 2 };

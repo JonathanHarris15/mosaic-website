@@ -365,14 +365,21 @@
             case R.INACTIVE:
                 return 'No longer active';
 
-            case R.ALREADY_ASSIGNED: {
-                // Name the Roles they are already down for. "Already serving
-                // here" alone leaves the editor hunting for where.
+            case R.ALREADY_ASSIGNED:
+                return 'Already in this Role';
+
+            case R.SERVING_ELSEWHERE: {
+                // Name the Roles they are already down for. "Serving elsewhere"
+                // alone leaves the editor hunting for where, and hunting is the
+                // thing showing blocked people exists to avoid.
                 const elsewhere = (ctx.otherRoles || []).filter(Boolean);
                 return elsewhere.length
-                    ? 'Already serving here — ' + listSentence(elsewhere)
-                    : 'Already serving here';
+                    ? 'Already serving this morning — ' + listSentence(elsewhere)
+                    : 'Already serving this morning';
             }
+
+            case R.NOT_ON_ALLOWLIST:
+                return 'Not on the list of people who do this Role';
 
             case R.SEX_MISMATCH:
                 return ctx.requirement === Roles.REQUIREMENTS.FEMALE

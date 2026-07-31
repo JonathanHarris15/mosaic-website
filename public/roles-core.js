@@ -276,11 +276,13 @@
 
     // A stored value that is not a usable number reads as the default. A single
     // bad field must not poison every load calculation in the church.
+    function isUsableIntensity(raw) {
+        return typeof raw === 'number' && Number.isFinite(raw) && raw >= 0;
+    }
+
     function intensityOf(def) {
         const raw = def && def.intensity;
-        return typeof raw === 'number' && Number.isFinite(raw) && raw >= 0
-            ? raw
-            : DEFAULT_INTENSITY;
+        return isUsableIntensity(raw) ? raw : DEFAULT_INTENSITY;
     }
 
     // ── Whether doing a Role uses up your morning ────────────────────────────
@@ -401,15 +403,13 @@
     // A person may hold a set of Roles only when EVERY Role in it permits a
     // second, and never more than two. Holding one exclusive Role therefore
     // means holding nothing else, because that Role itself says so.
-    function servingElsewhere(def, candidate, context) {
-        const held = (context.assignedElsewhere || [])
-            .filter(a => a && a.personId === candidate.id);
-        if (held.length === 0) return null;
+    function servingElsewhere(def, held) {
+        if (!held || held.length === 0) return null;
 
         const blocked = (
             held.length >= MAX_ROLES_PER_PERSON ||
             !allowsAnotherRole(def) ||
-            held.some(a => a.allowsAnotherRole !== true)
+            held.some(a => !allowsAnotherRole(a))
         );
 
         // Name the Role that has them. A bare "unavailable" makes the editor go
@@ -422,17 +422,18 @@
     // Judge one Person against one slot. Returns `null` when they may fill it,
     // or the reason they may not. Ordered most-fundamental first, so the user is
     // told the real cause — being Inactive explains everything else about them.
-    function ineligibilityFor(def, slot, candidate, context) {
-        const seated = (context.assigned || []).filter(a => a.slotId !== slot.id);
-
+    // `seated` and `busy` are passed in already narrowed rather than derived
+    // per candidate: both are the same for every person judged against one slot,
+    // and the solver calls this tens of thousands of times.
+    function ineligibilityFor(def, slot, candidate, context, seated, busy) {
         if (isInactive(candidate)) return { reason: REASONS.INACTIVE };
 
         if (seated.some(a => a.personId === candidate.id)) {
             return { reason: REASONS.ALREADY_ASSIGNED };
         }
 
-        const busy = servingElsewhere(def, candidate, context);
-        if (busy) return busy;
+        const clash = servingElsewhere(def, busy[candidate.id]);
+        if (clash) return clash;
 
         const requirement = slot && slot.requirement;
         if (requirement !== REQUIREMENTS.EITHER) {
@@ -529,8 +530,17 @@
     // a reason rather than quietly dropping them.
     function candidatesFor(def, slot, context) {
         const ctx = context || {};
+
+        // Narrowed once for the whole slot, not once per candidate.
+        const seated = (ctx.assigned || []).filter(a => a.slotId !== slot.id);
+        const busy = {};
+        (ctx.assignedElsewhere || []).forEach(a => {
+            if (!a || !a.personId) return;
+            (busy[a.personId] || (busy[a.personId] = [])).push(a);
+        });
+
         return (ctx.people || []).map(candidate => {
-            const blocked = ineligibilityFor(def, slot, candidate, ctx);
+            const blocked = ineligibilityFor(def, slot, candidate, ctx, seated, busy);
             return Object.assign(
                 { personId: candidate.id, eligible: !blocked, reason: null },
                 blocked || {}
@@ -637,16 +647,19 @@
 
         // Intensity is optional — absent reads as 1 — but a stored value that is
         // not a usable number is a mistake worth naming, not silently ignoring.
-        if (def && def.intensity !== undefined && def.intensity !== null) {
-            const n = def.intensity;
-            if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) {
-                errors.push('Intensity must be a number of weeks, and cannot be negative.');
-            }
+        // Same predicate `intensityOf` reads by, so what validation rejects can
+        // never be something reading quietly accepts.
+        if (def && def.intensity !== undefined && def.intensity !== null &&
+            !isUsableIntensity(def.intensity)) {
+            errors.push('Intensity must be a number of weeks, and cannot be negative.');
         }
 
+        // The allowlist is the one restriction that needs no Relationship Type,
+        // so it can be judged here without the list of shared Types — and asking
+        // validateRestriction keeps one wording for one rule.
         restrictionsOf(def).forEach(rule => {
-            if (rule && rule.kind === RESTRICTIONS.ALLOWLIST && !(rule.personIds || []).length) {
-                errors.push('An allowlist needs at least one person, or the Role can never be filled.');
+            if (rule && rule.kind === RESTRICTIONS.ALLOWLIST) {
+                validateRestriction(rule, []).errors.forEach(e => errors.push(e));
             }
         });
 
