@@ -1,0 +1,56 @@
+/* Roles Panel — the styles its markup depends on (MS-16).
+
+   Shared for the same reason the markup is: the panel is mounted on the Event
+   detail screen and on the service page's Roles tab, and a slot row that reads
+   one way on one page and another way on the other is worse than no panel at
+   all. Both pages link this file.
+
+   The `cal-` prefix is kept. It is what the markup already carries, and renaming
+   it across both pages to say `roles-` would be churn that buys nothing. */
+
+/* The one raw value in the design set — the steel-teal focus ring, which
+   already matches the Input component. */
+.cal-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(93,148,169,.18); }
+
+.cal-motion { transition: background-color 150ms cubic-bezier(0.2,0,0,1),
+                          opacity 150ms cubic-bezier(0.2,0,0,1),
+                          border-color 150ms cubic-bezier(0.2,0,0,1); }
+.cal-press:active { transform: scale(0.98); }
+
+/* Row actions reveal on hover on a desktop. There is no hover on touch, so the
+   mobile shell keeps them visible — same as the Tags tab. */
+.cal-row-actions { opacity: 0; }
+.cal-row:hover .cal-row-actions,
+.cal-row:focus-within .cal-row-actions { opacity: 1; }
+html.shell-mobile .cal-row-actions { opacity: 1; }
+
+/* ── The phone ─────────────────────────────────────────────────────────────
+   A slot row is: number · requirement · avatar · name · state · four buttons.
+   That is eight things, and 390px does not hold them — it holds about half, and
+   the rest wrap into a shape nobody designed.
+
+   So on a phone the row keeps what only it can say — the requirement, who is
+   standing in it, and where that stands — and the row's controls drop to a line
+   of their own. The number and the avatar go: the number counts places nobody
+   refers to out loud, and the avatar is decoration beside a name that is right
+   there. */
+html.shell-mobile .cal-slot-row { min-height: 48px; flex-wrap: wrap; }
+html.shell-mobile .cal-slot-index,
+html.shell-mobile .cal-slot-avatar { display: none; }
+html.shell-mobile .cal-slot-req { width: 62px; }
+html.shell-mobile .cal-row-actions,
+html.shell-mobile .cal-slot-actions { width: 100%; justify-content: flex-end; }
+
+/* A Role card's header carries a badge glyph, a rule count, a fill count and a
+   way through to the Event. The way through is said again in full at the bottom
+   of the section, so on a phone the header keeps the name and the count — which
+   is the header the design draws. */
+html.shell-mobile .cal-role-glyph,
+html.shell-mobile .cal-role-everydate { display: none; }
+
+/* The dashed sand hairline around the whole strip is what marks one-off work as
+   lighter than a Role we keep. The handoff said a single job may never have a
+   border of its own — that held until a job had seven people on it and ran
+   straight into the next one. Each job now gets an edge; the weight difference
+   lives in the dash, not in the absence. */
+.cal-oneoff-strip { border: 1px dashed #C2B79D; }

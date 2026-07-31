@@ -18,13 +18,22 @@
     <!-- Mobile shell: standardized back-arrow header when opened in the WebView. -->
     <script src="mobile-shell.js"></script>
     <link rel="stylesheet" href="mobile-shell.css" />
-    <script>window.MOBILE_HEADER = { title: 'Service Editor', back: 'mobile.html#/calendar' };</script>
+    <!-- The page answers the shell's back arrow rather than the shell deciding:
+         out of the Roles tab if you are on it, out of the page if you are not.
+         Same rule the Roles Manager follows. Without it, opening Roles and
+         pressing back leaves the Sunday entirely, which is not what a tab
+         should do. -->
+    <script>window.MOBILE_HEADER = { title: 'Service Editor', onBack: true };</script>
     <script src="mobile-shell-header.js"></script>
 
     <!-- Alpine JS -->
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
     <!-- Sortable JS -->
     <script src="vendor/sortable-1.15.0.min.js"></script>
+
+    <!-- The Roles tab renders the shared Roles panel, which brings its own
+         styles (MS-16). -->
+    <link rel="stylesheet" href="roles-panel.css">
     <style>
 [x-cloak] { display: none !important; }
         .form-section { position: relative; margin-bottom: 1rem; border-radius: 16px; border-width: 1px; --tw-border-opacity: 1; border-color: rgb(218 208 192 / var(--tw-border-opacity, 1)); --tw-bg-opacity: 1; background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1)); padding: 1.5rem; --tw-shadow: 0 2px 6px rgba(14,28,54,.08); --tw-shadow-colored: 0 2px 6px var(--tw-shadow-color); box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow); overflow: visible !important; }
@@ -100,6 +109,17 @@
             padding-right: 1rem;
             padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
         }
+
+        /* ── The tab strip on a phone ─────────────────────────────────────────
+           Two tabs on 390px, and "Order of Service" is the long one. Left to
+           itself the pair sits at its natural width against the left edge, which
+           reads as one tab and a spare rather than a choice between two. So they
+           split the width evenly and the glyphs go: the labels already say what
+           these are, and the icons are what pushes "Order of Service" onto a
+           second line. */
+        body.shell-mobile #service-tabs { gap: 0; }
+        body.shell-mobile #service-tabs button { flex: 1 1 0; padding-left: 0; padding-right: 0; justify-content: center; }
+        body.shell-mobile #service-tabs .material-symbols-outlined { display: none; }
     </style>
     <!-- Firebase SDKs -->
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -437,6 +457,36 @@
                 </div>
             </div>
         </div>
+
+        <!-- ── Order of Service ↔ Roles ────────────────────────────────────────
+             Two ways into the same Sunday, under the same header (MS-16). The
+             card above stays put on both: the date, the theme, and who is
+             leading, preaching and playing. So the Roles tab is not a different
+             page about a different thing — it is the rest of the same Sunday,
+             the welcome team and the sound desk under the liturgy that is
+             already there.
+
+             Only an editor gets it. For everyone else there is one tab, so
+             there is no strip to draw. -->
+        <div id="service-tabs" x-show="canEdit" class="flex items-center gap-1 mb-6 border-b border-outline-variant">
+            <template x-for="pane in [
+                { key: 'order', label: 'Order of Service', icon: 'list_alt' },
+                { key: 'roles', label: 'Roles', icon: 'groups' }
+            ]" :key="pane.key">
+                <button @click="openTab(pane.key)"
+                        :class="tab === pane.key
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-on-surface-variant hover:text-primary'"
+                        class="flex items-center gap-2 px-4 py-3 -mb-px border-b-2 font-label-md
+                               text-label-md transition-colors">
+                    <span class="material-symbols-outlined text-[19px]" x-text="pane.icon"></span>
+                    <span x-text="pane.label"></span>
+                </button>
+            </template>
+        </div>
+
+        <!-- ── The Order of Service ─────────────────────────────────────────── -->
+        <div x-show="tab === 'order'">
 
         <!-- ── Regular service: movements + service notes ──────────────────────── -->
         <template x-if="!service.isIrregular">
@@ -1012,6 +1062,77 @@
                 </div>
             </div>
         </template>
+        </div><!-- /Order of Service -->
+
+        <!-- ── Roles ────────────────────────────────────────────────────────────
+             The same Roles surface the Event detail screen shows, mounted here
+             for this Sunday (MS-16). Not a copy — `eventDetailPage` is the
+             behaviour, roles-panel.js is the markup, and both pages use them.
+
+             `rolesOnly` turns off the controls that change WHICH Roles the
+             Sunday carries. That belongs to the Sunday Service as an Event, not
+             to one date of it, and changing it from inside a single Sunday is
+             how somebody changes every Sunday by accident. The link at the
+             bottom of the panel goes to where it IS decided.
+
+             Liturgical Roles are absent here on purpose. They are fields on the
+             Service that the printed booklet reads (ADR-0018 §2), they are set
+             in the card above, and a second way to set them would be a second
+             source of truth for who is preaching. -->
+        <!-- Built once, on the first visit to the tab, and then kept.
+
+             Not `x-data` on a plain div: Alpine evaluates that as it walks the
+             page, when `date` is still empty because the Service loads
+             asynchronously — the panel would ask for the occurrence
+             `sunday_service_` and find nothing.
+
+             But not `x-if="tab === 'roles'"` either, which was the first attempt
+             and was worse than it looked. x-if DESTROYS what it built when the
+             condition goes false, so every switch back to Roles re-ran the whole
+             load — the occurrence, the series, the people, the Roles and the
+             Service document. Five round trips, every tap, for a panel that was
+             already correct a second ago.
+
+             `rolesOpened` latches instead. Nothing is fetched for somebody who
+             never opens the tab, and nothing is fetched twice for somebody who
+             does. Visibility is then just x-show. -->
+        <template x-if="rolesOpened && date">
+            <div x-show="tab === 'roles'"
+                 x-data="eventDetailPage({
+                     occurrenceId: sundayOccurrenceId,
+                     rolesOnly: true,
+                     people: peopleRegistry
+                 })"
+                 x-init="init()">
+
+                <div x-show="loading" class="py-12 text-center text-on-surface-variant font-label-md text-label-md">
+                    Loading the roles for this Sunday…
+                </div>
+
+                <!-- A dropped read is the common failure here, and trying again
+                     usually works. A page reload would too, but it would take
+                     the unsaved order of service with it. -->
+                <div x-show="error && !loading" class="py-12 flex flex-col items-center gap-3 text-center">
+                    <span class="material-symbols-outlined text-[28px] text-on-surface-variant">cloud_off</span>
+                    <p x-text="error" class="text-on-surface-variant font-label-md text-label-md max-w-sm"></p>
+                    <button @click="retry()"
+                            class="bg-primary text-on-primary px-5 py-2 rounded-full font-label-md
+                                   text-label-md flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[18px]">refresh</span>
+                        Try again
+                    </button>
+                </div>
+
+                <template x-if="!loading && !error">
+                    <div>
+                        <div data-roles-panel="banner"></div>
+                        <div data-roles-panel="roles"></div>
+                    </div>
+                </template>
+
+                <div data-roles-panel="picker"></div>
+            </div>
+        </template>
     </main>
 
     <!-- Hymn Preview Modal -->
@@ -1076,6 +1197,8 @@
     </div>
 
     <script src="date-utils.js"></script>
+    <!-- Who serves at a Sunday, and when that becomes a serve record (MS-16). -->
+    <script src="service-involvement-core.js"></script>
     <script src="prayer-suggestions.js"></script>
     <!-- Service Guide engine/catalog/seed/store: the Order of Service editor picks
          the week's Service Guide Template (or toggles legacy) and gates its
@@ -1083,7 +1206,13 @@
     <!-- Mobile-only save bar. Hidden on desktop by CSS; shown when the page runs
          inside the WebView shell. Mirrors the header button's state so there is
          still exactly one way to save, just docked where a thumb can reach it. -->
-    <div id="mobile-save-bar" x-show="user && canEdit" x-cloak
+    <!-- On the Roles tab there is nothing to save by hand — every assignment
+         writes as you make it. A docked "Save Service" button there would be a
+         button that does nothing to what is on screen, and worse, it implies the
+         roles are unsaved until you press it. So on that tab the bar appears
+         only when the order of service genuinely has unsaved edits, which is the
+         one case you still need it. -->
+    <div id="mobile-save-bar" x-show="user && canEdit && (tab === 'order' || isDirty)" x-cloak
         class="bg-surface border-t border-outline-variant/40 shadow-lg">
         <div class="flex items-center gap-2" x-show="isDirty">
             <span class="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse"></span>
@@ -1108,6 +1237,19 @@
     <script src="guide-store.js"></script>
     <script src="events-core.js"></script>
     <script src="service-builder.js"></script>
+
+    <!-- The Roles tab (MS-16). It mounts the Event detail screen's own component
+         for this Sunday, so staffing a Sunday here and staffing it from the
+         Calendar are the same code, not two that have to agree. -->
+    <script src="events-occurrence-core.js"></script>
+    <script src="events-store.js"></script>
+    <script src="calendar-view.js"></script>
+    <script src="roles-core.js"></script>
+    <script src="calendar-event.js"></script>
+
+    <!-- Fills the data-roles-panel placeholders. Must run AFTER them and BEFORE
+         Alpine, which is deferred — hence the end of the body. -->
+    <script src="roles-panel.js"></script>
 </body>
 
 </html>

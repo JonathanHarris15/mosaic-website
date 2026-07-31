@@ -30,11 +30,31 @@
 
     const params = new URLSearchParams(window.location.search);
 
-    window.eventDetailPage = function eventDetailPage() {
+    // This component is the Event detail SCREEN, and it is also the behaviour
+    // behind the Roles panel wherever that is mounted (MS-16). The service page
+    // mounts it for one Sunday, beside the order of service, so that staffing a
+    // Sunday and building a Sunday are not two different pages.
+    //
+    // `config` is how a host says which occurrence and how much of it:
+    //
+    //   occurrenceId  the occurrence to open, instead of reading ?id= from the
+    //                 address bar. A host that is already about one date knows
+    //                 it without being told twice.
+    //   rolesOnly     the host shows the Roles panel and nothing else, so the
+    //                 controls that change WHICH Roles the Event carries are
+    //                 absent. That is a property of the Event, decided on the
+    //                 Event — changing it from inside one Sunday is how somebody
+    //                 changes every Sunday by accident.
+    window.eventDetailPage = function eventDetailPage(config) {
+        const cfg = config || {};
+
         return {
             loading: true,
             error: '',
             saving: false,
+
+            // Filling Roles is always on offer; deciding which Roles exist is not.
+            canEditRoleSet: !cfg.rolesOnly,
 
             rank: null,
             personId: null,
@@ -49,7 +69,7 @@
             groups: [],
 
             // The screens that sit over this one.
-            picker: { open: false, roleSlug: null, slotId: null, query: '', hideBlocked: false, picked: null },
+            picker: { open: false, roleSlug: null, slotId: null, query: '', hideBlocked: false, picked: null, loading: false },
             pattern: { open: false, rule: null, orphans: [], choices: {} },
             tidyUp: { open: false, ticks: {} },
             // Set only when a Role being taken off would drop somebody.
@@ -60,6 +80,18 @@
 
             async init() {
                 await this.resolveViewer();
+                await this.load();
+            },
+
+            // A dropped read is not a broken page, it is a read that did not come
+            // back — and the difference matters, because trying again usually
+            // works. Without this the only way out of "could not be loaded" is a
+            // full page reload, which on the service page means losing whatever
+            // is unsaved in the order of service.
+            async retry() {
+                if (this.loading) return;
+                this.error = '';
+                this.loading = true;
                 await this.load();
             },
 
@@ -177,10 +209,12 @@
                     // way into the Sunday Service as an Event — the liturgy is
                     // still edited per-Sunday in the order of service, and that
                     // separation is what keeps the printed booklet safe.
-                    const seriesId = params.get('series');
+                    const seriesId = cfg.occurrenceId ? null : params.get('series');
                     if (seriesId) return await this.loadSeriesMode(seriesId);
 
-                    const id = params.get('id');
+                    // A host that mounted this for one date said so; otherwise the
+                    // address bar names it.
+                    const id = cfg.occurrenceId || params.get('id');
 
                     // No id means this is a new Event, not a broken link.
                     if (!id) {
@@ -204,17 +238,50 @@
                     this.assignments = loaded.assignments || [];
                     this.startOccurrenceDraft();
 
-                    if (loaded.seriesId) {
-                        const s = await db.collection('events').doc(loaded.seriesId).get();
-                        if (s.exists) this.series = Object.assign({ id: s.id }, s.data());
+                    // The rest in one wave. None of these three needs anything
+                    // from the others — they were only sequential because they
+                    // were written in the order somebody thought of them, and
+                    // each `await` is a whole round trip.
+                    //
+                    // allSettled, NOT all. Reads on this transport get dropped —
+                    // that is what the deadline in local-cache.js exists for —
+                    // and with `all` a dropped read of the SERIES blanked the
+                    // whole screen, roster and all, over a document the roster
+                    // never needed. Only the people and the Role definitions are
+                    // worth failing for, because without them there is nothing
+                    // to draw.
+                    const [series, core, liturgy] = await Promise.allSettled([
+                        loaded.seriesId
+                            ? db.collection('events').doc(loaded.seriesId).get()
+                            : Promise.resolve(null),
+
+                        this.isEditor ? this.loadEditorData() : this.loadPeople(),
+
+                        // A Sunday's liturgy lives on the Service document, not
+                        // in assignments, and the picker has to see it to know
+                        // who is already busy.
+                        this.isSunday
+                            ? Store.loadLiturgicalHolders(db, loaded.date)
+                            : Promise.resolve([]),
+                    ]);
+
+                    if (core.status === 'rejected') throw core.reason;
+
+                    if (series.status === 'fulfilled' && series.value && series.value.exists) {
+                        this.series = Object.assign({ id: series.value.id }, series.value.data());
+                    } else if (series.status === 'rejected') {
+                        // Survivable: the series carries the recurrence and the
+                        // colour, so the roster reads fine without it.
+                        console.warn('Could not read the event series:', series.reason);
                     }
 
-                    if (this.isEditor) await this.loadEditorData();
-                    else await this.loadPeople();
-
-                    if (this.isSunday) {
-                        this.liturgicalHolders =
-                            await Store.loadLiturgicalHolders(db, this.occurrence.date);
+                    if (liturgy.status === 'fulfilled') {
+                        this.liturgicalHolders = liturgy.value || [];
+                    } else {
+                        // Already degrades to nobody by design — worth saying out
+                        // loud, because the cost is that somebody preaching stays
+                        // assignable rather than showing as busy.
+                        console.warn('Could not read who is leading this Sunday:', liturgy.reason);
                     }
                 } catch (e) {
                     console.error('Event load failed:', e);
@@ -226,27 +293,62 @@
                 }
             },
 
+            // A host that has already read the directory hands it over rather
+            // than making this read it again. The service page had loaded all 74
+            // People into its own registry before the Roles tab was ever opened,
+            // and this fetched the identical collection a second time — on a
+            // transport where a dropped read is the failure mode, the cheapest
+            // read is the one not issued.
+            //
+            // Empty means the host has not got there yet, which is not the same
+            // as "no people", so that falls through and reads.
             async loadPeople() {
+                if (cfg.people && cfg.people.length) {
+                    this.people = cfg.people.slice()
+                        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+                    return;
+                }
+
                 const snap = await db.collection('people').get();
                 this.people = snap.docs
                     .map(d => Object.assign({ id: d.id }, d.data()))
                     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
             },
 
+            // What the SCREEN needs: the people, to put a name against whoever is
+            // in a slot, and the Role Definitions, to draw the cards at all.
+            //
+            // Relationships, groups and privacy tags are NOT here. They answer
+            // "who may take this place", which is a question nobody has asked
+            // until they open the picker — and three collections is three reads
+            // and three chances of a dropped one, paid by every editor who only
+            // came to look at the roster.
             async loadEditorData() {
-                await this.loadPeople();
-                const [roles, rels, groups] = await Promise.all([
+                const [, roles] = await Promise.all([
+                    this.loadPeople(),
                     db.collection('roles').get(),
+                ]);
+                this.roleDefinitions = roles.docs.map(d => Object.assign({ id: d.id }, d.data()));
+            },
+
+            // Loaded once, the first time somebody opens the picker, and kept.
+            pickerDataLoaded: false,
+
+            async ensurePickerData() {
+                if (this.pickerDataLoaded) return;
+
+                const [rels, groups] = await Promise.all([
                     // Serving rules may only name a Relationship Type an elder has
                     // shared with editors, so the query is constrained the same way
                     // the Roles Manager constrains it. Unconstrained it would error.
                     db.collection('relationships').where('sharedWithEditors', '==', true).get().catch(() => ({ docs: [] })),
                     db.collection('relationship_groups').where('sharedWithEditors', '==', true).get().catch(() => ({ docs: [] })),
                 ]);
-                this.roleDefinitions = roles.docs.map(d => Object.assign({ id: d.id }, d.data()));
                 this.relationships = rels.docs.map(d => d.data());
                 this.groups = groups.docs.map(d => Object.assign({ id: d.id }, d.data()));
                 await this.loadHidingTags();
+
+                this.pickerDataLoaded = true;
             },
 
             // What time this date happens at. Read through the model rather than
@@ -927,8 +1029,22 @@
             // greyed out WITH THE REASON, never silently omitted — the point is
             // that an editor can see who was passed over and why.
 
-            openPicker(roleSlug, slotId) {
-                this.picker = { open: true, roleSlug, slotId, query: '', hideBlocked: false, picked: null };
+            // The list stays hidden until the privacy tags are in.
+            //
+            // `hidingTags` empty means "no tag hides anybody", which OFFERS
+            // everyone — the wrong direction for a rule an elder set precisely
+            // so nobody below them sees who is behind it. Rendering the
+            // candidates while the read is still in flight would print those
+            // names for as long as it took, which is the one failure this list
+            // must never have.
+            async openPicker(roleSlug, slotId) {
+                this.picker = {
+                    open: true, roleSlug, slotId,
+                    query: '', hideBlocked: false, picked: null,
+                    loading: !this.pickerDataLoaded,
+                };
+                await this.ensurePickerData();
+                this.picker.loading = false;
             },
 
             closePicker() { this.picker.open = false; },

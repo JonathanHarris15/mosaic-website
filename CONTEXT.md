@@ -151,7 +151,7 @@ A reusable, elder-defined definition for a kind of Relationship, saved once and 
 _Avoid_: Relationship tag, edge label, directional (**Prioritized** is its enriched successor)
 
 **Role** (umbrella):
-A type of participation a Person is assigned to for an **Event**, recorded as Involvement. Two families: **liturgical Roles** (preacher, service leader, worship leader…) are **locked** — code-defined, undeletable, and wired into the Service entity and the Service Guide — while **Servant Roles** are editable **Role Definitions**. Assigned to People on the service page's **Roles tab** and in bulk from the **Roles Manager**. Distinct from **Permission Level** (a User's access) and **Membership Stage** (a Person's church relationship). Decided in [ADR 0016](docs/adr/0016-roles-as-events-locked-liturgical-editable-servant.md).
+A type of participation a Person is assigned to for an **Event**, recorded as Involvement. Two families: **liturgical Roles** (preacher, service leader, worship leader…) are **locked** — code-defined, undeletable, and wired into the Service entity and the Service Guide — while **Servant Roles** are editable **Role Definitions**. Assigned to People on the **Roles tab** and in bulk from the **Roles Manager**. Distinct from **Permission Level** (a User's access) and **Membership Stage** (a Person's church relationship). Decided in [ADR 0016](docs/adr/0016-roles-as-events-locked-liturgical-editable-servant.md).
 _Avoid_: using "role" for access (that is Permission Level) or for membership (that is Membership Stage)
 
 **Servant Role**:
@@ -166,8 +166,14 @@ _Avoid_: Role template, role config
 A dated occurrence that carries **Roles** to be filled. A Sunday **Service** is one **locked, recurring** Event — always present, its liturgical Roles undeletable. Arbitrary Events (introduced with the Calendar, MS-99) can carry Servant Roles too. Fairness is scoped **per Event series**: a Person's serving history for a Role is counted within that recurring Event, not globally, so someone can be overdue for one Event's Role and fresh for another's at the same time.
 _Avoid_: Meeting, appointment (use Event); do not conflate with Service (a Service is one kind of Event)
 
+**Roles tab**:
+The surface that puts named People into a single Event's Roles — every Role that date carries, its slots, each Assignment's state, and the picker that shows who was passed over and why. **One surface, two homes**: it is the Roles section of the Event detail screen, and it is a tab on the service page beside the Order of Service, because the Sunday is staffed every week and its order of service is edited elsewhere. Both mount the same markup and the same behaviour, so they cannot drift.
+
+**It fills Roles; it does not decide which exist.** Which Roles an Event carries belongs to the **Event series** and is set there — deciding it from inside one date would change every date. So on the service page the tab has no way to add or remove a Role, only a way through to where that is decided. **Liturgical Roles are absent from it**: they are fields on the Service that the printed guide reads, set in the Order of Service (ADR-0018 §2).
+_Avoid_: Roster tab, assignment tab, staffing screen
+
 **Roles Manager**:
-The editor+ dashboard card where **Role Definitions** are authored and managed, and where a date range of a recurring **Event** is **auto-assigned** — the system drafts a fair, rule-valid lineup for the user to review and accept (propose-then-approve). Distinct from the per-Event **Roles tab**, which assigns a single service by hand.
+The editor+ dashboard card where **Role Definitions** are authored and managed, and where a date range of a recurring **Event** is **auto-assigned** — the system drafts a fair, rule-valid lineup for the user to review and accept (propose-then-approve). Distinct from the **Roles tab**, which assigns a single date by hand.
 - **One Roles Manager, opened on both.** The phone does not get a port of this screen; it opens the same page inside the shell (`?shell=mobile`), reachable from the phone's home grid, which is the phone's dashboard. This screen is where a Role's slots and restriction rules are decided, so a second copy of it would be a second place for those rules to drift from the model.
 - **On a phone it is a list, then an editor** — never both, because there is only room for one. The list's rows become cards you tap; delete moves into the editor's own bar, and the only back arrow is the shell's, which the page answers: out of the Role you have open, or out of the page if you have none.
 _Avoid_: Scheduler page, role admin
@@ -340,7 +346,7 @@ A hymn selection within a Service's liturgy.
   - **Literal**: An unlinked name (has a `name` but `id` is null). These typically arise from docx imports where a match wasn't found. They must be resolved (linked to a Canonical hymn) to enable full functionality.
 
 ### Involvement
-A record that a Person **did serve** in a specific Role at an Event. The single serve log — there is no separate one (ADR-0016). It records the past: an Involvement is never written for an Event that has not happened yet (ADR-0018).
+A record that a Person **did serve** in a specific Role at an Event. The single serve log — there is no separate one (ADR-0016). It records the past: an Involvement is never written for an Event that has not happened yet (ADR-0018 for Servant Roles, ADR-0019 for the liturgy).
 - **Fields**:
   - `serviceDate`: The date of the event (YYYY-MM-DD).
   - `type`: The Role slug (see Roles). **Role-open**: any slug is accepted, so a new Servant Role needs no schema change.
@@ -348,6 +354,7 @@ A record that a Person **did serve** in a specific Role at an Event. The single 
   - `metadata`: Optional extra data (e.g., prayer type, prayer text; the label of a [[One-off Role]]).
 - A record written before `seriesId` existed **reads as** the Sunday Service (`EventsCore.seriesIdOf`). Without that fallback every historic serve would drop out of fairness the moment the field appeared. `scripts/backfill-involvement-series.js` makes it explicit, because a Firestore query cannot fall back.
 - **An [[Assignment]] is not an Involvement.** The Assignment is the plan and is mutable; the Involvement is the fact and is written only once the date has passed. Only a **Confirmed** Assignment converts automatically.
+- **The two families convert on different terms** (ADR-0019). A Servant Role's Assignment needs a **Confirmed** state, because somebody had to say yes and silence is never read as one. A **liturgical Role has no state** — it is a field on the Service, not a record of a conversation — so it converts **unconditionally** and raises no "did they serve?" question: being on the printed booklet is the commitment. Corrections use the manual Involvement add/delete on the Person's record.
 
 ## Roles
 A Role is a type of participation assigned on an Event and recorded as Involvement. Two families (ADR-0016) — `RolesCore.allRoles()` composes them into the one list every surface renders.

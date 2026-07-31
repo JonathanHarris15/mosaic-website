@@ -141,6 +141,15 @@ function serviceForm() {
         canEdit: false,
         isShepherd: false,
         currentPermissionLevel: 'viewer',
+        // Which half of the Sunday is on screen — the liturgy, or who is
+        // standing in its Roles (MS-16). Opens on the order of service, which is
+        // what this page has always been.
+        tab: 'order',
+        // Latches on the first visit to the Roles tab and never clears. It is
+        // what builds the panel — so nothing is fetched for somebody who never
+        // opens it, and nothing is re-fetched for somebody who switches back and
+        // forth. Switching tabs after that is only a matter of what is shown.
+        rolesOpened: false,
         // Prayer Request per pastoral-prayer subject, visible to elders only.
         prayerRequests: {
             male: { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false },
@@ -420,7 +429,46 @@ function serviceForm() {
             return this.originalService !== JSON.stringify(this.service);
         },
 
+        // This Sunday as an Event occurrence, which is what the Roles tab mounts
+        // (MS-16). A Sunday nobody has staffed yet has no occurrence document —
+        // occurrences are sparse — and that is fine: the id is deterministic, so
+        // EventsStore rebuilds the occurrence from it and writes a document the
+        // first time somebody is actually put in a slot.
+        get sundayOccurrenceId() {
+            return window.EventsOccurrenceCore
+                ? window.EventsOccurrenceCore.occurrenceId(
+                    window.EventsOccurrenceCore.SUNDAY_SERVICE_ID, this.date)
+                : null;
+        },
+
+        openTab(key) {
+            this.tab = key;
+            // Latch on the way in, not on a watcher, so the panel is built by
+            // the tap that asked for it. If `date` has not landed yet the
+            // template simply waits for it rather than building a panel pointed
+            // at no Sunday.
+            if (key === 'roles') this.rolesOpened = true;
+        },
+
+        // The shell's back arrow, answered by the page (MS-16). A tab is not a
+        // place you navigate to, so backing out of Roles should land on the
+        // order of service, not throw you out of the Sunday altogether. Only
+        // once there is nothing left to back out of does it leave the page.
+        //
+        // Same rule the Roles Manager follows for the Role it has open.
+        listenForShellBack() {
+            if (typeof document === 'undefined' || !document.addEventListener) return;
+            document.addEventListener('mobile-header:back', () => {
+                if (this.tab !== 'order') {
+                    this.tab = 'order';
+                    return;
+                }
+                window.location.href = 'mobile.html#/calendar';
+            });
+        },
+
         async init() {
+            this.listenForShellBack();
             auth.onAuthStateChanged(async (user) => {
                 this.user = user;
                 if (user) {
@@ -1000,23 +1048,63 @@ function serviceForm() {
 
                 const peopleToRecalculate = new Set();
 
-                // 1. Process Standard Roles
-                for (const { field, role, metadata } of roles) {
-                    const oldId = original[field] ? original[field].id : null;
-                    const newId = this.service[field].id;
-                    if (oldId !== newId) {
-                        if (oldId) await this._removeInvolvement(batch, oldId, role, metadata);
-                        if (newId) await this._addInvolvement(batch, newId, role, metadata);
-                    }
-                }
+                // An Involvement is the fact that somebody served, so it is not
+                // written until the day has been (MS-160, ADR-0018 §1). Putting a
+                // preacher down for a Sunday six weeks out used to count as
+                // serving the moment you saved, and a fairness engine reading
+                // that log ranks people by what was hoped for.
+                //
+                // A Sunday still ahead therefore writes nothing and is stamped
+                // `involvementDeferred`, which is the Service saying its records
+                // are still owed. The scheduled job pays them the night the date
+                // passes, and clears the flag.
+                //
+                // Pastoral prayer below is untouched: it records being prayed
+                // FOR, not serving, and it drives lastPastoralPrayerDate for the
+                // prayer rotation.
+                const hasHappened = ServiceInvolvementCore.hasPassed(
+                    this.date, window.DateUtils.todayStr());
 
-                // 1b. Process Music Helpers (a set of worship_helper involvements)
-                const helperChanges = worshipHelperInvolvementChanges(original.musicHelpers, this.service.musicHelpers);
-                for (const personId of helperChanges.removed) {
-                    await this._removeInvolvement(batch, personId, 'worship_helper');
-                }
-                for (const personId of helperChanges.added) {
-                    await this._addInvolvement(batch, personId, 'worship_helper');
+                if (hasHappened) {
+                    // 1. Process Standard Roles
+                    for (const { field, role, metadata } of roles) {
+                        const oldId = original[field] ? original[field].id : null;
+                        const newId = this.service[field].id;
+                        if (oldId !== newId) {
+                            if (oldId) await this._removeInvolvement(batch, oldId, role, metadata);
+                            if (newId) await this._addInvolvement(batch, newId, role, metadata);
+                        }
+                    }
+
+                    // 1b. Process Music Helpers (a set of worship_helper involvements)
+                    const helperChanges = worshipHelperInvolvementChanges(original.musicHelpers, this.service.musicHelpers);
+                    for (const personId of helperChanges.removed) {
+                        await this._removeInvolvement(batch, personId, 'worship_helper');
+                    }
+                    for (const personId of helperChanges.added) {
+                        await this._addInvolvement(batch, personId, 'worship_helper');
+                    }
+                } else {
+                    // Nothing is owed yet — and anything already here is a record
+                    // of something that has not happened, whether this save put it
+                    // there or the old write-on-save behaviour did. Clearing it on
+                    // the way past means a Sunday heals itself the next time it is
+                    // touched, rather than waiting on the migration.
+                    for (const { field, role, metadata } of roles) {
+                        const oldId = original[field] ? original[field].id : null;
+                        const newId = this.service[field].id;
+                        if (oldId) await this._removeInvolvement(batch, oldId, role, metadata);
+                        if (newId && newId !== oldId) {
+                            await this._removeInvolvement(batch, newId, role, metadata);
+                        }
+                    }
+
+                    const helperIds = new Set(
+                        [...(original.musicHelpers || []), ...(this.service.musicHelpers || [])]
+                            .map(h => h && h.id).filter(Boolean));
+                    for (const personId of helperIds) {
+                        await this._removeInvolvement(batch, personId, 'worship_helper');
+                    }
                 }
 
                 // In the new system baptism presence is derived from the chosen
@@ -1091,6 +1179,12 @@ function serviceForm() {
                     irregularElements: this.service.irregularElements,
                     notes: this.service.notes,
                     liturgy: this.service.liturgy,
+                    // Whether this Sunday still owes its serve records. The
+                    // scheduled job converts only Services carrying it, which is
+                    // what stops it re-crediting every Sunday in the archive —
+                    // those were written the old way under auto-generated ids, so
+                    // a second pass would add a duplicate rather than overwrite.
+                    involvementDeferred: !hasHappened,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
                 // Only persist the guide system once the editor has engaged the new
