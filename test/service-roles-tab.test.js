@@ -376,3 +376,99 @@ test('the panel brings its own phone rules', () => {
     assert.ok(read('service-builder.html').includes('roles-panel.css'),
         'the service page never links the stylesheet those rules live in');
 });
+
+// ── What the page reads, and when ────────────────────────────────────────────
+//
+// Opening an Event used to fetch the whole directory, every shared relationship,
+// every shared group and every privacy tag — five collections — before it drew
+// anything. Three of those only answer "who may take this place", which nobody
+// has asked until they open the picker. Every one is a read that can be dropped,
+// and a dropped one surfaced as "Could not read which tags hide people" on a
+// screen that had not been asked to offer anybody.
+
+function fakeDb(log) {
+    const snap = { docs: [], empty: true };
+    const q = (name) => ({
+        get() { log.push(name); return Promise.resolve(snap); },
+        where(field, op, value) { return q(name + '?' + field); },
+        doc() { return { get: () => Promise.resolve({ exists: false, data: () => ({}) }),
+                         collection: () => q(name + '/sub') }; },
+        collection: () => q(name + '/sub'),
+    });
+    return { collection: (name) => q(name) };
+}
+
+function editorPage(log) {
+    const sandbox = sandboxFor({ db: fakeDb(log) });
+    vm.runInContext(read('calendar-event.js'), sandbox, { filename: 'calendar-event.js' });
+    const page = sandbox.eventDetailPage({ occurrenceId: 'sunday_service_2026-10-12', rolesOnly: true });
+    page.rank = 'editor';
+    return page;
+}
+
+test('opening the page reads the people and the Roles, and nothing else', async () => {
+    const log = [];
+    await editorPage(log).loadEditorData();
+
+    assert.deepStrictEqual(log, ['people', 'roles'],
+        'the page still fetches picker data before anyone has asked to pick');
+});
+
+test('the privacy tags are not read until the picker is opened', async () => {
+    const log = [];
+    const page = editorPage(log);
+    await page.loadEditorData();
+    assert.ok(!log.includes('people_tags'),
+        'people_tags is read on page load, on a screen that offers nobody');
+
+    await page.openPicker('coffee', 's1');
+    assert.ok(log.includes('people_tags'), 'the picker never reads the privacy tags');
+    assert.ok(log.some(c => c.startsWith('relationships')), 'the picker never reads relationships');
+    assert.ok(log.some(c => c.startsWith('relationship_groups')), 'the picker never reads groups');
+});
+
+test('opening the picker a second time reads nothing again', async () => {
+    const log = [];
+    const page = editorPage(log);
+    await page.loadEditorData();
+    await page.openPicker('coffee', 's1');
+    const afterFirst = log.length;
+
+    await page.openPicker('welcome', 's2');
+    assert.strictEqual(log.length, afterFirst,
+        'every slot you click refetches the whole directory');
+});
+
+test('the picker offers nobody until the privacy tags are in', async () => {
+    // An empty hidingTags list offers EVERYONE. An elder set those tags so
+    // nobody below them sees who is behind one, so a list drawn mid-read would
+    // print exactly the names the tag exists to hide.
+    const page = editorPage([]);
+    await page.loadEditorData();
+
+    const opening = page.openPicker('coffee', 's1');
+    assert.strictEqual(page.picker.loading, true,
+        'the picker opens ready to draw candidates before it knows who is hidden');
+
+    await opening;
+    assert.strictEqual(page.picker.loading, false);
+});
+
+test('the candidate list and its counts are both held back while loading', () => {
+    const markup = RolesPanel.MARKUP.picker;
+    assert.match(markup, /x-for="c in \(picker\.loading \? \[\] : candidates\)"/,
+        'the candidate list renders while the privacy tags are still in flight');
+    assert.match(markup, /x-show="!picker\.loading"[^>]*\n?[^>]*eligibleCount/,
+        '"0 can take it" shows while loading, which is a wrong answer not a pending one');
+});
+
+test('a picker opened straight from the declined banner waits too', async () => {
+    // The banner's "Find someone" button is a second way in, and it must not be
+    // a way round.
+    assert.match(RolesPanel.MARKUP.banner, /@click="openPicker\(/);
+    const page = editorPage([]);
+    await page.loadEditorData();
+    const opening = page.openPicker('coffee', 's1');
+    assert.strictEqual(page.picker.loading, true);
+    await opening;
+});

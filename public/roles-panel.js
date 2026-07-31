@@ -373,7 +373,9 @@
                            class="flex-grow bg-transparent border-0 text-[14px] cal-focus" />
                 </div>
                 <div class="mt-2 flex items-center justify-between gap-sm">
-                    <span class="text-[12.5px] text-on-surface-variant"
+                    <!-- Hidden while the candidates are still being worked out.
+                         "0 can take it" is a wrong answer, not a pending one. -->
+                    <span class="text-[12.5px] text-on-surface-variant" x-show="!picker.loading"
                           x-text="eligibleCount + ' can take it · ' + blockedCount + ' can\\'t'"></span>
                     <!-- OFF by default. Seeing who was passed over is the point. -->
                     <label class="flex items-center gap-2 cursor-pointer">
@@ -384,7 +386,14 @@
             </div>
 
             <div class="max-h-[45vh] overflow-y-auto">
-                <template x-for="c in candidates" :key="c.personId">
+                <!-- Nothing until the privacy tags are in. An empty tag list
+                     offers everyone, so a list drawn mid-read would print the
+                     names those tags exist to hide. -->
+                <div x-show="picker.loading" class="px-md py-8 text-center text-[13px] text-on-surface-variant">
+                    Checking who can take it…
+                </div>
+
+                <template x-for="c in (picker.loading ? [] : candidates)" :key="c.personId">
                     <button @click="pick(c)" :disabled="!c.eligible"
                             class="w-full text-left flex items-center gap-sm px-md py-2.5 border-b border-outline-variant cal-motion"
                             :class="{

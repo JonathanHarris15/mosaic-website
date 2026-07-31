@@ -69,7 +69,7 @@
             groups: [],
 
             // The screens that sit over this one.
-            picker: { open: false, roleSlug: null, slotId: null, query: '', hideBlocked: false, picked: null },
+            picker: { open: false, roleSlug: null, slotId: null, query: '', hideBlocked: false, picked: null, loading: false },
             pattern: { open: false, rule: null, orphans: [], choices: {} },
             tidyUp: { open: false, ticks: {} },
             // Set only when a Role being taken off would drop somebody.
@@ -255,20 +255,38 @@
                     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
             },
 
+            // What the SCREEN needs: the people, to put a name against whoever is
+            // in a slot, and the Role Definitions, to draw the cards at all.
+            //
+            // Relationships, groups and privacy tags are NOT here. They answer
+            // "who may take this place", which is a question nobody has asked
+            // until they open the picker — and three collections is three reads
+            // and three chances of a dropped one, paid by every editor who only
+            // came to look at the roster.
             async loadEditorData() {
                 await this.loadPeople();
-                const [roles, rels, groups] = await Promise.all([
-                    db.collection('roles').get(),
+                const roles = await db.collection('roles').get();
+                this.roleDefinitions = roles.docs.map(d => Object.assign({ id: d.id }, d.data()));
+            },
+
+            // Loaded once, the first time somebody opens the picker, and kept.
+            pickerDataLoaded: false,
+
+            async ensurePickerData() {
+                if (this.pickerDataLoaded) return;
+
+                const [rels, groups] = await Promise.all([
                     // Serving rules may only name a Relationship Type an elder has
                     // shared with editors, so the query is constrained the same way
                     // the Roles Manager constrains it. Unconstrained it would error.
                     db.collection('relationships').where('sharedWithEditors', '==', true).get().catch(() => ({ docs: [] })),
                     db.collection('relationship_groups').where('sharedWithEditors', '==', true).get().catch(() => ({ docs: [] })),
                 ]);
-                this.roleDefinitions = roles.docs.map(d => Object.assign({ id: d.id }, d.data()));
                 this.relationships = rels.docs.map(d => d.data());
                 this.groups = groups.docs.map(d => Object.assign({ id: d.id }, d.data()));
                 await this.loadHidingTags();
+
+                this.pickerDataLoaded = true;
             },
 
             // What time this date happens at. Read through the model rather than
@@ -949,8 +967,22 @@
             // greyed out WITH THE REASON, never silently omitted — the point is
             // that an editor can see who was passed over and why.
 
-            openPicker(roleSlug, slotId) {
-                this.picker = { open: true, roleSlug, slotId, query: '', hideBlocked: false, picked: null };
+            // The list stays hidden until the privacy tags are in.
+            //
+            // `hidingTags` empty means "no tag hides anybody", which OFFERS
+            // everyone — the wrong direction for a rule an elder set precisely
+            // so nobody below them sees who is behind it. Rendering the
+            // candidates while the read is still in flight would print those
+            // names for as long as it took, which is the one failure this list
+            // must never have.
+            async openPicker(roleSlug, slotId) {
+                this.picker = {
+                    open: true, roleSlug, slotId,
+                    query: '', hideBlocked: false, picked: null,
+                    loading: !this.pickerDataLoaded,
+                };
+                await this.ensurePickerData();
+                this.picker.loading = false;
             },
 
             closePicker() { this.picker.open = false; },
