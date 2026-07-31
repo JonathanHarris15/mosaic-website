@@ -75,6 +75,22 @@ function visit(opts) {
 const MOBILE = 'mobile.html';
 const PREF = 'mosaicPrefersDesktop';
 
+test('the viewport tag is parsed before the rule asks how wide we are', () => {
+    // THE BUG THIS EXISTS FOR. The rule shipped ABOVE the viewport meta tag,
+    // and every iPhone got the desktop site. Until Safari parses that tag the
+    // viewport is the default 980px, so `(max-width: 820px)` is false — on a
+    // phone that reports a 402px touch screen to the very next line of script.
+    //
+    // Nothing else in this file can catch it: the rule is correct, and running
+    // it (as the tests below do) has no viewport to get wrong. Only the order
+    // of two tags in the page is wrong, so only the page can be asked.
+    const viewport = INDEX.indexOf('name="viewport"');
+    const rule = INDEX.indexOf('<script>');
+    assert.ok(viewport !== -1, 'the viewport tag is gone');
+    assert.ok(viewport < rule,
+        'the entry rule runs before the viewport tag, so it measures a 980px window on every phone');
+});
+
 test('a desktop browser stays on the desktop site', () => {
     assert.equal(visit({ phone: false }).wentTo, null);
 });

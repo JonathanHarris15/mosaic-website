@@ -3,6 +3,14 @@
 
 <head>
     <meta charset="utf-8" />
+    <!-- ⚠ THE VIEWPORT TAG MUST STAY ABOVE THE SCRIPT BELOW IT.
+         Until Safari has parsed it, the page's viewport is the default 980px
+         wide — so a width media query asked before this line answers for a
+         desktop-sized window on every phone in the world. The script below is a
+         width media query, and it shipped underneath this tag first time round:
+         it ran, decided "not a phone", and every iPhone got the desktop site
+         while the same browser reported a 402px touch screen a moment later. -->
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <!-- Which app is this? Runs before any resources load, so the wrong one
          never paints.
 
@@ -49,7 +57,6 @@
             }
         })();
     </script>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Mosaic Services</title>
     <!-- Google Fonts: Noto Serif & Work Sans -->
 
