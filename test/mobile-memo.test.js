@@ -48,10 +48,17 @@ test('forget clears BOTH levels', () => {
     // Clearing only the in-memory half looks like it works — you are still on
     // the same document while you test it — and then the stale sessionStorage
     // copy comes back the moment you return from a shell page.
-    const body = DATA.match(/function forget\(key\) \{([\s\S]*?)\n  \}/);
-    assert.ok(body, 'forget() is gone');
-    assert.match(body[1], /delete memo\[key\]/, 'forget leaves the in-memory copy');
-    assert.match(body[1], /removeItem/, 'forget leaves the sessionStorage copy, which outlives the document');
+    //
+    // Both levels are cleared by drop(), which forget() routes every key
+    // through — including the second key it clears for Home's featured service.
+    const body = DATA.match(/function drop\(key\) \{([\s\S]*?)\n  \}/);
+    assert.ok(body, 'drop() is gone — forget clears the levels some other way now');
+    assert.match(body[1], /delete memo\[key\]/, 'the in-memory copy is left behind');
+    assert.match(body[1], /removeItem/, 'the sessionStorage copy, which outlives the document, is left behind');
+
+    const forget = DATA.match(/function forget\(key\) \{([\s\S]*?)\n  \}/);
+    assert.ok(forget, 'forget() is gone');
+    assert.match(forget[1], /drop\(key\)/, 'forget no longer clears the key it was asked about');
 });
 
 test('only collections the app never writes are memoised', () => {

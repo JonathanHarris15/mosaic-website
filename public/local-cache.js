@@ -137,6 +137,82 @@
         return ready;
     }
 
+    // ── A read that never answers ────────────────────────────────────────────
+    //
+    // ⚠ THIS HALF IS ON. It is not part of the cache above and does not depend
+    // on it — it rides on the same interception because that is the one place
+    // every read in the app already passes through.
+    //
+    // Measured on a phone: a query started and had still not answered
+    // twenty-five seconds later, while the same query took 94ms a minute
+    // earlier and the page's own timers kept firing on schedule throughout. It
+    // did not fail. It never settled. So the screen waited on a promise that
+    // was never going to resolve, which is what "it sometimes takes 15+ seconds
+    // to load" actually was: not a slow page, a dropped read.
+    //
+    // auth.js already retries a read that REJECTS (see its RETRYABLE list).
+    // Nothing could retry this one, because there is no event to hang a retry
+    // on. A deadline is the only thing that can notice silence.
+    //
+    // ⚠ IT NEVER CANCELS THE FIRST ATTEMPT. Nothing here can tell a dropped
+    // read from a merely slow one, and cancelling would turn every slow read on
+    // a bad connection into a failure. So the retry RACES the original and
+    // whichever answers first wins. The price is one duplicated read whenever
+    // one is genuinely slow, which is why there is a single retry rather than a
+    // stream of them.
+    //
+    // Six seconds because a healthy read here is under half of one — the
+    // 3.6MB services read measured 457ms — so the deadline only fires on
+    // something that has actually gone wrong, and the person waiting gets an
+    // answer inside seven seconds instead of never.
+    var DEADLINE_MS = 6000;
+    var ATTEMPTS = 2;
+
+    // `deadline-exceeded` deliberately: it is already in auth.js's retryable
+    // list and already caught by its boot guard, so giving up here lands in
+    // machinery that exists rather than inventing a new failure nobody handles.
+    function deadlineExceeded() {
+        var e = new Error("This read did not answer in " + Math.round(DEADLINE_MS * ATTEMPTS / 1000) + "s.");
+        e.code = "deadline-exceeded";
+        e.name = "FirebaseError";
+        return e;
+    }
+
+    // `issue` must start a NEW read each time it is called.
+    function guard(issue, opts) {
+        var deadline = (opts && opts.deadlineMs) || DEADLINE_MS;
+        var attempts = (opts && opts.attempts) || ATTEMPTS;
+        return new Promise(function (resolve, reject) {
+            var settled = false;
+            var timers = [];
+
+            function finish(fn, value) {
+                if (settled) return;
+                settled = true;
+                for (var i = 0; i < timers.length; i++) clearTimeout(timers[i]);
+                fn(value);
+            }
+
+            function attempt() {
+                if (settled) return;
+                var p;
+                try { p = issue(); } catch (e) { finish(reject, e); return; }
+                Promise.resolve(p).then(
+                    function (snap) { finish(resolve, snap); },
+                    // A read that FAILS is the old, handled path — surfaced
+                    // unchanged. Retrying it here as well would double every
+                    // wait auth.js already manages, and make being refused
+                    // slower for no gain.
+                    function (err) { finish(reject, err); }
+                );
+            }
+
+            for (var i = 1; i < attempts; i++) timers.push(setTimeout(attempt, deadline * i));
+            timers.push(setTimeout(function () { finish(reject, deadlineExceeded()); }, deadline * attempts));
+            attempt();
+        });
+    }
+
     // ── 2. Cache-first reads ─────────────────────────────────────────────────
     // Answer from the device if we have it, then quietly refresh so the NEXT
     // read is current. On the web, or before the cache is up, this is a plain
@@ -206,10 +282,11 @@
     // 'server'}) — goes straight through. That is the opt-out, and it is what
     // fresh() below is for. Writes, transactions (Transaction.get is a separate
     // method) and live listeners are all untouched.
+    // Patched even with the cache off, because the read deadline above rides on
+    // the same interception and is needed either way. With CACHE_ENABLED false
+    // the wrapper adds a deadline and NOTHING else: every read still goes to the
+    // server exactly as it did before any of this existed.
     function interceptReads(firebase) {
-        // With the cache off there is nothing to read from, so leave Firestore's
-        // own prototypes alone rather than wrapping every read to no purpose.
-        if (!CACHE_ENABLED) return false;
         if (!isMobile() || !firebase || !firebase.firestore) return false;
         var ns = firebase.firestore;
         var patched = 0;
@@ -224,10 +301,14 @@
 
             var original = proto.get;
             function cacheFirst(options) {
+                var self = this;
                 // The caller said what it wants. Honour it exactly — this is the
-                // opt-out every write-feeding read uses (FRESH_READ).
-                if (options) return original.call(this, options);
-                return read(this, original);
+                // opt-out every write-feeding read uses (FRESH_READ). It still
+                // gets a deadline: a read that states its source can be dropped
+                // exactly like any other.
+                if (options) return guard(function () { return original.call(self, options); });
+                if (!CACHE_ENABLED) return guard(function () { return original.call(self); });
+                return guard(function () { return read(self, original); });
             }
             cacheFirst.__mosaicCacheFirst = true;
             proto.get = cacheFirst;
@@ -283,6 +364,7 @@
     global.MosaicLocalCache = {
         isMobile: isMobile,
         enable: enable,
+        guardRead: guard,
         read: read,
         fresh: fresh,
         interceptReads: interceptReads,

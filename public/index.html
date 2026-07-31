@@ -3,21 +3,60 @@
 
 <head>
     <meta charset="utf-8" />
-    <!-- Native app only: launch the mobile shell when running inside Capacitor.
-         Runs before any resources load. Web browsers (any width) fall through
-         to the desktop app — a narrow desktop window is still the desktop app. -->
+    <!-- ⚠ THE VIEWPORT TAG MUST STAY ABOVE THE SCRIPT BELOW IT.
+         Until Safari has parsed it, the page's viewport is the default 980px
+         wide — so a width media query asked before this line answers for a
+         desktop-sized window on every phone in the world. The script below is a
+         width media query, and it shipped underneath this tag first time round:
+         it ran, decided "not a phone", and every iPhone got the desktop site
+         while the same browser reported a 402px touch screen a moment later. -->
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <!-- Which app is this? Runs before any resources load, so the wrong one
+         never paints.
+
+         The native app is always the mobile app. A BROWSER is the mobile app
+         when it is a phone — a touch screen at phone width — and the desktop
+         app otherwise, so a narrow desktop window is still the desktop app.
+         Deliberately not the user agent: it lies, and it cannot tell a phone
+         from a phone-sized window any better than this can.
+
+         `?shell=web` opts out, and the opt-out is REMEMBERED. The mobile app
+         does not cover every screen, so the desktop site is a real destination
+         on a phone — and being bounced back here on the next visit would make
+         it one you can reach exactly once. `?shell=mobile` undoes it. The
+         native app ignores the preference: there is no desktop site inside the
+         WebView to prefer, only this page sending you back here forever. -->
     <script>
         (function () {
             var C = window.Capacitor;
             var native = !!(C && (typeof C.isNativePlatform === "function"
                 ? C.isNativePlatform()
                 : (C.platform && C.platform !== "web")));
-            if (native && location.pathname.indexOf("mobile.html") === -1) {
+            var PREF = "mosaicPrefersDesktop";
+            var asked = null;
+            try { asked = new URLSearchParams(location.search).get("shell"); } catch (e) {}
+            var prefersDesktop = false;
+            try {
+                if (asked === "web") localStorage.setItem(PREF, "1");
+                else if (asked === "mobile") localStorage.removeItem(PREF);
+                prefersDesktop = localStorage.getItem(PREF) === "1";
+            } catch (e) {}
+            // The shell remembers itself for the whole tab (mobile-shell.js), and
+            // on a phone its own guard — "am I narrow?" — is always yes. So
+            // without this, leaving the app for the desktop site gets you THIS
+            // page desktop and every page you click through to still wearing
+            // phone chrome, back-links and all. Same key, same clearing that
+            // mobile-shell.js does with ?shell=web; done here because index.html
+            // is the one page that doesn't load it.
+            try { if (asked === "web") sessionStorage.removeItem("mosaicShell"); } catch (e) {}
+            var phone = !!window.matchMedia
+                && window.matchMedia("(pointer: coarse) and (max-width: 820px)").matches;
+            if ((native || (phone && !prefersDesktop))
+                && location.pathname.indexOf("mobile.html") === -1) {
                 location.replace("mobile.html");
             }
         })();
     </script>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Mosaic Services</title>
     <!-- Google Fonts: Noto Serif & Work Sans -->
 
@@ -28,6 +67,16 @@
     <!-- Tailwind CSS -->
     <link rel="stylesheet" href="mosaic.css" />
     <link rel="stylesheet" href="fonts.css" />
+    <style>
+        /* The way back to the mobile app, for the one person it can reach: a
+           phone that has chosen the desktop site. Hidden by default rather than
+           shown by default, so a desktop browser never sees it even for the one
+           frame before the rule applies. */
+        #mobile-switch { display: none; }
+        @media (pointer: coarse) and (max-width: 820px) {
+            #mobile-switch { display: flex; }
+        }
+    </style>
 
     <!-- Firebase SDKs -->
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -131,6 +180,15 @@
                 </div>
             </div>
         </div>
+
+        <!-- Shown only on a phone (see the #mobile-switch rule in <head>), which
+             on a phone means: only when you asked for the desktop site, because
+             otherwise you were never sent here. Clears that choice on the way. -->
+        <a href="index.html?shell=mobile" id="mobile-switch"
+            class="shrink-0 items-center justify-center gap-1 pt-2 pb-4 text-on-surface-variant hover:text-primary transition-colors duration-200">
+            <span class="material-symbols-outlined text-[18px]">smartphone</span>
+            <span class="font-label-md text-label-md">Switch to the mobile app</span>
+        </a>
     </main>
     <script>
 
