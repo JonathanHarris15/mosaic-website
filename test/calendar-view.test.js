@@ -744,3 +744,59 @@ test('a chosen colour and the warning amber cannot be mistaken for each other', 
     assert.strictEqual(amber.bar.toUpperCase(), View.WARNING_COLOUR.toUpperCase());
     assert.ok(View.EVENT_COLOURS.every(c => c.tint !== c.bar), 'a bar and a background look alike');
 });
+
+// ── The fairness note (MS-17) ────────────────────────────────────────────────
+//
+// Two facts, in the order fairness weighs them: how long since this Role, and
+// how much they are carrying. Never one combined score — a number nobody can
+// decompose is a number nobody trusts.
+
+test('the note says how long since they did this Role, in the Event\'s own units', () => {
+    assert.strictEqual(
+        View.fairnessNote({ eligible: true }, { recency: 9, unit: 'Sunday' }),
+        'last did this 9 Sundays ago'
+    );
+});
+
+test('never having done it reads as not having done it all season', () => {
+    assert.strictEqual(
+        View.fairnessNote({ eligible: true }, { recency: 12, unit: 'Sunday', neverServed: true }),
+        'not done this in 12 Sundays'
+    );
+});
+
+test('other work this season is named beside it', () => {
+    assert.strictEqual(
+        View.fairnessNote({ eligible: true }, { recency: 9, unit: 'Sunday', otherJobs: 2 }),
+        'last did this 9 Sundays ago · 2 other jobs this season'
+    );
+});
+
+test('being over the rest budget is said outright, and replaces the count', () => {
+    // This is the one that should stop an editor picking them, so it must not
+    // be left for them to work out from a number.
+    assert.strictEqual(
+        View.fairnessNote({ eligible: true }, { recency: 1, unit: 'Sunday', otherJobs: 6, spent: true }),
+        'last did this 1 Sunday ago · over their rest budget'
+    );
+});
+
+test('somebody carrying nothing gets no load clause at all', () => {
+    assert.strictEqual(
+        View.fairnessNote({ eligible: true }, { recency: 4, unit: 'Sunday', otherJobs: 0 }),
+        'last did this 4 Sundays ago'
+    );
+});
+
+test('the note is empty rather than wrong when there is no history to read', () => {
+    // A one-off Event is not a series, so there is no run of past occurrences to
+    // be fair across. Saying nothing beats inventing a number.
+    assert.strictEqual(View.fairnessNote({ eligible: true }, {}), '');
+});
+
+test('a group name still leads the note, as it did before fairness existed', () => {
+    assert.strictEqual(
+        View.fairnessNote({ eligible: true }, { groupName: 'Tuesday', recency: 3, unit: 'time' }),
+        'Tuesday group · last did this 3 times ago'
+    );
+});

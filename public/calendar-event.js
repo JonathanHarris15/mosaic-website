@@ -23,10 +23,8 @@
     const Store = window.EventsStore;
     const View = window.CalendarView;
     const Roles = window.RolesCore;
-
-    // A slot id no real slot uses, so somebody blocked because they are down for
-    // the liturgy can never be mistaken for somebody sitting in a place here.
-    const LITURGICAL_SLOT = '__liturgical__';
+    const Events = window.EventsCore;
+    const Fairness = window.FairnessCore;
 
     const params = new URLSearchParams(window.location.search);
 
@@ -67,6 +65,13 @@
             roleDefinitions: [],
             relationships: [],
             groups: [],
+
+            // What fairness knows about this occurrence: the serve history for
+            // this series inside the window, and the window's own dates. Loaded
+            // once per occurrence rather than per Role — load is per person per
+            // date, and only recency changes from one Role to the next.
+            serveHistory: [],
+            fairnessWindow: [],
 
             // The screens that sit over this one.
             picker: { open: false, roleSlug: null, slotId: null, query: '', hideBlocked: false, picked: null, loading: false },
@@ -283,6 +288,12 @@
                         // assignable rather than showing as busy.
                         console.warn('Could not read who is leading this Sunday:', liturgy.reason);
                     }
+
+                    // Last, and only for an editor: it needs the series and the
+                    // Role definitions above it, and a member never sees the
+                    // picker the note is written for. Failing here costs a
+                    // subtitle, never the roster.
+                    if (this.isEditor) await this.loadFairness();
                 } catch (e) {
                     console.error('Event load failed:', e);
                     this.error = (e && e.code === 'permission-denied')
@@ -457,10 +468,16 @@
                     }));
             },
 
+            // ⚠ Carries the fairness fields, not just the label. This projection
+            // used to drop them, which meant `allowsAnotherRole` read as absent
+            // for every one-off no matter what was stored — a toggle that
+            // silently did nothing.
             get oneOffRoles() {
                 return ((this.occurrence && this.occurrence.oneOffRoles) || []).map(job => ({
                     id: job.id,
                     label: job.label,
+                    intensity: Roles.intensityOf(job),
+                    allowsAnotherRole: Roles.allowsAnotherRole(job),
                     people: this.assignments.filter(a => a.oneOffId === job.id),
                 }));
             },
@@ -984,6 +1001,44 @@
                 await this.persist();
             },
 
+            // ── A one-off job's own fairness settings ────────────────────────
+            //
+            // A one-off Role has no stored definition, so intensity and
+            // exclusivity live on the Event itself. They sit behind a disclosure
+            // because the whole point of a one-off is that it is CHEAP — adding
+            // "someone to unlock the hall" has to stay a sentence and a return
+            // key, and both defaults are already right almost every time.
+            //
+            // But they have to exist: without them the person who unlocks the
+            // hall every week reads as doing free work and quietly absorbs three
+            // more jobs the same morning.
+            oneOffOptionsFor: null,
+
+            toggleOneOffOptions(id) {
+                this.oneOffOptionsFor = this.oneOffOptionsFor === id ? null : id;
+            },
+
+            async setOneOffField(id, patch) {
+                const jobs = ((this.occurrence.oneOffRoles) || []).map(job => (
+                    job.id === id ? Object.assign({}, job, patch) : job
+                ));
+                this.occurrence.oneOffRoles = jobs;
+                await this.persist();
+            },
+
+            async setOneOffIntensity(id, raw) {
+                const value = Number(raw);
+                if (!Number.isFinite(value) || value < 0) {
+                    this.error = 'Rest between turns has to be zero or more weeks.';
+                    return;
+                }
+                await this.setOneOffField(id, { intensity: value });
+            },
+
+            async setOneOffExclusive(id, allowsAnother) {
+                await this.setOneOffField(id, { allowsAnotherRole: allowsAnother === true });
+            },
+
             async removeOneOffRole(id) {
                 this.occurrence.oneOffRoles = ((this.occurrence.oneOffRoles) || []).filter(j => j.id !== id);
                 this.assignments = this.assignments.filter(a => a.oneOffId !== id);
@@ -1091,6 +1146,92 @@
                 }
             },
 
+            // ── What fairness knows ──────────────────────────────────────────
+            //
+            // Read once per occurrence, so the picker can explain a suggestion
+            // instead of just making one.
+            //
+            // ⚠ THE WINDOW COMES FROM THE RECURRENCE RULE, NOT THE SERVE LOG.
+            // Three quiet Sundays still happened; a window built from the dates
+            // that appear in the log would skip them and quietly stretch "the
+            // last 12 Sundays" over a longer run of calendar than it claims.
+            async loadFairness() {
+                this.serveHistory = [];
+                this.fairnessWindow = [];
+
+                const seriesId = this.occurrence && this.occurrence.seriesId;
+                const date = this.occurrence && this.occurrence.date;
+                const rule = this.series && (this.series.recurrence
+                    || (this.isSundaySeries ? Store.SUNDAY_RULE : null));
+                // A one-off Event is not a series, so there is no run of past
+                // occurrences to be fair across. Nothing to say, so say nothing.
+                if (!seriesId || !date || !rule) return;
+
+                const size = Events.fairnessWindowOf(this.series);
+                // Reach back generously and take the last `size` dates before
+                // this one — enough calendar for a monthly Event to fill its
+                // window, and cheap because it is arithmetic, not a read.
+                const from = window.DateUtils.addDays(date, -Math.ceil(size * 31));
+                const before = window.DateUtils.addDays(date, -1);
+                const past = Core.datesBetween(rule, from, before).reverse();
+
+                this.fairnessWindow = Fairness.windowDates(past, size);
+                if (!this.fairnessWindow.length) return;
+
+                const earliest = this.fairnessWindow[this.fairnessWindow.length - 1];
+                try {
+                    // Constrained by series AND date: the composite index for
+                    // exactly this landed with MS-13. Records written before
+                    // `seriesId` existed do not match — a Firestore query cannot
+                    // apply the read-time fallback — which is what
+                    // scripts/backfill-involvement-series.js is for.
+                    const snap = await db.collectionGroup('involvement')
+                        .where('seriesId', '==', seriesId)
+                        .where('serviceDate', '>=', earliest)
+                        .get();
+                    this.serveHistory = snap.docs.map(d => {
+                        const data = d.data() || {};
+                        return {
+                            personId: d.ref.parent.parent.id,
+                            type: data.type,
+                            serviceDate: data.serviceDate,
+                            seriesId: Events.seriesIdOf(data),
+                            metadata: data.metadata || null,
+                        };
+                    });
+                } catch (e) {
+                    // A missing note is a smaller failure than a broken picker,
+                    // so this never blocks assigning somebody.
+                    console.error('Could not read the serve history:', e);
+                }
+            },
+
+            // What one turn of this Event is called, so a note can say "3 Sundays
+            // ago" rather than "3 occurrences ago".
+            get occurrenceUnit() {
+                return this.isSundaySeries ? 'Sunday' : 'time';
+            },
+
+            // Intensity, resolved across its three homes for a serve record.
+            intensityForRecord(record) {
+                const oneOffId = record.metadata && record.metadata.oneOffId;
+                return Events.roleIntensity(this.series, record.type, {
+                    definition: this.roleDefinitions.find(d => d.slug === record.type) || null,
+                    oneOff: oneOffId
+                        ? ((this.occurrence.oneOffRoles || []).find(j => j.id === oneOffId) || { id: oneOffId })
+                        : null,
+                });
+            },
+
+            // Per person per date, so it is computed once for the occurrence and
+            // read by every Role's picker.
+            get fairnessLoad() {
+                if (!this.fairnessWindow.length) return {};
+                return Fairness.loadOf(
+                    this.serveHistory, this.fairnessWindow, r => this.intensityForRecord(r)
+                );
+            },
+
             // Who may be offered AT ALL — which is a different question from who
             // is eligible. Somebody who has left, or whom this viewer may not see,
             // is not a candidate who lost; they are not a candidate. Showing them
@@ -1131,7 +1272,6 @@
                 //
                 // Exclusive is the default, so a Role nobody has configured
                 // blocks; liturgical Roles are always exclusive.
-                const oneOffJobs = (this.occurrence && this.occurrence.oneOffRoles) || [];
                 const elsewhere = this.assignments
                     .filter(a => a.personId && !mine(a))
                     .map(a => ({
@@ -1139,11 +1279,7 @@
                         roleSlug: a.oneOffId || a.roleSlug,
                         allowsAnotherRole: Roles.allowsAnotherRole(
                             a.oneOffId
-                                // The stored job, not the `oneOffRoles` getter,
-                                // which projects away everything but id, label
-                                // and people — so the flag would read as absent
-                                // for ever once the Event page can set it.
-                                ? oneOffJobs.find(j => j.id === a.oneOffId)
+                                ? this.oneOffRoles.find(j => j.id === a.oneOffId)
                                 : this.roleDefinitions.find(d => d.slug === a.roleSlug)
                         ),
                     }))
@@ -1163,6 +1299,14 @@
 
                 const q = String(this.picker.query || '').trim().toLowerCase();
 
+                // Recency is per Role, so it is computed once for the whole
+                // picker rather than once per candidate.
+                const size = this.fairnessWindow.length;
+                const recency = size
+                    ? Fairness.recencyOf(this.serveHistory, this.fairnessWindow, def.slug)
+                    : null;
+                const load = this.fairnessLoad;
+
                 return judged
                     .map(c => {
                         const person = this.people.find(p => p.id === c.personId) || {};
@@ -1178,7 +1322,20 @@
                         return Object.assign({}, c, {
                             name: person.name || 'Someone',
                             subtitle: c.eligible
-                                ? View.fairnessNote(c, { groupName: this.groupNameFor(c.personId) })
+                                ? View.fairnessNote(c, {
+                                    groupName: this.groupNameFor(c.personId),
+                                    // Both numbers, never a single score — one
+                                    // nobody can decompose is one nobody trusts.
+                                    recency: recency
+                                        ? Fairness.recencyFor(recency, c.personId, size)
+                                        : null,
+                                    neverServed: !!recency && recency[c.personId] === undefined,
+                                    unit: this.occurrenceUnit,
+                                    spent: Fairness.isSpent(load[c.personId] || 0, size),
+                                    otherJobs: this.serveHistory.filter(r => (
+                                        r.personId === c.personId && r.type !== def.slug
+                                    )).length,
+                                })
                                 : View.blockReason(c, {
                                     people: this.people,
                                     requirement: slot.requirement,

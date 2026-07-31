@@ -59,6 +59,8 @@ function loadComponent(scriptFile, factoryName, overrides) {
     sandbox.EventsStore = require('../public/events-store.js');
     sandbox.CalendarView = require('../public/calendar-view.js');
     sandbox.RolesCore = require('../public/roles-core.js');
+    sandbox.EventsCore = require('../public/events-core.js');
+    sandbox.FairnessCore = require('../public/fairness-core.js');
     sandbox.DateUtils = require('../public/date-utils.js');
 
     // The browser-only edges, stubbed just enough to construct the component.
@@ -2265,4 +2267,84 @@ test('nothing styles a safe-area inset the shell cannot report', () => {
     if (!/env\(safe-area-inset/.test(css)) return;
     assert.ok(/viewport-fit=cover/.test(shell),
         'mobile-shell.css pads by safe-area insets that always read 0');
+});
+
+// ── A one-off job's own fairness settings (MS-171) ───────────────────────────
+//
+// A one-off Role is meant to be CHEAP — a label and some people — so these sit
+// behind a disclosure. But they have to exist: without them the person who
+// unlocks the hall every week reads as doing free work and quietly absorbs
+// three more jobs the same morning.
+
+test('a one-off job carries the fairness fields, not just its label', () => {
+    // The projection used to drop them, which would have made the toggle below
+    // silently do nothing once it existed.
+    const page = eventPageWithRole();
+    page.occurrence.oneOffRoles = [
+        { id: 'o1', label: 'Unlock the hall', intensity: 0.5, allowsAnotherRole: true },
+    ];
+    const job = page.oneOffRoles[0];
+
+    assert.strictEqual(job.intensity, 0.5);
+    assert.strictEqual(job.allowsAnotherRole, true);
+});
+
+test('a one-off job nobody has configured owes a week and uses up the morning', () => {
+    const job = eventPageWithRole().oneOffRoles[0];
+    assert.strictEqual(job.intensity, 1);
+    assert.strictEqual(job.allowsAnotherRole, false);
+});
+
+test('the options are collapsed until asked for, one job at a time', () => {
+    const page = eventPageWithRole();
+    assert.strictEqual(page.oneOffOptionsFor, null, 'adding a job stays a sentence and a return key');
+
+    page.toggleOneOffOptions('o1');
+    assert.strictEqual(page.oneOffOptionsFor, 'o1');
+
+    page.toggleOneOffOptions('o1');
+    assert.strictEqual(page.oneOffOptionsFor, null);
+});
+
+test('setting a one-off intensity persists it on the Event', async () => {
+    const page = eventPageWithRole();
+    await page.setOneOffIntensity('o1', '2.5');
+
+    assert.strictEqual(page.occurrence.oneOffRoles[0].intensity, 2.5);
+    assert.strictEqual(page.saved, 1);
+});
+
+test('a one-off intensity of 0 is kept — some jobs really are free', async () => {
+    const page = eventPageWithRole();
+    await page.setOneOffIntensity('o1', '0');
+    assert.strictEqual(page.occurrence.oneOffRoles[0].intensity, 0);
+});
+
+test('a negative one-off intensity is refused and nothing is written', async () => {
+    const page = eventPageWithRole();
+    await page.setOneOffIntensity('o1', '-2');
+
+    assert.strictEqual(page.occurrence.oneOffRoles[0].intensity, undefined);
+    assert.strictEqual(page.saved, 0);
+    assert.match(page.error, /zero or more/i);
+});
+
+test('the exclusivity toggle persists on the job it belongs to', async () => {
+    const page = eventPageWithRole();
+    page.occurrence.oneOffRoles = [{ id: 'o1', label: 'Unlock' }, { id: 'o2', label: 'Lock up' }];
+
+    await page.setOneOffExclusive('o2', true);
+
+    assert.strictEqual(page.occurrence.oneOffRoles[1].allowsAnotherRole, true);
+    assert.strictEqual(page.occurrence.oneOffRoles[0].allowsAnotherRole, undefined,
+        'the other job is left alone');
+});
+
+test('a one-off job with no options set still reads as exclusive to the picker', () => {
+    // Absent means exclusive everywhere, so a job created before the toggle
+    // existed behaves like every other Role rather than quietly permitting a
+    // second one.
+    const RolesCore = require('../public/roles-core.js');
+    const page = eventPageWithRole();
+    assert.strictEqual(RolesCore.allowsAnotherRole(page.oneOffRoles[0]), false);
 });

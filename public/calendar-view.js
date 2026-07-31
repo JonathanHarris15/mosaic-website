@@ -424,12 +424,31 @@
     // The fairness note an eligible person shows in the same slot the reason
     // would occupy — which is also where an auto-assign suggestion will sit
     // later, so no relayout is needed then.
+    // What fairness knows about somebody, in the same slot a block reason would
+    // use. Two facts, in the order the engine weighs them: how long since they
+    // did THIS Role, and how much they are carrying overall (ADR-0020).
+    //
+    // A number nobody can decompose is a number nobody trusts, so the note says
+    // both rather than a single score — and "over their rest budget" is said
+    // outright, because that is the one that should stop an editor picking them.
     function fairnessNote(candidate, context) {
         const ctx = context || {};
         const parts = [];
         if (ctx.groupName) parts.push(ctx.groupName + ' group');
-        if (ctx.lastServed) parts.push('last served ' + ctx.lastServed);
-        else if (ctx.lastServed === null) parts.push('has not served this Role yet');
+
+        if (typeof ctx.recency === 'number' && ctx.unit) {
+            parts.push(ctx.neverServed
+                ? 'not done this in ' + plural(ctx.recency, ctx.unit)
+                : 'last did this ' + plural(ctx.recency, ctx.unit) + ' ago');
+        } else if (ctx.lastServed) {
+            parts.push('last served ' + ctx.lastServed);
+        } else if (ctx.lastServed === null) {
+            parts.push('has not served this Role yet');
+        }
+
+        if (ctx.spent) parts.push('over their rest budget');
+        else if (ctx.otherJobs > 0) parts.push(plural(ctx.otherJobs, 'other job') + ' this season');
+
         return parts.join(' · ');
     }
 

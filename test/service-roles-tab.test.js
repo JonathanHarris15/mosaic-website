@@ -34,6 +34,7 @@ function sandboxFor(extra) {
     sandbox.CalendarView = require('../public/calendar-view.js');
     sandbox.RolesCore = require('../public/roles-core.js');
     sandbox.EventsCore = require('../public/events-core.js');
+    sandbox.FairnessCore = require('../public/fairness-core.js');
     sandbox.DateUtils = require('../public/date-utils.js');
     sandbox.ServiceInvolvementCore = require('../public/service-involvement-core.js');
 
