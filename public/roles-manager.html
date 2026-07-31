@@ -81,6 +81,9 @@
     <script src="auth.js"></script>
     <script src="relationship-core.js"></script>
     <script src="roles-core.js"></script>
+    <!-- Liturgical intensity lives on the Sunday Service series, never in
+         /roles — this page needs EventsCore to read and write it. -->
+    <script src="events-core.js"></script>
     <script src="roles-manager.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
@@ -224,14 +227,24 @@
                     </div>
                     <p class="font-body-md text-[13px] leading-normal text-on-surface-variant mb-sm">
                         Built into the app — filled on the service page and printed in the service guide,
-                        so they can't be changed here. They're listed so you can see all serving in one place.
+                        so who does them, and what they need, can't be changed here.
+                        The one thing you can set is how much rest each one owes, because preparing a
+                        sermon and reading a prayer aren't the same work and the rota needs to know.
                     </p>
-                    <div class="flex flex-wrap gap-xs">
+                    <ul class="flex flex-col gap-base">
                         <template x-for="role in liturgicalRoles" :key="role.slug">
-                            <span class="font-serif text-[15px] text-on-surface-variant bg-surface-container-lowest border border-outline-variant rounded-sm px-base py-[5px]"
-                                  x-text="role.name"></span>
+                            <li class="flex items-center gap-sm px-sm py-sm rounded-lg border border-outline-variant bg-surface-container-lowest">
+                                <span class="material-symbols-outlined text-[17px] text-outline flex-shrink-0">lock</span>
+                                <span class="flex-grow font-serif text-[16px] text-on-surface-variant truncate" x-text="role.name"></span>
+                                <input type="number" min="0" step="0.25"
+                                       :value="liturgicalIntensity(role.slug)"
+                                       @change="setLiturgicalIntensity(role.slug, $event.target.value)"
+                                       :disabled="savingIntensity === role.slug"
+                                       class="w-20 flex-shrink-0 border border-outline-variant rounded-lg px-sm py-[6px] font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary disabled:opacity-50" />
+                                <span class="flex-shrink-0 font-body-md text-[13px] text-on-surface-variant">weeks' rest</span>
+                            </li>
                         </template>
-                    </div>
+                    </ul>
                 </section>
             </div>
 
@@ -297,6 +310,40 @@
                                     Renaming changes the label only — the Role keeps its serve history.
                                 </span>
                             </label>
+
+                            <!-- ── How often, and whether it uses up the morning ──────────
+                                 Two separate questions that are easy to conflate: intensity
+                                 says the job TIRES you, exclusivity says it OCCUPIES you.
+                                 Sound is plausibly 1 week's rest and still exclusive — easy
+                                 work, but you're stuck at the desk. Kept apart on purpose. -->
+                            <div class="flex flex-col gap-base pt-sm border-t border-outline-variant">
+                                <span class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">How often it can be asked of someone</span>
+
+                                <label class="flex flex-col gap-base max-w-[440px]">
+                                    <span class="font-body-md text-body-md text-on-surface">Rest between turns</span>
+                                    <div class="flex items-center gap-sm">
+                                        <input type="number" min="0" step="0.25" x-model="draft.intensity"
+                                               class="w-24 border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary" />
+                                        <span class="font-body-md text-body-md text-on-surface-variant">weeks</span>
+                                    </div>
+                                    <span class="font-body-md text-[13px] text-on-surface-variant">
+                                        Weeks before someone should do this again. Sound is 1 — every week is fine.
+                                        Setup is 4. Leave it at 1 if you're not sure.
+                                    </span>
+                                </label>
+
+                                <label class="flex items-start gap-sm max-w-[560px] cursor-pointer">
+                                    <input type="checkbox" x-model="draft.allowsAnotherRole"
+                                           class="mt-[3px] w-4 h-4 flex-shrink-0 accent-primary" />
+                                    <span class="flex flex-col gap-[2px]">
+                                        <span class="font-body-md text-body-md text-on-surface">They can also take another Role that day</span>
+                                        <span class="font-body-md text-[13px] text-on-surface-variant">
+                                            Off by default: doing this Role normally uses up someone's morning.
+                                            Tick it for something light like greeting at the door.
+                                        </span>
+                                    </span>
+                                </label>
+                            </div>
 
                             <!-- Slots -->
                             <div class="flex flex-col gap-base">
@@ -402,7 +449,19 @@
                                                 <option :value="option.value" x-text="option.label"></option>
                                             </template>
                                         </select>
-                                        <select x-model="newRuleValue"
+
+                                        <!-- An allowlist names people, so it collects them one
+                                             at a time instead of taking a single value. -->
+                                        <select x-show="composingAllowlist" x-model="newAllowlistPick"
+                                                @change="addToNewAllowlist()"
+                                                class="lg:flex-grow lg:min-w-0 border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary">
+                                            <option value="">Add someone…</option>
+                                            <template x-for="option in allowlistOptions" :key="option.id">
+                                                <option :value="option.id" x-text="option.name"></option>
+                                            </template>
+                                        </select>
+
+                                        <select x-show="!composingAllowlist" x-model="newRuleValue"
                                                 class="lg:flex-grow lg:min-w-0 border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary">
                                             <option value="" x-text="ruleValuePlaceholder"></option>
                                             <template x-for="option in ruleValueOptions" :key="option.id">
@@ -414,6 +473,30 @@
                                             Add rule
                                         </button>
                                     </div>
+
+                                    <!-- Chosen people, as names. Removable before the rule is
+                                         added, since an allowlist is written whole. -->
+                                    <div x-show="composingAllowlist && newAllowlist.length" class="flex flex-wrap gap-xs">
+                                        <template x-for="(personId, i) in newAllowlist" :key="personId">
+                                            <span class="inline-flex items-center gap-xs font-serif text-[15px] text-on-surface bg-surface border border-outline-variant rounded-sm pl-base pr-[5px] py-[4px]">
+                                                <span x-text="newAllowlistNames[i]"></span>
+                                                <button @click="removeFromNewAllowlist(personId)" title="Remove"
+                                                        class="w-5 h-5 flex items-center justify-center rounded text-on-surface-variant hover:text-error">
+                                                    <span class="material-symbols-outlined text-[15px]">close</span>
+                                                </button>
+                                            </span>
+                                        </template>
+                                    </div>
+
+                                    <p x-show="composingAllowlist && !newAllowlist.length"
+                                       class="font-body-md text-[13px] text-on-surface-variant">
+                                        Pick the people who do this Role. Nobody else will be suggested for it,
+                                        or offered when you fill it by hand.
+                                    </p>
+                                    <p x-show="composingAllowlist && peopleDenied"
+                                       class="font-body-md text-[13px] text-error">
+                                        The directory could not be read, so there is nobody to choose from.
+                                    </p>
 
                                     <!-- An empty picker and a failed read look identical; say which. -->
                                     <p x-show="relationshipTypesNotice"
