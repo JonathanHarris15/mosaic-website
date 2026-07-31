@@ -365,14 +365,21 @@
             case R.INACTIVE:
                 return 'No longer active';
 
-            case R.ALREADY_ASSIGNED: {
-                // Name the Roles they are already down for. "Already serving
-                // here" alone leaves the editor hunting for where.
+            case R.ALREADY_ASSIGNED:
+                return 'Already in this Role';
+
+            case R.SERVING_ELSEWHERE: {
+                // Name the Roles they are already down for. "Serving elsewhere"
+                // alone leaves the editor hunting for where, and hunting is the
+                // thing showing blocked people exists to avoid.
                 const elsewhere = (ctx.otherRoles || []).filter(Boolean);
                 return elsewhere.length
-                    ? 'Already serving here — ' + listSentence(elsewhere)
-                    : 'Already serving here';
+                    ? 'Already serving this morning — ' + listSentence(elsewhere)
+                    : 'Already serving this morning';
             }
+
+            case R.NOT_ON_ALLOWLIST:
+                return 'Not on the list of people who do this Role';
 
             case R.SEX_MISMATCH:
                 return ctx.requirement === Roles.REQUIREMENTS.FEMALE
@@ -417,12 +424,31 @@
     // The fairness note an eligible person shows in the same slot the reason
     // would occupy — which is also where an auto-assign suggestion will sit
     // later, so no relayout is needed then.
+    // What fairness knows about somebody, in the same slot a block reason would
+    // use. Two facts, in the order the engine weighs them: how long since they
+    // did THIS Role, and how much they are carrying overall (ADR-0020).
+    //
+    // A number nobody can decompose is a number nobody trusts, so the note says
+    // both rather than a single score — and "over their rest budget" is said
+    // outright, because that is the one that should stop an editor picking them.
     function fairnessNote(candidate, context) {
         const ctx = context || {};
         const parts = [];
         if (ctx.groupName) parts.push(ctx.groupName + ' group');
-        if (ctx.lastServed) parts.push('last served ' + ctx.lastServed);
-        else if (ctx.lastServed === null) parts.push('has not served this Role yet');
+
+        if (typeof ctx.recency === 'number' && ctx.unit) {
+            parts.push(ctx.neverServed
+                ? 'not done this in ' + plural(ctx.recency, ctx.unit)
+                : 'last did this ' + plural(ctx.recency, ctx.unit) + ' ago');
+        } else if (ctx.lastServed) {
+            parts.push('last served ' + ctx.lastServed);
+        } else if (ctx.lastServed === null) {
+            parts.push('has not served this Role yet');
+        }
+
+        if (ctx.spent) parts.push('over their rest budget');
+        else if (ctx.otherJobs > 0) parts.push(plural(ctx.otherJobs, 'other job') + ' this season');
+
         return parts.join(' · ');
     }
 

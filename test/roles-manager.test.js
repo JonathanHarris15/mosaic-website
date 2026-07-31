@@ -68,7 +68,22 @@ function fakeDb(seed = {}, { deny = [], failWrites = false } = {}) {
                     return { id };
                 }),
                 doc: id => ({
-                    set: guard(doc => { coll(name)[id] = JSON.parse(JSON.stringify(doc)); }),
+                    get: async () => ({
+                        id,
+                        exists: coll(name)[id] !== undefined,
+                        data: () => coll(name)[id],
+                    }),
+                    // `merge` is honoured, because the difference matters: the
+                    // Sunday Service series is written by this page for one
+                    // field and by the seeder for the rest, and a fake that
+                    // silently replaced the document would hide a real
+                    // clobbering bug.
+                    set: guard((doc, options) => {
+                        const next = JSON.parse(JSON.stringify(doc));
+                        coll(name)[id] = (options && options.merge)
+                            ? { ...coll(name)[id], ...next }
+                            : next;
+                    }),
                     update: guard(patch => { coll(name)[id] = { ...coll(name)[id], ...patch }; }),
                     delete: guard(() => { delete coll(name)[id]; }),
                 }),
@@ -79,6 +94,7 @@ function fakeDb(seed = {}, { deny = [], failWrites = false } = {}) {
 
 global.window = global;
 const Roles = require('../public/roles-core.js');
+const EventsCore = require('../public/events-core.js');
 require('../public/relationship-core.js');
 require('../public/roles-manager.js');
 
@@ -597,14 +613,17 @@ test('each kind of rule gets its own glyph, so a list of rules is scannable', as
 // ── Composing a rule from one pair of pickers ────────────────────────────────
 
 test('the rule kinds on offer include a relationship rule only when a Type is shared', async () => {
+    // The allowlist is always on offer and always last: it needs nothing shared
+    // to build, and it is the blunt one — right for the four who serve
+    // communion, wrong for anything a tag could say.
     const withShared = await mountPage({ relationship_types: { t1: MARRIAGE } });
     assert.deepStrictEqual(
         withShared.ruleKindOptions.map(o => o.value),
-        ['requireTag', 'excludeTag', 'notTogether']
+        ['requireTag', 'excludeTag', 'notTogether', 'allowlist']
     );
 
     const withNone = await mountPage({ relationship_types: { t2: DISCIPLESHIP } });
-    assert.deepStrictEqual(withNone.ruleKindOptions.map(o => o.value), ['requireTag', 'excludeTag'],
+    assert.deepStrictEqual(withNone.ruleKindOptions.map(o => o.value), ['requireTag', 'excludeTag', 'allowlist'],
         'offering a rule there is nothing to build is a dead end');
     // And every label is a sentence opener, not a field name.
     withShared.ruleKindOptions.forEach(o => assert.doesNotMatch(o.label, /Tag[A-Z]|kind|typeId/));
@@ -675,16 +694,16 @@ test('an unshared Group Type is offered nowhere', async () => {
 test('the rule kinds follow what is actually shared, pairwise and group independently', async () => {
     const groupOnly = await mountPage({ relationship_types: { t3: HOUSE_GROUP } });
     assert.deepStrictEqual(groupOnly.ruleKindOptions.map(o => o.value),
-        ['requireTag', 'excludeTag', 'notSameGroup', 'sameGroup'],
+        ['requireTag', 'excludeTag', 'notSameGroup', 'sameGroup', 'allowlist'],
         'a shared Group Type must open the group rules even with no pairwise Type');
 
     const pairOnly = await mountPage({ relationship_types: { t1: MARRIAGE } });
     assert.deepStrictEqual(pairOnly.ruleKindOptions.map(o => o.value),
-        ['requireTag', 'excludeTag', 'notTogether']);
+        ['requireTag', 'excludeTag', 'notTogether', 'allowlist']);
 
     const both = await mountPage({ relationship_types: { t1: MARRIAGE, t3: HOUSE_GROUP } });
     assert.deepStrictEqual(both.ruleKindOptions.map(o => o.value),
-        ['requireTag', 'excludeTag', 'notTogether', 'notSameGroup', 'sameGroup']);
+        ['requireTag', 'excludeTag', 'notTogether', 'notSameGroup', 'sameGroup', 'allowlist']);
 });
 
 test('a shared Group Type is not reported as nothing being shared', async () => {
@@ -1053,4 +1072,178 @@ test('a phone control that must not be pressed is not rendered, not hidden', () 
         delete global.MOSAIC_SHELL;
     }
     assert.equal(page.inShell, false, 'the web page would lose its own controls');
+});
+
+// ── The fairness fields (MS-170) ─────────────────────────────────────────────
+//
+// Three controls, and the one that matters most is a number that means nothing
+// without its sentence: `4` is only legible as "four weeks before asking again".
+
+const PEOPLE = {
+    p1: { name: 'Ada Lovelace' },
+    p2: { name: 'Grace Hopper' },
+    p3: { name: 'Katherine Johnson' },
+};
+
+test('opening a Role shows the defaults rather than two empty controls', async () => {
+    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+
+    assert.equal(page.draft.intensity, 1, 'a Role nobody has configured owes one week');
+    assert.equal(page.draft.allowsAnotherRole, false, 'and uses up the morning');
+});
+
+test('intensity and exclusivity are stored on the Role', async () => {
+    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.draft.intensity = 4;
+    page.draft.allowsAnotherRole = true;
+    await page.saveDraft();
+
+    assert.equal(stored('roles').r1.intensity, 4);
+    assert.equal(stored('roles').r1.allowsAnotherRole, true);
+});
+
+test('a cleared intensity box is refused, never silently saved as a free job', async () => {
+    // A number input hands back '' when emptied, and Number('') is 0 — a REAL
+    // intensity meaning the job costs nothing. Saving that silently would empty
+    // the rest budget of whoever does it, so validation stops the save instead.
+    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.draft.intensity = '';
+    await page.saveDraft();
+
+    assert.equal(stored('roles').r1.intensity, undefined, 'nothing was written');
+    assert.match(page.draftErrors.join(' '), /intensity/i);
+});
+
+test('intensity 0 is kept, because a free job is a real answer', async () => {
+    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.draft.intensity = 0;
+    await page.saveDraft();
+
+    assert.equal(stored('roles').r1.intensity, 0);
+});
+
+// ── The allowlist ────────────────────────────────────────────────────────────
+
+test('an allowlist is built from people and stored as one rule, not one per person', async () => {
+    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+
+    page.newRuleKind = Roles.RESTRICTIONS.ALLOWLIST;
+    page.newAllowlistPick = 'p1';
+    page.addToNewAllowlist();
+    page.newAllowlistPick = 'p3';
+    page.addToNewAllowlist();
+    page.addComposedRule();
+
+    assert.deepStrictEqual(page.draft.restrictions, [
+        { kind: 'allowlist', personIds: ['p1', 'p3'] },
+    ]);
+});
+
+test('adding an allowlist replaces any earlier one — a Role has one list', async () => {
+    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.newRuleKind = Roles.RESTRICTIONS.ALLOWLIST;
+
+    page.newAllowlistPick = 'p1';
+    page.addToNewAllowlist();
+    page.addComposedRule();
+
+    page.newAllowlistPick = 'p2';
+    page.addToNewAllowlist();
+    page.addComposedRule();
+
+    const lists = page.draft.restrictions.filter(r => r.kind === 'allowlist');
+    assert.equal(lists.length, 1);
+    assert.deepStrictEqual(lists[0].personIds, ['p2']);
+});
+
+test('an empty allowlist is refused rather than saved as a Role nobody can fill', async () => {
+    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.newRuleKind = Roles.RESTRICTIONS.ALLOWLIST;
+    page.addComposedRule();
+
+    assert.deepStrictEqual(page.draft.restrictions, []);
+});
+
+test('the same person cannot be added to an allowlist twice', async () => {
+    const page = await mountPage({ people: PEOPLE });
+    page.newAllowlistPick = 'p1';
+    page.addToNewAllowlist();
+    page.newAllowlistPick = 'p1';
+    page.addToNewAllowlist();
+
+    assert.deepStrictEqual(page.newAllowlist, ['p1']);
+    assert.equal(page.allowlistOptions.some(o => o.id === 'p1'), false,
+        'someone already picked is not offered again');
+});
+
+test('an allowlist reads as names, never as ids', async () => {
+    const page = await mountPage({ people: PEOPLE });
+    const sentence = page.ruleSentence({ kind: 'allowlist', personIds: ['p1', 'p2'] });
+
+    assert.match(sentence, /Ada Lovelace/);
+    assert.match(sentence, /Grace Hopper/);
+    assert.doesNotMatch(sentence, /p1|p2/);
+});
+
+test('a person who has left is SAID to be missing, not quietly dropped', async () => {
+    // A shorter allowlist than the editor believes they have is how a Role
+    // silently stops being fillable.
+    const page = await mountPage({ people: PEOPLE });
+    const sentence = page.ruleSentence({ kind: 'allowlist', personIds: ['p1', 'gone'] });
+
+    assert.match(sentence, /Ada Lovelace/);
+    assert.match(sentence, /no longer in the directory/);
+});
+
+test('an empty stored allowlist says so rather than reading as no rule', async () => {
+    const page = await mountPage({ people: PEOPLE });
+    assert.match(page.ruleSentence({ kind: 'allowlist', personIds: [] }), /nobody could ever fill/i);
+    assert.equal(page.isRuleAvailable({ kind: 'allowlist', personIds: [] }), false);
+});
+
+// ── Liturgical intensity ─────────────────────────────────────────────────────
+
+test('a liturgical Role with nothing set reads as one week', async () => {
+    const page = await mountPage({});
+    assert.equal(page.liturgicalIntensity('preacher'), 1);
+});
+
+test('liturgical intensity is written to the Event series, never to /roles', async () => {
+    const page = await mountPage({ events: { sunday_service: { id: 'sunday_service', name: 'Sunday Service' } } });
+    await page.setLiturgicalIntensity('preacher', 3);
+
+    assert.equal(stored('events').sunday_service.liturgicalIntensity.preacher, 3);
+    assert.equal(Object.keys(stored('roles')).length, 0,
+        'a document in /roles would make a locked Role editable (ADR-0016)');
+    assert.equal(page.liturgicalIntensity('preacher'), 3, 'and the screen matches what was stored');
+});
+
+test('setting one liturgical intensity leaves the others alone', async () => {
+    const page = await mountPage({
+        events: { sunday_service: { id: 'sunday_service', liturgicalIntensity: { prayer: 2 } } },
+    });
+    await page.setLiturgicalIntensity('preacher', 3);
+
+    assert.equal(stored('events').sunday_service.liturgicalIntensity.prayer, 2);
+    assert.equal(stored('events').sunday_service.liturgicalIntensity.preacher, 3);
+});
+
+test('a negative liturgical intensity is refused and nothing is written', async () => {
+    const page = await mountPage({ events: { sunday_service: { id: 'sunday_service' } } });
+    await page.setLiturgicalIntensity('preacher', -1);
+
+    assert.equal(stored('events').sunday_service.liturgicalIntensity, undefined);
+});
+
+test('liturgical Roles are still refused by the editor — intensity is the only exception', async () => {
+    const page = await mountPage({});
+    page.startEdit(page.liturgicalRoles[0]);
+    assert.equal(page.draft, null, 'the lock holds everywhere else');
 });

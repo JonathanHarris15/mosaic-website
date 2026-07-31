@@ -171,6 +171,11 @@
             family: FAMILIES.SERVANT,
             slots: [{ id: 's1', requirement: REQUIREMENTS.EITHER }],
             restrictions: [],
+            // Written explicitly rather than left absent, so the Roles Manager
+            // form has something to render and the defaults are visible to the
+            // editor rather than implied.
+            intensity: DEFAULT_INTENSITY,
+            allowsAnotherRole: false,
         };
     }
 
@@ -232,6 +237,7 @@
         NOT_TOGETHER: 'notTogether',        // no two people joined by a Relationship Type
         NOT_SAME_GROUP: 'notSameGroup',     // no two people from one Relationship Group
         SAME_GROUP: 'sameGroup',            // everyone from ONE Relationship Group
+        ALLOWLIST: 'allowlist',             // only these named people
     });
 
     // Why somebody was passed over. The Roles tab and auto-assign both have to
@@ -240,14 +246,62 @@
     const REASONS = Object.freeze({
         INACTIVE: 'inactive',
         ALREADY_ASSIGNED: 'alreadyAssigned',
+        SERVING_ELSEWHERE: 'servingElsewhere',          // holding another Role at this Event
         SEX_MISMATCH: 'sexMismatch',
         SEX_UNKNOWN: 'sexUnknown',
         MISSING_REQUIRED_TAG: 'missingRequiredTag',
         EXCLUDED_BY_TAG: 'excludedByTag',
+        NOT_ON_ALLOWLIST: 'notOnAllowlist',             // this Role is kept to a named few
         RELATIONSHIP_CONFLICT: 'relationshipConflict',
         SAME_GROUP_CONFLICT: 'sameGroupConflict',       // already someone here from their group
         NOT_IN_REQUIRED_GROUP: 'notInRequiredGroup',    // not in the group this Role is drawn from
     });
+
+    // ── How much rest a Role owes the person who does it ─────────────────────
+    //
+    // Measured in WEEKS (ADR-0020). Sound is 1 — every week is fine. Setup is 4
+    // — a month before asking again. Coffee is 1.25: nearly every week, with the
+    // occasional break. Fairness sums these over its window, which is why load
+    // comes out in the same unit as the window and "spent" needs no constant.
+    //
+    // 0 is a real value, not an absent one: the job is free. It still counts as
+    // serving and still moves the person's recency — it just never makes them
+    // look busy.
+    //
+    // Only a Servant Role keeps its intensity here. A liturgical Role has no
+    // stored definition and must never have one, and a one-off Role has no
+    // definition at all — both are resolved by EventsCore, which can see the
+    // series and the Event.
+    const DEFAULT_INTENSITY = 1;
+
+    // A stored value that is not a usable number reads as the default. A single
+    // bad field must not poison every load calculation in the church.
+    function isUsableIntensity(raw) {
+        return typeof raw === 'number' && Number.isFinite(raw) && raw >= 0;
+    }
+
+    function intensityOf(def) {
+        const raw = def && def.intensity;
+        return isUsableIntensity(raw) ? raw : DEFAULT_INTENSITY;
+    }
+
+    // ── Whether doing a Role uses up your morning ────────────────────────────
+    //
+    // EXCLUSIVE IS THE DEFAULT AND THE ASSUMPTION. An absent flag means the Role
+    // occupies you, because the Role nobody has thought about must not quietly
+    // double-book people.
+    //
+    // Distinct from intensity, and the two are easy to confuse: intensity says
+    // this job TIRES you, exclusivity says this job OCCUPIES you. Sound is
+    // plausibly intensity 1 and exclusive — easy work, but you are stuck at the
+    // desk all morning.
+    function allowsAnotherRole(role) {
+        return !!role && role.allowsAnotherRole === true;
+    }
+
+    // The most Roles one person may hold at one Event, and only when every one
+    // of them permits it.
+    const MAX_ROLES_PER_PERSON = 2;
 
     // An Inactive Person carries no Membership Stage and is off the Track, so
     // they are never proposed — while every Involvement record they already have
@@ -338,17 +392,48 @@
 
     const restrictionsOf = def => (def && Array.isArray(def.restrictions) ? def.restrictions : []);
 
+    // ── Already busy in another Role at this Event ───────────────────────────
+    //
+    // `assignedElsewhere` is who holds a DIFFERENT Role at this occurrence, each
+    // carrying whether that Role leaves them free: [{ personId, roleSlug,
+    // allowsAnotherRole }]. Deliberately separate from `assigned`, which is this
+    // Role's own seats — the relationship rules stay scoped to one Role, because
+    // "no married couple in Kids" says nothing about Coffee.
+    //
+    // A person may hold a set of Roles only when EVERY Role in it permits a
+    // second, and never more than two. Holding one exclusive Role therefore
+    // means holding nothing else, because that Role itself says so.
+    function servingElsewhere(def, held) {
+        if (!held || held.length === 0) return null;
+
+        const blocked = (
+            held.length >= MAX_ROLES_PER_PERSON ||
+            !allowsAnotherRole(def) ||
+            held.some(a => !allowsAnotherRole(a))
+        );
+
+        // Name the Role that has them. A bare "unavailable" makes the editor go
+        // hunting for which one, on a screen that already knows the answer.
+        return blocked
+            ? { reason: REASONS.SERVING_ELSEWHERE, roleSlug: held[0].roleSlug || null }
+            : null;
+    }
+
     // Judge one Person against one slot. Returns `null` when they may fill it,
     // or the reason they may not. Ordered most-fundamental first, so the user is
     // told the real cause — being Inactive explains everything else about them.
-    function ineligibilityFor(def, slot, candidate, context) {
-        const seated = (context.assigned || []).filter(a => a.slotId !== slot.id);
-
+    // `seated` and `busy` are passed in already narrowed rather than derived
+    // per candidate: both are the same for every person judged against one slot,
+    // and the solver calls this tens of thousands of times.
+    function ineligibilityFor(def, slot, candidate, context, seated, busy) {
         if (isInactive(candidate)) return { reason: REASONS.INACTIVE };
 
         if (seated.some(a => a.personId === candidate.id)) {
             return { reason: REASONS.ALREADY_ASSIGNED };
         }
+
+        const clash = servingElsewhere(def, busy[candidate.id]);
+        if (clash) return clash;
 
         const requirement = slot && slot.requirement;
         if (requirement !== REQUIREMENTS.EITHER) {
@@ -362,6 +447,13 @@
             }
             if (rule.kind === RESTRICTIONS.EXCLUDE_TAG && carriesTag(candidate, rule.tagId)) {
                 return { reason: REASONS.EXCLUDED_BY_TAG, tagId: rule.tagId };
+            }
+            // The named few who serve communion or run coffee. A rule that is
+            // ABSENT means everyone; an EMPTY one means nobody, which is why
+            // validation refuses it rather than letting it empty a rota.
+            if (rule.kind === RESTRICTIONS.ALLOWLIST) {
+                const allowed = (rule.personIds || []).indexOf(candidate.id) !== -1;
+                if (!allowed) return { reason: REASONS.NOT_ON_ALLOWLIST };
             }
             if (rule.kind === RESTRICTIONS.NOT_TOGETHER) {
                 const clash = seated.find(a => joinedBy(
@@ -425,15 +517,30 @@
     //   people        — the candidates, in the order to show them
     //   relationships — the pairwise edges (for NOT_TOGETHER)
     //   assigned      — [{ slotId, personId }] already seated in THIS Role on
-    //                   THIS Event. Scoped that way on purpose: serving another
-    //                   Role the same morning is not this Role's business.
+    //                   THIS Event. Scoped that way on purpose, but ONLY for the
+    //                   relationship rules: "no married couple in Kids" says
+    //                   nothing about who is on Coffee.
+    //   assignedElsewhere
+    //                 — [{ personId, roleSlug, allowsAnotherRole }] holding a
+    //                   different Role at this Event. Serving another Role the
+    //                   same morning IS this Role's business now (ADR-0020):
+    //                   exclusive is the default, so by default it blocks.
     //
     // Everybody comes back, eligible or not, so the UI can grey people out with
     // a reason rather than quietly dropping them.
     function candidatesFor(def, slot, context) {
         const ctx = context || {};
+
+        // Narrowed once for the whole slot, not once per candidate.
+        const seated = (ctx.assigned || []).filter(a => a.slotId !== slot.id);
+        const busy = {};
+        (ctx.assignedElsewhere || []).forEach(a => {
+            if (!a || !a.personId) return;
+            (busy[a.personId] || (busy[a.personId] = [])).push(a);
+        });
+
         return (ctx.people || []).map(candidate => {
-            const blocked = ineligibilityFor(def, slot, candidate, ctx);
+            const blocked = ineligibilityFor(def, slot, candidate, ctx, seated, busy);
             return Object.assign(
                 { personId: candidate.id, eligible: !blocked, reason: null },
                 blocked || {}
@@ -462,6 +569,17 @@
 
         if (TAG_RULES.indexOf(kind) !== -1) {
             if (!rule.tagId) errors.push('This rule needs a Tag.');
+            return { valid: errors.length === 0, errors: errors };
+        }
+
+        // Absent is not empty. No allowlist rule means the Role is open to
+        // everyone; an allowlist naming nobody is a Role that can never be
+        // filled, and it must be refused here rather than discovered six weeks
+        // later as an empty slot on a rota.
+        if (kind === RESTRICTIONS.ALLOWLIST) {
+            if (!(rule.personIds || []).length) {
+                errors.push('An allowlist needs at least one person, or the Role can never be filled.');
+            }
             return { valid: errors.length === 0, errors: errors };
         }
 
@@ -527,6 +645,24 @@
             errors.push('A Role Definition must belong to the servant family; liturgical Roles are code-defined.');
         }
 
+        // Intensity is optional — absent reads as 1 — but a stored value that is
+        // not a usable number is a mistake worth naming, not silently ignoring.
+        // Same predicate `intensityOf` reads by, so what validation rejects can
+        // never be something reading quietly accepts.
+        if (def && def.intensity !== undefined && def.intensity !== null &&
+            !isUsableIntensity(def.intensity)) {
+            errors.push('Intensity must be a number of weeks, and cannot be negative.');
+        }
+
+        // The allowlist is the one restriction that needs no Relationship Type,
+        // so it can be judged here without the list of shared Types — and asking
+        // validateRestriction keeps one wording for one rule.
+        restrictionsOf(def).forEach(rule => {
+            if (rule && rule.kind === RESTRICTIONS.ALLOWLIST) {
+                validateRestriction(rule, []).errors.forEach(e => errors.push(e));
+            }
+        });
+
         const slots = slotsOf(def);
         if (slots.length === 0) {
             errors.push('A Role needs at least one slot.');
@@ -559,8 +695,13 @@
         REASONS,
         LITURGICAL_ROLES,
         LITURGICAL_SLUGS,
+        DEFAULT_INTENSITY,
+        MAX_ROLES_PER_PERSON,
         isRequirement,
         assignablePeople,
+        // fairness fields (MS-17, ADR-0020)
+        intensityOf,
+        allowsAnotherRole,
         // the registry: both families, one list
         allRoles,
         roleBySlug,

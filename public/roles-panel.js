@@ -230,12 +230,46 @@
                                             <span x-show="job.people.length"
                                                   class="shrink-0 text-[11px] text-on-surface-variant"
                                                   x-text="job.people.length"></span>
+                                            <button x-show="isEditor && canEditRoleSet" @click="toggleOneOffOptions(job.id)"
+                                                    class="shrink-0 w-[26px] h-[26px] rounded-md flex items-center justify-center
+                                                           text-on-surface-variant hover:bg-surface-container cal-motion cal-focus"
+                                                    :class="oneOffOptionsFor === job.id ? 'bg-surface-container text-on-surface' : ''"
+                                                    aria-label="Settings for this job">
+                                                <span class="material-symbols-outlined text-[16px]">tune</span>
+                                            </button>
                                             <button x-show="isEditor && canEditRoleSet" @click="askRemoveOneOffRole(job.id)"
                                                     class="shrink-0 w-[26px] h-[26px] rounded-md flex items-center justify-center
                                                            text-on-surface-variant hover:bg-surface-container cal-motion cal-focus"
                                                     aria-label="Remove this job">
                                                 <span class="material-symbols-outlined text-[16px]">delete</span>
                                             </button>
+                                        </div>
+
+                                        <!-- Collapsed by default, because a one-off is meant to be
+                                             cheap: a label and some people. Both defaults are right
+                                             almost every time, and every control shown here makes the
+                                             cheap thing less cheap. But they have to be reachable —
+                                             the person who unlocks the hall every week is doing real
+                                             work, and without these fairness reads it as free. -->
+                                        <div x-show="isEditor && canEditRoleSet && oneOffOptionsFor === job.id"
+                                             x-cloak
+                                             class="px-3 py-2.5 border-b border-outline-variant bg-surface-container-lowest flex flex-col gap-2">
+                                            <label class="flex items-center gap-2 text-[13px] text-on-surface-variant">
+                                                <span class="shrink-0">Rest between turns</span>
+                                                <input type="number" min="0" step="0.25"
+                                                       :value="job.intensity"
+                                                       @change="setOneOffIntensity(job.id, $event.target.value)"
+                                                       class="w-16 rounded-md border border-outline-variant bg-surface
+                                                              text-[13px] text-on-surface px-2 py-1 cal-focus" />
+                                                <span class="shrink-0">weeks</span>
+                                            </label>
+                                            <label class="flex items-start gap-2 text-[13px] text-on-surface-variant cursor-pointer">
+                                                <input type="checkbox"
+                                                       :checked="job.allowsAnotherRole"
+                                                       @change="setOneOffExclusive(job.id, $event.target.checked)"
+                                                       class="mt-[3px] w-3.5 h-3.5 shrink-0 accent-primary" />
+                                                <span>They can also take another Role that day</span>
+                                            </label>
                                         </div>
 
                                         <!-- One person per row. Somebody asked for one of these is

@@ -49,6 +49,17 @@ window.RolesManager = () => ({
     // so the two read as a sentence — "Cannot serve together if | Marriage".
     newRuleKind: 'requireTag',
     newRuleValue: '',
+
+    // The allowlist picker's own state: people are chosen one at a time into a
+    // pending list, so the rule is built whole rather than a rule per person.
+    people: [],
+    peopleDenied: false,
+    newAllowlist: [],
+    newAllowlistPick: '',
+
+    // The Sunday Service series document — where liturgical intensity lives.
+    series: null,
+    savingIntensity: '',
     newRoleName: '',
 
     loading: true,
@@ -125,7 +136,36 @@ window.RolesManager = () => ({
             this.loadRoleDefinitions(),
             this.loadShepherdingTags(),
             this.loadSharedRelationshipTypes(),
+            this.loadPeople(),
+            this.loadSeries(),
         ]);
+    },
+
+    // For the allowlist picker only. Names, so a rule reads as people rather
+    // than as ids — an id nobody can resolve is shown as missing rather than
+    // quietly dropped, the same treatment an unshared Relationship Type gets.
+    async loadPeople() {
+        try {
+            const snap = await db.collection('people').orderBy('name').get();
+            this.people = snap.docs.map(d => ({ id: d.id, name: (d.data() || {}).name || '' }));
+        } catch (e) {
+            console.error('Could not read people:', e);
+            this.people = [];
+            this.peopleDenied = true;
+        }
+    },
+
+    // The Sunday Service series, which is where liturgical intensity lives —
+    // never in /roles, because that collection is editor-writable and a document
+    // there would make a locked Role editable (ADR-0016).
+    async loadSeries() {
+        try {
+            const doc = await db.collection('events').doc(EventsCore.SUNDAY_SERVICE_ID).get();
+            this.series = doc.exists ? Object.assign({ id: doc.id }, doc.data()) : null;
+        } catch (e) {
+            console.error('Could not read the Sunday Service:', e);
+            this.series = null;
+        }
     },
 
     // ── Loading ──────────────────────────────────────────────────────────────
@@ -282,7 +322,13 @@ window.RolesManager = () => ({
             this.showToast('Liturgical Roles are built in and cannot be edited', 'error');
             return;
         }
-        this.draft = JSON.parse(JSON.stringify(role));
+        // Defaults are filled in on open rather than left absent, so the form
+        // shows the editor what a Role they have never configured actually does
+        // — exclusive, one week's rest — instead of two empty controls.
+        this.draft = Object.assign(JSON.parse(JSON.stringify(role)), {
+            intensity: RolesCore.intensityOf(role),
+            allowsAnotherRole: RolesCore.allowsAnotherRole(role),
+        });
         this.draftId = role.id;
         this.saveAttempted = false;
         this.resetRuleForm();
@@ -311,6 +357,8 @@ window.RolesManager = () => ({
     resetRuleForm() {
         this.newRuleKind = RolesCore.RESTRICTIONS.REQUIRE_TAG;
         this.newRuleValue = '';
+        this.newAllowlist = [];
+        this.newAllowlistPick = '';
     },
 
     async deleteRole(role) {
@@ -438,7 +486,60 @@ window.RolesManager = () => ({
             options.push({ value: RolesCore.RESTRICTIONS.NOT_SAME_GROUP, label: 'No two people from the same' });
             options.push({ value: RolesCore.RESTRICTIONS.SAME_GROUP, label: 'Everyone from the same' });
         }
+        // Last, because it is the blunt one: naming people directly is right for
+        // the four who serve communion, and wrong for anything a tag could say.
+        options.push({ value: RolesCore.RESTRICTIONS.ALLOWLIST, label: 'Only these people' });
         return options;
+    },
+
+    get composingAllowlist() {
+        return this.newRuleKind === RolesCore.RESTRICTIONS.ALLOWLIST;
+    },
+
+    personName(personId) {
+        const person = this.people.find(p => p.id === personId);
+        return (person && person.name) || null;
+    },
+
+    // Everyone not already picked, so the same person cannot be added twice.
+    get allowlistOptions() {
+        return this.people.filter(p => this.newAllowlist.indexOf(p.id) === -1);
+    },
+
+    get newAllowlistNames() {
+        return this.newAllowlist.map(id => this.personName(id) || 'Someone no longer in the directory');
+    },
+
+    addToNewAllowlist() {
+        const id = this.newAllowlistPick;
+        if (!id || this.newAllowlist.indexOf(id) !== -1) return;
+        this.newAllowlist = this.newAllowlist.concat([id]);
+        this.newAllowlistPick = '';
+    },
+
+    removeFromNewAllowlist(personId) {
+        this.newAllowlist = this.newAllowlist.filter(id => id !== personId);
+    },
+
+    // Written as ONE rule holding everyone, not a rule per person: an allowlist
+    // is a single statement about the Role, and roles-core refuses an empty one
+    // rather than letting it become a Role nobody can ever fill.
+    addAllowlistRule() {
+        if (!this.draft) return;
+        if (!this.newAllowlist.length) {
+            this.showToast('Add at least one person, or the Role could never be filled', 'error');
+            return;
+        }
+        const existing = this.draftRestrictions
+            .filter(rule => rule.kind !== RolesCore.RESTRICTIONS.ALLOWLIST);
+        this.draft = Object.assign({}, this.draft, {
+            restrictions: existing.concat([{
+                kind: RolesCore.RESTRICTIONS.ALLOWLIST,
+                personIds: this.newAllowlist.slice(),
+            }]),
+        });
+        this.newAllowlist = [];
+        this.newAllowlistPick = '';
     },
 
     get composingRelationshipRule() {
@@ -467,6 +568,10 @@ window.RolesManager = () => ({
     // built; both routes below still do their own checking, because the form is
     // a convenience and they are the boundary.
     addComposedRule() {
+        if (this.composingAllowlist) {
+            this.addAllowlistRule();
+            return;
+        }
         if (!this.newRuleValue) {
             if (this.composingGroupRule) this.showToast('Pick a group type from the list', 'error');
             else if (this.composingRelationshipRule) this.showToast('Pick a relationship type from the list', 'error');
@@ -547,6 +652,45 @@ window.RolesManager = () => ({
         return RolesCore.validateRestriction(rule, this.sharedRelationshipTypes).valid;
     },
 
+    // ── Liturgical intensity ─────────────────────────────────────────────────
+    //
+    // The ONE thing about a liturgical Role an editor may change, and it is not
+    // part of the Role's definition — it is a fairness weight. Preparing a
+    // sermon and reading a prayer are not the same work, and fairness has to be
+    // able to know that.
+    //
+    // Written to the Sunday Service series, NEVER to /roles: that collection is
+    // editor-writable, so a document there would make a locked Role editable —
+    // the exact invariant that makes these Roles locked (ADR-0016). RolesCore
+    // refuses such a document and this page quarantines it.
+
+    liturgicalIntensity(slug) {
+        return EventsCore.roleIntensity(this.series, slug);
+    },
+
+    async setLiturgicalIntensity(slug, raw) {
+        const value = Number(raw);
+        if (!Number.isFinite(value) || value < 0) {
+            this.showToast('Rest between turns has to be zero or more weeks', 'error');
+            return;
+        }
+        const map = Object.assign({}, (this.series && this.series.liturgicalIntensity) || {});
+        map[slug] = value;
+
+        this.savingIntensity = slug;
+        try {
+            await db.collection('events').doc(EventsCore.SUNDAY_SERVICE_ID)
+                .set({ liturgicalIntensity: map }, { merge: true });
+            this.series = Object.assign({}, this.series || {}, { liturgicalIntensity: map });
+        } catch (e) {
+            console.error('Could not save the intensity:', e);
+            this.showToast('Could not save that — nothing was changed', 'error');
+            await this.loadSeries();
+        } finally {
+            this.savingIntensity = '';
+        }
+    },
+
     tagName(tagId) {
         const tag = this.shepherdingTags.find(t => t.id === tagId);
         return tag ? tag.name : null;
@@ -560,6 +704,7 @@ window.RolesManager = () => ({
         if (kind === RolesCore.RESTRICTIONS.EXCLUDE_TAG) return 'block';
         if (kind === RolesCore.RESTRICTIONS.SAME_GROUP) return 'groups';
         if (kind === RolesCore.RESTRICTIONS.NOT_SAME_GROUP) return 'group_remove';
+        if (kind === RolesCore.RESTRICTIONS.ALLOWLIST) return 'how_to_reg';
         return 'hub';
     },
 
@@ -580,6 +725,22 @@ window.RolesManager = () => ({
                 ? `Cannot be tagged "${name}"`
                 : 'Excludes a tag that no longer exists — remove this rule';
         }
+        // Names, never ids. An id that no longer resolves is SAID so — a person
+        // who left leaves a dead entry that silently shrinks the list, and a
+        // shorter allowlist than the editor thinks they have is how a Role
+        // quietly stops being fillable.
+        if (kind === RolesCore.RESTRICTIONS.ALLOWLIST) {
+            const ids = rule.personIds || [];
+            if (!ids.length) return 'This list is empty, so nobody could ever fill this Role — remove it or add someone';
+            const names = ids.map(id => this.personName(id));
+            const missing = names.filter(name => !name).length;
+            const known = names.filter(Boolean);
+            const said = known.length ? `Only ${known.join(', ')} can fill this Role` : 'Only people who are no longer in the directory';
+            return missing
+                ? `${said} — and ${missing} ${missing === 1 ? 'person is' : 'people are'} no longer in the directory`
+                : said;
+        }
+
         const type = this.sharedRelationshipTypes.find(t => t.id === rule.typeId);
         if (!type) {
             return 'This rule is unavailable — an elder is no longer sharing the relationship type it uses ' +
@@ -631,6 +792,11 @@ window.RolesManager = () => ({
             family: RolesCore.FAMILIES.SERVANT,
             slots: this.draft.slots,
             restrictions: this.draftRestrictions,
+            // Typed into a number input, which hands back a string when the box
+            // is cleared. Normalised once here so what is stored is always the
+            // number every read path expects.
+            intensity: RolesCore.intensityOf({ intensity: Number(this.draft.intensity) }),
+            allowsAnotherRole: this.draft.allowsAnotherRole === true,
         };
 
         try {

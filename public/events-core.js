@@ -190,6 +190,74 @@
         return Object.assign({}, data, { seriesId: seriesId || SUNDAY_SERVICE_ID });
     }
 
+    // ── Fairness config (MS-17, ADR-0020) ─────────────────────────────────────
+    //
+    // Fairness looks back over a WINDOW of this series' own occurrences — the
+    // last 12, about a season for a Sunday. Occurrences and not weeks, so a
+    // fortnightly Event is judged on the same amount of its own history as a
+    // weekly one rather than half of it.
+    //
+    // Stored on the series so it CAN vary, but shipped fixed with no UI: the
+    // window is the unit load is measured against, so changing it changes what
+    // "spent" means for every person at once.
+    const DEFAULT_FAIRNESS_WINDOW = 12;
+
+    const usableNumber = (value, min) => (
+        typeof value === 'number' && Number.isFinite(value) && value >= min
+    );
+
+    function fairnessWindowOf(series) {
+        const raw = series && series.fairnessWindow;
+        return usableNumber(raw, 1) ? raw : DEFAULT_FAIRNESS_WINDOW;
+    }
+
+    // ── Where a Role's intensity lives ────────────────────────────────────────
+    //
+    // ⚠ THREE HOMES, ONE ANSWER. Resolve through here and nowhere else.
+    //
+    //   • one-off Role    — on the Event. It has no definition at all, and its
+    //                       own value is the only one there is, so it wins.
+    //   • liturgical Role — the `liturgicalIntensity` map here. A liturgical Role
+    //                       has no stored definition and MUST NEVER GET ONE:
+    //                       /roles is editor-writable, so a document there would
+    //                       make a locked Role editable, which is the invariant
+    //                       ADR-0016 exists to protect. `RolesCore.allRoles`
+    //                       refuses such a document outright.
+    //   • Servant Role    — its own definition, supplied by the caller.
+    //
+    // Absent anywhere reads as 1. A stored value that is not a usable number also
+    // reads as 1: one bad field must not poison every load in the church. That
+    // rule is stated in RolesCore too, because these modules are deliberately
+    // independent — and a test holds the two together, since a duplicated rule
+    // is a rule that can drift.
+    const DEFAULT_INTENSITY = 1;
+
+    function intensityValue(raw) {
+        return usableNumber(raw, 0) ? raw : null;
+    }
+
+    function roleIntensity(series, roleSlug, options) {
+        const opts = options || {};
+
+        // A one-off Role IS the whole Role, so its own value is the only one
+        // there is. A Servant Role has a definition, and that definition is the
+        // Roles Manager's answer — it must win over the series map, or a stray
+        // `liturgicalIntensity: { setup: 3 }` would silently override a Setup
+        // definition saying 4, with the Manager showing one number and fairness
+        // using another. Only a Role with NO definition falls through to the
+        // map, which is exactly the liturgical case the map exists for.
+        const own = opts.oneOff
+            ? intensityValue(opts.oneOff.intensity)
+            : intensityValue(opts.definition && opts.definition.intensity);
+        if (own !== null) return own;
+        if (opts.oneOff || opts.definition) return DEFAULT_INTENSITY;
+
+        const liturgical = intensityValue(
+            ((series && series.liturgicalIntensity) || {})[roleSlug]
+        );
+        return liturgical === null ? DEFAULT_INTENSITY : liturgical;
+    }
+
     // ── Validation ────────────────────────────────────────────────────────────
 
     function validateSeries(series) {
@@ -214,12 +282,27 @@
             }
         });
 
+        const intensities = s.liturgicalIntensity || {};
+        Object.keys(intensities).forEach(slug => {
+            const n = intensities[slug];
+            if (!usableNumber(n, 0)) {
+                errors.push(
+                    'The intensity for "' + slug + '" must be a number of weeks, and cannot be negative.'
+                );
+            }
+        });
+
         return { valid: errors.length === 0, errors: errors };
     }
 
     const EventsCore = {
         SUNDAY_SERVICE_ID,
         SERVICES_COLLECTION,
+        DEFAULT_FAIRNESS_WINDOW,
+        DEFAULT_INTENSITY,
+        // fairness config (MS-17)
+        fairnessWindowOf,
+        roleIntensity,
         // building
         newSeries,
         sundayServiceSeries,

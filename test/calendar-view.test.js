@@ -267,13 +267,42 @@ test('the sex requirement is named as the design words it', () => {
     );
 });
 
-test('already serving names where, rather than leaving the editor hunting', () => {
+// The two "already busy" reasons are deliberately separate (ADR-0020).
+// ALREADY_ASSIGNED is a second slot of THIS Role; SERVING_ELSEWHERE is another
+// Role the same morning. They used to be one, which is how the liturgy ended up
+// faked in as a seat and tripping this Role's relationship rules.
+
+test('already assigned means this Role, and needs no list of elsewhere', () => {
     assert.strictEqual(
         View.blockReason(
             { eligible: false, reason: Roles.REASONS.ALREADY_ASSIGNED },
             { otherRoles: ['Setup', 'Sound'] }
         ),
-        'Already serving here — Setup and Sound'
+        'Already in this Role'
+    );
+});
+
+test('serving elsewhere names where, rather than leaving the editor hunting', () => {
+    assert.strictEqual(
+        View.blockReason(
+            { eligible: false, reason: Roles.REASONS.SERVING_ELSEWHERE },
+            { otherRoles: ['Setup', 'Sound'] }
+        ),
+        'Already serving this morning — Setup and Sound'
+    );
+});
+
+test('serving elsewhere still says so when the Roles cannot be named', () => {
+    assert.strictEqual(
+        View.blockReason({ eligible: false, reason: Roles.REASONS.SERVING_ELSEWHERE }, {}),
+        'Already serving this morning'
+    );
+});
+
+test('being off an allowlist says so plainly, never "cannot take this place"', () => {
+    assert.strictEqual(
+        View.blockReason({ eligible: false, reason: Roles.REASONS.NOT_ON_ALLOWLIST }, {}),
+        'Not on the list of people who do this Role'
     );
 });
 
@@ -714,4 +743,60 @@ test('a chosen colour and the warning amber cannot be mistaken for each other', 
     const amber = View.EVENT_COLOURS.find(c => c.slug === 'amber');
     assert.strictEqual(amber.bar.toUpperCase(), View.WARNING_COLOUR.toUpperCase());
     assert.ok(View.EVENT_COLOURS.every(c => c.tint !== c.bar), 'a bar and a background look alike');
+});
+
+// ── The fairness note (MS-17) ────────────────────────────────────────────────
+//
+// Two facts, in the order fairness weighs them: how long since this Role, and
+// how much they are carrying. Never one combined score — a number nobody can
+// decompose is a number nobody trusts.
+
+test('the note says how long since they did this Role, in the Event\'s own units', () => {
+    assert.strictEqual(
+        View.fairnessNote({ eligible: true }, { recency: 9, unit: 'Sunday' }),
+        'last did this 9 Sundays ago'
+    );
+});
+
+test('never having done it reads as not having done it all season', () => {
+    assert.strictEqual(
+        View.fairnessNote({ eligible: true }, { recency: 12, unit: 'Sunday', neverServed: true }),
+        'not done this in 12 Sundays'
+    );
+});
+
+test('other work this season is named beside it', () => {
+    assert.strictEqual(
+        View.fairnessNote({ eligible: true }, { recency: 9, unit: 'Sunday', otherJobs: 2 }),
+        'last did this 9 Sundays ago · 2 other jobs this season'
+    );
+});
+
+test('being over the rest budget is said outright, and replaces the count', () => {
+    // This is the one that should stop an editor picking them, so it must not
+    // be left for them to work out from a number.
+    assert.strictEqual(
+        View.fairnessNote({ eligible: true }, { recency: 1, unit: 'Sunday', otherJobs: 6, spent: true }),
+        'last did this 1 Sunday ago · over their rest budget'
+    );
+});
+
+test('somebody carrying nothing gets no load clause at all', () => {
+    assert.strictEqual(
+        View.fairnessNote({ eligible: true }, { recency: 4, unit: 'Sunday', otherJobs: 0 }),
+        'last did this 4 Sundays ago'
+    );
+});
+
+test('the note is empty rather than wrong when there is no history to read', () => {
+    // A one-off Event is not a series, so there is no run of past occurrences to
+    // be fair across. Saying nothing beats inventing a number.
+    assert.strictEqual(View.fairnessNote({ eligible: true }, {}), '');
+});
+
+test('a group name still leads the note, as it did before fairness existed', () => {
+    assert.strictEqual(
+        View.fairnessNote({ eligible: true }, { groupName: 'Tuesday', recency: 3, unit: 'time' }),
+        'Tuesday group · last did this 3 times ago'
+    );
 });

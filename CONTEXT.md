@@ -360,7 +360,9 @@ A record that a Person **did serve** in a specific Role at an Event. The single 
 A Role is a type of participation assigned on an Event and recorded as Involvement. Two families (ADR-0016) — `RolesCore.allRoles()` composes them into the one list every surface renders.
 
 ### Liturgical Roles (locked)
-Code-defined in `RolesCore.LITURGICAL_ROLES`, undeletable and uneditable, and still wired into the Service entity and the Service Guide. They have **no** editable definition and are **not** stored in `/roles` — storing copies would create a second source of truth and, since `/roles` is editor-writable, would make "locked" Roles editable.
+Code-defined in `RolesCore.LITURGICAL_ROLES`, undeletable and uneditable, and still wired into the Service entity and the Service Guide. They have **no** editable definition and are **not** stored in `/roles` — storing copies would create a second source of truth and, since `/roles` is editor-writable, would make "locked" Roles editable. (`RolesCore.allRoles` refuses a stored definition carrying a liturgical slug, and the Roles Manager quarantines any that appears rather than rendering it.)
+- **The one tunable thing about them is [[Role intensity]]**, which is a fairness weight and not part of the definition — preparing a sermon and reading a prayer are not the same work, and a church has to be able to say so. It lives in a `liturgicalIntensity` map on the [[Event series]] document, never in `/roles`, so the invariant above holds. A slug absent from the map reads as the default `1`.
+- They are always **exclusive** ([[Role exclusivity]]) and hold no toggle: you cannot preach and run the sound desk.
 - `service_leader`: The primary facilitator of the service.
 - `preacher`: The person delivering the sermon.
 - `worship_leader`: The person leading the musical worship. Surfaces in the UI as the "Music Leader."
@@ -384,9 +386,48 @@ The stored specification of a Servant Role, authored in the Roles Manager. Lives
     - `notTogether` — a **pairwise Relationship Type**: two People joined by it may not fill the same Role on the same Event (no married couple in Kids).
     - `notSameGroup` — a **Group** Relationship Type: no two People from one **Relationship Group** may fill the same Role, so it staffs across the congregation.
     - `sameGroup` — the inverse: everyone filling the Role must share one Relationship Group, so they already know each other. The only **cohesive** rule — it constrains the combination rather than the individual, so the first Person seated is unconstrained and being in **no** group of that Type is disqualifying (unlike `notSameGroup`, where it is harmless).
+    - `allowlist` — **only these named People**, for the handful who serve communion or run coffee. A fact about the *Role*, not about the person, which is why it is not a Tag: Shepherding Tags are a pastoral concept, and configuring one Role should not mean editing five Person records. **Absent is not empty** — no rule means everyone, an empty list means nobody and is refused at authoring time. Editor-facing only; nobody is ever told they are on one.
     - A relationship rule may only name a [[Shared Relationship Type]]; one naming an unshared Type is refused rather than left to evaluate to "nobody qualifies".
+  - `intensity`: See [[Role intensity]]. Defaults to `1`.
+  - `allowsAnotherRole`: See [[Role exclusivity]]. Absent or `false` means exclusive, which is the default.
   - **A Relationship Group's leader counts as being in the group** for every serving rule. The leader is deliberately *not* inside `memberIds` (ADR-0014 §5), so the plain reading of the roster is wrong here — `RolesCore.inGroup` is the check to use.
 - Eligibility (`RolesCore.candidatesFor`) returns every candidate with a **reason** when ineligible, never a silent omission — the Roles tab and auto-assign both have to explain who they passed over. An **Inactive** Person is never proposed; their Involvement history is untouched.
+
+### Role intensity
+**How much rest a Role owes the person who does it, measured in weeks.** Sound is `1` — someone can do it every week and stay fresh. Setup/teardown is `4` — a month before they should be asked again. Coffee is `1.25`: nearly every week, with the occasional break.
+
+- A float, **at least 0**, defaulting to **1**. Every Role has one, including [[One-off Role]]s (set on the Event, not in the Roles Manager, since a one-off has no stored definition).
+- **`0` means the job is free.** It is still serving, it still writes [[Involvement]], and it still moves the person's recency for that Role — it simply costs them nothing and never makes them look busy. For greeting at the door, or a job somebody actively wants, that is the honest number.
+- Intensity is what makes different jobs comparable: it is the exchange rate between "sound every week" and "setup once a month". Without it, [[Fairness]] counts a morning of hauling tables as one job and a morning at the sound desk as one job, which is the thing every rota gets wrong.
+- **Where it is stored depends on the family.** A [[Role Definition]] keeps its own. A [[Liturgical Role]] has no stored definition and may never have one, so its intensity lives in a `liturgicalIntensity` map on the [[Event series]]. A [[One-off Role]] keeps its own on the Event.
+
+### Role exclusivity
+Whether doing a Role uses up your morning. **Exclusive is the default and the assumption**: filling a Role means you fill no other at that Event. A Role whose `allowsAnotherRole` is checked does not tie you down — you can hold it *and* one other Role, provided that one is also permissive.
+
+- A person may hold **at most two** Roles at one Event, and only when **every** Role they hold permits it. Holding any exclusive Role means holding nothing else, because that Role itself says so.
+- Set in the Roles Manager for a [[Role Definition]]; set on the Event itself for a [[One-off Role]], which has no stored definition to hang it on. [[Liturgical Roles (locked)]] are always exclusive and offer no toggle.
+- **Distinct from [[Role intensity]], and the two are easy to confuse.** Intensity says *this job tires you out*; exclusivity says *this job occupies you*. Greeting at the door is plausibly neither. Sound is plausibly intensity `1` but exclusive — easy work, but you are stuck at the desk all morning.
+- This is a **hard rule, not a preference**: it belongs to eligibility, so hand-assignment on the Roles tab obeys it exactly as [[Fairness]] does.
+
+### Fairness
+How the app decides who should fill a Role, so that nobody has to remember who did it last time and the same few people do not carry everything. Counted **per [[Event series]]** — someone can be overdue for Sunday setup and fresh for a midweek Role at the same time (ADR-0016 §5, ADR-0020).
+
+**It solves one [[Event occurrence]] at a time.** A ten-week roster is the same step run ten times, each reading a history window that has rolled forward to include the weeks already drafted. There is no separate notion of "planned" work: last week's pick is simply part of this week's history.
+
+Two measures, doing different jobs:
+
+- **Load** — how much a Person is carrying this season. The sum of the [[Role intensity]] of everything they did inside the **window**, so it is denominated in weeks, and `load ≥ window` means they are over their rest budget. Load decides **who is considered at all**.
+- **Recency** — how long since that Person last did *this particular* Role, capped at the window, so never having done it reads the same as not having done it all season. Recency decides **who gets which Role** among those considered.
+
+The **window** is the last 12 occurrences of the series — a season for a Sunday. Measured in occurrences rather than weeks, so a fortnightly Event is judged on the same amount of its own history as a weekly one.
+
+Who is considered:
+
+- Every **active** Person, less anyone the Role's own rules exclude. Membership is not a fairness concept — a church that wants a Role kept to Members says so with a `requireTag` rule on that Role, since Kids and coffee should not share one answer.
+- **Not** anyone holding a [[Liturgical Roles (locked)|Liturgical Role]] at this occurrence, and **not** anyone who has held one in at least half the window. The first is because you cannot preach and run the sound desk; the second is a guarantee where load alone would only be a tendency.
+- The least-loaded are taken with room to spare, and the pool **widens** rather than failing when the Role's rules make a roster impossible. A spot that still cannot be filled is **left empty with the reason given**, never quietly dropped.
+
+Fairness **proposes; it never forbids**. Everything it decides is a draft an editor approves ([[Roles Manager]]), and hand-assignment stays open to anyone eligible.
 
 ### Event series
 The recurring thing that carries Roles, in the `events` collection. The Sunday **Service** is one **locked** series (`sunday_service`): always present, undeletable, its liturgical Roles fixed to it. Servant Roles can be added to a series and removed again — locked protects the liturgical Roles, not the whole roster.
@@ -433,8 +474,9 @@ A Person placed in one slot of one Role on an [[Event occurrence]] — **the pla
 
 ### One-off Role
 A Role created for a single Event and living only on it — "someone to unlock the hall". Deliberately cheap: a **label and some people**, with no definition, no reuse, no slots, no restrictions and no eligibility checking. Forcing every ad-hoc job through the Roles Manager would make the Roles Manager a junk drawer.
+- It still carries a [[Role intensity]] and a [[Role exclusivity]] toggle, both set **on the Event page** rather than in the Roles Manager, since there is no stored definition to hold them. Without them a one-off job would be free and unlimited, and the person who unlocks the hall would quietly absorb three more jobs the same morning.
 - Its [[Involvement]] is written under **one reserved slug**, `one_off`, with the label in `metadata` — never an invented slug per job, which `RolesCore.roleBySlug` could not resolve to a name on any surface showing serve history.
-- **Counts as serving** (the person who unlocks the hall every week is not someone who never helps), but is **never a Role to balance** — fairness skips the `one_off` bucket rather than trying to rotate a job that happens once.
+- **Counts as serving** (the person who unlocks the hall every week is not someone who never helps), but is **never a Role to balance** — there is no rotating a job that happens once. So [[Fairness]] never *fills* one — but it always counts one, and the intensity set on the Event is what it counts. Anything less would record the hall-unlocker's serving and then hand them the coffee rota anyway.
 
 ### Event visibility
 Who may see an [[Event occurrence]]. One of five rungs, set on the series or the one-off Event and **stamped onto every occurrence** — a security rule cannot afford a lookup per document (ADR-0018 §5, following MS-130).
@@ -551,4 +593,5 @@ The phone's month: seven columns of day numbers, each carrying up to **three dot
 - **"Calendar"** meant the Sunday-only Service Calendar before MS-99. It now means the all-Events [[Calendar]]; the Sunday view is [[Services]]. Code, labels and docs saying "Service Calendar" refer to Services.
 - **"Assignment" vs "Involvement"** were the same act before MS-99 — assigning someone wrote a serve record immediately, even for a future date. They are now distinct: [[Assignment]] is the plan, [[Involvement]] is the fact (ADR-0018).
 - **"Event"** is used for both the recurring [[Event series]] and a single dated [[Event occurrence]]. Prefer the precise term in code; in the UI, "Event" means whichever the user is looking at.
+- **"Fairness" was a ranking before MS-17 and is a solve after it.** ADR-0016 §5–6 and the original MS-17 described a module that ordered candidates for one Role, and MS-18 was to loop it across dates. It cannot work that way: no [[Involvement]] exists for a date that has not happened, so a ranking is identical for every date in the range. Fairness now staffs a whole occurrence at once and MS-18 is the loop around it (ADR-0020). Anything describing fairness as a score or a sorted list of candidates predates this.
 - **[[Permission Level]] is not one straight line.** The tier list reads `viewer → member → editor → elder → admin → super_admin`, which suggests `admin` sees everything `elder` does. It does not, and never has: `firestore.rules` has always defined `isElder()` as `['elder', 'super_admin']` and `isAdmin()` as `['admin', 'super_admin']`, so shepherding data is closed to admins. [[Event visibility]] follows the rules rather than the list — an `elder`-visibility Event is invisible to an admin. **One consequence, surfaced in MS-99:** the week-shift tool now refuses for anyone who cannot see every rung, so it is `elder`/`super_admin` only. Reading the tier list as a hierarchy is the mistake; `admin` is an operational tier, not a pastoral one.
