@@ -77,7 +77,9 @@ module.exports = {
         "error-container":   "#F3D9D4",
         "on-error-container":"#5C231C",
         "success":           "#4B8A6B",
-        "warning":           "#B8862E",
+        "warning":             "#B8862E",
+        "warning-container":   "#F0E2C6",
+        "on-warning-container":"#5A4212",
       },
 
       borderRadius: {

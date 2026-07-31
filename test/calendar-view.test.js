@@ -399,7 +399,7 @@ test('the tick-list footer recomputes, and says "for good"', () => {
     );
 });
 
-// ── The "You in July" rail ────────────────────────────────────────────────────
+// ── Upcoming ──────────────────────────────────────────────────────────────────
 
 const OCCURRENCES = [
     {
@@ -420,6 +420,53 @@ test('the rail is derived from the events themselves, and sorted by date', () =>
     const mine = View.myCommitments(OCCURRENCES, 'me');
     assert.deepStrictEqual(mine.map(c => c.date), ['2026-07-15', '2026-07-19']);
     assert.deepStrictEqual(mine.map(c => c.roleLabel), ['Kids Ministry', 'Prayer']);
+});
+
+test('the window runs from today, not from the month the grid is on', () => {
+    assert.deepStrictEqual(View.upcomingRange('2026-07-31', 'week'),
+        { from: '2026-07-31', to: '2026-08-07' });
+    assert.deepStrictEqual(View.upcomingRange('2026-07-31', 'fortnight'),
+        { from: '2026-07-31', to: '2026-08-14' });
+    assert.deepStrictEqual(View.upcomingRange('2026-07-31', 'month'),
+        { from: '2026-07-31', to: '2026-08-30' });
+});
+
+test('a window nobody recognises falls back rather than asking for nothing', () => {
+    // A bad id used to be an empty range, which reads as "nothing on" — the one
+    // answer this card must never give by accident.
+    const fallback = View.upcomingRange('2026-07-31', 'wobble');
+    assert.deepStrictEqual(fallback, View.upcomingRange('2026-07-31', View.DEFAULT_UPCOMING_WINDOW));
+    assert.ok(fallback.to > fallback.from);
+});
+
+test('each window says its own name in the empty sentence', () => {
+    assert.strictEqual(
+        View.myCommitmentsSentence([], View.upcomingWindow('fortnight').phrase),
+        'Nothing on for you in the next two weeks.'
+    );
+});
+
+test('a day already gone is not something you have on', () => {
+    // The card is about what is coming. A serve you have already done sitting
+    // under "Upcoming" reads as a thing still to do.
+    const withPast = [
+        { id: 'gone', date: '2026-07-01', name: 'Pluckers Trivia', isPast: true,
+          assignments: [{ personId: 'me', roleSlug: 'contestants', slotId: 's1', state: 'confirmed', label: 'Contestants' }] },
+    ].concat(OCCURRENCES);
+
+    const mine = View.myCommitments(withPast, 'me');
+    assert.deepStrictEqual(mine.map(c => c.date), ['2026-07-15', '2026-07-19']);
+});
+
+test('a window with nothing left says so plainly', () => {
+    const allPast = [
+        { id: 'gone', date: '2026-07-29', name: 'Pluckers Trivia', isPast: true,
+          assignments: [{ personId: 'me', roleSlug: 'contestants', slotId: 's1', state: 'confirmed', label: 'Contestants' }] },
+    ];
+    const mine = View.myCommitments(allPast, 'me');
+    assert.deepStrictEqual(mine, []);
+    assert.strictEqual(View.myCommitmentsSentence(mine, 'the next week'),
+        'Nothing on for you in the next week.');
 });
 
 test('the rail carries somebody else’s nothing', () => {
@@ -447,8 +494,98 @@ test('with nothing outstanding the sentence does not invent a nag', () => {
     assert.strictEqual(View.myCommitmentsSentence(confirmed), 'One thing — Setup.');
 });
 
-test('an empty month says so plainly', () => {
-    assert.strictEqual(View.myCommitmentsSentence([], 'July'), 'Nothing on for you in July.');
+test('an empty window says so plainly', () => {
+    assert.strictEqual(View.myCommitmentsSentence([], 'the next month'),
+        'Nothing on for you in the next month.');
+});
+
+// ── Places still to fill ──────────────────────────────────────────────────────
+//
+// A place is open when it is empty OR when the person in it said no. One rule,
+// both cases — which is what brings the warning back by itself when somebody
+// declines, with nothing having to remember it was ever cleared.
+
+const KIDS = { slug: 'kids', name: 'Kids Ministry', slots: [{ id: 's1' }, { id: 's2' }] };
+const SOUND = { slug: 'sound_desk', name: 'Sound desk', slots: [{ id: 's1' }] };
+const DEFS = [KIDS, SOUND];
+
+test('an untouched date is every place open', () => {
+    // The sparse promise: a date nobody has done anything to has no document at
+    // all, and it is exactly the date with the most to fill.
+    const date = { id: 'x', date: '2026-08-09', seriesRoleSlugs: ['kids', 'sound_desk'] };
+    assert.strictEqual(View.openPlaces(date, DEFS), 3);
+});
+
+test('somebody standing in a place closes it, and their no opens it again', () => {
+    const base = { id: 'x', date: '2026-08-09', seriesRoleSlugs: ['sound_desk'] };
+
+    const empty = View.openPlaces(base, DEFS);
+    const filled = View.openPlaces(Object.assign({}, base, {
+        assignments: [{ personId: 'p1', roleSlug: 'sound_desk', slotId: 's1', state: 'pending' }],
+    }), DEFS);
+    const declined = View.openPlaces(Object.assign({}, base, {
+        assignments: [{ personId: 'p1', roleSlug: 'sound_desk', slotId: 's1', state: 'declined' }],
+    }), DEFS);
+
+    assert.strictEqual(empty, 1);
+    assert.strictEqual(filled, 0, 'a pending yes still holds the place');
+    assert.strictEqual(declined, 1, 'the warning must come back on its own');
+});
+
+test('the Roles come from both levels, and the same Role twice is one Role', () => {
+    const date = {
+        id: 'x', date: '2026-08-09',
+        seriesRoleSlugs: ['sound_desk'],
+        occurrenceRoleSlugs: ['sound_desk', 'kids'],
+    };
+    assert.strictEqual(View.openPlaces(date, DEFS), 3, 'the sound desk was counted twice');
+});
+
+test('a liturgical Role is not a place this screen can chase', () => {
+    // It is filled in the order of service and prints in the booklet.
+    const liturgical = Roles.LITURGICAL_SLUGS[0];
+    const sunday = {
+        id: 'sunday_service_2026-08-09', date: '2026-08-09',
+        seriesRoleSlugs: [liturgical, 'sound_desk'],
+    };
+    const defs = DEFS.concat([{ slug: liturgical, name: 'Preacher', slots: [{ id: 'p1' }] }]);
+    assert.strictEqual(View.openPlaces(sunday, defs), 1);
+});
+
+test('a one-off Role is open only while nobody at all is on it', () => {
+    // No slots, no count — it is a label and some people.
+    const base = { id: 'x', date: '2026-08-09', oneOffRoles: [{ id: 'o1', label: 'Unlock the hall' }] };
+
+    assert.strictEqual(View.openPlaces(base, DEFS), 1);
+    assert.strictEqual(View.openPlaces(Object.assign({}, base, {
+        assignments: [{ personId: 'p1', oneOffId: 'o1', state: 'pending' }],
+    }), DEFS), 0);
+    assert.strictEqual(View.openPlaces(Object.assign({}, base, {
+        assignments: [{ personId: 'p1', oneOffId: 'o1', state: 'declined' }],
+    }), DEFS), 1);
+});
+
+test('a date nothing is happening on has nothing to chase', () => {
+    const roles = { seriesRoleSlugs: ['kids'] };
+    const cancelled = Object.assign({ id: 'x', date: '2026-08-09', cancelled: true }, roles);
+    const gone = Object.assign({ id: 'x', date: '2026-08-09', movedTo: '2026-08-16' }, roles);
+    const past = Object.assign({ id: 'x', date: '2026-06-09', isPast: true }, roles);
+
+    assert.strictEqual(View.openPlaces(cancelled, DEFS), 0);
+    assert.strictEqual(View.openPlaces(gone, DEFS), 0);
+    assert.strictEqual(View.openPlaces(past, DEFS), 0, 'nobody can fill last month');
+});
+
+test('a Role whose definition is not in hand is not counted as a gap', () => {
+    // Guessing would put a number on the screen nobody can act on.
+    const date = { id: 'x', date: '2026-08-09', seriesRoleSlugs: ['welcome_team'] };
+    assert.strictEqual(View.openPlaces(date, DEFS), 0);
+    assert.strictEqual(View.openPlaces(date, []), 0);
+});
+
+test('the gap is said the same way wherever it appears', () => {
+    assert.strictEqual(View.placesToFillLabel(1), '1 place to fill');
+    assert.strictEqual(View.placesToFillLabel(3), '3 places to fill');
 });
 
 // ── Needs sorting ─────────────────────────────────────────────────────────────
@@ -558,4 +695,23 @@ test('the red a chip uses for "needs sorting" is the theme\'s error red', () => 
     // warning everywhere else it appears.
     const theme = require('../tailwind.config.js').theme.extend.colors;
     assert.strictEqual(View.ATTENTION_COLOUR.toUpperCase(), theme.error.toUpperCase());
+});
+
+test('the amber a chip uses for "places to fill" is the theme\'s warning', () => {
+    const theme = require('../tailwind.config.js').theme.extend.colors;
+    assert.strictEqual(View.WARNING_COLOUR.toUpperCase(), theme.warning.toUpperCase());
+
+    // The pair the chip background needs. Without them the class is simply not
+    // generated and the chip draws with no background at all.
+    assert.ok(theme['warning-container'], 'no background for the warning chip');
+    assert.ok(theme['on-warning-container'], 'no text colour for the warning chip');
+});
+
+test('a chosen colour and the warning amber cannot be mistaken for each other', () => {
+    // They are the same amber. A chosen colour only ever draws the BAR down the
+    // side of a chip; the warning only ever tints the BACKGROUND. So a tinted
+    // chip always means the app is saying something.
+    const amber = View.EVENT_COLOURS.find(c => c.slug === 'amber');
+    assert.strictEqual(amber.bar.toUpperCase(), View.WARNING_COLOUR.toUpperCase());
+    assert.ok(View.EVENT_COLOURS.every(c => c.tint !== c.bar), 'a bar and a background look alike');
 });

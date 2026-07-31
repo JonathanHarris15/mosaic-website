@@ -347,6 +347,52 @@ test('an editor gets the whole roster of anything needing sorting, and only that
     assert.strictEqual(rows[1].assignments, undefined, 'and nothing for a calm one');
 });
 
+test('an editor gets the rosters of the dates ahead that already have people on them', async () => {
+    // Which is what turns "this date has people" into "this date still has two
+    // places to fill". It cannot be read off the document: the count depends on
+    // the Roles the series carries TODAY, and no stamp on a date knows that.
+    const ahead = { id: 'a', date: '2026-07-18', visibility: 'member', participantIds: ['p1'] };
+    const empty = { id: 'b', date: '2026-07-19', visibility: 'member', participantIds: [] };
+    const gone = { id: 'c', date: '2026-07-02', visibility: 'member', participantIds: ['p1'] };
+
+    const db = fakeDb({
+        event_occurrences: { a: ahead, b: empty, c: gone },
+        'event_occurrences/a/roster': {
+            kids__s1__p1: { personId: 'p1', roleSlug: 'kids', slotId: 's1', state: 'confirmed' },
+        },
+    }, { rank: 'editor', personId: 'p9' });
+
+    const rows = await Store.attachRosters(
+        db,
+        [Object.assign({}, ahead), Object.assign({}, empty), Object.assign({}, gone)],
+        { rank: 'editor', personId: 'p9', staffingFrom: '2026-07-10' }
+    );
+
+    assert.strictEqual(rows[0].assignments.length, 1, 'the date ahead brings its roster');
+    assert.strictEqual(rows[1].assignments, undefined,
+        'a date nobody is on needs no read — every place on it is open already');
+    assert.strictEqual(rows[2].assignments, undefined, 'nobody can fill a date already gone');
+});
+
+test('nobody but an editor pays for the staffing read', async () => {
+    const occ = { id: 'a', date: '2026-07-18', visibility: 'member', participantIds: ['p9'] };
+    const db = fakeDb({ event_occurrences: { a: occ } }, { rank: 'member', personId: 'p1' });
+
+    await Store.attachRosters(db, [Object.assign({}, occ)],
+        { rank: 'member', personId: 'p1', staffingFrom: '2026-07-10' });
+
+    assert.ok(!db._queriesRun.some(x => /roster/.test(x.collection)),
+        'a member is being charged for a count they are never shown');
+});
+
+test('without staffingFrom nothing extra is read at all', async () => {
+    const occ = { id: 'a', date: '2026-07-18', visibility: 'member', participantIds: ['p9'] };
+    const db = fakeDb({ event_occurrences: { a: occ } }, { rank: 'editor', personId: 'p1' });
+
+    await Store.attachRosters(db, [Object.assign({}, occ)], { rank: 'editor', personId: 'p1' });
+    assert.ok(!db._queriesRun.some(x => /roster/.test(x.collection)));
+});
+
 test('a refused roster read degrades to no roster rather than failing the page', async () => {
     const occ = { id: 'x', date: '2026-07-18', visibility: 'participant', participantIds: ['p1'] };
     const db = fakeDb({ event_occurrences: { x: occ } }, { rank: 'member', personId: 'p1' });
@@ -906,6 +952,31 @@ test('every date of a series shows the series colour, without storing it', async
         assert.strictEqual(o.seriesColour, 'gold', o.date + ' lost the series colour');
         assert.strictEqual(o.colour, undefined, o.date + ' stored a copy of it');
     });
+});
+
+test('every date of a series carries the Roles the series needs, without storing them', async () => {
+    // The Calendar counts the places still to fill from these. Stored, they
+    // would freeze — a Role added to the series would never reach the dates
+    // somebody had already put people on.
+    const series = {
+        midweek: {
+            name: 'Midweek Gathering', visibility: 'member', roleSlugs: ['kids', 'sound_desk'],
+            recurrence: { freq: 'weekly', startDate: '2026-07-01', weekday: 3 },
+        },
+    };
+    const viewer = { rank: 'member', personId: 'p1' };
+    const db = fakeDb({ events: series, event_occurrences: {} }, viewer);
+
+    const rows = await Store.loadCalendar(db, Object.assign({}, viewer, RANGE));
+
+    assert.ok(rows.length > 1);
+    rows.forEach(o => {
+        assert.deepStrictEqual(o.seriesRoleSlugs, ['kids', 'sound_desk'],
+            o.date + ' cannot say what it needs');
+    });
+
+    const payload = await Store.saveOccurrence(db, Object.assign({}, rows[0], { assignments: [] }));
+    assert.strictEqual(payload.seriesRoleSlugs, undefined, 'the series’ Roles froze onto one date');
 });
 
 test('an inherited colour is never written back onto the occurrence', async () => {

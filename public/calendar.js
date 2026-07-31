@@ -2,7 +2,7 @@
 //
 // The front door. Most people opening this are answering "what's coming up and
 // am I in it", not administering — so the month grid answers "what's on", and
-// the *You in July* rail and the **Only mine** filter answer "am I in it"
+// the *Upcoming* card and the **Only mine** filter answer "am I in it"
 // without hunting.
 //
 // Sundays appear here alongside everything else, but a Sunday chip is a
@@ -89,6 +89,21 @@
             people: [],
             hiddenSeries: [],       // series unticked in the "Show" filters
 
+            // ── Upcoming ────────────────────────────────────────────────────
+            //
+            // Its own rows, its own query. The card answers "what am I down
+            // for", which runs from today forward — so paging the grid back to
+            // April must not change the answer, and a window of two weeks
+            // crosses the end of the month more often than not.
+            upcoming: [],
+            upcomingWindow: View.DEFAULT_UPCOMING_WINDOW,
+            upcomingWindows: View.UPCOMING_WINDOWS,
+
+            // The Roles and their slots, so the grid can count the places still
+            // to fill. Editors only — nobody else is shown that count, and
+            // nobody else is allowed to read the definitions.
+            roleDefinitions: [],
+
             // The day tapped in the phone's strip. Null means "today, or the
             // first of whichever month is up" — the strip always has a day
             // selected, because the list underneath it is that day.
@@ -101,7 +116,12 @@
                 // wrong rank either over-asks (and errors) or under-asks (and
                 // quietly hides somebody's own commitments).
                 this.rank = await this.resolveRank();
+                // The grid first — it is the page. The card beside it and the
+                // Role definitions behind the warnings follow on their own, so
+                // neither can hold the calendar up.
                 await this.load();
+                this.loadUpcoming();
+                this.loadRoleDefinitions();
             },
 
             async resolveRank() {
@@ -145,6 +165,12 @@
                         personId: this.personId,
                         from: range.from,
                         to: range.to,
+                        // An editor is shown the places still to fill, and that
+                        // cannot be answered from the occurrence document — so
+                        // the dates from today on that already have somebody on
+                        // them bring their rosters with them. Dates nobody is on
+                        // need no read: every place on them is open already.
+                        staffingFrom: this.isEditor ? this.today : null,
                     });
 
                     // Each row is annotated once, here, so no template ever has
@@ -166,6 +192,42 @@
                     this.occurrences = [];
                 } finally {
                     this.loading = false;
+                }
+            },
+
+            // The Upcoming card's own read: today through the end of the chosen
+            // window, whatever month the grid is showing.
+            //
+            // It fails quietly. This card sits beside the calendar rather than
+            // being it, and an error sentence over the grid because a side panel
+            // could not load would say the whole page had failed when it had not.
+            async loadUpcoming() {
+                if (!this.personId) { this.upcoming = []; return; }
+                const range = View.upcomingRange(this.today, this.upcomingWindow);
+                try {
+                    this.upcoming = await Store.loadCalendar(db, {
+                        rank: this.rank,
+                        personId: this.personId,
+                        from: range.from,
+                        to: range.to,
+                    });
+                } catch (e) {
+                    console.error('Upcoming load failed:', e);
+                    this.upcoming = [];
+                }
+            },
+
+            // Which Roles exist and how many places each one has. Without this
+            // the grid cannot tell a date with nobody on it from a date that
+            // needs nobody, so a viewer who is not an editor — who never sees
+            // the count — never pays for the read.
+            async loadRoleDefinitions() {
+                if (!this.isEditor) { this.roleDefinitions = []; return; }
+                try {
+                    const snap = await db.collection('roles').get();
+                    this.roleDefinitions = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                } catch (e) {
+                    this.roleDefinitions = [];
                 }
             },
 
@@ -214,11 +276,47 @@
 
             // ── The right rail ───────────────────────────────────────────────
 
-            get myCommitments() { return View.myCommitments(this.visible, this.personId); },
+            // Upcoming reads its own rows, and deliberately ignores "Only mine"
+            // and the "Show" ticks. Those govern the grid — a month's worth of
+            // series with counts beside them — and a serve of your own is not
+            // something a display filter over a different stretch of time should
+            // be able to hide from you.
+            get myCommitments() { return View.myCommitments(this.upcoming, this.personId); },
             get mySentence() {
-                return View.myCommitmentsSentence(this.myCommitments, this.monthLabel.split(' ')[0]);
+                return View.myCommitmentsSentence(
+                    this.myCommitments, View.upcomingWindow(this.upcomingWindow).phrase);
             },
             get needsSorting() { return View.needsSorting(this.visible, this.people); },
+
+            // A window is a different question, not a different filter, so it
+            // goes back to the database rather than trimming what is in hand.
+            setUpcomingWindow(id) {
+                this.upcomingWindow = id;
+                return this.loadUpcoming();
+            },
+
+            // ── Places still to fill ─────────────────────────────────────────
+            //
+            // Editors only, and only on the days ahead. Somebody who cannot fill
+            // a place is being told about weather; a place on a date already
+            // gone cannot be filled by anybody.
+            placesToFill(occurrence) {
+                if (!this.isEditor) return 0;
+                return View.openPlaces(occurrence, this.roleDefinitions);
+            },
+
+            placesToFillLabel(occurrence) {
+                return View.placesToFillLabel(this.placesToFill(occurrence));
+            },
+
+            // The navy dot that says you are serving. It reads off `mine`, so an
+            // amber chip does not swallow it — but it stays off the chips that
+            // are shouting or struck through, where it was never drawn.
+            showsYou(occurrence) {
+                if (!occurrence || !occurrence.mine) return false;
+                const kind = this.chipKind(occurrence);
+                return kind === 'mine' || kind === 'unfilled';
+            },
 
             // ── The phone ────────────────────────────────────────────────────
             //
@@ -284,6 +382,7 @@
                     // never disagree about what a day looks like.
                     if (kind === 'off') return '#DAD0C0';                 // outline-variant
                     if (kind === 'declined') return View.ATTENTION_COLOUR;
+                    if (kind === 'unfilled') return View.WARNING_COLOUR;
                     if (kind === 'mine') return '#182F57';                // primary
                     return View.colourOf(ev).bar;
                 });
@@ -389,9 +488,11 @@
                     encodeURIComponent(occurrence.id);
             },
 
-            get canCreate() {
+            get isEditor() {
                 return ['editor', 'admin', 'elder', 'super_admin'].indexOf(this.rank) !== -1;
             },
+
+            get canCreate() { return this.isEditor; },
 
             // Nobody is signed in — which is NOT the same as an empty month, and
             // the difference is invisible unless the page says it.
@@ -418,6 +519,12 @@
                     .toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
             },
             dayNumber(dateStr) { return window.DateUtils.parseDateStr(dateStr).getDate(); },
+            monthShort(dateStr) {
+                return window.DateUtils.parseDateStr(dateStr)
+                    .toLocaleDateString('en-GB', { month: 'short' });
+            },
+            // Past the end of this month — which the Upcoming window usually is.
+            inLaterMonth(dateStr) { return monthOf(dateStr) !== monthOf(this.today); },
             weekdayShort(dateStr) {
                 return window.DateUtils.parseDateStr(dateStr)
                     .toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase();
@@ -450,11 +557,19 @@
 
             // The chip's colour family, so the template does not branch on four
             // things at once.
+            //
+            // In order of how loud each one is. `unfilled` sits under the red
+            // and over everything else: a date still short of people is the
+            // editor's job for the week, but somebody having said no is the one
+            // that cannot wait. Being in it yourself is neither — and the "you"
+            // dot reads off `mine` rather than off this, so an amber chip you
+            // are serving on still says so.
             chipKind(occurrence) {
                 // Skipped or moved away. First, because everything below it
                 // describes a gathering that is taking place.
                 if (Core.notHappening(occurrence)) return 'off';
                 if (occurrence.needsAttention) return 'declined';
+                if (this.placesToFill(occurrence)) return 'unfilled';
                 if (occurrence.mine) return 'mine';
                 if (occurrence.isSunday) return 'sunday';
                 return 'other';

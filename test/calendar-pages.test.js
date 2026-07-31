@@ -73,7 +73,7 @@ function membersOf(component) {
 
 // ── Pulling the identifiers out of the markup ─────────────────────────────────
 
-const ALPINE_ATTRS = /(?:x-text|x-show|x-if|x-model[.\w]*|x-html|x-for|@click|@change|@keydown[.\w]*|:class|:href|:disabled|:checked|:value|:aria-label|:style)\s*=\s*"([^"]*)"/g;
+const ALPINE_ATTRS = /(?:x-text|x-show|x-if|x-model[.\w]*|x-html|x-for|@click|@change|@keydown[.\w]*|:class|:href|:disabled|:checked|:selected|:value|:aria-label|:style)\s*=\s*"([^"]*)"/g;
 
 // Things a template may legitimately name that are not component members.
 const ALLOWED = new Set([
@@ -1607,16 +1607,176 @@ test('List means a list — the strip belongs to Month', () => {
         'the phone draws its month strip in List as well as Month');
 });
 
-test('the phone says "You in July" once, not twice', () => {
+test('the phone says the Upcoming sentence once, not twice', () => {
     // The rail's panel and the phone's navy hero are the same sentence. Both on
     // one screen reads as a bug, because it is one.
     const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
-    const said = html.split(/'You in ' \+ monthLabel/).length - 1;
+    const said = html.split(/x-text="mySentence"/).length - 1;
     assert.strictEqual(said, 2, 'the sentence moved or was duplicated again');
 
     // The rail's copy is the one that stands down.
     const rail = html.indexOf('cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg p-md');
     assert.ok(rail !== -1, 'the rail panel is drawn on a phone as well as the hero');
+});
+
+test('the card is Upcoming, not the month the grid happens to be on', () => {
+    // "You in July" answered a question nobody asked: paging the grid back to
+    // April changed what you were down for.
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    assert.ok(!/'You in ' \+ monthLabel/.test(html), 'the card is still tied to the browsed month');
+
+    // Both copies carry the window picker, or the phone can see the answer
+    // without being able to change the question.
+    const pickers = html.split(/setUpcomingWindow\(\$event\.target\.value\)/).length - 1;
+    assert.strictEqual(pickers, 2);
+
+    // And each option says which one it is. Bound with `x-model` instead, the
+    // select initialises before the loop inside it has drawn any options, and
+    // the box reads "Next week" while the card answers for a fortnight.
+    const marked = html.split(/:selected="w\.id === upcomingWindow"/).length - 1;
+    assert.strictEqual(marked, 2, 'the picker can open showing a window it is not on');
+});
+
+test('Upcoming asks for its own days, not the month on screen', async () => {
+    const asked = [];
+    const page = loadComponent('calendar.js', 'calendarPage', {
+        EventsStore: Object.assign({}, require('../public/events-store.js'), {
+            async loadCalendar(db, opts) { asked.push(opts); return []; },
+        }),
+    });
+    page.personId = 'p1';
+    page.today = '2026-07-31';
+    page.month = '2026-04';           // the grid is somewhere else entirely
+
+    await page.loadUpcoming();
+    assert.deepStrictEqual(
+        { from: asked[0].from, to: asked[0].to },
+        { from: '2026-07-31', to: '2026-08-14' }
+    );
+
+    // Changing the window is a different question, so it goes back to the
+    // database rather than trimming what is already in hand.
+    await page.setUpcomingWindow('week');
+    assert.deepStrictEqual(
+        { from: asked[1].from, to: asked[1].to },
+        { from: '2026-07-31', to: '2026-08-07' }
+    );
+    assert.strictEqual(page.mySentence, 'Nothing on for you in the next week.');
+});
+
+test('a row that has left this month says which month it is in', async () => {
+    // Two rows both saying "2" is a card nobody can read in order, and the
+    // window runs over the end of the month more often than not.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.today = '2026-07-31';
+
+    assert.strictEqual(page.inLaterMonth('2026-08-02'), true);
+    assert.strictEqual(page.inLaterMonth('2026-07-31'), false, 'this month says itself twice');
+    assert.strictEqual(page.monthShort('2026-08-02'), 'Aug');
+});
+
+test('Upcoming ignores the grid’s filters — your own serve is not a display option', async () => {
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.personId = 'p1';
+    page.today = '2026-07-31';
+    page.upcoming = [{
+        id: 'x', date: '2026-08-02', seriesId: 'sunday_service', name: 'Sunday Service',
+        assignments: [{ personId: 'p1', roleSlug: 'setup', slotId: 's1', state: 'confirmed', label: 'Setup' }],
+    }];
+    page.onlyMine = true;
+    page.hiddenSeries = ['sunday_service'];
+
+    assert.strictEqual(page.myCommitments.length, 1,
+        'unticking a series in Show hid something you agreed to do');
+});
+
+test('a signed-out page asks for no Upcoming at all', async () => {
+    const asked = [];
+    const page = loadComponent('calendar.js', 'calendarPage', {
+        EventsStore: Object.assign({}, require('../public/events-store.js'), {
+            async loadCalendar(db, opts) { asked.push(opts); return []; },
+        }),
+    });
+    page.personId = null;
+
+    await page.loadUpcoming();
+    assert.strictEqual(asked.length, 0, 'a read nobody can be shown the answer to');
+});
+
+// ── Places still to fill ──────────────────────────────────────────────────────
+
+test('only an editor is shown the places still to fill', () => {
+    // A member cannot fill one. A count they can do nothing about is weather.
+    const date = { id: 'x', date: '2026-08-09', seriesRoleSlugs: ['sound_desk'] };
+    const defs = [{ slug: 'sound_desk', name: 'Sound desk', slots: [{ id: 's1' }] }];
+
+    const member = loadComponent('calendar.js', 'calendarPage');
+    member.rank = 'member';
+    member.roleDefinitions = defs;
+    assert.strictEqual(member.placesToFill(date), 0);
+
+    const editor = loadComponent('calendar.js', 'calendarPage');
+    editor.rank = 'editor';
+    editor.roleDefinitions = defs;
+    assert.strictEqual(editor.placesToFill(date), 1);
+    assert.strictEqual(editor.placesToFillLabel(date), '1 place to fill');
+});
+
+test('a member never pays for the reads the count needs', async () => {
+    const asked = [];
+    const page = loadComponent('calendar.js', 'calendarPage', {
+        db: { collection: name => { asked.push(name); return { get: async () => ({ docs: [] }) }; } },
+    });
+    page.rank = 'member';
+
+    await page.loadRoleDefinitions();
+    assert.strictEqual(asked.length, 0, 'the Role definitions were read for somebody never shown them');
+    assert.strictEqual(page.roleDefinitions.length, 0);
+});
+
+test('an unfilled chip goes amber, and a decline still outranks it', () => {
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.rank = 'editor';
+    page.roleDefinitions = [{ slug: 'sound_desk', name: 'Sound desk', slots: [{ id: 's1' }] }];
+
+    const open = { id: 'x', date: '2026-08-09', seriesRoleSlugs: ['sound_desk'] };
+    assert.strictEqual(page.chipKind(open), 'unfilled');
+    assert.strictEqual(page.stripDots({ events: [open] })[0], '#B8862E');
+
+    // Somebody having said no is the thing that cannot wait.
+    assert.strictEqual(page.chipKind(Object.assign({}, open, { needsAttention: true })), 'declined');
+    // And a date that is not happening has nothing to fill.
+    assert.strictEqual(page.chipKind(Object.assign({}, open, { cancelled: true })), 'off');
+});
+
+test('an amber chip still says you are on it', () => {
+    // The "you" dot reads off `mine`, or the warning would swallow the one
+    // thing the person looking at it cares most about.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.rank = 'editor';
+    page.roleDefinitions = [{ slug: 'sound_desk', name: 'Sound desk', slots: [{ id: 's1' }] }];
+
+    const open = { id: 'x', date: '2026-08-09', seriesRoleSlugs: ['sound_desk'], mine: { label: 'Setup' } };
+    assert.strictEqual(page.chipKind(open), 'unfilled');
+    assert.strictEqual(page.showsYou(open), true);
+
+    // Not on the ones it was never drawn on.
+    assert.strictEqual(page.showsYou({ id: 'y', date: '2026-08-09', mine: { label: 'Setup' }, cancelled: true }), false);
+    assert.strictEqual(page.showsYou({ id: 'z', date: '2026-08-09' }), false);
+});
+
+test('the warning lives on the chip, not in the corner of the day', () => {
+    // The corner of a cell says "this day is something to sort" and nothing
+    // else. WHICH event is short of people is answered on the event, where you
+    // would click to fix it — saying it twice in two places is one place too
+    // many, and the day marks would then have to be kept in step by hand.
+    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    const corner = html.indexOf('x-show="cell.needsAttention"');
+    const chips = html.indexOf('x-for="ev in cell.events"');
+    assert.ok(corner !== -1 && chips > corner, 'the cell corner moved — this test no longer looks at it');
+
+    const dayHeader = html.slice(corner, chips);
+    assert.ok(!/warning/.test(dayHeader), 'the amber mark is back in the corner of the day');
 });
 
 test('the strip shows at most three dots a day', () => {

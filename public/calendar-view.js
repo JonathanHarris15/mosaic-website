@@ -183,6 +183,16 @@
     // matching the red used everywhere else it appears.
     const ATTENTION_COLOUR = '#A8463E';
 
+    // The warning amber, for a date that simply is not filled yet. A step below
+    // the red and never instead of it.
+    //
+    // It is the same amber an Event can be painted, and that is not the clash it
+    // looks like: a chosen colour only ever draws the BAR down the side of a
+    // chip, and this only ever tints the chip's BACKGROUND. No event colour
+    // touches a background, so a tinted chip always means the app is saying
+    // something rather than an editor having picked a shade.
+    const WARNING_COLOUR = '#B8862E';
+
     function colourFor(slug) {
         return EVENT_COLOURS.find(c => c.slug === slug)
             || EVENT_COLOURS.find(c => c.slug === DEFAULT_COLOUR);
@@ -493,15 +503,47 @@
         return plural(served, 'serve') + ' recorded. ' + open + ' stay unanswered, for good.';
     }
 
-    // ── The "You in July" summary ────────────────────────────────────────────
+    // ── Upcoming ─────────────────────────────────────────────────────────────
     //
     // Derived from the events themselves and sorted by date. Never a second
     // list — a parallel list is a list that goes stale.
+    //
+    // This card used to be "You in July" — the browsed month, whichever month
+    // that was. Two things were wrong with that. A serve you have already done
+    // sat in it as though it were still to do, and paging the grid back to
+    // April changed the answer to "what am I down for", which is a question
+    // about the days ahead and has nothing to do with which month is on screen.
+    //
+    // So it runs from today forward, over a window you choose, and it is
+    // anchored to today rather than to the grid.
+
+    const UPCOMING_WINDOWS = Object.freeze([
+        { id: 'week', label: 'Next week', phrase: 'the next week', days: 7 },
+        { id: 'fortnight', label: 'Next 2 weeks', phrase: 'the next two weeks', days: 14 },
+        // Thirty days, not "the same day next month" — the card is a look
+        // ahead, not a date calculation somebody has to check.
+        { id: 'month', label: 'Next month', phrase: 'the next month', days: 30 },
+    ]);
+
+    const DEFAULT_UPCOMING_WINDOW = 'fortnight';
+
+    function upcomingWindow(id) {
+        return UPCOMING_WINDOWS.find(w => w.id === id) ||
+            UPCOMING_WINDOWS.find(w => w.id === DEFAULT_UPCOMING_WINDOW);
+    }
+
+    // What to ask the database for: today, through the end of the window.
+    function upcomingRange(today, id) {
+        const end = parseDate(today);
+        end.setDate(end.getDate() + upcomingWindow(id).days);
+        return { from: today, to: formatDate(end) };
+    }
 
     function myCommitments(occurrences, personId) {
         if (!personId) return [];
         const mine = [];
         (occurrences || []).forEach(o => {
+            if (o && o.isPast) return;
             ((o && o.assignments) || []).forEach(a => {
                 if (a.personId !== personId) return;
                 mine.push({
@@ -518,12 +560,14 @@
         return mine.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     }
 
-    // The EB Garamond sentence at the top of the rail: what you are down for,
-    // and how many are still waiting on your yes.
-    function myCommitmentsSentence(commitments, monthLabel) {
+    // The EB Garamond sentence at the top of the card: what you are down for,
+    // and how many are still waiting on your yes. `windowLabel` is the window's
+    // own words — "the next two weeks" — so the empty line names the same
+    // stretch of time the rows underneath it cover.
+    function myCommitmentsSentence(commitments, windowLabel) {
         const list = commitments || [];
         if (!list.length) {
-            return 'Nothing on for you' + (monthLabel ? ' in ' + monthLabel : '') + '.';
+            return 'Nothing on for you' + (windowLabel ? ' in ' + windowLabel : '') + '.';
         }
 
         const names = list.map(c => c.roleLabel);
@@ -536,6 +580,70 @@
         return head + ' ' + (waiting === 1
             ? '1 is still waiting on your yes.'
             : waiting + ' are still waiting on your yes.');
+    }
+
+    // ── Places still to fill ─────────────────────────────────────────────────
+    //
+    // A place is open when nobody is standing in it OR when the person in it
+    // said no. One rule, both cases — which is what makes the warning come back
+    // by itself the moment somebody declines. Nothing has to remember that the
+    // place was ever filled, so nothing can be wrong about it.
+    //
+    // Only an editor is shown this. A member cannot fill a place, and a count
+    // of gaps they can do nothing about is just weather.
+    //
+    // The Roles come from two levels, exactly as the Event page reads them: the
+    // series' `roleSlugs` apply to every date, `occurrenceRoleSlugs` to this one
+    // alone. Liturgical Roles are filled in the order of service and print in
+    // the booklet, so they are not places this screen can chase.
+
+    function rolesOn(occurrence) {
+        const notLiturgical = slug => Roles.LITURGICAL_SLUGS.indexOf(slug) === -1;
+        const fromSeries = ((occurrence && occurrence.seriesRoleSlugs) || []).filter(notLiturgical);
+        const fromDate = ((occurrence && occurrence.occurrenceRoleSlugs) || [])
+            .filter(slug => notLiturgical(slug) && fromSeries.indexOf(slug) === -1);
+        return fromSeries.concat(fromDate);
+    }
+
+    const standing = a => a && (a.state || Core.STATES.PENDING) !== Core.STATES.DECLINED;
+
+    function openPlaces(occurrence, roleDefinitions) {
+        const o = occurrence || {};
+        // A date that is skipped or moved away has nothing to chase. A date
+        // already gone hasn't either — a place nobody filled last Sunday cannot
+        // be filled now — and the page drops those before asking, so paging
+        // backwards does not bury the dates that can still be sorted.
+        if (Core.notHappening(o) || o.isPast) return 0;
+
+        const defs = roleDefinitions || [];
+        const assignments = o.assignments || [];
+        let open = 0;
+
+        rolesOn(o).forEach(slug => {
+            const def = defs.find(d => d && d.slug === slug);
+            // A Role this viewer's copy of the definitions does not carry is not
+            // a gap — it is a Role we cannot describe, and guessing at one would
+            // put a number on the screen nobody can act on.
+            if (!def) return;
+            (def.slots || []).forEach(slot => {
+                const at = assignments.find(a => a.roleSlug === slug && a.slotId === slot.id && !a.oneOffId);
+                if (!standing(at)) open++;
+            });
+        });
+
+        // A one-off Role is a label and some people — no slots, no count — so it
+        // is open only while nobody at all is standing in it.
+        ((o.oneOffRoles) || []).forEach(job => {
+            if (!assignments.some(a => a.oneOffId === job.id && standing(a))) open++;
+        });
+
+        return open;
+    }
+
+    // "2 places to fill". Said the same way wherever it appears, so a chip, a
+    // row and a card cannot describe the same gap in three voices.
+    function placesToFillLabel(n) {
+        return plural(n, 'place') + ' to fill';
     }
 
     // ── Needs sorting ────────────────────────────────────────────────────────
@@ -591,6 +699,7 @@
         DEFAULT_COLOUR,
         SUNDAY_COLOUR,
         ATTENTION_COLOUR,
+        WARNING_COLOUR,
         colourFor,
         colourOf,
         // recurrence
@@ -609,8 +718,14 @@
         unconfirmedPrompt,
         serveTickSummary,
         // the rail
+        UPCOMING_WINDOWS,
+        DEFAULT_UPCOMING_WINDOW,
+        upcomingWindow,
+        upcomingRange,
         myCommitments,
         myCommitmentsSentence,
+        openPlaces,
+        placesToFillLabel,
         needsSorting,
     };
 

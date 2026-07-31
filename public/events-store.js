@@ -105,9 +105,9 @@
     // ── Putting the rosters back on ──────────────────────────────────────────
     //
     // The roster is a SUBCOLLECTION, so a list query over occurrences returns
-    // none of it. Left there, the Calendar's "Only mine" filter, the *You in
-    // July* rail and the *Needs sorting* list all come back silently empty —
-    // the page renders, and simply never mentions anything you are down for.
+    // none of it. Left there, the Calendar's "Only mine" filter, the *Upcoming*
+    // card and the *Needs sorting* list all come back silently empty — the page
+    // renders, and simply never mentions anything you are down for.
     //
     // So the rows that need a roster fetch one, and only those:
     //
@@ -116,20 +116,29 @@
     //     because you are always allowed to know what you were asked to do.
     //   • An editor: the WHOLE roster of Events that need sorting, which is what
     //     turns a declined flag into "Bethany Croft declined Kids Ministry".
+    //   • An editor, with `staffingFrom` set: the whole roster of every date
+    //     from then on that somebody is already standing in. That is what turns
+    //     "this date has people" into "this date still has two places to fill",
+    //     and it cannot be answered from the document — the count depends on the
+    //     Roles the series carries TODAY, which no stamp on a date can know.
+    //     Dates nobody is on need no read at all: with an empty roster, every
+    //     place on them is open by definition.
     //
-    // Both are bounded by how much is actually going on, not by the month.
+    // All of them are bounded by how much is actually going on, not by the month.
     async function attachRosters(db, occurrences, options) {
         const opts = options || {};
         const isEditor = ['editor', 'admin', 'elder', 'super_admin'].indexOf(opts.rank) !== -1;
 
         await Promise.all(occurrences.map(async o => {
             const rosterRef = occurrenceRef(db, o.id).collection(ROSTER);
+            const staffed = ((o.participantIds || []).length > 0);
             const mine = opts.personId && (o.participantIds || []).indexOf(opts.personId) !== -1;
 
             // An editor reading a whole roster is allowed; a member reading only
             // their own row is too. Anything refused degrades to no roster rather
             // than failing the page.
-            const wantsAll = isEditor && o.needsAttention;
+            const forStaffing = !!opts.staffingFrom && staffed && o.date >= opts.staffingFrom;
+            const wantsAll = isEditor && (o.needsAttention || forStaffing);
             if (!mine && !wantsAll) return;
 
             try {
@@ -209,6 +218,14 @@
                             name: s.name,
                             seriesName: s.name,
                             seriesColour: s.colour,
+                            // Which Roles every date of this series carries, so
+                            // the Calendar can count the places still to fill
+                            // without opening each Event. Stamped for display
+                            // only, and stripped on the way back out for the
+                            // same reason `seriesColour` is: written down, it
+                            // would freeze this one date at the roster the
+                            // series had the last time anybody touched it.
+                            seriesRoleSlugs: s.roleSlugs || [],
                         },
                         o,
                         { time: rule.time || null }
@@ -270,7 +287,11 @@
         // Read-time stamps, not stored fields. `seriesColour` is the series'
         // colour copied on for display; letting it land here would freeze this
         // one date at whatever the colour was the last time somebody touched it.
+        // `seriesRoleSlugs` is the same stamp for the series' Roles, and freezes
+        // the same way — a Role added to the series would then never reach the
+        // dates somebody had already put people on.
         delete payload.seriesColour;
+        delete payload.seriesRoleSlugs;
         // And `time`, for exactly the same reason — which this missed, so it
         // froze. `rebuildOccurrence` stamps the rule's time on for display, and
         // the first save of the date (a role, a visibility change) wrote it back
