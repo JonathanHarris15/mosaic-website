@@ -146,6 +146,15 @@
   // Anything that CHANGES one of these has to say so, or you would come back
   // to Home and read your own edit as it was before you made it.
   function forget(key) {
+    drop(key);
+    // Home's featured service is a SECOND read of the same collection, held
+    // under its own key. Everything that edits a service already calls
+    // forget("services") and none of it knows this exists — so without this
+    // line you edit Sunday's theme, go back to Home, and read the old one.
+    if (key === "services") drop("nextService");
+  }
+
+  function drop(key) {
     delete memo[key];
     try { window.sessionStorage.removeItem("mosaicMemo:" + key); } catch (e) {}
   }
@@ -216,23 +225,29 @@
     });
   }
 
+  // ⚠ A SERVICE IS KEYED BY ITS DATE AND HAS NO DATE FIELD. Every document id
+  // is "2026-08-02"; against the live data 205 of 205 ids are date-shaped and 0
+  // of 205 carry a `date` field. So `d.date` below is not a fallback that never
+  // fires — it is the other way round, and any query that filters or orders on
+  // a `date` field matches nothing at all.
+  function mapService(doc) {
+    var d = doc.data() || {};
+    return {
+      id: doc.id,
+      date: d.date || doc.id,
+      theme: d.theme || d.title || "(no theme)",
+      preacher: d.preacher || "",
+      serviceLeader: d.serviceLeader || d.leader || "",
+      musicLeader: d.musicLeader || "",
+      sermonette: d.sermonette || "",
+      hasBaptism: !!d.hasBaptism,
+    };
+  }
+
   function loadServices() {
     return get(db.collection("services")).then(function (snap) {
       var out = [];
-      snap.forEach(function (doc) {
-        var d = doc.data() || {};
-        var date = d.date || doc.id;
-        out.push({
-          id: doc.id,
-          date: date,
-          theme: d.theme || d.title || "(no theme)",
-          preacher: d.preacher || "",
-          serviceLeader: d.serviceLeader || d.leader || "",
-          musicLeader: d.musicLeader || "",
-          sermonette: d.sermonette || "",
-          hasBaptism: !!d.hasBaptism,
-        });
-      });
+      snap.forEach(function (doc) { out.push(mapService(doc)); });
       out.sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
       return out;
     });
@@ -934,15 +949,31 @@
 
   function todayStr() { return new Date().toISOString().slice(0, 10); }
 
-  // The service to feature on Home: nearest upcoming (date >= today), else most recent.
-  function getNextService() {
-    return getServices().then(function (list) {
-      var t = todayStr();
-      var up = list.filter(function (s) { return String(s.date) >= t; });
-      if (up.length) { up.sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); }); return up[0]; }
-      return list[0] || null;
-    });
+  // The service to feature on Home: nearest upcoming (date >= today), else most
+  // recent.
+  //
+  // This used to read the WHOLE services collection and filter it here — 205
+  // documents and 3.6 MB measured against the real database, to show a theme
+  // and three names totalling 0.1 KB. The weight is not the number of services,
+  // it is the printed `guide` stored on each one: 3.27 MB of the 3.54 MB, with
+  // a single Sunday at 425 KB. On a phone that is the whole load time.
+  //
+  // Ordered by DOCUMENT ID, which is the date — see mapService above. Ordering
+  // or filtering on a `date` field would return nothing.
+  function loadNextService() {
+    var byId = firebase.firestore.FieldPath.documentId();
+    var services = db.collection("services");
+    return get(services.orderBy(byId).startAt(todayStr()).limit(1))
+      .then(function (snap) {
+        // Nothing ahead of today — the church has run out of booked Sundays, or
+        // this is a quiet gap. Show the most recent rather than an empty card.
+        if (!snap.empty) return snap;
+        return get(services.orderBy(byId, "desc").limit(1));
+      })
+      .then(function (snap) { return snap.empty ? null : mapService(snap.docs[0]); });
   }
+
+  function getNextService() { return remembered("nextService", loadNextService); }
 
   // ── Warming the cache at launch ──────────────────────────────
   // The point of the whole exercise: spend the wait ONCE, while the app is

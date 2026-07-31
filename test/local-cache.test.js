@@ -27,6 +27,14 @@ function load(win, opts) {
         assert.ok(src.includes(flag), 'the CACHE_ENABLED switch has been renamed or reshaped');
         src = src.replace(flag, 'var CACHE_ENABLED = true;');
     }
+    // The read deadline is six seconds in production, which is six seconds too
+    // long for a test suite. Same trick as CACHE_ENABLED above: it is a local
+    // in the module's closure, so the source is where it can be reached.
+    if (opts && opts.deadlineMs) {
+        const line = 'var DEADLINE_MS = 6000;';
+        assert.ok(src.includes(line), 'the read deadline has been renamed or reshaped');
+        src = src.replace(line, `var DEADLINE_MS = ${opts.deadlineMs};`);
+    }
     const globals = Object.assign({ localStorage: mockStorage() }, win);
     const module = { exports: {} };
     const fn = new Function('window', 'module', src + '\nreturn window.MosaicLocalCache;');
@@ -231,21 +239,142 @@ test('launch warms the cache, and never blocks the app on it', () => {
 
 test('the cache ships off, and nothing touches Firestore while it is', () => {
     // It hangs the WebView (see CACHE_ENABLED). Until that is solved and
-    // verified in the native app, both halves must stay inert — persistence
-    // unset AND Firestore's prototypes unpatched, so the app behaves exactly
-    // as it did before any of this existed.
+    // verified in the native app, the CACHE half must stay inert: persistence
+    // unset, the Firestore handle unconfigured, and no read ever answered from
+    // the device.
+    //
+    // The prototypes ARE patched now, which they were not before — the read
+    // deadline below rides on the same interception. So the thing to hold is
+    // no longer "nothing is patched", it is "nothing is CACHED": a read must
+    // still go to the server exactly as it did before any of this existed.
     const src = read('local-cache.js');
     assert.match(src, /var CACHE_ENABLED = false;/,
         'the cache is on again — it must be verified on the Roles Manager in the native app first');
 
     const Cache = load({ MOSAIC_MOBILE_APP: true });
-    assert.equal(Cache.interceptReads(fakeFirebase()), false, 'reads are still being intercepted');
+    const fb = fakeFirebase();
+    Cache.interceptReads(fb);
 
-    let touched = false;
-    const db = { enablePersistence: () => { touched = true; return Promise.resolve(); },
-                 settings: () => { touched = true; } };
-    return Cache.enable(db).then(on => {
-        assert.equal(on, false, 'persistence was switched on');
-        assert.equal(touched, false, 'the Firestore handle was configured anyway');
+    const q = new fb.firestore.Query();
+    q.calls = [];
+    return q.get().then(() => {
+        assert.deepEqual(q.calls, ['plain'],
+            'a read was answered from the device while the cache is supposed to be off');
+
+        let touched = false;
+        const db = { enablePersistence: () => { touched = true; return Promise.resolve(); },
+                     settings: () => { touched = true; } };
+        return Cache.enable(db).then(on => {
+            assert.equal(on, false, 'persistence was switched on');
+            assert.equal(touched, false, 'the Firestore handle was configured anyway');
+        });
+    });
+});
+
+// ── The read that never answers ─────────────────────────────────────────────
+//
+// Measured on a phone: a query started and had still not answered 25 seconds
+// later, while the same query took 94ms a minute earlier and the page's own
+// timers kept firing throughout. It did not fail. It never settled — so the
+// screen waited on a promise that was never going to resolve, which is the
+// "sometimes it takes 15+ seconds to load".
+//
+// auth.js already retries a read that REJECTS. Nothing could retry this one:
+// there is no event to hang a retry on.
+
+function hangs() { return new Promise(() => {}); }
+
+test('a read that never answers is asked again', () => {
+    const Cache = load({ MOSAIC_MOBILE_APP: true }, { deadlineMs: 30 });
+    let attempt = 0;
+    return Cache.guardRead(() => (++attempt === 1 ? hangs() : Promise.resolve('answer')))
+        .then(v => {
+            assert.equal(v, 'answer', 'the retry never happened, so the screen waits forever');
+            assert.equal(attempt, 2);
+        });
+});
+
+test('a read that never answers AT ALL gives up rather than hanging', () => {
+    // Giving up is not defeat — `deadline-exceeded` is already in auth.js's
+    // retryable list and already caught by its boot guard, so the page recovers
+    // or says it could not load. Both beat a spinner with no end.
+    const Cache = load({ MOSAIC_MOBILE_APP: true }, { deadlineMs: 20 });
+    return Cache.guardRead(hangs).then(
+        () => assert.fail('a read that never answered resolved anyway'),
+        err => assert.equal(err.code, 'deadline-exceeded',
+            'the failure does not carry a code the existing retry machinery knows'));
+});
+
+test('a slow read is never cancelled — whoever answers first wins', () => {
+    // The deadline cannot tell a DROPPED read from a merely slow one, and
+    // cancelling would turn every slow read on a bad connection into a failure.
+    // So passing the deadline starts a SECOND read alongside the first rather
+    // than replacing it, and the first one to answer is the answer.
+    //
+    // Here the retry is the one that hangs, and the original — already past its
+    // deadline — still wins. The total wait is still bounded: answer nothing by
+    // deadline × attempts and it gives up (see the test above).
+    const Cache = load({ MOSAIC_MOBILE_APP: true }, { deadlineMs: 20 });
+    let attempt = 0;
+    return Cache.guardRead(() => {
+        return ++attempt === 1
+            ? new Promise(r => setTimeout(() => r('the slow one'), 30))
+            : hangs();
+    }).then(v => assert.equal(v, 'the slow one', 'a slow read was abandoned instead of awaited'));
+});
+
+test('a read that FAILS is passed straight through, not retried here', () => {
+    // Rejection is the old, handled path — auth.js retries the transient ones
+    // and refuses to retry permission-denied, which means the same thing on the
+    // third attempt as the first. Retrying here too would double every one of
+    // those waits and make being refused slower.
+    const Cache = load({ MOSAIC_MOBILE_APP: true }, { deadlineMs: 30 });
+    let attempt = 0;
+    const denied = Object.assign(new Error('nope'), { code: 'permission-denied' });
+    return Cache.guardRead(() => { attempt++; return Promise.reject(denied); }).then(
+        () => assert.fail('a refused read resolved'),
+        err => {
+            assert.equal(err.code, 'permission-denied', 'the original failure was swallowed');
+            assert.equal(attempt, 1, 'a refusal was retried');
+        });
+});
+
+test('a healthy read is not doubled', () => {
+    // The guard costs a duplicate read when it fires, so it must not fire for
+    // reads that are simply working.
+    const Cache = load({ MOSAIC_MOBILE_APP: true }, { deadlineMs: 30 });
+    let attempt = 0;
+    return Cache.guardRead(() => { attempt++; return Promise.resolve('quick'); })
+        .then(v => {
+            assert.equal(v, 'quick');
+            assert.equal(attempt, 1, 'a working read was issued twice');
+        });
+});
+
+test('the deadline reaches every read site, including the ones passing options', () => {
+    // The ~130 read sites across the shell pages were written before any of
+    // this existed and none of them opt in. The patch is how they are covered —
+    // and a read that states { source: 'server' } can hang exactly like any
+    // other, so the deadline applies there too even though the CACHE steps
+    // aside for it.
+    const Cache = load({ MOSAIC_MOBILE_APP: true }, { deadlineMs: 20 });
+    const fb = fakeFirebase();
+
+    // The real read underneath: hangs the first time it is asked, whatever the
+    // caller stated it wanted.
+    let attempts = 0;
+    fb.firestore.DocumentReference.prototype.get = function (options) {
+        this.calls.push(options ? options.source : 'plain');
+        return ++attempts === 1 ? hangs() : Promise.resolve({ exists: true });
+    };
+    assert.equal(Cache.interceptReads(fb), true, 'nothing was patched, so nothing is guarded');
+
+    const doc = new fb.firestore.DocumentReference();
+    doc.calls = [];
+    return doc.get({ source: 'server' }).then(snap => {
+        assert.ok(snap.exists, 'the read never recovered');
+        assert.equal(attempts, 2, 'a hung read that stated its source was left to hang');
+        assert.deepEqual(doc.calls, ['server', 'server'],
+            'the retry asked for something different from what the caller wanted');
     });
 });
