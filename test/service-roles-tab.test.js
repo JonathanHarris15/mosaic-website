@@ -550,3 +550,90 @@ test('people and roles go out together', async () => {
     assert.deepStrictEqual(log, ['people', 'roles'],
         'the two page-load reads changed; check they are still one wave');
 });
+
+// ── Reads get dropped on this transport, so the panel has to cope ────────────
+//
+// The WebView is forced onto long polling, and local-cache.js puts a deadline on
+// every read because measured reads have started and simply never answered. So
+// the questions here are: how many reads does the panel issue at all, and what
+// happens when one of them does not come back.
+
+test('the panel takes the directory the page already has', async () => {
+    const log = [];
+    const sandbox = sandboxFor({ db: fakeDb(log) });
+    vm.runInContext(read('calendar-event.js'), sandbox, { filename: 'calendar-event.js' });
+
+    const page = sandbox.eventDetailPage({
+        occurrenceId: 'sunday_service_2026-10-12',
+        rolesOnly: true,
+        people: [{ id: 'p2', name: 'Zoe' }, { id: 'p1', name: 'Ade' }],
+    });
+    page.rank = 'editor';
+    await page.loadEditorData();
+
+    assert.ok(!log.includes('people'),
+        'the panel re-reads a directory the page had already loaded');
+    assert.deepStrictEqual(page.people.map(p => p.name), ['Ade', 'Zoe'],
+        'the handed-over people are not sorted the way the panel sorts its own');
+});
+
+test('an empty registry is not mistaken for an empty church', async () => {
+    const log = [];
+    const sandbox = sandboxFor({ db: fakeDb(log) });
+    vm.runInContext(read('calendar-event.js'), sandbox, { filename: 'calendar-event.js' });
+
+    const page = sandbox.eventDetailPage({ occurrenceId: 'x_2026-10-12', rolesOnly: true, people: [] });
+    page.rank = 'editor';
+    await page.loadEditorData();
+
+    assert.ok(log.includes('people'),
+        'a host that has not loaded its people yet leaves the panel with none');
+});
+
+test('the service page hands its registry to the panel', () => {
+    assert.match(read('service-builder.html'), /people: peopleRegistry/,
+        'the panel is mounted without the directory the page already read');
+});
+
+test('a dropped read offers a way to try again', () => {
+    const html = read('service-builder.html');
+    assert.match(html, /@click="retry\(\)"/,
+        'the only way out of a failed load is reloading the page, which loses unsaved work');
+    assert.match(html, /x-show="error && !loading"/,
+        'the error and the spinner can both show at once');
+});
+
+test('retry clears the old error and goes back for the data', async () => {
+    const log = [];
+    const page = editorPage(log);
+    page.error = 'That event could not be loaded just now.';
+    page.loading = false;
+
+    const running = page.retry();
+    // Cleared on the way in, so the failure notice goes the moment you tap
+    // rather than sitting there over a spinner.
+    assert.strictEqual(page.error, '', 'the old error is still on screen during the retry');
+    assert.strictEqual(page.loading, true, 'nothing tells the page a retry is under way');
+
+    await running;
+    assert.ok(log.length, 'retry never issued a read');
+});
+
+test('retry does nothing while a load is already running', async () => {
+    const page = editorPage([]);
+    page.loading = true;
+    page.error = 'boom';
+    await page.retry();
+    assert.strictEqual(page.error, 'boom', 'a second tap starts a competing load');
+});
+
+test('a dropped series read does not blank the roster', () => {
+    // The series carries the recurrence and the colour. The roster needs
+    // neither, so failing the whole screen over it loses the thing that WAS
+    // read for the sake of the thing that was not.
+    const src = read('calendar-event.js');
+    assert.match(src, /await Promise\.allSettled\(\[/,
+        'the load still uses Promise.all, so any one dropped read blanks everything');
+    assert.match(src, /if \(core\.status === 'rejected'\) throw core\.reason;/,
+        'nothing distinguishes the reads worth failing for from the rest');
+});

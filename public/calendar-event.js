@@ -83,6 +83,18 @@
                 await this.load();
             },
 
+            // A dropped read is not a broken page, it is a read that did not come
+            // back — and the difference matters, because trying again usually
+            // works. Without this the only way out of "could not be loaded" is a
+            // full page reload, which on the service page means losing whatever
+            // is unsaved in the order of service.
+            async retry() {
+                if (this.loading) return;
+                this.error = '';
+                this.loading = true;
+                await this.load();
+            },
+
             resolveViewer() {
                 return new Promise(resolve => {
                     auth.onAuthStateChanged(async user => {
@@ -229,15 +241,19 @@
                     // The rest in one wave. None of these three needs anything
                     // from the others — they were only sequential because they
                     // were written in the order somebody thought of them, and
-                    // each `await` is a whole round trip. On a phone that was the
-                    // difference between the screen appearing and the screen
-                    // arriving in instalments.
-                    await Promise.all([
+                    // each `await` is a whole round trip.
+                    //
+                    // allSettled, NOT all. Reads on this transport get dropped —
+                    // that is what the deadline in local-cache.js exists for —
+                    // and with `all` a dropped read of the SERIES blanked the
+                    // whole screen, roster and all, over a document the roster
+                    // never needed. Only the people and the Role definitions are
+                    // worth failing for, because without them there is nothing
+                    // to draw.
+                    const [series, core, liturgy] = await Promise.allSettled([
                         loaded.seriesId
-                            ? db.collection('events').doc(loaded.seriesId).get().then(s => {
-                                if (s.exists) this.series = Object.assign({ id: s.id }, s.data());
-                            })
-                            : null,
+                            ? db.collection('events').doc(loaded.seriesId).get()
+                            : Promise.resolve(null),
 
                         this.isEditor ? this.loadEditorData() : this.loadPeople(),
 
@@ -246,9 +262,27 @@
                         // who is already busy.
                         this.isSunday
                             ? Store.loadLiturgicalHolders(db, loaded.date)
-                                .then(held => { this.liturgicalHolders = held; })
-                            : null,
+                            : Promise.resolve([]),
                     ]);
+
+                    if (core.status === 'rejected') throw core.reason;
+
+                    if (series.status === 'fulfilled' && series.value && series.value.exists) {
+                        this.series = Object.assign({ id: series.value.id }, series.value.data());
+                    } else if (series.status === 'rejected') {
+                        // Survivable: the series carries the recurrence and the
+                        // colour, so the roster reads fine without it.
+                        console.warn('Could not read the event series:', series.reason);
+                    }
+
+                    if (liturgy.status === 'fulfilled') {
+                        this.liturgicalHolders = liturgy.value || [];
+                    } else {
+                        // Already degrades to nobody by design — worth saying out
+                        // loud, because the cost is that somebody preaching stays
+                        // assignable rather than showing as busy.
+                        console.warn('Could not read who is leading this Sunday:', liturgy.reason);
+                    }
                 } catch (e) {
                     console.error('Event load failed:', e);
                     this.error = (e && e.code === 'permission-denied')
@@ -259,7 +293,22 @@
                 }
             },
 
+            // A host that has already read the directory hands it over rather
+            // than making this read it again. The service page had loaded all 74
+            // People into its own registry before the Roles tab was ever opened,
+            // and this fetched the identical collection a second time — on a
+            // transport where a dropped read is the failure mode, the cheapest
+            // read is the one not issued.
+            //
+            // Empty means the host has not got there yet, which is not the same
+            // as "no people", so that falls through and reads.
             async loadPeople() {
+                if (cfg.people && cfg.people.length) {
+                    this.people = cfg.people.slice()
+                        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+                    return;
+                }
+
                 const snap = await db.collection('people').get();
                 this.people = snap.docs
                     .map(d => Object.assign({ id: d.id }, d.data()))
