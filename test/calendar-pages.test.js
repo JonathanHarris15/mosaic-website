@@ -18,6 +18,20 @@ const vm = require('node:vm');
 
 const PUBLIC = path.join(__dirname, '..', 'public');
 
+// The Roles surface is shared between the Event detail screen and the service
+// page, so its markup lives in roles-panel.js and each page carries a
+// placeholder (MS-16). Reading a page here means reading what the browser will
+// actually see, so the panel is spliced back in — otherwise every assertion
+// about a slot row would quietly pass by finding nothing at all.
+const RolesPanel = require('../public/roles-panel.js');
+
+function readPage(htmlFile) {
+    const html = fs.readFileSync(path.join(PUBLIC, htmlFile), 'utf8');
+    return html.replace(
+        /<div data-roles-panel="(\w+)"><\/div>/g,
+        (whole, name) => RolesPanel.MARKUP[name] || whole);
+}
+
 // ── Loading a page component without a browser ────────────────────────────────
 
 function loadComponent(scriptFile, factoryName, overrides) {
@@ -142,7 +156,7 @@ function identifiersIn(expression) {
 }
 
 function checkPage(htmlFile, scriptFile, factoryName) {
-    const html = fs.readFileSync(path.join(PUBLIC, htmlFile), 'utf8');
+    const html = readPage(htmlFile);
     const component = loadComponent(scriptFile, factoryName);
     const members = membersOf(component);
     const locals = loopVars(html);
@@ -226,7 +240,7 @@ test('each page loads every module its component reaches for', () => {
     };
 
     Object.keys(NEEDED).forEach(page => {
-        const html = fs.readFileSync(path.join(PUBLIC, page), 'utf8');
+        const html = readPage(page);
         NEEDED[page].forEach(src => {
             assert.match(html, new RegExp('src="' + src.replace('.', '\\.') + '"'), page + ' does not load ' + src);
         });
@@ -236,7 +250,7 @@ test('each page loads every module its component reaches for', () => {
 test('the week-shift page loads the modules it now depends on', () => {
     // MS-152 taught the shift to move occurrences; without these it silently
     // skips them and loses the week's roster.
-    const html = fs.readFileSync(path.join(PUBLIC, 'service-calendar.html'), 'utf8');
+    const html = readPage('service-calendar.html');
     assert.match(html, /src="events-occurrence-core\.js"/);
     assert.match(html, /src="events-store\.js"/);
 });
@@ -244,7 +258,7 @@ test('the week-shift page loads the modules it now depends on', () => {
 // ── The Calendar is reachable ─────────────────────────────────────────────────
 
 test('the dashboard offers the Calendar, and it is not the Services card', () => {
-    const html = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
+    const html = readPage('index.html');
     assert.match(html, /href="calendar\.html"/, 'the Calendar has no way in');
     assert.match(html, /data-card-key="calendar"/);
     // The Services card keeps its stored key, or every user's saved dashboard
@@ -301,7 +315,7 @@ test('the order of service is still one click from a Sunday', () => {
     // Sunday's liturgy from the Calendar. It lives at the top of the side
     // column rather than in the header, but if it ever disappears entirely the
     // liturgy becomes unreachable from here.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     assert.ok(/:href="servicesHref"/.test(html),
         'a Sunday Event page has no link to its order of service');
 
@@ -314,7 +328,7 @@ test('the Calendar never promises a Sunday chip goes somewhere it does not', () 
     // The grid, the legend and the list row all used to advertise "opens its
     // order of service" with a leaves-this-page arrow. A promise the click no
     // longer keeps is worse than no promise.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    const html = readPage('calendar.html');
     assert.ok(!/opens its order of service/.test(html));
     assert.ok(!/north_east/.test(html), 'a chip still advertises leaving for another surface');
 });
@@ -471,7 +485,7 @@ function orphanedRowActions(html) {
 
 test('every hover-revealed control sits in a row that can reveal it', () => {
     ['calendar-event.html', 'calendar.html'].forEach(file => {
-        const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+        const html = readPage(file);
         assert.deepStrictEqual(orphanedRowActions(html), [],
             file + ' hides a control with no .cal-row to reveal it');
     });
@@ -480,7 +494,7 @@ test('every hover-revealed control sits in a row that can reveal it', () => {
 test('the control that removes a recurring Role from an Event is reachable', () => {
     // It lives on the EVENT screen now, not on one date — but it is still a
     // control that once shipped invisible, so it stays pinned.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     assert.ok(/askRemoveSeriesRole\(/.test(html), 'nothing removes a recurring Role');
     assert.deepStrictEqual(orphanedRowActions(html).filter(l => /role/i.test(l)), []);
 });
@@ -489,7 +503,7 @@ test('an editor can set the state of a one-off assignment, not just remove them'
     // A one-off Role is still a real Assignment carrying a real state — it goes
     // in pending like any other. Without a control here an editor can put
     // somebody on the door and never mark them confirmed, so the strip lies.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
 
     ['pending', 'confirmed', 'declined'].forEach(state => {
         assert.ok(html.indexOf("setState(a, '" + state + "')") !== -1,
@@ -553,7 +567,7 @@ test('an empty one-off job goes without a question too', async () => {
 });
 
 test('the remove buttons go through the question, never straight to the deletion', () => {
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     // The unguarded ones still exist — they are what the confirmation calls —
     // but nothing in the markup may reach them directly.
     assert.ok(!/@click="removeSeriesRole\(/.test(html), 'a click removes a Role without asking');
@@ -612,7 +626,7 @@ test('a recurring Event colours the series, a one-off colours itself', async () 
 });
 
 test('the colour section is offered to editors and writes through the store', () => {
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     assert.ok(/Colour on the calendar/.test(html), 'no colour section on the Event page');
     assert.ok(/setColour\(c\.slug\)/.test(html));
     // It must say which way the change lands — series-wide or this one — because
@@ -701,7 +715,7 @@ test('the Calendar offers the Sunday Service as a thing above all its dates', ()
     // Two different doors, and they must stay different: this one opens the
     // EVENT - its time, and the Roles every Sunday carries - while a chip opens
     // one date of it.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    const html = readPage('calendar.html');
     assert.ok(/calendar-event\.html\?series=sunday_service/.test(html),
         'no way into the Sunday Service as an Event');
 
@@ -716,7 +730,7 @@ test('every page that loads the events store loads the series model first', () =
     // loads them the other way round leaves it undefined at parse time — and the
     // page renders, it just cannot manage a series.
     ['calendar.html', 'calendar-event.html', 'service-calendar.html'].forEach(file => {
-        const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+        const html = readPage(file);
         if (html.indexOf('events-store.js') === -1) return;
         const core = html.indexOf('src="events-core.js"');
         const store = html.indexOf('src="events-store.js"');
@@ -821,7 +835,7 @@ test('assignments on a Sunday Servant Role carry the three states like anywhere 
 test('no managed Role is removable from one date at all', () => {
     // WHICH Roles an Event carries is decided once, on the Event. A button here
     // would be silently changing every date, or silently changing none.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     assert.ok(!/askRemoveManagedRole\(/.test(html));
     assert.ok(!/addManagedRole\(/.test(html));
     // A way THROUGH to where it is decided, instead.
@@ -832,7 +846,7 @@ test('a Sunday date shows its Roles section at all', () => {
     // It once did not: the whole section was hidden on a Sunday, so the welcome
     // team and the sound desk had nowhere to be asked. The liturgical Roles stay
     // out of it, which is what made hiding the section look reasonable.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     assert.ok(!/x-show="!isSunday && \(isEditor \|\| canSeeRoster\)"/.test(html),
         'the Roles section is hidden on a Sunday, so its Servant Roles cannot be filled');
 });
@@ -897,7 +911,7 @@ test('the menu stays on screen when you click near an edge', () => {
 test('clicking an event opens the event, and never the day menu', () => {
     // The chip sits INSIDE the day cell, so without stopping the click the same
     // gesture would both open an event and offer to create one.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    const html = readPage('calendar.html');
     assert.ok(/@click\.stop="open\(ev\)"/.test(html),
         'an event chip lets its click reach the day underneath');
 });
@@ -910,7 +924,7 @@ test('the day menu closes on Escape and on the next click', () => {
     page.closeDayMenu();
     assert.strictEqual(page.dayMenu, null);
 
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    const html = readPage('calendar.html');
     assert.ok(/@keydown\.escape\.window="closeDayMenu\(\)"/.test(html));
     assert.ok(/@click\.outside="closeDayMenu\(\)"/.test(html));
 });
@@ -1104,7 +1118,7 @@ test('a date not happening never counts as needing sorting', () => {
 // ── Moving one instance from the Event page ───────────────────────────────────
 
 test('a repeating Event offers to move just this one', () => {
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     assert.ok(/openMove\(\)/.test(html), 'no way to move a single date');
     assert.ok(/saveMove\(\)/.test(html));
 });
@@ -1150,13 +1164,13 @@ test('the move form refuses the date it is already on before writing anything', 
 // time, the place and who can see it — one place for "what this Event IS".
 
 test('editing a repeating Event goes to the Event, not to a pattern-only modal', () => {
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     assert.ok(/'calendar-event\.html\?series=' \+ occurrence\.seriesId/.test(html),
         'one date of a repeating Event has no way through to the Event itself');
 });
 
 test('the Event screen edits everything that is true of every date', () => {
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     ['seriesDraft.name', 'seriesDraft.location', 'seriesDraft.description',
      'saveSeriesTime(', 'openPattern()', 'setSeriesVisibility(', 'addSeriesRole(', 'setColour(']
         .forEach(binding => {
@@ -1191,7 +1205,7 @@ test('an Event cannot be saved with no name', () => {
 test('the Sunday Service keeps its name and its pattern', () => {
     // Everything else in the app refers to both. Renaming it or moving it off
     // Sundays would break the Service Guide and every Involvement record.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     assert.ok(/x-model="seriesDraft.name" :disabled="isSundaySeries"/.test(html),
         'the Sunday Service can be renamed');
     // The "Change pattern" button must sit inside a !isSundaySeries guard: take
@@ -1206,7 +1220,7 @@ test('the Sunday Service keeps its name and its pattern', () => {
 // ── A one-off Event was creatable and then frozen ─────────────────────────────
 
 test('a one-off Event can have its details changed after it exists', () => {
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     ['occurrenceDraft.name', 'occurrenceDraft.date', 'occurrenceDraft.time',
      'occurrenceDraft.location', 'occurrenceDraft.description', 'saveOccurrenceDetails()']
         .forEach(binding => {
@@ -1291,7 +1305,7 @@ test('a one-off\'s visibility control actually changes its visibility', async ()
 // screen that looks like it is about one of them.
 
 test('one date of a repeating Event does not decide who can see it', () => {
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     // The ladder is still on the page — for a ONE-OFF, whose occurrence is the
     // whole Event — so the guard is what matters.
     assert.ok(/x-show="isEditor && isOneOff"[\s\S]*?Who can see this/.test(html),
@@ -1313,7 +1327,7 @@ test('one date of a repeating Event does not decide its colour', () => {
 });
 
 test('a Role the Event carries is shown on one date but never changed there', () => {
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     // No way to put a managed Role on one date, and no way to take one off it.
     assert.ok(!/addManagedRole\(/.test(html),
         'a managed Role can still be added to one date');
@@ -1328,7 +1342,7 @@ test('taking a Role off the Event asks first when people are on it', () => {
     // The guard moved with the control. Removing a Role from the EVENT drops
     // everybody in it on EVERY date, which is a bigger thing than the per-date
     // removal this used to guard, not a smaller one.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     assert.ok(/askRemoveSeriesRole\(/.test(html),
         'a Role comes off the whole Event with no question asked');
     assert.ok(!/@click="removeSeriesRole\(/.test(html),
@@ -1400,7 +1414,7 @@ test('one Sunday does not decide the pattern, and is not skippable here', () => 
     assert.strictEqual(page.canMove, false);
     assert.strictEqual(page.patternEditable, false);
 
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     assert.ok(/x-show="isEditor && patternEditable"/.test(html),
         'the pattern controls are not guarded for a Sunday');
 });
@@ -1422,7 +1436,7 @@ test('one Sunday has a way through to the Sunday Service itself', () => {
     const page = sundayDate();
     assert.strictEqual(page.eventHref, 'calendar-event.html?series=sunday_service');
 
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     assert.ok(/:href="eventHref"/.test(html), 'no way through to the Event from one date of it');
 });
 
@@ -1497,7 +1511,7 @@ test('a Role says how many people it needs each time, not how many "places"', ()
 
 test('both Calendar pages can actually enter the phone shell', () => {
     ['calendar.html', 'calendar-event.html'].forEach(file => {
-        const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+        const html = readPage(file);
         assert.ok(/src="mobile-shell\.js"/.test(html), file + ' cannot enter the shell');
         assert.ok(/href="mobile-shell\.css"/.test(html), file + ' has no shell stylesheet');
         assert.ok(/window\.MOBILE_HEADER/.test(html), file + ' has no shell header');
@@ -1509,7 +1523,7 @@ test('the shell script loads before anything that reads the class', () => {
     // It sets `.shell-mobile` on the documentElement, and the page's own styles
     // and scripts branch on it. Loaded late, the first paint is the desktop one.
     ['calendar.html', 'calendar-event.html'].forEach(file => {
-        const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+        const html = readPage(file);
         assert.ok(html.indexOf('mobile-shell.js') < html.indexOf('mobile-shell-header.js'),
             file + ' builds its header before it knows it is in the shell');
         assert.ok(html.indexOf('mobile-shell.js') < html.indexOf('src="calendar'),
@@ -1521,7 +1535,7 @@ test('a Calendar page carrying shell-mobile rules is a page that loads the shell
     // The general form of the bug, so the next page to add one of these rules
     // cannot forget the script that makes it mean anything.
     fs.readdirSync(PUBLIC).filter(f => f.endsWith('.html')).forEach(file => {
-        const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+        const html = readPage(file);
         if (!/html\.shell-mobile|body\.shell-mobile/.test(html)) return;
         assert.ok(/src="mobile-shell\.js"/.test(html),
             file + ' styles the phone shell but never loads it, so none of those rules fire');
@@ -1571,7 +1585,7 @@ test('the phone has a month of its own, and the desktop grid never runs there', 
     // Seven columns across 390px is about 50px a day, which fits a number and
     // nothing else. So the grid stands down and the strip replaces it — rather
     // than the phone showing a squeezed copy nobody can use.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    const html = readPage('calendar.html');
 
     assert.ok(/html\.shell-mobile \.cal-desktop-only\s*{\s*display:\s*none/.test(html),
         'the desktop layout still draws on a phone');
@@ -1591,7 +1605,7 @@ test('the phone has a month of its own, and the desktop grid never runs there', 
 test('List means a list — the strip belongs to Month', () => {
     // A strip above a list is a second answer to a question the list already
     // answers, and it pushes the first card most of a screen down.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    const html = readPage('calendar.html');
 
     // Anchored on stripDots, which only the phone's strip calls — three grids on
     // this page share the seven-column style, and matching on that would test
@@ -1610,7 +1624,7 @@ test('List means a list — the strip belongs to Month', () => {
 test('the phone says the Upcoming sentence once, not twice', () => {
     // The rail's panel and the phone's navy hero are the same sentence. Both on
     // one screen reads as a bug, because it is one.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    const html = readPage('calendar.html');
     const said = html.split(/x-text="mySentence"/).length - 1;
     assert.strictEqual(said, 2, 'the sentence moved or was duplicated again');
 
@@ -1622,7 +1636,7 @@ test('the phone says the Upcoming sentence once, not twice', () => {
 test('the card is Upcoming, not the month the grid happens to be on', () => {
     // "You in July" answered a question nobody asked: paging the grid back to
     // April changed what you were down for.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    const html = readPage('calendar.html');
     assert.ok(!/'You in ' \+ monthLabel/.test(html), 'the card is still tied to the browsed month');
 
     // Both copies carry the window picker, or the phone can see the answer
@@ -1770,7 +1784,7 @@ test('the warning lives on the chip, not in the corner of the day', () => {
     // else. WHICH event is short of people is answered on the event, where you
     // would click to fix it — saying it twice in two places is one place too
     // many, and the day marks would then have to be kept in step by hand.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    const html = readPage('calendar.html');
     const corner = html.indexOf('x-show="cell.needsAttention"');
     const chips = html.indexOf('x-for="ev in cell.events"');
     assert.ok(corner !== -1 && chips > corner, 'the cell corner moved — this test no longer looks at it');
@@ -1914,7 +1928,7 @@ test('a date of a series never stores a time of its own', async () => {
 });
 
 test('the Event screen reads the time through the model, not off the document', () => {
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     assert.ok(!/occurrence\.time/.test(html),
         'the title line still reads the stored stamp, so it can disagree with the pattern');
     assert.ok(/formatTime\(eventTime\)/.test(html), 'the title line shows no time at all');
@@ -1986,7 +2000,7 @@ test('a hamburger is only drawn where a drawer can open', () => {
 
     // Every page that asks for one loads the list.
     fs.readdirSync(PUBLIC).filter(f => f.endsWith('.html')).forEach(file => {
-        const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+        const html = readPage(file);
         if (!/MOBILE_HEADER\s*=\s*\{[^}]*menu:\s*true/.test(html)) return;
         assert.ok(/mobile\/destinations\.js/.test(html),
             file + ' asks for a hamburger but never loads the destinations it would show');
@@ -2012,7 +2026,7 @@ test('both drawers are built from one list', () => {
     assert.ok(!/events: "calendar\.html"/.test(app), 'the old shell-page map is still in app.js');
 
     // mobile.html must load it before the two files that read it.
-    const mobile = fs.readFileSync(path.join(PUBLIC, 'mobile.html'), 'utf8');
+    const mobile = readPage('mobile.html');
     assert.ok(mobile.indexOf('mobile/destinations.js') < mobile.indexOf('mobile/data.js'),
         'data.js runs before the list it reads exists');
     assert.ok(mobile.indexOf('mobile/destinations.js') < mobile.indexOf('mobile/app.js'),
@@ -2093,7 +2107,7 @@ test('a destination goes to the same place from either drawer', () => {
 
 test('both Calendar pages say when nobody is signed in', () => {
     ['calendar', 'calendar-event'].forEach(page => {
-        const html = fs.readFileSync(path.join(PUBLIC, page + '.html'), 'utf8');
+        const html = readPage(page + '.html');
         assert.ok(/x-show="signedOut"/.test(html), page + ' never says you are signed out');
         assert.ok(/:href="signInHref"/.test(html), page + ' says so but offers no way in');
     });
@@ -2142,7 +2156,7 @@ test('a member gets the roster, not the editor\'s Role cards', () => {
     // controls they cannot use — AND the flat list, so the same people were named
     // twice on one screen. Administering is the editor's job; a member is
     // answering "who else is coming".
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
 
     const roles = html.indexOf('<!-- ── Roles ──');
     assert.ok(roles !== -1, 'the Roles section moved');
@@ -2158,7 +2172,7 @@ test('a member gets the roster, not the editor\'s Role cards', () => {
 test('a slot row is survivable on a 390px screen', () => {
     // Number, requirement, avatar, name, state and four buttons is eight things.
     // 390px holds about half, and the rest wrap into a shape nobody designed.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
 
     [
         ['cal-slot-index', 'the place number'],
@@ -2181,7 +2195,7 @@ test('a slot row is survivable on a 390px screen', () => {
 test('every phone rule on the Event page has something to style', () => {
     // The general form of the bug this page keeps hitting: a rule for a class
     // nothing carries is styling for an element that does not exist.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar-event.html'), 'utf8');
+    const html = readPage('calendar-event.html');
     const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
     const body = html.slice(html.indexOf('</style>'));
 
@@ -2200,7 +2214,7 @@ test('every phone rule on the Event page has something to style', () => {
 test('a phone card names a Sunday once', () => {
     // The name directly above the marker already says "Sunday Service". A card
     // that says the same thing twice reads as a bug, because it is one.
-    const html = fs.readFileSync(path.join(PUBLIC, 'calendar.html'), 'utf8');
+    const html = readPage('calendar.html');
     assert.ok(!/Sunday service\s*\n?\s*<\/div>/i.test(html),
         'the phone card repeats the event name back at itself');
 });
