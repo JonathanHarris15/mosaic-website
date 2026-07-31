@@ -206,8 +206,273 @@
         };
     }
 
+    // ── The tie-break ─────────────────────────────────────────────────────────
+    //
+    // Genuine ties are common — two people who have never done a Role and carry
+    // nothing score identically — so something has to break them, and the choice
+    // matters more than it looks.
+    //
+    // Alphabetical is a NEW UNFAIRNESS wearing fairness's clothes: Aaron gets
+    // everything, for ever. Random is fair but makes a roster irreproducible,
+    // and a draft that redraws differently on Wednesday than it did on Tuesday
+    // cannot be reviewed — nobody can tell whether the data changed or the dice
+    // did.
+    //
+    // So: a hash of the person and the occurrence. Stable for a given week, so a
+    // re-run is identical; different from week to week, so the same names are
+    // not favoured. Small and deterministic on purpose — this is a shuffle, not
+    // a security primitive.
+    function tieBreak(personId, seriesId, date) {
+        const key = String(personId) + '|' + String(seriesId) + '|' + String(date);
+        let hash = 2166136261;
+        for (let i = 0; i < key.length; i++) {
+            hash ^= key.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+        return (hash >>> 0) / 4294967296;
+    }
+
+    // ── The solve ─────────────────────────────────────────────────────────────
+    //
+    // Staff a whole occurrence, maximising total recency across the roster.
+    //
+    // ⚠ WHY THIS IS A SEARCH AND NOT A SORT.
+    //
+    // Three of the five restriction kinds — notTogether, notSameGroup and
+    // sameGroup — constrain COMBINATIONS, not individuals: whether a person may
+    // be seated depends on who else was seated. No ordering of people can
+    // express that, and neither can max-weight bipartite matching, which is why
+    // matching was rejected as WRONG rather than merely weaker. It would return
+    // rosters putting a married couple in Kids, which the manual picker refuses.
+    //
+    // Backtracking fits the existing model exactly: `RolesCore.ineligibilityFor`
+    // already takes who is seated and judges the next candidate against them,
+    // which IS the signature a search needs. Calling it — rather than
+    // reimplementing it — is also what guarantees the solver and the picker can
+    // never disagree.
+    //
+    // The problem stays small because the coupling splits: relationship rules
+    // are scoped to one Role, so each Role's slots are an independent
+    // sub-problem, and exclusivity is the only thread tying the Roles together.
+
+    // How much slack the pool starts with. Cutting it to exactly the number of
+    // spots manufactures failures the congregation does not actually have — six
+    // spots, one DBS-checked person among the six, two Kids slots, and no legal
+    // roster exists while the seventh-least-loaded person is DBS-checked and
+    // sitting right there.
+    const POOL_SLACK = 4;
+
+    const slotsOf = role => (role && Array.isArray(role.slots) ? role.slots : []);
+
+    function spotCount(roles) {
+        return (roles || []).reduce((n, role) => n + slotsOf(role).length, 0);
+    }
+
+    // Seat one Role's slots, filling as many as possible and, among rosters that
+    // fill the same number, taking the one with the best total recency.
+    //
+    // FILLING MORE ALWAYS BEATS FILLING BETTER. A Role that can seat one of its
+    // two slots must seat that one and report the other, not come back empty:
+    // a half-staffed Coffee rota is a real rota, and an editor can see the gap.
+    // Leaving a slot empty is therefore a branch of the search like any other,
+    // which is also what lets a cohesive `sameGroup` Role stop early rather than
+    // fail outright.
+    function solveRole(role, options) {
+        const o = options;
+        const slots = slotsOf(role);
+        const best = { seats: [], score: -1 };
+        let lastReason = null;
+
+        const better = (seats, score) => (
+            seats.length > best.seats.length ||
+            (seats.length === best.seats.length && score > best.score)
+        );
+
+        const walk = (index, seats, taken, score) => {
+            if (index === slots.length) {
+                if (better(seats, score)) {
+                    best.seats = seats.slice();
+                    best.score = score;
+                }
+                return;
+            }
+
+            // Branch and bound. Filling more slots is the first thing compared,
+            // so a branch that cannot reach the best count is dead however good
+            // its recency would be; only on an equal count does the score bound
+            // decide.
+            const left = slots.length - index;
+            if (seats.length + left < best.seats.length) return;
+            if (seats.length + left === best.seats.length &&
+                score + left * o.windowSize <= best.score) return;
+
+            const slot = slots[index];
+            const judged = o.candidatesFor(role, slot, {
+                people: o.people.filter(p => taken.indexOf(p.id) === -1),
+                relationships: o.relationships,
+                groups: o.groups,
+                assigned: seats.map(s => ({ slotId: s.slotId, personId: s.personId })),
+                assignedElsewhere: o.assignedElsewhere,
+            });
+
+            const eligible = judged.filter(c => c.eligible);
+            if (!eligible.length) {
+                // Remember why, so the unfilled slot can name the rule rather
+                // than shrugging.
+                const blocked = judged.find(c => !c.eligible);
+                if (blocked) lastReason = blocked;
+            }
+
+            eligible
+                .map(c => ({
+                    personId: c.personId,
+                    recency: o.recencyFor(o.recency[role.slug], c.personId),
+                }))
+                .sort((a, b) => (
+                    b.recency - a.recency ||
+                    o.tieBreak(a.personId) - o.tieBreak(b.personId)
+                ))
+                .forEach(candidate => {
+                    walk(
+                        index + 1,
+                        seats.concat([{
+                            roleSlug: role.slug,
+                            slotId: slot.id,
+                            personId: candidate.personId,
+                            recency: candidate.recency,
+                        }]),
+                        taken.concat([candidate.personId]),
+                        score + candidate.recency
+                    );
+                });
+
+            // …and the branch where this slot stays empty.
+            walk(index + 1, seats, taken, score);
+        };
+
+        walk(0, [], [], 0);
+
+        const filledIds = best.seats.map(s => s.slotId);
+        return {
+            seats: best.seats,
+            gaps: slots.filter(slot => filledIds.indexOf(slot.id) === -1),
+            reason: lastReason,
+        };
+    }
+
+    function solve(options) {
+        const o = options || {};
+        const roles = o.roles || [];
+        const windowSize = o.windowSize === undefined ? 12 : o.windowSize;
+        const allows = role => !!role && role.allowsAnotherRole === true;
+
+        // Injected, not imported. Like every other *-core module here this one
+        // requires nothing — and passing the judge in makes the relationship
+        // visible at each call site: fairness ASKS roles-core and accepts its
+        // answers. It never gets to hold its own opinion about eligibility.
+        const candidatesFor = o.candidatesFor;
+        if (typeof candidatesFor !== 'function') {
+            throw new Error(
+                'FairnessCore.solve needs RolesCore.candidatesFor passed as ' +
+                'options.candidatesFor — eligibility is never decided here.'
+            );
+        }
+
+        const ranked = pool({
+            people: o.people,
+            history: o.history,
+            occurrenceDates: o.occurrenceDates,
+            windowSize: windowSize,
+            intensityOf: o.intensityOf,
+            liturgicalSlugs: o.liturgicalSlugs,
+            liturgicalHolders: o.liturgicalHolders,
+        });
+
+        // Recency is per Role, so it is computed once per Role rather than once
+        // per candidate — the same numbers are asked for over and over inside
+        // the search.
+        const recency = {};
+        roles.forEach(role => {
+            recency[role.slug] = recencyOf(o.history, ranked.windowDates, role.slug);
+        });
+
+        const byId = {};
+        (o.people || []).forEach(p => { if (p && p.id) byId[p.id] = p; });
+
+        const start = Math.min(
+            spotCount(roles) + POOL_SLACK,
+            ranked.candidates.length
+        );
+
+        let filled = [];
+        let unfilled = [];
+        let used = 0;
+
+        // Widen rather than fail: pull in the next-least-loaded person and solve
+        // again, until it is fillable or the pool is exhausted. A spot that is
+        // still unfillable is returned EMPTY WITH A REASON — never quietly
+        // dropped, because a hole discovered on a Sunday morning is the failure
+        // this whole feature exists to prevent.
+        for (let size = start; size <= ranked.candidates.length; size++) {
+            const people = ranked.candidates.slice(0, size)
+                .map(c => byId[c.personId])
+                .filter(Boolean);
+
+            const seated = [];
+            const gaps = [];
+
+            roles.forEach(role => {
+                const attempt = solveRole(role, {
+                    people: people,
+                    relationships: o.relationships,
+                    groups: o.groups,
+                    windowSize: windowSize,
+                    recency: recency,
+                    recencyFor: (map, personId) => recencyFor(map, personId, windowSize),
+                    candidatesFor: candidatesFor,
+                    tieBreak: personId => tieBreak(personId, o.seriesId, o.date),
+                    // Exclusivity is the one thread tying the Roles together, so
+                    // it is the only cross-Role state the per-Role search sees.
+                    assignedElsewhere: seated.map(s => ({
+                        personId: s.personId,
+                        roleSlug: s.roleSlug,
+                        allowsAnotherRole: allows(
+                            roles.find(r => r.slug === s.roleSlug)
+                        ),
+                    })),
+                });
+
+                attempt.seats.forEach(seat => seated.push(seat));
+                attempt.gaps.forEach(slot => gaps.push({
+                    roleSlug: role.slug,
+                    slotId: slot.id,
+                    reason: (attempt.reason && attempt.reason.reason) || null,
+                    detail: attempt.reason || null,
+                }));
+            });
+
+            filled = seated;
+            unfilled = gaps;
+            used = size;
+            if (!gaps.length) break;
+        }
+
+        return {
+            filled: filled,
+            unfilled: unfilled,
+            // Both of these are signals about the CHURCH rather than about the
+            // algorithm — being short of volunteers, or having restrictions
+            // tighter than anyone realised — and both should reach the user
+            // rather than being absorbed into a rota that looks fine.
+            widened: Math.max(0, used - start),
+            allSpent: ranked.allSpent,
+            pool: ranked.candidates,
+        };
+    }
+
     const FairnessCore = {
         LITURGICAL_SHARE,
+        POOL_SLACK,
         // the window
         windowDates,
         // load
@@ -218,6 +483,9 @@
         recencyFor,
         // who is considered
         pool,
+        // the solve
+        tieBreak,
+        solve,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
