@@ -52,7 +52,9 @@ A one-off Role is a label and some people, created for a single Event: no defini
 
 Its Involvement is written under **one reserved slug**, `one_off`, with the label in `metadata`. Not an invented slug per job: `RolesCore.roleBySlug` is the only way to turn a slug into a human name, and it only knows liturgical Roles and stored Role Definitions, so an invented slug would resolve to `null` on every surface showing serve history.
 
-The person who quietly unlocks the hall every week therefore reads as someone who serves — which matters for a tool whose purpose is not overworking the same few people — while fairness skips the `one_off` bucket entirely rather than trying to rotate a job that happens once.
+The person who quietly unlocks the hall every week therefore reads as someone who serves — which matters for a tool whose purpose is not overworking the same few people — while fairness never tries to rotate a job that happens once.
+
+**Sharpened by MS-17.** This section originally said fairness "skips the `one_off` bucket entirely", which contradicted the sentence before it: recording the serving and then discarding it is exactly how the hall-unlocker gets handed the coffee rota. Fairness scores on two dials, and `one_off` is on opposite sides of them — invisible to the **Role dial** (there is no turn to be due at), fully counted by the **Load dial** (they are carrying something every week). "Entirely" was the error; the justification above was right.
 
 ### 5. Visibility is a five-rung ladder, stamped on every occurrence
 

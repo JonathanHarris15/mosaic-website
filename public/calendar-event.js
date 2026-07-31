@@ -1123,11 +1123,28 @@
                         slotId: LITURGICAL_SLOT, personId: h.personId,
                     })));
 
+                // Holding another Role this morning normally rules you out
+                // (ADR-0020). Exclusive is the default, so a Role nobody has
+                // configured blocks — including a one-off, which carries no
+                // toggle until it is given one on the Event page.
+                const elsewhere = this.assignments
+                    .filter(a => a.personId && (a.roleSlug !== def.slug || a.oneOffId))
+                    .map(a => ({
+                        personId: a.personId,
+                        roleSlug: a.oneOffId || a.roleSlug,
+                        allowsAnotherRole: Roles.allowsAnotherRole(
+                            a.oneOffId
+                                ? this.oneOffRoles.find(j => j.id === a.oneOffId)
+                                : this.roleDefinitions.find(d => d.slug === a.roleSlug)
+                        ),
+                    }));
+
                 const judged = Roles.candidatesFor(def, slot, {
                     people: this.assignablePeople,
                     relationships: this.relationships,
                     groups: this.groups,
                     assigned: seated,
+                    assignedElsewhere: elsewhere,
                 });
 
                 const q = String(this.picker.query || '').trim().toLowerCase();
