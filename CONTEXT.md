@@ -386,6 +386,7 @@ The stored specification of a Servant Role, authored in the Roles Manager. Lives
     - `notTogether` — a **pairwise Relationship Type**: two People joined by it may not fill the same Role on the same Event (no married couple in Kids).
     - `notSameGroup` — a **Group** Relationship Type: no two People from one **Relationship Group** may fill the same Role, so it staffs across the congregation.
     - `sameGroup` — the inverse: everyone filling the Role must share one Relationship Group, so they already know each other. The only **cohesive** rule — it constrains the combination rather than the individual, so the first Person seated is unconstrained and being in **no** group of that Type is disqualifying (unlike `notSameGroup`, where it is harmless).
+    - `allowlist` — **only these named People**, for the handful who serve communion or run coffee. A fact about the *Role*, not about the person, which is why it is not a Tag: Shepherding Tags are a pastoral concept, and configuring one Role should not mean editing five Person records. **Absent is not empty** — no rule means everyone, an empty list means nobody and is refused at authoring time. Editor-facing only; nobody is ever told they are on one.
     - A relationship rule may only name a [[Shared Relationship Type]]; one naming an unshared Type is refused rather than left to evaluate to "nobody qualifies".
   - `intensity`: See [[Role intensity]]. Defaults to `1`.
   - `allowsAnotherRole`: See [[Role exclusivity]]. Absent or `false` means exclusive, which is the default.

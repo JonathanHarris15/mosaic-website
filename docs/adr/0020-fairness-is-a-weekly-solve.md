@@ -94,6 +94,8 @@ A Shepherding Tag would work and was rejected. Tags are a *pastoral* concept in 
 
 Living in `restrictions[]` rather than as its own field means it composes with the other rules by AND, hand-assignment obeys it for free, and the picker greys people out with a reason instead of hiding them — consistent with every other restriction. **Absent is not empty**: no rule means everyone, an empty list means nobody and is a validation error at authoring time rather than an unfillable rota discovered six weeks later. It is purely an editor's tool and is never shown to the person.
 
+**It is editor-facing in the interface, not in the data.** `/roles` is `allow read: if true`, so an allowlist's person ids are world-readable, and "these four people serve communion" is resolvable against the world-readable directory by anyone who opens devtools. This is the same trade ADR-0018 accepted for `participantIds` and it is accepted here on the same narrow grounds — the directory is already open, so this discloses little that is not — but it is a second instance of the same smell, and the argument is about the app's read posture rather than about this feature. The directory question is filed separately and is larger than either.
+
 ## Consequences
 
 - **The Role data type grows three fields** — `intensity`, `allowsAnotherRole`, and an `allowlist` restriction — and all three need authoring UI. Servant Roles in the Roles Manager; one-off Roles on the Event page, which has no Roles Manager to fall back on; liturgical intensity on the locked card that already renders.
