@@ -141,6 +141,10 @@ function serviceForm() {
         canEdit: false,
         isShepherd: false,
         currentPermissionLevel: 'viewer',
+        // Which half of the Sunday is on screen — the liturgy, or who is
+        // standing in its Roles (MS-16). Opens on the order of service, which is
+        // what this page has always been.
+        tab: 'order',
         // Prayer Request per pastoral-prayer subject, visible to elders only.
         prayerRequests: {
             male: { text: '', initialSentDate: null, reminderSent: false, source: null, noteGenerated: false },
@@ -418,6 +422,18 @@ function serviceForm() {
 
         get isDirty() {
             return this.originalService !== JSON.stringify(this.service);
+        },
+
+        // This Sunday as an Event occurrence, which is what the Roles tab mounts
+        // (MS-16). A Sunday nobody has staffed yet has no occurrence document —
+        // occurrences are sparse — and that is fine: the id is deterministic, so
+        // EventsStore rebuilds the occurrence from it and writes a document the
+        // first time somebody is actually put in a slot.
+        get sundayOccurrenceId() {
+            return window.EventsOccurrenceCore
+                ? window.EventsOccurrenceCore.occurrenceId(
+                    window.EventsOccurrenceCore.SUNDAY_SERVICE_ID, this.date)
+                : null;
         },
 
         async init() {

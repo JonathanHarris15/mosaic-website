@@ -2172,7 +2172,11 @@ test('a member gets the roster, not the editor\'s Role cards', () => {
 test('a slot row is survivable on a 390px screen', () => {
     // Number, requirement, avatar, name, state and four buttons is eight things.
     // 390px holds about half, and the rest wrap into a shape nobody designed.
-    const html = readPage('calendar-event.html');
+    //
+    // The markup and the rules are in different files now — the panel is shared
+    // with the service page — so they are read together and checked as one.
+    const html = readPage('calendar-event.html') +
+        fs.readFileSync(path.join(PUBLIC, 'roles-panel.css'), 'utf8');
 
     [
         ['cal-slot-index', 'the place number'],
@@ -2196,7 +2200,10 @@ test('every phone rule on the Event page has something to style', () => {
     // The general form of the bug this page keeps hitting: a rule for a class
     // nothing carries is styling for an element that does not exist.
     const html = readPage('calendar-event.html');
-    const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+    // The panel's rules live in roles-panel.css now, because the service page
+    // needs them too — so both sources are checked against the same markup.
+    const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>')) +
+        fs.readFileSync(path.join(PUBLIC, 'roles-panel.css'), 'utf8');
     const body = html.slice(html.indexOf('</style>'));
 
     const hooks = new Set();

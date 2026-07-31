@@ -17,48 +17,11 @@
     <script>window.MOBILE_HEADER = { title: 'Event', back: '#back' };</script>
     <script src="mobile-shell-header.js"></script>
 
+    <!-- The Roles panel's styles are shared with the service page. -->
+    <link rel="stylesheet" href="roles-panel.css">
+
     <style>
         [x-cloak] { display: none !important; }
-
-        /* The one raw value in the design set — the steel-teal focus ring, which
-           already matches the Input component. */
-        .cal-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(93,148,169,.18); }
-
-        .cal-motion { transition: background-color 150ms cubic-bezier(0.2,0,0,1),
-                                  opacity 150ms cubic-bezier(0.2,0,0,1),
-                                  border-color 150ms cubic-bezier(0.2,0,0,1); }
-        .cal-press:active { transform: scale(0.98); }
-
-        /* Row actions reveal on hover on a desktop. There is no hover on touch,
-           so the mobile shell keeps them visible — same as the Tags tab. */
-        .cal-row-actions { opacity: 0; }
-        .cal-row:hover .cal-row-actions,
-        .cal-row:focus-within .cal-row-actions { opacity: 1; }
-        html.shell-mobile .cal-row-actions { opacity: 1; }
-
-        /* ── The phone ────────────────────────────────────────────────────────
-           A slot row is: number · requirement · avatar · name · state · four
-           buttons. That is eight things, and 390px does not hold them — it holds
-           about half, and the rest wrap into a shape nobody designed.
-
-           So on a phone the row keeps what only it can say — the requirement,
-           who is standing in it, and where that stands — and the row's controls
-           drop to a line of their own. The number and the avatar go: the number
-           counts places nobody refers to out loud, and the avatar is decoration
-           beside a name that is right there. */
-        html.shell-mobile .cal-slot-row { min-height: 48px; flex-wrap: wrap; }
-        html.shell-mobile .cal-slot-index,
-        html.shell-mobile .cal-slot-avatar { display: none; }
-        html.shell-mobile .cal-slot-req { width: 62px; }
-        html.shell-mobile .cal-row-actions,
-        html.shell-mobile .cal-slot-actions { width: 100%; justify-content: flex-end; }
-
-        /* A Role card's header carries a badge glyph, a rule count, a fill count
-           and a way through to the Event. The way through is said again in full
-           at the bottom of the section, so on a phone the header keeps the name
-           and the count — which is the header the design draws. */
-        html.shell-mobile .cal-role-glyph,
-        html.shell-mobile .cal-role-everydate { display: none; }
 
         /* Three icon-and-text pairs across 390px is three lines. The dots that
            separate them are already in the markup, so dropping the glyphs is
@@ -68,13 +31,6 @@
 
         .cal-cols { display: grid; grid-template-columns: minmax(0,1fr); gap: 28px; align-items: start; }
         @media (min-width: 900px) { .cal-cols { grid-template-columns: minmax(0,1fr) 372px; } }
-
-        /* The dashed sand hairline around the whole strip is what marks one-off
-           work as lighter than a Role we keep. The handoff said a single job may
-           never have a border of its own — that held until a job had seven
-           people on it and ran straight into the next one. Each job now gets an
-           edge; the weight difference lives in the dash, not in the absence. */
-        .cal-oneoff-strip { border: 1px dashed #C2B79D; }
     </style>
 
     <script src="vendor/firebase/firebase-app-compat.js"></script>

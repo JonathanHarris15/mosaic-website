@@ -30,11 +30,31 @@
 
     const params = new URLSearchParams(window.location.search);
 
-    window.eventDetailPage = function eventDetailPage() {
+    // This component is the Event detail SCREEN, and it is also the behaviour
+    // behind the Roles panel wherever that is mounted (MS-16). The service page
+    // mounts it for one Sunday, beside the order of service, so that staffing a
+    // Sunday and building a Sunday are not two different pages.
+    //
+    // `config` is how a host says which occurrence and how much of it:
+    //
+    //   occurrenceId  the occurrence to open, instead of reading ?id= from the
+    //                 address bar. A host that is already about one date knows
+    //                 it without being told twice.
+    //   rolesOnly     the host shows the Roles panel and nothing else, so the
+    //                 controls that change WHICH Roles the Event carries are
+    //                 absent. That is a property of the Event, decided on the
+    //                 Event — changing it from inside one Sunday is how somebody
+    //                 changes every Sunday by accident.
+    window.eventDetailPage = function eventDetailPage(config) {
+        const cfg = config || {};
+
         return {
             loading: true,
             error: '',
             saving: false,
+
+            // Filling Roles is always on offer; deciding which Roles exist is not.
+            canEditRoleSet: !cfg.rolesOnly,
 
             rank: null,
             personId: null,
@@ -177,10 +197,12 @@
                     // way into the Sunday Service as an Event — the liturgy is
                     // still edited per-Sunday in the order of service, and that
                     // separation is what keeps the printed booklet safe.
-                    const seriesId = params.get('series');
+                    const seriesId = cfg.occurrenceId ? null : params.get('series');
                     if (seriesId) return await this.loadSeriesMode(seriesId);
 
-                    const id = params.get('id');
+                    // A host that mounted this for one date said so; otherwise the
+                    // address bar names it.
+                    const id = cfg.occurrenceId || params.get('id');
 
                     // No id means this is a new Event, not a broken link.
                     if (!id) {

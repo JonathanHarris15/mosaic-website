@@ -25,6 +25,10 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
     <!-- Sortable JS -->
     <script src="vendor/sortable-1.15.0.min.js"></script>
+
+    <!-- The Roles tab renders the shared Roles panel, which brings its own
+         styles (MS-16). -->
+    <link rel="stylesheet" href="roles-panel.css">
     <style>
 [x-cloak] { display: none !important; }
         .form-section { position: relative; margin-bottom: 1rem; border-radius: 16px; border-width: 1px; --tw-border-opacity: 1; border-color: rgb(218 208 192 / var(--tw-border-opacity, 1)); --tw-bg-opacity: 1; background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1)); padding: 1.5rem; --tw-shadow: 0 2px 6px rgba(14,28,54,.08); --tw-shadow-colored: 0 2px 6px var(--tw-shadow-color); box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow); overflow: visible !important; }
@@ -437,6 +441,36 @@
                 </div>
             </div>
         </div>
+
+        <!-- ── Order of Service ↔ Roles ────────────────────────────────────────
+             Two ways into the same Sunday, under the same header (MS-16). The
+             card above stays put on both: the date, the theme, and who is
+             leading, preaching and playing. So the Roles tab is not a different
+             page about a different thing — it is the rest of the same Sunday,
+             the welcome team and the sound desk under the liturgy that is
+             already there.
+
+             Only an editor gets it. For everyone else there is one tab, so
+             there is no strip to draw. -->
+        <div x-show="canEdit" class="flex items-center gap-1 mb-6 border-b border-outline-variant">
+            <template x-for="pane in [
+                { key: 'order', label: 'Order of Service', icon: 'list_alt' },
+                { key: 'roles', label: 'Roles', icon: 'groups' }
+            ]" :key="pane.key">
+                <button @click="tab = pane.key"
+                        :class="tab === pane.key
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-on-surface-variant hover:text-primary'"
+                        class="flex items-center gap-2 px-4 py-3 -mb-px border-b-2 font-label-md
+                               text-label-md transition-colors">
+                    <span class="material-symbols-outlined text-[19px]" x-text="pane.icon"></span>
+                    <span x-text="pane.label"></span>
+                </button>
+            </template>
+        </div>
+
+        <!-- ── The Order of Service ─────────────────────────────────────────── -->
+        <div x-show="tab === 'order'">
 
         <!-- ── Regular service: movements + service notes ──────────────────────── -->
         <template x-if="!service.isIrregular">
@@ -1012,6 +1046,50 @@
                 </div>
             </div>
         </template>
+        </div><!-- /Order of Service -->
+
+        <!-- ── Roles ────────────────────────────────────────────────────────────
+             The same Roles surface the Event detail screen shows, mounted here
+             for this Sunday (MS-16). Not a copy — `eventDetailPage` is the
+             behaviour, roles-panel.js is the markup, and both pages use them.
+
+             `rolesOnly` turns off the controls that change WHICH Roles the
+             Sunday carries. That belongs to the Sunday Service as an Event, not
+             to one date of it, and changing it from inside a single Sunday is
+             how somebody changes every Sunday by accident. The link at the
+             bottom of the panel goes to where it IS decided.
+
+             Liturgical Roles are absent here on purpose. They are fields on the
+             Service that the printed booklet reads (ADR-0018 §2), they are set
+             in the card above, and a second way to set them would be a second
+             source of truth for who is preaching. -->
+        <!-- x-if, not x-show. Alpine evaluates x-data the moment it walks the
+             page, and at that point `date` is still empty — the Service loads
+             asynchronously. A panel built then would ask for the occurrence
+             `sunday_service_` and find nothing. Behind an x-if it is built when
+             the tab is opened and the Sunday is known, which also means the
+             Calendar's data is not fetched by anyone who never opens Roles. -->
+        <template x-if="tab === 'roles' && date">
+            <div x-data="eventDetailPage({ occurrenceId: sundayOccurrenceId, rolesOnly: true })"
+                 x-init="init()">
+
+                <div x-show="loading" class="py-12 text-center text-on-surface-variant font-label-md text-label-md">
+                    Loading the roles for this Sunday…
+                </div>
+
+                <p x-show="error" x-text="error"
+                   class="py-12 text-center text-on-surface-variant font-label-md text-label-md"></p>
+
+                <template x-if="!loading && !error">
+                    <div>
+                        <div data-roles-panel="banner"></div>
+                        <div data-roles-panel="roles"></div>
+                    </div>
+                </template>
+
+                <div data-roles-panel="picker"></div>
+            </div>
+        </template>
     </main>
 
     <!-- Hymn Preview Modal -->
@@ -1110,6 +1188,19 @@
     <script src="guide-store.js"></script>
     <script src="events-core.js"></script>
     <script src="service-builder.js"></script>
+
+    <!-- The Roles tab (MS-16). It mounts the Event detail screen's own component
+         for this Sunday, so staffing a Sunday here and staffing it from the
+         Calendar are the same code, not two that have to agree. -->
+    <script src="events-occurrence-core.js"></script>
+    <script src="events-store.js"></script>
+    <script src="calendar-view.js"></script>
+    <script src="roles-core.js"></script>
+    <script src="calendar-event.js"></script>
+
+    <!-- Fills the data-roles-panel placeholders. Must run AFTER them and BEFORE
+         Alpine, which is deferred — hence the end of the body. -->
+    <script src="roles-panel.js"></script>
 </body>
 
 </html>

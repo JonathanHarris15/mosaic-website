@@ -230,7 +230,7 @@
                                             <span x-show="job.people.length"
                                                   class="shrink-0 text-[11px] text-on-surface-variant"
                                                   x-text="job.people.length"></span>
-                                            <button x-show="isEditor" @click="askRemoveOneOffRole(job.id)"
+                                            <button x-show="isEditor && canEditRoleSet" @click="askRemoveOneOffRole(job.id)"
                                                     class="shrink-0 w-[26px] h-[26px] rounded-md flex items-center justify-center
                                                            text-on-surface-variant hover:bg-surface-container cal-motion cal-focus"
                                                     aria-label="Remove this job">
@@ -304,8 +304,11 @@
                                 </template>
 
                                 <!-- Adding one is a single always-visible input.
-                                     It should take seconds. -->
-                                <div x-show="isEditor" class="flex items-center gap-2 pt-1">
+                                     It should take seconds.
+                                     Absent where the panel only fills Roles — the
+                                     service page's Roles tab staffs a Sunday, it
+                                     does not decide what the Sunday needs. -->
+                                <div x-show="isEditor && canEditRoleSet" class="flex items-center gap-2 pt-1">
                                     <span class="material-symbols-outlined text-[17px] text-outline">add</span>
                                     <input x-model="oneOffDraft" @keydown.enter="addOneOffRole()"
                                            placeholder="Someone to unlock the hall…"
@@ -422,13 +425,31 @@
 
     // Fill every placeholder this page carries. A missing one is not an error —
     // a page shows the parts of the panel it wants.
-    function mount(doc) {
-        const target = doc || (typeof document !== 'undefined' ? document : null);
-        if (!target || !target.querySelector) return;
+    //
+    // Recurses into <template> elements, because their contents live in a
+    // separate document fragment that document.querySelector cannot see. The
+    // service page needs that: its Roles pane is behind an x-if so the panel is
+    // built when the tab is opened and the Sunday's date is known, rather than
+    // at page load when it is not.
+    function fill(root) {
+        if (!root || !root.querySelectorAll) return;
+
         Object.keys(MARKUP).forEach(function (name) {
-            const slot = target.querySelector('[data-roles-panel="' + name + '"]');
-            if (slot) slot.innerHTML = MARKUP[name];
+            const slots = root.querySelectorAll('[data-roles-panel="' + name + '"]');
+            Array.prototype.forEach.call(slots, function (slot) {
+                slot.innerHTML = MARKUP[name];
+            });
         });
+
+        // Terminates: the markup just injected carries x-for templates, and none
+        // of those hold a placeholder.
+        Array.prototype.forEach.call(root.querySelectorAll('template'), function (t) {
+            fill(t.content);
+        });
+    }
+
+    function mount(doc) {
+        fill(doc || (typeof document !== 'undefined' ? document : null));
     }
 
     const RolesPanel = { MARKUP: MARKUP, mount: mount };
