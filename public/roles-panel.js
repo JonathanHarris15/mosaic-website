@@ -336,8 +336,13 @@
 
     const PICKER = `
     <!-- ── The picker ─────────────────────────────────────────────────────── -->
+    <!-- z-70, not the z-50 this had while it only ever opened over the Event
+         page. The service page docks a save bar at z-60 on a phone, which would
+         otherwise sit on top of the picker — over the Assign button, at the
+         bottom, exactly where a thumb goes. The picker is the frontmost thing on
+         either page, so it says so. -->
     <div x-show="picker.open" @keydown.escape.window="closePicker()"
-         class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
+         class="fixed inset-0 z-[70] bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
         <div class="bg-surface-container-lowest rounded-lg border border-outline-variant w-full max-w-[640px] mt-[6vh]">
             <div class="px-md py-md border-b border-outline-variant">
                 <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant"

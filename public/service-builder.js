@@ -436,7 +436,25 @@ function serviceForm() {
                 : null;
         },
 
+        // The shell's back arrow, answered by the page (MS-16). A tab is not a
+        // place you navigate to, so backing out of Roles should land on the
+        // order of service, not throw you out of the Sunday altogether. Only
+        // once there is nothing left to back out of does it leave the page.
+        //
+        // Same rule the Roles Manager follows for the Role it has open.
+        listenForShellBack() {
+            if (typeof document === 'undefined' || !document.addEventListener) return;
+            document.addEventListener('mobile-header:back', () => {
+                if (this.tab !== 'order') {
+                    this.tab = 'order';
+                    return;
+                }
+                window.location.href = 'mobile.html#/calendar';
+            });
+        },
+
         async init() {
+            this.listenForShellBack();
             auth.onAuthStateChanged(async (user) => {
                 this.user = user;
                 if (user) {

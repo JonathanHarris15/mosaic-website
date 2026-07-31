@@ -291,3 +291,88 @@ test('the Roles pane is behind an x-if, not an x-show', () => {
     assert.match(html, /<template x-if="tab === 'roles' && date">/,
         'the Roles pane mounts before the Sunday it is about is known');
 });
+
+// ── The phone ────────────────────────────────────────────────────────────────
+//
+// The mobile app does not port this screen. It opens the same page inside the
+// shell (`service-builder.html?date=…&shell=mobile`, mobile/app.js), which is
+// the pattern the Roles Manager already follows. So "the mobile screen" is this
+// page at 390px, and what has to be right is the chrome around the panel.
+
+test('the phone opens this page rather than a port of it', () => {
+    const app = fs.readFileSync(path.join(PUBLIC, 'mobile', 'app.js'), 'utf8');
+    assert.match(app, /service-builder\.html\?date=.*shell=mobile/,
+        'the mobile app no longer opens the service editor in the shell');
+});
+
+test('the picker sits above the docked save bar', () => {
+    // The service page docks its save bar at z-60 on a phone. The picker used to
+    // be z-50, which put the bar on top of it — over the Assign button, at the
+    // bottom of the sheet, exactly where a thumb goes.
+    const bar = read('service-builder.html');
+    const barZ = Number((bar.match(/#mobile-save-bar\s*\{[^}]*z-index:\s*(\d+)/) || [])[1]);
+    const pickerZ = Number((RolesPanel.MARKUP.picker.match(/fixed inset-0 z-\[?(\d+)\]?/) || [])[1]);
+
+    assert.ok(barZ, 'the docked save bar has no z-index to compare against');
+    assert.ok(pickerZ > barZ,
+        'the save bar (z-' + barZ + ') covers the picker (z-' + pickerZ + ') on a phone');
+});
+
+test('the save bar stands down on the Roles tab unless there is something to save', () => {
+    // Every assignment writes as it is made. A "Save Service" button there does
+    // nothing to what is on screen, and implies the roles are unsaved until
+    // pressed — the opposite of true.
+    const html = read('service-builder.html');
+    assert.match(html, /id="mobile-save-bar"[^>]*x-show="user && canEdit && \(tab === 'order' \|\| isDirty\)"/,
+        'the docked save bar does not know about the Roles tab');
+});
+
+test('the tab strip is laid out for 390px', () => {
+    const html = read('service-builder.html');
+    assert.match(html, /id="service-tabs"/, 'the tab strip has no hook for the phone rules');
+    assert.match(html, /body\.shell-mobile #service-tabs button \{[^}]*flex: 1 1 0/,
+        'the two tabs do not split the width, so they read as one tab and a spare');
+    assert.match(html, /body\.shell-mobile #service-tabs \.material-symbols-outlined \{ display: none/,
+        'the tab glyphs stay on a phone, which pushes "Order of Service" onto a second line');
+});
+
+test('the shell back arrow leaves the Roles tab before it leaves the page', () => {
+    const form = load('service-builder.js', 'serviceForm')();
+    const handlers = [];
+
+    // The page listens on `document`; the sandbox's stub records instead.
+    const sandbox = sandboxFor({
+        document: { addEventListener(name, fn) { handlers.push([name, fn]); } },
+    });
+    vm.runInContext(read('service-builder.js'), sandbox, { filename: 'service-builder.js' });
+    const page = sandbox.serviceForm();
+    page.listenForShellBack();
+
+    const back = handlers.find(([name]) => name === 'mobile-header:back');
+    assert.ok(back, 'the page never listens for the shell back arrow');
+
+    page.tab = 'roles';
+    back[1]();
+    assert.strictEqual(page.tab, 'order',
+        'back off the Roles tab throws you out of the Sunday instead of returning to it');
+});
+
+test('the page asks the shell to hand back the arrow', () => {
+    const html = read('service-builder.html');
+    assert.match(html, /MOBILE_HEADER = \{[^}]*onBack: true/,
+        'the shell still decides where back goes, so the tab cannot answer it');
+});
+
+test('the panel brings its own phone rules', () => {
+    // The slot row is eight things wide and 390px holds about half. Those rules
+    // moved into roles-panel.css with the markup, so the service page gets them
+    // by linking one file rather than by anyone remembering to copy them.
+    const css = fs.readFileSync(path.join(PUBLIC, 'roles-panel.css'), 'utf8');
+    ['cal-slot-row', 'cal-slot-index', 'cal-slot-avatar', 'cal-slot-actions',
+        'cal-role-glyph', 'cal-role-everydate'].forEach(hook => {
+        assert.ok(new RegExp('html\\.shell-mobile[^{]*\\.' + hook).test(css),
+            hook + ' has no phone rule in the shared stylesheet');
+    });
+    assert.ok(read('service-builder.html').includes('roles-panel.css'),
+        'the service page never links the stylesheet those rules live in');
+});

@@ -18,7 +18,12 @@
     <!-- Mobile shell: standardized back-arrow header when opened in the WebView. -->
     <script src="mobile-shell.js"></script>
     <link rel="stylesheet" href="mobile-shell.css" />
-    <script>window.MOBILE_HEADER = { title: 'Service Editor', back: 'mobile.html#/calendar' };</script>
+    <!-- The page answers the shell's back arrow rather than the shell deciding:
+         out of the Roles tab if you are on it, out of the page if you are not.
+         Same rule the Roles Manager follows. Without it, opening Roles and
+         pressing back leaves the Sunday entirely, which is not what a tab
+         should do. -->
+    <script>window.MOBILE_HEADER = { title: 'Service Editor', onBack: true };</script>
     <script src="mobile-shell-header.js"></script>
 
     <!-- Alpine JS -->
@@ -104,6 +109,17 @@
             padding-right: 1rem;
             padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
         }
+
+        /* ── The tab strip on a phone ─────────────────────────────────────────
+           Two tabs on 390px, and "Order of Service" is the long one. Left to
+           itself the pair sits at its natural width against the left edge, which
+           reads as one tab and a spare rather than a choice between two. So they
+           split the width evenly and the glyphs go: the labels already say what
+           these are, and the icons are what pushes "Order of Service" onto a
+           second line. */
+        body.shell-mobile #service-tabs { gap: 0; }
+        body.shell-mobile #service-tabs button { flex: 1 1 0; padding-left: 0; padding-right: 0; justify-content: center; }
+        body.shell-mobile #service-tabs .material-symbols-outlined { display: none; }
     </style>
     <!-- Firebase SDKs -->
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -452,7 +468,7 @@
 
              Only an editor gets it. For everyone else there is one tab, so
              there is no strip to draw. -->
-        <div x-show="canEdit" class="flex items-center gap-1 mb-6 border-b border-outline-variant">
+        <div id="service-tabs" x-show="canEdit" class="flex items-center gap-1 mb-6 border-b border-outline-variant">
             <template x-for="pane in [
                 { key: 'order', label: 'Order of Service', icon: 'list_alt' },
                 { key: 'roles', label: 'Roles', icon: 'groups' }
@@ -1163,7 +1179,13 @@
     <!-- Mobile-only save bar. Hidden on desktop by CSS; shown when the page runs
          inside the WebView shell. Mirrors the header button's state so there is
          still exactly one way to save, just docked where a thumb can reach it. -->
-    <div id="mobile-save-bar" x-show="user && canEdit" x-cloak
+    <!-- On the Roles tab there is nothing to save by hand — every assignment
+         writes as you make it. A docked "Save Service" button there would be a
+         button that does nothing to what is on screen, and worse, it implies the
+         roles are unsaved until you press it. So on that tab the bar appears
+         only when the order of service genuinely has unsaved edits, which is the
+         one case you still need it. -->
+    <div id="mobile-save-bar" x-show="user && canEdit && (tab === 'order' || isDirty)" x-cloak
         class="bg-surface border-t border-outline-variant/40 shadow-lg">
         <div class="flex items-center gap-2" x-show="isDirty">
             <span class="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse"></span>
