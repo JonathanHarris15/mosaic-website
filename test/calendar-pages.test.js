@@ -2372,6 +2372,35 @@ test('Auto-assign is offered from the Calendar, to editors, and not on a phone',
     assert.match(link[0], /cal-desktop-only/, 'a phone is offered a page it will be refused');
 });
 
+// ⚠ A MISSING CORE FUNCTION IS INVISIBLE UNTIL SOMEBODY OPENS THE PAGE.
+// Alpine swallows a getter that throws — the span renders empty and the console
+// fills up where nobody is looking. `Core.dayMonth` shipped like that: defined
+// in the module, used by the page, and left out of the exported list. So rather
+// than trust each getter to have its own test, read every core call the page
+// makes and check the other side answers to that name.
+test('every core function Auto-assign calls is actually exported', () => {
+    const source = fs.readFileSync(path.join(PUBLIC, 'auto-assign.js'), 'utf8');
+    const modules = {
+        Core: require('../public/events-occurrence-core.js'),
+        Store: require('../public/events-store.js'),
+        Roles: require('../public/roles-core.js'),
+        Events: require('../public/events-core.js'),
+        Fairness: require('../public/fairness-core.js'),
+        Loop: require('../public/auto-assign-core.js'),
+        Dates: require('../public/date-utils.js'),
+    };
+
+    const missing = [];
+    const call = /\b(Core|Store|Roles|Events|Fairness|Loop|Dates)\.([A-Za-z_$][\w$]*)\s*\(/g;
+    let m;
+    while ((m = call.exec(source)) !== null) {
+        if (typeof modules[m[1]][m[2]] !== 'function') missing.push(m[1] + '.' + m[2]);
+    }
+
+    assert.deepEqual([...new Set(missing)], [],
+        'the page calls something its module does not offer');
+});
+
 test('Auto-assign is refused to anyone below editor', () => {
     const page = loadComponent('auto-assign.js', 'autoAssignPage');
 
@@ -2432,6 +2461,24 @@ test('a range of any length can be drafted — there is no cap', () => {
     assert.equal(page.canDraft, true,
         'a draft that far out is a sketch, and re-drafting nearer the time is the answer');
     assert.equal(Store.SUNDAY_RULE, page.rule, 'the Sunday Service uses its implied rule');
+});
+
+// The empty branches of this line return before ever touching a date, so a
+// test that only checks those proves the page renders when it has nothing to
+// say — and nothing at all about the case the editor actually sees.
+test('the resolved range names its first and last date', () => {
+    const page = loadComponent('auto-assign.js', 'autoAssignPage');
+
+    page.series = [{ id: 'sunday_service', name: 'Sunday Service', roleSlugs: [] }];
+    page.seriesId = 'sunday_service';
+    page.fromDate = '2026-10-04';
+    page.toDate = '2026-10-25';
+
+    assert.equal(page.resolvedLine, '4 Sundays, 4 October – 25 October');
+    assert.equal(page.pretty('2026-10-04'), '4 October');
+
+    page.toDate = '2026-10-04';
+    assert.equal(page.resolvedLine, '1 Sunday, 4 October – 4 October');
 });
 
 test('nothing can be drafted when the range resolves to no dates', () => {
