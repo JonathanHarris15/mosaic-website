@@ -3333,6 +3333,100 @@ test('the draft draws one header, not a second one under the first', () => {
     assert.match(html, /<header[\s\S]*?auth-container[\s\S]*?<\/header>/);
 });
 
+// ── The strip is the horizontal scrollbar (thumb behaviour) ─────────────────
+
+function scrubbablePage() {
+    const page = draftedPage();
+    page.draft = {
+        dates: ['2026-10-04', '2026-10-11', '2026-10-18', '2026-10-25'].map(d => drafted(d)),
+    };
+    page.buildGrid();
+    // A grid twice the width of its window: half visible, scrolled to the start.
+    const scroller = { scrollLeft: 0, scrollWidth: 1000, clientWidth: 500 };
+    page.$refs = { scroller: scroller };
+    page.onGridScroll(scroller);
+    return { page, scroller };
+}
+
+const strip = { getBoundingClientRect: () => ({ left: 0, width: 100 }) };
+
+// ⚠ GRABBED WHERE YOU GRABBED IT. Centring the thumb on the pointer instead
+// makes the grid lurch sideways the moment you take hold — the difference
+// between dragging a scrollbar and being thrown by one.
+test('taking hold of the window does not move it', () => {
+    const { page, scroller } = scrubbablePage();
+    assert.equal(page.viewWidth, 0.5);
+
+    // Press near the right-hand end of the thumb, which spans 0–50%.
+    page.startScrub({ clientX: 40 }, strip);
+
+    assert.equal(scroller.scrollLeft, 0, 'it went nowhere until the pointer did');
+    assert.equal(page.grabbedAt, 0.4);
+});
+
+test('dragging the window moves the grid one-to-one with the pointer', () => {
+    const { page, scroller } = scrubbablePage();
+
+    page.startScrub({ clientX: 10 }, strip);   // grabbed 10% into the thumb
+    page.moveScrub({ clientX: 30 }, strip);    // pointer moves 20% along
+
+    assert.ok(Math.abs(scroller.scrollLeft - 200) < 0.001,
+        'the thumb starts where the pointer put it: 20% of 1000');
+});
+
+test('a press on the empty track jumps, the way a scrollbar track does', () => {
+    const { page, scroller } = scrubbablePage();
+
+    // 60% along is past the thumb, which ends at 50%.
+    page.startScrub({ clientX: 60 }, strip);
+
+    assert.equal(page.grabbedAt, 0.25, 'centred, because there was no thumb to grab');
+    assert.ok(Math.abs(scroller.scrollLeft - 350) < 0.001, 'the window lands under the pointer');
+});
+
+test('the window never runs off either end', () => {
+    const { page, scroller } = scrubbablePage();
+
+    page.startScrub({ clientX: 25 }, strip);
+    page.moveScrub({ clientX: -200 }, strip);
+    assert.equal(scroller.scrollLeft, 0);
+
+    page.moveScrub({ clientX: 500 }, strip);
+    assert.equal(scroller.scrollLeft, 500, 'the far end is scrollWidth minus one window');
+});
+
+test('a grid that fits entirely cannot be dragged, and does not offer to be', () => {
+    const page = draftedPage();
+    page.draft = { dates: [drafted('2026-10-04')] };
+    page.buildGrid();
+    const scroller = { scrollLeft: 0, scrollWidth: 500, clientWidth: 900 };
+    page.$refs = { scroller: scroller };
+    page.onGridScroll(scroller);
+
+    assert.equal(page.canScrub, false, 'a grab cursor over a dead control is a small lie');
+    page.startScrub({ clientX: 50 }, strip);
+    assert.equal(page.scrubbing, false);
+    assert.equal(scroller.scrollLeft, 0);
+});
+
+test('moving the pointer without having grabbed anything scrolls nothing', () => {
+    const { page, scroller } = scrubbablePage();
+
+    page.moveScrub({ clientX: 90 }, strip);
+    assert.equal(scroller.scrollLeft, 0);
+});
+
+test('the grid hides its own horizontal bar but keeps the vertical one', () => {
+    const html = readPage('auto-assign.html');
+
+    assert.match(html, /\.aa-scroll-clip \{ overflow: hidden/);
+    assert.match(html, /\.aa-scroller \{ height: calc\(100% \+ 18px\)/,
+        'the bar is pushed out of sight, not switched off');
+    // Clipped, never switched off: the trackpad and shift-wheel still scroll
+    // the grid sideways, and the strip just shows where that got you.
+    assert.doesNotMatch(html, /\.aa-scroller \{[^}]*overflow-x:\s*hidden/);
+});
+
 test('going back to setup drops the grid with the draft', () => {
     const page = draftedPage();
     page.draft = { dates: [drafted('2026-10-04')] };

@@ -104,14 +104,26 @@
         /* The window that follows the scroll. Sits BEHIND the ticks so the
            labels stay readable and the buttons stay clickable — it indicates,
            the strip underneath it is what you actually drag. */
-        .aa-strip { position: relative; touch-action: none; cursor: grab; user-select: none; }
-        .aa-strip:active { cursor: grabbing; }
+        .aa-strip { position: relative; touch-action: none; user-select: none; }
+        .aa-strip-live { cursor: grab; }
+        .aa-strip-live:active { cursor: grabbing; }
+
+        /* The grid's own horizontal scrollbar, clipped away. `overflow: hidden`
+           on the parent plus the extra height here pushes the bar out of sight
+           while the VERTICAL one stays — `scrollbar-width: none` would remove
+           both, and the vertical one is still the only sign of how far the
+           Roles go. */
+        .aa-scroll-clip { overflow: hidden; }
+        .aa-scroller { height: calc(100% + 18px); overflow: auto; }
         .aa-window {
             position: absolute; top: 0; bottom: 0; z-index: 0;
             background: rgba(184,155,106,.16);
             border: 1px solid #B89B6A; border-radius: 6px;
             pointer-events: none;
             transition: left 90ms linear, width 90ms linear;
+        }
+        .aa-window-held {
+            transition: none;
         }
         .aa-strip .aa-tick { position: relative; z-index: 1; }
 
@@ -410,10 +422,13 @@
                      grid. Both ends are live, so the strip is where you are as
                      well as what is wrong. -->
                 <div class="aa-strip flex-grow" x-ref="strip"
-                     @pointerdown="startScrub($event, $refs.strip); $refs.strip.setPointerCapture($event.pointerId)"
+                     :class="canScrub ? 'aa-strip-live' : ''"
+                     @pointerdown="startScrub($event, $refs.strip); canScrub && $refs.strip.setPointerCapture($event.pointerId)"
                      @pointermove="moveScrub($event, $refs.strip)"
                      @pointerup="endScrub()" @pointercancel="endScrub()">
-                    <div class="aa-window"
+                    <!-- No easing while it is in your hand: a thumb that lags
+                         90ms behind the pointer feels broken, not smooth. -->
+                    <div class="aa-window" :class="scrubbing ? 'aa-window-held' : ''"
                          :style="'left:' + (viewLeft * 100) + '%; width:' + (viewWidth * 100) + '%'"></div>
                     <div class="flex items-stretch">
                         <template x-for="col in columns" :key="col.date">
@@ -442,7 +457,12 @@
                  scroll. The cards are information-rich and only a few dates fit
                  at once, so losing your place is the failure mode. -->
             <div class="flex-grow flex min-h-0">
-            <div class="flex-grow overflow-auto bg-surface-container-low"
+            <!-- The clip hides the grid's own horizontal scrollbar. The range
+                 strip is that scrollbar now, and two controls for one axis is
+                 one too many. Clipped rather than `scrollbar-width: none`,
+                 which would take the VERTICAL bar with it. -->
+            <div class="aa-scroll-clip flex-grow min-h-0 bg-surface-container-low">
+            <div class="aa-scroller"
                  x-ref="scroller" @scroll="onGridScroll($event.target)"
                  x-init="$nextTick(() => onGridScroll($refs.scroller))">
                 <table class="aa-grid border-separate border-spacing-0">
@@ -637,6 +657,7 @@
                         </template>
                     </tbody>
                 </table>
+            </div>
             </div>
 
             <!-- ══════ The panel ══════

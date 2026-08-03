@@ -722,25 +722,51 @@
                 return Math.max(0, Math.min(n - 1, Math.floor(this.viewLeft * n)));
             },
 
-            // Dragging anywhere on the strip scrolls the grid to that point,
-            // with the window centred on the pointer. A click on a tick still
-            // jumps to that date — the two agree, so they never fight.
+            // ── The strip IS the horizontal scrollbar ────────────────────────
+            //
+            // So the window behaves like a thumb: you grab it WHERE YOU GRABBED
+            // IT and it follows one-to-one. Centring it on the pointer instead
+            // means the grid lurches sideways the moment you take hold, which
+            // is the difference between dragging a scrollbar and being thrown
+            // by one.
+            //
+            // A press on the empty track still jumps — that is what a scrollbar
+            // track does, and it is how the far end of a long range stays one
+            // click away.
+
+            scrubbing: false,
+            grabbedAt: 0,           // where in the thumb the pointer took hold
+
+            fractionAt(event, strip) {
+                const box = strip.getBoundingClientRect();
+                if (!box.width) return null;
+                return (event.clientX - box.left) / box.width;
+            },
+
+            // Nothing to scroll means nothing to drag, and a grab cursor over a
+            // control that does nothing is a small lie.
+            get canScrub() { return this.viewWidth < 1; },
+
+            startScrub(event, strip) {
+                if (!this.canScrub) return;
+                const at = this.fractionAt(event, strip);
+                if (at === null) return;
+
+                const onThumb = at >= this.viewLeft && at <= this.viewLeft + this.viewWidth;
+                this.grabbedAt = onThumb ? (at - this.viewLeft) : this.viewWidth / 2;
+                this.scrubbing = true;
+                this.scrubTo(event, strip);
+            },
+
             scrubTo(event, strip) {
                 const scroller = this.$refs.scroller;
                 if (!scroller || !strip) return;
-                const box = strip.getBoundingClientRect();
-                if (!box.width) return;
-                const at = (event.clientX - box.left) / box.width;
-                const centred = at - this.viewWidth / 2;
-                scroller.scrollLeft = Math.max(0, Math.min(1 - this.viewWidth, centred))
-                    * scroller.scrollWidth;
-            },
+                const at = this.fractionAt(event, strip);
+                if (at === null) return;
 
-            scrubbing: false,
-
-            startScrub(event, strip) {
-                this.scrubbing = true;
-                this.scrubTo(event, strip);
+                const left = at - this.grabbedAt;
+                const room = Math.max(0, 1 - this.viewWidth);
+                scroller.scrollLeft = Math.max(0, Math.min(room, left)) * scroller.scrollWidth;
             },
 
             moveScrub(event, strip) {
