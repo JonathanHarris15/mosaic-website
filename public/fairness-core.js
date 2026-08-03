@@ -277,10 +277,21 @@
     // Leaving a slot empty is therefore a branch of the search like any other,
     // which is also what lets a cohesive `sameGroup` Role stop early rather than
     // fail outright.
+    //
+    // SOME PLACES MAY ALREADY BE TAKEN. `o.held` is the seats an editor has
+    // already filled by hand in this Role, and the search fills what is left
+    // around them. They are seeded into the walk rather than merely subtracted
+    // from the slot list, because `notTogether` and its siblings judge a
+    // candidate against WHO IS ALREADY SEATED — and a rule that cannot see the
+    // hand-made half of a roster would cheerfully seat somebody's husband
+    // beside them. The bound is unaffected: held seats appear in every branch.
     function solveRole(role, options) {
         const o = options;
-        const slots = slotsOf(role);
-        const best = { seats: [], score: -1 };
+        const heldSeats = o.held || [];
+        const taken = {};
+        heldSeats.forEach(seat => { taken[seat.slotId] = true; });
+        const slots = slotsOf(role).filter(slot => !taken[slot.id]);
+        const best = { seats: heldSeats.slice(), score: -1 };
         let lastReason = null;
 
         // The order candidates are tried in NEVER CHANGES within a Role: both
@@ -370,7 +381,7 @@
             walk(index + 1, seats, score);
         };
 
-        walk(0, [], 0);
+        walk(0, heldSeats.slice(), 0);
 
         const filledIds = best.seats.map(s => s.slotId);
         return {
@@ -443,6 +454,16 @@
             ranked.candidates.length
         );
 
+        // Places an editor has already filled by hand. The solve fills what is
+        // left around them and never moves one. Stamped with their own Role's
+        // exclusivity here rather than trusted from the caller, so a held seat
+        // and a solved one are judged by exactly the same rule.
+        const flagOf = {};
+        roles.forEach(role => { flagOf[role.slug] = role.allowsAnotherRole === true; });
+        const preset = (o.seated || []).map(seat => Object.assign({}, seat, {
+            allowsAnotherRole: flagOf[seat.roleSlug] === true,
+        }));
+
         let filled = [];
         let unfilled = [];
         let used = 0;
@@ -457,10 +478,15 @@
                 .map(c => byId[c.personId])
                 .filter(Boolean);
 
-            const seated = [];
+            // Starts holding every hand-made seat, in every Role, so exclusivity
+            // reads the same whatever order the Roles are solved in — a held
+            // Setup seat blocks the same person from Coffee even when Coffee
+            // goes first. Solved seats join it as they are taken.
+            const seated = preset.slice();
             const gaps = [];
 
             roles.forEach(role => {
+                const held = preset.filter(seat => seat.roleSlug === role.slug);
                 const attempt = solveRole(role, {
                     people: people,
                     relationships: o.relationships,
@@ -468,6 +494,7 @@
                     recencyFor: personId => recencyFor(recency[role.slug], personId, windowSize),
                     candidatesFor: candidatesFor,
                     tieBreak: memoTieBreak,
+                    held: held,
                     // Exclusivity is the one thread tying the Roles together, so
                     // it is the only cross-Role state the per-Role search sees.
                     // Each seat carries its own Role's flag, stamped when it was
@@ -475,9 +502,18 @@
                     assignedElsewhere: seated,
                 });
 
-                attempt.seats.forEach(seat => seated.push(Object.assign({
-                    allowsAnotherRole: role.allowsAnotherRole === true,
-                }, seat)));
+                // `attempt.seats` gives back the held ones too, since the search
+                // filled in around them. Only the newly-taken places are added,
+                // or a held seat would be counted twice and its holder would
+                // read as already carrying two Roles.
+                const wasHeld = {};
+                held.forEach(seat => { wasHeld[seat.slotId] = true; });
+                attempt.seats.forEach(seat => {
+                    if (wasHeld[seat.slotId]) return;
+                    seated.push(Object.assign({
+                        allowsAnotherRole: role.allowsAnotherRole === true,
+                    }, seat));
+                });
                 attempt.gaps.forEach(slot => gaps.push({
                     roleSlug: role.slug,
                     slotId: slot.id,
