@@ -813,9 +813,72 @@
                 }
             },
 
-            endDrag() { this.dragging = null; this.over = null; },
+            endDrag() {
+                this.dragging = null;
+                this.over = null;
+                this.stopEdgeScroll();
+            },
 
             dragOver(key) { if (this.dragging) this.over = key; },
+
+            // ── Dragging to the edge scrolls the grid ────────────────────────
+            //
+            // A drag holds the pointer captive: the editor cannot reach the
+            // range strip with the hand that is already carrying somebody.
+            //
+            // ⚠ DRIVEN BY A FRAME LOOP, NOT BY `dragover`. A pointer held
+            // still at the edge stops firing dragover in some browsers, and
+            // "it scrolls only while I wiggle" is worse than not scrolling at
+            // all. So dragover just records WHERE the pointer is; the loop
+            // reads that spot every frame until the drag ends.
+
+            edgeAim: null,          // last pointer position, in screen pixels
+            edgeFrame: null,
+
+            edgeScrollAt(event) {
+                if (!this.dragging || !event) return;
+                this.edgeAim = { x: event.clientX, y: event.clientY };
+                this.runEdgeScroll();
+            },
+
+            runEdgeScroll() {
+                if (this.edgeFrame !== null) return;
+                const raf = typeof window !== 'undefined' && window.requestAnimationFrame;
+                if (!raf) return;
+
+                const step = () => {
+                    this.edgeFrame = null;
+                    if (!this.dragging || !this.edgeAim) return;
+                    this.pullGrid();
+                    this.edgeFrame = raf.call(window, step);
+                };
+                this.edgeFrame = raf.call(window, step);
+            },
+
+            // One tick of the pull. Separated so a test can drive it without a
+            // browser's frame clock.
+            pullGrid() {
+                const scroller = this.$refs && this.$refs.scroller;
+                // The CLIP is what you can see; the scroller hangs 18px below
+                // it so its own scrollbar falls off the bottom.
+                const box = (this.$refs && this.$refs.clip) || scroller;
+                if (!scroller || !box || !box.getBoundingClientRect) return;
+
+                const by = Grid.edgeScroll(box.getBoundingClientRect(), this.edgeAim);
+                if (!by.x && !by.y) return;
+
+                if (by.x) scroller.scrollLeft = Math.max(0, scroller.scrollLeft + by.x);
+                if (by.y) scroller.scrollTop = Math.max(0, scroller.scrollTop + by.y);
+                this.onGridScroll(scroller);
+            },
+
+            stopEdgeScroll() {
+                this.edgeAim = null;
+                if (this.edgeFrame === null) return;
+                const cancel = typeof window !== 'undefined' && window.cancelAnimationFrame;
+                if (cancel) cancel.call(window, this.edgeFrame);
+                this.edgeFrame = null;
+            },
 
             dropOn(date, place) {
                 const held = this.dragging;

@@ -307,3 +307,66 @@ test('the liturgy row is not counted against a date — it is not fillable here'
 test('a grid built without days refuses rather than drawing an empty screen', () => {
     assert.throws(() => Grid.gridFrom({}), /needs options\.dates/);
 });
+
+// ── Dragging to the edge scrolls the grid ───────────────────────────────────
+//
+// A drag holds the pointer captive, so the scrollbar and the range strip are
+// both out of reach of the hand that is carrying somebody.
+
+const BOX = { left: 100, right: 900, top: 200, bottom: 700 };
+
+test('the middle of the grid pulls in no direction at all', () => {
+    assert.deepEqual(Grid.edgeScroll(BOX, { x: 500, y: 450 }), { x: 0, y: 0 });
+});
+
+test('the left edge pulls left, the right edge right', () => {
+    assert.ok(Grid.edgeScroll(BOX, { x: 110, y: 450 }).x < 0);
+    assert.ok(Grid.edgeScroll(BOX, { x: 890, y: 450 }).x > 0);
+});
+
+test('the top edge pulls up, the bottom edge down', () => {
+    assert.ok(Grid.edgeScroll(BOX, { x: 500, y: 210 }).y < 0);
+    assert.ok(Grid.edgeScroll(BOX, { x: 500, y: 690 }).y > 0);
+});
+
+// A corner is both edges at once — reaching the last date of a long range on a
+// Role near the bottom is one diagonal drag, not two.
+test('a corner pulls on both axes together', () => {
+    const by = Grid.edgeScroll(BOX, { x: 895, y: 695 });
+    assert.ok(by.x > 0 && by.y > 0);
+});
+
+// ⚠ ONE SPEED IS EITHER TOO SLOW TO CROSS A LONG RANGE OR TOO FAST TO STOP ON
+// A COLUMN. The pull ramps with how close to the edge you are, so the editor
+// steers by moving their hand rather than by timing a release.
+test('the pull gets stronger the closer to the edge you get', () => {
+    const near = Grid.edgeScroll(BOX, { x: 150, y: 450 }).x;
+    const nearer = Grid.edgeScroll(BOX, { x: 120, y: 450 }).x;
+    const at = Grid.edgeScroll(BOX, { x: 100, y: 450 }).x;
+
+    assert.ok(Math.abs(nearer) > Math.abs(near));
+    assert.ok(Math.abs(at) > Math.abs(nearer));
+    assert.equal(Math.abs(at), Grid.EDGE_MAX, 'and it is capped at the edge itself');
+});
+
+// The panel and the displaced rail are both a drop's-width from the grid, and
+// neither of them should drive it.
+test('a pointer outside the grid pulls nothing', () => {
+    assert.deepEqual(Grid.edgeScroll(BOX, { x: 950, y: 450 }), { x: 0, y: 0 },
+        'over the directory');
+    assert.deepEqual(Grid.edgeScroll(BOX, { x: 500, y: 760 }), { x: 0, y: 0 },
+        'over the displaced rail');
+    assert.deepEqual(Grid.edgeScroll(BOX, { x: 500, y: 150 }), { x: 0, y: 0 },
+        'over the range strip');
+});
+
+// Otherwise the two zones overlap and the middle of the box pulls both ways.
+test('a box too small to have edges pulls nothing', () => {
+    const slot = { left: 0, right: 60, top: 0, bottom: 60 };
+    assert.deepEqual(Grid.edgeScroll(slot, { x: 30, y: 30 }), { x: 0, y: 0 });
+});
+
+test('no box and no pointer is no pull, not a crash', () => {
+    assert.deepEqual(Grid.edgeScroll(null, { x: 1, y: 1 }), { x: 0, y: 0 });
+    assert.deepEqual(Grid.edgeScroll(BOX, null), { x: 0, y: 0 });
+});

@@ -3427,6 +3427,111 @@ test('the grid hides its own horizontal bar but keeps the vertical one', () => {
     assert.doesNotMatch(html, /\.aa-scroller \{[^}]*overflow-x:\s*hidden/);
 });
 
+// ── Dragging to the edge scrolls the grid ───────────────────────────────────
+
+// The grid, and the box you can actually see it through. The scroller hangs
+// 18px below the clip so its own scrollbar falls off the bottom.
+function draggablePage() {
+    const page = draftedPage();
+    page.draft = {
+        dates: ['2026-10-04', '2026-10-11', '2026-10-18', '2026-10-25'].map(d => drafted(d)),
+    };
+    page.buildGrid();
+
+    const scroller = {
+        scrollLeft: 0, scrollTop: 0, scrollWidth: 1000, clientWidth: 500,
+        getBoundingClientRect: () => ({ left: 100, right: 600, top: 200, bottom: 718 }),
+    };
+    const clip = { getBoundingClientRect: () => ({ left: 100, right: 600, top: 200, bottom: 700 }) };
+    page.$refs = { scroller: scroller, clip: clip };
+    page.onGridScroll(scroller);
+    return { page, scroller };
+}
+
+test('carrying a card to the right edge scrolls the grid on', () => {
+    const { page, scroller } = draggablePage();
+    page.startDrag({}, 'p1', null, 'directory');
+
+    page.edgeScrollAt({ clientX: 595, clientY: 450 });
+    page.pullGrid();
+
+    assert.ok(scroller.scrollLeft > 0, 'the far dates come to the card');
+    assert.ok(page.viewLeft > 0, 'and the range window keeps up');
+});
+
+test('carrying a card to the bottom edge scrolls down to the Roles below', () => {
+    const { page, scroller } = draggablePage();
+    page.startDrag({}, 'p1', null, 'directory');
+
+    page.edgeScrollAt({ clientX: 350, clientY: 695 });
+    page.pullGrid();
+
+    assert.ok(scroller.scrollTop > 0);
+    assert.equal(scroller.scrollLeft, 0, 'and only down — the pointer was nowhere near a side');
+});
+
+// ⚠ MEASURED OFF THE CLIP, NOT THE SCROLLER. The scroller is deliberately
+// taller than what you can see, so its bottom edge sits 18px below the screen
+// where the pointer can never reach it.
+test('the bottom edge is where the grid stops being visible', () => {
+    const { page, scroller } = draggablePage();
+    page.startDrag({}, 'p1', null, 'directory');
+
+    // Inside the scroller's own box, below the clip's. Nothing is there.
+    page.edgeScrollAt({ clientX: 350, clientY: 710 });
+    page.pullGrid();
+    assert.equal(scroller.scrollTop, 0, 'measuring the scroller would put the edge off screen');
+});
+
+test('nothing scrolls unless a card is actually in hand', () => {
+    const { page, scroller } = draggablePage();
+
+    page.edgeScrollAt({ clientX: 595, clientY: 695 });
+    assert.equal(page.edgeAim, null, 'a pointer at the edge with nothing in hand is just a pointer');
+    page.pullGrid();
+    assert.equal(scroller.scrollLeft, 0);
+    assert.equal(scroller.scrollTop, 0);
+});
+
+// ⚠ THE AIM IS WATCHED AT THE WHOLE DRAFT, NOT AT THE GRID. Watch only the
+// grid and the last position it saw sticks: carry a card off the bottom into
+// the displaced rail and it scrolls on with nobody asking.
+test('carrying a card off the grid stops the pull', () => {
+    const { page, scroller } = draggablePage();
+    page.startDrag({}, 'p1', null, 'directory');
+
+    page.edgeScrollAt({ clientX: 350, clientY: 695 });
+    page.pullGrid();
+    const got = scroller.scrollTop;
+    assert.ok(got > 0);
+
+    page.edgeScrollAt({ clientX: 350, clientY: 760 });   // down in the displaced rail
+    page.pullGrid();
+    assert.equal(scroller.scrollTop, got, 'it stopped where it was');
+});
+
+test('letting go stops the pull', () => {
+    const { page, scroller } = draggablePage();
+    page.startDrag({}, 'p1', null, 'directory');
+    page.edgeScrollAt({ clientX: 595, clientY: 450 });
+
+    page.endDrag();
+    assert.equal(page.edgeAim, null);
+    page.pullGrid();
+    assert.equal(scroller.scrollLeft, 0);
+});
+
+test('the whole draft watches the drag, and the clip is what gets measured', () => {
+    const html = readPage('auto-assign.html');
+
+    assert.match(html,
+        /x-show="view === 'draft'"[\s\S]{0,200}@dragover="edgeScrollAt\(\$event\)"/,
+        'watched at the draft, so the aim is always where the pointer really is');
+    assert.match(html, /@dragend="stopEdgeScroll\(\)" @drop="stopEdgeScroll\(\)"/);
+    assert.match(html, /aa-scroll-clip[^>]*x-ref="clip"/,
+        'the visible box, not the scroller that hangs below it');
+});
+
 // ── Folding the liturgy away ────────────────────────────────────────────────
 
 test('the liturgy row folds, and the fold is remembered', () => {

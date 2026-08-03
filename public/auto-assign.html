@@ -474,7 +474,15 @@
         <!-- ══════════════ The draft ══════════════ -->
         <!-- The grid itself is MS-179. What is here now is the frame it hangs
              in, and enough of a tally to prove the loop ran. -->
-        <div x-show="view === 'draft'" class="flex-grow flex flex-col min-h-0">
+        <!-- ⚠ The drag is watched at the WHOLE draft, not at the grid. Watch
+             only the grid and the last pointer position it saw sticks: carry a
+             card off the bottom edge into the displaced rail and the grid keeps
+             scrolling with nobody asking it to. Watched from up here, the aim
+             is always where the pointer really is, and the pull is nothing
+             whenever that is outside the grid. -->
+        <div x-show="view === 'draft'" class="flex-grow flex flex-col min-h-0"
+             @dragover="edgeScrollAt($event)"
+             @dragend="stopEdgeScroll()" @drop="stopEdgeScroll()">
 
             <!-- ══════ The range strip ══════
                  One tick per date. The cards below are worth reading and only
@@ -529,7 +537,7 @@
                  strip is that scrollbar now, and two controls for one axis is
                  one too many. Clipped rather than `scrollbar-width: none`,
                  which would take the VERTICAL bar with it. -->
-            <div class="aa-scroll-clip flex-grow min-h-0 bg-surface-container-low">
+            <div class="aa-scroll-clip flex-grow min-h-0 bg-surface-container-low" x-ref="clip">
             <div class="aa-scroller"
                  x-ref="scroller" @scroll="onGridScroll($event.target)"
                  x-init="$nextTick(() => onGridScroll($refs.scroller))">

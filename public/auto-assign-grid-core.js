@@ -307,6 +307,46 @@
         };
     }
 
+    // ── Scrolling by dragging to the edge ────────────────────────────────────
+    //
+    // A drag holds the pointer captive, so the editor cannot reach for the
+    // scrollbar or the range strip with the hand that is already full. Without
+    // this, moving somebody from the first date to the last means dropping them
+    // somewhere in between, scrolling, and picking them up again.
+    //
+    // ⚠ THE RECT IS THE VISIBLE BOX, NOT THE SCROLLING ELEMENT. The grid's
+    // scroller is deliberately taller than what you can see — that is how its
+    // own horizontal scrollbar is hidden — so measuring the scroller would put
+    // the bottom edge 18px below the screen, where the pointer can never go.
+    //
+    // Speed ramps with how close to the edge you are, rather than switching on:
+    // one speed is either too slow to cross a long range or too fast to stop on
+    // a column. Zero outside the box entirely, so hovering the panel or the
+    // displaced rail does not drive the grid.
+
+    const EDGE_ZONE = 56;       // px from the edge where it starts to pull
+    const EDGE_MAX = 22;        // px per frame at the very edge
+
+    function axisPull(at, low, high, zone, max) {
+        if (at < low || at > high) return 0;
+        if (high - low <= zone * 2) return 0;   // no room to have edges at all
+        if (at < low + zone) return -Math.ceil(((low + zone - at) / zone) * max);
+        if (at > high - zone) return Math.ceil(((at - (high - zone)) / zone) * max);
+        return 0;
+    }
+
+    function edgeScroll(rect, point, options) {
+        if (!rect || !point) return { x: 0, y: 0 };
+        const o = options || {};
+        const zone = o.zone || EDGE_ZONE;
+        const max = o.max || EDGE_MAX;
+
+        return {
+            x: axisPull(point.x, rect.left, rect.right, zone, max),
+            y: axisPull(point.y, rect.top, rect.bottom, zone, max),
+        };
+    }
+
     const AutoAssignGridCore = {
         // words
         wantsOf,
@@ -314,6 +354,10 @@
         recencyLabel,
         // the grid
         gridFrom,
+        // dragging to the edge
+        EDGE_ZONE,
+        EDGE_MAX,
+        edgeScroll,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
