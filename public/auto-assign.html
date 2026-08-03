@@ -88,7 +88,36 @@
         .aa-avatar-sm { width: 21px; height: 21px; font-size: 9px; }
 
         .aa-dot { width: 5px; height: 5px; border-radius: 999px; display: inline-block; }
-        .aa-tick { min-width: 54px; }
+        .aa-tick { min-width: 0; }
+
+        /* The window that follows the scroll. Sits BEHIND the ticks so the
+           labels stay readable and the buttons stay clickable — it indicates,
+           the strip underneath it is what you actually drag. */
+        .aa-strip { position: relative; touch-action: none; cursor: grab; user-select: none; }
+        .aa-strip:active { cursor: grabbing; }
+        .aa-window {
+            position: absolute; top: 0; bottom: 0; z-index: 0;
+            background: rgba(184,155,106,.16);
+            border: 1px solid #B89B6A; border-radius: 6px;
+            pointer-events: none;
+            transition: left 90ms linear, width 90ms linear;
+        }
+        .aa-strip .aa-tick { position: relative; z-index: 1; }
+
+        /* How hard the season is leaning on somebody. A number has to be read;
+           a bar can be compared down a whole column at a glance. */
+        .aa-load {
+            display: block; height: 3px; border-radius: 999px;
+            background: #E8DDCD; overflow: hidden;
+        }
+        .aa-load-fill { display: block; height: 100%; background: #5D94A9; border-radius: 999px; }
+        .aa-load-spent { background: #B89B6A; }
+
+        /* Dragging. The lifted card stays visible where it came from — a card
+           that disappears mid-drag makes the editor guess what they picked up. */
+        .aa-card[draggable="true"] { cursor: grab; }
+        .aa-lifting { opacity: .4; }
+        .aa-target { outline: 2px solid #5D94A9; outline-offset: 1px; border-radius: 8px; }
     </style>
 </head>
 
@@ -310,30 +339,38 @@
                  cannot tell whether the trouble is in front of them or six
                  columns away. This is what buys that overview back. -->
             <div class="shrink-0 border-b border-outline-variant bg-surface-container-lowest px-6 py-2.5
-                        flex items-center gap-3 overflow-x-auto">
+                        flex items-center gap-3">
                 <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant shrink-0">
                     Range
                 </span>
-                <div class="flex items-stretch gap-1">
-                    <template x-for="col in columns" :key="col.date">
-                        <button type="button" @click="focusDate(col.index)"
-                                :class="col.index === focused
-                                    ? 'bg-surface-container border-gold'
-                                    : 'bg-transparent border-transparent hover:bg-surface-container-low'"
-                                class="aa-tick border rounded px-2 py-1 flex flex-col items-center gap-1
-                                       aa-motion aa-focus shrink-0">
-                            <span class="text-[11px] text-on-surface-variant whitespace-nowrap"
-                                  x-text="col.label"></span>
-                            <span class="flex items-center gap-[3px] h-[6px]">
-                                <span x-show="col.empty" class="aa-dot bg-outline"
-                                      :title="col.empty + ' still empty'"></span>
-                                <span x-show="col.spent" class="aa-dot bg-gold"
-                                      :title="col.spent + ' over budget'"></span>
-                                <span x-show="col.problems" class="aa-dot bg-error"
-                                      :title="col.problems + ' breaking a rule'"></span>
-                            </span>
-                        </button>
-                    </template>
+                <!-- The window follows the grid, and dragging it drives the
+                     grid. Both ends are live, so the strip is where you are as
+                     well as what is wrong. -->
+                <div class="aa-strip flex-grow" x-ref="strip"
+                     @pointerdown="startScrub($event, $refs.strip); $refs.strip.setPointerCapture($event.pointerId)"
+                     @pointermove="moveScrub($event, $refs.strip)"
+                     @pointerup="endScrub()" @pointercancel="endScrub()">
+                    <div class="aa-window"
+                         :style="'left:' + (viewLeft * 100) + '%; width:' + (viewWidth * 100) + '%'"></div>
+                    <div class="flex items-stretch">
+                        <template x-for="col in columns" :key="col.date">
+                            <button type="button" @click="focusDate(col.index)"
+                                    :class="col.index === focused ? 'text-on-surface' : 'text-on-surface-variant'"
+                                    class="aa-tick relative rounded px-1 py-1 flex flex-col items-center gap-1
+                                           aa-motion aa-focus flex-grow basis-0 min-w-0">
+                                <span class="text-[10.5px] whitespace-nowrap truncate max-w-full"
+                                      x-text="col.label"></span>
+                                <span class="flex items-center gap-[3px] h-[6px]">
+                                    <span x-show="col.empty" class="aa-dot bg-outline"
+                                          :title="col.empty + ' still empty'"></span>
+                                    <span x-show="col.spent" class="aa-dot bg-gold"
+                                          :title="col.spent + ' over budget'"></span>
+                                    <span x-show="col.problems" class="aa-dot bg-error"
+                                          :title="col.problems + ' breaking a rule'"></span>
+                                </span>
+                            </button>
+                        </template>
+                    </div>
                 </div>
             </div>
 
@@ -341,7 +378,9 @@
                  The Role column and the date header both stay put as you
                  scroll. The cards are information-rich and only a few dates fit
                  at once, so losing your place is the failure mode. -->
-            <div class="flex-grow overflow-auto bg-surface-container-low">
+            <div class="flex-grow overflow-auto bg-surface-container-low"
+                 x-ref="scroller" @scroll="onGridScroll($event.target)"
+                 x-init="$nextTick(() => onGridScroll($refs.scroller))">
                 <table class="aa-grid border-separate border-spacing-0">
                     <thead>
                         <tr>
@@ -420,27 +459,51 @@
                                             <div class="flex flex-col gap-1.5">
                                                 <template x-for="place in cell.places"
                                                           :key="place.slotId || place.card.personId">
-                                                    <div>
+                                                    <div @dragover.prevent="dragOver(cellKey(cell.date, place))"
+                                                         @dragleave="over = null"
+                                                         @drop.prevent="dropOn(cell.date, place)"
+                                                         :class="over === cellKey(cell.date, place) ? 'aa-target' : ''">
                                                         <!-- Somebody in it. -->
                                                         <template x-if="place.filled">
-                                                            <div class="aa-card"
-                                                                 :class="place.card.warning ? 'aa-card-warn'
-                                                                         : (place.card.spent ? 'aa-card-spent' : '')">
+                                                            <div class="aa-card" draggable="true"
+                                                                 @dragstart="startDrag($event, place.card.personId,
+                                                                     { date: cell.date, roleSlug: place.roleSlug, slotId: place.slotId })"
+                                                                 @dragend="endDrag()"
+                                                                 :class="[
+                                                                     place.card.warning ? 'aa-card-warn'
+                                                                         : (place.card.spent ? 'aa-card-spent' : ''),
+                                                                     dragging && dragging.personId === place.card.personId
+                                                                         ? 'aa-lifting' : '']">
                                                                 <div class="flex items-center gap-2">
                                                                     <span class="aa-avatar" x-text="place.card.initials"></span>
                                                                     <span class="min-w-0 flex-grow">
                                                                         <span class="block text-[13px] text-on-surface truncate leading-tight"
                                                                               x-text="place.card.name"></span>
-                                                                        <span class="block text-[10.5px] text-on-surface-variant truncate">
-                                                                            <span x-text="place.card.load + ' / ' + place.card.budget"></span>
-                                                                            <span x-show="place.card.recencyLabel"
-                                                                                  x-text="' · ' + place.card.recencyLabel"></span>
-                                                                        </span>
+                                                                        <span class="block text-[10.5px] text-on-surface-variant truncate"
+                                                                              x-show="place.card.recencyLabel"
+                                                                              x-text="place.card.recencyLabel"></span>
                                                                     </span>
                                                                     <span x-show="place.card.held"
                                                                           class="material-symbols-outlined text-[14px] text-secondary shrink-0"
                                                                           title="Already on the calendar">push_pin</span>
                                                                 </div>
+
+                                                                <!-- How hard this season is leaning on
+                                                                     them. A number is something you have
+                                                                     to read; a bar you can compare down a
+                                                                     whole column at a glance. -->
+                                                                <div class="mt-1.5 flex items-center gap-1.5"
+                                                                     :title="place.card.load + ' of ' + place.card.budget + ' weeks of rest owed'">
+                                                                    <span class="aa-load flex-grow">
+                                                                        <span class="aa-load-fill"
+                                                                              :class="place.card.spent ? 'aa-load-spent' : ''"
+                                                                              :style="'width:' + Math.min(100,
+                                                                                  (place.card.budget ? place.card.load / place.card.budget : 0) * 100) + '%'"></span>
+                                                                    </span>
+                                                                    <span class="text-[9.5px] text-on-surface-variant tabular-nums shrink-0"
+                                                                          x-text="place.card.load + '/' + place.card.budget"></span>
+                                                                </div>
+
                                                                 <p x-show="place.card.warning"
                                                                    class="mt-1 text-[10.5px] text-error leading-snug"
                                                                    x-text="place.card.warning"></p>
@@ -462,8 +525,18 @@
                                                     </div>
                                                 </template>
 
-                                                <span x-show="!cell.places.length && row.kind === 'oneOff'"
-                                                      class="text-[11px] text-on-surface-variant">Nobody yet</span>
+                                                <!-- A one-off has no fixed number of places, so
+                                                     the way to add one is an open drop zone rather
+                                                     than an empty slot that was never defined. -->
+                                                <div x-show="row.kind === 'oneOff'"
+                                                     @dragover.prevent="dragOver(cellKey(cell.date, { roleSlug: row.id, slotId: 'add' }))"
+                                                     @dragleave="over = null"
+                                                     @drop.prevent="dropOn(cell.date, { roleSlug: row.id, slotId: null, oneOffId: row.id })"
+                                                     :class="over === cellKey(cell.date, { roleSlug: row.id, slotId: 'add' }) ? 'aa-target' : ''"
+                                                     class="aa-empty flex items-center justify-center">
+                                                    <span class="text-[11px] text-on-surface-variant"
+                                                          x-text="cell.places.length ? 'Drop to add' : 'Nobody yet'"></span>
+                                                </div>
                                             </div>
                                         </template>
                                     </td>
@@ -472,6 +545,40 @@
                         </template>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- ══════ Displaced ══════
+                 Whoever got knocked out of a place, still attached to their
+                 date, waiting to be put back. Deleting them quietly is the
+                 failure this rail prevents: they were on the rota a second ago
+                 and the editor should not have to remember who they lost. -->
+            <div class="shrink-0 border-t border-outline-variant bg-surface-container px-6 py-2
+                        flex items-center gap-3 min-h-[52px] overflow-x-auto"
+                 @dragover.prevent="dragOver('rail')" @dragleave="over = null"
+                 @drop.prevent="dropOnRail()"
+                 :class="over === 'rail' ? 'aa-target' : ''">
+                <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant shrink-0">
+                    Displaced
+                </span>
+                <span x-show="!displacedCards.length" class="text-[12px] text-on-surface-variant">
+                    Nobody. Drop a card here to take them off without deciding where they go.
+                </span>
+                <template x-for="d in displacedCards" :key="d.personId + d.date">
+                    <div class="aa-card shrink-0 flex items-center gap-2" draggable="true"
+                         @dragstart="startDrag($event, d.personId, { date: d.date }, 'rail')"
+                         @dragend="endDrag()">
+                        <span class="aa-avatar aa-avatar-sm" x-text="d.initials"></span>
+                        <span class="min-w-0">
+                            <span class="block text-[12.5px] text-on-surface truncate leading-tight"
+                                  x-text="d.name"></span>
+                            <span class="block text-[10.5px] text-on-surface-variant"
+                                  x-text="'was on ' + d.dateLabel"></span>
+                        </span>
+                        <button type="button" @click="dismiss(d)" title="Leave them out"
+                                class="material-symbols-outlined text-[15px] text-on-surface-variant
+                                       hover:text-error aa-motion aa-focus rounded">close</button>
+                    </div>
+                </template>
             </div>
 
             <div class="shrink-0 border-t border-outline-variant bg-surface-container-lowest
@@ -504,6 +611,7 @@
 <script src="auto-assign-core.js"></script>
 <script src="calendar-view.js"></script>
 <script src="auto-assign-grid-core.js"></script>
+<script src="auto-assign-edit-core.js"></script>
 <script src="auto-assign.js"></script>
 <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </body>

@@ -31,6 +31,7 @@
     const Fairness = window.FairnessCore;
     const Loop = window.AutoAssignCore;
     const Grid = window.AutoAssignGridCore;
+    const Edit = window.AutoAssignEditCore;
     const View = window.CalendarView;
     const Dates = window.DateUtils;
 
@@ -96,6 +97,19 @@
             // whole serve history and Alpine would ask for them constantly.
             grid: null,
             focused: 0,             // which date the range strip is pointing at
+
+            // Where the grid is scrolled to, as a fraction of the whole range.
+            // The strip draws a window from these, so the overview shows you
+            // not just what is wrong but whereabouts you are standing.
+            viewLeft: 0,
+            viewWidth: 1,
+
+            // What is in the hand, and who got knocked out. A displaced person
+            // is a thing the screen has to show: they were on the rota a second
+            // ago and vanishing them makes the editor rebuild it from memory.
+            dragging: null,         // { personId, from: place|null, source }
+            over: null,             // the place key under the pointer
+            displaced: [],          // [{ personId, date }]
 
             // ── Loading ──────────────────────────────────────────────────────
 
@@ -301,6 +315,7 @@
                 try {
                     await this.loadForDraft();
                     this.draft = Loop.draft(this.draftOptions());
+                    this.displaced = [];
                     this.buildGrid();
                     this.focused = 0;
                     this.view = 'draft';
@@ -629,20 +644,169 @@
                 }
             },
 
+            // ── The window that follows the scroll ───────────────────────────
+            //
+            // Read off the grid rather than counted in dates: a column is 220px
+            // and the viewport is whatever the editor's window is, so the
+            // fraction is the only honest answer. Both ends of this are live —
+            // scrolling moves the window, dragging the window scrolls.
+
+            onGridScroll(el) {
+                if (!el || !el.scrollWidth) return;
+                this.viewLeft = el.scrollLeft / el.scrollWidth;
+                this.viewWidth = Math.min(1, el.clientWidth / el.scrollWidth);
+                this.focused = this.nearestColumn();
+            },
+
+            // The LEFTMOST visible date, not the middle of the window. A grid is
+            // read left to right, so where you are is where it starts — and the
+            // middle of a window covering everything is date three of five,
+            // which is nowhere anybody is looking.
+            nearestColumn() {
+                const n = this.columns.length;
+                if (!n) return 0;
+                return Math.max(0, Math.min(n - 1, Math.floor(this.viewLeft * n)));
+            },
+
+            // Dragging anywhere on the strip scrolls the grid to that point,
+            // with the window centred on the pointer. A click on a tick still
+            // jumps to that date — the two agree, so they never fight.
+            scrubTo(event, strip) {
+                const scroller = this.$refs.scroller;
+                if (!scroller || !strip) return;
+                const box = strip.getBoundingClientRect();
+                if (!box.width) return;
+                const at = (event.clientX - box.left) / box.width;
+                const centred = at - this.viewWidth / 2;
+                scroller.scrollLeft = Math.max(0, Math.min(1 - this.viewWidth, centred))
+                    * scroller.scrollWidth;
+            },
+
+            scrubbing: false,
+
+            startScrub(event, strip) {
+                this.scrubbing = true;
+                this.scrubTo(event, strip);
+            },
+
+            moveScrub(event, strip) {
+                if (this.scrubbing) this.scrubTo(event, strip);
+            },
+
+            endScrub() { this.scrubbing = false; },
+
+            // ── Dragging people about ────────────────────────────────────────
+
+            placeKey(place) {
+                return String(place.roleSlug) + '|' + String(place.slotId);
+            },
+
+            cellKey(date, place) {
+                return date + '|' + this.placeKey(place);
+            },
+
+            // From a card already on the grid. `from` is what makes it a MOVE
+            // rather than a copy — without it the person stays where they were
+            // as well as arriving where they went.
+            startDrag(event, personId, from, source) {
+                this.dragging = { personId: personId, from: from || null, source: source || 'grid' };
+                if (event && event.dataTransfer) {
+                    event.dataTransfer.effectAllowed = 'move';
+                    // Firefox refuses to start a drag with nothing on the
+                    // clipboard, however little the payload is used.
+                    try { event.dataTransfer.setData('text/plain', personId); } catch (e) { /* ignore */ }
+                }
+            },
+
+            endDrag() { this.dragging = null; this.over = null; },
+
+            dragOver(key) { if (this.dragging) this.over = key; },
+
+            dropOn(date, place) {
+                const held = this.dragging;
+                this.over = null;
+                if (!held || !this.draft) return;
+                this.dragging = null;
+
+                const result = Edit.place(this.draft, {
+                    personId: held.personId,
+                    from: held.from,
+                    to: {
+                        date: date,
+                        roleSlug: place.roleSlug,
+                        slotId: place.slotId,
+                        oneOffId: place.oneOffId || null,
+                    },
+                });
+
+                this.draft = result.draft;
+                if (result.displaced) {
+                    this.displaced = Edit.addDisplaced(this.displaced, result.displaced);
+                }
+                // Whoever was waiting has now been placed.
+                this.displaced = Edit.removeDisplaced(this.displaced, {
+                    personId: held.personId,
+                    date: (held.source === 'rail' && held.from) ? held.from.date : date,
+                });
+                this.buildGrid();
+            },
+
+            // Onto the rail: taken off the rota, still on screen. An emptied
+            // place and a person with nowhere to go are different things, and
+            // the editor needs to see both.
+            dropOnRail() {
+                const held = this.dragging;
+                this.over = null;
+                if (!held || !held.from || !this.draft) { this.dragging = null; return; }
+                this.dragging = null;
+
+                const out = Edit.clear(this.draft, held.from);
+                this.draft = out.draft;
+                if (out.removed) this.displaced = Edit.addDisplaced(this.displaced, out.removed);
+                this.buildGrid();
+            },
+
+            // Off the rail entirely — they are not being placed and they are
+            // not waiting. The only way a name leaves the screen on purpose.
+            dismiss(person) {
+                this.displaced = Edit.removeDisplaced(this.displaced, person);
+            },
+
+            get displacedCards() {
+                return this.displaced.map(d => ({
+                    personId: d.personId,
+                    date: d.date,
+                    name: this.personName(d.personId),
+                    initials: Grid.initialsOf(this.personName(d.personId)),
+                    dateLabel: Core.dayMonth(d.date),
+                }));
+            },
+
             // ── The draft, at a glance ───────────────────────────────────────
             //
             // The tally the bottom bar reads, which is also what tells the
             // editor whether the draft is finished.
 
+            // ⚠ COUNTED OFF THE GRID, NOT OFF THE DRAFT. The solve's `gaps` list
+            // is a snapshot of what IT could not fill; the moment the editor
+            // moves a card, that list stops describing the screen. The grid
+            // rebuilds every place from the Role's own slots, so it is the only
+            // thing that still knows how many there are.
             get tally() {
-                const days = (this.draft && this.draft.dates) || [];
+                const cols = this.columns;
                 let places = 0;
                 let empty = 0;
-                days.forEach(day => {
-                    places += day.seats.length + day.gaps.length;
-                    empty += day.gaps.length;
+
+                (this.grid ? this.grid.rows : []).forEach(row => {
+                    if (row.kind === 'liturgy') return;
+                    row.cells.forEach(cell => {
+                        if (!cell.applicable) return;
+                        places += cell.places.length;
+                    });
                 });
-                return { dates: days.length, places: places, empty: empty };
+                cols.forEach(col => { empty += col.empty; });
+
+                return { dates: cols.length, places: places, empty: empty };
             },
 
             get draftSubtitle() {

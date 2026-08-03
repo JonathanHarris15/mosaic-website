@@ -64,6 +64,7 @@ function loadComponent(scriptFile, factoryName, overrides) {
     sandbox.DateUtils = require('../public/date-utils.js');
     sandbox.AutoAssignCore = require('../public/auto-assign-core.js');
     sandbox.AutoAssignGridCore = require('../public/auto-assign-grid-core.js');
+    sandbox.AutoAssignEditCore = require('../public/auto-assign-edit-core.js');
 
     // The browser-only edges, stubbed just enough to construct the component.
     sandbox.location = { search: '?id=midweek_2026-07-15', href: '' };
@@ -250,6 +251,7 @@ test('each page loads every module its component reaches for', () => {
         // throw the moment it was handed a solve that was not there.
         'auto-assign.html': ['events-occurrence-core.js', 'events-store.js', 'roles-core.js', 'events-core.js',
                              'fairness-core.js', 'auto-assign-core.js', 'auto-assign-grid-core.js',
+                             'auto-assign-edit-core.js',
                              'calendar-view.js', 'date-utils.js', 'auto-assign.js'],
     };
 
@@ -2390,6 +2392,7 @@ test('every core function Auto-assign calls is actually exported', () => {
         Fairness: require('../public/fairness-core.js'),
         Loop: require('../public/auto-assign-core.js'),
         Grid: require('../public/auto-assign-grid-core.js'),
+        Edit: require('../public/auto-assign-edit-core.js'),
         View: require('../public/calendar-view.js'),
         Dates: require('../public/date-utils.js'),
     };
@@ -2683,6 +2686,130 @@ test('an unfillable place names the sex it actually asked for', () => {
     page.buildGrid();
 
     assert.match(page.grid.roleRows[0].cells[0].places[1].reason, /needs a woman/);
+});
+
+// ── Dragging people about (MS-180) ──────────────────────────────────────────
+
+test('dropping somebody on an occupied place sends the occupant to the rail', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: [drafted('2026-10-04', [
+            { roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 },
+        ])],
+    };
+    page.buildGrid();
+
+    page.startDrag(null, 'p2', null, 'directory');
+    page.dropOn('2026-10-04', { roleSlug: 'coffee', slotId: 's1' });
+
+    assert.equal(page.grid.roleRows[0].cells[0].places[0].card.name, 'Bob Carter');
+    assert.deepEqual(page.displacedCards.map(d => d.name), ['Alice Brown']);
+    assert.equal(page.displacedCards[0].dateLabel, '4 October');
+    assert.equal(page.dragging, null, 'the hand is empty once the card lands');
+});
+
+test('placing somebody from the rail takes them off it', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: [drafted('2026-10-04', [
+            { roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 },
+        ])],
+    };
+    page.buildGrid();
+
+    page.startDrag(null, 'p2', null, 'directory');
+    page.dropOn('2026-10-04', { roleSlug: 'coffee', slotId: 's1' });
+    assert.equal(page.displaced.length, 1);
+
+    // Alice, now waiting, goes into the other place.
+    page.startDrag(null, 'p1', { date: '2026-10-04' }, 'rail');
+    page.dropOn('2026-10-04', { roleSlug: 'coffee', slotId: 's2' });
+
+    assert.deepEqual(page.displaced, []);
+    assert.equal(page.grid.roleRows[0].cells[0].places[1].card.name, 'Alice Brown');
+});
+
+test('a card dropped on the rail leaves the rota but not the screen', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: [drafted('2026-10-04', [
+            { roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 },
+        ])],
+    };
+    page.buildGrid();
+
+    page.startDrag(null, 'p1', { date: '2026-10-04', roleSlug: 'coffee', slotId: 's1' });
+    page.dropOnRail();
+
+    assert.equal(page.grid.roleRows[0].cells[0].places[0].filled, false);
+    assert.deepEqual(page.displacedCards.map(d => d.name), ['Alice Brown']);
+    assert.equal(page.tally.empty, 2);
+});
+
+test('a moved card is redrawn with the numbers of where it landed', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: [
+            drafted('2026-10-04', [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1' }]),
+            drafted('2026-10-11', []),
+        ],
+    };
+    page.buildGrid();
+    assert.equal(page.grid.roleRows[0].cells[1].places[0].filled, false);
+
+    page.startDrag(null, 'p1', { date: '2026-10-04', roleSlug: 'coffee', slotId: 's1' });
+    page.dropOn('2026-10-11', { roleSlug: 'coffee', slotId: 's1' });
+
+    assert.equal(page.grid.roleRows[0].cells[0].places[0].filled, false);
+    const moved = page.grid.roleRows[0].cells[1].places[0].card;
+    assert.equal(moved.name, 'Alice Brown');
+    assert.equal(moved.load, 0, 'nothing before the 11th any more — the range was re-read');
+});
+
+test('dismissing a displaced person is the one way a name leaves the screen', () => {
+    const page = draftedPage();
+    page.displaced = [{ personId: 'p1', date: '2026-10-04' }];
+
+    page.dismiss({ personId: 'p1', date: '2026-10-04' });
+    assert.deepEqual(page.displaced, []);
+});
+
+test('re-drafting clears whoever was waiting — they belong to the old draft', () => {
+    const page = draftedPage();
+    page.displaced = [{ personId: 'p1', date: '2026-10-04' }];
+    page.draft = { dates: [drafted('2026-10-04')] };
+    page.buildGrid();
+
+    page.backToSetup();
+    assert.equal(page.draft, null);
+});
+
+// ── The window that follows the scroll ──────────────────────────────────────
+
+test('the range window is read off the grid, not counted in dates', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: ['2026-10-04', '2026-10-11', '2026-10-18', '2026-10-25'].map(d => drafted(d)),
+    };
+    page.buildGrid();
+
+    // Half the range visible, scrolled to the far end.
+    page.onGridScroll({ scrollLeft: 400, scrollWidth: 800, clientWidth: 400 });
+
+    assert.equal(page.viewLeft, 0.5);
+    assert.equal(page.viewWidth, 0.5);
+    assert.equal(page.focused, 2, 'the window is over the second half, so the third date');
+});
+
+test('a grid that fits entirely shows a window covering the whole strip', () => {
+    const page = draftedPage();
+    page.draft = { dates: [drafted('2026-10-04'), drafted('2026-10-11')] };
+    page.buildGrid();
+
+    page.onGridScroll({ scrollLeft: 0, scrollWidth: 500, clientWidth: 900 });
+
+    assert.equal(page.viewWidth, 1, 'never wider than the strip, however roomy the screen');
+    assert.equal(page.focused, 0);
 });
 
 test('going back to setup drops the grid with the draft', () => {
