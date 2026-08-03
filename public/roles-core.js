@@ -255,6 +255,11 @@
         RELATIONSHIP_CONFLICT: 'relationshipConflict',
         SAME_GROUP_CONFLICT: 'sameGroupConflict',       // already someone here from their group
         NOT_IN_REQUIRED_GROUP: 'notInRequiredGroup',    // not in the group this Role is drawn from
+        // Only a whole-roster answer can produce these two: nobody can be
+        // offered a Role or a place that has since stopped existing, but a
+        // roster written last month can certainly still name one.
+        UNKNOWN_ROLE: 'unknownRole',
+        UNKNOWN_SLOT: 'unknownSlot',
     });
 
     // ── How much rest a Role owes the person who does it ─────────────────────
@@ -548,6 +553,121 @@
         });
     }
 
+    // ── Judging a roster that is already seated ───────────────────────────────
+    //
+    // The other half of eligibility (ADR-0021). `candidatesFor` asks "may I seat
+    // this person NEXT?" and its answer is thrown away the moment they are
+    // placed. This asks "is this roster, AS IT STANDS, legal?" and returns a
+    // WARNING for every seat that breaks one of the editor's own rules.
+    //
+    // ⚠ THE TWO ARE DIFFERENT QUESTIONS, and that is the whole reason this
+    // exists rather than being folded into the other. A roster can be perfectly
+    // legal on the day it is drafted and break later — somebody marries, a tag
+    // is removed, a Role gains a restriction. Nothing was overridden and there
+    // is still a problem, which is also why the model calls this a Warning and
+    // not an override.
+    //
+    // A warning never REFUSES. Eligibility advises; the editor is the final word,
+    // because a tool that will not record the rota the church is actually going
+    // to run is a tool the rota leaves. What the app owes them is to say so.
+    //
+    // Nothing here is stored. Warnings are derived on every read, never stamped
+    // on the roster, never acknowledged, never dismissed — one you can wave away
+    // is one nobody reads by the third week.
+    //
+    //   roster            — [{ roleSlug, slotId, personId }] every seat on ONE
+    //                       occurrence, across every Role.
+    //   roles             — the Role definitions those slugs refer to.
+    //   liturgicalHolders — [{ personId, roleSlug }] whoever is preaching or
+    //                       leading. Liturgy is fields on the Service rather
+    //                       than Assignments, so it cannot arrive in the roster
+    //                       and has to be handed in beside it.
+    //
+    // Empty places produce nothing: leaving one unfilled is a legitimate answer.
+    function warningsFor(roster, context) {
+        const ctx = context || {};
+        const seats = (roster || []).filter(s => s && s.personId && s.roleSlug);
+
+        const defBySlug = {};
+        (ctx.roles || []).forEach(def => { if (def && def.slug) defBySlug[def.slug] = def; });
+        const personById = {};
+        (ctx.people || []).forEach(p => { if (p && p.id) personById[p.id] = p; });
+
+        // Liturgy always occupies the whole morning, so it joins the busy list
+        // as an exclusive holding. Reusing `servingElsewhere` rather than
+        // writing a second liturgical rule is what keeps the picker's answer and
+        // this one identical (ADR-0020 §7).
+        const liturgical = (ctx.liturgicalHolders || [])
+            .filter(h => h && h.personId)
+            .map(h => ({
+                personId: h.personId,
+                roleSlug: h.roleSlug || null,
+                allowsAnotherRole: false,
+            }));
+
+        const warnings = [];
+
+        seats.forEach(seat => {
+            const def = defBySlug[seat.roleSlug];
+            if (!def) {
+                warnings.push({
+                    personId: seat.personId,
+                    roleSlug: seat.roleSlug,
+                    slotId: seat.slotId,
+                    reason: REASONS.UNKNOWN_ROLE,
+                });
+                return;
+            }
+
+            const slot = slotsOf(def).filter(s => s.id === seat.slotId)[0];
+            if (!slot) {
+                warnings.push({
+                    personId: seat.personId,
+                    roleSlug: seat.roleSlug,
+                    slotId: seat.slotId,
+                    reason: REASONS.UNKNOWN_SLOT,
+                });
+                return;
+            }
+
+            const candidate = personById[seat.personId] || { id: seat.personId };
+
+            // Judge this seat AS THOUGH IT WERE BEING PLACED LAST: everyone else
+            // is already sitting there, and the rules see them. Asking the same
+            // question `candidatesFor` asks, with the same narrowed inputs, is
+            // what stops the two drifting — the paired test pins it.
+            const seated = seats.filter(s => (
+                s !== seat && s.roleSlug === seat.roleSlug && s.slotId !== seat.slotId
+            ));
+            const busy = {};
+            busy[seat.personId] = seats
+                .filter(s => s !== seat && s.personId === seat.personId && s.roleSlug !== seat.roleSlug)
+                .map(s => ({
+                    personId: s.personId,
+                    roleSlug: s.roleSlug,
+                    allowsAnotherRole: allowsAnotherRole(defBySlug[s.roleSlug]),
+                }))
+                .concat(liturgical.filter(h => h.personId === seat.personId));
+
+            const blocked = ineligibilityFor(def, slot, candidate, ctx, seated, busy);
+            if (!blocked) return;
+
+            warnings.push(Object.assign({
+                personId: seat.personId,
+                roleSlug: seat.roleSlug,
+                slotId: seat.slotId,
+            }, blocked, {
+                // `roleSlug` on a SERVING_ELSEWHERE names the Role that has them
+                // already, which would otherwise overwrite the Role this warning
+                // is about. Both matter, so both are kept and named apart.
+                heldRoleSlug: blocked.roleSlug || null,
+                roleSlug: seat.roleSlug,
+            }));
+        });
+
+        return warnings;
+    }
+
     // ── Validating a restriction against the Types on offer ───────────────────
     //
     // A relationship rule may only name a Relationship Type an elder has marked
@@ -712,6 +832,7 @@
         // eligibility
         isInactive,
         candidatesFor,
+        warningsFor,
         // relationship group membership (MS-141)
         inGroup,
         groupsFor,

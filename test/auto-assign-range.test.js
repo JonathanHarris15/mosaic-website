@@ -278,13 +278,13 @@ test('a held place is still visible to its own Role\'s relationship rules', () =
     // Kids keeps married couples apart. Dana is held in place one by hand, so
     // the solve must not seat her husband in place two.
     const kids = role('kids', 2, {
-        restrictions: [{ kind: 'notTogether', relationshipType: 'spouse' }],
+        restrictions: [{ kind: Roles.RESTRICTIONS.NOT_TOGETHER, typeId: 'spouse' }],
     });
     const result = AutoAssign.draft(options({
         dates: RANGE.slice(0, 1),
         roles: [kids],
         people: [person('dana'), person('marcus'), person('ruth')],
-        relationships: [{ type: 'spouse', personIds: ['dana', 'marcus'] }],
+        relationships: [{ typeId: 'spouse', fromId: 'dana', toId: 'marcus' }],
         existing: { [RANGE[0]]: [held('kids', 's1', 'dana', 'confirmed')] },
     }));
 
