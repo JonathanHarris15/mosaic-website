@@ -454,6 +454,19 @@ window.RolesManager = () => ({
         return this.sharedRelationshipTypes.filter(type => type.kind === 'group');
     },
 
+    // ⚠ EVERY type lookup goes through here. The two the Membership Directory
+    // answers are not in `sharedRelationshipTypes` and never will be, so a
+    // `.find` over that list alone reports a perfectly good Family rule as
+    // "unavailable — an elder is no longer sharing this type", which is both
+    // wrong and unfixable by the person reading it.
+    get knownRelationshipTypes() {
+        return RolesCore.DIRECTORY_GROUP_TYPES.concat(this.sharedRelationshipTypes);
+    },
+
+    relationshipTypeById(typeId) {
+        return this.knownRelationshipTypes.find(t => t && t.id === typeId) || null;
+    },
+
     // The two the Membership Directory answers come FIRST and are always there.
     // They need no elder to share them: a Family is a household an editor
     // already keeps, not an arbitrary grouping somebody has to invent, and
@@ -464,9 +477,7 @@ window.RolesManager = () => ({
     },
 
     get groupRuleOptions() {
-        return this.directoryGroupTypes.concat(
-            this.sharedRelationshipTypes.filter(type => type.kind === 'group')
-        );
+        return this.directoryGroupTypes.concat(this.customGroupTypes);
     },
 
     // Said out loud, because an empty picker and a denied query look identical
@@ -667,7 +678,7 @@ window.RolesManager = () => ({
     },
 
     isRuleAvailable(rule) {
-        return RolesCore.validateRestriction(rule, this.sharedRelationshipTypes).valid;
+        return RolesCore.validateRestriction(rule, this.knownRelationshipTypes).valid;
     },
 
     // ── Liturgical intensity ─────────────────────────────────────────────────
@@ -759,7 +770,7 @@ window.RolesManager = () => ({
                 : said;
         }
 
-        const type = this.sharedRelationshipTypes.find(t => t.id === rule.typeId);
+        const type = this.relationshipTypeById(rule.typeId);
         if (!type) {
             return 'This rule is unavailable — an elder is no longer sharing the relationship type it uses ' +
                 'with editors. Remove it, or ask an elder to share that type again.';
@@ -784,7 +795,7 @@ window.RolesManager = () => ({
         if (!this.draft) return [];
         const errors = RolesCore.validateDefinition(this.draft).errors.slice();
         this.draftRestrictions.forEach((rule, i) => {
-            RolesCore.validateRestriction(rule, this.sharedRelationshipTypes).errors
+            RolesCore.validateRestriction(rule, this.knownRelationshipTypes).errors
                 .forEach(message => errors.push(`Rule ${i + 1}: ${message}`));
         });
         return errors;

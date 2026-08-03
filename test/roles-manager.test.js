@@ -775,6 +775,35 @@ test('group rules read as sentences and carry their own glyphs', async () => {
     assert.equal(new Set(icons).size, 3);
 });
 
+// ⚠ THE BUG THIS REPLACES. A rule naming Marriage rendered as "unavailable —
+// an elder is no longer sharing the relationship type it uses", because the
+// label looked the type up in `sharedRelationshipTypes` alone. Wrong, and
+// unfixable by the person reading it: no elder can share a type that is not a
+// document.
+test('a rule naming Family or Marriage reads as a sentence, not as unavailable', async () => {
+    // Deliberately a church with NOTHING shared.
+    const page = await mountPage({ relationship_types: {} });
+
+    const marriage = { kind: 'notSameGroup', typeId: 'marriage' };
+    const family = { kind: 'notSameGroup', typeId: 'family' };
+
+    assert.equal(page.isRuleAvailable(marriage), true);
+    assert.equal(page.isRuleAvailable(family), true);
+    assert.match(page.ruleSentence(marriage), /Marriage/);
+    assert.match(page.ruleSentence(family), /Family/);
+    assert.doesNotMatch(page.ruleSentence(marriage), /unavailable/);
+});
+
+// Still true of a CUSTOM type, and still worth saying: an elder really can
+// unshare one after a rule was written against it.
+test('a rule naming a type nobody shares any more still says so', async () => {
+    const page = await mountPage({ relationship_types: {} });
+    const orphan = { kind: 'notSameGroup', typeId: 't3' };
+
+    assert.equal(page.isRuleAvailable(orphan), false);
+    assert.match(page.ruleSentence(orphan), /unavailable/);
+});
+
 test('saved group rules round-trip through the eligibility engine', async () => {
     const page = await mountPage({ roles: { r1: coffeeDefinition() }, relationship_types: { t3: HOUSE_GROUP } });
     page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
