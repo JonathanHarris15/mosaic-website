@@ -1186,9 +1186,16 @@
                     // `seriesId` existed do not match — a Firestore query cannot
                     // apply the read-time fallback — which is what
                     // scripts/backfill-involvement-series.js is for.
+                    //
+                    // ⚠ The orderBy is load-bearing. That index is
+                    // (seriesId ASC, serviceDate DESC); an inequality with no
+                    // stated order implies ASCENDING, which the index cannot
+                    // serve — so without this line every read fails and the
+                    // catch below swallows it, silently.
                     const snap = await db.collectionGroup('involvement')
                         .where('seriesId', '==', seriesId)
                         .where('serviceDate', '>=', earliest)
+                        .orderBy('serviceDate', 'desc')
                         .get();
                     this.serveHistory = snap.docs.map(d => {
                         const data = d.data() || {};

@@ -51,6 +51,10 @@
             loading: true,
             error: '',
 
+            // Something the editor should know that is not a reason to stop —
+            // a cold start, or a history read that came back empty-handed.
+            notice: '',
+
             // 'setup' → 'draft'. There is no third: accepting leaves the page.
             view: 'setup',
 
@@ -278,6 +282,7 @@
                 if (!this.canDraft) return;
                 this.drafting = true;
                 this.error = '';
+                this.notice = '';
 
                 try {
                     await this.loadForDraft();
@@ -352,16 +357,27 @@
 
             get windowSize() { return Events.fairnessWindowOf(this.chosen); },
 
+            // ⚠ NO HISTORY IS A LEGITIMATE STATE, NOT A FAILURE. A managed Role
+            // launches cold, and its first draft has nothing to be fair across —
+            // everybody starts level and the run itself lays down the record the
+            // next draft reads. So this never blocks a draft. It only says which
+            // of the two silences it is: nothing served yet, or nothing readable.
             async loadHistory(dates) {
                 this.history = [];
+                this.notice = '';
                 const past = this.pastDates;
                 if (!past.length) return;
                 const earliest = past[past.length - 1];
 
                 try {
+                    // The orderBy is NOT cosmetic. An inequality with no order
+                    // implies ASCENDING, and the deployed composite index is
+                    // (seriesId ASC, serviceDate DESC) — which cannot serve it.
+                    // Naming the descending order is what makes the query match.
                     const snap = await db.collectionGroup('involvement')
                         .where('seriesId', '==', this.seriesId)
                         .where('serviceDate', '>=', earliest)
+                        .orderBy('serviceDate', 'desc')
                         .get();
                     this.history = snap.docs.map(d => {
                         const data = d.data() || {};
@@ -373,15 +389,20 @@
                             metadata: data.metadata || null,
                         };
                     });
+                    if (!this.history.length) {
+                        this.notice = 'Nobody has served this event in the last ' +
+                            past.length + ' ' + this.occurrenceUnit.toLowerCase() +
+                            (past.length === 1 ? '' : 's') +
+                            ', so everybody starts level and the draft spreads the work evenly.';
+                    }
                 } catch (e) {
-                    // Without history everybody reads as equally fresh, which is
-                    // a draft that looks fine and is not. Refuse rather than
-                    // quietly produce one.
+                    // Everybody reads as equally fresh, which is a draft that
+                    // looks fine and is not. Say so, and let it through anyway —
+                    // a roster the editor can fix beats no roster at all.
                     console.error('Could not read the serve history:', e);
-                    throw new Error(
-                        'The serve history could not be read, and a draft without it ' +
-                        'would spread the work by guesswork.'
-                    );
+                    this.notice = 'The serve history could not be read, so everybody counts ' +
+                        'as fresh. The draft will still be sensible, but it cannot know who ' +
+                        'has carried this lately — check the names before you accept.';
                 }
             },
 

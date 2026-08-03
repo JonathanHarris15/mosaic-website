@@ -2460,6 +2460,59 @@ test('a preset is counted in occurrences, not in weeks', () => {
         'that means anything is its own');
 });
 
+// A managed Role launches cold. If a first draft refused to run until somebody
+// had already served, no Role could ever have a first draft — the history the
+// solve wants is written BY drafting, so the empty case has to go through.
+function pageWithHistoryRead(read) {
+    const calls = [];
+    const query = {
+        where(field, op, value) { calls.push([field, op, value]); return query; },
+        orderBy(field, dir) { calls.push(['orderBy', field, dir]); return query; },
+        get: read,
+    };
+    const page = loadComponent('auto-assign.js', 'autoAssignPage', {
+        db: { collectionGroup: () => query },
+    });
+    page.series = [{ id: 'sunday_service', name: 'Sunday Service', roleSlugs: [] }];
+    page.seriesId = 'sunday_service';
+    page.fromDate = '2026-10-04';
+    page.toDate = '2026-11-01';
+    return { page, calls };
+}
+
+test('a first draft with no serve history starts everybody level', async () => {
+    const { page } = pageWithHistoryRead(async () => ({ docs: [] }));
+
+    await page.loadHistory(page.resolvedDates);
+
+    assert.deepEqual(page.history, [], 'nobody has served, and that is not an error');
+    assert.match(page.notice, /everybody starts level/,
+        'the editor should know the draft is even because it is blind, not because it is clever');
+    assert.equal(page.error, '', 'a cold start must never block the draft');
+});
+
+test('a serve history that cannot be read still lets the draft through', async () => {
+    const { page } = pageWithHistoryRead(async () => { throw new Error('missing index'); });
+
+    await assert.doesNotReject(() => page.loadHistory(page.resolvedDates),
+        'a roster the editor can fix beats no roster at all');
+    assert.deepEqual(page.history, []);
+    assert.match(page.notice, /could not be read/);
+    assert.match(page.notice, /check the names/, 'say what it cannot know, not just that it failed');
+});
+
+test('the serve history is asked for in the order its index is built in', async () => {
+    const { page, calls } = pageWithHistoryRead(async () => ({ docs: [] }));
+
+    await page.loadHistory(page.resolvedDates);
+
+    // An inequality with no stated order implies ASCENDING, and the deployed
+    // index is (seriesId ASC, serviceDate DESC) — so leaving the order unsaid
+    // fails EVERY read, and the failure looks exactly like an empty church.
+    assert.deepEqual(calls[calls.length - 1], ['orderBy', 'serviceDate', 'desc']);
+    assert.ok(calls.some(c => c[0] === 'seriesId' && c[2] === 'sunday_service'));
+});
+
 test('the liturgical Roles are never drafted as fillable places', () => {
     const Roles = require('../public/roles-core.js');
     const page = loadComponent('auto-assign.js', 'autoAssignPage');
