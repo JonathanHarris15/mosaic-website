@@ -2412,6 +2412,41 @@ test('every core function Auto-assign calls is actually exported', () => {
         'the page calls something its module does not offer');
 });
 
+// ⚠ AN EMPTY STRING DISABLES A BUTTON. Alpine removes a boolean attribute for
+// `false`, `null` and `undefined` — and for anything else it SETS it, so
+// `:disabled="saving"` against `saving: ''` renders `disabled="disabled"`. The
+// control greys out on load and nothing can be pressed, with no error anywhere.
+//
+// It shipped exactly once, on the Roles Manager's non-servers list. Rather than
+// remember it, read every boolean binding on every page and check what backs it.
+test('no boolean attribute is bound to a value that is empty-string when idle', () => {
+    const BOOLEAN_ATTRS = ['disabled', 'checked', 'readonly', 'required', 'hidden'];
+    const wrong = [];
+
+    fs.readdirSync(PUBLIC).filter(f => f.endsWith('.html')).forEach(file => {
+        const html = fs.readFileSync(path.join(PUBLIC, file), 'utf8');
+        const js = path.join(PUBLIC, file.replace(/\.html$/, '.js'));
+        if (!fs.existsSync(js)) return;
+        const source = fs.readFileSync(js, 'utf8');
+
+        BOOLEAN_ATTRS.forEach(attr => {
+            const bind = new RegExp(':' + attr + '="([A-Za-z_$][\\w$.]*)"', 'g');
+            let m;
+            while ((m = bind.exec(html)) !== null) {
+                const name = m[1].split('.')[0];
+                // Declared as an empty string somewhere in the component.
+                if (new RegExp('\\b' + name + ":\\s*''").test(source)
+                    || new RegExp('\\b' + name + ':\\s*""').test(source)) {
+                    wrong.push(file + ' :' + attr + '="' + m[1] + '"');
+                }
+            }
+        });
+    });
+
+    assert.deepEqual([...new Set(wrong)], [],
+        'bind !!value instead — an empty string sets the attribute rather than clearing it');
+});
+
 test('Auto-assign is refused to anyone below editor', () => {
     const page = loadComponent('auto-assign.js', 'autoAssignPage');
 

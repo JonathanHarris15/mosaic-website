@@ -274,8 +274,13 @@
                             class="absolute z-10 left-0 right-0 mt-base bg-surface-container-lowest border border-outline-variant rounded-lg shadow-md overflow-hidden">
                             <template x-for="p in nonServerMatches" :key="p.id">
                                 <li>
+                                    <!-- ⚠ `!!`, NOT the bare string. Alpine only
+                                         removes a boolean attribute for false,
+                                         null or undefined — an empty string
+                                         becomes `disabled="disabled"`, so every
+                                         row greys out and nothing can be added. -->
                                     <button type="button" @click="setDoesNotServe(p.id, true)"
-                                            :disabled="savingNonServer"
+                                            :disabled="!!savingNonServer"
                                             class="w-full text-left px-sm py-sm font-body-md text-body-md text-on-surface hover:bg-surface-container transition-colors disabled:opacity-40"
                                             x-text="p.name"></button>
                                 </li>
