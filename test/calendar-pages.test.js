@@ -3308,6 +3308,31 @@ test('a browser that refuses to remember does not break the page', () => {
     assert.doesNotThrow(() => page.forgetDraft());
 });
 
+// ⚠ The grid is the page. A sticky header inside a scrolling BODY still walks
+// up and off, taking the range strip with it — and the strip is only worth
+// having if it stays put while you read the columns.
+test('the page is pinned to the viewport and the grid scrolls inside it', () => {
+    const html = readPage('auto-assign.html');
+
+    assert.match(html, /\.aa-page \{[^}]*overflow: hidden/,
+        'the body must not be what scrolls');
+    assert.match(html, /\.aa-desk \{ display: none/);
+    assert.match(html, /\.aa-desk \{ display: flex/,
+        'written as block this rule beats Tailwind and cancels the whole flex column');
+    assert.match(html, /x-ref="scroller"[\s\S]{0,200}?@scroll="onGridScroll/,
+        'the grid is the scrolling container');
+});
+
+test('the draft draws one header, not a second one under the first', () => {
+    const html = readPage('auto-assign.html');
+    const headers = html.match(/<header[\s>]/g) || [];
+
+    assert.equal(headers.length, 1, 'two bars saying the same kind of thing cost 74px of grid');
+    // And that one header carries both jobs.
+    assert.match(html, /<header[\s\S]*?draftSubtitle[\s\S]*?<\/header>/);
+    assert.match(html, /<header[\s\S]*?auth-container[\s\S]*?<\/header>/);
+});
+
 test('going back to setup drops the grid with the draft', () => {
     const page = draftedPage();
     page.draft = { dates: [drafted('2026-10-04')] };

@@ -21,13 +21,24 @@
                                  opacity 150ms cubic-bezier(0.2,0,0,1),
                                  border-color 150ms cubic-bezier(0.2,0,0,1); }
 
+        /* ⚠ THE PAGE ITSELF DOES NOT SCROLL — the grid inside it does. A sticky
+           header inside a scrolling BODY still walks up and off, and the range
+           strip is only useful if it stays put while you read the columns. So
+           the body is pinned to the viewport and every container down to the
+           grid passes its height along with min-h-0. */
+        .aa-page { height: 100vh; height: 100dvh; overflow: hidden; }
+
         /* The width the grid needs before it is worth drawing at all. Below it
            the page shows the "needs a computer" panel and nothing else — not a
            squeezed grid, because a squeezed one invites the editor to try. */
+        /* ⚠ `flex`, not `block`. This rule is in a <style> after the
+           stylesheet, so it beats Tailwind's own `flex` — written as `block` it
+           quietly cancelled the flex column the whole page hangs off, and every
+           min-h-0 below it meant nothing. */
         .aa-desk { display: none; }
-        .aa-phone { display: block; }
+        .aa-phone { display: flex; }
         @media (min-width: 1024px) {
-            .aa-desk { display: block; }
+            .aa-desk { display: flex; }
             .aa-phone { display: none; }
         }
 
@@ -136,11 +147,11 @@
     </style>
 </head>
 
-<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+<body class="bg-background text-on-background font-body-md text-body-md antialiased aa-page flex flex-col"
       x-data="autoAssignPage()" x-cloak>
 
 <!-- ══════════════ What a phone gets ══════════════ -->
-<div class="aa-phone flex-grow flex flex-col px-6 py-10 max-w-[420px] mx-auto">
+<div class="aa-phone flex-grow min-h-0 overflow-auto flex flex-col px-6 py-10 max-w-[420px] mx-auto">
     <a href="calendar.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary aa-motion">
         <span class="material-symbols-outlined text-[20px]">arrow_back</span>
         <span class="text-xs font-label-md uppercase tracking-wider">Calendar</span>
@@ -164,14 +175,33 @@
 </div>
 
 <!-- ══════════════ The screen ══════════════ -->
-<div class="aa-desk flex-grow flex flex-col">
+<div class="aa-desk flex-grow min-h-0 flex flex-col">
 
-    <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a href="calendar.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary aa-motion">
+    <!-- ONE header for both views. The draft used to draw a second bar under
+         this one saying the same kind of thing, which cost 74px of grid on a
+         screen where the grid is the whole point. The back arrow changes what
+         it means instead: out of the draft, or out of the page. -->
+    <header class="shrink-0 w-full px-6 py-2.5 flex items-center gap-4
+                   bg-surface-container-lowest border-b border-outline-variant">
+        <a href="calendar.html" x-show="view === 'setup'"
+           class="flex items-center gap-1 text-on-surface-variant hover:text-primary aa-motion">
             <span class="material-symbols-outlined text-[20px]">arrow_back</span>
             <span class="text-xs font-label-md uppercase tracking-wider">Calendar</span>
         </a>
-        <div id="auth-container" class="flex items-center"><div class="h-10"></div></div>
+
+        <template x-if="view === 'draft'">
+            <div class="flex items-center gap-3 min-w-0 flex-grow">
+                <button @click="backToSetup()" type="button" aria-label="Back to setup"
+                        class="material-symbols-outlined text-[20px] text-secondary p-1.5 rounded-lg
+                               hover:bg-surface-container aa-motion aa-focus shrink-0">arrow_back</button>
+                <div class="flex flex-col gap-0.5 min-w-0">
+                    <span class="font-display text-[19px] text-primary tracking-[.02em] leading-none">Auto-assign</span>
+                    <span class="text-[12px] text-on-surface-variant truncate" x-text="draftSubtitle"></span>
+                </div>
+            </div>
+        </template>
+
+        <div id="auth-container" class="flex items-center ml-auto"><div class="h-10"></div></div>
     </header>
 
     <div x-show="loading" class="flex-grow flex items-center justify-center">
@@ -199,7 +229,8 @@
     <main x-show="!loading && isEditor" class="flex-grow w-full flex flex-col min-h-0">
 
         <!-- ══════════════ Setup ══════════════ -->
-        <div x-show="view === 'setup'" class="w-full max-w-7xl mx-auto px-4 md:px-margin pb-lg pt-md flex justify-center">
+        <div x-show="view === 'setup'"
+             class="flex-grow min-h-0 overflow-auto w-full max-w-7xl mx-auto px-4 md:px-margin pb-lg pt-md flex justify-center">
             <div class="w-full max-w-[720px] flex flex-col gap-8 pt-6">
 
                 <div class="flex flex-col gap-2.5">
@@ -364,17 +395,6 @@
         <!-- The grid itself is MS-179. What is here now is the frame it hangs
              in, and enough of a tally to prove the loop ran. -->
         <div x-show="view === 'draft'" class="flex-grow flex flex-col min-h-0">
-
-            <div class="shrink-0 h-[74px] flex items-center gap-4 px-6 bg-surface-container-lowest
-                        border-y border-outline-variant">
-                <button @click="backToSetup()" type="button" aria-label="Back to setup"
-                        class="material-symbols-outlined text-[20px] text-secondary p-1.5 rounded-lg
-                               hover:bg-surface-container aa-motion aa-focus">arrow_back</button>
-                <div class="flex flex-col gap-0.5 min-w-0">
-                    <span class="font-display text-[19px] text-primary tracking-[.02em]">Auto-assign</span>
-                    <span class="text-[12px] text-on-surface-variant truncate" x-text="draftSubtitle"></span>
-                </div>
-            </div>
 
             <!-- ══════ The range strip ══════
                  One tick per date. The cards below are worth reading and only
