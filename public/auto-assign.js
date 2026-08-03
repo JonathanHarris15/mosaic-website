@@ -143,6 +143,12 @@
             // WHY somebody is missing from every row below.
             liturgyOpen: true,
 
+            // The directory drawer. Open by default — the first thing most
+            // editors do to a draft is put somebody in it by hand — but 320px
+            // is a column and a half of grid, and reading a wide range does
+            // not need the directory at all.
+            panelOpen: true,
+
             // ── Loading ──────────────────────────────────────────────────────
 
             async init() {
@@ -158,6 +164,7 @@
                 }
 
                 this.restoreLiturgyFold();
+                this.restorePanelDrawer();
 
                 const today = Dates.todayStr();
                 this.fromDate = addDays(today, 1);
@@ -918,6 +925,9 @@
                 };
                 this.seedRole = place.roleSlug;
                 this.seedNote = '';
+                // Asking why is asking for the panel. A shut drawer would
+                // swallow the answer and look like the click did nothing.
+                this.panelOpen = true;
             },
 
             closePanel() { this.selected = null; this.seedNote = ''; },
@@ -1179,6 +1189,21 @@
             toggleLiturgy() {
                 this.liturgyOpen = !this.liturgyOpen;
                 Saved.save(this.storage, this.LITURGY_KEY, { open: this.liturgyOpen });
+            },
+
+            PANEL_KEY: 'mosaic.autoAssign.panelOpen',
+
+            restorePanelDrawer() {
+                const kept = Saved.read(this.storage, this.PANEL_KEY);
+                if (kept && typeof kept.open === 'boolean') this.panelOpen = kept.open;
+            },
+
+            // Only a deliberate toggle is remembered. Picking a card opens the
+            // drawer because the answer is in there, but that is this draft's
+            // business — it should not quietly overwrite what the editor chose.
+            togglePanel() {
+                this.panelOpen = !this.panelOpen;
+                Saved.save(this.storage, this.PANEL_KEY, { open: this.panelOpen });
             },
 
             // What a folded cell says. Names, not a count: "3 on liturgy" tells

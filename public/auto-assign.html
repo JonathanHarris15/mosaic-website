@@ -189,8 +189,36 @@
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
 
-        .aa-panel { width: 320px; }
-        @media (min-width: 1440px) { .aa-panel { width: 360px; } }
+        /* ── The directory drawer ──
+           Shuts to give the grid its width back. The panel animates, but the
+           content inside it keeps its own fixed width — otherwise the names
+           would reflow and re-wrap the whole way closed, which reads as the
+           panel breaking rather than sliding away.
+
+           `visibility` is what takes the shut panel out of the tab order, so
+           an editor cannot land in a search box they cannot see. Delayed on
+           the way out so the slide finishes first, immediate on the way in. */
+        .aa-panel {
+            width: 320px; overflow: hidden;
+            transition: width 240ms cubic-bezier(0.2, 0, 0, 1);
+        }
+        .aa-panel-shut { width: 0; }
+        .aa-panel-body { width: 320px; transition: visibility 0s; }
+        .aa-panel-shut .aa-panel-body { visibility: hidden; transition: visibility 0s 240ms; }
+
+        /* Stays on screen when the panel is shut, so the way back is where the
+           way out was. */
+        .aa-rail { width: 34px; }
+        .aa-rail-label { writing-mode: vertical-rl; }
+
+        @media (min-width: 1440px) {
+            .aa-panel, .aa-panel-body { width: 360px; }
+            .aa-panel-shut { width: 0; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .aa-panel { transition: none; }
+        }
     </style>
 </head>
 
@@ -739,9 +767,32 @@
             <!-- ══════ The panel ══════
                  Two jobs, one at a time. Search the church and drag anyone in,
                  or explain a placement that is already there. Closing the
-                 explanation returns to the directory. -->
-            <aside class="aa-panel shrink-0 border-l border-outline-variant bg-surface-container-lowest
-                          flex flex-col min-h-0">
+                 explanation returns to the directory.
+
+                 It also shuts like a drawer. Some of the work here is reading
+                 a wide range rather than adding anybody, and 320px is a
+                 column and a half of grid. -->
+            <aside class="shrink-0 border-l border-outline-variant bg-surface-container-lowest
+                          flex min-h-0">
+
+                <!-- ── The handle ── -->
+                <div class="aa-rail shrink-0 flex flex-col items-center gap-3 pt-3.5">
+                    <button type="button" @click="togglePanel()"
+                            :title="panelOpen ? 'Close the directory' : 'Open the directory'"
+                            :aria-label="panelOpen ? 'Close the directory' : 'Open the directory'"
+                            :aria-expanded="panelOpen ? 'true' : 'false'"
+                            class="material-symbols-outlined text-[18px] text-on-surface-variant
+                                   hover:text-primary p-1 rounded aa-motion aa-focus"
+                            x-text="panelOpen ? 'chevron_right' : 'chevron_left'"></button>
+                    <button type="button" x-show="!panelOpen" @click="togglePanel()"
+                            class="aa-rail-label text-[10.5px] font-label-md uppercase tracking-[.14em]
+                                   text-on-surface-variant hover:text-primary aa-motion aa-focus rounded">
+                        Directory
+                    </button>
+                </div>
+
+                <div class="aa-panel min-h-0" :class="panelOpen ? '' : 'aa-panel-shut'">
+                <div class="aa-panel-body flex flex-col min-h-0 h-full">
 
                 <!-- ── The directory ── -->
                 <template x-if="!selected">
@@ -927,6 +978,9 @@
                         </div>
                     </div>
                 </template>
+
+                </div>
+                </div>
             </aside>
             </div>
 

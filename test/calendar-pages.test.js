@@ -3535,6 +3535,96 @@ test('a browser that will not remember the fold does not break the page', () => 
     assert.equal(page.liturgyOpen, false, 'the fold still works, it just is not kept');
 });
 
+// ── The directory drawer ────────────────────────────────────────────────────
+
+test('the directory shuts like a drawer, and stays shut next time', () => {
+    const box = {};
+    const page = draftedPage(null, {
+        localStorage: {
+            setItem(k, v) { box[k] = v; },
+            getItem(k) { return box[k] === undefined ? null : box[k]; },
+            removeItem(k) { delete box[k]; },
+        },
+    });
+
+    assert.equal(page.panelOpen, true, 'open until somebody shuts it');
+    page.togglePanel();
+    assert.equal(page.panelOpen, false);
+
+    page.panelOpen = true;
+    page.restorePanelDrawer();
+    assert.equal(page.panelOpen, false, 'an editor who wanted the width back keeps it');
+});
+
+// ⚠ A shut drawer would swallow the answer, and the click would read as
+// having done nothing at all.
+test('asking why somebody is placed opens the drawer', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: [drafted('2026-10-04', [
+            { roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 },
+        ])],
+    };
+    page.buildGrid();
+    page.panelOpen = false;
+
+    page.selectPlace('2026-10-04', page.grid.roleRows[0].cells[0].places[0]);
+    assert.equal(page.panelOpen, true);
+});
+
+// Only a deliberate toggle is remembered — otherwise one click on a card would
+// quietly overwrite what the editor chose.
+test('opening the drawer to explain a placement is not remembered', () => {
+    const box = {};
+    const page = draftedPage(null, {
+        localStorage: {
+            setItem(k, v) { box[k] = v; },
+            getItem(k) { return box[k] === undefined ? null : box[k]; },
+            removeItem(k) { delete box[k]; },
+        },
+    });
+    page.draft = {
+        dates: [drafted('2026-10-04', [
+            { roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 },
+        ])],
+    };
+    page.buildGrid();
+
+    page.togglePanel();
+    page.selectPlace('2026-10-04', page.grid.roleRows[0].cells[0].places[0]);
+    assert.equal(page.panelOpen, true, 'the answer is visible');
+
+    page.restorePanelDrawer();
+    assert.equal(page.panelOpen, false, 'but shut is still what they asked for');
+});
+
+test('the drawer slides, and a shut one cannot be tabbed into', () => {
+    const html = readPage('auto-assign.html');
+
+    assert.match(html, /\.aa-panel \{[\s\S]*?transition: width 240ms/);
+    assert.match(html, /\.aa-panel-shut \{ width: 0; \}/);
+    // The content keeps its own width, or the names re-wrap the whole way shut.
+    assert.match(html, /\.aa-panel-body \{ width: 320px/);
+    // Delayed out so the slide finishes, immediate in.
+    assert.match(html, /\.aa-panel-shut \.aa-panel-body \{ visibility: hidden; transition: visibility 0s 240ms/);
+    // The way back is where the way out was.
+    assert.match(html, /x-show="!panelOpen"[\s\S]{0,300}Directory/);
+});
+
+test('a browser that will not remember the drawer does not break the page', () => {
+    const page = draftedPage(null, {
+        localStorage: {
+            setItem() { throw new Error('quota'); },
+            getItem() { throw new Error('denied'); },
+            removeItem() { throw new Error('denied'); },
+        },
+    });
+
+    assert.doesNotThrow(() => page.restorePanelDrawer());
+    assert.doesNotThrow(() => page.togglePanel());
+    assert.equal(page.panelOpen, false, 'the drawer still works, it just is not kept');
+});
+
 test('going back to setup drops the grid with the draft', () => {
     const page = draftedPage();
     page.draft = { dates: [drafted('2026-10-04')] };
