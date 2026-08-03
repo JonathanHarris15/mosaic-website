@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Auto-assign | Mosaic</title>
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <!-- ⚠ NO mobile shell, deliberately. Every other editor page opens inside
+         it; this one does not, because it is a wide grid of dates against Roles
+         and there is no honest phone reading of it. A phone gets the panel at
+         the bottom of this file instead of a table it cannot use. -->
+
+    <style>
+        [x-cloak] { display: none !important; }
+
+        .aa-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(93,148,169,.18); }
+        .aa-motion { transition: background-color 150ms cubic-bezier(0.2,0,0,1),
+                                 opacity 150ms cubic-bezier(0.2,0,0,1),
+                                 border-color 150ms cubic-bezier(0.2,0,0,1); }
+
+        /* The width the grid needs before it is worth drawing at all. Below it
+           the page shows the "needs a computer" panel and nothing else — not a
+           squeezed grid, because a squeezed one invites the editor to try. */
+        .aa-desk { display: none; }
+        .aa-phone { display: block; }
+        @media (min-width: 1024px) {
+            .aa-desk { display: block; }
+            .aa-phone { display: none; }
+        }
+    </style>
+</head>
+
+<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+      x-data="autoAssignPage()" x-cloak>
+
+<!-- ══════════════ What a phone gets ══════════════ -->
+<div class="aa-phone flex-grow flex flex-col px-6 py-10 max-w-[420px] mx-auto">
+    <a href="calendar.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary aa-motion">
+        <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+        <span class="text-xs font-label-md uppercase tracking-wider">Calendar</span>
+    </a>
+    <div class="flex-grow flex flex-col justify-center gap-5">
+        <span class="material-symbols-outlined text-[34px] text-sand">desktop_windows</span>
+        <h1 class="font-display text-headline-md text-primary tracking-[.02em]">This one needs a computer.</h1>
+        <p class="text-[15.5px] leading-relaxed text-on-surface-variant text-pretty">
+            Auto-assign lays out every role against every date at once. There is no honest way to do
+            that on a phone. Open Mosaic at a desk and we'll draft it with you.
+        </p>
+        <div class="h-px bg-outline-variant my-1"></div>
+        <p class="text-[13.5px] leading-relaxed text-on-surface-variant">
+            You can still see the finished roster, and change one person, from the Calendar.
+        </p>
+    </div>
+    <a href="calendar.html"
+       class="w-full text-center bg-primary text-on-primary rounded-lg px-md py-4 font-label-md text-xs uppercase tracking-wider">
+        Go to the Calendar
+    </a>
+</div>
+
+<!-- ══════════════ The screen ══════════════ -->
+<div class="aa-desk flex-grow flex flex-col">
+
+    <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
+        <a href="calendar.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary aa-motion">
+            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+            <span class="text-xs font-label-md uppercase tracking-wider">Calendar</span>
+        </a>
+        <div id="auth-container" class="flex items-center"><div class="h-10"></div></div>
+    </header>
+
+    <div x-show="loading" class="flex-grow flex items-center justify-center">
+        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    </div>
+
+    <!-- Signed out, or signed in without the rank. Two different sentences:
+         one is a thing you can fix by signing in, the other is not. -->
+    <div x-show="!loading && (signedOut || refused)" class="flex-grow flex items-center justify-center px-4">
+        <div class="max-w-[52ch] bg-surface-container-low border border-outline-variant rounded-lg p-lg flex items-start gap-sm">
+            <span class="material-symbols-outlined text-[22px] text-gold shrink-0">person_off</span>
+            <div>
+                <p class="text-on-surface" x-show="signedOut">You are not signed in.</p>
+                <p class="text-on-surface" x-show="refused">Auto-assign is for editors.</p>
+                <p class="text-[13px] text-on-surface-variant mt-1" x-show="signedOut">
+                    Drafting a roster needs an editor's account.
+                </p>
+                <p class="text-[13px] text-on-surface-variant mt-1" x-show="refused">
+                    You can still see what you are down for on the Calendar.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <main x-show="!loading && isEditor" class="flex-grow w-full flex flex-col min-h-0">
+
+        <!-- ══════════════ Setup ══════════════ -->
+        <div x-show="view === 'setup'" class="w-full max-w-7xl mx-auto px-4 md:px-margin pb-lg pt-md flex justify-center">
+            <div class="w-full max-w-[720px] flex flex-col gap-8 pt-6">
+
+                <div class="flex flex-col gap-2.5">
+                    <div class="text-[13px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">Rosters</div>
+                    <h1 class="font-display text-display-lg text-primary tracking-[.02em] leading-[1.1]">Auto-assign</h1>
+                    <p class="text-body-md leading-relaxed text-on-surface-variant max-w-[56ch] text-pretty">
+                        Draft who serves in each role across a stretch of dates, balanced so the same
+                        few people don't carry everything. Nothing is saved until you accept it.
+                    </p>
+                </div>
+
+                <div x-show="error" class="bg-error-container text-on-error-container border border-outline-variant
+                                           rounded-lg p-md flex items-start gap-sm">
+                    <span class="material-symbols-outlined text-[20px]">error</span>
+                    <p class="text-body-md flex-grow" x-text="error"></p>
+                </div>
+
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-lg
+                            px-8 pt-7 pb-8 flex flex-col gap-6">
+
+                    <!-- Which Event -->
+                    <div class="flex flex-col gap-2">
+                        <label for="aa-series"
+                               class="text-[13px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                            Recurring event
+                        </label>
+                        <!-- Only series are offered. A one-off Event belongs to
+                             no series, so it has no run of past dates to be fair
+                             across — there is nothing to balance it against. -->
+                        <select id="aa-series" x-model="seriesId" @change="applyPreset(preset)"
+                                class="w-full bg-surface-container-low border border-outline-variant rounded-lg
+                                       px-3.5 py-3 text-[15px] text-on-surface aa-focus">
+                            <template x-for="s in series" :key="s.id">
+                                <option :value="s.id" x-text="s.name"></option>
+                            </template>
+                        </select>
+                        <p x-show="!series.length" class="text-[13px] text-on-surface-variant">
+                            No repeating events yet. Auto-assign needs one to be fair across.
+                        </p>
+                    </div>
+
+                    <!-- Which dates -->
+                    <div class="flex flex-col gap-3">
+                        <span class="text-[13px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">Dates</span>
+                        <div class="flex items-center gap-3">
+                            <input type="date" x-model="fromDate" @change="onRangeChanged()" aria-label="From"
+                                   class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg
+                                          px-3.5 py-3 text-[15px] text-on-surface aa-focus" />
+                            <span class="text-[13px] text-on-surface-variant tracking-wide">to</span>
+                            <input type="date" x-model="toDate" @change="onRangeChanged()" aria-label="To"
+                                   class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg
+                                          px-3.5 py-3 text-[15px] text-on-surface aa-focus" />
+                        </div>
+                        <!-- Counted in OCCURRENCES, not weeks: a fortnightly
+                             Event's twelve is six months of calendar, and the
+                             number that means anything is its own. -->
+                        <div class="flex gap-2">
+                            <template x-for="n in presets" :key="n">
+                                <button @click="applyPreset(n)" type="button"
+                                        class="px-3.5 py-2.5 rounded-lg border font-label-md text-[11.5px]
+                                               uppercase tracking-[.12em] aa-motion aa-focus"
+                                        :class="preset === n
+                                            ? 'bg-primary text-on-primary border-primary'
+                                            : 'bg-transparent text-secondary border-outline-variant hover:bg-surface-container-low'"
+                                        x-text="'Next ' + n + ' ' + occurrenceUnit.toLowerCase() + (n === 1 ? '' : 's')"></button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- What that resolves to -->
+                    <div class="flex items-center gap-2.5 px-4 py-3.5 bg-surface-container-low
+                                border border-outline-variant rounded-lg">
+                        <span class="material-symbols-outlined text-[19px] text-tertiary shrink-0">event_available</span>
+                        <span class="text-[15px] text-on-surface" x-text="resolvedLine"></span>
+                    </div>
+
+                    <!-- Dates that already have people on them.
+                         Only shown when there are any: three choices about
+                         nothing is three questions the editor has to read and
+                         dismiss before doing the thing they came for. -->
+                    <div x-show="hasOccupied"
+                         class="flex flex-col gap-3.5 px-4 pt-4 pb-5 bg-surface-container border border-gold rounded-lg">
+                        <div class="flex gap-2.5 items-start">
+                            <span class="material-symbols-outlined text-[19px] text-gold shrink-0 mt-px">history_edu</span>
+                            <div class="flex flex-col gap-1">
+                                <div class="text-[15px] font-semibold text-on-surface" x-text="occupiedLine"></div>
+                                <div class="text-[13.5px] leading-snug text-on-surface-variant text-pretty">
+                                    Somebody has already put people on them by hand. Tell us what to do with them.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <template x-for="c in choices" :key="c.id">
+                                <button @click="choice = c.id" type="button"
+                                        class="flex-1 text-left px-3.5 py-3 rounded-lg border flex flex-col gap-1 aa-motion aa-focus"
+                                        :class="choice === c.id
+                                            ? 'bg-surface-container-lowest border-primary'
+                                            : 'bg-transparent border-outline-variant hover:bg-surface-container-low'">
+                                    <span class="flex items-center gap-1.5 font-label-md text-[13px] uppercase tracking-[.1em]"
+                                          :class="choice === c.id ? 'text-primary' : 'text-on-surface-variant'">
+                                        <span class="material-symbols-outlined text-[16px]" x-text="c.icon"></span>
+                                        <span x-text="c.label"></span>
+                                    </span>
+                                    <span class="text-[12px] leading-snug text-on-surface-variant" x-text="c.desc"></span>
+                                </button>
+                            </template>
+                        </div>
+                        <p class="text-[12.5px] leading-snug text-on-surface-variant" x-text="choiceFootnote"></p>
+                    </div>
+
+                    <!-- Go -->
+                    <div class="flex items-center justify-between gap-4 pt-1.5">
+                        <span class="text-[12.5px] text-on-surface-variant">
+                            You'll be able to rework the draft before anything is saved.
+                        </span>
+                        <button @click="runDraft()" :disabled="!canDraft" type="button"
+                                class="shrink-0 bg-primary text-on-primary rounded-lg px-5 py-3.5 shadow-xs
+                                       font-label-md text-[12.5px] uppercase tracking-[.12em] aa-motion aa-focus
+                                       disabled:opacity-40 disabled:cursor-not-allowed"
+                                x-text="drafting ? 'Drafting…' : 'Draft the roster'"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════════ The draft ══════════════ -->
+        <!-- The grid itself is MS-179. What is here now is the frame it hangs
+             in, and enough of a tally to prove the loop ran. -->
+        <div x-show="view === 'draft'" class="flex-grow flex flex-col min-h-0">
+
+            <div class="shrink-0 h-[74px] flex items-center gap-4 px-6 bg-surface-container-lowest
+                        border-y border-outline-variant">
+                <button @click="backToSetup()" type="button" aria-label="Back to setup"
+                        class="material-symbols-outlined text-[20px] text-secondary p-1.5 rounded-lg
+                               hover:bg-surface-container aa-motion aa-focus">arrow_back</button>
+                <div class="flex flex-col gap-0.5 min-w-0">
+                    <span class="font-display text-[19px] text-primary tracking-[.02em]">Auto-assign</span>
+                    <span class="text-[12px] text-on-surface-variant truncate" x-text="draftSubtitle"></span>
+                </div>
+            </div>
+
+            <div class="flex-grow overflow-auto bg-surface-container-low p-6">
+                <div class="max-w-[720px] mx-auto bg-surface-container-lowest border border-outline-variant
+                            rounded-lg p-lg flex flex-col gap-3">
+                    <span class="text-[13px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                        Drafted
+                    </span>
+                    <p class="text-body-md text-on-surface">
+                        <span x-text="tally.dates"></span> dates ·
+                        <span x-text="tally.places"></span> places ·
+                        <span x-text="tally.empty"></span> still empty
+                    </p>
+                    <p class="text-[13px] text-on-surface-variant text-pretty">
+                        The grid that lets you rework this is the next piece of work. Nothing here
+                        has been saved — leaving the page loses the draft.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="vendor/firebase/firebase-app-compat.js"></script>
+<script src="vendor/firebase/firebase-auth-compat.js"></script>
+<script src="vendor/firebase/firebase-firestore-compat.js"></script>
+
+<script src="local-cache.js"></script>
+<script src="auth.js"></script>
+<script src="date-utils.js"></script>
+<script src="roles-core.js"></script>
+<script src="events-core.js"></script>
+<script src="events-occurrence-core.js"></script>
+<script src="events-store.js"></script>
+<script src="fairness-core.js"></script>
+<script src="auto-assign-core.js"></script>
+<script src="calendar-view.js"></script>
+<script src="auto-assign.js"></script>
+<script defer src="vendor/alpine-3.15.12.min.js"></script>
+</body>
+</html>

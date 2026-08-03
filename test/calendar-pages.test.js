@@ -62,6 +62,7 @@ function loadComponent(scriptFile, factoryName, overrides) {
     sandbox.EventsCore = require('../public/events-core.js');
     sandbox.FairnessCore = require('../public/fairness-core.js');
     sandbox.DateUtils = require('../public/date-utils.js');
+    sandbox.AutoAssignCore = require('../public/auto-assign-core.js');
 
     // The browser-only edges, stubbed just enough to construct the component.
     sandbox.location = { search: '?id=midweek_2026-07-15', href: '' };
@@ -191,6 +192,10 @@ test('the Event detail page only binds to things its component defines', () => {
     checkPage('calendar-event.html', 'calendar-event.js', 'eventDetailPage');
 });
 
+test('the Auto-assign page only binds to things its component defines', () => {
+    checkPage('auto-assign.html', 'auto-assign.js', 'autoAssignPage');
+});
+
 // ── How auth.js actually exposes itself ───────────────────────────────────────
 
 test('auth.js declares auth and db as consts, so they are NOT window properties', () => {
@@ -239,6 +244,11 @@ test('each page loads every module its component reaches for', () => {
     const NEEDED = {
         'calendar.html': ['events-occurrence-core.js', 'events-store.js', 'calendar-view.js', 'date-utils.js', 'calendar.js'],
         'calendar-event.html': ['events-occurrence-core.js', 'events-store.js', 'calendar-view.js', 'roles-core.js', 'date-utils.js', 'calendar-event.js'],
+        // Auto-assign steps the solve across dates, so it needs BOTH the loop
+        // and the fairness underneath it — the loop imports nothing and would
+        // throw the moment it was handed a solve that was not there.
+        'auto-assign.html': ['events-occurrence-core.js', 'events-store.js', 'roles-core.js', 'events-core.js',
+                             'fairness-core.js', 'auto-assign-core.js', 'date-utils.js', 'auto-assign.js'],
     };
 
     Object.keys(NEEDED).forEach(page => {
@@ -2347,4 +2357,118 @@ test('a one-off job with no options set still reads as exclusive to the picker',
     const RolesCore = require('../public/roles-core.js');
     const page = eventPageWithRole();
     assert.strictEqual(RolesCore.allowsAnotherRole(page.oneOffRoles[0]), false);
+});
+
+// ── Auto-assign (MS-18) ───────────────────────────────────────────────────────
+
+test('Auto-assign is offered from the Calendar, to editors, and not on a phone', () => {
+    const html = readPage('calendar.html');
+    const link = html.match(/<a[^>]*href="auto-assign\.html"[\s\S]*?<\/a>/);
+
+    assert.ok(link, 'the Calendar does not offer Auto-assign at all');
+    assert.match(link[0], /x-show="canCreate"/, 'it is offered to people who cannot use it');
+    // The page it opens is a wide grid and says so when you arrive. Better not
+    // to offer the journey than to end it with a shrug.
+    assert.match(link[0], /cal-desktop-only/, 'a phone is offered a page it will be refused');
+});
+
+test('Auto-assign is refused to anyone below editor', () => {
+    const page = loadComponent('auto-assign.js', 'autoAssignPage');
+
+    page.loading = false;
+    ['viewer', 'member'].forEach(rank => {
+        page.rank = rank;
+        assert.equal(page.isEditor, false, rank + ' should not be able to draft a roster');
+        assert.equal(page.refused, true);
+    });
+    ['editor', 'admin', 'elder', 'super_admin'].forEach(rank => {
+        page.rank = rank;
+        assert.equal(page.isEditor, true, rank + ' should be able to draft a roster');
+        assert.equal(page.refused, false);
+    });
+
+    page.rank = null;
+    assert.equal(page.signedOut, true);
+    assert.equal(page.refused, false, 'signed out and refused are different sentences');
+});
+
+test('the three choices about existing people default to keeping them', () => {
+    const Loop = require('../public/auto-assign-core.js');
+    const page = loadComponent('auto-assign.js', 'autoAssignPage');
+
+    assert.equal(page.choice, Loop.CHOICES.KEEP,
+        'an assignment exists because a person put it there; losing one is the ' +
+        'failure you do not notice');
+    assert.deepEqual(
+        page.choices.map(c => c.id),
+        [Loop.CHOICES.KEEP, Loop.CHOICES.REPLACE, Loop.CHOICES.LEAVE_OUT]
+    );
+    // Every option is safer than it sounds, and all three need saying so.
+    assert.match(page.choiceFootnote, /already said yes/);
+    assert.match(page.choiceFootnote, /said no/);
+});
+
+test('the notice about existing people is hidden when there are none', () => {
+    const page = loadComponent('auto-assign.js', 'autoAssignPage');
+
+    assert.equal(page.hasOccupied, false);
+    page.occupied = ['2026-10-04', '2026-10-11'];
+    assert.equal(page.hasOccupied, true);
+    assert.match(page.occupiedLine, /^2 of these/);
+    page.occupied = ['2026-10-04'];
+    assert.match(page.occupiedLine, /^One of these/);
+});
+
+test('a range of any length can be drafted — there is no cap', () => {
+    const page = loadComponent('auto-assign.js', 'autoAssignPage');
+    const Store = require('../public/events-store.js');
+
+    page.series = [{ id: 'sunday_service', name: 'Sunday Service', roleSlugs: [] }];
+    page.seriesId = 'sunday_service';
+    page.fromDate = '2026-10-04';
+    page.toDate = '2027-10-03';        // a whole year, far past the 12-week window
+
+    assert.ok(page.resolvedDates.length > 12);
+    assert.equal(page.canDraft, true,
+        'a draft that far out is a sketch, and re-drafting nearer the time is the answer');
+    assert.equal(Store.SUNDAY_RULE, page.rule, 'the Sunday Service uses its implied rule');
+});
+
+test('nothing can be drafted when the range resolves to no dates', () => {
+    const page = loadComponent('auto-assign.js', 'autoAssignPage');
+
+    page.series = [{ id: 'sunday_service', name: 'Sunday Service', roleSlugs: [] }];
+    page.seriesId = 'sunday_service';
+    page.fromDate = '2026-10-05';      // a Monday
+    page.toDate = '2026-10-09';        // to the Friday — no Sunday in between
+
+    assert.deepEqual(page.resolvedDates, []);
+    assert.equal(page.canDraft, false);
+    assert.match(page.resolvedLine, /No dates/);
+});
+
+test('a preset is counted in occurrences, not in weeks', () => {
+    const page = loadComponent('auto-assign.js', 'autoAssignPage');
+
+    page.series = [{ id: 'sunday_service', name: 'Sunday Service', roleSlugs: [] }];
+    page.seriesId = 'sunday_service';
+    page.fromDate = '2026-10-04';
+    page.applyPreset(8);
+
+    assert.equal(page.resolvedDates.length, 8,
+        'a fortnightly Event\'s twelve is six months of calendar — the number ' +
+        'that means anything is its own');
+});
+
+test('the liturgical Roles are never drafted as fillable places', () => {
+    const Roles = require('../public/roles-core.js');
+    const page = loadComponent('auto-assign.js', 'autoAssignPage');
+
+    const preacher = Roles.LITURGICAL_SLUGS[0];
+    page.series = [{ id: 'sunday_service', name: 'Sunday Service', roleSlugs: [preacher, 'coffee'] }];
+    page.seriesId = 'sunday_service';
+    page.roleDefinitions = [{ slug: 'coffee', name: 'Coffee', slots: [{ id: 's1' }] }];
+
+    assert.deepEqual(page.draftableRoles.map(r => r.slug), ['coffee'],
+        'liturgy is fields on the Service that the printed booklet reads (ADR-0018 §2)');
 });
