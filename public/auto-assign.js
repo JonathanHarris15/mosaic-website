@@ -137,6 +137,12 @@
             offered: null,          // a stored draft waiting to be resumed
             offerStale: [],
 
+            // Liturgy is three names a date and is READ-ONLY here, so it is the
+            // first thing worth folding away when the grid runs out of room.
+            // Folded, not hidden: it still says who is tied up, because that is
+            // WHY somebody is missing from every row below.
+            liturgyOpen: true,
+
             // ── Loading ──────────────────────────────────────────────────────
 
             async init() {
@@ -150,6 +156,8 @@
                     this.error = 'The list of events could not be read. That is a permissions ' +
                         'problem rather than an empty church — please tell an admin.';
                 }
+
+                this.restoreLiturgyFold();
 
                 const today = Dates.todayStr();
                 this.fromDate = addDays(today, 1);
@@ -1157,6 +1165,30 @@
 
             get storage() {
                 try { return window.localStorage || null; } catch (e) { return null; }
+            },
+
+            // Remembered across visits: an editor who folded it away to see the
+            // grid does not want it back every time they draft.
+            LITURGY_KEY: 'mosaic.autoAssign.liturgyOpen',
+
+            restoreLiturgyFold() {
+                const kept = Saved.read(this.storage, this.LITURGY_KEY);
+                if (kept && typeof kept.open === 'boolean') this.liturgyOpen = kept.open;
+            },
+
+            toggleLiturgy() {
+                this.liturgyOpen = !this.liturgyOpen;
+                Saved.save(this.storage, this.LITURGY_KEY, { open: this.liturgyOpen });
+            },
+
+            // What a folded cell says. Names, not a count: "3 on liturgy" tells
+            // the editor nothing they can act on, and the whole reason this row
+            // is here is to explain an absence below it.
+            liturgyLine(cell) {
+                const names = (cell.holders || []).map(h => h.name);
+                if (!names.length) return '';
+                if (names.length <= 2) return names.join(', ');
+                return names[0] + ', ' + names[1] + ' +' + (names.length - 2);
             },
 
             get savedKey() {

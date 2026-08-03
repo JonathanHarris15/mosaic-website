@@ -3427,6 +3427,63 @@ test('the grid hides its own horizontal bar but keeps the vertical one', () => {
     assert.doesNotMatch(html, /\.aa-scroller \{[^}]*overflow-x:\s*hidden/);
 });
 
+// ── Folding the liturgy away ────────────────────────────────────────────────
+
+test('the liturgy row folds, and the fold is remembered', () => {
+    const box = {};
+    const page = draftedPage(null, {
+        localStorage: {
+            setItem(k, v) { box[k] = v; },
+            getItem(k) { return box[k] === undefined ? null : box[k]; },
+            removeItem(k) { delete box[k]; },
+        },
+    });
+
+    assert.equal(page.liturgyOpen, true, 'open until somebody folds it');
+    page.toggleLiturgy();
+    assert.equal(page.liturgyOpen, false);
+
+    // An editor who folded it away to see the grid does not want it back every
+    // time they draft.
+    page.liturgyOpen = true;
+    page.restoreLiturgyFold();
+    assert.equal(page.liturgyOpen, false);
+});
+
+// ⚠ FOLDED, NOT HIDDEN. This row is here to explain an absence below it — a
+// count would say nothing anybody can act on.
+test('a folded liturgy cell still names who is tied up', () => {
+    const page = draftedPage();
+
+    assert.equal(page.liturgyLine({ holders: [{ name: 'Sam Crites' }] }), 'Sam Crites');
+    assert.equal(
+        page.liturgyLine({ holders: [{ name: 'Sam Crites' }, { name: 'Tony Baker Jr.' }] }),
+        'Sam Crites, Tony Baker Jr.'
+    );
+    assert.equal(
+        page.liturgyLine({ holders: [
+            { name: 'Sam Crites' }, { name: 'Tony Baker Jr.' }, { name: 'Ian Riley' },
+        ] }),
+        'Sam Crites, Tony Baker Jr. +1',
+        'names first, and the overflow counted — never just a number'
+    );
+    assert.equal(page.liturgyLine({ holders: [] }), '');
+});
+
+test('a browser that will not remember the fold does not break the page', () => {
+    const page = draftedPage(null, {
+        localStorage: {
+            setItem() { throw new Error('quota'); },
+            getItem() { throw new Error('denied'); },
+            removeItem() { throw new Error('denied'); },
+        },
+    });
+
+    assert.doesNotThrow(() => page.restoreLiturgyFold());
+    assert.doesNotThrow(() => page.toggleLiturgy());
+    assert.equal(page.liturgyOpen, false, 'the fold still works, it just is not kept');
+});
+
 test('going back to setup drops the grid with the draft', () => {
     const page = draftedPage();
     page.draft = { dates: [drafted('2026-10-04')] };

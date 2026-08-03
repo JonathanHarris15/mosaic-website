@@ -510,10 +510,21 @@
                                 <!-- The Role name, pinned. -->
                                 <th class="aa-rowhead text-left px-3 py-2.5 align-top">
                                     <div class="flex flex-col gap-0.5">
-                                        <span class="text-[13.5px] text-on-surface leading-tight"
-                                              x-text="row.name"></span>
+                                        <span class="text-[13.5px] text-on-surface leading-tight flex items-center gap-1">
+                                            <!-- Liturgy is read-only and three names a date, so
+                                                 it is the first thing worth folding away when the
+                                                 grid runs out of room. -->
+                                            <button type="button" x-show="row.kind === 'liturgy'"
+                                                    @click="toggleLiturgy()"
+                                                    :aria-expanded="liturgyOpen ? 'true' : 'false'"
+                                                    :aria-label="liturgyOpen ? 'Fold the liturgy away' : 'Show the liturgy'"
+                                                    class="material-symbols-outlined text-[17px] -ml-1 text-on-surface-variant
+                                                           hover:text-primary aa-motion aa-focus rounded shrink-0"
+                                                    x-text="liturgyOpen ? 'expand_more' : 'chevron_right'"></button>
+                                            <span x-text="row.name"></span>
+                                        </span>
                                         <span class="text-[11px] text-on-surface-variant"
-                                              x-show="row.kind === 'liturgy'">Set in the order of service</span>
+                                              x-show="row.kind === 'liturgy' && liturgyOpen">Set in the order of service</span>
                                         <!-- Without this the same face twice in one
                                              column reads as a bug rather than as allowed. -->
                                         <span x-show="row.allowsAnotherRole"
@@ -525,9 +536,19 @@
                                 </th>
 
                                 <template x-for="cell in row.cells" :key="row.key + cell.date">
-                                    <td class="aa-cell px-2 py-2 align-top">
+                                    <td class="aa-cell px-2 align-top"
+                                        :class="(row.kind === 'liturgy' && !liturgyOpen) ? 'py-1' : 'py-2'">
+                                        <!-- Folded: still says WHO is tied up, because that
+                                             is why somebody is missing from every row below.
+                                             A count would say nothing anyone can act on. -->
+                                        <template x-if="row.kind === 'liturgy' && !liturgyOpen">
+                                            <div class="text-[11.5px] text-on-surface-variant truncate"
+                                                 :title="cell.holders.map(h => h.name + ' — ' + h.roleName).join(', ')"
+                                                 x-text="liturgyLine(cell) || '—'"></div>
+                                        </template>
+
                                         <!-- Liturgy: shown, never fillable here. -->
-                                        <template x-if="row.kind === 'liturgy'">
+                                        <template x-if="row.kind === 'liturgy' && liturgyOpen">
                                             <div class="flex flex-col gap-1">
                                                 <template x-for="h in cell.holders" :key="h.personId + h.roleSlug">
                                                     <div class="flex items-center gap-2 px-2 py-1 rounded
