@@ -32,6 +32,7 @@
     const Loop = window.AutoAssignCore;
     const Grid = window.AutoAssignGridCore;
     const Edit = window.AutoAssignEditCore;
+    const Panel = window.AutoAssignPanelCore;
     const View = window.CalendarView;
     const Dates = window.DateUtils;
 
@@ -110,6 +111,16 @@
             dragging: null,         // { personId, from: place|null, source }
             over: null,             // the place key under the pointer
             displaced: [],          // [{ personId, date }]
+
+            // ── The panel ────────────────────────────────────────────────────
+            // Two jobs, one at a time: search the church, or explain a
+            // placement. Closing the explanation returns to the directory.
+            search: '',
+            selected: null,         // { date, roleSlug, slotId, personId }
+            seedRole: '',
+            seedDate: '',
+            seeding: false,
+            seedNote: '',
 
             // ── Loading ──────────────────────────────────────────────────────
 
@@ -560,6 +571,11 @@
                     );
                 });
 
+                // Kept, because the panel asks the same questions of people who
+                // are NOT on the grid — everyone in the directory needs a load
+                // reading, and it has to be the same one the cards use.
+                this.loadsByDate = loads;
+
                 this.grid = Grid.gridFrom({
                     dates: this.draft.dates,
                     roles: roles,
@@ -770,6 +786,234 @@
             // not waiting. The only way a name leaves the screen on purpose.
             dismiss(person) {
                 this.displaced = Edit.removeDisplaced(this.displaced, person);
+            },
+
+            // ── The panel ────────────────────────────────────────────────────
+
+            // Load for the directory is read at the START of the range: it is a
+            // fact about the season so far, not about a date. Every row is
+            // measured the same way, which is what makes the ordering mean
+            // something.
+            loadForDirectory(personId) {
+                const first = (this.grid && this.grid.columns[0]) || null;
+                if (!first) return 0;
+                return this.gridLoadAt(first.date, personId);
+            },
+
+            gridLoadAt(date, personId) {
+                return (this.loadsByDate[date] || {})[personId] || 0;
+            },
+
+            loadsByDate: {},
+
+            get directory() {
+                return Panel.directory({
+                    people: this.assignablePeople,
+                    windowSize: this.windowSize,
+                    query: this.search,
+                    loadAt: id => this.loadForDirectory(id),
+                    servingCount: id => this.servingCount(id),
+                });
+            },
+
+            servingCount(personId) {
+                let n = 0;
+                ((this.draft && this.draft.dates) || []).forEach(day => {
+                    (day.seats || []).forEach(seat => {
+                        if (seat.personId === personId) n++;
+                    });
+                });
+                return n;
+            },
+
+            selectPlace(date, place) {
+                if (!place.filled) { this.selected = null; return; }
+                this.selected = {
+                    date: date,
+                    roleSlug: place.roleSlug,
+                    slotId: place.slotId,
+                    personId: place.card.personId,
+                };
+                this.seedRole = place.roleSlug;
+                this.seedNote = '';
+            },
+
+            closePanel() { this.selected = null; this.seedNote = ''; },
+
+            get isSelected() {
+                return (date, place) => !!this.selected
+                    && this.selected.date === date
+                    && this.selected.roleSlug === place.roleSlug
+                    && String(this.selected.slotId) === String(place.slotId);
+            },
+
+            // Everything the panel says about one placement, rebuilt on read
+            // because the roster underneath it keeps moving.
+            get placement() {
+                const s = this.selected;
+                if (!s || !this.grid) return null;
+
+                const row = this.grid.roleRows.filter(r => r.slug === s.roleSlug)[0];
+                const col = this.columns.filter(c => c.date === s.date)[0];
+                const cell = (row && col) ? row.cells[col.index] : null;
+                const place = cell
+                    ? cell.places.filter(p => String(p.slotId) === String(s.slotId))[0]
+                    : null;
+
+                const window = Fairness.windowDates(
+                    Loop.windowFor(this.resolvedDates, col ? col.index : 0, this.pastDates),
+                    this.windowSize
+                );
+
+                return {
+                    personId: s.personId,
+                    name: this.personName(s.personId),
+                    initials: Panel.initialsOf(this.personName(s.personId)),
+                    roleName: this.roleName(s.roleSlug),
+                    dateLabel: Core.dayMonth(s.date),
+                    card: place ? place.card : null,
+                    wants: place ? place.wants : '',
+                    load: this.gridLoadAt(s.date, s.personId),
+                    budget: this.windowSize,
+                    serves: Panel.servesInWindow({
+                        personId: s.personId,
+                        history: this.history,
+                        windowDates: window,
+                        intensityOf: record => this.intensityForRecord(record),
+                        roleNameOf: slug => this.roleName(slug),
+                        labelOf: date => Core.dayMonth(date),
+                    }),
+                    across: Panel.acrossRange({
+                        personId: s.personId,
+                        dates: (this.draft && this.draft.dates) || [],
+                        selected: s,
+                        roleNameOf: slug => this.roleName(slug),
+                        labelOf: date => Core.dayMonth(date),
+                    }),
+                    considered: this.consideredFor(s),
+                };
+            },
+
+            // Nothing records the runners-up, so this asks eligibility again for
+            // the place, against the roster AS IT STANDS. Which is what keeps it
+            // true after the editor has moved things about.
+            consideredFor(s) {
+                const def = this.roleDefinitions.filter(d => d.slug === s.roleSlug)[0];
+                const slot = ((def && def.slots) || []).filter(x => x.id === s.slotId)[0];
+                if (!def || !slot) return [];
+
+                const day = ((this.draft && this.draft.dates) || [])
+                    .filter(d => d.date === s.date)[0] || { seats: [] };
+                const seats = day.seats || [];
+
+                const assigned = seats.filter(x => (
+                    x.roleSlug === s.roleSlug && String(x.slotId) !== String(s.slotId)
+                ));
+                const elsewhere = seats
+                    .filter(x => x.roleSlug !== s.roleSlug)
+                    .map(x => ({
+                        personId: x.personId,
+                        roleSlug: x.roleSlug,
+                        allowsAnotherRole: Roles.allowsAnotherRole(
+                            this.roleDefinitions.filter(d => d.slug === x.roleSlug)[0]
+                        ),
+                    }))
+                    .concat((this.liturgical[s.date] || []).map(h => ({
+                        personId: h.personId, roleSlug: h.roleSlug, allowsAnotherRole: false,
+                    })));
+
+                const candidates = Roles.candidatesFor(def, slot, {
+                    people: this.assignablePeople,
+                    assigned: assigned,
+                    assignedElsewhere: elsewhere,
+                    relationships: this.relationships,
+                    groups: this.groups,
+                });
+
+                return Panel.considered({
+                    candidates: candidates,
+                    seatedPersonId: s.personId,
+                    nameOf: id => this.personName(id),
+                    loadAt: id => this.gridLoadAt(s.date, id),
+                    reasonText: c => this.reasonWords(c, {
+                        date: s.date, roleSlug: s.roleSlug, slotId: s.slotId,
+                    }),
+                });
+            },
+
+            // ── Seeding a serve ──────────────────────────────────────────────
+            //
+            // ⚠ THE ONE THING ON THIS SCREEN THAT SAVES AS YOU GO. A serve is a
+            // claim about the past, and a past that only exists if you later
+            // accept a rota would be a strange thing indeed.
+
+            get seedDates() {
+                const s = this.selected;
+                if (!s) return [];
+                const col = this.columns.filter(c => c.date === s.date)[0];
+                return Fairness.windowDates(
+                    Loop.windowFor(this.resolvedDates, col ? col.index : 0, this.pastDates),
+                    this.windowSize
+                ).filter(d => d < this.resolvedDates[0]);
+            },
+
+            get canSeed() {
+                return !!this.selected && !!this.seedRole && !!this.seedDate && !this.seeding;
+            },
+
+            async addServe() {
+                if (!this.canSeed) return;
+                this.seeding = true;
+                this.seedNote = '';
+                const personId = this.selected.personId;
+
+                try {
+                    const record = await Store.seedServe(db, {
+                        personId: personId,
+                        roleSlug: this.seedRole,
+                        date: this.seedDate,
+                        seriesId: this.seriesId,
+                    });
+                    this.history = this.history.concat([{
+                        id: record.id,
+                        personId: personId,
+                        type: record.type,
+                        serviceDate: record.serviceDate,
+                        seriesId: record.seriesId,
+                        metadata: record.metadata || null,
+                        seeded: true,
+                    }]);
+                    this.seedDate = '';
+                    // The dates already drafted were balanced against the old
+                    // picture and they still say so. Re-draft is how the editor
+                    // acts on this (MS-181) — nothing re-solves on its own.
+                    this.buildGrid();
+                    this.seedNote = 'Saved. The draft was not redrawn — re-draft to use it.';
+                } catch (e) {
+                    console.error('Could not record the serve:', e);
+                    this.seedNote = 'That could not be saved. Nothing was recorded.';
+                } finally {
+                    this.seeding = false;
+                }
+            },
+
+            async dropServe(serve) {
+                if (!this.selected || !serve.id || this.seeding) return;
+                this.seeding = true;
+                this.seedNote = '';
+                const personId = this.selected.personId;
+
+                try {
+                    await Store.removeServe(db, personId, serve.id);
+                    this.history = this.history.filter(r => r.id !== serve.id);
+                    this.buildGrid();
+                    this.seedNote = 'Removed. The draft was not redrawn.';
+                } catch (e) {
+                    console.error('Could not remove the serve:', e);
+                    this.seedNote = 'That could not be removed. Nothing changed.';
+                } finally {
+                    this.seeding = false;
+                }
             },
 
             get displacedCards() {

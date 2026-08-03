@@ -930,6 +930,49 @@
         };
     }
 
+    // ── Seeding a serve (MS-182) ─────────────────────────────────────────────
+    //
+    // ⚠ THIS IS THE ONE THING ON THE AUTO-ASSIGN SCREEN THAT WRITES AT ONCE.
+    // Everything else there is a proposal held in the browser until Accept. A
+    // serve record is not part of the draft — it is a claim about the PAST, and
+    // a past that only exists if you later accept a rota would be a strange
+    // thing indeed.
+    //
+    // It records a SERVE, never a load figure. Fairness has two dials: a figure
+    // would drop somebody down the pool while leaving the solver believing they
+    // have never held the Role, so the burnout gate reads fixed and the
+    // rotation is still blind. A serve moves both, and the number then explains
+    // itself — it is six because of these six things.
+    //
+    // `seeded` marks it as typed in rather than lived through, so the panel
+    // knows which records it may offer to take back.
+    async function seedServe(db, serve) {
+        const s = serve || {};
+        if (!s.personId || !s.roleSlug || !s.date) {
+            throw new Error('A serve needs a person, a Role and a date.');
+        }
+
+        const personRef = db.collection('people').doc(s.personId);
+        const data = Events.stampSeries({
+            serviceDate: s.date,
+            type: s.roleSlug,
+            seeded: true,
+            createdAt: new Date().toISOString(),
+        }, s.seriesId);
+        if (s.oneOffId) data.metadata = { oneOffId: s.oneOffId };
+
+        const ref = await personRef.collection('involvement').add(data);
+        return Object.assign({ id: ref.id, personId: s.personId }, data);
+    }
+
+    async function removeServe(db, personId, involvementId) {
+        if (!personId || !involvementId) {
+            throw new Error('Removing a serve needs the person and the record.');
+        }
+        await db.collection('people').doc(personId)
+            .collection('involvement').doc(involvementId).delete();
+    }
+
     // ── Changing a recurrence pattern ────────────────────────────────────────
     //
     // NOTHING IS MIGRATED SILENTLY. The caller computes the orphans, shows them
@@ -1126,6 +1169,9 @@
         COLOUR_SLUGS,
         saveRoster,
         acceptDraft,
+        // seeding a serve (MS-182) — the one write that does not wait for accept
+        seedServe,
+        removeServe,
         applyOrphanChoices,
         // internals worth testing
         rosterId,

@@ -118,6 +118,12 @@
         .aa-card[draggable="true"] { cursor: grab; }
         .aa-lifting { opacity: .4; }
         .aa-target { outline: 2px solid #5D94A9; outline-offset: 1px; border-radius: 8px; }
+        .aa-picked { outline: 2px solid #182F57; outline-offset: 1px; }
+
+        /* Wide enough for a name, a reason and a date side by side, and no
+           wider — the grid is what the editor came for. */
+        .aa-panel { width: 320px; }
+        @media (min-width: 1440px) { .aa-panel { width: 360px; } }
     </style>
 </head>
 
@@ -192,7 +198,7 @@
                     <h1 class="font-display text-display-lg text-primary tracking-[.02em] leading-[1.1]">Auto-assign</h1>
                     <p class="text-body-md leading-relaxed text-on-surface-variant max-w-[56ch] text-pretty">
                         Draft who serves in each role across a stretch of dates, balanced so the same
-                        few people don't carry everything. Nothing is saved until you accept it.
+                        few people don't carry everything. No rota is saved until you accept it.
                     </p>
                 </div>
 
@@ -378,6 +384,7 @@
                  The Role column and the date header both stay put as you
                  scroll. The cards are information-rich and only a few dates fit
                  at once, so losing your place is the failure mode. -->
+            <div class="flex-grow flex min-h-0">
             <div class="flex-grow overflow-auto bg-surface-container-low"
                  x-ref="scroller" @scroll="onGridScroll($event.target)"
                  x-init="$nextTick(() => onGridScroll($refs.scroller))">
@@ -466,10 +473,12 @@
                                                         <!-- Somebody in it. -->
                                                         <template x-if="place.filled">
                                                             <div class="aa-card" draggable="true"
+                                                                 @click="selectPlace(cell.date, place)"
                                                                  @dragstart="startDrag($event, place.card.personId,
                                                                      { date: cell.date, roleSlug: place.roleSlug, slotId: place.slotId })"
                                                                  @dragend="endDrag()"
                                                                  :class="[
+                                                                     isSelected(cell.date, place) ? 'aa-picked' : '',
                                                                      place.card.warning ? 'aa-card-warn'
                                                                          : (place.card.spent ? 'aa-card-spent' : ''),
                                                                      dragging && dragging.personId === place.card.personId
@@ -547,6 +556,200 @@
                 </table>
             </div>
 
+            <!-- ══════ The panel ══════
+                 Two jobs, one at a time. Search the church and drag anyone in,
+                 or explain a placement that is already there. Closing the
+                 explanation returns to the directory. -->
+            <aside class="aa-panel shrink-0 border-l border-outline-variant bg-surface-container-lowest
+                          flex flex-col min-h-0">
+
+                <!-- ── The directory ── -->
+                <template x-if="!selected">
+                    <div class="flex flex-col min-h-0 h-full">
+                        <div class="shrink-0 px-4 pt-4 pb-3 flex flex-col gap-2 border-b border-outline-variant">
+                            <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                                Directory
+                            </span>
+                            <input type="search" x-model="search" placeholder="Search the church"
+                                   class="w-full bg-surface-container-low border border-outline-variant rounded-lg
+                                          px-3 py-2 text-[13.5px] text-on-surface aa-focus" />
+                            <!-- Already filtered to people who may be offered at
+                                 all, so there is no unavailable state to draw. -->
+                            <span class="text-[11px] text-on-surface-variant">
+                                <span x-text="directory.count"></span> to choose from · least busy first
+                            </span>
+                        </div>
+                        <div class="flex-grow overflow-auto p-2 flex flex-col gap-1">
+                            <template x-for="row in directory.rows" :key="row.personId">
+                                <div class="aa-card flex items-center gap-2" draggable="true"
+                                     @dragstart="startDrag($event, row.personId, null, 'directory')"
+                                     @dragend="endDrag()"
+                                     :class="row.spent ? 'aa-card-spent' : ''">
+                                    <span class="aa-avatar aa-avatar-sm" x-text="row.initials"></span>
+                                    <span class="min-w-0 flex-grow">
+                                        <span class="block text-[12.5px] text-on-surface truncate leading-tight"
+                                              x-text="row.name"></span>
+                                        <span class="aa-load mt-1">
+                                            <span class="aa-load-fill" :class="row.spent ? 'aa-load-spent' : ''"
+                                                  :style="'width:' + Math.min(100,
+                                                      (row.budget ? row.load / row.budget : 0) * 100) + '%'"></span>
+                                        </span>
+                                    </span>
+                                    <span class="text-[10px] text-on-surface-variant tabular-nums shrink-0"
+                                          x-text="row.serving ? row.serving + ' in range' : ''"></span>
+                                </div>
+                            </template>
+                            <p x-show="!directory.rows.length" class="text-[12px] text-on-surface-variant p-2">
+                                Nobody matches that.
+                            </p>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ── Why this placement ── -->
+                <template x-if="selected && placement">
+                    <div class="flex flex-col min-h-0 h-full">
+                        <div class="shrink-0 px-4 pt-3.5 pb-3 border-b border-outline-variant
+                                    flex items-start gap-2">
+                            <span class="aa-avatar" x-text="placement.initials"></span>
+                            <div class="min-w-0 flex-grow">
+                                <span class="block text-[14px] text-on-surface truncate"
+                                      x-text="placement.name"></span>
+                                <span class="block text-[11.5px] text-on-surface-variant truncate"
+                                      x-text="placement.roleName + ' · ' + placement.dateLabel"></span>
+                            </div>
+                            <button type="button" @click="closePanel()" title="Back to the directory"
+                                    class="material-symbols-outlined text-[18px] text-on-surface-variant
+                                           hover:text-primary aa-motion aa-focus rounded">close</button>
+                        </div>
+
+                        <div class="flex-grow overflow-auto px-4 py-3 flex flex-col gap-4">
+
+                            <!-- The warning, and that it stands anyway. -->
+                            <div x-show="placement.card && placement.card.warning"
+                                 class="bg-error-container text-on-error-container rounded-lg p-3
+                                        flex flex-col gap-1">
+                                <span class="text-[12.5px]" x-text="placement.card && placement.card.warning"></span>
+                                <span class="text-[11px] opacity-80">
+                                    The placement stands. Eligibility advises; you decide.
+                                </span>
+                            </div>
+
+                            <!-- ⚠ The load section is a LIST, never an invented
+                                 category split. Load is one number and this is
+                                 what it is made of. It is also the seeding
+                                 control: these Roles launch cold. -->
+                            <div class="flex flex-col gap-2">
+                                <div class="flex items-baseline justify-between">
+                                    <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                                        This season
+                                    </span>
+                                    <span class="text-[11.5px] text-on-surface tabular-nums"
+                                          x-text="placement.load + ' of ' + placement.budget"></span>
+                                </div>
+                                <span class="aa-load">
+                                    <span class="aa-load-fill"
+                                          :class="placement.load >= placement.budget ? 'aa-load-spent' : ''"
+                                          :style="'width:' + Math.min(100,
+                                              (placement.budget ? placement.load / placement.budget : 0) * 100) + '%'"></span>
+                                </span>
+
+                                <div class="flex flex-col gap-1 mt-1">
+                                    <template x-for="s in placement.serves" :key="s.id || (s.roleSlug + s.date)">
+                                        <div class="flex items-center gap-2 text-[12px] text-on-surface-variant">
+                                            <span class="flex-grow truncate"
+                                                  x-text="s.roleName + ' · ' + s.dateLabel"></span>
+                                            <span class="tabular-nums shrink-0" x-text="s.intensity"></span>
+                                            <button type="button" x-show="s.removable" @click="dropServe(s)"
+                                                    title="Remove this record"
+                                                    class="material-symbols-outlined text-[14px]
+                                                           hover:text-error aa-motion aa-focus rounded">close</button>
+                                        </div>
+                                    </template>
+                                    <p x-show="!placement.serves.length" class="text-[12px] text-on-surface-variant">
+                                        Nothing this season. That is why they came up.
+                                    </p>
+                                </div>
+
+                                <!-- Records a SERVE, never a load figure. A figure
+                                     would move the load dial and leave the solver
+                                     believing they had never held the Role. -->
+                                <div class="mt-1 border-t border-outline-variant pt-2.5 flex flex-col gap-2">
+                                    <span class="text-[11px] text-on-surface-variant text-pretty">
+                                        Been doing this already? Record it, and the draft will believe it.
+                                    </span>
+                                    <div class="flex items-center gap-1.5">
+                                        <select x-model="seedRole"
+                                                class="flex-grow min-w-0 bg-surface-container-low border border-outline-variant
+                                                       rounded px-2 py-1.5 text-[12px] text-on-surface aa-focus">
+                                            <template x-for="r in draftableRoles" :key="r.slug">
+                                                <option :value="r.slug" x-text="r.name"></option>
+                                            </template>
+                                        </select>
+                                        <select x-model="seedDate"
+                                                class="flex-grow min-w-0 bg-surface-container-low border border-outline-variant
+                                                       rounded px-2 py-1.5 text-[12px] text-on-surface aa-focus">
+                                            <option value="">Which date</option>
+                                            <template x-for="d in seedDates" :key="d">
+                                                <option :value="d" x-text="pretty(d)"></option>
+                                            </template>
+                                        </select>
+                                        <button type="button" @click="addServe()" :disabled="!canSeed"
+                                                :class="canSeed ? 'bg-primary text-on-primary' : 'bg-surface-container text-outline'"
+                                                class="shrink-0 rounded px-2.5 py-1.5 text-[12px] aa-motion aa-focus">
+                                            Add
+                                        </button>
+                                    </div>
+                                    <span class="text-[11px] text-secondary" x-show="seedNote" x-text="seedNote"></span>
+                                    <span class="text-[10.5px] text-on-surface-variant">
+                                        This one saves straight away — it is a record of the past, not part of the draft.
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Everything they hold across the range, so the
+                                 editor need not scan every column for the rest. -->
+                            <div class="flex flex-col gap-1.5">
+                                <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                                    Across this range
+                                </span>
+                                <template x-for="a in placement.across" :key="a.date + a.roleSlug + a.slotId">
+                                    <div class="text-[12px] flex items-center gap-1.5"
+                                         :class="a.selected ? 'text-on-surface' : 'text-on-surface-variant'">
+                                        <span class="material-symbols-outlined text-[13px]"
+                                              x-text="a.selected ? 'radio_button_checked' : 'radio_button_unchecked'"></span>
+                                        <span class="truncate" x-text="a.roleName + ' · ' + a.dateLabel"></span>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Not a stored decision — the eligibility check
+                                 asked again for this place, against the roster
+                                 as it stands now. -->
+                            <div class="flex flex-col gap-1.5">
+                                <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                                    Others considered
+                                </span>
+                                <template x-for="c in placement.considered" :key="c.personId">
+                                    <div class="flex items-start gap-2 text-[12px]">
+                                        <span class="aa-avatar aa-avatar-sm" x-text="c.initials"></span>
+                                        <span class="min-w-0 flex-grow">
+                                            <span class="block text-on-surface truncate" x-text="c.name"></span>
+                                            <span class="block text-[11px] text-on-surface-variant"
+                                                  x-text="c.reason || 'Could have had it'"></span>
+                                        </span>
+                                    </div>
+                                </template>
+                                <p x-show="!placement.considered.length" class="text-[12px] text-on-surface-variant">
+                                    Nobody else was in the running.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </aside>
+            </div>
+
             <!-- ══════ Displaced ══════
                  Whoever got knocked out of a place, still attached to their
                  date, waiting to be put back. Deleting them quietly is the
@@ -588,8 +791,12 @@
                     <span x-text="tally.places"></span> places ·
                     <span x-text="tally.empty"></span> still empty
                 </p>
+                <!-- ⚠ The promise is about the ROSTER. Seeding a serve is a
+                     claim about the past and writes at once, so a blanket
+                     "nothing is saved" would be a lie the moment it is used. -->
                 <p class="text-[12px] text-on-surface-variant">
-                    Nothing has been saved — leaving the page loses the draft.
+                    No rota has been saved — leaving the page loses the draft.
+                    Serve records you add save straight away.
                 </p>
             </div>
         </div>
@@ -612,6 +819,7 @@
 <script src="calendar-view.js"></script>
 <script src="auto-assign-grid-core.js"></script>
 <script src="auto-assign-edit-core.js"></script>
+<script src="auto-assign-panel-core.js"></script>
 <script src="auto-assign.js"></script>
 <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </body>

@@ -65,6 +65,7 @@ function loadComponent(scriptFile, factoryName, overrides) {
     sandbox.AutoAssignCore = require('../public/auto-assign-core.js');
     sandbox.AutoAssignGridCore = require('../public/auto-assign-grid-core.js');
     sandbox.AutoAssignEditCore = require('../public/auto-assign-edit-core.js');
+    sandbox.AutoAssignPanelCore = require('../public/auto-assign-panel-core.js');
 
     // The browser-only edges, stubbed just enough to construct the component.
     sandbox.location = { search: '?id=midweek_2026-07-15', href: '' };
@@ -251,7 +252,7 @@ test('each page loads every module its component reaches for', () => {
         // throw the moment it was handed a solve that was not there.
         'auto-assign.html': ['events-occurrence-core.js', 'events-store.js', 'roles-core.js', 'events-core.js',
                              'fairness-core.js', 'auto-assign-core.js', 'auto-assign-grid-core.js',
-                             'auto-assign-edit-core.js',
+                             'auto-assign-edit-core.js', 'auto-assign-panel-core.js',
                              'calendar-view.js', 'date-utils.js', 'auto-assign.js'],
     };
 
@@ -2568,8 +2569,11 @@ test('the serve history is asked for in the order its index is built in', async 
 });
 
 // A page wired for the grid: one Role with two places, across four Sundays.
-function draftedPage(overrides) {
-    const page = loadComponent('auto-assign.js', 'autoAssignPage');
+function draftedPage(overrides, sandbox) {
+    // ⚠ `db` is closed over by the component, so a fake has to go in through
+    // the SANDBOX. Setting it on the returned page object looks right and does
+    // nothing at all.
+    const page = loadComponent('auto-assign.js', 'autoAssignPage', sandbox);
     page.series = [{ id: 'sunday_service', name: 'Sunday Service', roleSlugs: ['coffee'] }];
     page.seriesId = 'sunday_service';
     page.fromDate = '2026-10-04';
@@ -2810,6 +2814,209 @@ test('a grid that fits entirely shows a window covering the whole strip', () => 
 
     assert.equal(page.viewWidth, 1, 'never wider than the strip, however roomy the screen');
     assert.equal(page.focused, 0);
+});
+
+// ── The panel (MS-182) ──────────────────────────────────────────────────────
+
+test('the directory offers everyone assignable, with the grid load reading', () => {
+    const page = draftedPage();
+    page.draft = { dates: [drafted('2026-10-04')] };
+    page.buildGrid();
+
+    assert.equal(page.directory.count, 2);
+    assert.deepEqual(page.directory.rows.map(r => r.name), ['Alice Brown', 'Bob Carter']);
+    assert.equal(page.directory.rows[0].budget, page.windowSize,
+        'the directory must not rank people differently from the grid');
+
+    page.search = 'bob';
+    assert.deepEqual(page.directory.rows.map(r => r.name), ['Bob Carter']);
+});
+
+test('the directory never offers somebody a tag hides', () => {
+    const page = draftedPage({ rank: 'editor' });
+    page.people = page.people.concat([
+        { id: 'p9', name: 'Hidden Person', tags: ['staff-only'] },
+    ]);
+    page.hidingTags = ['staff-only'];
+    page.draft = { dates: [drafted('2026-10-04')] };
+    page.buildGrid();
+
+    assert.equal(page.directory.rows.some(r => r.personId === 'p9'), false);
+});
+
+test('clicking a card opens the panel for that person and place', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: [drafted('2026-10-04', [
+            { roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 },
+        ])],
+    };
+    page.buildGrid();
+
+    const place = page.grid.roleRows[0].cells[0].places[0];
+    page.selectPlace('2026-10-04', place);
+
+    assert.equal(page.placement.name, 'Alice Brown');
+    assert.equal(page.placement.roleName, 'Coffee');
+    assert.equal(page.placement.dateLabel, '4 October');
+    assert.equal(page.isSelected('2026-10-04', place), true);
+
+    page.closePanel();
+    assert.equal(page.selected, null, 'closing returns the panel to the directory');
+});
+
+test('an empty place opens nothing — there is no placement to explain', () => {
+    const page = draftedPage();
+    page.draft = { dates: [drafted('2026-10-04')] };
+    page.buildGrid();
+
+    page.selectPlace('2026-10-04', page.grid.roleRows[0].cells[0].places[0]);
+    assert.equal(page.selected, null);
+});
+
+test('the panel lists the serves the load is made of, not an invented split', () => {
+    const page = draftedPage();
+    page.history = [
+        { id: 'i1', personId: 'p1', type: 'coffee', serviceDate: '2026-09-27', seeded: true },
+        { id: 'i2', personId: 'p1', type: 'coffee', serviceDate: '2026-09-20' },
+    ];
+    page.draft = {
+        dates: [drafted('2026-10-04', [
+            { roleSlug: 'coffee', slotId: 's1', personId: 'p1' },
+        ])],
+    };
+    page.buildGrid();
+    page.selectPlace('2026-10-04', page.grid.roleRows[0].cells[0].places[0]);
+
+    assert.deepEqual(page.placement.serves.map(s => s.dateLabel), ['27 September', '20 September']);
+    assert.equal(page.placement.load, 2, 'the number is 2 because of these two things');
+    assert.deepEqual(page.placement.serves.map(s => s.removable), [true, false],
+        'a Sunday that happened is a fact; the seeded one is the editor\'s to take back');
+});
+
+test('the panel names who else was in the running, and why they lost', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: [drafted('2026-10-04', [
+            { roleSlug: 'coffee', slotId: 's2', personId: 'p1' },
+        ])],
+    };
+    page.buildGrid();
+    // Slot s2 wants a woman; Bob is a man.
+    page.selectPlace('2026-10-04', page.grid.roleRows[0].cells[0].places[1]);
+
+    const others = page.placement.considered;
+    assert.deepEqual(others.map(c => c.name), ['Bob Carter']);
+    assert.match(others[0].reason, /needs a woman/);
+    assert.equal(others.some(c => c.personId === 'p1'), false);
+});
+
+// ⚠ A serve is a claim about the PAST, so it writes at once — unlike everything
+// else on this screen. A past that only existed if you later accepted a rota
+// would be a strange thing indeed.
+test('seeding a serve writes immediately, and does not redraw the draft', async () => {
+    const written = [];
+    const page = draftedPage(null, {
+        db: {
+            collection: () => ({
+                doc: () => ({
+                    collection: () => ({
+                        add: async data => { written.push(data); return { id: 'new1' }; },
+                    }),
+                }),
+            }),
+        },
+    });
+    page.draft = {
+        dates: [drafted('2026-10-04', [
+            { roleSlug: 'coffee', slotId: 's1', personId: 'p1' },
+        ])],
+    };
+    page.buildGrid();
+    page.selectPlace('2026-10-04', page.grid.roleRows[0].cells[0].places[0]);
+
+    page.seedRole = 'coffee';
+    page.seedDate = '2026-09-27';
+    await page.addServe();
+
+    assert.equal(written.length, 1);
+    assert.equal(written[0].type, 'coffee');
+    assert.equal(written[0].serviceDate, '2026-09-27');
+    assert.equal(written[0].seeded, true, 'marked as typed in rather than lived through');
+    assert.match(page.seedNote, /not redrawn/,
+        'nothing re-solves on its own — re-draft is how the editor acts on it');
+});
+
+// The whole reason it records a serve and not a number: fairness has two dials.
+test('a seeded serve moves load AND recency, which a typed figure could not', async () => {
+    const page = draftedPage(null, {
+        db: {
+            collection: () => ({
+                doc: () => ({ collection: () => ({ add: async () => ({ id: 'new1' }) }) }),
+            }),
+        },
+    });
+    page.draft = {
+        dates: [drafted('2026-10-04', [
+            { roleSlug: 'coffee', slotId: 's1', personId: 'p1' },
+        ])],
+    };
+    page.buildGrid();
+    const before = page.grid.roleRows[0].cells[0].places[0].card;
+    assert.equal(before.load, 0);
+    assert.equal(before.recencyLabel, 'Not this season');
+
+    page.selectPlace('2026-10-04', page.grid.roleRows[0].cells[0].places[0]);
+    page.seedRole = 'coffee';
+    page.seedDate = '2026-09-27';
+    await page.addServe();
+
+    const after = page.grid.roleRows[0].cells[0].places[0].card;
+    assert.equal(after.load, 1, 'the burnout gate moved');
+    assert.equal(after.recencyLabel, 'Last time', 'and so did the rotation');
+});
+
+test('a serve that will not save says so, and records nothing', async () => {
+    const page = draftedPage(null, {
+        db: {
+            collection: () => ({
+                doc: () => ({
+                    collection: () => ({ add: async () => { throw new Error('refused'); } }),
+                }),
+            }),
+        },
+    });
+    page.draft = {
+        dates: [drafted('2026-10-04', [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1' }])],
+    };
+    page.buildGrid();
+    page.selectPlace('2026-10-04', page.grid.roleRows[0].cells[0].places[0]);
+    page.seedRole = 'coffee';
+    page.seedDate = '2026-09-27';
+    await page.addServe();
+
+    assert.match(page.seedNote, /could not be saved/);
+    assert.deepEqual(page.history, [], 'nothing was recorded, so nothing is claimed');
+});
+
+test('only dates before the range are offered to seed — the future is not the past', () => {
+    const page = draftedPage();
+    page.draft = { dates: [drafted('2026-10-04', [
+        { roleSlug: 'coffee', slotId: 's1', personId: 'p1' },
+    ])] };
+    page.buildGrid();
+    page.selectPlace('2026-10-04', page.grid.roleRows[0].cells[0].places[0]);
+
+    assert.ok(page.seedDates.length > 0);
+    assert.equal(page.seedDates.every(d => d < '2026-10-04'), true);
+});
+
+test('the page no longer promises that nothing is saved, because one thing is', () => {
+    const html = readPage('auto-assign.html');
+    assert.doesNotMatch(html, /Nothing is saved until you accept/,
+        'seeding a serve writes at once, so the blanket promise became a lie');
+    assert.match(html, /No rota is saved until you accept it/);
+    assert.match(html, /Serve records you add save straight away/);
 });
 
 test('going back to setup drops the grid with the draft', () => {
