@@ -433,8 +433,12 @@
                                     <span class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">Add a rule</span>
 
                                     <div class="flex flex-col lg:flex-row lg:items-center gap-base">
+                                        <!-- A fixed width on the sentence opener, not an
+                                             intrinsic one: the longest label is "No two people
+                                             from the same", and letting the box size itself to
+                                             that ran the text under the arrow. -->
                                         <select x-model="newRuleKind" @change="newRuleValue = ''"
-                                                class="lg:flex-shrink-0 border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary">
+                                                class="w-full lg:w-[17.5rem] lg:flex-shrink-0 border border-outline-variant rounded-lg pl-sm pr-8 py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary">
                                             <template x-for="option in ruleKindOptions" :key="option.value">
                                                 <option :value="option.value" x-text="option.label"></option>
                                             </template>
@@ -444,7 +448,7 @@
                                              at a time instead of taking a single value. -->
                                         <select x-show="composingAllowlist" x-model="newAllowlistPick"
                                                 @change="addToNewAllowlist()"
-                                                class="lg:flex-grow lg:min-w-0 border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary">
+                                                class="w-full lg:flex-grow lg:min-w-0 border border-outline-variant rounded-lg pl-sm pr-8 py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary">
                                             <option value="">Add someone…</option>
                                             <template x-for="option in allowlistOptions" :key="option.id">
                                                 <option :value="option.id" x-text="option.name"></option>
@@ -452,7 +456,7 @@
                                         </select>
 
                                         <select x-show="!composingAllowlist" x-model="newRuleValue"
-                                                class="lg:flex-grow lg:min-w-0 border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary">
+                                                class="w-full lg:flex-grow lg:min-w-0 border border-outline-variant rounded-lg pl-sm pr-8 py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary">
                                             <option value="" x-text="ruleValuePlaceholder"></option>
                                             <template x-for="option in ruleValueOptions" :key="option.id">
                                                 <option :value="option.id" x-text="option.name"></option>
