@@ -3470,6 +3470,24 @@ test('a folded liturgy cell still names who is tied up', () => {
     assert.equal(page.liturgyLine({ holders: [] }), '');
 });
 
+// ⚠ Both states stay in the DOM. Swapping them with x-if would tear one out
+// and drop the other in, and there is nothing to animate between two elements
+// that never coexist.
+test('the fold animates rather than snapping', () => {
+    const html = readPage('auto-assign.html');
+
+    assert.match(html, /\.aa-fold \{[\s\S]*?transition: max-height 240ms/,
+        'a table cell has no height to animate, so the ceiling is what moves');
+    assert.match(html, /\.aa-fold-open \{ max-height: 320px/);
+    assert.match(html, /\.aa-chevron \{ transition: transform/, 'the arrow turns, it is not swapped');
+    assert.doesNotMatch(html, /x-if="row\.kind === 'liturgy' && liturgyOpen"/,
+        'x-if cannot animate — it removes the element');
+
+    // Somebody who asked their computer to stop moving things still gets the
+    // fold, just instantly.
+    assert.match(html, /prefers-reduced-motion: reduce[\s\S]{0,160}transition: none/);
+});
+
 test('a browser that will not remember the fold does not break the page', () => {
     const page = draftedPage(null, {
         localStorage: {

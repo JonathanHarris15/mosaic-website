@@ -98,6 +98,27 @@
         }
         .aa-avatar-sm { width: 21px; height: 21px; font-size: 9px; }
 
+        /* ── Folding the liturgy away ──
+           `max-height`, because a table cell has no height to animate and the
+           content's own is unknown. The open value only has to be COMFORTABLY
+           bigger than the tallest liturgy cell — it is a ceiling, not a height,
+           so it changes nothing when the row is shorter. */
+        .aa-fold {
+            display: block; max-height: 0; opacity: 0; overflow: hidden;
+            transition: max-height 240ms cubic-bezier(0.2, 0, 0, 1),
+                        opacity 140ms linear;
+        }
+        .aa-fold-open { max-height: 320px; opacity: 1; }
+        .aa-cell-motion { transition: padding 240ms cubic-bezier(0.2, 0, 0, 1); }
+        .aa-chevron { transition: transform 240ms cubic-bezier(0.2, 0, 0, 1), color 150ms linear; }
+        .aa-turned { transform: rotate(-90deg); }
+
+        /* Somebody who has asked their computer to stop moving things should
+           still get the fold — just instantly. */
+        @media (prefers-reduced-motion: reduce) {
+            .aa-fold, .aa-cell-motion, .aa-chevron { transition: none; }
+        }
+
         .aa-dot { width: 5px; height: 5px; border-radius: 999px; display: inline-block; }
         .aa-tick { min-width: 0; }
 
@@ -508,7 +529,8 @@
                             <tr :class="row.kind === 'oneOff' && (ri === 0 || rows[ri - 1].kind !== 'oneOff')
                                         ? 'aa-divider' : ''">
                                 <!-- The Role name, pinned. -->
-                                <th class="aa-rowhead text-left px-3 py-2.5 align-top">
+                                <th class="aa-rowhead aa-cell-motion text-left px-3 align-top"
+                                    :class="(row.kind === 'liturgy' && !liturgyOpen) ? 'py-1.5' : 'py-2.5'">
                                     <div class="flex flex-col gap-0.5">
                                         <span class="text-[13.5px] text-on-surface leading-tight flex items-center gap-1">
                                             <!-- Liturgy is read-only and three names a date, so
@@ -518,13 +540,16 @@
                                                     @click="toggleLiturgy()"
                                                     :aria-expanded="liturgyOpen ? 'true' : 'false'"
                                                     :aria-label="liturgyOpen ? 'Fold the liturgy away' : 'Show the liturgy'"
-                                                    class="material-symbols-outlined text-[17px] -ml-1 text-on-surface-variant
-                                                           hover:text-primary aa-motion aa-focus rounded shrink-0"
-                                                    x-text="liturgyOpen ? 'expand_more' : 'chevron_right'"></button>
+                                                    :class="liturgyOpen ? '' : 'aa-turned'"
+                                                    class="aa-chevron material-symbols-outlined text-[17px] -ml-1
+                                                           text-on-surface-variant hover:text-primary aa-focus rounded shrink-0"
+                                                    >expand_more</button>
                                             <span x-text="row.name"></span>
                                         </span>
-                                        <span class="text-[11px] text-on-surface-variant"
-                                              x-show="row.kind === 'liturgy' && liturgyOpen">Set in the order of service</span>
+                                        <span class="aa-fold" x-show="row.kind === 'liturgy'"
+                                              :class="liturgyOpen ? 'aa-fold-open' : ''">
+                                            <span class="block text-[11px] text-on-surface-variant">Set in the order of service</span>
+                                        </span>
                                         <!-- Without this the same face twice in one
                                              column reads as a bug rather than as allowed. -->
                                         <span x-show="row.allowsAnotherRole"
@@ -536,33 +561,41 @@
                                 </th>
 
                                 <template x-for="cell in row.cells" :key="row.key + cell.date">
-                                    <td class="aa-cell px-2 align-top"
+                                    <td class="aa-cell aa-cell-motion px-2 align-top"
                                         :class="(row.kind === 'liturgy' && !liturgyOpen) ? 'py-1' : 'py-2'">
-                                        <!-- Folded: still says WHO is tied up, because that
-                                             is why somebody is missing from every row below.
-                                             A count would say nothing anyone can act on. -->
-                                        <template x-if="row.kind === 'liturgy' && !liturgyOpen">
-                                            <div class="text-[11.5px] text-on-surface-variant truncate"
-                                                 :title="cell.holders.map(h => h.name + ' — ' + h.roleName).join(', ')"
-                                                 x-text="liturgyLine(cell) || '—'"></div>
-                                        </template>
-
-                                        <!-- Liturgy: shown, never fillable here. -->
-                                        <template x-if="row.kind === 'liturgy' && liturgyOpen">
-                                            <div class="flex flex-col gap-1">
-                                                <template x-for="h in cell.holders" :key="h.personId + h.roleSlug">
-                                                    <div class="flex items-center gap-2 px-2 py-1 rounded
-                                                                bg-surface-container-low">
-                                                        <span class="aa-avatar aa-avatar-sm"
-                                                              x-text="h.initials"></span>
-                                                        <span class="min-w-0">
-                                                            <span class="block text-[12.5px] text-on-surface truncate"
-                                                                  x-text="h.name"></span>
-                                                            <span class="block text-[10.5px] text-on-surface-variant truncate"
-                                                                  x-text="h.roleName"></span>
-                                                        </span>
+                                        <!-- ⚠ BOTH states are always in the DOM. Swapping them
+                                             with x-if would tear one out and drop the other in,
+                                             and there is nothing to animate between two elements
+                                             that never coexist. They fold past each other
+                                             instead. -->
+                                        <template x-if="row.kind === 'liturgy'">
+                                            <div>
+                                                <div class="aa-fold" :class="liturgyOpen ? 'aa-fold-open' : ''">
+                                                    <div class="flex flex-col gap-1">
+                                                        <template x-for="h in cell.holders" :key="h.personId + h.roleSlug">
+                                                            <div class="flex items-center gap-2 px-2 py-1 rounded
+                                                                        bg-surface-container-low">
+                                                                <span class="aa-avatar aa-avatar-sm"
+                                                                      x-text="h.initials"></span>
+                                                                <span class="min-w-0">
+                                                                    <span class="block text-[12.5px] text-on-surface truncate"
+                                                                          x-text="h.name"></span>
+                                                                    <span class="block text-[10.5px] text-on-surface-variant truncate"
+                                                                          x-text="h.roleName"></span>
+                                                                </span>
+                                                            </div>
+                                                        </template>
                                                     </div>
-                                                </template>
+                                                </div>
+
+                                                <!-- Folded: still says WHO is tied up, because that
+                                                     is why somebody is missing from every row below.
+                                                     A count would say nothing anyone can act on. -->
+                                                <div class="aa-fold" :class="liturgyOpen ? '' : 'aa-fold-open'">
+                                                    <div class="text-[11.5px] text-on-surface-variant truncate py-0.5"
+                                                         :title="cell.holders.map(h => h.name + ' — ' + h.roleName).join(', ')"
+                                                         x-text="liturgyLine(cell) || '—'"></div>
+                                                </div>
                                             </div>
                                         </template>
 
