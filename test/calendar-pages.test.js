@@ -3473,6 +3473,23 @@ test('a folded liturgy cell still names who is tied up', () => {
 // ⚠ Both states stay in the DOM. Swapping them with x-if would tear one out
 // and drop the other in, and there is nothing to animate between two elements
 // that never coexist.
+// A date is the unit an editor reads down, and four cards a column with
+// nothing between them run together.
+test('the columns are told apart by a rule and a wash, and the two line up', () => {
+    const html = readPage('auto-assign.html');
+
+    assert.match(html, /\.aa-cell, \.aa-head \{ border-right/);
+    assert.match(html, /\.aa-col-alt \{ background/);
+    // The header sets its own background to stay opaque while sticky, so the
+    // wash has to beat it — or the column starts halfway down.
+    assert.match(html, /\.aa-head\.aa-col-alt \{ background/);
+
+    // Header and body must read the same column index, or the stripes stagger.
+    assert.match(html, /:data-col="col\.index"\s*\n\s*:class="col\.index % 2 \? 'aa-col-alt'/);
+    assert.match(html, /x-for="\(cell, ci\) in row\.cells"/);
+    assert.match(html, /ci % 2 \? 'aa-col-alt'/);
+});
+
 test('the fold animates rather than snapping', () => {
     const html = readPage('auto-assign.html');
 

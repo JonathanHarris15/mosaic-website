@@ -69,6 +69,20 @@
         .aa-corner { z-index: 3; }
         .aa-cell { width: 220px; min-width: 220px; }
 
+        /* ── Telling the columns apart ──
+           A date is the unit the editor reads down, and four cards a column
+           with nothing between them run together. Two things do the work: a
+           rule at every column edge, and a wash on alternate columns — the
+           wash is what survives being glanced at, the rule is what makes the
+           edge exact. Both are quiet: this is a hundred cards, and anything
+           louder competes with the cards themselves. */
+        .aa-cell, .aa-head { border-right: 1px solid #DAD0C0; }
+        .aa-col-alt { background: rgba(24, 47, 87, .028); }
+        /* The header sets its own background to stay opaque while sticky, so
+           the wash has to beat it — and carry through, or the column starts
+           halfway down. */
+        .aa-head.aa-col-alt { background: #F4F2F3; }
+
         /* A one-off Role is a different kind of thing from a managed one, and
            the divider is what says so without a second heading row. */
         .aa-divider th, .aa-divider td { border-top: 2px solid #DAD0C0; }
@@ -495,6 +509,7 @@
                                 <!-- x-ref cannot be bound dynamically in Alpine,
                                      so the strip finds a column by attribute. -->
                                 <th :data-col="col.index"
+                                    :class="col.index % 2 ? 'aa-col-alt' : ''"
                                     class="aa-head px-3 py-2 text-left align-bottom">
                                     <div class="flex flex-col gap-0.5">
                                         <div class="flex items-center gap-1.5">
@@ -560,9 +575,11 @@
                                     </div>
                                 </th>
 
-                                <template x-for="cell in row.cells" :key="row.key + cell.date">
+                                <template x-for="(cell, ci) in row.cells" :key="row.key + cell.date">
                                     <td class="aa-cell aa-cell-motion px-2 align-top"
-                                        :class="(row.kind === 'liturgy' && !liturgyOpen) ? 'py-1' : 'py-2'">
+                                        :class="[
+                                            (row.kind === 'liturgy' && !liturgyOpen) ? 'py-1' : 'py-2',
+                                            ci % 2 ? 'aa-col-alt' : '']">
                                         <!-- ⚠ BOTH states are always in the DOM. Swapping them
                                              with x-if would tear one out and drop the other in,
                                              and there is nothing to animate between two elements
