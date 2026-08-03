@@ -406,6 +406,15 @@
             case R.NOT_IN_REQUIRED_GROUP:
                 return 'Not in the ' + (ctx.groupName || 'required') + ' group';
 
+            // Only a roster written earlier can carry these: nobody can be
+            // OFFERED a Role or a place that has stopped existing, but a rota
+            // made last month can certainly still name one.
+            case R.UNKNOWN_ROLE:
+                return 'This Role no longer exists';
+
+            case R.UNKNOWN_SLOT:
+                return 'This Role no longer has this place';
+
             default:
                 // A rule we do not have words for still gets a reason. Never an
                 // empty subtitle, and never a silent omission.

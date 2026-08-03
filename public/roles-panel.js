@@ -135,10 +135,17 @@
                                                     <span class="cal-slot-avatar w-[28px] h-[28px] rounded-full bg-surface-container-high
                                                                  flex items-center justify-center text-[11px] font-label-md shrink-0"
                                                           x-text="initials(personName(row.assignment.personId))"></span>
-                                                    <span class="text-[14.5px] truncate"
-                                                          :class="stateTone(row.assignment) === 'attention'
-                                                            ? 'font-semibold text-on-error-container' : 'text-on-surface'"
-                                                          x-text="personName(row.assignment.personId)"></span>
+                                                    <div class="min-w-0">
+                                                        <div class="text-[14.5px] truncate"
+                                                             :class="stateTone(row.assignment) === 'attention'
+                                                               ? 'font-semibold text-on-error-container' : 'text-on-surface'"
+                                                             x-text="personName(row.assignment.personId)"></div>
+                                                        <!-- Named, not just flagged. "Something is wrong
+                                                             here" sends the editor hunting on a screen
+                                                             that already knows the answer. -->
+                                                        <div x-show="row.warning" class="text-[12px] text-on-error-container truncate"
+                                                             x-text="row.warning && row.warning.text"></div>
+                                                    </div>
                                                 </div>
                                             </template>
                                             <template x-if="!row.assignment">
@@ -150,6 +157,20 @@
                                                     <!-- An empty place is a calm resting state, never an error. -->
                                                     <span class="text-[14px] text-on-surface-variant">Nobody yet</span>
                                                 </div>
+                                            </template>
+
+                                            <!-- The roster breaks one of this Role's own rules
+                                                 here. It is a Warning, never a refusal — the
+                                                 editor put them there on purpose, or the data
+                                                 moved underneath a roster that was fine when
+                                                 it was made (ADR-0021). -->
+                                            <template x-if="row.warning">
+                                                <span class="shrink-0 inline-flex items-center gap-1 rounded-md
+                                                             bg-error-container text-on-error-container border border-error
+                                                             px-2 py-1 text-[10px] font-label-md uppercase tracking-wider"
+                                                      :title="row.warning.text">
+                                                    <span class="material-symbols-outlined text-[13px] text-error">error</span> Breaks a rule
+                                                </span>
                                             </template>
 
                                             <!-- Declined is the only loud state. -->
@@ -410,11 +431,11 @@
                     <!-- Hidden while the candidates are still being worked out.
                          "0 can take it" is a wrong answer, not a pending one. -->
                     <span class="text-[12.5px] text-on-surface-variant" x-show="!picker.loading"
-                          x-text="eligibleCount + ' can take it · ' + blockedCount + ' can\\'t'"></span>
+                          x-text="eligibleCount + ' free · ' + blockedCount + ' would break a rule'"></span>
                     <!-- OFF by default. Seeing who was passed over is the point. -->
                     <label class="flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" x-model="picker.hideBlocked" class="accent-primary cal-focus" />
-                        <span class="text-[12px] text-on-surface-variant">Hide the ones who can't</span>
+                        <span class="text-[12px] text-on-surface-variant">Only the free ones</span>
                     </label>
                 </div>
             </div>
@@ -428,12 +449,16 @@
                 </div>
 
                 <template x-for="c in (picker.loading ? [] : candidates)" :key="c.personId">
-                    <button @click="pick(c)" :disabled="!c.eligible"
+                    <!-- A blocked row is READABLE AND PICKABLE. Eligibility
+                         advises; the editor decides (ADR-0021). It is dimmed so
+                         the fair picks lead the eye, never disabled. -->
+                    <button @click="pick(c)"
                             class="w-full text-left flex items-center gap-sm px-md py-2.5 border-b border-outline-variant cal-motion"
                             :class="{
-                                'opacity-[.45] cursor-not-allowed': !c.eligible,
+                                'opacity-[.6]': !c.eligible && picker.picked !== c.personId,
+                                'bg-error-container': !c.eligible && picker.picked === c.personId,
                                 'bg-surface-container': c.eligible && picker.picked === c.personId,
-                                'hover:bg-surface-container-low': c.eligible && picker.picked !== c.personId
+                                'hover:bg-surface-container-low': picker.picked !== c.personId
                             }">
                         <span class="w-[30px] h-[30px] rounded-full bg-surface-container-high flex items-center
                                      justify-center text-[11px] font-label-md shrink-0"
@@ -445,9 +470,11 @@
                                  will sit later, with no relayout needed. -->
                             <div class="text-[12px] text-on-surface-variant truncate" x-text="c.subtitle"></div>
                         </div>
-                        <span x-show="!c.eligible" class="material-symbols-outlined text-[18px] text-outline shrink-0">block</span>
-                        <span x-show="c.eligible && picker.picked === c.personId"
-                              class="material-symbols-outlined text-[20px] text-primary shrink-0">check_circle</span>
+                        <span x-show="!c.eligible && picker.picked !== c.personId"
+                              class="material-symbols-outlined text-[18px] text-error shrink-0">error</span>
+                        <span x-show="picker.picked === c.personId"
+                              class="material-symbols-outlined text-[20px] shrink-0"
+                              :class="c.eligible ? 'text-primary' : 'text-error'">check_circle</span>
                     </button>
                 </template>
             </div>

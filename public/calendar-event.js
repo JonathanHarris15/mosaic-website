@@ -459,6 +459,7 @@
                             slot: slot,
                             requirementLabel: this.requirementLabel(slot.requirement),
                             assignment: this.assignmentAt(def.slug, slot.id),
+                            warning: this.warningAt(def.slug, slot.id),
                         })),
                         needsAttention: (def.slots || []).some(slot => {
                             const a = this.assignmentAt(def.slug, slot.id);
@@ -1185,9 +1186,16 @@
                     // `seriesId` existed do not match — a Firestore query cannot
                     // apply the read-time fallback — which is what
                     // scripts/backfill-involvement-series.js is for.
+                    //
+                    // ⚠ The orderBy is load-bearing. That index is
+                    // (seriesId ASC, serviceDate DESC); an inequality with no
+                    // stated order implies ASCENDING, which the index cannot
+                    // serve — so without this line every read fails and the
+                    // catch below swallows it, silently.
                     const snap = await db.collectionGroup('involvement')
                         .where('seriesId', '==', seriesId)
                         .where('serviceDate', '>=', earliest)
+                        .orderBy('serviceDate', 'desc')
                         .get();
                     this.serveHistory = snap.docs.map(d => {
                         const data = d.data() || {};
@@ -1355,13 +1363,64 @@
             get pickerConsequence() {
                 if (!this.picker.picked) return '';
                 const person = this.people.find(p => p.id === this.picker.picked);
-                return ((person && person.name) || 'They') +
-                    ' will go in as Pending until you hear from them.';
+                const who = (person && person.name) || 'They';
+
+                // Say what it breaks BEFORE the write, not only after. The rule
+                // does not refuse (ADR-0021), so this line is the whole of the
+                // warning the editor gets while they can still change their mind.
+                const chosen = this.candidates.filter(c => c.personId === this.picker.picked)[0];
+                if (chosen && !chosen.eligible) {
+                    return who + ' breaks a rule here — ' + chosen.subtitle +
+                        ' Going ahead is fine; the place will be flagged.';
+                }
+
+                return who + ' will go in as Pending until you hear from them.';
+            },
+
+            // ── What is wrong with the roster as it stands ────────────────────
+            //
+            // ADR-0021: eligibility ADVISES. A rule about the roster no longer
+            // refuses, because a tool that will not record the rota the church
+            // is actually going to run is a tool the rota leaves. What it owes
+            // the editor instead is to say so, here and on Auto-assign, from the
+            // same pass — which is what stops the two surfaces disagreeing.
+            //
+            // Derived on every read. Never stored, never dismissed.
+            get rosterWarnings() {
+                return Roles.warningsFor(this.assignments, {
+                    roles: this.roleDefinitions,
+                    people: this.people,
+                    relationships: this.relationships,
+                    groups: this.groups,
+                    liturgicalHolders: this.liturgicalBlocks,
+                });
+            },
+
+            warningAt(roleSlug, slotId) {
+                const found = this.rosterWarnings.filter(w => (
+                    w.roleSlug === roleSlug && w.slotId === slotId
+                ))[0];
+                if (!found) return null;
+                return {
+                    reason: found.reason,
+                    text: View.blockReason(found, {
+                        people: this.people,
+                        requirement: (this.slotAt(roleSlug, slotId) || {}).requirement,
+                        otherRoles: found.heldRoleSlug ? [this.roleName(found.heldRoleSlug)] : [],
+                        groupName: this.groupNameFor(found.personId),
+                    }),
+                };
+            },
+
+            slotAt(roleSlug, slotId) {
+                const def = this.roleDefinitions.find(d => d.slug === roleSlug);
+                return ((def && def.slots) || []).find(s => s.id === slotId) || null;
             },
 
             pick(candidate) {
-                // A blocked row does nothing at all. It is there to be read.
-                if (!candidate.eligible) return;
+                // A blocked row is pickable. Placing somebody against a Role's
+                // own rules is the editor's call to make (ADR-0021) — the panel
+                // says what it breaks, before and after.
                 this.picker.picked = candidate.personId;
             },
 

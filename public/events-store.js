@@ -851,6 +851,128 @@
         return writes.length;
     }
 
+    // ── Accepting a draft ────────────────────────────────────────────────────
+    //
+    // Auto-assign holds a whole range in a browser as a PROPOSAL. Nothing in it
+    // is an Assignment (ADR-0018 fixed that state machine at three states and it
+    // gains no fourth), nobody is assigned, and no serve history has moved.
+    // This is the write that changes that, all at once.
+    //
+    // Three things it has to get right:
+    //
+    //   OCCURRENCES ARE SPARSE. A document exists only once something has been
+    //   said about a date, so most future dates in a range have none at all.
+    //   They are created here, on the deterministic id, so two editors
+    //   accepting at once land on one document rather than a twin.
+    //
+    //   PENDING, NOT CONFIRMED. Nobody has been asked. But a seat the editor
+    //   KEPT arrives carrying the state it already had, and that state survives
+    //   — accepting a draft must never quietly un-say somebody's yes.
+    //
+    //   THE DRAFT OWNS ONLY WHAT IT DRAFTED. Every place of every Role in
+    //   `roleSlugs` on that date is replaced by what the draft says, including
+    //   being emptied. Anything else on the date — a one-off job, a Role the
+    //   series does not carry any more — is left exactly where it is.
+    //
+    // Not atomic across the range: a long one exceeds a batch, so it is written
+    // date by date and reports which ones landed. A caller that stops half way
+    // has really written half.
+    async function acceptDraft(db, draft, options) {
+        const o = options || {};
+        const owned = o.roleSlugs || [];
+        const written = [];
+        let assignments = 0;
+
+        // Skipped dates were never drafted. "Leave out" means leave out.
+        const days = ((draft || {}).dates || []).filter(day => day && !day.skipped);
+
+        for (const day of days) {
+            const id = Core.occurrenceId(o.seriesId, day.date);
+            const existing = await occurrenceRef(db, id).collection(ROSTER).get();
+
+            const kept = existing.docs
+                .map(doc => doc.data())
+                .filter(a => a && owned.indexOf(a.roleSlug) === -1);
+
+            const drafted = (day.seats || [])
+                .filter(seat => seat && seat.personId && seat.roleSlug)
+                .map(seat => {
+                    const fresh = Core.newAssignment(seat, o.actor);
+                    // A kept seat keeps its own state and who set it; only a
+                    // newly drafted one starts Pending.
+                    return seat.held && seat.state
+                        ? Object.assign(fresh, { state: seat.state })
+                        : fresh;
+                });
+
+            const roster = kept.concat(drafted);
+
+            // Sparseness holds: a date nobody is on, that nobody WAS on, gets no
+            // document. A date whose places the editor emptied does get written
+            // — clearing a roster is a real change and has to land.
+            if (!roster.length && !existing.docs.length) continue;
+
+            await saveOccurrence(db, {
+                id: id,
+                seriesId: o.seriesId,
+                date: day.date,
+                assignments: roster,
+            });
+
+            assignments += drafted.length;
+            written.push(day.date);
+        }
+
+        return {
+            dates: written,
+            occurrences: written.length,
+            assignments: assignments,
+        };
+    }
+
+    // ── Seeding a serve (MS-182) ─────────────────────────────────────────────
+    //
+    // ⚠ THIS IS THE ONE THING ON THE AUTO-ASSIGN SCREEN THAT WRITES AT ONCE.
+    // Everything else there is a proposal held in the browser until Accept. A
+    // serve record is not part of the draft — it is a claim about the PAST, and
+    // a past that only exists if you later accept a rota would be a strange
+    // thing indeed.
+    //
+    // It records a SERVE, never a load figure. Fairness has two dials: a figure
+    // would drop somebody down the pool while leaving the solver believing they
+    // have never held the Role, so the burnout gate reads fixed and the
+    // rotation is still blind. A serve moves both, and the number then explains
+    // itself — it is six because of these six things.
+    //
+    // `seeded` marks it as typed in rather than lived through, so the panel
+    // knows which records it may offer to take back.
+    async function seedServe(db, serve) {
+        const s = serve || {};
+        if (!s.personId || !s.roleSlug || !s.date) {
+            throw new Error('A serve needs a person, a Role and a date.');
+        }
+
+        const personRef = db.collection('people').doc(s.personId);
+        const data = Events.stampSeries({
+            serviceDate: s.date,
+            type: s.roleSlug,
+            seeded: true,
+            createdAt: new Date().toISOString(),
+        }, s.seriesId);
+        if (s.oneOffId) data.metadata = { oneOffId: s.oneOffId };
+
+        const ref = await personRef.collection('involvement').add(data);
+        return Object.assign({ id: ref.id, personId: s.personId }, data);
+    }
+
+    async function removeServe(db, personId, involvementId) {
+        if (!personId || !involvementId) {
+            throw new Error('Removing a serve needs the person and the record.');
+        }
+        await db.collection('people').doc(personId)
+            .collection('involvement').doc(involvementId).delete();
+    }
+
     // ── Changing a recurrence pattern ────────────────────────────────────────
     //
     // NOTHING IS MIGRATED SILENTLY. The caller computes the orphans, shows them
@@ -1046,6 +1168,10 @@
         saveOccurrenceDetails,
         COLOUR_SLUGS,
         saveRoster,
+        acceptDraft,
+        // seeding a serve (MS-182) — the one write that does not wait for accept
+        seedServe,
+        removeServe,
         applyOrphanChoices,
         // internals worth testing
         rosterId,

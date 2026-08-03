@@ -744,6 +744,7 @@
         notHappening,
         timeOf,
         movedNote,
+        dayMonth,
         mergeOccurrences,
         orphanedOccurrences,
         // assignments
