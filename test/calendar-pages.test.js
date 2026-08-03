@@ -3427,6 +3427,63 @@ test('the grid hides its own horizontal bar but keeps the vertical one', () => {
     assert.doesNotMatch(html, /\.aa-scroller \{[^}]*overflow-x:\s*hidden/);
 });
 
+// ── Measuring the window ────────────────────────────────────────────────────
+//
+// ⚠ A HIDDEN GRID HAS NO WIDTH. Measured while the setup step is still
+// showing, the answer is zero by zero — and the untouched starting value says
+// the grid fits entirely. Both symptoms at once: a window stretched across the
+// whole strip, and a strip that will not drag.
+
+test('the window is measured once the grid is actually on screen', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: ['2026-10-04', '2026-10-11', '2026-10-18', '2026-10-25'].map(d => drafted(d)),
+    };
+    page.buildGrid();
+
+    // What the setup step offers: an element with no size at all.
+    let width = 0;
+    page.$refs = {
+        scroller: {
+            scrollLeft: 0, scrollTop: 0,
+            get scrollWidth() { return width; },
+            get clientWidth() { return width ? 500 : 0; },
+        },
+    };
+
+    page.measureGrid();
+    assert.equal(page.viewWidth, 1, 'nothing measurable, so nothing claimed');
+    assert.equal(page.canScrub, false);
+
+    width = 1000;                   // the draft view is up; the grid has width
+    page.showDraft();
+
+    assert.equal(page.view, 'draft');
+    assert.equal(page.viewWidth, 0.5, 'half the range is visible');
+    assert.equal(page.canScrub, true, 'and now the strip is a scrollbar');
+});
+
+// It hands the grid 320px or takes it away — most of a column.
+test('shutting the directory re-measures the window', () => {
+    const page = draftedPage();
+    page.draft = { dates: ['2026-10-04', '2026-10-11'].map(d => drafted(d)) };
+    page.buildGrid();
+
+    let client = 500;
+    page.$refs = {
+        scroller: {
+            scrollLeft: 0, scrollTop: 0, scrollWidth: 1000,
+            get clientWidth() { return client; },
+        },
+    };
+    page.showDraft();
+    assert.equal(page.viewWidth, 0.5);
+
+    client = 820;                   // the drawer shut and gave the width back
+    page.togglePanel();
+    assert.equal(page.viewWidth, 0.82);
+});
+
 // ── Dragging to the edge scrolls the grid ───────────────────────────────────
 
 // The grid, and the box you can actually see it through. The scroller hangs

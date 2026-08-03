@@ -373,7 +373,7 @@
                     this.buildGrid();
                     this.remember();
                     this.focused = 0;
-                    this.view = 'draft';
+                    this.showDraft();
                 } catch (e) {
                     console.error('Could not draft the roster:', e);
                     this.error = 'The roster could not be drafted. ' +
@@ -725,6 +725,36 @@
                 this.viewLeft = el.scrollLeft / el.scrollWidth;
                 this.viewWidth = Math.min(1, el.clientWidth / el.scrollWidth);
                 this.focused = this.nearestColumn();
+            },
+
+            // ⚠ A HIDDEN GRID HAS NO WIDTH. The scroller's own `x-init` runs
+            // while the setup step is still showing, so what it measures is
+            // zero by zero — and the untouched starting value says the grid
+            // fits entirely. That draws the window across the whole strip and
+            // leaves it dead in the hand, which is exactly the two symptoms
+            // together: too wide, and it will not drag.
+            //
+            // So the measurement is taken when the grid is ON SCREEN, and
+            // again whenever the room it has to sit in changes.
+            measureGrid() {
+                const attempt = (left) => {
+                    const el = this.$refs && this.$refs.scroller;
+                    if (el && el.scrollWidth) { this.onGridScroll(el); return; }
+                    // The rows are drawn a moment after the view flips. Worth
+                    // a couple of frames rather than one and a wrong answer.
+                    if (left > 0) this.afterPaint(() => attempt(left - 1));
+                };
+                this.afterPaint(() => attempt(3));
+            },
+
+            afterPaint(fn) {
+                const raf = typeof window !== 'undefined' && window.requestAnimationFrame;
+                if (raf) raf.call(window, fn); else fn();
+            },
+
+            showDraft() {
+                this.view = 'draft';
+                this.measureGrid();
             },
 
             // The LEFTMOST visible date, not the middle of the window. A grid is
@@ -1267,6 +1297,12 @@
             togglePanel() {
                 this.panelOpen = !this.panelOpen;
                 Saved.save(this.storage, this.PANEL_KEY, { open: this.panelOpen });
+                // The drawer hands 320px to the grid or takes it away, which
+                // is most of a column — the window has to be re-measured or it
+                // says the grid is wider or narrower than it is. Once now (for
+                // a browser told not to animate) and once the slide has
+                // finished, from the panel's own transitionend.
+                this.measureGrid();
             },
 
             // What a folded cell says. Names, not a count: "3 on liturgy" tells
@@ -1339,7 +1375,7 @@
                 this.edited = {};
                 this.buildGrid();
                 this.focused = 0;
-                this.view = 'draft';
+                this.showDraft();
             },
 
             dismissStored() {

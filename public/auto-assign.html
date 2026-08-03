@@ -482,7 +482,8 @@
              whenever that is outside the grid. -->
         <div x-show="view === 'draft'" class="flex-grow flex flex-col min-h-0"
              @dragover="edgeScrollAt($event)"
-             @dragend="stopEdgeScroll()" @drop="stopEdgeScroll()">
+             @dragend="stopEdgeScroll()" @drop="stopEdgeScroll()"
+             @resize.window="measureGrid()">
 
             <!-- ══════ The range strip ══════
                  One tick per date. The cards below are worth reading and only
@@ -540,7 +541,7 @@
             <div class="aa-scroll-clip flex-grow min-h-0 bg-surface-container-low" x-ref="clip">
             <div class="aa-scroller"
                  x-ref="scroller" @scroll="onGridScroll($event.target)"
-                 x-init="$nextTick(() => onGridScroll($refs.scroller))">
+                 x-init="measureGrid()">
                 <table class="aa-grid border-separate border-spacing-0">
                     <thead>
                         <tr>
@@ -799,7 +800,8 @@
                     </button>
                 </div>
 
-                <div class="aa-panel min-h-0" :class="panelOpen ? '' : 'aa-panel-shut'">
+                <div class="aa-panel min-h-0" :class="panelOpen ? '' : 'aa-panel-shut'"
+                     @transitionend.self="measureGrid()">
                 <div class="aa-panel-body flex flex-col min-h-0 h-full">
 
                 <!-- ── The directory ── -->
