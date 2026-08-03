@@ -1154,6 +1154,32 @@ test('a cleared intensity box is refused, never silently saved as a free job', a
     assert.match(page.draftErrors.join(' '), /intensity/i);
 });
 
+// ⚠ THE BUG THIS REPLACES. Plain `x-model` on a number input writes a STRING,
+// and the model reads intensity strictly — so the moment anybody typed a new
+// number the Role became unsaveable, with an error blaming the value they had
+// just correctly entered.
+test('a typed intensity saves, string or not', async () => {
+    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+
+    page.draft.intensity = '1.2';           // what the box actually hands back
+    assert.deepEqual(page.draftErrors, [], 'the number they typed is not a problem');
+
+    await page.saveDraft();
+    assert.equal(stored('roles').r1.intensity, 1.2, 'stored as a number, never a string');
+});
+
+test('an intensity that is not a number at all is still refused', async () => {
+    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+
+    page.draft.intensity = 'soon';
+    assert.match(page.draftErrors.join(' '), /intensity/i);
+
+    page.draft.intensity = '-2';
+    assert.match(page.draftErrors.join(' '), /negative/i);
+});
+
 test('intensity 0 is kept, because a free job is a real answer', async () => {
     const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
     page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));

@@ -791,9 +791,29 @@ window.RolesManager = () => ({
 
     // Every problem at once, so the editor fixes them together rather than one
     // save at a time.
+    // What the editor typed, in the shape the model reads. A number input hands
+    // back a string, and `intensity` is read strictly on purpose — a STORED
+    // string is genuinely bad data. Coercing at the boundary keeps both true:
+    // the box can never lock the Role, and the strict read stays strict.
+    get normalisedDraft() {
+        if (!this.draft) return null;
+        const raw = this.draft.intensity;
+
+        // ⚠ ONLY a value that really is a number is coerced. An EMPTY box must
+        // stay rejected: Number('') is 0, a real intensity meaning the job costs
+        // nothing, and saving that silently would empty the rest budget of
+        // whoever does it. Absent is fine — it reads as one week — but blank is
+        // a question the editor has not answered.
+        if (typeof raw !== 'string' || raw.trim() === '') return this.draft;
+        const parsed = Number(raw);
+        if (!Number.isFinite(parsed)) return this.draft;
+
+        return Object.assign({}, this.draft, { intensity: parsed });
+    },
+
     get draftErrors() {
         if (!this.draft) return [];
-        const errors = RolesCore.validateDefinition(this.draft).errors.slice();
+        const errors = RolesCore.validateDefinition(this.normalisedDraft).errors.slice();
         this.draftRestrictions.forEach((rule, i) => {
             RolesCore.validateRestriction(rule, this.knownRelationshipTypes).errors
                 .forEach(message => errors.push(`Rule ${i + 1}: ${message}`));
