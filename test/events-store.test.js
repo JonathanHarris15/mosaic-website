@@ -25,7 +25,18 @@ function fakeDb(collections, viewer) {
 
     // The rule from firestore.rules, restated: rank, or the participant rung
     // answered against the document's own participant list.
-    function mayRead(doc) {
+    //
+    // ⚠ AN OCCURRENCE WITH NO `visibility` FIELD IS DENIED TO EVERYONE, editors
+    // included. The rule's `stampedVisibility()` answers 'none' for a document
+    // that has no such field, and `rankCanSee('none')` is false on every branch.
+    //
+    // This is NOT what `Core.canSee` does, and the difference is the whole bug:
+    // the client model's `visibilityOf` treats any Sunday Service occurrence as
+    // public whatever it stores, so a document written with no stamp read fine
+    // in every test and was refused by production. A fake that borrowed the
+    // model's opinion could never catch a write that forgot the stamp.
+    function mayRead(doc, name) {
+        if (name === Store.OCCURRENCES && !(doc && 'visibility' in doc)) return false;
         return Core.canSee(viewer && viewer.rank, doc, viewer && viewer.personId);
     }
 
@@ -53,7 +64,7 @@ function fakeDb(collections, viewer) {
                 // THIS is the behaviour that makes the bug real. One unreadable
                 // row fails the entire read.
                 if (name === Store.OCCURRENCES || name === Store.SERIES) {
-                    const blocked = matches.find(doc => !mayRead(doc));
+                    const blocked = matches.find(doc => !mayRead(doc, name));
                     if (blocked) {
                         const err = new Error(
                             'Missing or insufficient permissions. (query on ' + name +
@@ -99,7 +110,7 @@ function fakeDb(collections, viewer) {
                 // is readable by anyone, existing or not.
                 const alwaysReadable = name === Store.SERIES && id === Core.SUNDAY_SERVICE_ID;
 
-                if (guarded && !alwaysReadable && (!d || !mayRead(Object.assign({ id }, d)))) {
+                if (guarded && !alwaysReadable && (!d || !mayRead(Object.assign({ id }, d), name))) {
                     const err = new Error(
                         'Missing or insufficient permissions. (get on ' + name + '/' + id +
                         (d ? ', which the viewer may not read)' : ', which does not exist)')
@@ -1213,6 +1224,79 @@ test('a Sunday nobody has touched opens too, even with no rule stored', async ()
     assert.ok(o, 'an untouched Sunday reported itself missing');
     assert.strictEqual(o.seriesId, 'sunday_service');
     assert.strictEqual(o.visibility, 'public', 'a Sunday Service is always public');
+});
+
+// ── The stamp every created occurrence has to carry ───────────────────────────
+//
+// A security rule reads `resource.data.visibility` off the document and cannot
+// go and look at the series (ADR-0018 §5). `stampedVisibility()` answers 'none'
+// when the field is absent, and `rankCanSee('none')` is false on every branch —
+// so an occurrence written without it is a document NOBODY can read back, not
+// even the editor who just wrote it. It also drops off the Calendar, whose list
+// queries filter on `visibility`.
+
+test('accepting a roster stamps visibility on the dates it creates', async () => {
+    const db = fakeDb({
+        events: { sunday_service: { name: 'Sunday Service' } },
+        event_occurrences: {},
+    }, { rank: 'editor' });
+
+    await Store.acceptDraft(db, {
+        dates: [{ date: '2026-08-09', seats: [{ personId: 'p1', roleSlug: 'coffee', slotId: 's1' }] }],
+    }, { seriesId: 'sunday_service', roleSlugs: ['coffee'], actor: { actorUid: 'u1' } });
+
+    const doc = db._flatWrites().find(w => w.path === 'event_occurrences/sunday_service_2026-08-09');
+    assert.ok(doc, 'accepting a roster wrote no occurrence document');
+    assert.strictEqual(
+        doc.data.visibility, 'public',
+        'the occurrence carries no visibility stamp, so the rule refuses it to everyone'
+    );
+});
+
+test('an accepted roster can be read back by the editor who wrote it', async () => {
+    // The round trip, which is what the editor actually experienced: the seats
+    // were written, and the page then showed every place as needing people.
+    const written = {};
+    const db = fakeDb({
+        events: { sunday_service: { name: 'Sunday Service' } },
+        event_occurrences: written,
+    }, { rank: 'editor' });
+
+    await Store.acceptDraft(db, {
+        dates: [{ date: '2026-08-09', seats: [{ personId: 'p1', roleSlug: 'coffee', slotId: 's1' }] }],
+    }, { seriesId: 'sunday_service', roleSlugs: ['coffee'], actor: { actorUid: 'u1' } });
+
+    // Play the writes back into the store the fake reads from.
+    db._flatWrites().forEach(w => {
+        const m = /^event_occurrences\/([^/]+)$/.exec(w.path);
+        if (m) written[m[1]] = w.data;
+    });
+
+    const o = await Store.loadOccurrence(db, 'sunday_service_2026-08-09');
+    assert.ok(o, 'the date the editor had just rostered could not be read back');
+    assert.strictEqual(o.stored, true, 'fell back to a rebuild, losing the roster');
+});
+
+test('a refused occurrence document does not throw away the roster it came with', async () => {
+    // The two reads are independent, and an editor is allowed the roster even
+    // when the document read is refused. Returning the bare rebuild showed every
+    // place as empty on a date that really had people on it.
+    const db = fakeDb({
+        events: { sunday_service: { name: 'Sunday Service' } },
+        // No `visibility`, so the document read is refused — exactly the state
+        // the unstamped writes left real dates in.
+        event_occurrences: { 'sunday_service_2026-08-09': { seriesId: 'sunday_service', date: '2026-08-09' } },
+        'event_occurrences/sunday_service_2026-08-09/roster': {
+            coffee__s1__p1: { roleSlug: 'coffee', slotId: 's1', personId: 'p1', state: 'pending' },
+        },
+    }, { rank: 'editor' });
+
+    const o = await Store.loadOccurrence(db, 'sunday_service_2026-08-09');
+
+    assert.ok(o, 'a real rostered date reported itself missing');
+    assert.strictEqual(o.assignments.length, 1, 'the roster was thrown away with the refused document');
+    assert.strictEqual(o.assignments[0].personId, 'p1');
+    assert.deepStrictEqual(o.participantIds, ['p1'], 'participant list did not follow the roster');
 });
 
 test('a date the pattern does not produce is genuinely not found', async () => {

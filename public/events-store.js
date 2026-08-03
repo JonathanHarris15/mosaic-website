@@ -346,7 +346,6 @@
             occurrenceRef(db, id).collection(ROSTER).get().catch(() => ({ docs: [] })),
         ]);
 
-        if (!doc) return rebuildOccurrence(db, id);
         // Occurrences are SPARSE. A date nobody has touched has NO DOCUMENT, so
         // "no document" is not the same as "no such event" — and answering
         // "could not be found" is wrong in the worst way, because the date is
@@ -354,11 +353,44 @@
         //
         // The id is deterministic for exactly this reason: it carries the series
         // and the date, so the occurrence can be rebuilt without a document.
-        if (!doc.exists) return rebuildOccurrence(db, id);
+        //
+        // ⚠ THE ROSTER SURVIVES THE REBUILD. These two reads are independent,
+        // and an editor is allowed the roster (`isEditor()`) even when the
+        // DOCUMENT read is refused. Returning the bare rebuild threw away
+        // assignments already in hand, so every place on the date read as empty
+        // — a roster that was really there, showing as "needs people".
+        if (!doc || !doc.exists) {
+            const rebuilt = await rebuildOccurrence(db, id);
+            if (rebuilt && roster.docs.length) {
+                rebuilt.assignments = roster.docs.map(d => d.data());
+                rebuilt.participantIds = Core.participantIds(rebuilt.assignments);
+            }
+            return rebuilt;
+        }
 
         return Object.assign({ id: doc.id, stored: true }, doc.data(), {
             assignments: roster.docs.map(d => d.data()),
         });
+    }
+
+    // The visibility an occurrence of this series has to CARRY.
+    //
+    // ⚠ EVERY WRITE THAT CREATES AN OCCURRENCE MUST STAMP THIS. The rule reads
+    // `resource.data.visibility` off the document itself and cannot go and look
+    // at the series (ADR-0018 §5) — and `stampedVisibility()` answers 'none' for
+    // a document that has no such field, which `rankCanSee` refuses for
+    // EVERYONE, editors included. A document written without it is one nobody
+    // can read back, including the person who just wrote it. The list queries
+    // filter on `visibility` too, so it also drops off the Calendar.
+    function stampFor(series, seriesId) {
+        return {
+            // The Sunday Service is permanently public and the series rule names
+            // it explicitly rather than reading a field, so the series document
+            // may carry no stamp of its own.
+            visibility: (series && series.visibility)
+                || (seriesId === Core.SUNDAY_SERVICE_ID ? 'public' : 'member'),
+            rosterShared: !!(series && series.rosterShared === true),
+        };
     }
 
     // An occurrence reconstructed from its id and its series. Returns null unless
@@ -378,7 +410,7 @@
         if (!rule) return null;
         if (Core.datesBetween(rule, parsed.date, parsed.date).indexOf(parsed.date) === -1) return null;
 
-        return {
+        return Object.assign({
             id: id,
             seriesId: parsed.seriesId,
             date: parsed.date,
@@ -386,15 +418,10 @@
             name: series.name,
             seriesName: series.name,
             seriesColour: series.colour,
-            // The Sunday Service is permanently public and carries no stamp of
-            // its own; the rule names it explicitly rather than reading a field.
-            visibility: series.visibility
-                || (parsed.seriesId === Core.SUNDAY_SERVICE_ID ? 'public' : 'member'),
-            rosterShared: series.rosterShared === true,
             time: rule.time || null,
             participantIds: [],
             assignments: [],
-        };
+        }, stampFor(series, parsed.seriesId));
     }
 
     // ── Creating an Event ────────────────────────────────────────────────────
@@ -886,6 +913,14 @@
         // Skipped dates were never drafted. "Leave out" means leave out.
         const days = ((draft || {}).dates || []).filter(day => day && !day.skipped);
 
+        // Read once, for the whole range. Most of these dates have no document
+        // yet, so this write CREATES them — and a created occurrence has to
+        // carry its own visibility stamp or nobody can read it back. Accepting a
+        // roster used to write the seats and nothing else, so every date it
+        // touched became unreadable and showed as needing people.
+        const series = days.length ? await loadSeries(db, o.seriesId) : null;
+        const stamp = stampFor(series, o.seriesId);
+
         for (const day of days) {
             const id = Core.occurrenceId(o.seriesId, day.date);
             const existing = await occurrenceRef(db, id).collection(ROSTER).get();
@@ -912,12 +947,12 @@
             // — clearing a roster is a real change and has to land.
             if (!roster.length && !existing.docs.length) continue;
 
-            await saveOccurrence(db, {
+            await saveOccurrence(db, Object.assign({
                 id: id,
                 seriesId: o.seriesId,
                 date: day.date,
                 assignments: roster,
-            });
+            }, stamp));
 
             assignments += drafted.length;
             written.push(day.date);
