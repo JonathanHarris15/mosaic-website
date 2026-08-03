@@ -122,6 +122,15 @@
 
         /* Wide enough for a name, a reason and a date side by side, and no
            wider — the grid is what the editor came for. */
+        /* Says what is about to happen while it can still be reconsidered. */
+        .aa-consequence {
+            position: absolute; left: 0; right: 0; top: -18px; z-index: 4;
+            background: #182F57; color: #F2EAE2;
+            font-size: 10px; line-height: 16px; text-align: center;
+            border-radius: 4px; pointer-events: none;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+
         .aa-panel { width: 320px; }
         @media (min-width: 1440px) { .aa-panel { width: 360px; } }
     </style>
@@ -215,6 +224,34 @@
                     <p class="text-body-md flex-grow" x-text="notice"></p>
                 </div>
 
+                <!-- A draft kept in the browser, re-checked before it is
+                     offered. A stale one looks completely normal, which is
+                     exactly what makes it dangerous. -->
+                <div x-show="offered" class="bg-surface-container border border-gold rounded-lg
+                                             p-md flex items-start gap-sm">
+                    <span class="material-symbols-outlined text-[20px] text-gold">history</span>
+                    <div class="flex-grow min-w-0">
+                        <p class="text-body-md text-on-surface" x-show="!offerStale.length">
+                            You have a draft for this range saved on this computer.
+                        </p>
+                        <p class="text-body-md text-on-surface" x-show="offerStale.length">
+                            You had a draft for this range, but it no longer matches.
+                        </p>
+                        <template x-for="why in offerStale" :key="why">
+                            <p class="text-[12.5px] text-on-surface-variant mt-0.5" x-text="why"></p>
+                        </template>
+                        <div class="flex items-center gap-3 mt-2">
+                            <button type="button" x-show="!offerStale.length" @click="resumeDraft()"
+                                    class="text-[12.5px] text-primary underline underline-offset-2 aa-focus rounded">
+                                Pick it back up
+                            </button>
+                            <button type="button" @click="dismissStored()"
+                                    class="text-[12.5px] text-on-surface-variant hover:text-error aa-focus rounded"
+                                    x-text="offerStale.length ? 'Throw it away and start fresh' : 'Throw it away'"></button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="bg-surface-container-lowest border border-outline-variant rounded-lg
                             px-8 pt-7 pb-8 flex flex-col gap-6">
 
@@ -243,11 +280,11 @@
                     <div class="flex flex-col gap-3">
                         <span class="text-[13px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">Dates</span>
                         <div class="flex items-center gap-3">
-                            <input type="date" x-model="fromDate" @change="onRangeChanged()" aria-label="From"
+                            <input type="date" x-model="fromDate" @change="onRangeSettled()" aria-label="From"
                                    class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg
                                           px-3.5 py-3 text-[15px] text-on-surface aa-focus" />
                             <span class="text-[13px] text-on-surface-variant tracking-wide">to</span>
-                            <input type="date" x-model="toDate" @change="onRangeChanged()" aria-label="To"
+                            <input type="date" x-model="toDate" @change="onRangeSettled()" aria-label="To"
                                    class="flex-1 bg-surface-container-low border border-outline-variant rounded-lg
                                           px-3.5 py-3 text-[15px] text-on-surface aa-focus" />
                         </div>
@@ -399,12 +436,28 @@
                                 <th :data-col="col.index"
                                     class="aa-head px-3 py-2 text-left align-bottom">
                                     <div class="flex flex-col gap-0.5">
-                                        <span class="text-[14px] text-on-surface" x-text="col.label"></span>
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="text-[14px] text-on-surface flex-grow" x-text="col.label"></span>
+                                            <!-- Settle this date, refresh the rest. Also the
+                                                 natural way to work down a long range. -->
+                                            <button type="button" @click="redraftFrom(col.index)"
+                                                    title="Keep this date and everything before it; redraw the rest"
+                                                    class="material-symbols-outlined text-[15px] text-on-surface-variant
+                                                           hover:text-primary aa-motion aa-focus rounded shrink-0">refresh</button>
+                                        </div>
                                         <span class="text-[11px] text-on-surface-variant"
                                               x-show="col.empty || col.problems"
                                               x-text="[col.empty ? col.empty + ' empty' : '',
                                                        col.problems ? col.problems + ' to fix' : '']
                                                       .filter(Boolean).join(' · ')"></span>
+                                        <!-- Balanced against a Sunday that no longer exists.
+                                             Named rather than fixed: a table that rearranges
+                                             itself while it is read cannot be read. -->
+                                        <span x-show="isStale(col.index)"
+                                              class="text-[10.5px] text-gold flex items-center gap-1">
+                                            <span class="material-symbols-outlined text-[12px]">history</span>
+                                            Drawn before your changes
+                                        </span>
                                     </div>
                                 </th>
                             </template>
@@ -469,7 +522,17 @@
                                                     <div @dragover.prevent="dragOver(cellKey(cell.date, place))"
                                                          @dragleave="over = null"
                                                          @drop.prevent="dropOn(cell.date, place)"
-                                                         :class="over === cellKey(cell.date, place) ? 'aa-target' : ''">
+                                                         :class="over === cellKey(cell.date, place) ? 'aa-target' : ''"
+                                                         class="relative">
+                                                        <!-- The consequence, while it can still be
+                                                             reconsidered. Nothing is swapped for the
+                                                             person turned out — an automatic swap
+                                                             would be a decision the app made. -->
+                                                        <div x-show="over === cellKey(cell.date, place)
+                                                                     && place.filled
+                                                                     && dragging && dragging.personId !== place.card.personId"
+                                                             class="aa-consequence"
+                                                             x-text="'Turns out ' + (place.filled ? place.card.name : '')"></div>
                                                         <!-- Somebody in it. -->
                                                         <template x-if="place.filled">
                                                             <div class="aa-card" draggable="true"
@@ -774,8 +837,8 @@
                         <span class="min-w-0">
                             <span class="block text-[12.5px] text-on-surface truncate leading-tight"
                                   x-text="d.name"></span>
-                            <span class="block text-[10.5px] text-on-surface-variant"
-                                  x-text="'was on ' + d.dateLabel"></span>
+                            <span class="block text-[10.5px] text-on-surface-variant truncate"
+                                  x-text="d.roleName + ' · ' + d.dateLabel"></span>
                         </span>
                         <button type="button" @click="dismiss(d)" title="Leave them out"
                                 class="material-symbols-outlined text-[15px] text-on-surface-variant
@@ -784,20 +847,76 @@
                 </template>
             </div>
 
+            <!-- ══════ The bottom bar ══════
+                 Whether the draft is finished, and committing it. Problems are
+                 a way IN, not a wall: accepting is always allowed, with empty
+                 places and with warnings (ADR-0021). What this does is make you
+                 look first. -->
             <div class="shrink-0 border-t border-outline-variant bg-surface-container-lowest
-                        px-6 py-3 flex items-center gap-3">
-                <p class="text-[13px] text-on-surface-variant flex-grow">
-                    <span x-text="tally.dates"></span> dates ·
-                    <span x-text="tally.places"></span> places ·
-                    <span x-text="tally.empty"></span> still empty
-                </p>
+                        px-6 py-3 flex items-center gap-4">
+
+                <div class="flex items-center gap-3 flex-grow min-w-0">
+                    <p class="text-[13px] text-on-surface-variant shrink-0">
+                        <span x-text="tally.dates"></span> dates ·
+                        <span x-text="tally.places"></span> places
+                    </p>
+                    <!-- Quiet at zero: a clean draft should feel clean. -->
+                    <span x-show="tally.empty" class="text-[13px] text-on-surface">
+                        <span x-text="tally.empty"></span> still empty
+                    </span>
+                    <button type="button" x-show="problemCount" @click="goToProblems()"
+                            class="text-[13px] text-error underline underline-offset-2 aa-focus rounded shrink-0">
+                        <span x-text="problemCount"></span> breaking a rule — take me there
+                    </button>
+                    <span x-show="!problemCount" class="text-[13px] text-secondary flex items-center gap-1">
+                        <span class="material-symbols-outlined text-[15px]">check_circle</span>
+                        Breaks no rules
+                    </span>
+                    <span x-show="staleCount" class="text-[12px] text-gold truncate">
+                        <span x-text="staleCount"></span> dates drawn before your changes
+                    </span>
+                </div>
+
                 <!-- ⚠ The promise is about the ROSTER. Seeding a serve is a
                      claim about the past and writes at once, so a blanket
                      "nothing is saved" would be a lie the moment it is used. -->
-                <p class="text-[12px] text-on-surface-variant">
-                    No rota has been saved — leaving the page loses the draft.
-                    Serve records you add save straight away.
+                <p class="text-[11.5px] text-on-surface-variant text-right shrink-0 max-w-[26ch]">
+                    No rota is saved until you accept. Serve records save straight away.
                 </p>
+
+                <div class="flex items-center gap-2 shrink-0">
+                    <button type="button" @click="discard()"
+                            class="text-[12.5px] text-on-surface-variant hover:text-error px-2 py-2
+                                   aa-motion aa-focus rounded">Discard</button>
+                    <button type="button" @click="redraftAll()"
+                            class="text-[12.5px] text-on-surface-variant hover:text-primary px-2 py-2
+                                   aa-motion aa-focus rounded">Re-draft</button>
+                    <button type="button" @click="acceptRoster()" :disabled="accepting || mustLookFirst"
+                            :title="mustLookFirst ? 'Look at the problems first' : ''"
+                            :class="(accepting || mustLookFirst)
+                                ? 'bg-surface-container text-outline'
+                                : 'bg-primary text-on-primary hover:opacity-90'"
+                            class="rounded-lg px-4 py-2.5 font-label-md text-xs uppercase tracking-wider
+                                   aa-motion aa-focus"
+                            x-text="accepting ? 'Saving…' : acceptLabel"></button>
+                </div>
+            </div>
+
+            <!-- What landed, and what did not. A long range is written date by
+                 date, so a failure part way through really has written some. -->
+            <div x-show="accepted || acceptError"
+                 class="shrink-0 border-t border-outline-variant px-6 py-3 flex items-center gap-3"
+                 :class="acceptError ? 'bg-error-container text-on-error-container' : 'bg-surface-container'">
+                <span class="material-symbols-outlined text-[18px]"
+                      x-text="acceptError ? 'error' : 'check_circle'"></span>
+                <p class="text-[13px] flex-grow" x-show="!acceptError">
+                    Saved. <span x-text="accepted && accepted.assignments"></span> places across
+                    <span x-text="accepted && accepted.occurrences"></span> dates. Everybody is
+                    Pending until they answer.
+                </p>
+                <p class="text-[13px] flex-grow" x-show="acceptError" x-text="acceptError"></p>
+                <a href="calendar.html" x-show="!acceptError"
+                   class="text-[12.5px] text-primary underline underline-offset-2 shrink-0">Go to the Calendar</a>
             </div>
         </div>
     </main>
@@ -820,6 +939,7 @@
 <script src="auto-assign-grid-core.js"></script>
 <script src="auto-assign-edit-core.js"></script>
 <script src="auto-assign-panel-core.js"></script>
+<script src="auto-assign-saved-core.js"></script>
 <script src="auto-assign.js"></script>
 <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </body>

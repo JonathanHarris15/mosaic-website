@@ -66,6 +66,7 @@ function loadComponent(scriptFile, factoryName, overrides) {
     sandbox.AutoAssignGridCore = require('../public/auto-assign-grid-core.js');
     sandbox.AutoAssignEditCore = require('../public/auto-assign-edit-core.js');
     sandbox.AutoAssignPanelCore = require('../public/auto-assign-panel-core.js');
+    sandbox.AutoAssignSavedCore = require('../public/auto-assign-saved-core.js');
 
     // The browser-only edges, stubbed just enough to construct the component.
     sandbox.location = { search: '?id=midweek_2026-07-15', href: '' };
@@ -253,6 +254,7 @@ test('each page loads every module its component reaches for', () => {
         'auto-assign.html': ['events-occurrence-core.js', 'events-store.js', 'roles-core.js', 'events-core.js',
                              'fairness-core.js', 'auto-assign-core.js', 'auto-assign-grid-core.js',
                              'auto-assign-edit-core.js', 'auto-assign-panel-core.js',
+                             'auto-assign-saved-core.js',
                              'calendar-view.js', 'date-utils.js', 'auto-assign.js'],
     };
 
@@ -3016,7 +3018,293 @@ test('the page no longer promises that nothing is saved, because one thing is', 
     assert.doesNotMatch(html, /Nothing is saved until you accept/,
         'seeding a serve writes at once, so the blanket promise became a lie');
     assert.match(html, /No rota is saved until you accept it/);
-    assert.match(html, /Serve records you add save straight away/);
+    assert.match(html, /Serve records save straight away/);
+});
+
+// ── Staleness and re-draft from here (MS-181) ───────────────────────────────
+
+// Each date was drafted reading the dates before it as history, so editing the
+// 4th leaves every later column balanced against a Sunday that no longer
+// exists. Nothing re-solves on its own — a table that rearranges itself while
+// it is being reviewed cannot be reviewed.
+test('editing a date marks the later columns, and changes none of their people', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: ['2026-10-04', '2026-10-11', '2026-10-18', '2026-10-25'].map((d, i) => drafted(d, [
+            { roleSlug: 'coffee', slotId: 's1', personId: i % 2 ? 'p1' : 'p2' },
+        ])),
+    };
+    page.buildGrid();
+    const before = page.grid.roleRows[0].cells.map(c => c.places[0].card.name);
+
+    page.startDrag(null, 'p1', null, 'directory');
+    page.dropOn('2026-10-04', { roleSlug: 'coffee', slotId: 's1' });
+
+    const after = page.grid.roleRows[0].cells.map(c => c.places[0].card.name);
+    assert.deepEqual(after.slice(1), before.slice(1), 'no other date moved a single person');
+    assert.equal(page.isStale(0), false, 'the edited date was balanced against what came before it');
+    assert.deepEqual([1, 2, 3].map(i => page.isStale(i)), [true, true, true]);
+    assert.equal(page.staleCount, 3);
+});
+
+test('re-drafting from a date clears the marker and keeps that date as it stands', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: ['2026-10-04', '2026-10-11', '2026-10-18', '2026-10-25'].map(d => drafted(d, [
+            { roleSlug: 'coffee', slotId: 's1', personId: 'p2' },
+        ])),
+    };
+    page.buildGrid();
+
+    page.startDrag(null, 'p1', null, 'directory');
+    page.dropOn('2026-10-04', { roleSlug: 'coffee', slotId: 's1' });
+    assert.equal(page.staleCount, 3);
+
+    page.redraftFrom(0);
+
+    assert.equal(page.staleCount, 0);
+    assert.equal(page.grid.roleRows[0].cells[0].places[0].card.name, 'Alice Brown',
+        'the date the editor settled is kept exactly as they left it');
+});
+
+test('re-drafting twice with nothing in between gives the same answer', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: ['2026-10-04', '2026-10-11'].map(d => drafted(d, [
+            { roleSlug: 'coffee', slotId: 's1', personId: 'p1' },
+        ])),
+    };
+    page.buildGrid();
+
+    page.redraftFrom(0);
+    const once = JSON.stringify(page.draft.dates[1].seats);
+    page.redraftFrom(0);
+
+    assert.equal(JSON.stringify(page.draft.dates[1].seats), once,
+        'a draft that redraws differently on Wednesday than Tuesday cannot be reviewed');
+});
+
+test('seeding a serve drifts the whole range, not just what comes after a date', async () => {
+    const page = draftedPage(null, {
+        db: {
+            collection: () => ({
+                doc: () => ({ collection: () => ({ add: async () => ({ id: 'new1' }) }) }),
+            }),
+        },
+    });
+    page.draft = {
+        dates: ['2026-10-04', '2026-10-11'].map(d => drafted(d, [
+            { roleSlug: 'coffee', slotId: 's1', personId: 'p1' },
+        ])),
+    };
+    page.buildGrid();
+    page.selectPlace('2026-10-04', page.grid.roleRows[0].cells[0].places[0]);
+    page.seedRole = 'coffee';
+    page.seedDate = '2026-09-27';
+    await page.addServe();
+
+    assert.equal(page.isStale(0), true, 'a serve is history — every column read it');
+    assert.equal(page.staleCount, 2);
+});
+
+// ── The bottom bar and accepting (MS-183) ───────────────────────────────────
+
+test('the bar counts problems and can take you to the first one', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: [
+            drafted('2026-10-04'),
+            // Bob is a man; s2 wants a woman.
+            drafted('2026-10-11', [{ roleSlug: 'coffee', slotId: 's2', personId: 'p2' }]),
+        ],
+    };
+    page.buildGrid();
+
+    assert.equal(page.problemCount, 1);
+    assert.equal(page.mustLookFirst, true);
+    assert.equal(page.acceptLabel, 'Accept anyway');
+
+    page.goToProblems();
+
+    assert.equal(page.selected.personId, 'p2', 'it opens the explanation, not just the column');
+    assert.equal(page.focused, 1);
+    assert.equal(page.mustLookFirst, false);
+});
+
+test('a clean draft says so, and offers the plain button', () => {
+    const page = draftedPage();
+    page.draft = { dates: [drafted('2026-10-04')] };
+    page.buildGrid();
+
+    assert.equal(page.problemCount, 0);
+    assert.equal(page.acceptLabel, 'Accept the roster');
+    assert.equal(page.mustLookFirst, false, 'a clean draft should feel clean');
+});
+
+// Accepting is always allowed — with empty places, because leaving one for
+// nearer the day is a real answer, and with warnings, because the editor is the
+// final word (ADR-0021). The bar only makes you LOOK.
+test('accepting is allowed with empty places, and writes what it drew', async () => {
+    let written = null;
+    const page = draftedPage(null, {
+        EventsStore: Object.assign({}, require('../public/events-store.js'), {
+            acceptDraft: async (db, draft, options) => {
+                written = { draft: draft, options: options };
+                return { dates: ['2026-10-04'], occurrences: 1, assignments: 1 };
+            },
+        }),
+    });
+    page.draft = {
+        dates: [drafted('2026-10-04', [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1' }])],
+    };
+    page.buildGrid();
+    assert.equal(page.tally.empty, 1);
+
+    await page.acceptRoster();
+
+    assert.ok(written, 'an empty place is not a reason to refuse');
+    assert.deepEqual(written.options.roleSlugs, ['coffee']);
+    assert.equal(written.options.seriesId, 'sunday_service');
+    assert.deepEqual(page.accepted, { dates: ['2026-10-04'], occurrences: 1, assignments: 1 });
+});
+
+test('accepting blind is refused; accepting after looking is not', async () => {
+    let calls = 0;
+    const page = draftedPage(null, {
+        EventsStore: Object.assign({}, require('../public/events-store.js'), {
+            acceptDraft: async () => { calls++; return { dates: [], occurrences: 0, assignments: 0 }; },
+        }),
+    });
+    page.draft = {
+        dates: [drafted('2026-10-04', [{ roleSlug: 'coffee', slotId: 's2', personId: 'p2' }])],
+    };
+    page.buildGrid();
+
+    await page.acceptRoster();
+    assert.equal(calls, 0, 'not a gate on the decision — a gate on making it blind');
+
+    page.goToProblems();
+    await page.acceptRoster();
+    assert.equal(calls, 1);
+});
+
+// ⚠ A long range is written date by date, so a failure part way through HAS
+// really written the dates before it. "Nothing was saved" would be a lie the
+// editor discovers on the Calendar.
+test('a half-written accept says some dates may already have landed', async () => {
+    const page = draftedPage(null, {
+        EventsStore: Object.assign({}, require('../public/events-store.js'), {
+            acceptDraft: async () => { throw new Error('network'); },
+        }),
+    });
+    page.draft = { dates: [drafted('2026-10-04')] };
+    page.buildGrid();
+
+    await page.acceptRoster();
+
+    assert.match(page.acceptError, /may already/);
+    assert.equal(page.accepted, null);
+});
+
+test('the draft owns the one-off jobs on its dates too', () => {
+    const page = draftedPage();
+    page.occurrences = {
+        '2026-10-11': { date: '2026-10-11', oneOffRoles: [{ id: 'j1', label: 'Move the piano' }] },
+    };
+
+    assert.deepEqual(page.ownedSlugs, ['coffee', 'j1'],
+        'without it the accept keeps the old one-off row and adds the drafted one beside it');
+});
+
+// ── Kept in the browser (MS-184) ────────────────────────────────────────────
+
+function withStorage(overrides) {
+    const box = {};
+    const storage = {
+        setItem(k, v) { box[k] = v; },
+        getItem(k) { return box[k] === undefined ? null : box[k]; },
+        removeItem(k) { delete box[k]; },
+    };
+    const page = draftedPage(overrides, { localStorage: storage });
+    return { page, box, storage };
+}
+
+test('a draft is written to the browser as it is edited', () => {
+    const { page, box } = withStorage();
+    page.draft = {
+        dates: [drafted('2026-10-04', [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1' }])],
+    };
+    page.buildGrid();
+
+    page.startDrag(null, 'p2', null, 'directory');
+    page.dropOn('2026-10-04', { roleSlug: 'coffee', slotId: 's2' });
+
+    const stored = JSON.parse(box[page.savedKey]);
+    assert.equal(stored.draft.dates[0].seats.length, 2,
+        'half an hour of dragging must not die with a stray click');
+});
+
+test('a stored draft that still matches can be picked back up', () => {
+    const { page, box } = withStorage();
+    page.draft = {
+        dates: [drafted('2026-10-04', [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1' }])],
+    };
+    page.buildGrid();
+    page.remember();
+
+    page.offered = JSON.parse(box[page.savedKey]);
+    page.offerStale = [];
+    page.resumeDraft();
+
+    assert.equal(page.view, 'draft');
+    assert.equal(page.grid.roleRows[0].cells[0].places[0].card.name, 'Alice Brown');
+    assert.equal(page.offered, null);
+});
+
+test('a stored draft naming somebody who has left is not picked back up', () => {
+    const { page, box } = withStorage();
+    page.draft = {
+        dates: [drafted('2026-10-04', [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1' }])],
+    };
+    page.buildGrid();
+    page.remember();
+
+    const stored = JSON.parse(box[page.savedKey]);
+    page.people = [{ id: 'p2', name: 'Bob Carter', sex: 'male' }];
+    page.offered = stored;
+    page.offerStale = require('../public/auto-assign-saved-core.js')
+        .staleReasons(stored, page.savedContext());
+    assert.equal(page.offerStale.length, 1);
+
+    page.resumeDraft();
+    assert.equal(page.view, 'setup', 'better a fresh draft than a picture of a church that has moved on');
+});
+
+test('accepting and discarding both clear what is stored', async () => {
+    const { page, box } = withStorage({});
+    page.draft = { dates: [drafted('2026-10-04')] };
+    page.buildGrid();
+    page.remember();
+    assert.ok(box[page.savedKey]);
+
+    page.discard();
+    assert.equal(box[page.savedKey], undefined);
+    assert.equal(page.view, 'setup');
+});
+
+test('a browser that refuses to remember does not break the page', () => {
+    const page = draftedPage(null, {
+        localStorage: {
+            setItem() { throw new Error('quota'); },
+            getItem() { throw new Error('denied'); },
+            removeItem() { throw new Error('denied'); },
+        },
+    });
+    page.draft = { dates: [drafted('2026-10-04')] };
+    page.buildGrid();
+
+    assert.doesNotThrow(() => page.remember());
+    assert.doesNotThrow(() => page.forgetDraft());
 });
 
 test('going back to setup drops the grid with the draft', () => {

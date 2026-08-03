@@ -33,6 +33,7 @@
     const Grid = window.AutoAssignGridCore;
     const Edit = window.AutoAssignEditCore;
     const Panel = window.AutoAssignPanelCore;
+    const Saved = window.AutoAssignSavedCore;
     const View = window.CalendarView;
     const Dates = window.DateUtils;
 
@@ -122,6 +123,19 @@
             seeding: false,
             seedNote: '',
 
+            // ── Staleness (MS-181) ───────────────────────────────────────────
+            // Each date was drafted reading the dates before it as history, so
+            // editing the 5th leaves every later column balanced against a
+            // Sunday that no longer exists. Nothing re-solves on its own — a
+            // table that rearranges itself while it is being reviewed cannot be
+            // reviewed (ADR-0020 §6) — so the drift is NAMED instead.
+            staleFrom: null,        // index of the earliest column now out of date
+            edited: {},             // date → the editor has touched it by hand
+
+            // ── Kept in the browser (MS-184) ─────────────────────────────────
+            offered: null,          // a stored draft waiting to be resumed
+            offerStale: [],
+
             // ── Loading ──────────────────────────────────────────────────────
 
             async init() {
@@ -140,6 +154,15 @@
                 this.fromDate = addDays(today, 1);
                 this.applyPreset(this.preset);
                 this.loading = false;
+            },
+
+            // The setup step already re-reads what is on the range when it
+            // changes; a saved draft is checked at the same moment, so the
+            // offer appears beside the range it belongs to rather than at load
+            // time against whatever range happened to be default.
+            onRangeSettled() {
+                this.onRangeChanged();
+                this.offerStored();
             },
 
             async resolveRank() {
@@ -213,7 +236,7 @@
                 const far = addDays(this.fromDate, Math.ceil(n * 31) + 31);
                 const dates = Core.datesBetween(rule, this.fromDate, far);
                 this.toDate = dates.length ? dates[Math.min(n, dates.length) - 1] : far;
-                this.onRangeChanged();
+                this.onRangeSettled();
             },
 
             get resolvedDates() {
@@ -327,7 +350,12 @@
                     await this.loadForDraft();
                     this.draft = Loop.draft(this.draftOptions());
                     this.displaced = [];
+                    this.staleFrom = null;
+                    this.edited = {};
+                    this.seenProblems = false;
+                    this.accepted = null;
                     this.buildGrid();
+                    this.remember();
                     this.focused = 0;
                     this.view = 'draft';
                 } catch (e) {
@@ -653,7 +681,7 @@
             // they were looking at.
             focusDate(index) {
                 this.focused = index;
-                if (typeof document === 'undefined') return;
+                if (typeof document === 'undefined' || !document.querySelector) return;
                 const el = document.querySelector('.aa-grid [data-col="' + index + '"]');
                 if (el && el.scrollIntoView) {
                     el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
@@ -757,7 +785,8 @@
 
                 this.draft = result.draft;
                 if (result.displaced) {
-                    this.displaced = Edit.addDisplaced(this.displaced, result.displaced);
+                    this.displaced = Edit.addDisplaced(this.displaced,
+                        Object.assign({ roleSlug: place.roleSlug }, result.displaced));
                 }
                 // Whoever was waiting has now been placed.
                 this.displaced = Edit.removeDisplaced(this.displaced, {
@@ -765,6 +794,10 @@
                     date: (held.source === 'rail' && held.from) ? held.from.date : date,
                 });
                 this.buildGrid();
+                // Both ends of a move drift the dates after them.
+                if (held.from && held.from.date) this.markStaleAfter(held.from.date);
+                this.markStaleAfter(date);
+                this.remember();
             },
 
             // Onto the rail: taken off the rota, still on screen. An emptied
@@ -778,8 +811,13 @@
 
                 const out = Edit.clear(this.draft, held.from);
                 this.draft = out.draft;
-                if (out.removed) this.displaced = Edit.addDisplaced(this.displaced, out.removed);
+                if (out.removed) {
+                    this.displaced = Edit.addDisplaced(this.displaced,
+                        Object.assign({ roleSlug: held.from.roleSlug }, out.removed));
+                }
                 this.buildGrid();
+                this.markStaleAfter(held.from.date);
+                this.remember();
             },
 
             // Off the rail entirely — they are not being placed and they are
@@ -986,7 +1024,10 @@
                     this.seedDate = '';
                     // The dates already drafted were balanced against the old
                     // picture and they still say so. Re-draft is how the editor
-                    // acts on this (MS-181) — nothing re-solves on its own.
+                    // acts on this (MS-181) — nothing re-solves on its own. A
+                    // serve is history, so EVERY column drifted, not just the
+                    // ones after a date.
+                    this.staleFrom = 0;
                     this.buildGrid();
                     this.seedNote = 'Saved. The draft was not redrawn — re-draft to use it.';
                 } catch (e) {
@@ -1006,6 +1047,7 @@
                 try {
                     await Store.removeServe(db, personId, serve.id);
                     this.history = this.history.filter(r => r.id !== serve.id);
+                    this.staleFrom = 0;
                     this.buildGrid();
                     this.seedNote = 'Removed. The draft was not redrawn.';
                 } catch (e) {
@@ -1016,12 +1058,150 @@
                 }
             },
 
+            // ── Staleness, and re-draft from here (MS-181) ───────────────────
+
+            // Everything AFTER the edited date drifts; the edited date itself
+            // does not. It was balanced against what came before it, and that
+            // has not moved.
+            markStaleAfter(date) {
+                this.edited[date] = true;
+                const col = this.columns.filter(c => c.date === date)[0];
+                if (!col) return;
+                const from = col.index + 1;
+                if (from >= this.columns.length) return;
+                this.staleFrom = (this.staleFrom === null)
+                    ? from
+                    : Math.min(this.staleFrom, from);
+            },
+
+            isStale(index) {
+                return this.staleFrom !== null && index >= this.staleFrom;
+            },
+
+            get staleCount() {
+                if (this.staleFrom === null) return 0;
+                return Math.max(0, this.columns.length - this.staleFrom);
+            },
+
+            // Keep this date and everything before it exactly as they stand;
+            // draw the rest again, reading the kept dates as history. Also the
+            // natural way to work down a long range — settle the first Sunday,
+            // refresh the rest, move on.
+            redraftFrom(index) {
+                if (!this.draft) return;
+
+                // Edits made to the later dates are about to go. Say so — this
+                // is the one action on the screen that throws away work. Read
+                // off what the editor ACTUALLY touched, not guessed at from the
+                // seats: a hand-placed card and a solved one look alike.
+                const losing = ((this.draft.dates || []).slice(index + 1))
+                    .some(day => this.edited[day.date]);
+                if (losing && typeof confirm === 'function') {
+                    const ok = confirm(
+                        'Redrawing from here throws away the changes you made to the later dates. Carry on?'
+                    );
+                    if (!ok) return;
+                }
+
+                this.draft = Loop.redraftFrom(this.draft, index, this.draftOptions());
+                (this.draft.dates || []).slice(index + 1)
+                    .forEach(day => { delete this.edited[day.date]; });
+                // Everything from here on has just been balanced against the
+                // current picture, so nothing after it is stale any more.
+                this.staleFrom = (this.staleFrom !== null && this.staleFrom <= index)
+                    ? this.staleFrom
+                    : null;
+                if (this.staleFrom !== null && this.staleFrom > index) this.staleFrom = null;
+                this.selected = null;
+                this.buildGrid();
+                this.remember();
+            },
+
+            // ── Kept in the browser (MS-184) ─────────────────────────────────
+
+            get storage() {
+                try { return window.localStorage || null; } catch (e) { return null; }
+            },
+
+            get savedKey() {
+                return Saved.keyFor(this.seriesId, this.resolvedDates);
+            },
+
+            savedContext() {
+                return {
+                    seriesId: this.seriesId,
+                    dates: this.resolvedDates,
+                    roles: this.draftableRoles,
+                    people: this.assignablePeople,
+                    choice: this.choice,
+                    displaced: this.displaced,
+                    savedAt: new Date().toISOString(),
+                };
+            },
+
+            remember() {
+                if (!this.draft) return;
+                Saved.save(this.storage, this.savedKey,
+                    Saved.pack(this.draft, this.savedContext()));
+            },
+
+            forgetDraft() {
+                Saved.forget(this.storage, this.savedKey);
+            },
+
+            // ⚠ RE-CHECKED BEFORE IT IS SHOWN. People leave, Roles change,
+            // dates get cancelled — and a stale draft looks completely normal,
+            // which is what makes it dangerous.
+            async offerStored() {
+                this.offered = null;
+                this.offerStale = [];
+                const stored = Saved.read(this.storage, this.savedKey);
+                if (!stored || !stored.draft) return;
+
+                // The re-check needs the same data a draft does, so it costs the
+                // same read. Worth it: the alternative is showing a picture of a
+                // church that has moved on.
+                try {
+                    await this.loadForDraft();
+                } catch (e) {
+                    console.error('Could not check the saved draft:', e);
+                    return;
+                }
+
+                this.offerStale = Saved.staleReasons(stored, this.savedContext());
+                this.offered = stored;
+            },
+
+            resumeDraft() {
+                if (!this.offered || this.offerStale.length) return;
+                this.draft = this.offered.draft;
+                this.displaced = this.offered.displaced || [];
+                this.offered = null;
+                this.selected = null;
+                this.seenProblems = false;
+                this.staleFrom = null;
+                this.edited = {};
+                this.buildGrid();
+                this.focused = 0;
+                this.view = 'draft';
+            },
+
+            dismissStored() {
+                this.offered = null;
+                this.offerStale = [];
+                this.forgetDraft();
+            },
+
             get displacedCards() {
                 return this.displaced.map(d => ({
                     personId: d.personId,
                     date: d.date,
                     name: this.personName(d.personId),
                     initials: Grid.initialsOf(this.personName(d.personId)),
+                    // Where they came from, both halves. "Was on 4 October" is
+                    // not enough to put somebody back — you need to know what
+                    // they were doing.
+                    roleName: d.roleSlug ? this.roleName(d.roleSlug) : 'Displaced',
                     dateLabel: Core.dayMonth(d.date),
                 }));
             },
@@ -1051,6 +1231,117 @@
                 cols.forEach(col => { empty += col.empty; });
 
                 return { dates: cols.length, places: places, empty: empty };
+            },
+
+            // ── Warnings, and getting to them ────────────────────────────────
+            //
+            // Problems are a way IN, not a wall. A count with no route to it is
+            // just a scold — the editor still has to hunt down which of forty
+            // cards it meant.
+
+            get problemCount() {
+                return this.columns.reduce((n, col) => n + col.problems, 0);
+            },
+
+            get firstProblem() {
+                let found = null;
+                (this.grid ? this.grid.roleRows : []).forEach(row => {
+                    row.cells.forEach(cell => {
+                        cell.places.forEach(place => {
+                            if (found || !place.filled || !place.card.warning) return;
+                            found = { date: cell.date, place: place };
+                        });
+                    });
+                });
+                return found;
+            },
+
+            // Looking at the problems is what unlocks "accept anyway". Not a
+            // gate on the decision — the editor is the final word (ADR-0021) —
+            // a gate on deciding it BLIND.
+            seenProblems: false,
+
+            goToProblems() {
+                const first = this.firstProblem;
+                if (!first) return;
+                const col = this.columns.filter(c => c.date === first.date)[0];
+                if (col) this.focusDate(col.index);
+                this.selectPlace(first.date, first.place);
+                this.seenProblems = true;
+            },
+
+            get acceptLabel() {
+                return this.problemCount ? 'Accept anyway' : 'Accept the roster';
+            },
+
+            get mustLookFirst() {
+                return this.problemCount > 0 && !this.seenProblems;
+            },
+
+            // ── Accepting ────────────────────────────────────────────────────
+
+            accepting: false,
+            accepted: null,         // { dates, occurrences, assignments }
+            acceptError: '',
+
+            // The draft owns the managed Roles it drew, AND the one-off jobs on
+            // the dates in range — without those the accept would keep the old
+            // one-off rows and add the drafted ones beside them.
+            get ownedSlugs() {
+                const slugs = this.draftableRoles.map(r => r.slug);
+                this.resolvedDates.forEach(date => {
+                    (((this.occurrences[date] || {}).oneOffRoles) || []).forEach(job => {
+                        if (job && job.id && slugs.indexOf(job.id) === -1) slugs.push(job.id);
+                    });
+                });
+                return slugs;
+            },
+
+            async acceptRoster() {
+                if (!this.draft || this.accepting || this.mustLookFirst) return;
+                this.accepting = true;
+                this.acceptError = '';
+
+                try {
+                    const out = await Store.acceptDraft(db, this.draft, {
+                        seriesId: this.seriesId,
+                        roleSlugs: this.ownedSlugs,
+                        actor: { actorUid: (auth.currentUser && auth.currentUser.uid) || null },
+                    });
+                    this.accepted = out;
+                    this.forgetDraft();
+                } catch (e) {
+                    console.error('Could not accept the roster:', e);
+                    // ⚠ A long range is written date by date, so a failure part
+                    // way through HAS really written the dates before it. Saying
+                    // "nothing was saved" here would be a lie the editor would
+                    // discover on the calendar.
+                    this.acceptError = 'The roster could not be finished. Some dates may already ' +
+                        'have been written — check the Calendar before trying again.';
+                } finally {
+                    this.accepting = false;
+                }
+            },
+
+            discard() {
+                this.forgetDraft();
+                this.displaced = [];
+                this.selected = null;
+                this.backToSetup();
+            },
+
+            // The blunt version of the per-column redraw: the whole range again,
+            // from the history as it stands now.
+            redraftAll() {
+                if (!this.draft) return;
+                this.draft = Loop.draft(this.draftOptions());
+                this.displaced = [];
+                this.selected = null;
+                this.seenProblems = false;
+                this.staleFrom = null;
+                this.edited = {};
+                this.buildGrid();
+                this.remember();
             },
 
             get draftSubtitle() {
