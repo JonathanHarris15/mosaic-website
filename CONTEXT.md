@@ -186,7 +186,16 @@ The surface that staffs a **stretch of dates at once** — pick a recurring **Ev
 - **The range has no limit.** Past the [[Fairness]] window the later dates are balanced against drafted work rather than real history, which is not worth refusing or warning about: a draft that far out is a sketch, and the answer is to re-draft it nearer the time.
 - **Editing one date does not redraw the ones after it.** They were balanced against the date as it was, and they say so; a *re-draft from here* redraws them on request. A table that rearranges itself while it is being reviewed cannot be reviewed — the same reasoning that kept the solve deterministic (ADR-0020 §6).
 - **Desktop only.** Unlike the [[Roles Manager]], this screen does not open in the mobile shell. It is a wide grid of dates against Roles, and there is no honest phone reading of it — the phone says so rather than showing a broken one.
+- **A draft lives in the browser, never on the server.** It survives a reload and a closed tab, keyed by Event and range, and is re-checked against current people, Roles and dates before it is offered back. It is not an [[Assignment]] and gains no document: the assignment states are three and stay three (ADR-0018).
 _Avoid_: bulk assign, the scheduler, Future Schedule
+
+**Displaced**:
+Somebody turned out of a place on a draft, waiting to be put somewhere else. Dropping a person onto a taken place displaces whoever was there; nothing is swapped in for them, because an automatic swap would be a second decision the app made on the editor's behalf. A displaced person carries the date **and** the Role they came from, and stays on screen until the editor places them or leaves them out — vanishing them would make the editor rebuild from memory who they just lost.
+_Avoid_: orphan, bumped, unassigned
+
+**Seeded serve**:
+An [[Involvement]] an editor typed in rather than one the church lived through, recorded so a Role that launched with no history has something to be fair across. Recorded as a **serve** — a Role and a date — never as a load figure: [[Fairness]] has two dials, and a figure would move load while leaving the solve believing the person had never held the Role. It is a claim about the **past**, so it saves at once rather than waiting for the draft to be accepted, and only a seeded record may be taken back on this screen.
+_Avoid_: manual load, load override, starting load
 
 **Permission Level**:
 An authenticated User's access tier — the concept formerly called the User **role** (viewer → member → editor → elder → admin → super_admin). Renamed to free the word "role" for serving **Roles**; the tier values are unchanged. The stored field is `users.permissionLevel`; the legacy `role` field is retained as a fallback (read by the Firestore rules and by client reads) until the migration completes and MS-127 drops it. Distinct from **Membership Stage** (church relationship) and **Role** (serving).
