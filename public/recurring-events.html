@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Recurring events | Mosaic</title>
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <script src="mobile/destinations.js"></script>
+    <script>window.MOBILE_HEADER = { title: 'Recurring events', back: 'calendar.html' };</script>
+    <script src="mobile-shell-header.js"></script>
+
+    <style>
+        [x-cloak] { display: none !important; }
+
+        .re-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(93,148,169,.18); }
+        .re-motion { transition: background-color 150ms cubic-bezier(0.2,0,0,1),
+                                 opacity 150ms cubic-bezier(0.2,0,0,1),
+                                 border-color 150ms cubic-bezier(0.2,0,0,1); }
+        .re-press:active { transform: scale(0.98); }
+
+        /* The shell draws the page title in its own header, so the page's <h1>
+           would say it a second time directly underneath. */
+        html.shell-mobile .re-page-title { display: none; }
+        html.shell-mobile .re-title-block { border-bottom: none; padding-bottom: 0; }
+
+        /* The series list sits beside the grid where there is room for both, and
+           above it where there is not. */
+        .re-cols { display: grid; grid-template-columns: minmax(0,1fr); gap: 28px; align-items: start; }
+        @media (min-width: 1100px) { .re-cols { grid-template-columns: 300px minmax(0,1fr); } }
+
+        /* ⚠ THE ROLE COLUMN STAYS PUT. Eight dates of cards is wider than any
+           screen, and a grid you can scroll sideways is useless if scrolling it
+           takes the row headings away — three columns in you are reading names
+           with no idea which Role they are in. */
+        .re-grid { border-collapse: separate; border-spacing: 0; }
+        .re-grid th, .re-grid td { border-bottom: 1px solid var(--re-rule, #E4DACE); }
+        .re-grid .re-stick {
+            position: sticky; left: 0; z-index: 2;
+            background: #FBF7F0;
+            border-right: 1px solid var(--re-rule, #E4DACE);
+        }
+        .re-grid thead .re-stick { z-index: 3; }
+        .re-grid thead th { position: sticky; top: 0; z-index: 1; background: #FBF7F0; }
+
+        /* A ticked column is tinted the whole way down, so the selection reads
+           as "these dates" rather than as a row of checkboxes at the top. */
+        .re-grid td.re-picked, .re-grid th.re-picked { background: rgba(93,148,169,.07); }
+        .re-grid th.re-picked { background: rgba(93,148,169,.13); }
+    </style>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="local-cache.js"></script>
+    <script src="auth.js"></script>
+    <script src="date-utils.js"></script>
+    <script src="roles-core.js"></script>
+    <script src="events-core.js"></script>
+    <script src="events-occurrence-core.js"></script>
+    <script src="events-store.js"></script>
+    <script src="calendar-view.js"></script>
+    <script src="recurring-roster-core.js"></script>
+    <script src="recurring-events.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+</head>
+
+<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+      x-data="recurringEventsPage()" x-cloak>
+
+    <header class="w-full max-w-[1600px] mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
+        <a href="calendar.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary re-motion">
+            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+            <span class="text-xs font-label-md uppercase tracking-wider">Calendar</span>
+        </a>
+        <div id="auth-container" class="flex items-center"><div class="h-10"></div></div>
+    </header>
+
+    <div x-show="loading" class="flex-grow flex items-center justify-center">
+        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    </div>
+
+    <main x-show="!loading" class="flex-grow w-full max-w-[1600px] mx-auto px-4 md:px-margin pb-lg pt-md">
+
+        <!-- Signed out, and signed in without the rank. Two different answers:
+             one is a door, the other is a wall, and a single "no" for both
+             leaves the first person nowhere to go. -->
+        <div x-show="signedOut"
+             class="mb-md bg-surface-container-low border border-outline-variant border-l-[3px] rounded-lg
+                    px-md py-3 flex items-start gap-sm" style="border-left-color:#B89B6A;">
+            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">person_off</span>
+            <div class="flex-grow min-w-0">
+                <p class="text-[14px] text-on-surface">You are not signed in.</p>
+                <p class="text-[12.5px] text-on-surface-variant mt-0.5">
+                    Sign in to see the events that repeat and who is on them.
+                </p>
+            </div>
+            <a :href="signInHref"
+               class="shrink-0 bg-primary text-on-primary px-3 py-2 rounded-lg font-label-md
+                      text-[11.5px] uppercase tracking-wider re-motion re-press re-focus">Sign in</a>
+        </div>
+
+        <div x-show="refused"
+             class="mb-md bg-surface-container-low border border-outline-variant rounded-lg px-md py-3
+                    flex items-start gap-sm">
+            <span class="material-symbols-outlined text-[20px] text-outline shrink-0">lock</span>
+            <div class="min-w-0">
+                <p class="text-[14px] text-on-surface">This one is for editors.</p>
+                <p class="text-[12.5px] text-on-surface-variant mt-0.5">
+                    Anything you are down for is on the Calendar, and on your profile.
+                </p>
+            </div>
+        </div>
+
+        <template x-if="isEditor">
+        <div>
+            <!-- ── Title ──────────────────────────────────────────────────── -->
+            <div class="re-title-block pb-md border-b border-outline-variant flex items-start justify-between gap-md flex-wrap">
+                <div class="min-w-0">
+                    <h1 class="re-page-title font-display text-headline-lg tracking-[.02em] text-primary">
+                        Recurring events
+                    </h1>
+                    <p class="text-[13px] text-on-surface-variant mt-1 max-w-[62ch]">
+                        Everything that comes round again. Read the rota, tick the dates that need
+                        redrawing, and change the event itself from here.
+                    </p>
+                </div>
+                <a :href="newEventHref"
+                   class="shrink-0 flex items-center gap-1 bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs
+                          font-label-md text-xs uppercase tracking-wider re-motion re-press re-focus hover:bg-primary-container">
+                    <span class="material-symbols-outlined text-[18px]">add</span> New recurring event
+                </a>
+            </div>
+
+            <div x-show="error"
+                 class="mt-md bg-error-container text-on-error-container border border-outline-variant
+                        rounded-lg p-md flex items-start gap-sm">
+                <span class="material-symbols-outlined text-[20px]">error</span>
+                <p class="font-body-md text-body-md" x-text="error"></p>
+            </div>
+
+            <!-- Nothing repeats yet. Only reachable on a church with no Sunday
+                 Service at all, but that is exactly the state a fresh install is
+                 in, and an empty grid with no explanation is a dead end. -->
+            <div x-show="!series.length"
+                 class="mt-gutter bg-surface-container-lowest border border-outline-variant rounded-lg p-lg text-center">
+                <span class="material-symbols-outlined text-[34px] text-outline">event_repeat</span>
+                <h2 class="font-display text-[20px] text-primary mt-2">Nothing repeats yet.</h2>
+                <p class="text-[13.5px] text-on-surface-variant mt-1 max-w-[46ch] mx-auto">
+                    A recurring event is anything that comes round — a Sunday, a midweek
+                    gathering, an elders' meeting. Make the first one and its rota appears here.
+                </p>
+            </div>
+
+            <div x-show="series.length" class="mt-gutter re-cols">
+
+                <!-- ── The series ─────────────────────────────────────────── -->
+                <aside class="flex flex-col gap-2 min-w-0">
+                    <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant px-1">
+                        The events
+                    </div>
+
+                    <template x-for="s in series" :key="s.id">
+                        <div class="rounded-lg border re-motion overflow-hidden"
+                             :class="s.id === seriesId
+                                ? 'border-primary bg-surface-container-low'
+                                : 'border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low'">
+                            <button @click="choose(s.id)" :disabled="gridLoading"
+                                    class="w-full text-left px-3 py-2.5 flex items-start gap-2 re-focus disabled:opacity-60">
+                                <span class="w-[10px] h-[10px] rounded-full mt-1.5 shrink-0 border border-black/10"
+                                      :style="'background:' + colourOf(s).bar"></span>
+                                <span class="min-w-0 flex-grow">
+                                    <span class="block text-[14.5px] text-on-surface truncate"
+                                          :class="s.id === seriesId ? 'font-semibold' : ''"
+                                          x-text="s.name"></span>
+                                    <span class="block text-[12px] text-on-surface-variant truncate mt-0.5"
+                                          x-text="patternOf(s)"></span>
+                                    <span class="block text-[11.5px] text-outline mt-0.5">
+                                        <span x-text="roleCountOf(s)"></span>
+                                        <span> · next </span><span x-text="nextDateOf(s)"></span>
+                                    </span>
+                                </span>
+                            </button>
+                            <!-- The door to the Event itself. On the row rather
+                                 than only above the grid, so changing a pattern
+                                 does not need the rota loaded first. -->
+                            <a :href="seriesHref(s.id)"
+                               class="flex items-center gap-1 px-3 py-1.5 border-t border-outline-variant text-[11.5px]
+                                      font-label-md uppercase tracking-wider text-secondary re-motion re-focus
+                                      hover:bg-surface-container"
+                                <span class="material-symbols-outlined text-[15px]">tune</span> Edit the event
+                            </a>
+                        </div>
+                    </template>
+                </aside>
+
+                <!-- ── The rota ───────────────────────────────────────────── -->
+                <section class="min-w-0" x-show="chosen">
+
+                    <div class="flex items-start justify-between gap-md flex-wrap pb-sm border-b border-outline-variant">
+                        <div class="min-w-0">
+                            <h2 class="font-display text-[22px] text-primary truncate"
+                                x-text="chosen ? chosen.name : ''"></h2>
+                            <p class="text-[12.5px] text-on-surface-variant mt-0.5"
+                               x-text="chosen ? patternOf(chosen) : ''"></p>
+                        </div>
+                        <a :href="eventHref"
+                           class="shrink-0 flex items-center gap-1 border border-secondary text-secondary px-md py-2 rounded-lg
+                                  font-label-md text-xs uppercase tracking-wider re-motion re-press re-focus hover:bg-surface-container">
+                            <span class="material-symbols-outlined text-[18px]">tune</span> Edit the event
+                        </a>
+                    </div>
+
+                    <!-- Paging, and what the window covers -->
+                    <div class="mt-sm flex items-center gap-sm flex-wrap">
+                        <button @click="earlier()" :disabled="!hasEarlier || gridLoading"
+                                class="flex items-center gap-1 border border-outline-variant text-on-surface-variant
+                                       px-3 py-1.5 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
+                                       re-motion re-press re-focus hover:bg-surface-container disabled:opacity-40">
+                            <span class="material-symbols-outlined text-[16px]">chevron_left</span> Earlier
+                        </button>
+                        <span class="text-[13px] text-on-surface font-label-md" x-text="windowLabel"></span>
+                        <button @click="later()" :disabled="!hasLater || gridLoading"
+                                class="flex items-center gap-1 border border-outline-variant text-on-surface-variant
+                                       px-3 py-1.5 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
+                                       re-motion re-press re-focus hover:bg-surface-container disabled:opacity-40">
+                            Later <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+                        </button>
+                        <button @click="backToToday()" :disabled="gridLoading"
+                                class="text-[11.5px] font-label-md uppercase tracking-wider text-secondary
+                                       px-2 py-1.5 rounded-lg re-motion re-focus hover:bg-surface-container">
+                            Back to now
+                        </button>
+                        <span x-show="gridLoading" class="flex items-center gap-1 text-[12px] text-on-surface-variant">
+                            <span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                            Reading the rota
+                        </span>
+                    </div>
+
+                    <!-- What ticking columns is FOR. Absent until something is
+                         ticked, so it never sits there as an instruction. -->
+                    <div x-show="range"
+                         class="mt-sm bg-surface-container-low border border-outline-variant border-l-[3px] rounded-lg
+                                px-md py-3 flex items-start gap-sm" style="border-left-color:#5D94A9;">
+                        <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#5D94A9;">auto_awesome_motion</span>
+                        <div class="flex-grow min-w-0">
+                            <p class="text-[14px] text-on-surface">
+                                <span x-text="range ? range.count : 0"></span>
+                                <span x-text="range && range.count === 1 ? ' date ticked' : ' dates ticked'"></span>
+                            </p>
+                            <p x-show="sweepNote" class="text-[12.5px] text-on-surface-variant mt-0.5" x-text="sweepNote"></p>
+                        </div>
+                        <div class="shrink-0 flex items-center gap-sm">
+                            <button @click="clearSelection()"
+                                    class="px-3 py-2 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
+                                           text-on-surface-variant re-motion re-focus hover:bg-surface-container">Clear</button>
+                            <a :href="draftHref"
+                               class="flex items-center gap-1 bg-primary text-on-primary px-3 py-2 rounded-lg shadow-xs
+                                      font-label-md text-[11.5px] uppercase tracking-wider re-motion re-press re-focus">
+                                Edit in the draft room
+                                <span class="material-symbols-outlined text-[16px]">north_east</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- No Roles on the series at all -->
+                    <div x-show="!hasRoles"
+                         class="mt-md bg-surface-container-lowest border border-outline-variant rounded-lg p-lg text-center">
+                        <span class="material-symbols-outlined text-[30px] text-outline">badge</span>
+                        <h3 class="font-display text-[18px] text-primary mt-2">No roles on this event yet.</h3>
+                        <p class="text-[13px] text-on-surface-variant mt-1 max-w-[46ch] mx-auto">
+                            Add the jobs that come round every time — welcome team, sound desk,
+                            coffee — and the rota appears here.
+                        </p>
+                        <a :href="eventHref"
+                           class="inline-flex items-center gap-1 mt-3 border border-secondary text-secondary px-md py-2
+                                  rounded-lg font-label-md text-xs uppercase tracking-wider re-motion re-press re-focus">
+                            <span class="material-symbols-outlined text-[18px]">tune</span> Add roles
+                        </a>
+                    </div>
+
+                    <!-- ── The grid ───────────────────────────────────────── -->
+                    <div x-show="hasRoles && grid" class="mt-md">
+                        <div class="border border-outline-variant rounded-lg overflow-hidden bg-surface-container-lowest">
+                            <div class="overflow-x-auto">
+                                <table class="re-grid w-full text-left" style="--re-rule:#E4DACE;">
+                                    <thead>
+                                        <tr>
+                                            <th class="re-stick px-3 py-2 min-w-[170px] align-bottom">
+                                                <label class="flex items-center gap-2 cursor-pointer">
+                                                    <input type="checkbox" :checked="allShown"
+                                                           @change="toggleAllShown()"
+                                                           class="accent-primary re-focus" />
+                                                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
+                                                        Role
+                                                    </span>
+                                                </label>
+                                            </th>
+                                            <template x-for="col in grid.columns" :key="col.date">
+                                                <th class="px-3 py-2 min-w-[150px] align-bottom"
+                                                    :class="isSelected(col.date) ? 're-picked' : ''">
+                                                    <label class="flex items-start gap-2 cursor-pointer">
+                                                        <input type="checkbox" :checked="isSelected(col.date)"
+                                                               @change="toggle(col.date)"
+                                                               class="accent-primary mt-0.5 re-focus" />
+                                                        <span class="min-w-0">
+                                                            <a :href="dateHref(col.date)" @click.stop
+                                                               class="block hover:text-primary re-motion re-focus">
+                                                                <span class="block text-[10.5px] font-label-md tracking-[.12em]
+                                                                             uppercase text-on-surface-variant"
+                                                                      x-text="weekday(col.date)"></span>
+                                                                <span class="block text-[13.5px] text-on-surface"
+                                                                      x-text="shortDate(col.date)"></span>
+                                                            </a>
+                                                            <!-- The state of the date in one line, so an
+                                                                 editor picks columns from the header rather
+                                                                 than by reading every cell under it. -->
+                                                            <span class="block text-[11px] mt-0.5"
+                                                                  :class="col.cancelled ? 'text-outline'
+                                                                        : col.declined ? 'text-error'
+                                                                        : col.empty ? 'text-on-surface-variant' : 'text-success'">
+                                                                <span x-show="col.cancelled">Cancelled</span>
+                                                                <span x-show="!col.cancelled && col.untouched">Nobody yet</span>
+                                                                <span x-show="!col.cancelled && !col.untouched && col.empty"
+                                                                      x-text="col.empty + ' to fill'"></span>
+                                                                <span x-show="!col.cancelled && !col.untouched && !col.empty">Full</span>
+                                                                <span x-show="!col.cancelled && col.declined"
+                                                                      x-text="' · ' + col.declined + ' declined'"></span>
+                                                            </span>
+                                                        </span>
+                                                    </label>
+                                                </th>
+                                            </template>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="row in grid.rows" :key="row.key">
+                                            <tr class="align-top">
+                                                <th class="re-stick px-3 py-2.5 font-normal">
+                                                    <span class="block text-[13.5px] text-on-surface" x-text="row.name"></span>
+                                                    <span x-show="row.kind === 'oneOff'"
+                                                          class="block text-[11px] text-outline mt-0.5">
+                                                        Just this date
+                                                    </span>
+                                                    <span x-show="row.kind === 'role' && row.placeCount"
+                                                          class="block text-[11px] text-outline mt-0.5"
+                                                          x-text="row.placeCount + (row.placeCount === 1 ? ' place' : ' places')"></span>
+                                                </th>
+
+                                                <template x-for="cell in row.cells" :key="row.key + cell.date">
+                                                    <td class="px-3 py-2.5"
+                                                        :class="isSelected(cell.date) ? 're-picked' : ''">
+                                                        <!-- A cancelled date, and a one-off's other columns,
+                                                             say so rather than sitting blank — a blank cell
+                                                             reads as a place somebody forgot to fill. -->
+                                                        <span x-show="cell.cancelled" class="text-[12px] text-outline">—</span>
+                                                        <span x-show="!cell.cancelled && !cell.applicable"
+                                                              class="text-[12px] text-outline">·</span>
+
+                                                        <div x-show="cell.applicable" class="flex flex-col gap-1">
+                                                            <template x-for="(place, i) in cell.places" :key="i">
+                                                                <div>
+                                                                    <div x-show="place.filled"
+                                                                         class="flex items-center gap-1.5">
+                                                                        <span class="w-[22px] h-[22px] rounded-full shrink-0 flex items-center
+                                                                                     justify-center text-[9.5px] font-label-md border"
+                                                                              :class="place.card && place.card.declined
+                                                                                ? 'bg-error-container text-on-error-container border-error'
+                                                                                : 'bg-surface-container-high border-outline-variant'"
+                                                                              x-text="place.card ? place.card.initials : ''"></span>
+                                                                        <span class="text-[13px] min-w-0 truncate"
+                                                                              :class="place.card && place.card.declined
+                                                                                ? 'text-error line-through' : 'text-on-surface'"
+                                                                              x-text="place.card ? place.card.name : ''"></span>
+                                                                    </div>
+                                                                    <!-- An unfilled place is DRAWN. The whole
+                                                                         point of reading ahead is seeing the
+                                                                         hole before the morning it matters. -->
+                                                                    <div x-show="!place.filled"
+                                                                         class="flex items-center gap-1.5 text-outline">
+                                                                        <span class="w-[22px] h-[22px] rounded-full shrink-0 border border-dashed
+                                                                                     border-outline-variant"></span>
+                                                                        <span class="text-[12.5px] italic">Nobody yet</span>
+                                                                    </div>
+                                                                </div>
+                                                            </template>
+                                                            <span x-show="!cell.places.length"
+                                                                  class="text-[12px] text-outline">—</span>
+                                                        </div>
+                                                    </td>
+                                                </template>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Where the liturgy actually lives. Said once, under the
+                             grid, because an editor who knows this series has a
+                             preacher will otherwise read its absence as a fault. -->
+                        <p x-show="hasLiturgy" class="mt-sm text-[12px] text-on-surface-variant flex items-start gap-1.5">
+                            <span class="material-symbols-outlined text-[15px] shrink-0 mt-px">menu_book</span>
+                            <span>
+                                Preaching, leading and the rest of the liturgy are not on this grid — they
+                                belong to the order of service, one date at a time, which is what keeps the
+                                printed booklet safe.
+                            </span>
+                        </p>
+                        <p class="mt-1 text-[12px] text-on-surface-variant">
+                            Tap a date to open it on its own. Tick dates to redraw them together.
+                        </p>
+                    </div>
+                </section>
+            </div>
+        </div>
+        </template>
+    </main>
+</body>
+</html>

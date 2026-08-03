@@ -154,6 +154,45 @@
         return occurrences;
     }
 
+    // ── One series, across a window of its own dates ─────────────────────────
+    //
+    // What the Recurring Events grid stands on: every date the RULE produces in
+    // the window, each carrying whatever is actually rostered on it. Dates with
+    // no document are present and empty — the sparse promise (ADR-0018 §3) —
+    // because a blank column is the answer to "who is on that Sunday", not a
+    // missing row.
+    //
+    // ⚠ CONSTRAINED BY VISIBILITY, like every other read here. The composite
+    // index (visibility ASC, seriesId ASC, date ASC) exists for exactly this.
+    // Unconstrained it does not return fewer rows, it errors — and the error
+    // reads as "this series has never been rostered".
+    //
+    // The rosters come back through `attachRosters` with `staffingFrom` set to
+    // the start of the window, which is what makes an editor's read the WHOLE
+    // roster of every staffed date rather than only their own row.
+    async function loadSeriesWindow(db, seriesId, options) {
+        const opts = options || {};
+        const q = Core.visibilityQueryFor(opts.rank, opts.personId);
+
+        const snap = await db.collection(OCCURRENCES)
+            .where('visibility', 'in', q.rungs)
+            .where('seriesId', '==', seriesId)
+            .where('date', '>=', opts.from)
+            .where('date', '<=', opts.to)
+            .get();
+
+        const stored = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+        await attachRosters(db, stored, {
+            rank: opts.rank,
+            personId: opts.personId,
+            staffingFrom: opts.from,
+        });
+
+        const byDate = {};
+        stored.forEach(o => { byDate[o.date] = o; });
+        return byDate;
+    }
+
     // The Sunday Service carries no stored recurrence rule: MS-13 built the
     // series layer before recurrence existed. Rather than migrate a document to
     // state something the name already guarantees, the rule is implied here —
@@ -1182,6 +1221,7 @@
         loadVisibleOccurrences,
         loadVisibleSeries,
         loadCalendar,
+        loadSeriesWindow,
         attachRosters,
         // writing
         createEvent,

@@ -68,6 +68,7 @@ function loadComponent(scriptFile, factoryName, overrides) {
     sandbox.AutoAssignEditCore = require('../public/auto-assign-edit-core.js');
     sandbox.AutoAssignPanelCore = require('../public/auto-assign-panel-core.js');
     sandbox.AutoAssignSavedCore = require('../public/auto-assign-saved-core.js');
+    sandbox.RecurringRosterCore = require('../public/recurring-roster-core.js');
 
     // The browser-only edges, stubbed just enough to construct the component.
     sandbox.location = { search: '?id=midweek_2026-07-15', href: '' };
@@ -199,6 +200,10 @@ test('the Event detail page only binds to things its component defines', () => {
 
 test('the Auto-assign page only binds to things its component defines', () => {
     checkPage('auto-assign.html', 'auto-assign.js', 'autoAssignPage');
+});
+
+test('the Recurring Events page only binds to things its component defines', () => {
+    checkPage('recurring-events.html', 'recurring-events.js', 'recurringEventsPage');
 });
 
 // ── How auth.js actually exposes itself ───────────────────────────────────────
@@ -731,18 +736,103 @@ test('a liturgical Role is never offered for removal, and refuses if asked', asy
     assert.deepStrictEqual(db.__writes, [], 'wrote anyway');
 });
 
-test('the Calendar offers the Sunday Service as a thing above all its dates', () => {
+test('the Calendar offers the events that repeat as a thing above all their dates', () => {
     // Two different doors, and they must stay different: this one opens the
-    // EVENT - its time, and the Roles every Sunday carries - while a chip opens
-    // one date of it.
+    // EVENTS - their time, and the Roles each one carries every date - while a
+    // chip opens one date of one of them.
+    //
+    // It used to be a single button marked "Sunday Service", which was the only
+    // door to the only series anybody had. A button per Event does not survive
+    // the second one, so the door is now the list and the Sunday Service is its
+    // first row.
     const html = readPage('calendar.html');
-    assert.ok(/calendar-event\.html\?series=sunday_service/.test(html),
-        'no way into the Sunday Service as an Event');
+    assert.ok(/href="recurring-events\.html"/.test(html),
+        'no way into the events that repeat');
 
     const hrefs = [];
     const page = calendarIn(hrefs);
     page.open({ id: 'sunday_service_2026-07-12', date: '2026-07-12', isSunday: true });
     assert.doesNotMatch(hrefs[0], /series=/, 'a chip opened the whole series instead of its date');
+});
+
+test('the Recurring Events page keeps every door it promises', () => {
+    // The page is deliberately read-only, so it exists to be left through: to
+    // the Event itself, to one date, to a new recurring Event, and to the draft
+    // room with the ticked dates in hand. A door that leads nowhere strands the
+    // editor on a screen that cannot change the thing they came to change.
+    const page = loadComponent('recurring-events.js', 'recurringEventsPage');
+    page.seriesId = 'sunday_service';
+
+    assert.strictEqual(page.seriesHref('sunday_service'),
+        'calendar-event.html?series=sunday_service', 'no door to the Event itself');
+    assert.strictEqual(page.eventHref, 'calendar-event.html?series=sunday_service');
+    assert.strictEqual(page.dateHref('2026-08-09'),
+        'calendar-event.html?id=sunday_service_2026-08-09', 'no door into a single date');
+
+    // The create form defaults to "just once", which is the wrong default from a
+    // page that is entirely about the ones that come round.
+    assert.match(page.newEventHref, /repeats=/, 'a new event from here would not repeat');
+
+    // No door to the draft room until dates are ticked — a live button that
+    // opens an empty range is worse than no button.
+    assert.strictEqual(page.draftHref, null);
+    page.selected = ['2026-08-09', '2026-08-16'];
+    assert.strictEqual(page.draftHref,
+        'auto-assign.html?series=sunday_service&from=2026-08-09&to=2026-08-16');
+});
+
+test('the draft room takes the series and range it is handed', () => {
+    // The other half of that door. Landing on a default range of the
+    // alphabetically-first series would throw away the choice the editor just
+    // made, and make them make it again from a dropdown.
+    const page = loadComponent('auto-assign.js', 'autoAssignPage', {
+        location: { search: '?series=midweek&from=2026-08-05&to=2026-08-26', href: '' },
+    });
+    page.series = [{ id: 'sunday_service', name: 'Sunday Service' }, { id: 'midweek', name: 'Midweek' }];
+    page.onRangeSettled = () => {};
+
+    page.applyIncoming();
+
+    assert.strictEqual(page.seriesId, 'midweek', 'ignored the series it was sent to');
+    assert.strictEqual(page.fromDate, '2026-08-05');
+    assert.strictEqual(page.toDate, '2026-08-26');
+    assert.strictEqual(page.preset, null, 'a ticked range is not one of the presets');
+});
+
+test('the draft room ignores a link it cannot honour, rather than erroring', () => {
+    // A stale or hand-typed link should open the ordinary page. An id in the
+    // address bar is a request, not a permission.
+    const page = loadComponent('auto-assign.js', 'autoAssignPage', {
+        location: { search: '?series=elders_only&from=nonsense&to=2026-08-26', href: '' },
+    });
+    page.series = [{ id: 'sunday_service', name: 'Sunday Service' }];
+    page.seriesId = 'sunday_service';
+    page.fromDate = '2026-07-01';
+    page.toDate = '2026-07-29';
+    page.onRangeSettled = () => {};
+
+    page.applyIncoming();
+
+    assert.strictEqual(page.seriesId, 'sunday_service', 'took a series it cannot see');
+    assert.strictEqual(page.fromDate, '2026-07-01', 'took half a range');
+    assert.strictEqual(page.toDate, '2026-07-29');
+});
+
+test('the Recurring Events page loads its models in an order that works', () => {
+    // Classic scripts, so a core loaded after the page that reads it is
+    // undefined at parse time — the page renders and simply cannot lay a grid
+    // out. The same trap the events store test below covers.
+    const html = readPage('recurring-events.html');
+    const at = name => html.indexOf('src="' + name + '"');
+
+    ['events-core.js', 'events-occurrence-core.js', 'roles-core.js',
+        'calendar-view.js', 'recurring-roster-core.js'].forEach(dep => {
+        assert.ok(at(dep) !== -1, 'recurring-events.html does not load ' + dep);
+        assert.ok(at(dep) < at('recurring-events.js'),
+            'recurring-events.js is loaded before ' + dep);
+    });
+    assert.ok(at('events-core.js') < at('events-store.js'),
+        'the events store is loaded before the series model');
 });
 
 test('every page that loads the events store loads the series model first', () => {

@@ -234,6 +234,12 @@
                         // fallback for "New event" pressed from the toolbar, where
                         // no day was named.
                         this.draft.date = params.get('date') || window.DateUtils.todayStr();
+                        // Arrived from the Recurring Events page, which is
+                        // entirely about the ones that come round. "Just once" is
+                        // the right default from the Calendar and the wrong one
+                        // from there — it makes the first act on that page
+                        // creating something that will never appear on it.
+                        if (params.get('repeats')) this.draft.recurrence.freq = 'weekly';
                         return;
                     }
 

@@ -189,7 +189,50 @@
                 const today = Dates.todayStr();
                 this.fromDate = addDays(today, 1);
                 this.applyPreset(this.preset);
+
+                // Arrived from the Recurring Events grid with columns ticked.
+                // Applied AFTER the defaults, so it overrides them rather than
+                // racing them, and only for a series this viewer can actually
+                // see — an id in the address bar is a request, not a permission.
+                this.applyIncoming();
                 this.loading = false;
+            },
+
+            // ── Opened for a series and a range somebody already chose ───────
+            //
+            // The grid on the Recurring Events page is where an editor decides
+            // WHICH dates need redrawing. Landing them here on a default range
+            // of the alphabetically-first series would throw that away and make
+            // them choose it a second time, from a dropdown, against dates they
+            // can no longer see.
+            //
+            // Every part is optional and independently ignored when it does not
+            // hold up, because a stale or hand-typed link should open the
+            // ordinary page rather than an error.
+            applyIncoming() {
+                const params = new URLSearchParams(window.location.search);
+                const seriesId = params.get('series');
+                const from = params.get('from');
+                const to = params.get('to');
+
+                if (seriesId && this.series.some(s => s.id === seriesId)) {
+                    this.seriesId = seriesId;
+                }
+
+                // Both, or neither. Half a range is worse than none: it silently
+                // pairs the date somebody meant with a default they did not.
+                const looksLikeDate = d => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
+                if (looksLikeDate(from) && looksLikeDate(to) && from <= to) {
+                    this.fromDate = from;
+                    this.toDate = to;
+                    // The presets are counts of occurrences, and this range came
+                    // from ticked columns rather than from one of them. Clearing
+                    // it stops a preset button reading as the chosen shape of a
+                    // range it had no part in.
+                    this.preset = null;
+                }
+
+                this.onRangeSettled();
             },
 
             // The setup step already re-reads what is on the range when it
@@ -266,6 +309,17 @@
             // resolved through the recurrence rule rather than by adding days.
             // Reaches forward generously and takes the first N the rule produces.
             applyPreset(n) {
+                // No preset is a real state: arriving from the Recurring Events
+                // grid brings a range made of ticked columns, which is not a
+                // count of anything. The series dropdown re-applies whatever
+                // preset is current, so without this that range would resolve
+                // through `Math.min(null, …) - 1` and land toDate on undefined.
+                if (!n) {
+                    this.preset = null;
+                    this.onRangeSettled();
+                    return;
+                }
+
                 this.preset = n;
                 const rule = this.rule;
                 if (!rule || !this.fromDate) return;

@@ -132,16 +132,19 @@
                 <h1 class="cal-page-title font-display text-headline-lg tracking-[.02em] text-primary">Calendar</h1>
             </div>
             <div class="cal-title-actions shrink-0 flex items-center gap-sm">
-                <!-- The Sunday Service AS AN EVENT — its time, and which Roles
-                     EVERY Sunday needs. Clicking one Sunday in the grid opens
-                     that Sunday; this is the thing above all of them. Neither is
-                     the liturgy: that is still built one Sunday at a time in the
-                     order of service, which is what keeps the printed booklet
-                     safe. -->
-                <a x-show="canCreate" href="calendar-event.html?series=sunday_service"
+                <!-- Everything that comes round again, and the rota each one is
+                     carrying. This used to be a button marked "Sunday Service",
+                     which was the only door to the only series anybody had —
+                     and a button per Event does not survive the second one.
+                     The Sunday Service is the first row in there.
+
+                     Still not the liturgy: that is built one Sunday at a time in
+                     the order of service, which is what keeps the printed
+                     booklet safe. -->
+                <a x-show="canCreate" href="recurring-events.html"
                    class="flex items-center gap-1 border border-secondary text-secondary px-md py-2 rounded-lg
                           font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
-                    <span class="material-symbols-outlined text-[18px]">church</span> Sunday Service
+                    <span class="material-symbols-outlined text-[18px]">event_repeat</span> Recurring events
                 </a>
                 <!-- Staffing a RUN of dates. Hidden on a phone, because the
                      page it opens is a wide grid of dates against Roles and

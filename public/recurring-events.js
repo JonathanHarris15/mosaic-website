@@ -1,0 +1,418 @@
+// Recurring Events — every repeating Event, and what its rota actually looks
+// like across the next stretch of dates.
+//
+// The Calendar used to carry a single button marked "Sunday Service", which was
+// the only door to the one series anybody had. It is not the only series any
+// more, and a button per Event does not scale past two. So this is the room the
+// series live in: pick one, read its rota as a grid, and leave through whichever
+// door the thing you noticed calls for —
+//
+//   the EVENT itself      its pattern, time, place, and which Roles it carries
+//                         every date (calendar-event.html?series=…)
+//   the DRAFT ROOM        redraw the dates you ticked (auto-assign.html)
+//   one DATE              who is on that one, and change a single person
+//
+// Read-only, deliberately. Everything here already has a screen that owns it,
+// and a fourth surface that half-edits a roster is how two of them start
+// disagreeing about the same Sunday.
+//
+// Editors only, like the button it replaces. What a member wants from a series
+// is their own part, which the Calendar already answers.
+
+(function () {
+    'use strict';
+
+    const Core = window.EventsOccurrenceCore;
+    const Store = window.EventsStore;
+    const View = window.CalendarView;
+    const Roles = window.RolesCore;
+    const Grid = window.RecurringRosterCore;
+    const Dates = window.DateUtils;
+
+    const EDITOR_RANKS = ['editor', 'admin', 'elder', 'super_admin'];
+
+    // How much calendar to compute dates across. Arithmetic, not a read, so it
+    // costs nothing — but it is bounded, because "every date this series has
+    // ever had" grows without limit and the answer nobody needs is the one from
+    // three years ago.
+    const REACH_BACK_DAYS = 366;
+    const REACH_ON_DAYS = 550;
+
+    // Dates across at once. Eight is the draft room's middle preset, and the
+    // same number means the same thing on both screens.
+    const WINDOW = 8;
+
+    window.recurringEventsPage = function recurringEventsPage() {
+        return {
+            loading: true,
+            error: '',
+            rank: null,
+            personId: null,
+
+            series: [],
+            seriesId: '',
+
+            people: [],
+            roleDefinitions: [],
+
+            // date → the occurrence document, with its roster attached. Sparse:
+            // a date nobody has touched is simply absent, which is the answer
+            // rather than a gap in the data (ADR-0018 §3).
+            occurrences: {},
+
+            // Every date the rule produces across the reach, and the slice of it
+            // on screen. Paging moves the anchor, never the reach.
+            allDates: [],
+            anchor: '',
+            windowSize: WINDOW,
+
+            selected: [],
+            gridLoading: false,
+
+            // ── Loading ──────────────────────────────────────────────────────
+
+            async init() {
+                this.rank = await this.resolveRank();
+                if (!this.isEditor) { this.loading = false; return; }
+
+                try {
+                    await Promise.all([this.loadSeries(), this.loadDirectory()]);
+                } catch (e) {
+                    console.error('Could not read the recurring events:', e);
+                    this.error = 'The recurring events could not be read. That is a permissions '
+                        + 'problem rather than an empty church — please tell an admin.';
+                    this.loading = false;
+                    return;
+                }
+
+                // Opened for a particular series, or the first one there is.
+                const asked = new URLSearchParams(window.location.search).get('series');
+                const opening = this.series.some(s => s.id === asked)
+                    ? asked
+                    : (this.series[0] && this.series[0].id) || '';
+
+                this.loading = false;
+                if (opening) await this.choose(opening);
+            },
+
+            resolveRank() {
+                return new Promise(resolve => {
+                    auth.onAuthStateChanged(async user => {
+                        if (!user) return resolve(null);
+                        try {
+                            const data = await getUserData(user.uid);
+                            this.personId = (data && data.personId) || null;
+                            resolve((data && (data.permissionLevel || data.role)) || 'viewer');
+                        } catch (e) {
+                            this.personId = null;
+                            resolve('viewer');
+                        }
+                    });
+                });
+            },
+
+            // Only a SERIES belongs here. A one-off Event has no pattern to show
+            // and no run of dates to lay out — it is one date, and the Calendar
+            // is where you meet it.
+            async loadSeries() {
+                const all = await Store.loadVisibleSeries(db, {
+                    rank: this.rank, personId: this.personId,
+                });
+                this.series = all
+                    .filter(s => s && (s.recurrence || s.id === Core.SUNDAY_SERVICE_ID))
+                    .sort((a, b) => {
+                        // The Sunday Service first, always. It is the one every
+                        // week turns on, and alphabetical order buries it under
+                        // whatever somebody called their coffee morning.
+                        if (a.id === Core.SUNDAY_SERVICE_ID) return -1;
+                        if (b.id === Core.SUNDAY_SERVICE_ID) return 1;
+                        return String(a.name || '').localeCompare(String(b.name || ''));
+                    });
+            },
+
+            // Names for the cards, and the Role definitions the grid's rows are
+            // built from. Both are needed before a single cell can be drawn, so
+            // they load with the series rather than per selection.
+            async loadDirectory() {
+                const [people, roles] = await Promise.all([
+                    db.collection('people').get(),
+                    db.collection('roles').get(),
+                ]);
+                this.people = people.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                this.roleDefinitions = roles.docs.map(d => Object.assign({ id: d.id }, d.data()));
+            },
+
+            // ── Who is looking ───────────────────────────────────────────────
+
+            get isEditor() { return EDITOR_RANKS.indexOf(this.rank) !== -1; },
+            get signedOut() { return !this.loading && !this.rank; },
+            get refused() { return !this.loading && !!this.rank && !this.isEditor; },
+
+            get signInHref() {
+                return window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/login' : 'login.html';
+            },
+
+            // ── The chosen series ────────────────────────────────────────────
+
+            get chosen() {
+                return this.series.filter(s => s.id === this.seriesId)[0] || null;
+            },
+
+            get rule() {
+                const s = this.chosen;
+                if (!s) return null;
+                return s.recurrence || (s.id === Core.SUNDAY_SERVICE_ID ? Store.SUNDAY_RULE : null);
+            },
+
+            get isSundaySeries() {
+                return this.seriesId === Core.SUNDAY_SERVICE_ID;
+            },
+
+            // Choosing a series starts its window at today, not wherever the
+            // last one was left. The dates of two series line up only by
+            // accident, and inheriting a scroll position across them shows a
+            // stretch nobody asked for.
+            async choose(id) {
+                if (this.gridLoading) return;
+                this.seriesId = id;
+                this.selected = [];
+                this.anchor = Dates.todayStr();
+                this.recomputeDates();
+                await this.loadWindow();
+            },
+
+            recomputeDates() {
+                const rule = this.rule;
+                if (!rule) { this.allDates = []; return; }
+                const today = Dates.todayStr();
+                this.allDates = Core.datesBetween(
+                    rule,
+                    Dates.addDays(today, -REACH_BACK_DAYS),
+                    Dates.addDays(today, REACH_ON_DAYS)
+                );
+            },
+
+            get dates() {
+                return Grid.windowOf(this.allDates, this.anchor, this.windowSize);
+            },
+
+            // ── Reading what is on those dates ───────────────────────────────
+
+            async loadWindow() {
+                const dates = this.dates;
+                if (!dates.length) { this.occurrences = {}; return; }
+
+                this.gridLoading = true;
+                this.error = '';
+                try {
+                    this.occurrences = await Store.loadSeriesWindow(db, this.seriesId, {
+                        rank: this.rank,
+                        personId: this.personId,
+                        from: dates[0],
+                        to: dates[dates.length - 1],
+                    });
+                } catch (e) {
+                    console.error('Could not read this rota:', e);
+                    // The dates are still real and still worth drawing — the
+                    // grid degrades to empty columns rather than to nothing,
+                    // and says which part failed.
+                    this.occurrences = {};
+                    this.error = 'The rota for these dates could not be read. The dates are right; '
+                        + 'who is on them is missing.';
+                } finally {
+                    this.gridLoading = false;
+                }
+            },
+
+            // ── Paging ───────────────────────────────────────────────────────
+
+            get hasEarlier() {
+                return Grid.previousAnchor(this.allDates, this.anchor, this.windowSize) !== null;
+            },
+
+            get hasLater() {
+                return Grid.nextAnchor(this.allDates, this.anchor, this.windowSize) !== null;
+            },
+
+            async earlier() {
+                const at = Grid.previousAnchor(this.allDates, this.anchor, this.windowSize);
+                if (at === null) return;
+                this.anchor = at;
+                await this.loadWindow();
+            },
+
+            async later() {
+                const at = Grid.nextAnchor(this.allDates, this.anchor, this.windowSize);
+                if (at === null) return;
+                this.anchor = at;
+                await this.loadWindow();
+            },
+
+            async backToToday() {
+                this.anchor = Dates.todayStr();
+                await this.loadWindow();
+            },
+
+            // ── The grid ─────────────────────────────────────────────────────
+
+            // The Roles this series carries, minus the liturgical ones. Those
+            // are not in the roster at all — they are fields on the Service
+            // document, filled in the order of service — so a row for them here
+            // would sit empty and read as "nobody is preaching".
+            get gridRoles() {
+                const slugs = ((this.chosen && this.chosen.roleSlugs) || [])
+                    .filter(slug => Roles.LITURGICAL_SLUGS.indexOf(slug) === -1);
+                return slugs
+                    .map(slug => this.roleDefinitions.find(d => d.slug === slug))
+                    .filter(Boolean)
+                    .map(def => ({
+                        slug: def.slug,
+                        name: def.name || def.slug,
+                        slots: def.slots || [],
+                    }));
+            },
+
+            get hasLiturgy() {
+                return ((this.chosen && this.chosen.roleSlugs) || [])
+                    .some(slug => Roles.LITURGICAL_SLUGS.indexOf(slug) !== -1);
+            },
+
+            get grid() {
+                if (!this.chosen) return null;
+                return Grid.rosterGrid({
+                    dates: this.dates,
+                    roles: this.gridRoles,
+                    nameOf: id => this.personName(id),
+                    cancelledAt: date => !!(this.occurrences[date] || {}).cancelled,
+                    oneOffsAt: date => (this.occurrences[date] || {}).oneOffRoles || [],
+                    assignmentsAt: date => (this.occurrences[date] || {}).assignments || [],
+                });
+            },
+
+            // A series carrying no Roles has nothing to lay out, and an empty
+            // table with date headings reads as a failed load rather than as a
+            // thing nobody has set up yet.
+            get hasRoles() { return this.gridRoles.length > 0; },
+
+            // ── Ticking columns ──────────────────────────────────────────────
+
+            isSelected(date) { return this.selected.indexOf(date) !== -1; },
+
+            toggle(date) {
+                this.selected = this.isSelected(date)
+                    ? this.selected.filter(d => d !== date)
+                    : this.selected.concat([date]);
+            },
+
+            get allShown() {
+                const shown = this.dates;
+                return shown.length > 0 && shown.every(d => this.isSelected(d));
+            },
+
+            toggleAllShown() {
+                const shown = this.dates;
+                if (this.allShown) {
+                    this.selected = this.selected.filter(d => shown.indexOf(d) === -1);
+                    return;
+                }
+                const add = shown.filter(d => !this.isSelected(d));
+                this.selected = this.selected.concat(add);
+            },
+
+            clearSelection() { this.selected = []; },
+
+            get range() { return Grid.rangeFor(this.selected, this.allDates); },
+
+            get draftHref() { return Grid.draftRoomHref(this.seriesId, this.range); },
+
+            // Said before the trip, not discovered after it. The draft room
+            // works in ranges, so a scattered selection brings the dates in
+            // between along with it — and redrawing a Sunday nobody chose is
+            // exactly the surprise this sentence exists to prevent.
+            get sweepNote() {
+                const range = this.range;
+                if (!range || range.contiguous) return '';
+                const n = range.swept.length;
+                return 'The draft room works in a run of dates, so '
+                    + n + (n === 1 ? ' date' : ' dates')
+                    + ' in between will come too — ' + View.listSentence(range.swept.map(d => this.shortDate(d)))
+                    + '. What is already on them is kept unless you say otherwise.';
+            },
+
+            // ── The other doors ──────────────────────────────────────────────
+
+            // The Event itself — its pattern, time, place, and which Roles it
+            // carries every date. Built here rather than in the markup so the
+            // list row and the header above the grid cannot drift into naming
+            // the same door two different ways.
+            seriesHref(id) {
+                return id ? 'calendar-event.html?series=' + encodeURIComponent(id) : null;
+            },
+
+            get eventHref() { return this.seriesHref(this.seriesId); },
+
+            dateHref(date) {
+                return 'calendar-event.html?id=' + encodeURIComponent(
+                    Core.occurrenceId(this.seriesId, date));
+            },
+
+            // A new Event that REPEATS. The create form defaults to "just once",
+            // which is the right default from the Calendar and the wrong one
+            // from a page that is entirely about the ones that do not.
+            get newEventHref() { return 'calendar-event.html?new=1&repeats=1'; },
+
+            // ── Words ────────────────────────────────────────────────────────
+
+            patternOf(s) {
+                const rule = s.recurrence
+                    || (s.id === Core.SUNDAY_SERVICE_ID ? Store.SUNDAY_RULE : null);
+                return rule ? View.recurrenceSentence(rule) : 'No pattern set.';
+            },
+
+            nextDateOf(s) {
+                const rule = s.recurrence
+                    || (s.id === Core.SUNDAY_SERVICE_ID ? Store.SUNDAY_RULE : null);
+                if (!rule) return '';
+                const next = View.nextDates(rule, Dates.todayStr(), 1);
+                return next.length ? this.shortDate(next[0]) : 'Nothing coming up';
+            },
+
+            roleCountOf(s) {
+                const slugs = (s.roleSlugs || [])
+                    .filter(slug => Roles.LITURGICAL_SLUGS.indexOf(slug) === -1);
+                if (!slugs.length) return 'No roles yet';
+                return slugs.length + (slugs.length === 1 ? ' role' : ' roles');
+            },
+
+            colourOf(s) {
+                return View.colourFor(s.colour);
+            },
+
+            personName(personId) {
+                const p = this.people.find(x => x.id === personId);
+                return (p && p.name) || 'Someone';
+            },
+
+            shortDate(dateStr) {
+                return dateStr ? View.formatDayMonth(dateStr) : '';
+            },
+
+            weekday(dateStr) {
+                return dateStr ? View.weekdayName(dateStr) : '';
+            },
+
+            longDate(dateStr) {
+                return dateStr ? Dates.formatDateLong(dateStr, 'en-GB') : '';
+            },
+
+            // What the window covers, in one line, so paging has something to
+            // land on other than the columns themselves changing.
+            get windowLabel() {
+                const dates = this.dates;
+                if (!dates.length) return 'No dates';
+                if (dates.length === 1) return this.longDate(dates[0]);
+                return this.shortDate(dates[0]) + ' – ' + this.shortDate(dates[dates.length - 1]);
+            },
+        };
+    };
+})();
