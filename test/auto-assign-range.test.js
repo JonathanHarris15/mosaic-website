@@ -368,3 +368,125 @@ test('the module requires nothing — the solve and the rules are injected', () 
     assert.equal(requires.length, 0,
         'fairness asks roles-core and this asks fairness — never by importing it');
 });
+
+// ── Somebody who is not there ───────────────────────────────────────────────
+//
+// An editor knows things the church has no record of. Away is a fact about a
+// person on a DATE, so it is asked per date: out on the 11th says nothing about
+// the 18th.
+
+test('somebody away on a date is not drafted onto it', () => {
+    const out = AutoAssign.draft(options({
+        people: [person('ann')],
+        awayOn: date => (date === RANGE[1] ? ['ann'] : []),
+    }));
+
+    assert.deepEqual(whoIsOn(out, 0), ['ann']);
+    assert.deepEqual(whoIsOn(out, 1), [], 'nobody at all, rather than somebody who is not there');
+    assert.equal(out.dates[1].gaps.length, 1, 'and the place is a gap, not a silence');
+    assert.deepEqual(whoIsOn(out, 2), ['ann'], 'the next date is a different question');
+});
+
+// ⚠ HELD SEATS TOO. A place they were already down for is exactly the place the
+// editor is trying to empty — honouring the hold would be the one case where
+// taking somebody out did nothing.
+test('being away takes them off a place they were already down for', () => {
+    const out = AutoAssign.draft(options({
+        existing: { [RANGE[0]]: [held('coffee', 's1', 'ann', AutoAssign.STATES.CONFIRMED)] },
+        awayOn: date => (date === RANGE[0] ? ['ann'] : []),
+    }));
+
+    assert.equal(whoIsOn(out, 0).indexOf('ann'), -1);
+    assert.equal(whoIsOn(out, 0).length, 1, 'and somebody else gets the place');
+});
+
+test('a date left out keeps what it had, minus whoever is away', () => {
+    const out = AutoAssign.draft(options({
+        roles: [role('coffee', 2)],
+        choice: AutoAssign.CHOICES.LEAVE_OUT,
+        existing: {
+            [RANGE[0]]: [
+                held('coffee', 's1', 'ann', AutoAssign.STATES.CONFIRMED),
+                held('coffee', 's2', 'ben', AutoAssign.STATES.CONFIRMED),
+            ],
+        },
+        awayOn: date => (date === RANGE[0] ? ['ann'] : []),
+    }));
+
+    assert.deepEqual(whoIsOn(out, 0), ['ben']);
+});
+
+// ── Filling one date's gaps ─────────────────────────────────────────────────
+//
+// The narrow version of a re-draft: everybody already on the date stays exactly
+// where they are, and only the empty places are staffed.
+
+test('filling gaps leaves everybody already on the date alone', () => {
+    const base = AutoAssign.draft(options({ roles: [role('coffee', 3)] }));
+    const opts = options({ roles: [role('coffee', 3)] });
+
+    // Take one person off, by hand, the way the screen does.
+    const gone = base.dates[0].seats[0];
+    base.dates[0] = Object.assign({}, base.dates[0], {
+        seats: base.dates[0].seats.filter(s => s !== gone),
+    });
+    const stayed = base.dates[0].seats.map(s => s.personId).sort();
+
+    const out = AutoAssign.fillGaps(base, 0, opts);
+
+    assert.equal(out.dates[0].seats.length, 3, 'the place is filled again');
+    stayed.forEach(id => assert.ok(
+        out.dates[0].seats.some(s => s.personId === id), id + ' was left where they were'
+    ));
+});
+
+test('filling gaps touches no other date', () => {
+    const base = AutoAssign.draft(options());
+    const before = base.dates.map(d => d.seats.map(s => s.personId).join(','));
+
+    const out = AutoAssign.fillGaps(base, 3, options());
+
+    out.dates.forEach((day, i) => {
+        if (i === 3) return;
+        assert.equal(day.seats.map(s => s.personId).join(','), before[i]);
+    });
+});
+
+// ⚠ THE HISTORY IS REBUILT FROM THE DRAFT, not from the serve log alone. A fill
+// that could not see the dates before it would happily pick somebody already
+// down for the two Sundays running up to this one.
+test('a fill reads the dates before it as history', () => {
+    const opts = options({ people: SIX.slice(0, 3), roles: [role('coffee', 1)] });
+    const base = AutoAssign.draft(opts);
+    const wanted = base.dates[2].seats[0].personId;
+
+    base.dates[2] = Object.assign({}, base.dates[2], { seats: [] });
+    const out = AutoAssign.fillGaps(base, 2, opts);
+
+    // Emptying a date and filling it again lands on the same person the draft
+    // did — which can only be true if the fill sees the two dates in front of
+    // it. Blind to them, everybody's recency ties at the window and the pick
+    // falls to the tie-break shuffle instead.
+    assert.equal(out.dates[2].seats[0].personId, wanted);
+    assert.notEqual(wanted, base.dates[1].seats[0].personId);
+});
+
+test('somebody away cannot be filled back into the place they left', () => {
+    const opts = options({
+        people: SIX.slice(0, 2),
+        roles: [role('coffee', 1)],
+        awayOn: date => (date === RANGE[0] ? ['ann'] : []),
+    });
+    const base = AutoAssign.draft(options({ people: SIX.slice(0, 2), roles: [role('coffee', 1)] }));
+
+    base.dates[0] = Object.assign({}, base.dates[0], { seats: [] });
+    const out = AutoAssign.fillGaps(base, 0, opts);
+
+    assert.equal(out.dates[0].seats.length, 1);
+    assert.notEqual(out.dates[0].seats[0].personId, 'ann');
+});
+
+test('filling a date that is not in the draft changes nothing', () => {
+    const base = AutoAssign.draft(options());
+    assert.equal(AutoAssign.fillGaps(base, 99, options()), base);
+});

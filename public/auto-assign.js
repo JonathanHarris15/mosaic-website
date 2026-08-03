@@ -124,6 +124,26 @@
             seeding: false,
             seedNote: '',
 
+            // ── What the editor knows and the church has not recorded ────────
+            //
+            // Two different claims, and they are kept apart on purpose.
+            //
+            // A NUDGE is weeks of rest owed that no serve accounts for: a new
+            // baby, a parent in hospital. It moves the load gate and nothing
+            // else — it never tells the solve they held a Role.
+            //
+            // AWAY is a person who is simply not there on a date. It empties
+            // their places and keeps them out of anything drafted afterwards.
+            //
+            // Both belong to the DRAFT, not to the person: they are what the
+            // editor knows while planning this stretch, and neither writes a
+            // record anybody would later find and wonder about.
+            nudges: {},             // personId → weeks added to their load
+            away: {},               // date → [personId]
+
+            replaceSearch: '',
+            outScope: null,         // 'date' | 'rest', while the choice is open
+
             // ── Staleness (MS-181) ───────────────────────────────────────────
             // Each date was drafted reading the dates before it as history, so
             // editing the 5th leaves every later column balanced against a
@@ -366,6 +386,10 @@
                     await this.loadForDraft();
                     this.draft = Loop.draft(this.draftOptions());
                     this.displaced = [];
+                    // Away is about a range of dates; a new range is a new
+                    // question. A nudge is about a person's season, so it
+                    // survives a re-draft the way the serve log does.
+                    this.away = {};
                     this.staleFrom = null;
                     this.edited = {};
                     this.seenProblems = false;
@@ -562,6 +586,8 @@
                     solve: Fairness.solve,
                     candidatesFor: Roles.candidatesFor,
                     intensityOf: record => this.intensityForRecord(record),
+                    nudges: this.nudges,
+                    awayOn: date => this.awayOn(date),
                     liturgicalSlugs: Roles.LITURGICAL_SLUGS,
                     liturgicalHoldersFor: date => (this.liturgical[date] || []).map(h => h.personId),
                     relationships: this.relationships,
@@ -600,7 +626,9 @@
                         Loop.windowFor(dates, index, this.pastDates), size
                     );
 
-                    loads[day.date] = Fairness.loadOf(history, window, intensity);
+                    loads[day.date] = Fairness.withNudges(
+                        Fairness.loadOf(history, window, intensity), this.nudges
+                    );
 
                     const perRole = {};
                     roles.forEach(role => {
@@ -1215,14 +1243,15 @@
                         roleNameOf: slug => this.roleName(slug),
                         labelOf: date => Core.dayMonth(date),
                     }),
-                    considered: this.consideredFor(s),
+                    nudge: this.nudges[s.personId] || 0,
+                    replacements: this.replacementsFor(s),
                 };
             },
 
-            // Nothing records the runners-up, so this asks eligibility again for
-            // the place, against the roster AS IT STANDS. Which is what keeps it
-            // true after the editor has moved things about.
-            consideredFor(s) {
+            // Who could have this place instead. The same eligibility check the
+            // solve used, asked again against the roster AS IT STANDS — so it
+            // stays true after the editor has moved things about.
+            replacementsFor(s) {
                 const def = this.roleDefinitions.filter(d => d.slug === s.roleSlug)[0];
                 const slot = ((def && def.slots) || []).filter(x => x.id === s.slotId)[0];
                 if (!def || !slot) return [];
@@ -1255,15 +1284,217 @@
                     groups: this.groups,
                 });
 
-                return Panel.considered({
+                return Panel.replacements({
                     candidates: candidates,
                     seatedPersonId: s.personId,
+                    query: this.replaceSearch,
                     nameOf: id => this.personName(id),
                     loadAt: id => this.gridLoadAt(s.date, id),
                     reasonText: c => this.reasonWords(c, {
                         date: s.date, roleSlug: s.roleSlug, slotId: s.slotId,
                     }),
                 });
+            },
+
+            // ── Swapping this person out for a named one ─────────────────────
+            //
+            // The same outcome as dropping a card on them, reached by typing
+            // rather than dragging: the person here goes to the displaced rail,
+            // still attached to their date, waiting to be put somewhere else.
+            replaceWith(personId) {
+                const s = this.selected;
+                if (!s || !this.draft || !personId) return;
+
+                const result = Edit.place(this.draft, {
+                    personId: personId,
+                    to: { date: s.date, roleSlug: s.roleSlug, slotId: s.slotId },
+                });
+
+                this.draft = result.draft;
+                if (result.displaced) {
+                    this.displaced = Edit.addDisplaced(this.displaced,
+                        Object.assign({ roleSlug: s.roleSlug }, result.displaced));
+                }
+                this.displaced = Edit.removeDisplaced(this.displaced, {
+                    personId: personId, date: s.date,
+                });
+
+                this.buildGrid();
+                this.markStaleAfter(s.date);
+                // The panel follows the place, not the person — the editor is
+                // looking at a seat and wants to see who is in it now.
+                this.selected = Object.assign({}, s, { personId: personId });
+                this.replaceSearch = '';
+                this.remember();
+            },
+
+            // ── Nudging a load ───────────────────────────────────────────────
+            //
+            // Weeks of rest owed that no serve accounts for. It moves the load
+            // gate and nothing else: it never tells the solve they held a Role,
+            // which is what keeps it out of the seeded-serve business next to
+            // it in the panel.
+
+            NUDGE_STEP: 1,
+            NUDGE_LIMIT: 24,
+
+            nudgeBy(personId, by) {
+                if (!personId) return;
+                const now = this.nudges[personId] || 0;
+                const next = Math.max(-this.NUDGE_LIMIT,
+                    Math.min(this.NUDGE_LIMIT, now + by));
+
+                // Zero is the absence of a nudge, not a nudge of nothing —
+                // otherwise the saved draft fills up with people nobody touched.
+                const nudges = Object.assign({}, this.nudges);
+                if (next === 0) delete nudges[personId]; else nudges[personId] = next;
+                this.nudges = nudges;
+
+                this.buildGrid();
+                this.remember();
+            },
+
+            clearNudge(personId) {
+                if (!this.nudges[personId]) return;
+                const nudges = Object.assign({}, this.nudges);
+                delete nudges[personId];
+                this.nudges = nudges;
+                this.buildGrid();
+                this.remember();
+            },
+
+            // ── Taking somebody out ──────────────────────────────────────────
+            //
+            // Away is a fact about a person on a DATE, so it is kept per date:
+            // out on the 16th says nothing about the 23rd. Emptying their places
+            // and keeping them out of the next draft are the same act, which is
+            // why this writes the record before it clears the seats.
+
+            awayOn(date) { return this.away[date] || []; },
+
+            isAway(date, personId) {
+                return this.awayOn(date).indexOf(personId) !== -1;
+            },
+
+            // 'date' — this one occurrence. 'rest' — here to the end of the
+            // range, for a holiday or a term off.
+            datesForScope(scope, from) {
+                const dates = this.resolvedDates;
+                const at = dates.indexOf(from);
+                if (at === -1) return [];
+                return scope === 'rest' ? dates.slice(at) : [from];
+            },
+
+            // ⚠ ASKED, NEVER ASSUMED. Emptying the places and filling them again
+            // are opposite answers to the same question — one says "I will sort
+            // this out", the other says "give me somebody". Picking either on
+            // the editor's behalf is wrong half the time, so the buttons open
+            // the choice and the choice does the work.
+            markOut(scope) {
+                if (!this.selected) return;
+                this.outScope = scope;
+            },
+
+            cancelOut() { this.outScope = null; },
+
+            get outDates() {
+                const s = this.selected;
+                if (!s || !this.outScope) return [];
+                return this.datesForScope(this.outScope, s.date);
+            },
+
+            // How many places they would leave behind.
+            get outPlaces() {
+                const s = this.selected;
+                if (!s) return 0;
+                const out = this.outDates;
+                let n = 0;
+                ((this.draft && this.draft.dates) || []).forEach(day => {
+                    if (out.indexOf(day.date) === -1) return;
+                    (day.seats || []).forEach(seat => {
+                        if (seat.personId === s.personId) n++;
+                    });
+                });
+                return n;
+            },
+
+            takeOut(fill) {
+                const s = this.selected;
+                if (!s || !this.outScope || !this.draft) return;
+
+                const dates = this.outDates;
+                const personId = s.personId;
+
+                const away = Object.assign({}, this.away);
+                dates.forEach(date => {
+                    if ((away[date] || []).indexOf(personId) === -1) {
+                        away[date] = (away[date] || []).concat([personId]);
+                    }
+                });
+                this.away = away;
+
+                // Out of every place on those dates. Not displaced — they are
+                // not waiting to be put somewhere, they are not there.
+                let draft = this.draft;
+                const emptied = [];
+                dates.forEach(date => {
+                    const day = (draft.dates || []).filter(d => d.date === date)[0];
+                    if (!day) return;
+                    (day.seats || [])
+                        .filter(seat => seat.personId === personId)
+                        .forEach(seat => {
+                            const at = { date: date, roleSlug: seat.roleSlug, slotId: seat.slotId };
+                            draft = Edit.clear(draft, at).draft;
+                            emptied.push(date);
+                        });
+                    this.displaced = Edit.removeDisplaced(this.displaced,
+                        { personId: personId, date: date });
+                });
+
+                if (fill) {
+                    // One date at a time, holding everything already on it, so
+                    // only the places they left get staffed — a full re-draft
+                    // would throw away every other edit on those dates.
+                    const all = this.resolvedDates;
+                    emptied.filter((d, i, list) => list.indexOf(d) === i).forEach(date => {
+                        draft = Loop.fillGaps(draft, all.indexOf(date), this.draftOptions());
+                    });
+                }
+
+                this.draft = draft;
+                this.outScope = null;
+                this.selected = null;
+                this.buildGrid();
+                this.markStaleAfter(dates[0]);
+                this.remember();
+            },
+
+            // Back on the rota. The places they lost stay as they are — putting
+            // them back would undo whoever the editor has since put there.
+            bringBack(personId, date) {
+                const away = Object.assign({}, this.away);
+                Object.keys(away).forEach(d => {
+                    if (date && d !== date) return;
+                    away[d] = away[d].filter(id => id !== personId);
+                    if (!away[d].length) delete away[d];
+                });
+                this.away = away;
+                this.remember();
+            },
+
+            // Everybody the editor has taken out, for the line that says so.
+            get awayNames() {
+                const seen = {};
+                Object.keys(this.away).forEach(date => {
+                    (this.away[date] || []).forEach(id => {
+                        seen[id] = (seen[id] || []).concat([date]);
+                    });
+                });
+                return Object.keys(seen).map(id => ({
+                    personId: id,
+                    name: this.personName(id),
+                    dates: seen[id].length,
+                }));
             },
 
             // ── Seeding a serve ──────────────────────────────────────────────
@@ -1467,6 +1698,8 @@
                     people: this.assignablePeople,
                     choice: this.choice,
                     displaced: this.displaced,
+                    nudges: this.nudges,
+                    away: this.away,
                     savedAt: new Date().toISOString(),
                 };
             },
@@ -1508,6 +1741,8 @@
                 if (!this.offered || this.offerStale.length) return;
                 this.draft = this.offered.draft;
                 this.displaced = this.offered.displaced || [];
+                this.nudges = this.offered.nudges || {};
+                this.away = this.offered.away || {};
                 this.offered = null;
                 this.selected = null;
                 this.seenProblems = false;

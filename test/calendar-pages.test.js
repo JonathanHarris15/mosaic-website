@@ -2897,7 +2897,7 @@ test('the panel lists the serves the load is made of, not an invented split', ()
         'a Sunday that happened is a fact; the seeded one is the editor\'s to take back');
 });
 
-test('the panel names who else was in the running, and why they lost', () => {
+test('the panel offers who could take the place instead, and what is wrong with each', () => {
     const page = draftedPage();
     page.draft = {
         dates: [drafted('2026-10-04', [
@@ -2908,7 +2908,7 @@ test('the panel names who else was in the running, and why they lost', () => {
     // Slot s2 wants a woman; Bob is a man.
     page.selectPlace('2026-10-04', page.grid.roleRows[0].cells[0].places[1]);
 
-    const others = page.placement.considered;
+    const others = page.placement.replacements;
     assert.deepEqual(others.map(c => c.name), ['Bob Carter']);
     assert.match(others[0].reason, /needs a woman/);
     assert.equal(others.some(c => c.personId === 'p1'), false);
@@ -3425,6 +3425,243 @@ test('the grid hides its own horizontal bar but keeps the vertical one', () => {
     // Clipped, never switched off: the trackpad and shift-wheel still scroll
     // the grid sideways, and the strip just shows where that got you.
     assert.doesNotMatch(html, /\.aa-scroller \{[^}]*overflow-x:\s*hidden/);
+});
+
+// ── What the editor knows and the church has not recorded ───────────────────
+
+function placedPage(seats) {
+    const page = draftedPage();
+    page.draft = {
+        dates: ['2026-10-04', '2026-10-11'].map(d => drafted(d, (seats || {})[d] || [])),
+    };
+    page.buildGrid();
+    page.selectPlace('2026-10-04', page.grid.roleRows[0].cells[0].places[0]);
+    return page;
+}
+
+const ON = (page, date) => {
+    const day = page.draft.dates.filter(d => d.date === date)[0];
+    return (day.seats || []).map(s => s.personId).sort();
+};
+
+test('a nudge adds weeks to a load nothing in the serve log accounts for', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+    assert.equal(page.placement.load, 0);
+
+    page.nudgeBy('p1', 1);
+    page.nudgeBy('p1', 1);
+
+    assert.equal(page.placement.nudge, 2);
+    assert.equal(page.placement.load, 2, 'and the card reads it the same way the solve will');
+});
+
+// Zero is the absence of a nudge, not a nudge of nothing — otherwise every
+// person the editor so much as looked at rides along in the saved draft.
+test('nudging back to nothing forgets the nudge', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+
+    page.nudgeBy('p1', 1);
+    page.nudgeBy('p1', -1);
+
+    assert.deepEqual(page.nudges, {});
+});
+
+// ⚠ A NUDGE IS NOT A SERVE. The seeding control says "they held this Role on
+// this date" and moves both dials. This says only "they are carrying more than
+// the record shows" — and must never invent a Sunday to say it.
+test('a nudge writes no serve, and tells the solve about no Role', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+
+    page.nudgeBy('p1', 3);
+
+    assert.deepEqual(page.history, [], 'no Sunday was invented');
+    assert.deepEqual(page.placement.serves, [], 'and the breakdown still says what it is made of');
+    assert.equal(page.draftOptions().nudges.p1, 3, 'but the solve is told');
+});
+
+// ── Taking somebody out ─────────────────────────────────────────────────────
+
+test('out on a date empties their places on it and nothing else', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+        '2026-10-11': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+
+    page.markOut('date');
+    assert.equal(page.outPlaces, 1);
+    page.takeOut(false);
+
+    assert.deepEqual(ON(page, '2026-10-04'), []);
+    assert.deepEqual(ON(page, '2026-10-11'), ['p1'], 'the next date is a different question');
+    assert.equal(page.isAway('2026-10-04', 'p1'), true);
+    assert.equal(page.isAway('2026-10-11', 'p1'), false);
+});
+
+test('out for the rest of the range takes every date from here on', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+        '2026-10-11': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+
+    page.markOut('rest');
+    assert.equal(page.outPlaces, 2);
+    page.takeOut(false);
+
+    assert.deepEqual(ON(page, '2026-10-04'), []);
+    assert.deepEqual(ON(page, '2026-10-11'), []);
+});
+
+// ⚠ TAKEN OUT IS NOT DISPLACED. A displaced person is waiting to be put
+// somewhere; somebody who is away is not there at all, and putting them on the
+// rail would invite the editor to drag them straight back in.
+test('somebody taken out does not land on the displaced rail', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+
+    page.markOut('date');
+    page.takeOut(false);
+
+    assert.deepEqual(page.displaced, []);
+});
+
+test('filling their places again puts somebody else in them', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+
+    page.markOut('date');
+    page.takeOut(true);
+
+    const on = ON(page, '2026-10-04');
+    assert.ok(on.length >= 1, 'the place is covered');
+    assert.equal(on.indexOf('p1'), -1, 'and never by the person who is not there');
+});
+
+// The choice is asked, never assumed: emptying and refilling are opposite
+// answers, and either one picked for the editor is wrong half the time.
+test('the two answers are opposite, and neither happens until one is picked', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+
+    page.markOut('date');
+    assert.equal(page.outScope, 'date');
+    assert.deepEqual(ON(page, '2026-10-04'), ['p1'], 'nothing has happened yet');
+
+    page.cancelOut();
+    assert.equal(page.outScope, null);
+    assert.deepEqual(ON(page, '2026-10-04'), ['p1']);
+    assert.deepEqual(page.away, {});
+});
+
+test('being away survives a re-draft — that is the point of recording it', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+
+    page.markOut('rest');
+    page.takeOut(false);
+
+    assert.deepEqual(page.draftOptions().awayOn('2026-10-04'), ['p1']);
+    assert.deepEqual(page.draftOptions().awayOn('2026-10-11'), ['p1']);
+});
+
+test('bringing somebody back clears every date they were out on', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+
+    page.markOut('rest');
+    page.takeOut(false);
+    assert.equal(page.awayNames.length, 1);
+    assert.equal(page.awayNames[0].dates, page.resolvedDates.length,
+        '"the rest of the range" is the range, not just the drafted part of it');
+
+    page.bringBack('p1', null);
+    assert.deepEqual(page.away, {});
+    assert.deepEqual(page.awayNames, []);
+});
+
+// ── Somebody else instead ───────────────────────────────────────────────────
+
+test('picking a replacement seats them and sends the other to Displaced', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+
+    page.replaceWith('p2');
+
+    assert.deepEqual(ON(page, '2026-10-04'), ['p2']);
+    assert.deepEqual(page.displaced.map(d => d.personId), ['p1']);
+});
+
+// The editor is looking at a SEAT and wants to see who is in it now — following
+// the person would leave them reading about somebody who is no longer there.
+test('the panel stays on the place, not on the person who left it', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+
+    page.replaceSearch = 'bob';
+    page.replaceWith('p2');
+
+    assert.equal(page.placement.personId, 'p2');
+    assert.equal(page.replaceSearch, '', 'and the box is clear for the next one');
+});
+
+test('the search narrows who is offered, without hiding a warning', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+
+    page.replaceSearch = 'bob';
+    assert.deepEqual(page.placement.replacements.map(c => c.name), ['Bob Carter']);
+
+    page.replaceSearch = 'zzz';
+    assert.deepEqual(page.placement.replacements, []);
+});
+
+test('a nudge and an away list ride with the saved draft', () => {
+    const box = {};
+    const page = draftedPage(null, {
+        localStorage: {
+            setItem(k, v) { box[k] = v; },
+            getItem(k) { return box[k] === undefined ? null : box[k]; },
+            removeItem(k) { delete box[k]; },
+        },
+    });
+    page.draft = { dates: [drafted('2026-10-04')] };
+    page.buildGrid();
+    page.nudges = { p1: 3 };
+    page.away = { '2026-10-04': ['p2'] };
+
+    page.remember();
+    const kept = JSON.parse(box[page.savedKey]);
+
+    assert.deepEqual(kept.nudges, { p1: 3 });
+    assert.deepEqual(kept.away, { '2026-10-04': ['p2'] });
+});
+
+test('the panel no longer explains the runners-up, it offers to change them', () => {
+    const html = readPage('auto-assign.html');
+
+    assert.doesNotMatch(html, /Others considered/);
+    assert.doesNotMatch(html, /Nothing this season/);
+    assert.match(html, /Somebody else instead/);
+    assert.match(html, /Carrying more than we know/);
+    assert.match(html, /Out for the rest of the range/);
+    // ⚠ The arrow is drawn INSIDE the box, over the last characters of the
+    // longest option — "Children's Ministry" reads as "Children's Minist⌄".
+    assert.doesNotMatch(html, /<select[^>]*\bpx-2\b/, 'every select needs room for its arrow');
+    assert.match(html, /x-model="seedRole"[\s\S]{0,400}pr-7/);
+    assert.match(html, /x-model="seedDate"[\s\S]{0,400}pr-7/);
 });
 
 // ── Hover offers a trade; holding still turns it into a displace ────────────

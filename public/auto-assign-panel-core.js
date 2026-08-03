@@ -128,18 +128,25 @@
         return out;
     }
 
-    // Who else was in the running for this place, and why each lost.
+    // Who could take this place instead, and what would be wrong with each.
     //
-    // Not a stored decision — nothing records the runners-up — so it is the
-    // eligibility check asked again for this place against the roster as it
-    // stands now. Which means it stays true after the editor moves things
-    // about, rather than describing a solve that has since been overwritten.
-    function considered(options) {
+    // This used to be a read-only "others considered" list, which answered a
+    // question nobody was asking: an editor looking at a placement they want
+    // changed wants to change it, not to read a report on how it was reached.
+    // So it is a search now — the same eligibility check, asked again for this
+    // place against the roster AS IT STANDS, with a name to type into it.
+    //
+    // ⚠ SEARCHING NEVER FILTERS BY ELIGIBILITY. Somebody who cannot have the
+    // place still appears, with the reason on them, because eligibility advises
+    // and the editor decides (ADR-0021). Hiding them would turn an advisory
+    // into a wall and leave the editor wondering where the name went.
+    function replacements(options) {
         const o = options || {};
         const seated = o.seatedPersonId;
 
         return (o.candidates || [])
             .filter(c => c && c.personId && c.personId !== seated)
+            .filter(c => matches(o.nameOf(c.personId), o.query))
             .map(candidate => ({
                 personId: candidate.personId,
                 name: o.nameOf(candidate.personId),
@@ -158,7 +165,7 @@
         directory,
         servesInWindow,
         acrossRange,
-        considered,
+        replacements,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

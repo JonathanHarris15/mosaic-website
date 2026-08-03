@@ -96,6 +96,35 @@
         return load;
     }
 
+    // ── Nudging a load by hand ────────────────────────────────────────────────
+    //
+    // A claim on somebody's week that the church has no record of: a new baby, a
+    // parent in hospital, a fortnight abroad. The system cannot know it and
+    // cannot infer it, so the editor says it, in the one unit that already
+    // means something here — weeks of rest owed.
+    //
+    // ⚠ A NUDGE IS NOT A SERVE, and the two must never be confused. A seeded
+    // serve says "they held this Role on this date": it moves load AND recency,
+    // and the solve can see which Role. A nudge says only "they are carrying
+    // more than the record shows". Recording a nudge as a serve would invent a
+    // Sunday that did not happen; recording a serve as a nudge would leave the
+    // solve believing they had never held the Role.
+    //
+    // Never below zero. A negative load is not a person with room to spare, it
+    // is a number that would sort above people who genuinely have none.
+    function withNudges(load, nudges) {
+        if (!nudges) return load || {};
+        const out = Object.assign({}, load || {});
+
+        Object.keys(nudges).forEach(personId => {
+            const by = Number(nudges[personId]);
+            if (!isFinite(by) || by === 0) return;
+            out[personId] = Math.max(0, (out[personId] || 0) + by);
+        });
+
+        return out;
+    }
+
     // Over their rest budget. Load is denominated in weeks and the window is a
     // number of occurrences, so the two are directly comparable — which is the
     // whole reason intensity is expressed as rest owed rather than as a weight.
@@ -166,7 +195,7 @@
         const at = positionsOf(dates);
         const history = o.history || [];
 
-        const load = loadOf(history, dates, o.intensityOf);
+        const load = withNudges(loadOf(history, dates, o.intensityOf), o.nudges);
 
         // How many occurrences in the window each person held any liturgical
         // Role on. Counted by DATE, not by record: leading music and praying on
@@ -434,6 +463,7 @@
             occurrenceDates: o.occurrenceDates,
             windowSize: windowSize,
             intensityOf: o.intensityOf,
+            nudges: o.nudges,
             liturgicalSlugs: o.liturgicalSlugs,
             liturgicalHolders: o.liturgicalHolders,
         });
@@ -548,6 +578,7 @@
         windowDates,
         // load
         loadOf,
+        withNudges,
         isSpent,
         // recency
         recencyOf,

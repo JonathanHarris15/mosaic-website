@@ -257,3 +257,62 @@ test('the pool never restates an eligibility rule — restrictions are not its j
     const pool = Fairness.pool(poolOptions());
     assert.deepEqual(idsIn(pool).sort(), ['alice', 'brenda', 'carl', 'dan', 'preacher-pete']);
 });
+
+// ── Nudging a load by hand ──────────────────────────────────────────────────
+//
+// A claim on somebody's week the church has no record of: a new baby, a parent
+// in hospital. The editor says it in the unit that already means something
+// here — weeks of rest owed.
+
+test('a nudge adds to a load the serve log already knows about', () => {
+    const out = Fairness.withNudges({ p1: 3, p2: 1 }, { p1: 2 });
+
+    assert.equal(out.p1, 5);
+    assert.equal(out.p2, 1, 'nobody else moves');
+});
+
+test('somebody with no serves at all can still be carrying something', () => {
+    assert.equal(Fairness.withNudges({}, { p1: 4 }).p1, 4);
+});
+
+test('a nudge can take load off as well as put it on', () => {
+    assert.equal(Fairness.withNudges({ p1: 5 }, { p1: -2 }).p1, 3);
+});
+
+// ⚠ NEVER BELOW ZERO. A negative load is not a person with room to spare, it is
+// a number that sorts them above people who genuinely have none.
+test('a nudge cannot push a load below nothing', () => {
+    assert.equal(Fairness.withNudges({ p1: 1 }, { p1: -9 }).p1, 0);
+});
+
+test('a nudge of nothing, or of nonsense, changes nothing', () => {
+    assert.deepEqual(Fairness.withNudges({ p1: 2 }, { p1: 0 }), { p1: 2 });
+    assert.deepEqual(Fairness.withNudges({ p1: 2 }, { p1: 'lots' }), { p1: 2 });
+    assert.deepEqual(Fairness.withNudges({ p1: 2 }, null), { p1: 2 });
+});
+
+test('nudging leaves the load it was given alone', () => {
+    const load = { p1: 2 };
+    Fairness.withNudges(load, { p1: 3 });
+    assert.equal(load.p1, 2, 'the caller keeps whatever it computed');
+});
+
+// ⚠ THE POINT OF THE WHOLE THING: a nudge has to reach the gate, or it is a
+// number in a box that changes nobody's Sunday.
+test('a nudge over the window takes somebody out of the running', () => {
+    const spentByHand = Fairness.pool({
+        people: [{ id: 'p1' }, { id: 'p2' }],
+        history: [],
+        occurrenceDates: SUNDAYS,
+        windowSize: 12,
+        intensityOf: () => 1,
+        nudges: { p1: 12 },
+    });
+
+    const p1 = spentByHand.candidates.filter(c => c.personId === 'p1')[0];
+    const p2 = spentByHand.candidates.filter(c => c.personId === 'p2')[0];
+
+    assert.equal(p1.spent, true, 'twelve weeks owed is twelve weeks owed');
+    assert.equal(p2.spent, false);
+    assert.equal(spentByHand.candidates[0].personId, 'p2', 'and the free one comes first');
+});

@@ -211,6 +211,11 @@
             background: rgba(242, 240, 236, .94);
             pointer-events: none;
         }
+        .aa-away-chip {
+            display: flex; align-items: center; gap: 7px; padding: 4px 8px;
+            border: 1px solid #DAD0C0; border-radius: 999px;
+            background: rgba(242, 240, 236, .7);
+        }
         .aa-ghost-chip {
             display: flex; align-items: center; gap: 7px; padding: 5px 9px;
             border: 1px dashed #B89B6A; border-radius: 8px;
@@ -241,6 +246,12 @@
 
         /* Stays on screen when the panel is shut, so the way back is where the
            way out was. */
+        /* ⚠ THE ARROW IS DRAWN INSIDE THE BOX, over the last few characters of
+           the longest option — "Children's Ministry" reads as "Children's
+           Minist⌄". Every select on this page carries `pr-7` for it, and this
+           makes the overflow an ellipsis rather than a hard cut. */
+        .aa-select { text-overflow: ellipsis; }
+
         .aa-rail { width: 34px; }
         .aa-rail-label { writing-mode: vertical-rl; }
 
@@ -962,9 +973,6 @@
                                                            hover:text-error aa-motion aa-focus rounded">close</button>
                                         </div>
                                     </template>
-                                    <p x-show="!placement.serves.length" class="text-[12px] text-on-surface-variant">
-                                        Nothing this season. That is why they came up.
-                                    </p>
                                 </div>
 
                                 <!-- Records a SERVE, never a load figure. A figure
@@ -974,17 +982,24 @@
                                     <span class="text-[11px] text-on-surface-variant text-pretty">
                                         Been doing this already? Record it, and the draft will believe it.
                                     </span>
+                                    <!-- ⚠ `pr-7` ON EVERY SELECT. The arrow the
+                                         browser draws sits INSIDE the box, over
+                                         the last few characters of the longest
+                                         option — so a Role called Children's
+                                         Ministry reads as "Children's Minist⌄". -->
                                     <div class="flex items-center gap-1.5">
                                         <select x-model="seedRole"
-                                                class="flex-grow min-w-0 bg-surface-container-low border border-outline-variant
-                                                       rounded px-2 py-1.5 text-[12px] text-on-surface aa-focus">
+                                                class="aa-select flex-grow min-w-0 bg-surface-container-low
+                                                       border border-outline-variant rounded pl-2 pr-7 py-1.5
+                                                       text-[12px] text-on-surface aa-focus">
                                             <template x-for="r in draftableRoles" :key="r.slug">
                                                 <option :value="r.slug" x-text="r.name"></option>
                                             </template>
                                         </select>
                                         <select x-model="seedDate"
-                                                class="flex-grow min-w-0 bg-surface-container-low border border-outline-variant
-                                                       rounded px-2 py-1.5 text-[12px] text-on-surface aa-focus">
+                                                class="aa-select flex-grow min-w-0 bg-surface-container-low
+                                                       border border-outline-variant rounded pl-2 pr-7 py-1.5
+                                                       text-[12px] text-on-surface aa-focus">
                                             <option value="">Which date</option>
                                             <template x-for="d in seedDates" :key="d">
                                                 <option :value="d" x-text="pretty(d)"></option>
@@ -1019,26 +1034,132 @@
                                 </template>
                             </div>
 
-                            <!-- Not a stored decision — the eligibility check
-                                 asked again for this place, against the roster
-                                 as it stands now. -->
-                            <div class="flex flex-col gap-1.5">
+                            <!-- ══ Nudging the load ══
+                                 ⚠ A NUDGE IS NOT A SERVE. The seeding control
+                                 above says "they held this Role on this date"
+                                 and moves BOTH dials. This says only "they are
+                                 carrying more than the record shows" — it moves
+                                 the load gate and tells the solve nothing about
+                                 any Role. Two claims, deliberately apart. -->
+                            <div class="flex flex-col gap-2 border-t border-outline-variant pt-3">
                                 <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
-                                    Others considered
+                                    Carrying more than we know
                                 </span>
-                                <template x-for="c in placement.considered" :key="c.personId">
-                                    <div class="flex items-start gap-2 text-[12px]">
-                                        <span class="aa-avatar aa-avatar-sm" x-text="c.initials"></span>
-                                        <span class="min-w-0 flex-grow">
-                                            <span class="block text-on-surface truncate" x-text="c.name"></span>
-                                            <span class="block text-[11px] text-on-surface-variant"
-                                                  x-text="c.reason || 'Could have had it'"></span>
-                                        </span>
+                                <span class="text-[11px] text-on-surface-variant text-pretty">
+                                    A new baby, a parent in hospital, a fortnight away. Add the weeks
+                                    and the draft will leave them alone.
+                                </span>
+                                <div class="flex items-center gap-2">
+                                    <button type="button" @click="nudgeBy(placement.personId, -1)"
+                                            title="One week less"
+                                            class="material-symbols-outlined text-[18px] text-on-surface-variant
+                                                   hover:text-primary border border-outline-variant rounded
+                                                   px-1.5 py-0.5 aa-motion aa-focus">remove</button>
+                                    <span class="text-[13px] text-on-surface tabular-nums w-14 text-center"
+                                          x-text="(placement.nudge > 0 ? '+' : '') + placement.nudge
+                                                  + (Math.abs(placement.nudge) === 1 ? ' week' : ' weeks')"></span>
+                                    <button type="button" @click="nudgeBy(placement.personId, 1)"
+                                            title="One week more"
+                                            class="material-symbols-outlined text-[18px] text-on-surface-variant
+                                                   hover:text-primary border border-outline-variant rounded
+                                                   px-1.5 py-0.5 aa-motion aa-focus">add</button>
+                                    <button type="button" x-show="placement.nudge"
+                                            @click="clearNudge(placement.personId)"
+                                            class="text-[11px] text-on-surface-variant hover:text-primary
+                                                   aa-motion aa-focus rounded ml-auto">Clear</button>
+                                </div>
+                            </div>
+
+                            <!-- ══ Out ══
+                                 ⚠ THE CHOICE IS ASKED, NEVER ASSUMED. Emptying
+                                 the places and filling them again are opposite
+                                 answers — one says "I will sort this out", the
+                                 other says "give me somebody". Either one picked
+                                 on the editor's behalf is wrong half the time. -->
+                            <div class="flex flex-col gap-2 border-t border-outline-variant pt-3">
+                                <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                                    Not available
+                                </span>
+
+                                <div x-show="!outScope" class="flex flex-col gap-1.5">
+                                    <button type="button" @click="markOut('date')"
+                                            class="text-left text-[12.5px] text-on-surface border border-outline-variant
+                                                   rounded-lg px-3 py-2 hover:bg-surface-container aa-motion aa-focus">
+                                        Out on <span x-text="placement.dateLabel"></span>
+                                    </button>
+                                    <button type="button" @click="markOut('rest')"
+                                            class="text-left text-[12.5px] text-on-surface border border-outline-variant
+                                                   rounded-lg px-3 py-2 hover:bg-surface-container aa-motion aa-focus">
+                                        Out for the rest of the range
+                                    </button>
+                                </div>
+
+                                <div x-show="outScope" class="flex flex-col gap-2 bg-surface-container rounded-lg p-3">
+                                    <span class="text-[12px] text-on-surface text-pretty">
+                                        <span x-text="placement.name"></span> comes off
+                                        <span x-text="outPlaces === 1 ? 'one place' : outPlaces + ' places'"></span>
+                                        across
+                                        <span x-text="outDates.length === 1 ? 'this date' : outDates.length + ' dates'"></span>.
+                                        What should happen to <span x-text="outPlaces === 1 ? 'it' : 'them'"></span>?
+                                    </span>
+                                    <div class="flex items-center gap-1.5">
+                                        <button type="button" @click="takeOut(true)"
+                                                class="flex-grow bg-primary text-on-primary rounded px-2.5 py-1.5
+                                                       text-[12px] aa-motion aa-focus">
+                                            Fill them again
+                                        </button>
+                                        <button type="button" @click="takeOut(false)"
+                                                class="flex-grow border border-outline-variant text-on-surface rounded
+                                                       px-2.5 py-1.5 text-[12px] hover:bg-surface-container-low
+                                                       aa-motion aa-focus">
+                                            Leave them empty
+                                        </button>
                                     </div>
-                                </template>
-                                <p x-show="!placement.considered.length" class="text-[12px] text-on-surface-variant">
-                                    Nobody else was in the running.
-                                </p>
+                                    <button type="button" @click="cancelOut()"
+                                            class="text-[11px] text-on-surface-variant hover:text-primary
+                                                   aa-motion aa-focus rounded self-start">Never mind</button>
+                                </div>
+                            </div>
+
+                            <!-- ══ Somebody else instead ══
+                                 The "others considered" list that was here
+                                 answered a question nobody asked: an editor
+                                 looking at a placement they want changed wants
+                                 to change it, not to read how it was reached. -->
+                            <div class="flex flex-col gap-2 border-t border-outline-variant pt-3">
+                                <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                                    Somebody else instead
+                                </span>
+                                <input type="search" x-model="replaceSearch" placeholder="Search the church"
+                                       class="w-full bg-surface-container-low border border-outline-variant rounded-lg
+                                              px-3 py-2 text-[13px] text-on-surface aa-focus" />
+                                <span class="text-[11px] text-on-surface-variant text-pretty">
+                                    Whoever you pick takes the place, and
+                                    <span x-text="placement.name"></span> goes to Displaced.
+                                </span>
+
+                                <div class="flex flex-col gap-0.5 max-h-64 overflow-auto">
+                                    <template x-for="c in placement.replacements" :key="c.personId">
+                                        <button type="button" @click="replaceWith(c.personId)"
+                                                class="flex items-start gap-2 text-[12px] text-left rounded-lg
+                                                       px-2 py-1.5 hover:bg-surface-container aa-motion aa-focus">
+                                            <span class="aa-avatar aa-avatar-sm" x-text="c.initials"></span>
+                                            <span class="min-w-0 flex-grow">
+                                                <span class="block text-on-surface truncate" x-text="c.name"></span>
+                                                <!-- Eligibility advises; the editor
+                                                     decides (ADR-0021). Shown, never
+                                                     hidden and never disabled. -->
+                                                <span class="block text-[11px]"
+                                                      :class="c.reason ? 'text-error' : 'text-on-surface-variant'"
+                                                      x-text="c.reason || 'Could take it'"></span>
+                                            </span>
+                                        </button>
+                                    </template>
+                                    <p x-show="!placement.replacements.length"
+                                       class="text-[12px] text-on-surface-variant px-2 py-1">
+                                        Nobody matches that.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1091,6 +1212,28 @@
                                        hover:text-error aa-motion aa-focus rounded">close</button>
                     </div>
                 </template>
+
+                <!-- Taken out, not displaced. A displaced person is waiting to
+                     be put somewhere; somebody who is away is not there at all.
+                     Shown here anyway, because this is the only line on the
+                     screen that says who is off the rota — and an editor who
+                     took the wrong person out needs a way back. -->
+                <div x-show="awayNames.length" class="flex items-center gap-2 shrink-0 ml-auto">
+                    <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                        Away
+                    </span>
+                    <template x-for="a in awayNames" :key="a.personId">
+                        <span class="aa-away-chip shrink-0">
+                            <span class="text-[12px] text-on-surface truncate" x-text="a.name"></span>
+                            <span class="text-[10.5px] text-on-surface-variant tabular-nums"
+                                  x-text="a.dates === 1 ? '1 date' : a.dates + ' dates'"></span>
+                            <button type="button" @click="bringBack(a.personId, null)"
+                                    title="Back on the rota"
+                                    class="material-symbols-outlined text-[15px] text-on-surface-variant
+                                           hover:text-primary aa-motion aa-focus rounded">undo</button>
+                        </span>
+                    </template>
+                </div>
             </div>
 
             <!-- ══════ The bottom bar ══════

@@ -126,42 +126,45 @@
 
     // ── One step ──────────────────────────────────────────────────────────────
 
-    function staff(o, date, index, history) {
-        const existing = (o.existing || {})[date] || [];
-        const choice = o.choice || CHOICES.KEEP;
+    // ── Who is out ────────────────────────────────────────────────────────────
+    //
+    // An editor knows things the church has no record of: somebody is away that
+    // weekend, or off for the rest of the term. Away is a fact about a PERSON on
+    // a DATE, so it is asked per date rather than filtered out of the people
+    // list once — being out on the 16th says nothing about the 23rd.
+    //
+    // It applies to held seats too. A place they were already down for is
+    // exactly the place the editor is trying to empty.
+    function awayOn(o, date) {
+        return (typeof o.awayOn === 'function' ? o.awayOn(date) : []) || [];
+    }
 
-        // Left out: the date keeps exactly what it had and is not drafted. It
-        // still counts as history, because those people are still serving.
-        if (choice === CHOICES.LEAVE_OUT && existing.length) {
-            const kept = heldSeats(existing, CHOICES.KEEP);
-            return {
-                date: date,
-                skipped: true,
-                seats: kept.map(a => Object.assign(asSeat(a), {
-                    held: true, state: a.state, recency: null, allowsAnotherRole: null,
-                })),
-                gaps: [],
-                widened: 0,
-                allSpent: false,
-                pool: [],
-            };
-        }
+    const withoutAway = (list, out, idOf) => (
+        out.length ? (list || []).filter(x => out.indexOf(idOf(x)) === -1) : (list || [])
+    );
 
-        const held = heldSeats(existing, choice);
+    // One date, given whoever is already sitting in it. Shared by the walk down
+    // the range and by filling a single date's gaps, so both read the same
+    // window and hand the solve the same shape.
+    function solveDate(o, date, index, history, held) {
+        const out = awayOn(o, date);
+        const seated = withoutAway(held, out, a => a.personId);
+
         const heldByKey = {};
-        held.forEach(a => { heldByKey[a.roleSlug + '|' + a.slotId] = a; });
+        seated.forEach(a => { heldByKey[a.roleSlug + '|' + a.slotId] = a; });
 
         const result = o.solve({
             roles: o.roles,
-            people: o.people,
+            people: withoutAway(o.people, out, p => p && p.id),
             history: history,
             occurrenceDates: windowFor(o.dates, index, o.pastDates),
             windowSize: o.windowSize,
             seriesId: o.seriesId,
             date: date,
-            seated: held.map(asSeat),
+            seated: seated.map(asSeat),
             candidatesFor: o.candidatesFor,
             intensityOf: o.intensityOf,
+            nudges: o.nudges,
             liturgicalSlugs: o.liturgicalSlugs,
             liturgicalHolders: o.liturgicalHoldersFor
                 ? o.liturgicalHoldersFor(date)
@@ -180,8 +183,8 @@
             seats: result.filled.map(seat => {
                 const was = heldByKey[seat.roleSlug + '|' + seat.slotId];
                 return Object.assign({}, seat, {
-                    held: !!was,
-                    state: was ? was.state : null,
+                    held: was ? (was.held !== undefined ? was.held : true) : false,
+                    state: was ? (was.state || null) : null,
                 });
             }),
             gaps: result.unfilled,
@@ -189,6 +192,32 @@
             allSpent: result.allSpent,
             pool: result.pool,
         };
+    }
+
+    function staff(o, date, index, history) {
+        const existing = (o.existing || {})[date] || [];
+        const choice = o.choice || CHOICES.KEEP;
+
+        // Left out: the date keeps exactly what it had and is not drafted. It
+        // still counts as history, because those people are still serving.
+        if (choice === CHOICES.LEAVE_OUT && existing.length) {
+            const kept = withoutAway(
+                heldSeats(existing, CHOICES.KEEP), awayOn(o, date), a => a.personId
+            );
+            return {
+                date: date,
+                skipped: true,
+                seats: kept.map(a => Object.assign(asSeat(a), {
+                    held: true, state: a.state, recency: null, allowsAnotherRole: null,
+                })),
+                gaps: [],
+                widened: 0,
+                allSpent: false,
+                pool: [],
+            };
+        }
+
+        return solveDate(o, date, index, history, heldSeats(existing, choice));
     }
 
     // ── The range ─────────────────────────────────────────────────────────────
@@ -256,6 +285,36 @@
         return run(options, kept.length, kept);
     }
 
+    // ── Filling the gaps on one date ──────────────────────────────────────────
+    //
+    // Everybody already in the date stays exactly where they are; only the empty
+    // places are staffed. This is the narrow version of a re-draft, for when
+    // somebody has been taken out and the editor wants their places covered
+    // rather than the whole rest of the range redrawn.
+    //
+    // ⚠ THE HISTORY IS REBUILT FROM THE DRAFT, not from the serve log alone.
+    // The dates before this one have people on them, and a fill that could not
+    // see them would happily pick somebody who is already down for the two
+    // Sundays before — the carry-forward is the whole reason the range is
+    // walked in order.
+    function fillGaps(previous, index, options) {
+        const o = options || {};
+        assertReady(o);
+
+        const days = ((previous || {}).dates || []).slice();
+        const day = days[index];
+        if (!day || day.skipped) return previous;
+
+        const dates = o.dates || [];
+        let history = (o.history || []).slice();
+        for (let i = 0; i < index; i++) {
+            history = history.concat(historyFrom(days[i].seats, dates[i], o.seriesId));
+        }
+
+        days[index] = solveDate(o, day.date, index, history, day.seats || []);
+        return Object.assign({}, previous, { dates: days });
+    }
+
     const AutoAssignCore = {
         CHOICES,
         STATES,
@@ -269,6 +328,7 @@
         // the range
         draft,
         redraftFrom,
+        fillGaps,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

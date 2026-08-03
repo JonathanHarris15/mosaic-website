@@ -138,13 +138,13 @@ test('the panel lists everything that person holds across the range', () => {
     assert.deepEqual(out.map(s => s.roleName), ['Welcome', 'Coffee']);
 });
 
-// ── Who else was considered ─────────────────────────────────────────────────
+// ── Who could take this place instead ───────────────────────────────────────
 
 // Nothing records the runners-up, so this is the eligibility check asked again
 // for this place against the roster AS IT STANDS — which is what keeps it true
 // after the editor has moved things about.
-test('the others considered are listed with the reason each was passed over', () => {
-    const out = Panel.considered({
+test('everybody who could take the place is offered, with what is wrong with each', () => {
+    const out = Panel.replacements({
         seatedPersonId: 'p1',
         candidates: [
             { personId: 'p1', eligible: true },
@@ -163,8 +163,8 @@ test('the others considered are listed with the reason each was passed over', ()
         'the person in the place is not one of the others');
 });
 
-test('the ones who could have had it come first, then the ones who could not', () => {
-    const out = Panel.considered({
+test('the ones who could have it come first, then the ones who could not', () => {
+    const out = Panel.replacements({
         seatedPersonId: 'p1',
         candidates: [
             { personId: 'p2', eligible: false, reason: 'inactive' },
@@ -176,4 +176,38 @@ test('the ones who could have had it come first, then the ones who could not', (
     });
 
     assert.deepEqual(out.map(c => c.eligible), [true, false]);
+});
+
+test('typing a name narrows the list to it', () => {
+    const of = query => Panel.replacements({
+        seatedPersonId: 'p1',
+        query: query,
+        candidates: [
+            { personId: 'p2', eligible: true },
+            { personId: 'p3', eligible: true },
+        ],
+        nameOf: id => NAMES[id],
+        loadAt: () => 0,
+        reasonText: () => '',
+    });
+
+    assert.deepEqual(of('bob').map(c => c.name), ['Bob Carter']);
+    assert.deepEqual(of('').map(c => c.name).length, 2, 'no query is everybody');
+});
+
+// ⚠ ELIGIBILITY ADVISES, THE EDITOR DECIDES (ADR-0021). Hiding somebody the
+// rules are unhappy about turns an advisory into a wall, and leaves the editor
+// typing a name and watching nothing come back.
+test('somebody who cannot have the place is still offered, with the reason on them', () => {
+    const out = Panel.replacements({
+        seatedPersonId: 'p1',
+        query: 'bob',
+        candidates: [{ personId: 'p2', eligible: false, reason: 'sexMismatch' }],
+        nameOf: id => NAMES[id],
+        loadAt: () => 0,
+        reasonText: c => 'because: ' + c.reason,
+    });
+
+    assert.deepEqual(out.map(c => c.name), ['Bob Carter']);
+    assert.equal(out[0].reason, 'because: sexMismatch');
 });

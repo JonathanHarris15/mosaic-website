@@ -64,6 +64,10 @@
             seriesId: (context || {}).seriesId || null,
             choice: (context || {}).choice || null,
             displaced: (context || {}).displaced || [],
+            // What the editor knows and the church has not recorded. Kept with
+            // the draft, because that is the only thing it is true of.
+            nudges: (context || {}).nudges || {},
+            away: (context || {}).away || {},
             against: fingerprint(context),
             draft: draft,
         };

@@ -198,6 +198,14 @@ _Avoid_: orphan, bumped, unassigned
 Two people on a draft trading places. Offered when a card is dropped on a taken place and the card itself came from one: the screen shows the trade — the other person drawn into the place the card is leaving — before it happens. Holding the card still on the place turns the offer into a [[Displaced]] instead, so both outcomes are the editor's and neither is the app's. Refused, never quietly corrected, when the trade would leave somebody holding two places in the same Role on one date; the offer becomes a displace.
 _Avoid_: exchange, switch, shuffle
 
+**Load nudge**:
+Weeks of rest owed that an editor adds to somebody by hand, for a claim on their week the church has no record of — a new baby, a parent in hospital, a fortnight abroad. Denominated in the same unit as [[Load]] and the window, so it lands on the burnout line with no second scale to learn. **Not a [[Seeded serve]], and the two must never be merged.** A serve says *they held this Role on this date* and moves both of [[Fairness]]'s dials; a nudge says only *they are carrying more than the record shows* and moves the load gate alone. It belongs to the **draft**, not to the Person: it is what the editor knows while planning this stretch, and it writes no record anybody would later find and wonder about. Never takes a load below zero.
+_Avoid_: load override, penalty, handicap, manual load
+
+**Away**:
+Somebody an editor has taken off a draft because they will not be there — for one date, or from a date to the end of the range. Their places are emptied and they are kept out of anything drafted afterwards, so it survives a re-draft. Distinct from [[Displaced]]: a displaced person is waiting to be put somewhere, an away person is not there at all. Emptying the places and filling them again are **asked, never assumed** — they are opposite answers to the same question, and either one chosen on the editor's behalf is wrong half the time. Like a [[Load nudge]], it belongs to the draft and writes no record.
+_Avoid_: unavailable, blackout, absent, holiday
+
 **Seeded serve**:
 An [[Involvement]] an editor typed in rather than one the church lived through, recorded so a Role that launched with no history has something to be fair across. Recorded as a **serve** — a Role and a date — never as a load figure: [[Fairness]] has two dials, and a figure would move load while leaving the solve believing the person had never held the Role. It is a claim about the **past**, so it saves at once rather than waiting for the draft to be accepted, and only a seeded record may be taken back on this screen.
 _Avoid_: manual load, load override, starting load
