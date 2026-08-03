@@ -888,7 +888,13 @@
                         </div>
                         <div class="flex-grow overflow-auto p-2 flex flex-col gap-1">
                             <template x-for="row in directory.rows" :key="row.personId">
-                                <div class="aa-card flex items-center gap-2" draggable="true"
+                                <!-- Draggable AND clickable. Dragging puts them
+                                     somewhere; clicking asks about them — their
+                                     load, what it is made of, whether they are
+                                     carrying something we cannot see, whether
+                                     they will even be there. -->
+                                <div class="aa-card flex items-center gap-2 cursor-pointer" draggable="true"
+                                     @click="selectPerson(row.personId)"
                                      @dragstart="startDrag($event, row.personId, null, 'directory')"
                                      @dragend="endDrag()"
                                      :class="row.spent ? 'aa-card-spent' : ''">
@@ -923,7 +929,7 @@
                                 <span class="block text-[14px] text-on-surface truncate"
                                       x-text="placement.name"></span>
                                 <span class="block text-[11.5px] text-on-surface-variant truncate"
-                                      x-text="placement.roleName + ' · ' + placement.dateLabel"></span>
+                                      x-text="placement.subtitle"></span>
                             </div>
                             <button type="button" @click="closePanel()" title="Back to the directory"
                                     class="material-symbols-outlined text-[18px] text-on-surface-variant
@@ -1032,6 +1038,9 @@
                                         <span class="truncate" x-text="a.roleName + ' · ' + a.dateLabel"></span>
                                     </div>
                                 </template>
+                                <p x-show="!placement.across.length" class="text-[12px] text-on-surface-variant">
+                                    Not down for anything yet.
+                                </p>
                             </div>
 
                             <!-- ══ Nudging the load ══
@@ -1082,16 +1091,20 @@
                                 </span>
 
                                 <div x-show="!outScope" class="flex flex-col gap-1.5">
-                                    <button type="button" @click="markOut('date')"
+                                    <!-- One date only makes sense from a date.
+                                         Opened from the directory there is no
+                                         "this week" to be out for. -->
+                                    <button type="button" x-show="placement.atPlace" @click="markOut('date')"
                                             class="text-left text-[12.5px] text-on-surface border border-outline-variant
                                                    rounded-lg px-3 py-2 hover:bg-surface-container aa-motion aa-focus">
                                         Out on <span x-text="placement.dateLabel"></span>
                                     </button>
                                     <button type="button" @click="markOut('rest')"
                                             class="text-left text-[12.5px] text-on-surface border border-outline-variant
-                                                   rounded-lg px-3 py-2 hover:bg-surface-container aa-motion aa-focus">
-                                        Out for the rest of the range
-                                    </button>
+                                                   rounded-lg px-3 py-2 hover:bg-surface-container aa-motion aa-focus"
+                                            x-text="placement.atPlace
+                                                ? 'Out for the rest of the range'
+                                                : 'Out for the whole range'"></button>
                                 </div>
 
                                 <div x-show="outScope" class="flex flex-col gap-2 bg-surface-container rounded-lg p-3">
@@ -1126,7 +1139,8 @@
                                  answered a question nobody asked: an editor
                                  looking at a placement they want changed wants
                                  to change it, not to read how it was reached. -->
-                            <div class="flex flex-col gap-2 border-t border-outline-variant pt-3">
+                            <div x-show="placement.atPlace"
+                                 class="flex flex-col gap-2 border-t border-outline-variant pt-3">
                                 <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
                                     Somebody else instead
                                 </span>

@@ -1191,7 +1191,32 @@
                 this.panelOpen = true;
             },
 
-            closePanel() { this.selected = null; this.seedNote = ''; },
+            // ── The same panel, about a person rather than a place ───────────
+            //
+            // Everything in it except the swap already answers "what is going
+            // on with this person" rather than "why is this seat filled like
+            // this" — their load and what it is made of, what they hold across
+            // the range, whether they are carrying something we cannot see,
+            // whether they are even going to be there.
+            //
+            // ⚠ A PERSON HAS NO PLACE, so `date`, `roleSlug` and `slotId` are
+            // null. Everything that reads them has to cope: a reading has to be
+            // taken SOMEWHERE, and for a person it is the start of the range —
+            // the same point the directory ranks by, so the two agree.
+            selectPerson(personId) {
+                if (!personId) return;
+                this.selected = {
+                    date: null, roleSlug: null, slotId: null, personId: personId,
+                };
+                this.seedRole = (this.draftableRoles[0] || {}).slug || '';
+                this.seedDate = '';
+                this.seedNote = '';
+                this.replaceSearch = '';
+                this.outScope = null;
+                this.panelOpen = true;
+            },
+
+            closePanel() { this.selected = null; this.seedNote = ''; this.outScope = null; },
 
             get isSelected() {
                 return (date, place) => !!this.selected
@@ -1218,15 +1243,24 @@
                     this.windowSize
                 );
 
+                // A reading has to be taken somewhere. For a place it is that
+                // date; for a person it is the start of the range, which is
+                // what the directory ranks by — so the two never disagree.
+                const at = s.date || this.readingDate;
+
                 return {
                     personId: s.personId,
                     name: this.personName(s.personId),
                     initials: Panel.initialsOf(this.personName(s.personId)),
-                    roleName: this.roleName(s.roleSlug),
-                    dateLabel: Core.dayMonth(s.date),
+                    atPlace: !!s.roleSlug,
+                    roleName: s.roleSlug ? this.roleName(s.roleSlug) : '',
+                    dateLabel: s.date ? Core.dayMonth(s.date) : '',
+                    subtitle: s.roleSlug
+                        ? this.roleName(s.roleSlug) + ' · ' + Core.dayMonth(s.date)
+                        : 'Across the whole range',
                     card: place ? place.card : null,
                     wants: place ? place.wants : '',
-                    load: this.gridLoadAt(s.date, s.personId),
+                    load: this.gridLoadAt(at, s.personId),
                     budget: this.windowSize,
                     serves: Panel.servesInWindow({
                         personId: s.personId,
@@ -1244,8 +1278,17 @@
                         labelOf: date => Core.dayMonth(date),
                     }),
                     nudge: this.nudges[s.personId] || 0,
-                    replacements: this.replacementsFor(s),
+                    // No place, nobody to swap out. The rest of the panel is
+                    // about the person and reads the same either way.
+                    replacements: s.roleSlug ? this.replacementsFor(s) : [],
                 };
+            },
+
+            // Where a figure with no date of its own is read: the start of the
+            // range, the same point the directory ranks by.
+            get readingDate() {
+                const first = (this.grid && this.grid.columns[0]) || null;
+                return first ? first.date : (this.resolvedDates[0] || null);
             },
 
             // Who could have this place instead. The same eligibility check the
@@ -1400,7 +1443,7 @@
             get outDates() {
                 const s = this.selected;
                 if (!s || !this.outScope) return [];
-                return this.datesForScope(this.outScope, s.date);
+                return this.datesForScope(this.outScope, s.date || this.readingDate);
             },
 
             // How many places they would leave behind.
@@ -1465,7 +1508,7 @@
                 this.outScope = null;
                 this.selected = null;
                 this.buildGrid();
-                this.markStaleAfter(dates[0]);
+                if (dates.length) this.markStaleAfter(dates[0]);
                 this.remember();
             },
 
@@ -1890,9 +1933,16 @@
                 }
             },
 
+            // ⚠ THE NUDGES AND THE AWAY LIST GO WITH IT. Both are what the
+            // editor knew while planning THIS draft, and neither writes a
+            // record anywhere else — so a discard that left them behind would
+            // quietly bias the next draft with numbers nobody can see and
+            // nobody remembers typing.
             discard() {
                 this.forgetDraft();
                 this.displaced = [];
+                this.nudges = {};
+                this.away = {};
                 this.selected = null;
                 this.backToSetup();
             },

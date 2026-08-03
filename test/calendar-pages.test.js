@@ -3649,6 +3649,79 @@ test('a nudge and an away list ride with the saved draft', () => {
     assert.deepEqual(kept.away, { '2026-10-04': ['p2'] });
 });
 
+// ── The same panel, about a person rather than a place ──────────────────────
+
+test('clicking somebody in the directory opens the panel about them', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+
+    page.selectPerson('p2');
+
+    assert.equal(page.placement.name, 'Bob Carter');
+    assert.equal(page.placement.atPlace, false);
+    assert.equal(page.placement.subtitle, 'Across the whole range');
+});
+
+// ⚠ NO PLACE, NOBODY TO SWAP OUT. Offering to replace a person who is not in
+// anything would be a button with no seat to put the answer in.
+test('a person opened from the directory is offered no swap', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+
+    page.selectPerson('p2');
+    assert.deepEqual(page.placement.replacements, []);
+});
+
+// A reading has to be taken somewhere, and for a person it is the start of the
+// range — the same point the directory ranks by, so the two never disagree.
+test('a person’s load reads the same in the panel as it does in the directory', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+    page.nudgeBy('p2', 3);
+
+    page.selectPerson('p2');
+
+    assert.equal(page.placement.load, 3);
+    assert.equal(page.placement.nudge, 3);
+    assert.equal(page.loadForDirectory('p2'), 3);
+});
+
+test('a person can be nudged and taken out from the directory too', () => {
+    const page = placedPage({
+        '2026-10-11': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p2', recency: 2 }],
+    });
+
+    page.selectPerson('p2');
+    page.markOut('rest');
+    // No date of their own, so "the rest" is the whole range.
+    assert.deepEqual(page.outDates, page.resolvedDates);
+    page.takeOut(false);
+
+    assert.equal(page.isAway('2026-10-04', 'p2'), true);
+    assert.deepEqual(ON(page, '2026-10-11'), []);
+});
+
+test('discarding a draft takes the nudges and the away list with it', () => {
+    const page = placedPage({
+        '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
+    });
+    page.nudgeBy('p1', 4);
+    page.markOut('date');
+    page.takeOut(false);
+    assert.deepEqual(page.nudges, { p1: 4 });
+
+    page.discard();
+
+    // Neither writes a record anywhere else, so a discard that left them
+    // behind would bias the next draft with numbers nobody can see.
+    assert.deepEqual(page.nudges, {});
+    assert.deepEqual(page.away, {});
+    assert.deepEqual(page.displaced, []);
+});
+
 test('the panel no longer explains the runners-up, it offers to change them', () => {
     const html = readPage('auto-assign.html');
 
@@ -3662,6 +3735,12 @@ test('the panel no longer explains the runners-up, it offers to change them', ()
     assert.doesNotMatch(html, /<select[^>]*\bpx-2\b/, 'every select needs room for its arrow');
     assert.match(html, /x-model="seedRole"[\s\S]{0,400}pr-7/);
     assert.match(html, /x-model="seedDate"[\s\S]{0,400}pr-7/);
+
+    // A directory row does two things now: dragging puts them somewhere,
+    // clicking asks about them.
+    assert.match(html, /@click="selectPerson\(row\.personId\)"/);
+    assert.match(html, /x-show="placement\.atPlace"[\s\S]{0,400}Somebody else instead/,
+        'no place, nobody to swap out');
 });
 
 // ── Hover offers a trade; holding still turns it into a displace ────────────
