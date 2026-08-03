@@ -63,6 +63,7 @@ function loadComponent(scriptFile, factoryName, overrides) {
     sandbox.FairnessCore = require('../public/fairness-core.js');
     sandbox.DateUtils = require('../public/date-utils.js');
     sandbox.AutoAssignCore = require('../public/auto-assign-core.js');
+    sandbox.AutoAssignGridCore = require('../public/auto-assign-grid-core.js');
 
     // The browser-only edges, stubbed just enough to construct the component.
     sandbox.location = { search: '?id=midweek_2026-07-15', href: '' };
@@ -248,7 +249,8 @@ test('each page loads every module its component reaches for', () => {
         // and the fairness underneath it — the loop imports nothing and would
         // throw the moment it was handed a solve that was not there.
         'auto-assign.html': ['events-occurrence-core.js', 'events-store.js', 'roles-core.js', 'events-core.js',
-                             'fairness-core.js', 'auto-assign-core.js', 'date-utils.js', 'auto-assign.js'],
+                             'fairness-core.js', 'auto-assign-core.js', 'auto-assign-grid-core.js',
+                             'calendar-view.js', 'date-utils.js', 'auto-assign.js'],
     };
 
     Object.keys(NEEDED).forEach(page => {
@@ -2387,6 +2389,8 @@ test('every core function Auto-assign calls is actually exported', () => {
         Events: require('../public/events-core.js'),
         Fairness: require('../public/fairness-core.js'),
         Loop: require('../public/auto-assign-core.js'),
+        Grid: require('../public/auto-assign-grid-core.js'),
+        View: require('../public/calendar-view.js'),
         Dates: require('../public/date-utils.js'),
     };
 
@@ -2558,6 +2562,139 @@ test('the serve history is asked for in the order its index is built in', async 
     // fails EVERY read, and the failure looks exactly like an empty church.
     assert.deepEqual(calls[calls.length - 1], ['orderBy', 'serviceDate', 'desc']);
     assert.ok(calls.some(c => c[0] === 'seriesId' && c[2] === 'sunday_service'));
+});
+
+// A page wired for the grid: one Role with two places, across four Sundays.
+function draftedPage(overrides) {
+    const page = loadComponent('auto-assign.js', 'autoAssignPage');
+    page.series = [{ id: 'sunday_service', name: 'Sunday Service', roleSlugs: ['coffee'] }];
+    page.seriesId = 'sunday_service';
+    page.fromDate = '2026-10-04';
+    page.toDate = '2026-10-25';
+    page.roleDefinitions = [{
+        slug: 'coffee', name: 'Coffee', intensity: 1,
+        slots: [{ id: 's1', requirement: 'either' }, { id: 's2', requirement: 'female' }],
+    }];
+    page.people = [
+        { id: 'p1', name: 'Alice Brown', sex: 'female' },
+        { id: 'p2', name: 'Bob Carter', sex: 'male' },
+    ];
+    Object.assign(page, overrides || {});
+    return page;
+}
+
+const drafted = (date, seats, gaps) => ({
+    date: date, skipped: false, seats: seats || [], gaps: gaps || [], widened: 0, pool: [],
+});
+
+test('the grid turns the draft inside out — Roles down, dates across', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: [
+            drafted('2026-10-04', [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 3 }],
+                [{ roleSlug: 'coffee', slotId: 's2', detail: { reason: 'sexUnknown' } }]),
+            drafted('2026-10-11'), drafted('2026-10-18'), drafted('2026-10-25'),
+        ],
+    };
+    page.buildGrid();
+
+    assert.equal(page.columns.length, 4);
+    assert.deepEqual(page.columns.map(c => c.label),
+        ['4 October', '11 October', '18 October', '25 October']);
+
+    const row = page.grid.roleRows[0];
+    assert.equal(row.name, 'Coffee');
+    assert.equal(row.cells.length, 4);
+    assert.deepEqual(row.cells[0].places.map(p => p.filled), [true, false]);
+    assert.equal(row.cells[0].places[0].card.name, 'Alice Brown');
+    assert.equal(row.cells[0].places[1].wants, 'A woman');
+    // The words come from the same place the Roles tab gets them.
+    assert.match(row.cells[0].places[1].reason, /sex on file/);
+});
+
+// ⚠ THE NUMBERS ON A CARD ARE READ AS OF ITS OWN DATE.
+//
+// Load and recency both move as the loop walks the range — that is the whole
+// point of the carry-forward. A single figure for the range would contradict
+// the draft describing it: somebody the solver correctly seated on week one
+// would show as over budget because of the work week four gave them.
+test('a card reads its load and recency as of its own date, not the range', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: [
+            drafted('2026-10-04', [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1' }]),
+            drafted('2026-10-11', [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1' }]),
+            drafted('2026-10-18', [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1' }]),
+            drafted('2026-10-25', [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1' }]),
+        ],
+    };
+    page.buildGrid();
+
+    const cards = page.grid.roleRows[0].cells.map(c => c.places[0].card);
+    assert.deepEqual(cards.map(c => c.load), [0, 1, 2, 3],
+        'week one saw an empty log; week four saw the three the loop had laid down');
+    assert.deepEqual(cards.map(c => c.recencyLabel),
+        ['Not this season', 'Last time', 'Last time', 'Last time']);
+});
+
+test('a held place still gets its history, though the solve never scored it', () => {
+    const page = draftedPage();
+    page.history = [
+        { personId: 'p1', type: 'coffee', serviceDate: '2026-09-27', seriesId: 'sunday_service' },
+    ];
+    page.draft = {
+        dates: [drafted('2026-10-04', [
+            { roleSlug: 'coffee', slotId: 's1', personId: 'p1', held: true, state: 'confirmed' },
+        ])],
+    };
+    page.buildGrid();
+
+    const card = page.grid.roleRows[0].cells[0].places[0].card;
+    assert.equal(card.held, true);
+    assert.equal(card.recencyLabel, 'Last time', 'a hand-made pick is not the one card with no history');
+    assert.equal(card.load, 1);
+});
+
+test('a drafted roster that breaks a rule says so, same as a hand-made one', () => {
+    const page = draftedPage();
+    // Both places need a woman by way of a second slot; Bob is a man.
+    page.draft = {
+        dates: [drafted('2026-10-04', [
+            { roleSlug: 'coffee', slotId: 's2', personId: 'p2', recency: 4 },
+        ])],
+    };
+    page.buildGrid();
+
+    const card = page.grid.roleRows[0].cells[0].places[1].card;
+    assert.equal(card.name, 'Bob Carter');
+    assert.match(card.warning, /needs a woman/, 'ADR-0021 — eligibility advises, and has to say what it advises');
+    assert.equal(page.columns[0].problems, 1);
+});
+
+// Same class of bug as the card above, on the other path: an unfillable place
+// is phrased from the slot's requirement, which is not on the reason either.
+test('an unfillable place names the sex it actually asked for', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: [drafted('2026-10-04', [], [
+            { roleSlug: 'coffee', slotId: 's2', detail: { reason: 'sexMismatch' } },
+        ])],
+    };
+    page.buildGrid();
+
+    assert.match(page.grid.roleRows[0].cells[0].places[1].reason, /needs a woman/);
+});
+
+test('going back to setup drops the grid with the draft', () => {
+    const page = draftedPage();
+    page.draft = { dates: [drafted('2026-10-04')] };
+    page.buildGrid();
+    assert.ok(page.grid);
+
+    page.backToSetup();
+    assert.equal(page.grid, null);
+    assert.equal(page.draft, null);
+    assert.equal(page.view, 'setup');
 });
 
 test('the liturgical Roles are never drafted as fillable places', () => {

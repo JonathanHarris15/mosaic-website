@@ -30,6 +30,8 @@
     const Events = window.EventsCore;
     const Fairness = window.FairnessCore;
     const Loop = window.AutoAssignCore;
+    const Grid = window.AutoAssignGridCore;
+    const View = window.CalendarView;
     const Dates = window.DateUtils;
 
     const EDITOR_RANKS = ['editor', 'admin', 'elder', 'super_admin'];
@@ -80,12 +82,20 @@
             relationships: [],
             groups: [],
             hidingTags: [],
+            tagNames: {},           // tagId → name, so a rule can name itself
             history: [],
             existing: {},           // date → assignments already there
+            occurrences: {},        // date → the occurrence, for its one-off jobs
             liturgical: {},         // date → [{ personId, roleSlug }]
             drafting: false,
 
             draft: null,
+
+            // The draft, transposed for the screen. Rebuilt only when the draft
+            // is, never on a render — the numbers on it cost a pass over the
+            // whole serve history and Alpine would ask for them constantly.
+            grid: null,
+            focused: 0,             // which date the range strip is pointing at
 
             // ── Loading ──────────────────────────────────────────────────────
 
@@ -227,8 +237,10 @@
                         const inRange = {};
                         dates.forEach(d => { inRange[d] = true; });
                         this.existing = {};
+                        this.occurrences = {};
                         occs.forEach(o => {
                             if (!inRange[o.date]) return;
+                            this.occurrences[o.date] = o;
                             const roster = (o.assignments || []).filter(a => a && a.personId);
                             if (roster.length) this.existing[o.date] = roster;
                         });
@@ -236,7 +248,9 @@
                     })
                     .catch(e => {
                         console.error('Could not check what is already on these dates:', e);
-                        if (token === this.rangeToken) { this.existing = {}; this.occupied = []; }
+                        if (token === this.rangeToken) {
+                            this.existing = {}; this.occurrences = {}; this.occupied = [];
+                        }
                     });
             },
 
@@ -287,6 +301,8 @@
                 try {
                     await this.loadForDraft();
                     this.draft = Loop.draft(this.draftOptions());
+                    this.buildGrid();
+                    this.focused = 0;
                     this.view = 'draft';
                 } catch (e) {
                     console.error('Could not draft the roster:', e);
@@ -332,6 +348,8 @@
                     this.hidingTags = snap.docs
                         .filter(d => (d.data() || {}).hidePeople === true)
                         .map(d => d.id);
+                    this.tagNames = {};
+                    snap.docs.forEach(d => { this.tagNames[d.id] = (d.data() || {}).name || ''; });
                 } catch (e) {
                     console.error('Could not read which tags hide people:', e);
                     this.hidingTags = [];
@@ -472,11 +490,149 @@
                 };
             },
 
+            // ── The draft, transposed for the screen ─────────────────────────
+
+            // ⚠ EVERY NUMBER ON A CARD IS READ AS OF ITS OWN DATE.
+            //
+            // Load and recency both move as the loop walks the range — that is
+            // the entire point of the carry-forward — so a single figure for
+            // the whole range would contradict the draft it is describing:
+            // somebody the solver correctly seated on week one would show as
+            // over budget because of the work week four gave them.
+            //
+            // So this walks the range again, rebuilding the history each date
+            // saw at the moment it was staffed. The same pile, in the same
+            // order, as `AutoAssignCore.run`.
+            buildGrid() {
+                if (!this.draft) { this.grid = null; return; }
+
+                const dates = this.resolvedDates;
+                const roles = this.draftableRoles;
+                const size = this.windowSize;
+                const intensity = record => this.intensityForRecord(record);
+
+                const loads = {};
+                const recencies = {};
+                const warnings = {};
+                let history = this.history.slice();
+
+                this.draft.dates.forEach((day, index) => {
+                    const window = Fairness.windowDates(
+                        Loop.windowFor(dates, index, this.pastDates), size
+                    );
+
+                    loads[day.date] = Fairness.loadOf(history, window, intensity);
+
+                    const perRole = {};
+                    roles.forEach(role => {
+                        perRole[role.slug] = Fairness.recencyOf(history, window, role.slug);
+                    });
+                    recencies[day.date] = perRole;
+
+                    // The same judgment the Roles tab makes, on the same rules
+                    // (ADR-0021). A drafted roster gets no easier a ride than a
+                    // hand-made one.
+                    warnings[day.date] = Roles.warningsFor(day.seats, {
+                        roles: roles,
+                        people: this.people,
+                        relationships: this.relationships,
+                        groups: this.groups,
+                        liturgicalHolders: this.liturgical[day.date] || [],
+                    });
+
+                    history = history.concat(
+                        Loop.historyFrom(day.seats, day.date, this.seriesId)
+                    );
+                });
+
+                this.grid = Grid.gridFrom({
+                    dates: this.draft.dates,
+                    roles: roles,
+                    windowSize: size,
+                    nameOf: id => this.personName(id),
+                    roleNameOf: slug => this.roleName(slug),
+                    labelOf: date => Core.dayMonth(date),
+                    loadAt: (date, personId) => (loads[date] || {})[personId] || 0,
+                    // ⚠ ABSENT IS NOT UNKNOWN. Somebody with no record of this
+                    // Role has not held it inside the window, which fairness
+                    // reads as a full window's rest — so the card has to read
+                    // it the same way, or a brand-new volunteer would be the
+                    // one person on the grid with a blank where everybody else
+                    // has a number. A one-off job has no window at all, and
+                    // that IS unknown.
+                    recencyAt: (date, roleSlug, personId) => {
+                        const map = (recencies[date] || {})[roleSlug];
+                        if (!map) return null;
+                        return Fairness.recencyFor(map, personId, size);
+                    },
+                    warningAt: (date, roleSlug, slotId) => (
+                        (warnings[date] || []).filter(w => (
+                            w.roleSlug === roleSlug && w.slotId === slotId
+                        ))[0] || null
+                    ),
+                    liturgicalAt: date => this.liturgical[date] || [],
+                    oneOffsAt: date => ((this.occurrences[date] || {}).oneOffRoles) || [],
+                    oneOffPeopleAt: date => (this.existing[date] || []).filter(a => a.oneOffId),
+                    reasonText: (detail, ctx) => this.reasonWords(detail, ctx),
+                });
+            },
+
+            // One phrasing of "why not", shared with the Roles tab. `blockReason`
+            // is where those sentences live, and a second set written here would
+            // drift from it the first time one was reworded.
+            reasonWords(detail, context) {
+                if (!detail || !detail.reason) return null;
+                const ctx = context || {};
+                const other = (this.existing[ctx.date] || [])
+                    .filter(a => a.personId === detail.personId && a.roleSlug !== ctx.roleSlug)
+                    .map(a => this.roleName(a.roleSlug));
+
+                return View.blockReason(
+                    Object.assign({ eligible: false }, detail),
+                    {
+                        people: this.people,
+                        // ⚠ THE REQUIREMENT IS NOT ON THE WARNING. It belongs
+                        // to the SLOT, and without looking it up every sex
+                        // mismatch falls to the default and tells a woman in a
+                        // woman's place that the place needs a man.
+                        requirement: this.requirementAt(ctx.roleSlug, ctx.slotId),
+                        tagName: this.tagNames[detail.tagId] || '',
+                        groupName: detail.groupName || '',
+                        otherRoles: other.concat(
+                            detail.heldRoleSlug ? [this.roleName(detail.heldRoleSlug)] : []
+                        ),
+                    }
+                );
+            },
+
+            requirementAt(roleSlug, slotId) {
+                const def = this.roleDefinitions.filter(d => d.slug === roleSlug)[0];
+                const slot = ((def && def.slots) || []).filter(s => s.id === slotId)[0];
+                return (slot && slot.requirement) || null;
+            },
+
+            // ── The range strip ──────────────────────────────────────────────
+
+            get columns() { return (this.grid && this.grid.columns) || []; },
+            get rows() { return (this.grid && this.grid.rows) || []; },
+
+            // Alpine cannot bind x-ref dynamically, so the column is found by
+            // attribute. `block: 'nearest'` keeps the vertical scroll where the
+            // editor left it — jumping to a date should not also lose the Role
+            // they were looking at.
+            focusDate(index) {
+                this.focused = index;
+                if (typeof document === 'undefined') return;
+                const el = document.querySelector('.aa-grid [data-col="' + index + '"]');
+                if (el && el.scrollIntoView) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                }
+            },
+
             // ── The draft, at a glance ───────────────────────────────────────
             //
-            // The grid itself is MS-179. What this carries is the tally the
-            // bottom bar reads, which is also what tells the editor whether the
-            // draft is finished.
+            // The tally the bottom bar reads, which is also what tells the
+            // editor whether the draft is finished.
 
             get tally() {
                 const days = (this.draft && this.draft.dates) || [];
@@ -496,6 +652,7 @@
 
             backToSetup() {
                 this.draft = null;
+                this.grid = null;
                 this.view = 'setup';
             },
 

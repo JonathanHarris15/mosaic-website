@@ -30,6 +30,65 @@
             .aa-desk { display: block; }
             .aa-phone { display: none; }
         }
+
+        /* ── The grid ──
+           The Role column and the date header both stay put. The cards are
+           information-rich and only four or five dates fit at once, so losing
+           your place while scrolling is the failure mode. Sticky cells need
+           their own background or the scrolled content shows through, and the
+           corner needs the highest layer or the two stickies fight over it. */
+        /* ⚠ The hex values below are the Tailwind tokens, restated. This theme
+           compiles colours straight into utilities and publishes no CSS
+           variables, so a `var(--…)` here would silently resolve to nothing.
+           Keep these in step with tailwind.config.js. */
+        .aa-grid { width: max-content; min-width: 100%; }
+        .aa-grid th, .aa-grid td { border-bottom: 1px solid #DAD0C0; }
+
+        .aa-head, .aa-corner {
+            position: sticky; top: 0; z-index: 2;
+            background: #ffffff;
+            border-bottom: 1px solid #DAD0C0;
+        }
+        .aa-rowhead, .aa-corner {
+            position: sticky; left: 0; z-index: 2;
+            background: #ffffff;
+            width: 190px; min-width: 190px;
+            border-right: 1px solid #DAD0C0;
+        }
+        .aa-corner { z-index: 3; }
+        .aa-cell { width: 220px; min-width: 220px; }
+
+        /* A one-off Role is a different kind of thing from a managed one, and
+           the divider is what says so without a second heading row. */
+        .aa-divider th, .aa-divider td { border-top: 2px solid #DAD0C0; }
+
+        .aa-card {
+            background: #ffffff;
+            border: 1px solid #DAD0C0;
+            border-radius: 8px; padding: 7px 9px;
+        }
+        /* Over budget has to be readable across a hundred cards without
+           shouting — a warm tint and a gold hairline, not a red box. */
+        .aa-card-spent { background: rgba(184,155,106,.10); border-color: #B89B6A; }
+        .aa-card-warn { background: rgba(168,70,62,.06); border-color: #A8463E; }
+
+        .aa-empty {
+            border: 1px dashed #DAD0C0;
+            border-radius: 8px; padding: 7px 9px; min-height: 38px;
+        }
+
+        /* A placeholder until real photographs land, so the card's shape does
+           not change on the day they do. */
+        .aa-avatar {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 26px; height: 26px; border-radius: 999px; flex-shrink: 0;
+            background: #EEE4D8; color: #5E6B82;
+            font-size: 10px; letter-spacing: .02em;
+        }
+        .aa-avatar-sm { width: 21px; height: 21px; font-size: 9px; }
+
+        .aa-dot { width: 5px; height: 5px; border-radius: 999px; display: inline-block; }
+        .aa-tick { min-width: 54px; }
     </style>
 </head>
 
@@ -245,22 +304,186 @@
                 </div>
             </div>
 
-            <div class="flex-grow overflow-auto bg-surface-container-low p-6">
-                <div class="max-w-[720px] mx-auto bg-surface-container-lowest border border-outline-variant
-                            rounded-lg p-lg flex flex-col gap-3">
-                    <span class="text-[13px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
-                        Drafted
-                    </span>
-                    <p class="text-body-md text-on-surface">
-                        <span x-text="tally.dates"></span> dates ·
-                        <span x-text="tally.places"></span> places ·
-                        <span x-text="tally.empty"></span> still empty
-                    </p>
-                    <p class="text-[13px] text-on-surface-variant text-pretty">
-                        The grid that lets you rework this is the next piece of work. Nothing here
-                        has been saved — leaving the page loses the draft.
-                    </p>
+            <!-- ══════ The range strip ══════
+                 One tick per date. The cards below are worth reading and only
+                 four or five dates fit at once, so without this the editor
+                 cannot tell whether the trouble is in front of them or six
+                 columns away. This is what buys that overview back. -->
+            <div class="shrink-0 border-b border-outline-variant bg-surface-container-lowest px-6 py-2.5
+                        flex items-center gap-3 overflow-x-auto">
+                <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant shrink-0">
+                    Range
+                </span>
+                <div class="flex items-stretch gap-1">
+                    <template x-for="col in columns" :key="col.date">
+                        <button type="button" @click="focusDate(col.index)"
+                                :class="col.index === focused
+                                    ? 'bg-surface-container border-gold'
+                                    : 'bg-transparent border-transparent hover:bg-surface-container-low'"
+                                class="aa-tick border rounded px-2 py-1 flex flex-col items-center gap-1
+                                       aa-motion aa-focus shrink-0">
+                            <span class="text-[11px] text-on-surface-variant whitespace-nowrap"
+                                  x-text="col.label"></span>
+                            <span class="flex items-center gap-[3px] h-[6px]">
+                                <span x-show="col.empty" class="aa-dot bg-outline"
+                                      :title="col.empty + ' still empty'"></span>
+                                <span x-show="col.spent" class="aa-dot bg-gold"
+                                      :title="col.spent + ' over budget'"></span>
+                                <span x-show="col.problems" class="aa-dot bg-error"
+                                      :title="col.problems + ' breaking a rule'"></span>
+                            </span>
+                        </button>
+                    </template>
                 </div>
+            </div>
+
+            <!-- ══════ The grid ══════
+                 The Role column and the date header both stay put as you
+                 scroll. The cards are information-rich and only a few dates fit
+                 at once, so losing your place is the failure mode. -->
+            <div class="flex-grow overflow-auto bg-surface-container-low">
+                <table class="aa-grid border-separate border-spacing-0">
+                    <thead>
+                        <tr>
+                            <th class="aa-corner text-left px-3 py-2 text-[11px] font-label-md uppercase
+                                       tracking-[.14em] text-on-surface-variant">Role</th>
+                            <template x-for="col in columns" :key="col.date">
+                                <!-- x-ref cannot be bound dynamically in Alpine,
+                                     so the strip finds a column by attribute. -->
+                                <th :data-col="col.index"
+                                    class="aa-head px-3 py-2 text-left align-bottom">
+                                    <div class="flex flex-col gap-0.5">
+                                        <span class="text-[14px] text-on-surface" x-text="col.label"></span>
+                                        <span class="text-[11px] text-on-surface-variant"
+                                              x-show="col.empty || col.problems"
+                                              x-text="[col.empty ? col.empty + ' empty' : '',
+                                                       col.problems ? col.problems + ' to fix' : '']
+                                                      .filter(Boolean).join(' · ')"></span>
+                                    </div>
+                                </th>
+                            </template>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(row, ri) in rows" :key="row.key">
+                            <tr :class="row.kind === 'oneOff' && (ri === 0 || rows[ri - 1].kind !== 'oneOff')
+                                        ? 'aa-divider' : ''">
+                                <!-- The Role name, pinned. -->
+                                <th class="aa-rowhead text-left px-3 py-2.5 align-top">
+                                    <div class="flex flex-col gap-0.5">
+                                        <span class="text-[13.5px] text-on-surface leading-tight"
+                                              x-text="row.name"></span>
+                                        <span class="text-[11px] text-on-surface-variant"
+                                              x-show="row.kind === 'liturgy'">Set in the order of service</span>
+                                        <!-- Without this the same face twice in one
+                                             column reads as a bug rather than as allowed. -->
+                                        <span x-show="row.allowsAnotherRole"
+                                              class="text-[10.5px] text-secondary flex items-center gap-1">
+                                            <span class="material-symbols-outlined text-[13px]">add_circle</span>
+                                            Can hold another
+                                        </span>
+                                    </div>
+                                </th>
+
+                                <template x-for="cell in row.cells" :key="row.key + cell.date">
+                                    <td class="aa-cell px-2 py-2 align-top">
+                                        <!-- Liturgy: shown, never fillable here. -->
+                                        <template x-if="row.kind === 'liturgy'">
+                                            <div class="flex flex-col gap-1">
+                                                <template x-for="h in cell.holders" :key="h.personId + h.roleSlug">
+                                                    <div class="flex items-center gap-2 px-2 py-1 rounded
+                                                                bg-surface-container-low">
+                                                        <span class="aa-avatar aa-avatar-sm"
+                                                              x-text="h.initials"></span>
+                                                        <span class="min-w-0">
+                                                            <span class="block text-[12.5px] text-on-surface truncate"
+                                                                  x-text="h.name"></span>
+                                                            <span class="block text-[10.5px] text-on-surface-variant truncate"
+                                                                  x-text="h.roleName"></span>
+                                                        </span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+
+                                        <!-- A one-off belongs to one date. Everywhere
+                                             else reads as not-applicable rather than
+                                             blank, which would look like a place
+                                             somebody forgot to fill. -->
+                                        <template x-if="row.kind !== 'liturgy' && !cell.applicable">
+                                            <div class="h-full min-h-[38px] flex items-center justify-center">
+                                                <span class="text-[18px] leading-none text-outline-variant">·</span>
+                                            </div>
+                                        </template>
+
+                                        <template x-if="row.kind !== 'liturgy' && cell.applicable">
+                                            <div class="flex flex-col gap-1.5">
+                                                <template x-for="place in cell.places"
+                                                          :key="place.slotId || place.card.personId">
+                                                    <div>
+                                                        <!-- Somebody in it. -->
+                                                        <template x-if="place.filled">
+                                                            <div class="aa-card"
+                                                                 :class="place.card.warning ? 'aa-card-warn'
+                                                                         : (place.card.spent ? 'aa-card-spent' : '')">
+                                                                <div class="flex items-center gap-2">
+                                                                    <span class="aa-avatar" x-text="place.card.initials"></span>
+                                                                    <span class="min-w-0 flex-grow">
+                                                                        <span class="block text-[13px] text-on-surface truncate leading-tight"
+                                                                              x-text="place.card.name"></span>
+                                                                        <span class="block text-[10.5px] text-on-surface-variant truncate">
+                                                                            <span x-text="place.card.load + ' / ' + place.card.budget"></span>
+                                                                            <span x-show="place.card.recencyLabel"
+                                                                                  x-text="' · ' + place.card.recencyLabel"></span>
+                                                                        </span>
+                                                                    </span>
+                                                                    <span x-show="place.card.held"
+                                                                          class="material-symbols-outlined text-[14px] text-secondary shrink-0"
+                                                                          title="Already on the calendar">push_pin</span>
+                                                                </div>
+                                                                <p x-show="place.card.warning"
+                                                                   class="mt-1 text-[10.5px] text-error leading-snug"
+                                                                   x-text="place.card.warning"></p>
+                                                            </div>
+                                                        </template>
+
+                                                        <!-- Nobody in it. Unfinished, not
+                                                             broken: leaving it empty is a
+                                                             legitimate answer. -->
+                                                        <template x-if="!place.filled">
+                                                            <div class="aa-empty">
+                                                                <span class="text-[11.5px] text-on-surface-variant"
+                                                                      x-text="place.wants"></span>
+                                                                <p x-show="place.reason"
+                                                                   class="text-[10.5px] text-on-surface-variant/80 leading-snug mt-0.5"
+                                                                   x-text="place.reason"></p>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </template>
+
+                                                <span x-show="!cell.places.length && row.kind === 'oneOff'"
+                                                      class="text-[11px] text-on-surface-variant">Nobody yet</span>
+                                            </div>
+                                        </template>
+                                    </td>
+                                </template>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="shrink-0 border-t border-outline-variant bg-surface-container-lowest
+                        px-6 py-3 flex items-center gap-3">
+                <p class="text-[13px] text-on-surface-variant flex-grow">
+                    <span x-text="tally.dates"></span> dates ·
+                    <span x-text="tally.places"></span> places ·
+                    <span x-text="tally.empty"></span> still empty
+                </p>
+                <p class="text-[12px] text-on-surface-variant">
+                    Nothing has been saved — leaving the page loses the draft.
+                </p>
             </div>
         </div>
     </main>
@@ -280,6 +503,7 @@
 <script src="fairness-core.js"></script>
 <script src="auto-assign-core.js"></script>
 <script src="calendar-view.js"></script>
+<script src="auto-assign-grid-core.js"></script>
 <script src="auto-assign.js"></script>
 <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </body>
