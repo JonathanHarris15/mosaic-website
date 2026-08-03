@@ -173,10 +173,20 @@ The surface that puts named People into a single Event's Roles — every Role th
 _Avoid_: Roster tab, assignment tab, staffing screen
 
 **Roles Manager**:
-The editor+ dashboard card where **Role Definitions** are authored and managed, and where a date range of a recurring **Event** is **auto-assigned** — the system drafts a fair, rule-valid lineup for the user to review and accept (propose-then-approve). Distinct from the **Roles tab**, which assigns a single date by hand.
+The editor+ dashboard card where **Role Definitions** are authored and managed. Distinct from the **Roles tab**, which assigns a single date by hand, and from [[Auto-assign]], which drafts a stretch of dates at once.
 - **One Roles Manager, opened on both.** The phone does not get a port of this screen; it opens the same page inside the shell (`?shell=mobile`), reachable from the phone's home grid, which is the phone's dashboard. This screen is where a Role's slots and restriction rules are decided, so a second copy of it would be a second place for those rules to drift from the model.
 - **On a phone it is a list, then an editor** — never both, because there is only room for one. The list's rows become cards you tap; delete moves into the editor's own bar, and the only back arrow is the shell's, which the page answers: out of the Role you have open, or out of the page if you have none.
 _Avoid_: Scheduler page, role admin
+
+**Auto-assign**:
+The surface that staffs a **stretch of dates at once** — pick a recurring **Event** and a date range, and [[Fairness]] drafts a lineup for every managed Role on every date in it, which the editor reworks and then accepts (propose-then-approve). Its own screen, reached from the **Calendar**, because it is the one serving surface whose subject is a *run* of dates rather than one of them.
+- What it produces is a **draft**: proposed, not committed. Nothing in it is an [[Assignment]] until the editor accepts, so nothing in it counts as serving or moves anyone's [[Fairness]] numbers.
+- It fills **managed** Roles only — those with a [[Role Definition]], which have the slots, requirements and restriction rules a solve can reason about. A [[One-off Role]] on a date in the range is **shown and left empty** for the editor to fill by hand: there is nothing to be fair about and nothing to check a pick against.
+- **Accepting an incomplete draft is allowed.** An empty place is a real answer — the editor can leave it and settle it nearer the day.
+- **The range has no limit.** Past the [[Fairness]] window the later dates are balanced against drafted work rather than real history, which is not worth refusing or warning about: a draft that far out is a sketch, and the answer is to re-draft it nearer the time.
+- **Editing one date does not redraw the ones after it.** They were balanced against the date as it was, and they say so; a *re-draft from here* redraws them on request. A table that rearranges itself while it is being reviewed cannot be reviewed — the same reasoning that kept the solve deterministic (ADR-0020 §6).
+- **Desktop only.** Unlike the [[Roles Manager]], this screen does not open in the mobile shell. It is a wide grid of dates against Roles, and there is no honest phone reading of it — the phone says so rather than showing a broken one.
+_Avoid_: bulk assign, the scheduler, Future Schedule
 
 **Permission Level**:
 An authenticated User's access tier — the concept formerly called the User **role** (viewer → member → editor → elder → admin → super_admin). Renamed to free the word "role" for serving **Roles**; the tier values are unchanged. The stored field is `users.permissionLevel`; the legacy `role` field is retained as a fallback (read by the Firestore rules and by client reads) until the migration completes and MS-127 drops it. Distinct from **Membership Stage** (church relationship) and **Role** (serving).
@@ -407,7 +417,7 @@ Whether doing a Role uses up your morning. **Exclusive is the default and the as
 - A person may hold **at most two** Roles at one Event, and only when **every** Role they hold permits it. Holding any exclusive Role means holding nothing else, because that Role itself says so.
 - Set in the Roles Manager for a [[Role Definition]]; set on the Event itself for a [[One-off Role]], which has no stored definition to hang it on. [[Liturgical Roles (locked)]] are always exclusive and offer no toggle.
 - **Distinct from [[Role intensity]], and the two are easy to confuse.** Intensity says *this job tires you out*; exclusivity says *this job occupies you*. Greeting at the door is plausibly neither. Sound is plausibly intensity `1` but exclusive — easy work, but you are stuck at the desk all morning.
-- This is a **hard rule, not a preference**: it belongs to eligibility, so hand-assignment on the Roles tab obeys it exactly as [[Fairness]] does.
+- [[Fairness]] never proposes a roster that breaks it. An editor may, and gets a [[Warning]] rather than a refusal (ADR-0021).
 
 ### Fairness
 How the app decides who should fill a Role, so that nobody has to remember who did it last time and the same few people do not carry everything. Counted **per [[Event series]]** — someone can be overdue for Sunday setup and fresh for a midweek Role at the same time (ADR-0016 §5, ADR-0020).
@@ -427,7 +437,7 @@ Who is considered:
 - **Not** anyone holding a [[Liturgical Roles (locked)|Liturgical Role]] at this occurrence, and **not** anyone who has held one in at least half the window. The first is because you cannot preach and run the sound desk; the second is a guarantee where load alone would only be a tendency.
 - The least-loaded are taken with room to spare, and the pool **widens** rather than failing when the Role's rules make a roster impossible. A spot that still cannot be filled is **left empty with the reason given**, never quietly dropped.
 
-Fairness **proposes; it never forbids**. Everything it decides is a draft an editor approves ([[Roles Manager]]), and hand-assignment stays open to anyone eligible.
+Fairness **proposes; it never forbids**. Everything it decides is a draft an editor approves ([[Auto-assign]]). Fairness itself will not propose a roster that breaks a Role's rules — a draft that starts by breaking the editor's own rules is not worth reviewing — but the editor may place whoever they need to, and gets a [[Warning]] rather than a refusal (ADR-0021).
 
 ### Event series
 The recurring thing that carries Roles, in the `events` collection. The Sunday **Service** is one **locked** series (`sunday_service`): always present, undeletable, its liturgical Roles fixed to it. Servant Roles can be added to a series and removed again — locked protects the liturgical Roles, not the whole roster.
@@ -468,9 +478,19 @@ A Person placed in one slot of one Role on an [[Event occurrence]] — **the pla
   - **Declined**: they said no, and the slot is **flagged for reassignment** — visibly needing attention, not silently empty.
 - Carries **who set the state and when**, so the state machine survives being handed to the congregation in MS-20.
 - Only **Servant Roles** and [[One-off Role]]s get Assignments. Liturgical Roles keep their existing wiring into the Service entity (ADR-0018 §2).
-- **Being *offered* is a different question from being *eligible*.** An ineligible Person is shown, blocked, with a reason — seeing who was passed over is the point of the picker. Somebody **Inactive**, or hidden by a tag carrying `hidePeople` (or `shepherdingHidden`), is not offered *at all*: they are not a candidate who lost. For a hidden Person a blocked row would print the very name the tag exists to hide. Elders and super admins still see them, since that is who the tag hides people from everyone else *for*.
-- **On a Sunday, holding a liturgical Role blocks you from a Servant Role on the same date.** You cannot preach and run the sound desk at once. Because the liturgy is stored as *fields on the Service*, not as Assignments, the picker reads that document to find out — and shows those people blocked, naming the liturgical Role, rather than hiding them.
+- **Being *offered* is a different question from being *eligible*, and only the first is absolute.** An ineligible Person is shown with the reason, and the editor may place them anyway, leaving a [[Warning]] (ADR-0021). Somebody **Inactive**, or hidden by a tag carrying `hidePeople` (or `shepherdingHidden`), is **not offered at all**: they are not a candidate who lost, and no rule about the roster can reach them. For a hidden Person even a warned row would print the very name the tag exists to hide. Elders and super admins still see them, since that is who the tag hides people from everyone else *for*.
+- **On a Sunday, holding a liturgical Role should keep you out of a Servant Role on the same date.** You cannot preach and run the sound desk at once. Because the liturgy is stored as *fields on the Service*, not as Assignments, the picker reads that document to find out — and names the liturgical Role rather than hiding the person.
 - **Once the date passes**: Confirmed becomes an [[Involvement]] automatically; Declined never does; Pending becomes an open question an editor resolves ("did they serve?"), and an unresolved question never counts as serving.
+
+### Warning
+A note that the roster on an [[Event occurrence]] breaks one of the Role's own rules, shown wherever that roster is shown — the [[Roles tab]] and [[Auto-assign]] alike. **The editor is the final word**: a rule about the roster advises and never refuses, because a tool that will not record the rota the church is actually running is a tool the rota leaves (ADR-0021).
+- Covers everything an editor authored: the **restriction rules**, the **allowlist**, a slot's male/female requirement, [[Role exclusivity]] and the two-Role limit, and the liturgical clash.
+- Does **not** cover who may be *shown*. An **Inactive** or tag-hidden Person is not offered at all, and no roster rule reaches them — that is a rule about names on screens, not about rosters.
+- **A property of the roster, not of the act.** It is judged from the roster as it stands, so a lineup that was fine when drafted and broke later — somebody married, a tag changed, a Role gained a rule — reports itself with nothing overridden. This is why it is not called an override.
+- **Derived on read. Never stored, never dismissed.** The same warning returns every time the date is opened, which is deliberate: a warning you can wave away is one nobody reads by the third week.
+- [[Fairness]] never creates one — it asks about eligibility and accepts the answer, so every draft it emits is clean. On [[Auto-assign]] a warning is always the editor's own edit.
+- An **empty place is not a warning**. Leaving a place unfilled is a legitimate answer.
+_Avoid_: override, violation, error, conflict
 
 ### One-off Role
 A Role created for a single Event and living only on it — "someone to unlock the hall". Deliberately cheap: a **label and some people**, with no definition, no reuse, no slots, no restrictions and no eligibility checking. Forcing every ad-hoc job through the Roles Manager would make the Roles Manager a junk drawer.
