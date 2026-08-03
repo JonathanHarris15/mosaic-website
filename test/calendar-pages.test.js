@@ -3500,7 +3500,9 @@ function draggablePage() {
         getBoundingClientRect: () => ({ left: 100, right: 600, top: 200, bottom: 718 }),
     };
     const clip = { getBoundingClientRect: () => ({ left: 100, right: 600, top: 200, bottom: 700 }) };
-    page.$refs = { scroller: scroller, clip: clip };
+    // The frozen Role column and date header, over the clip's top-left corner.
+    const corner = { getBoundingClientRect: () => ({ left: 100, right: 290, top: 200, bottom: 240 }) };
+    page.$refs = { scroller: scroller, clip: clip, corner: corner };
     page.onGridScroll(scroller);
     return { page, scroller };
 }
@@ -3538,6 +3540,39 @@ test('the bottom edge is where the grid stops being visible', () => {
     page.edgeScrollAt({ clientX: 350, clientY: 710 });
     page.pullGrid();
     assert.equal(scroller.scrollTop, 0, 'measuring the scroller would put the edge off screen');
+});
+
+// ⚠ THE LEFT EDGE IS THE ROLE COLUMN'S RIGHT EDGE. The Role names are frozen
+// over the left of the grid, so an edge measured at the box would sit
+// underneath them: to pull the grid left you would have to hover the one part
+// of it that never moves.
+test('the left edge is where the Role column ends, not where the grid starts', () => {
+    const { page, scroller } = draggablePage();
+    page.startDrag({}, 'p1', null, 'directory');
+    scroller.scrollLeft = 400;
+
+    page.edgeScrollAt({ clientX: 200, clientY: 450 });   // over the Role names
+    page.pullGrid();
+    assert.equal(scroller.scrollLeft, 400, 'the frozen column is not an edge');
+
+    page.edgeScrollAt({ clientX: 300, clientY: 450 });   // just past them
+    page.pullGrid();
+    assert.ok(scroller.scrollLeft < 400, 'the first date comes back');
+});
+
+// Same defect on the other axis: the date header is frozen over the top.
+test('the top edge is below the date header, not above it', () => {
+    const { page, scroller } = draggablePage();
+    page.startDrag({}, 'p1', null, 'directory');
+    scroller.scrollTop = 300;
+
+    page.edgeScrollAt({ clientX: 400, clientY: 210 });   // over the dates
+    page.pullGrid();
+    assert.equal(scroller.scrollTop, 300);
+
+    page.edgeScrollAt({ clientX: 400, clientY: 250 });   // just below them
+    page.pullGrid();
+    assert.ok(scroller.scrollTop < 300);
 });
 
 test('nothing scrolls unless a card is actually in hand', () => {

@@ -545,7 +545,11 @@
                 <table class="aa-grid border-separate border-spacing-0">
                     <thead>
                         <tr>
-                            <th class="aa-corner text-left px-3 py-2 text-[11px] font-label-md uppercase
+                            <!-- Sticky on both axes, so its bottom-right corner
+                                 is exactly where the grid starts being visible.
+                                 That is where a drag's edges are measured from. -->
+                            <th x-ref="corner"
+                                class="aa-corner text-left px-3 py-2 text-[11px] font-label-md uppercase
                                        tracking-[.14em] text-on-surface-variant">Role</th>
                             <template x-for="col in columns" :key="col.date">
                                 <!-- x-ref cannot be bound dynamically in Alpine,

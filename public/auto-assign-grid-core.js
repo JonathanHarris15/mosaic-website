@@ -314,10 +314,13 @@
     // this, moving somebody from the first date to the last means dropping them
     // somewhere in between, scrolling, and picking them up again.
     //
-    // ⚠ THE RECT IS THE VISIBLE BOX, NOT THE SCROLLING ELEMENT. The grid's
-    // scroller is deliberately taller than what you can see — that is how its
-    // own horizontal scrollbar is hidden — so measuring the scroller would put
-    // the bottom edge 18px below the screen, where the pointer can never go.
+    // ⚠ THE RECT IS THE BOX THE GRID CAN ACTUALLY MOVE IN, which is neither the
+    // scrolling element nor the box you see it through. The scroller is taller
+    // than the clip — that is how its own horizontal scrollbar is hidden — so
+    // its bottom edge is 18px below the screen where no pointer can reach. And
+    // the clip's top-left corner is under the frozen Role column and date
+    // header, so an edge there means hovering the one part of the grid that
+    // never moves. The caller passes what is left after both.
     //
     // Speed ramps with how close to the edge you are, rather than switching on:
     // one speed is either too slow to cross a long range or too fast to stop on

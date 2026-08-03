@@ -894,12 +894,36 @@
                 const box = (this.$refs && this.$refs.clip) || scroller;
                 if (!scroller || !box || !box.getBoundingClientRect) return;
 
-                const by = Grid.edgeScroll(box.getBoundingClientRect(), this.edgeAim);
+                const by = Grid.edgeScroll(this.gridBox(box), this.edgeAim);
                 if (!by.x && !by.y) return;
 
                 if (by.x) scroller.scrollLeft = Math.max(0, scroller.scrollLeft + by.x);
                 if (by.y) scroller.scrollTop = Math.max(0, scroller.scrollTop + by.y);
                 this.onGridScroll(scroller);
+            },
+
+            // ⚠ THE EDGES ARE NOT THE EDGES OF THE BOX. The Role column is
+            // frozen to the left and the date header to the top, so the first
+            // 190px and the first row or so of the box are covered by things
+            // that never move. An edge measured there sits UNDER them: to pull
+            // the grid left you would have to hover the Role names, which is
+            // the one part of the grid that is going nowhere.
+            //
+            // The corner cell is sticky on both axes at once, so its
+            // bottom-right corner is exactly where the grid starts being
+            // visible. That is the top-left of the box a drag is measured in.
+            gridBox(box) {
+                const seen = box.getBoundingClientRect();
+                const corner = this.$refs && this.$refs.corner;
+                if (!corner || !corner.getBoundingClientRect) return seen;
+
+                const frozen = corner.getBoundingClientRect();
+                return {
+                    left: Math.max(seen.left, frozen.right),
+                    right: seen.right,
+                    top: Math.max(seen.top, frozen.bottom),
+                    bottom: seen.bottom,
+                };
             },
 
             stopEdgeScroll() {
