@@ -3475,6 +3475,22 @@ test('a folded liturgy cell still names who is tied up', () => {
 // that never coexist.
 // A date is the unit an editor reads down, and four cards a column with
 // nothing between them run together.
+// ⚠ Put `max-w-7xl mx-auto` on the SCROLLING element and its scrollbar is
+// drawn at that element's right edge — floating in the middle of a wide
+// window with page either side of it.
+test('the setup step scrolls at the window edge, and has room at the bottom', () => {
+    const html = readPage('auto-assign.html');
+
+    assert.match(html,
+        /x-show="view === 'setup'" class="flex-grow min-h-0 overflow-auto w-full">/,
+        'the scroller is full width; the centring is a layer in');
+    assert.doesNotMatch(html,
+        /x-show="view === 'setup'"[^>]*overflow-auto[^>]*max-w-7xl/,
+        'centring the scroller itself is what inset the scrollbar');
+    assert.match(html, /max-w-7xl mx-auto px-4 md:px-margin pt-md pb-20/,
+        'and the last card is not flush against the bottom edge');
+});
+
 test('the columns are told apart by a rule and a wash, and the two line up', () => {
     const html = readPage('auto-assign.html');
 
