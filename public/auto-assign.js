@@ -846,10 +846,98 @@
             endDrag() {
                 this.dragging = null;
                 this.over = null;
+                this.clearDwell();
                 this.stopEdgeScroll();
             },
 
-            dragOver(key) { if (this.dragging) this.over = key; },
+            // ── What letting go would do, and holding still to change it ─────
+            //
+            // Hovering somebody else's place offers a SWAP: the two trade, and
+            // the screen shows the trade before it happens. Hold the card there
+            // and the offer changes to a displace — the other person comes off
+            // the rota onto the rail instead.
+            //
+            // A dwell rather than a modifier key, because both hands are
+            // already busy: one is holding the card and the other is nowhere
+            // near the keyboard. It is also the gesture that teaches itself —
+            // the offer visibly changes under a stationary pointer.
+
+            DWELL_MS: 700,
+
+            intent: null,           // 'fill' | 'swap' | 'displace'
+            aimCard: null,          // whoever is in the place under the pointer
+            dwellTimer: null,
+
+            dragOver(key, date, place) {
+                if (!this.dragging) return;
+                if (this.over === key) return;      // dragover fires constantly
+                this.over = key;
+                this.aimAt(date, place);
+            },
+
+            // ⚠ `dragleave` FIRES WHEN YOU MOVE ONTO A CHILD, exactly like
+            // `mouseout`. Clearing on every one of them restarts the dwell each
+            // time the pointer crosses the card inside the place, and the offer
+            // never changes however long you hold it.
+            dragOut(event) {
+                const from = event && event.currentTarget;
+                const to = event && event.relatedTarget;
+                if (from && to && from.contains && from.contains(to)) return;
+                this.over = null;
+                this.clearDwell();
+            },
+
+            intentAt(date, place) {
+                const held = this.dragging;
+                if (!held || !place) return null;
+                if (!place.filled) return 'fill';
+                if (place.card && place.card.personId === held.personId) return null;
+
+                return Edit.canSwap(this.draft, {
+                    personId: held.personId,
+                    from: held.from,
+                    to: { date: date, roleSlug: place.roleSlug, slotId: place.slotId },
+                }) ? 'swap' : 'displace';
+            },
+
+            aimAt(date, place) {
+                this.clearDwell();
+                this.intent = this.intentAt(date, place);
+                this.aimCard = (place && place.filled) ? place.card : null;
+                if (this.intent !== 'swap') return;
+
+                const later = typeof window !== 'undefined' && window.setTimeout;
+                if (!later) return;
+                this.dwellTimer = later.call(window, () => {
+                    this.dwellTimer = null;
+                    if (this.dragging && this.intent === 'swap') this.intent = 'displace';
+                }, this.DWELL_MS);
+            },
+
+            // Separated so a test can reach the far side of the dwell without
+            // waiting out the clock.
+            dwellElapsed() {
+                if (this.dragging && this.intent === 'swap') this.intent = 'displace';
+            },
+
+            clearDwell() {
+                this.intent = null;
+                this.aimCard = null;
+                if (this.dwellTimer === null) return;
+                const stop = typeof window !== 'undefined' && window.clearTimeout;
+                if (stop) stop.call(window, this.dwellTimer);
+                this.dwellTimer = null;
+            },
+
+            // Where the trade would send the person already in the place: back
+            // to the seat the card in hand just came from.
+            isSwapOrigin(date, place) {
+                const from = this.dragging && this.dragging.from;
+                return this.intent === 'swap' && !!from
+                    && from.date === date
+                    && from.roleSlug === place.roleSlug
+                    && String(from.slotId) === String(place.slotId);
+            },
 
             // ── Dragging to the edge scrolls the grid ────────────────────────
             //
@@ -936,9 +1024,36 @@
 
             dropOn(date, place) {
                 const held = this.dragging;
+                const wanted = this.intent;
                 this.over = null;
+                this.clearDwell();
                 if (!held || !this.draft) return;
                 this.dragging = null;
+
+                // A trade, if that is what was on offer when they let go. It
+                // re-checks rather than trusting the hover: the answer is the
+                // same, and a swap that quietly became impossible should fall
+                // back to the displace rather than do nothing.
+                if (wanted === 'swap') {
+                    const traded = Edit.swap(this.draft, {
+                        personId: held.personId,
+                        from: held.from,
+                        to: {
+                            date: date,
+                            roleSlug: place.roleSlug,
+                            slotId: place.slotId,
+                            oneOffId: place.oneOffId || null,
+                        },
+                    });
+                    if (traded.swapped) {
+                        this.draft = traded.draft;
+                        this.buildGrid();
+                        this.markStaleAfter(held.from.date);
+                        this.markStaleAfter(date);
+                        this.remember();
+                        return;
+                    }
+                }
 
                 const result = Edit.place(this.draft, {
                     personId: held.personId,
@@ -974,6 +1089,7 @@
             dropOnRail() {
                 const held = this.dragging;
                 this.over = null;
+                this.clearDwell();
                 if (!held || !held.from || !this.draft) { this.dragging = null; return; }
                 this.dragging = null;
 

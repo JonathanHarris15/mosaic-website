@@ -3427,6 +3427,194 @@ test('the grid hides its own horizontal bar but keeps the vertical one', () => {
     assert.doesNotMatch(html, /\.aa-scroller \{[^}]*overflow-x:\s*hidden/);
 });
 
+// ── Hover offers a trade; holding still turns it into a displace ────────────
+
+// Two people, two Roles, one date — the setting for every trade.
+function tradeablePage() {
+    const page = draftedPage({
+        series: [{ id: 'sunday_service', name: 'Sunday Service', roleSlugs: ['coffee', 'setup'] }],
+        roleDefinitions: [
+            { slug: 'coffee', name: 'Coffee', intensity: 1, slots: [{ id: 's1', requirement: 'either' }] },
+            { slug: 'setup', name: 'Setup', intensity: 1, slots: [{ id: 's1', requirement: 'either' }] },
+        ],
+    });
+    page.draft = {
+        dates: [drafted('2026-10-04', [
+            { roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 },
+            { roleSlug: 'setup', slotId: 's1', personId: 'p2', recency: 2 },
+        ])],
+    };
+    page.buildGrid();
+
+    const rowBySlug = slug => page.grid.roleRows.filter(r => r.slug === slug)[0];
+    return {
+        page: page,
+        coffee: rowBySlug('coffee').cells[0].places[0],
+        setup: rowBySlug('setup').cells[0].places[0],
+    };
+}
+
+const from = place => ({ date: '2026-10-04', roleSlug: place.roleSlug, slotId: place.slotId });
+const who = (page, slug) =>
+    page.grid.roleRows.filter(r => r.slug === slug)[0].cells[0].places[0].card;
+
+test('hovering somebody else’s place offers a trade', () => {
+    const { page, coffee, setup } = tradeablePage();
+    page.startDrag({}, 'p1', from(coffee), 'grid');
+
+    page.dragOver('k', '2026-10-04', setup);
+
+    assert.equal(page.intent, 'swap');
+    assert.equal(page.aimCard.personId, 'p2', 'and names who would come back the other way');
+});
+
+test('letting go on the trade puts each of them in the other’s place', () => {
+    const { page, coffee, setup } = tradeablePage();
+    page.startDrag({}, 'p1', from(coffee), 'grid');
+    page.dragOver('k', '2026-10-04', setup);
+
+    page.dropOn('2026-10-04', setup);
+
+    assert.equal(who(page, 'setup').personId, 'p1');
+    assert.equal(who(page, 'coffee').personId, 'p2');
+    assert.deepEqual(page.displaced, [], 'a trade puts nobody on the rail — that is the point');
+});
+
+// ⚠ THE GESTURE HAS TO TEACH ITSELF. Nothing tells an editor that holding
+// still changes the offer except watching the offer change.
+test('holding the card still turns the trade into a displace', () => {
+    const { page, coffee, setup } = tradeablePage();
+    page.startDrag({}, 'p1', from(coffee), 'grid');
+    page.dragOver('k', '2026-10-04', setup);
+    assert.equal(page.intent, 'swap');
+
+    page.dwellElapsed();
+    assert.equal(page.intent, 'displace');
+
+    page.dropOn('2026-10-04', setup);
+    assert.equal(who(page, 'setup').personId, 'p1');
+    assert.equal(page.grid.roleRows.filter(r => r.slug === 'coffee')[0]
+        .cells[0].places[0].filled, false, 'the place they left stays empty');
+    assert.deepEqual(page.displaced.map(d => d.personId), ['p2']);
+});
+
+test('moving on to another place starts the hold again', () => {
+    const { page, coffee, setup } = tradeablePage();
+    page.startDrag({}, 'p1', from(coffee), 'grid');
+    page.dragOver('k', '2026-10-04', setup);
+    page.dwellElapsed();
+    assert.equal(page.intent, 'displace');
+
+    page.dragOver('elsewhere', '2026-10-04', setup);
+    assert.equal(page.intent, 'swap', 'a fresh place is a fresh offer');
+});
+
+// ⚠ `dragleave` FIRES WHEN THE POINTER MOVES ONTO A CHILD, exactly like
+// `mouseout`. Clear on every one of them and the hold restarts each time the
+// pointer crosses the card inside the place — the offer never changes, however
+// long it is held.
+test('crossing the card inside a place does not restart the hold', () => {
+    const { page, coffee, setup } = tradeablePage();
+    page.startDrag({}, 'p1', from(coffee), 'grid');
+    page.dragOver('k', '2026-10-04', setup);
+
+    const inner = {};
+    const cell = { contains: node => node === inner };
+    page.dragOut({ currentTarget: cell, relatedTarget: inner });
+
+    assert.equal(page.over, 'k', 'still over the same place');
+    assert.equal(page.intent, 'swap', 'and still counting');
+
+    page.dragOut({ currentTarget: cell, relatedTarget: {} });
+    assert.equal(page.over, null, 'genuinely leaving still clears it');
+    assert.equal(page.intent, null);
+});
+
+// There is nowhere to send the person turned out, so there is nothing to
+// offer — the drop displaces and always did.
+test('a card from the directory never offers a trade', () => {
+    const { page, setup } = tradeablePage();
+    page.startDrag({}, 'p9', null, 'directory');
+
+    page.dragOver('k', '2026-10-04', setup);
+    assert.equal(page.intent, 'displace');
+});
+
+test('an empty place is a plain move, with nothing to hold for', () => {
+    const page = draftedPage();
+    page.draft = { dates: [drafted('2026-10-04')] };
+    page.buildGrid();
+    page.startDrag({}, 'p1', null, 'directory');
+
+    page.dragOver('k', '2026-10-04', page.grid.roleRows[0].cells[0].places[0]);
+    assert.equal(page.intent, 'fill');
+});
+
+test('two places in one Role on one date can trade with each other', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: [drafted('2026-10-04', [
+            { roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 },
+            { roleSlug: 'coffee', slotId: 's2', personId: 'p2', recency: 2 },
+        ])],
+    };
+    page.buildGrid();
+    const places = page.grid.roleRows[0].cells[0].places;
+    page.startDrag({}, 'p1', from(places[0]), 'grid');
+
+    page.dragOver('k', '2026-10-04', places[1]);
+    assert.equal(page.intent, 'swap', 'each of them still holds exactly one place after');
+});
+
+// ⚠ REFUSED, NOT CORRECTED — and the editor is told which of the two they are
+// getting before they let go, so the same drop still does something sensible.
+test('a trade that would sit somebody twice in one Role is offered as a displace', () => {
+    const page = draftedPage();
+    page.draft = {
+        dates: [
+            // p2 is already pouring at the second place on the 4th, so sending
+            // them back there would have them in two spots on one morning.
+            drafted('2026-10-04', [
+                { roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 },
+                { roleSlug: 'coffee', slotId: 's2', personId: 'p2', recency: 2 },
+            ]),
+            drafted('2026-10-11', [
+                { roleSlug: 'coffee', slotId: 's1', personId: 'p2', recency: 2 },
+            ]),
+        ],
+    };
+    page.buildGrid();
+
+    const fourth = page.grid.roleRows[0].cells[0].places[0];
+    const eleventh = page.grid.roleRows[0].cells[1].places[0];
+    page.startDrag({}, 'p1', from(fourth), 'grid');
+
+    page.dragOver('k', '2026-10-11', eleventh);
+    assert.equal(page.intent, 'displace');
+
+    page.dropOn('2026-10-11', eleventh);
+    assert.deepEqual(page.displaced.map(d => d.personId), ['p2']);
+});
+
+test('the line that runs out matches how long the hold actually is', () => {
+    const html = readPage('auto-assign.html');
+    const page = draftedPage();
+
+    const css = /animation: aa-dwell-out (\d+)ms linear/.exec(html);
+    assert.ok(css, 'the dwell has a line running out under it');
+    assert.equal(Number(css[1]), page.DWELL_MS,
+        'a line that finishes early or late is worse than no line');
+});
+
+test('the two outcomes are told apart before the card lands, not after', () => {
+    const html = readPage('auto-assign.html');
+
+    assert.match(html, /intent === 'swap'[\s\S]{0,200}Trades with/);
+    assert.match(html, /intent === 'displace'[\s\S]{0,240}goes to Displaced/);
+    assert.match(html, /isSwapOrigin\(cell\.date, place\) && aimCard/,
+        'the other half of the trade is drawn where it would land');
+});
+
 // ── Measuring the window ────────────────────────────────────────────────────
 //
 // ⚠ A HIDDEN GRID HAS NO WIDTH. Measured while the setup step is still

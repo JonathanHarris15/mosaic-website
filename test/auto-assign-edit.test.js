@@ -128,7 +128,10 @@ test('dropping somebody back where they already are changes nothing', () => {
     assert.equal(out.displaced, null);
 });
 
-test('swapping two people onto each other displaces the one who was there', () => {
+// ⚠ NOT A SWAP, WHATEVER IT LOOKS LIKE. A trade is `swap`, and it puts the
+// other person in the place this one is leaving. This is `place`: one person
+// moves, the other goes to the rail, and the place left behind stays empty.
+test('a plain move onto a taken place empties the old one and displaces the other', () => {
     const draft = draftOf({
         '2026-10-04': [seat('coffee', 's1', 'p1'), seat('welcome', 's1', 'p2')],
     });
@@ -227,4 +230,175 @@ test('placing somebody from the rail takes them off it', () => {
     assert.deepEqual(Edit.removeDisplaced(rail, { personId: 'p1', date: '2026-10-04' }), []);
     assert.equal(Edit.removeDisplaced(rail, { personId: 'p1', date: '2026-10-11' }).length, 1,
         'a different date is a different waiting person');
+});
+
+// ── Trading two places ──────────────────────────────────────────────────────
+//
+// ⚠ THIS MODULE USED TO REFUSE TO SWAP, and it was right about the danger and
+// wrong about the fix. "These two should trade" is the commonest edit on a
+// rota, and doing it as two displaces passes through a state where both places
+// are empty and both people are on the rail.
+//
+// Neither outcome is automatic. The screen offers the swap and the editor can
+// turn it into a displace by holding the card still. The app proposes.
+
+test('two people on the grid trade places', () => {
+    const draft = draftOf({
+        '2026-10-04': [seat('coffee', 's1', 'p1'), seat('setup', 's1', 'p2')],
+    });
+
+    const out = Edit.swap(draft, {
+        personId: 'p1',
+        from: { date: '2026-10-04', roleSlug: 'coffee', slotId: 's1' },
+        to: { date: '2026-10-04', roleSlug: 'setup', slotId: 's1' },
+    });
+
+    assert.equal(at(out.draft, '2026-10-04', 'setup', 's1').personId, 'p1');
+    assert.equal(at(out.draft, '2026-10-04', 'coffee', 's1').personId, 'p2');
+    assert.deepEqual(out.swapped, { personId: 'p2', date: '2026-10-04' },
+        'the caller is told who moved without asking to');
+});
+
+test('they trade across dates too', () => {
+    const draft = draftOf({
+        '2026-10-04': [seat('coffee', 's1', 'p1')],
+        '2026-10-11': [seat('coffee', 's1', 'p2')],
+    });
+
+    const out = Edit.swap(draft, {
+        personId: 'p1',
+        from: { date: '2026-10-04', roleSlug: 'coffee', slotId: 's1' },
+        to: { date: '2026-10-11', roleSlug: 'coffee', slotId: 's1' },
+    });
+
+    assert.equal(at(out.draft, '2026-10-11', 'coffee', 's1').personId, 'p1');
+    assert.equal(at(out.draft, '2026-10-04', 'coffee', 's1').personId, 'p2');
+});
+
+// The person who did not choose to move still ends up somewhere they never
+// agreed to (ADR-0018 §5).
+test('a trade leaves both seats hand-placed, and carries neither yes across', () => {
+    const draft = draftOf({
+        '2026-10-04': [
+            seat('coffee', 's1', 'p1', { held: true, state: 'confirmed' }),
+            seat('setup', 's1', 'p2', { held: true, state: 'confirmed' }),
+        ],
+    });
+
+    const out = Edit.swap(draft, {
+        personId: 'p1',
+        from: { date: '2026-10-04', roleSlug: 'coffee', slotId: 's1' },
+        to: { date: '2026-10-04', roleSlug: 'setup', slotId: 's1' },
+    });
+
+    ['coffee', 'setup'].forEach(slug => {
+        const made = at(out.draft, '2026-10-04', slug, 's1');
+        assert.equal(made.held, false, slug + ' was not on the calendar as it now stands');
+        assert.equal(made.state, null, slug + ' carries an answer nobody gave');
+    });
+});
+
+// ── When a trade is refused ─────────────────────────────────────────────────
+
+test('a card from the directory cannot trade — there is nowhere to send anybody', () => {
+    const draft = draftOf({ '2026-10-04': [seat('coffee', 's1', 'p2')] });
+
+    assert.equal(Edit.canSwap(draft, {
+        personId: 'p1', to: { date: '2026-10-04', roleSlug: 'coffee', slotId: 's1' },
+    }), false);
+});
+
+test('an empty place is not a trade, it is just a move', () => {
+    const draft = draftOf({ '2026-10-04': [seat('coffee', 's1', 'p1')] });
+
+    assert.equal(Edit.canSwap(draft, {
+        personId: 'p1',
+        from: { date: '2026-10-04', roleSlug: 'coffee', slotId: 's1' },
+        to: { date: '2026-10-04', roleSlug: 'setup', slotId: 's1' },
+    }), false);
+});
+
+test('the place they are already in is not a trade with themselves', () => {
+    const draft = draftOf({ '2026-10-04': [seat('coffee', 's1', 'p1')] });
+
+    assert.equal(Edit.canSwap(draft, {
+        personId: 'p1',
+        from: { date: '2026-10-04', roleSlug: 'coffee', slotId: 's1' },
+        to: { date: '2026-10-04', roleSlug: 'coffee', slotId: 's1' },
+    }), false);
+});
+
+// ⚠ ONE PERSON, ONE PLACE PER ROLE, PER DATE — and a trade can break it at
+// EITHER end. Refused rather than corrected: the caller displaces instead, and
+// the editor still gets a sensible outcome from the same drop.
+test('a trade that would sit somebody twice in one Role is refused', () => {
+    // p2 already does Coffee on the 4th, so sending them back there from the
+    // 11th would have them pouring at two places on the same morning.
+    const draft = draftOf({
+        '2026-10-04': [seat('coffee', 's1', 'p1'), seat('coffee', 's2', 'p2')],
+        '2026-10-11': [seat('coffee', 's1', 'p2')],
+    });
+
+    const move = {
+        personId: 'p1',
+        from: { date: '2026-10-04', roleSlug: 'coffee', slotId: 's1' },
+        to: { date: '2026-10-11', roleSlug: 'coffee', slotId: 's1' },
+    };
+
+    assert.equal(Edit.canSwap(draft, move), false);
+    assert.equal(Edit.swap(draft, move).swapped, null, 'and it changes nothing');
+    assert.equal(at(Edit.swap(draft, move).draft, '2026-10-04', 'coffee', 's1').personId, 'p1');
+});
+
+test('the same refusal at the other end of the trade', () => {
+    // p1 already does Coffee on the 11th, so that is where they cannot go.
+    const draft = draftOf({
+        '2026-10-04': [seat('setup', 's1', 'p1')],
+        '2026-10-11': [seat('coffee', 's1', 'p2'), seat('coffee', 's2', 'p1')],
+    });
+
+    assert.equal(Edit.canSwap(draft, {
+        personId: 'p1',
+        from: { date: '2026-10-04', roleSlug: 'setup', slotId: 's1' },
+        to: { date: '2026-10-11', roleSlug: 'coffee', slotId: 's1' },
+    }), false);
+});
+
+// Two places in the SAME Role on one date is the one thing that is fine — each
+// person still holds exactly one of them afterwards.
+test('two places in one Role on one date can trade with each other', () => {
+    const draft = draftOf({
+        '2026-10-04': [seat('coffee', 's1', 'p1'), seat('coffee', 's2', 'p2')],
+    });
+
+    const out = Edit.swap(draft, {
+        personId: 'p1',
+        from: { date: '2026-10-04', roleSlug: 'coffee', slotId: 's1' },
+        to: { date: '2026-10-04', roleSlug: 'coffee', slotId: 's2' },
+    });
+
+    assert.equal(at(out.draft, '2026-10-04', 'coffee', 's2').personId, 'p1');
+    assert.equal(at(out.draft, '2026-10-04', 'coffee', 's1').personId, 'p2');
+    assert.equal(seatsOn(out.draft, '2026-10-04').length, 2, 'nobody was duplicated');
+});
+
+test('a trade against a date that is not in the range does nothing', () => {
+    const draft = draftOf({ '2026-10-04': [seat('coffee', 's1', 'p1')] });
+
+    const out = Edit.swap(draft, {
+        personId: 'p1',
+        from: { date: '2026-10-04', roleSlug: 'coffee', slotId: 's1' },
+        to: { date: '2026-12-25', roleSlug: 'coffee', slotId: 's1' },
+    });
+
+    assert.equal(out.swapped, null);
+    assert.equal(at(out.draft, '2026-10-04', 'coffee', 's1').personId, 'p1');
+});
+
+test('a trade with nothing in hand does nothing, and does not throw', () => {
+    const draft = draftOf({ '2026-10-04': [seat('coffee', 's1', 'p1')] });
+
+    assert.equal(Edit.canSwap(draft, null), false);
+    assert.equal(Edit.canSwap(draft, {}), false);
+    assert.doesNotThrow(() => Edit.swap(draft, null));
 });

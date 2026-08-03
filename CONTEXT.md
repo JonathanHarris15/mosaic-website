@@ -191,8 +191,12 @@ The surface that staffs a **stretch of dates at once** — pick a recurring **Ev
 _Avoid_: bulk assign, the scheduler, Future Schedule
 
 **Displaced**:
-Somebody turned out of a place on a draft, waiting to be put somewhere else. Dropping a person onto a taken place displaces whoever was there; nothing is swapped in for them, because an automatic swap would be a second decision the app made on the editor's behalf. A displaced person carries the date **and** the Role they came from, and stays on screen until the editor places them or leaves them out — vanishing them would make the editor rebuild from memory who they just lost.
+Somebody turned out of a place on a draft, waiting to be put somewhere else. A displaced person carries the date **and** the Role they came from, and stays on screen until the editor places them or leaves them out — vanishing them would make the editor rebuild from memory who they just lost.
 _Avoid_: orphan, bumped, unassigned
+
+**Swap**:
+Two people on a draft trading places. Offered when a card is dropped on a taken place and the card itself came from one: the screen shows the trade — the other person drawn into the place the card is leaving — before it happens. Holding the card still on the place turns the offer into a [[Displaced]] instead, so both outcomes are the editor's and neither is the app's. Refused, never quietly corrected, when the trade would leave somebody holding two places in the same Role on one date; the offer becomes a displace.
+_Avoid_: exchange, switch, shuffle
 
 **Seeded serve**:
 An [[Involvement]] an editor typed in rather than one the church lived through, recorded so a Role that launched with no history has something to be fair across. Recorded as a **serve** — a Role and a date — never as a load figure: [[Fairness]] has two dials, and a figure would move load while leaving the solve believing the person had never held the Role. It is a claim about the **past**, so it saves at once rather than waiting for the draft to be accepted, and only a seeded record may be taken back on this screen.

@@ -180,13 +180,46 @@
 
         /* Wide enough for a name, a reason and a date side by side, and no
            wider — the grid is what the editor came for. */
-        /* Says what is about to happen while it can still be reconsidered. */
+        /* Says what is about to happen while it can still be reconsidered, and
+           WHICH of the two things it is. Different colours, because the two
+           outcomes are genuinely different and the words alone are read too
+           late — the card is already falling. */
         .aa-consequence {
             position: absolute; left: 0; right: 0; top: -18px; z-index: 4;
             background: #182F57; color: #F2EAE2;
             font-size: 10px; line-height: 16px; text-align: center;
             border-radius: 4px; pointer-events: none;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .aa-consequence-out { background: #7A5C1F; }
+
+        /* Holding the card still turns the trade into a displace. This line
+           running out under the words is what says so BEFORE it happens — a
+           gesture nobody is told about is a gesture nobody finds. */
+        .aa-dwell {
+            position: absolute; left: 0; bottom: 0; height: 2px; width: 0;
+            background: #B89B6A;
+            animation: aa-dwell-out 700ms linear forwards;
+        }
+        @keyframes aa-dwell-out { to { width: 100%; } }
+
+        /* The other half of the trade, drawn where it would land. */
+        .aa-ghost {
+            position: absolute; inset: 0; z-index: 5;
+            display: flex; align-items: center; gap: 7px; padding: 7px 9px;
+            border: 1px dashed #5D94A9; border-radius: 8px;
+            background: rgba(242, 240, 236, .94);
+            pointer-events: none;
+        }
+        .aa-ghost-chip {
+            display: flex; align-items: center; gap: 7px; padding: 5px 9px;
+            border: 1px dashed #B89B6A; border-radius: 8px;
+            background: rgba(242, 240, 236, .6);
+            pointer-events: none;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .aa-dwell { animation: none; }
         }
 
         /* ── The directory drawer ──
@@ -676,20 +709,38 @@
                                             <div class="flex flex-col gap-1.5">
                                                 <template x-for="place in cell.places"
                                                           :key="place.slotId || place.card.personId">
-                                                    <div @dragover.prevent="dragOver(cellKey(cell.date, place))"
-                                                         @dragleave="over = null"
+                                                    <div @dragover.prevent="dragOver(cellKey(cell.date, place), cell.date, place)"
+                                                         @dragleave="dragOut($event)"
                                                          @drop.prevent="dropOn(cell.date, place)"
                                                          :class="over === cellKey(cell.date, place) ? 'aa-target' : ''"
                                                          class="relative">
                                                         <!-- The consequence, while it can still be
-                                                             reconsidered. Nothing is swapped for the
-                                                             person turned out — an automatic swap
-                                                             would be a decision the app made. -->
-                                                        <div x-show="over === cellKey(cell.date, place)
-                                                                     && place.filled
-                                                                     && dragging && dragging.personId !== place.card.personId"
-                                                             class="aa-consequence"
-                                                             x-text="'Turns out ' + (place.filled ? place.card.name : '')"></div>
+                                                             reconsidered — and which of the two it
+                                                             is. Holding the card still turns the
+                                                             trade into a displace, and the line
+                                                             running out under the words is what
+                                                             says so before it happens. -->
+                                                        <div x-show="over === cellKey(cell.date, place) && intent === 'swap'"
+                                                             class="aa-consequence">
+                                                            <span x-text="'Trades with ' + (place.filled ? place.card.name : '')"></span>
+                                                            <span class="aa-dwell"></span>
+                                                        </div>
+                                                        <div x-show="over === cellKey(cell.date, place) && intent === 'displace'"
+                                                             class="aa-consequence aa-consequence-out"
+                                                             x-text="(place.filled ? place.card.name : '') + ' goes to Displaced'"></div>
+
+                                                        <!-- The other half of the trade, drawn where
+                                                             it would land. Without this the editor
+                                                             has to hold in their head who is coming
+                                                             back the other way. -->
+                                                        <div x-show="isSwapOrigin(cell.date, place) && aimCard"
+                                                             class="aa-ghost">
+                                                            <span class="material-symbols-outlined text-[15px] text-secondary shrink-0">swap_horiz</span>
+                                                            <span class="aa-avatar aa-avatar-sm"
+                                                                  x-text="aimCard ? aimCard.initials : ''"></span>
+                                                            <span class="text-[12.5px] text-on-surface truncate"
+                                                                  x-text="aimCard ? aimCard.name : ''"></span>
+                                                        </div>
                                                         <!-- Somebody in it. -->
                                                         <template x-if="place.filled">
                                                             <div class="aa-card" draggable="true"
@@ -759,7 +810,7 @@
                                                      than an empty slot that was never defined. -->
                                                 <div x-show="row.kind === 'oneOff'"
                                                      @dragover.prevent="dragOver(cellKey(cell.date, { roleSlug: row.id, slotId: 'add' }))"
-                                                     @dragleave="over = null"
+                                                     @dragleave="dragOut($event)"
                                                      @drop.prevent="dropOn(cell.date, { roleSlug: row.id, slotId: null, oneOffId: row.id })"
                                                      :class="over === cellKey(cell.date, { roleSlug: row.id, slotId: 'add' }) ? 'aa-target' : ''"
                                                      class="aa-empty flex items-center justify-center">
@@ -1005,15 +1056,25 @@
                  and the editor should not have to remember who they lost. -->
             <div class="shrink-0 border-t border-outline-variant bg-surface-container px-6 py-2
                         flex items-center gap-3 min-h-[52px] overflow-x-auto"
-                 @dragover.prevent="dragOver('rail')" @dragleave="over = null"
+                 @dragover.prevent="dragOver('rail')" @dragleave="dragOut($event)"
                  @drop.prevent="dropOnRail()"
                  :class="over === 'rail' ? 'aa-target' : ''">
                 <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant shrink-0">
                     Displaced
                 </span>
-                <span x-show="!displacedCards.length" class="text-[12px] text-on-surface-variant">
+                <span x-show="!displacedCards.length && intent !== 'displace'"
+                      class="text-[12px] text-on-surface-variant">
                     Nobody. Drop a card here to take them off without deciding where they go.
                 </span>
+
+                <!-- Where the held card is about to send somebody. Shown here
+                     as well as on the place, because the rail is where they
+                     will be looking for them afterwards. -->
+                <div x-show="intent === 'displace' && aimCard" class="aa-ghost-chip shrink-0">
+                    <span class="aa-avatar aa-avatar-sm" x-text="aimCard ? aimCard.initials : ''"></span>
+                    <span class="text-[12.5px] text-on-surface truncate"
+                          x-text="aimCard ? aimCard.name : ''"></span>
+                </div>
                 <template x-for="d in displacedCards" :key="d.personId + d.date">
                     <div class="aa-card shrink-0 flex items-center gap-2" draggable="true"
                          @dragstart="startDrag($event, d.personId, { date: d.date }, 'rail')"

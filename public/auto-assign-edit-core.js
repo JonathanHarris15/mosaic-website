@@ -16,6 +16,22 @@
 // put back. An emptied place and a displaced person are different things and
 // both have to be visible.
 //
+// ── Swapping, and why it is not the app deciding ─────────────────────────────
+//
+// This module used to refuse to swap at all, on the grounds that sending the
+// turned-out person to the dragged card's old place was a choice the editor
+// had not made. That was right about the danger and wrong about the fix: the
+// commonest edit on a rota is "these two should trade", and doing it as two
+// displaces means passing through a state where both places are empty and both
+// people are on the rail.
+//
+// So both outcomes exist and NEITHER is automatic — the screen offers the swap,
+// shows what it would look like, and the editor can hold the card still to turn
+// it into a displace instead. The app proposes; it never picks.
+//
+// A swap is refused, not corrected, when it would leave somebody holding two
+// places in the same Role on one date. The caller displaces instead.
+//
 // ── What a hand-placed seat is ───────────────────────────────────────────────
 //
 // Not held, and not in any state. `held` means "this was already on the
@@ -48,6 +64,42 @@
 
     function withSeats(day, seats) {
         return Object.assign({}, day, { seats: seats });
+    }
+
+    function seatAt(draft, place) {
+        const day = dayAt(draft, place.date);
+        if (!day) return null;
+        return (day.seats || []).filter(seat => sameSeat(seat, place))[0] || null;
+    }
+
+    // A seat the editor just made. Not held — `held` means "this was already on
+    // the calendar when we started" — and carrying no answer from the person in
+    // it, because they never agreed to this job (ADR-0018 §5).
+    function handPlaced(place, personId) {
+        return {
+            roleSlug: place.roleSlug,
+            slotId: place.slotId,
+            personId: personId,
+            oneOffId: place.oneOffId || null,
+            metadata: place.oneOffId ? { oneOffId: place.oneOffId } : null,
+            held: false,
+            state: null,
+            recency: null,
+        };
+    }
+
+    // ⚠ ONE PERSON, ONE PLACE PER ROLE, PER DATE. Without this, dragging
+    // somebody onto a second place in the SAME Role leaves them in both and the
+    // rota asks one person to be in two spots at once.
+    function withPersonIn(draft, place, personId) {
+        const day = dayAt(draft, place.date);
+        if (!day) return draft;
+
+        const seats = (day.seats || []).filter(seat => !(
+            seat.personId === personId && seat.roleSlug === place.roleSlug
+        ));
+        seats.push(handPlaced(place, personId));
+        return withDay(draft, place.date, withSeats(day, seats));
     }
 
     // ── Taking somebody out ──────────────────────────────────────────────────
@@ -99,36 +151,69 @@
         const target = clear(next, m.to);
         next = target.draft;
 
-        // ⚠ ONE PERSON, ONE PLACE PER ROLE, PER DATE. Without this, dragging
-        // somebody onto a second place in the SAME Role leaves them in both and
-        // the rota asks one person to be in two spots at once.
-        const day = dayAt(next, m.to.date);
-        if (!day) return { draft: draft, displaced: null };
-        const seats = (day.seats || []).filter(seat => !(
-            seat.personId === m.personId && seat.roleSlug === m.to.roleSlug
-        ));
-
-        seats.push({
-            roleSlug: m.to.roleSlug,
-            slotId: m.to.slotId,
-            personId: m.personId,
-            oneOffId: m.to.oneOffId || null,
-            metadata: m.to.oneOffId ? { oneOffId: m.to.oneOffId } : null,
-            // A seat the editor just made was not on the calendar when we
-            // started, and carries no answer from the person in it.
-            held: false,
-            state: null,
-            recency: null,
-        });
+        if (!dayAt(next, m.to.date)) return { draft: draft, displaced: null };
 
         return {
-            draft: withDay(next, m.to.date, withSeats(day, seats)),
+            draft: withPersonIn(next, m.to, m.personId),
             // Somebody knocked out by their own move is not displaced — they
             // are just where they went.
             displaced: (target.removed && target.removed.personId !== m.personId)
                 ? target.removed
                 : null,
         };
+    }
+
+    // ── Trading two places ───────────────────────────────────────────────────
+
+    // Whether this person already sits in that Role on that date, ignoring the
+    // two seats the swap itself is about.
+    function holdsOther(draft, personId, at, ignoring) {
+        const day = dayAt(draft, at.date);
+        if (!day) return false;
+
+        return (day.seats || []).some(seat => (
+            seat.personId === personId
+            && seat.roleSlug === at.roleSlug
+            && !ignoring.some(p => p.date === at.date && sameSeat(seat, p))
+        ));
+    }
+
+    // Can these two trade? Asked BEFORE the drop, because the screen has to
+    // show which of the two things is about to happen while the card is still
+    // in the air.
+    function canSwap(draft, move) {
+        const m = move || {};
+        if (!m.personId || !m.from || !m.from.date || !m.to || !m.to.date) return false;
+
+        // Onto the place they are already in is not a trade, it is nothing.
+        if (m.from.date === m.to.date && keyOf(m.from) === keyOf(m.to)) return false;
+
+        const mine = seatAt(draft, m.from);
+        const theirs = seatAt(draft, m.to);
+        if (!mine || !theirs) return false;
+        if (mine.personId !== m.personId) return false;
+        if (theirs.personId === m.personId) return false;
+
+        const both = [m.from, m.to];
+        return !holdsOther(draft, m.personId, m.to, both)
+            && !holdsOther(draft, theirs.personId, m.from, both);
+    }
+
+    // The trade itself. Both seats are newly hand-placed: the person who did
+    // not choose to move still ends up somewhere they never agreed to, so a
+    // Confirmed yes does not travel with either of them.
+    function swap(draft, move) {
+        if (!canSwap(draft, move)) return { draft: draft, swapped: null };
+
+        const m = move;
+        const theirs = seatAt(draft, m.to);
+
+        let next = clear(draft, m.from).draft;
+        next = clear(next, m.to).draft;
+        next = withPersonIn(next, m.to, m.personId);
+        next = withPersonIn(next, m.from, theirs.personId);
+
+        return { draft: next, swapped: { personId: theirs.personId, date: m.from.date } };
     }
 
     // ── The displaced rail ───────────────────────────────────────────────────
@@ -153,6 +238,9 @@
     const AutoAssignEditCore = {
         clear,
         place,
+        canSwap,
+        swap,
+        seatAt,
         addDisplaced,
         removeDisplaced,
     };
