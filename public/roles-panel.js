@@ -55,6 +55,7 @@
                                text-xs uppercase tracking-wider cal-motion cal-press cal-focus">
                     Find someone
                 </button>
+            </div>
 `;
 
     const ROLES = `

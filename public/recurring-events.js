@@ -323,7 +323,26 @@
 
             get range() { return Grid.rangeFor(this.selected, this.allDates); },
 
+            // The draft room, for the series that is open. With columns ticked
+            // it carries that range; without, the draft room applies its own
+            // default and drafts the next stretch.
+            //
+            // ONE door, not two. Auto-assign used to live on the Calendar, which
+            // could not know which series you meant — so it opened on whichever
+            // sorted first and made you choose again from a dropdown, against
+            // dates you could no longer see. Here the series is already the
+            // thing you are looking at.
             get draftHref() { return Grid.draftRoomHref(this.seriesId, this.range); },
+
+            // What pressing it will actually do. The button is in the same place
+            // either way, so the label is the only thing that can say whether
+            // the ticked columns are coming with you.
+            get draftLabel() {
+                const range = this.range;
+                if (!range) return 'Auto-assign';
+                return 'Auto-assign ' + range.spans
+                    + (range.spans === 1 ? ' date' : ' dates');
+            },
 
             // Said before the trip, not discovered after it. The draft room
             // works in ranges, so a scattered selection brings the dates in

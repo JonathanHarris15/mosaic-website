@@ -244,12 +244,20 @@
         };
     }
 
-    // The address of the draft room for that range. One place, so the page and
-    // any later caller cannot disagree about the parameter names.
+    // The address of the draft room. One place, so the page and any later caller
+    // cannot disagree about the parameter names.
+    //
+    // The range is OPTIONAL, and its absence is a real request rather than a
+    // missing argument: "draft this event" is what an editor wants far more
+    // often than "draft exactly these dates", and it is the whole of what the
+    // Auto-assign button on the Calendar used to mean. Without a range the draft
+    // room applies its own default — the next stretch from tomorrow — which is
+    // the only sensible reading of a series with no dates named.
     function draftRoomHref(seriesId, range) {
-        if (!seriesId || !range) return null;
-        return 'auto-assign.html'
-            + '?series=' + encodeURIComponent(seriesId)
+        if (!seriesId) return null;
+        const at = 'auto-assign.html?series=' + encodeURIComponent(seriesId);
+        if (!range) return at;
+        return at
             + '&from=' + encodeURIComponent(range.from)
             + '&to=' + encodeURIComponent(range.to);
     }

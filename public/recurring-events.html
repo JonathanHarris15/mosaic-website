@@ -28,6 +28,13 @@
         html.shell-mobile .re-page-title { display: none; }
         html.shell-mobile .re-title-block { border-bottom: none; padding-bottom: 0; }
 
+        /* The draft room is a wide grid of dates against Roles and refuses to
+           draw itself on a phone — it shows a "needs a computer" panel instead.
+           Better not to offer the journey than to end it with a shrug. The rota
+           grid below still scrolls sideways, because READING it on a phone is a
+           real thing to want; drafting one is not. */
+        html.shell-mobile .re-desktop-only { display: none !important; }
+
         /* The series list sits beside the grid where there is room for both, and
            above it where there is not. */
         .re-cols { display: grid; grid-template-columns: minmax(0,1fr); gap: 28px; align-items: start; }
@@ -191,7 +198,7 @@
                             <a :href="seriesHref(s.id)"
                                class="flex items-center gap-1 px-3 py-1.5 border-t border-outline-variant text-[11.5px]
                                       font-label-md uppercase tracking-wider text-secondary re-motion re-focus
-                                      hover:bg-surface-container"
+                                      hover:bg-surface-container">
                                 <span class="material-symbols-outlined text-[15px]">tune</span> Edit the event
                             </a>
                         </div>
@@ -208,12 +215,36 @@
                             <p class="text-[12.5px] text-on-surface-variant mt-0.5"
                                x-text="chosen ? patternOf(chosen) : ''"></p>
                         </div>
-                        <a :href="eventHref"
-                           class="shrink-0 flex items-center gap-1 border border-secondary text-secondary px-md py-2 rounded-lg
-                                  font-label-md text-xs uppercase tracking-wider re-motion re-press re-focus hover:bg-surface-container">
-                            <span class="material-symbols-outlined text-[18px]">tune</span> Edit the event
-                        </a>
+                        <div class="shrink-0 flex items-center gap-sm">
+                            <a :href="eventHref"
+                               class="flex items-center gap-1 border border-secondary text-secondary px-md py-2 rounded-lg
+                                      font-label-md text-xs uppercase tracking-wider re-motion re-press re-focus hover:bg-surface-container">
+                                <span class="material-symbols-outlined text-[18px]">tune</span> Edit the event
+                            </a>
+                            <!-- Staffing a RUN of dates, for the series already
+                                 open. Hidden on a phone, because the room it
+                                 opens is a wide grid of dates against Roles and
+                                 says as much when you get there — better not to
+                                 offer the journey than to end it with a shrug. -->
+                            <a :href="draftHref"
+                               class="re-desktop-only flex items-center gap-1 bg-primary text-on-primary px-md py-2 rounded-lg
+                                      shadow-xs font-label-md text-xs uppercase tracking-wider re-motion re-press re-focus
+                                      hover:bg-primary-container">
+                                <span class="material-symbols-outlined text-[18px]">auto_awesome_motion</span>
+                                <span x-text="draftLabel"></span>
+                            </a>
+                        </div>
                     </div>
+
+                    <!-- Says which dates it will take before you press it. With
+                         nothing ticked that is the draft room's own default —
+                         the next stretch from tomorrow — and an editor who
+                         expected "the ones on screen" should find that out here
+                         rather than on the other side. -->
+                    <p x-show="!range" class="re-desktop-only mt-2 text-[12px] text-on-surface-variant">
+                        Auto-assign drafts the next stretch of dates from tomorrow. Tick columns
+                        below to draft exactly those instead.
+                    </p>
 
                     <!-- Paging, and what the window covers -->
                     <div class="mt-sm flex items-center gap-sm flex-wrap">
@@ -258,10 +289,14 @@
                             <button @click="clearSelection()"
                                     class="px-3 py-2 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
                                            text-on-surface-variant re-motion re-focus hover:bg-surface-container">Clear</button>
+                            <!-- The same door as the button above the grid, said
+                                 the same way. Repeated here because this is
+                                 where the ticking happened, and the header can
+                                 be scrolled off by a long list of Roles. -->
                             <a :href="draftHref"
-                               class="flex items-center gap-1 bg-primary text-on-primary px-3 py-2 rounded-lg shadow-xs
-                                      font-label-md text-[11.5px] uppercase tracking-wider re-motion re-press re-focus">
-                                Edit in the draft room
+                               class="re-desktop-only flex items-center gap-1 bg-primary text-on-primary px-3 py-2 rounded-lg
+                                      shadow-xs font-label-md text-[11.5px] uppercase tracking-wider re-motion re-press re-focus">
+                                <span x-text="draftLabel"></span>
                                 <span class="material-symbols-outlined text-[16px]">north_east</span>
                             </a>
                         </div>

@@ -190,8 +190,23 @@ test('the draft room address names the series and the range', () => {
         Core.draftRoomHref('sunday_service', range),
         'auto-assign.html?series=sunday_service&from=2026-08-09&to=2026-08-16'
     );
-    assert.strictEqual(Core.draftRoomHref('sunday_service', null), null);
+});
+
+test('no ticked dates still opens the draft room, on the series alone', () => {
+    // "Draft this event" is what an editor wants far more often than "draft
+    // exactly these dates", and it is the whole of what the Calendar's
+    // Auto-assign button used to mean. Refusing to build a link without a range
+    // would make selecting columns a toll on the common case.
+    assert.strictEqual(
+        Core.draftRoomHref('sunday_service', null),
+        'auto-assign.html?series=sunday_service'
+    );
+});
+
+test('no series is no link at all, because there is nothing to draft', () => {
+    const range = Core.rangeFor(['2026-08-09'], DATES);
     assert.strictEqual(Core.draftRoomHref('', range), null);
+    assert.strictEqual(Core.draftRoomHref(null, null), null);
 });
 
 // ── Paging the window ─────────────────────────────────────────────────────────

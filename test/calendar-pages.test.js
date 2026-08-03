@@ -188,6 +188,113 @@ function checkPage(htmlFile, scriptFile, factoryName) {
     );
 }
 
+// ── The markup itself holds together ──────────────────────────────────────────
+//
+// Both of these shipped, and both render as a page that draws its heading and
+// then stops — no error, nothing in the console, just missing.
+//
+//   A STRAY </div> closed an x-if wrapper early. Alpine renders ONE root
+//   element per template, so everything after the stray tag became a sibling
+//   and was silently dropped. The page showed a title and a date and nothing
+//   else.
+//
+//   A MISSING ">" on an opening tag, left behind when an attribute was removed.
+//   The browser swallows the following elements into the attribute list, so a
+//   whole row vanishes into a tag nobody can see.
+//
+// Neither is catchable by eye in a 400-line template, and neither fails any
+// test about behaviour, because the component underneath is perfectly fine.
+
+const VOID_ELEMENTS = new Set([
+    'br', 'hr', 'img', 'input', 'meta', 'link', 'source',
+    'area', 'base', 'col', 'embed', 'param', 'track', 'wbr',
+]);
+
+// Style and script bodies are not markup — CSS braces and JS comparisons both
+// contain characters a tag scanner would take for tags.
+function markupOf(html) {
+    return html
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<script[\s\S]*?<\/script>/gi, '');
+}
+
+const TAG = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)([^>]*?)(\/?)>/g;
+
+function tagProblems(html) {
+    const src = markupOf(html);
+    const problems = [];
+    const stack = [];
+
+    // An opening tag whose ">" went missing swallows whatever follows it. The
+    // giveaway is a "<" inside what the scanner read as the attribute list.
+    let m;
+    TAG.lastIndex = 0;
+    while ((m = TAG.exec(src))) {
+        const [, closing, tag, attrs, selfClosing] = m;
+
+        if (attrs.indexOf('<') !== -1) {
+            problems.push('<' + tag + '> is missing its ">" — it has swallowed '
+                + 'the markup after it: ' + attrs.replace(/\s+/g, ' ').trim().slice(0, 70));
+            continue;
+        }
+        if (VOID_ELEMENTS.has(tag) || selfClosing) continue;
+
+        if (!closing) { stack.push(tag); continue; }
+        if (stack[stack.length - 1] === tag) { stack.pop(); continue; }
+
+        problems.push('</' + tag + '> closes nothing — the innermost open tag is <'
+            + (stack[stack.length - 1] || 'nothing') + '>');
+        break;
+    }
+
+    if (stack.length) problems.push('never closed: ' + stack.join(' > '));
+    return problems;
+}
+
+// Alpine renders the FIRST root element of a template and drops the rest,
+// without saying so.
+function xIfRootCounts(html) {
+    const src = markupOf(html);
+    const counts = [];
+    const opener = /<template\s+x-if\s*=\s*"([^"]*)"\s*>/g;
+
+    let open;
+    while ((open = opener.exec(src))) {
+        let depth = 0;
+        let roots = 0;
+        TAG.lastIndex = open.index + open[0].length;
+
+        let m;
+        while ((m = TAG.exec(src))) {
+            const [, closing, tag, , selfClosing] = m;
+            if (tag === 'template' && closing && depth === 0) break;
+            if (VOID_ELEMENTS.has(tag) || selfClosing) { if (depth === 0) roots++; continue; }
+            if (!closing) { if (depth === 0) roots++; depth++; } else { depth--; }
+        }
+        counts.push({ expression: open[1], roots: roots });
+    }
+    return counts;
+}
+
+const CALENDAR_PAGES = ['calendar.html', 'calendar-event.html', 'auto-assign.html', 'recurring-events.html'];
+
+test('every calendar page is well-formed markup', () => {
+    CALENDAR_PAGES.forEach(file => {
+        assert.deepStrictEqual(tagProblems(readPage(file)), [], file + ' has broken markup');
+    });
+});
+
+test('every x-if template has exactly one root element', () => {
+    CALENDAR_PAGES.forEach(file => {
+        xIfRootCounts(readPage(file)).forEach(found => {
+            assert.strictEqual(found.roots, 1,
+                file + ': x-if="' + found.expression + '" has ' + found.roots
+                + ' root elements. Alpine renders the first and silently drops the rest.');
+        });
+    });
+});
+
 // ── The pages ─────────────────────────────────────────────────────────────────
 
 test('the Calendar page only binds to things its component defines', () => {
@@ -773,12 +880,22 @@ test('the Recurring Events page keeps every door it promises', () => {
     // page that is entirely about the ones that come round.
     assert.match(page.newEventHref, /repeats=/, 'a new event from here would not repeat');
 
-    // No door to the draft room until dates are ticked — a live button that
-    // opens an empty range is worse than no button.
-    assert.strictEqual(page.draftHref, null);
+    // Auto-assign with nothing ticked drafts the series itself — this is the
+    // door that moved off the Calendar, where it could not know which series
+    // you meant. With columns ticked it carries that range instead, and the
+    // label is the only thing that says which of the two you are about to get.
+    assert.strictEqual(page.draftHref, 'auto-assign.html?series=sunday_service');
+    assert.strictEqual(page.draftLabel, 'Auto-assign');
+
+    page.allDates = ['2026-08-09', '2026-08-16', '2026-08-23'];
     page.selected = ['2026-08-09', '2026-08-16'];
     assert.strictEqual(page.draftHref,
         'auto-assign.html?series=sunday_service&from=2026-08-09&to=2026-08-16');
+    assert.strictEqual(page.draftLabel, 'Auto-assign 2 dates');
+
+    // A scattered tick counts what will really open, not what was ticked.
+    page.selected = ['2026-08-09', '2026-08-23'];
+    assert.strictEqual(page.draftLabel, 'Auto-assign 3 dates');
 });
 
 test('the draft room takes the series and range it is handed', () => {
@@ -2459,15 +2576,26 @@ test('a one-off job with no options set still reads as exclusive to the picker',
 
 // ── Auto-assign (MS-18) ───────────────────────────────────────────────────────
 
-test('Auto-assign is offered from the Calendar, to editors, and not on a phone', () => {
-    const html = readPage('calendar.html');
-    const link = html.match(/<a[^>]*href="auto-assign\.html"[\s\S]*?<\/a>/);
+test('Auto-assign is offered beside a chosen event, to editors, and not on a phone', () => {
+    // It MOVED. Auto-assign drafts a run of dates for ONE series, and the
+    // Calendar could not know which — so it opened on whichever sorted first
+    // alphabetically and made the editor pick again from a dropdown. It now sits
+    // on Recurring Events, where a series is already the thing being looked at.
+    const calendar = readPage('calendar.html');
+    assert.doesNotMatch(calendar, /href="auto-assign\.html"/,
+        'the Calendar still offers a door that cannot know which event it opens');
 
-    assert.ok(link, 'the Calendar does not offer Auto-assign at all');
-    assert.match(link[0], /x-show="canCreate"/, 'it is offered to people who cannot use it');
-    // The page it opens is a wide grid and says so when you arrive. Better not
+    const html = readPage('recurring-events.html');
+    const link = html.match(/<a[^>]*:href="draftHref"[\s\S]*?<\/a>/);
+
+    assert.ok(link, 'Recurring Events does not offer Auto-assign at all');
+    // The whole page is inside x-if="isEditor", which is the same promise the
+    // Calendar made with x-show="canCreate" — stated here so a later refactor
+    // that lifts the grid out cannot quietly drop it.
+    assert.match(html, /x-if="isEditor"/, 'the page is offered to people who cannot use it');
+    // The room it opens is a wide grid and says so when you arrive. Better not
     // to offer the journey than to end it with a shrug.
-    assert.match(link[0], /cal-desktop-only/, 'a phone is offered a page it will be refused');
+    assert.match(link[0], /re-desktop-only/, 'a phone is offered a page it will be refused');
 });
 
 // ⚠ A MISSING CORE FUNCTION IS INVISIBLE UNTIL SOMEBODY OPENS THE PAGE.
