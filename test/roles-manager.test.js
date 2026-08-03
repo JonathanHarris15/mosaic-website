@@ -1310,3 +1310,66 @@ test('liturgical Roles are still refused by the editor — intensity is the only
     page.startEdit(page.liturgicalRoles[0]);
     assert.equal(page.draft, null, 'the lock holds everywhere else');
 });
+
+// ── Who does not serve ──────────────────────────────────────────────────────
+//
+// ⚠ A FACT ABOUT THE PERSON, so it lives on their record. A Role's allowlist
+// answers "who may do THIS"; this answers "who does none of it", and copying
+// that onto each Role is how the two go out of step the next time a Role is
+// added.
+
+test('marking somebody as not serving writes it on the person, not on a Role', async () => {
+    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
+
+    await page.setDoesNotServe('p2', true);
+
+    assert.equal(stored('people').p2.doesNotServe, true);
+    assert.equal(stored('roles').r1.restrictions.length, 0,
+        'no Role was touched — the next Role added would not have got the copy');
+    assert.deepStrictEqual(page.nonServers.map(p => p.id), ['p2'],
+        'and the screen matches without a re-read');
+});
+
+test('putting somebody back is the same one field', async () => {
+    const page = await mountPage({
+        roles: { r1: coffeeDefinition() },
+        people: { ...PEOPLE, p2: { name: 'Grace Hopper', doesNotServe: true } },
+    });
+    assert.deepStrictEqual(page.nonServers.map(p => p.id), ['p2']);
+
+    await page.setDoesNotServe('p2', false);
+
+    assert.equal(stored('people').p2.doesNotServe, false);
+    assert.deepStrictEqual(page.nonServers, []);
+});
+
+// A search, not a dropdown of the whole church: the list it adds to is short
+// and the church is not.
+test('the search finds people who are not on the list already', async () => {
+    const page = await mountPage({
+        roles: { r1: coffeeDefinition() },
+        people: { ...PEOPLE, p2: { name: 'Grace Hopper', doesNotServe: true } },
+    });
+
+    page.nonServerSearch = 'grace';
+    assert.deepStrictEqual(page.nonServerMatches, [], 'already on it');
+
+    page.nonServerSearch = 'ada';
+    assert.deepStrictEqual(page.nonServerMatches.map(p => p.id), ['p1']);
+
+    page.nonServerSearch = '';
+    assert.deepStrictEqual(page.nonServerMatches, [],
+        'an empty box offers the whole church, which is not an offer');
+});
+
+test('a write that fails changes nothing on screen', async () => {
+    const page = await mountPage(
+        { roles: { r1: coffeeDefinition() }, people: PEOPLE },
+        { deny: ['people'] }
+    );
+
+    await page.setDoesNotServe('p2', true);
+
+    assert.deepStrictEqual(page.nonServers, []);
+    assert.equal(page.savingNonServer, '', 'and the control is usable again');
+});

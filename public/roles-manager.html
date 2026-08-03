@@ -246,6 +246,65 @@
                         </template>
                     </ul>
                 </section>
+
+                <!-- ── Who does not serve ─────────────────────────────────────
+                     ⚠ NOT A PRIVACY SETTING, and it hides nobody. The name is
+                     still everywhere it was; it is only never offered for a
+                     Role. Kept apart from the tags that hide people, because
+                     confusing the two would mean a small child's name quietly
+                     disappearing from the directory as well. -->
+                <section class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
+                    <div class="flex items-center justify-between gap-sm mb-xs">
+                        <h2 class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">
+                            Doesn't serve
+                        </h2>
+                        <span class="text-xs font-label-md tracking-wider text-outline"
+                              x-text="nonServers.length"></span>
+                    </div>
+                    <p class="font-body-md text-[13px] leading-normal text-on-surface-variant mb-sm">
+                        People no rota should ever offer — the youngest children, anyone too frail,
+                        anyone in a season of not serving. They stay everywhere else in Mosaic;
+                        they just stop coming up when a Role needs filling.
+                    </p>
+
+                    <div class="relative mb-sm">
+                        <input type="text" x-model="nonServerSearch" placeholder="Find someone by name"
+                               class="w-full border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary" />
+                        <ul x-show="nonServerMatches.length"
+                            class="absolute z-10 left-0 right-0 mt-base bg-surface-container-lowest border border-outline-variant rounded-lg shadow-md overflow-hidden">
+                            <template x-for="p in nonServerMatches" :key="p.id">
+                                <li>
+                                    <button type="button" @click="setDoesNotServe(p.id, true)"
+                                            :disabled="savingNonServer"
+                                            class="w-full text-left px-sm py-sm font-body-md text-body-md text-on-surface hover:bg-surface-container transition-colors disabled:opacity-40"
+                                            x-text="p.name"></button>
+                                </li>
+                            </template>
+                        </ul>
+                        <p x-show="nonServerSearch.trim() && !nonServerMatches.length"
+                           class="mt-base font-body-md text-[13px] text-on-surface-variant">
+                            Nobody left to add by that name.
+                        </p>
+                    </div>
+
+                    <ul x-show="nonServers.length" class="flex flex-col gap-base">
+                        <template x-for="p in nonServers" :key="p.id">
+                            <li class="flex items-center gap-sm px-sm py-sm rounded-lg border border-outline-variant bg-surface-container-lowest">
+                                <span class="flex-grow font-body-md text-body-md text-on-surface truncate"
+                                      x-text="p.name || 'Someone no longer in the directory'"></span>
+                                <button type="button" @click="setDoesNotServe(p.id, false)"
+                                        :disabled="savingNonServer === p.id"
+                                        title="Put them back on the rotas"
+                                        class="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary transition-colors disabled:opacity-40">
+                                    <span class="material-symbols-outlined text-[19px]">undo</span>
+                                </button>
+                            </li>
+                        </template>
+                    </ul>
+                    <p x-show="!nonServers.length" class="font-body-md text-[13px] text-on-surface-variant">
+                        Nobody yet. Everyone in the directory can be offered a Role.
+                    </p>
+                </section>
             </div>
 
             <!-- ── The editor ────────────────────────────────────────────────── -->

@@ -332,15 +332,30 @@
         return m.inactive === true || m.status === 'inactive';
     }
 
+    // Somebody the church does not put on a rota: a small child, somebody very
+    // frail, somebody in a season of not serving. It says nothing about who they
+    // are and nothing about whether anyone may see them — only that no Role is
+    // ever offered to them.
+    //
+    // ⚠ A FACT ABOUT THE PERSON, NOT ABOUT A ROLE, which is what makes it a
+    // field on the record rather than a list on a Role Definition. A Role's
+    // allowlist answers "who may do THIS"; this answers "who does none of it",
+    // and copying that answer onto every Role is how the two go out of step.
+    function doesNotServe(person) {
+        return !!(person && person.doesNotServe);
+    }
+
     // ── Who may even be offered ──────────────────────────────────────────────
     //
     // DISTINCT FROM ELIGIBILITY, and the difference is the whole design of the
     // picker. An ineligible Person is SHOWN, blocked, with a reason — seeing who
-    // was passed over is the point. These two are not that:
+    // was passed over is the point. These three are not that:
     //
     //   • Somebody no longer active has left. They are not a candidate who lost,
     //     they are not a candidate, and a blocked row for them is an answer to a
     //     question nobody asked.
+    //   • Somebody who does not serve is the same: there is no Role they might
+    //     have had, so there is nothing for a reason to explain.
     //   • Somebody hidden by a tag must not appear AT ALL. A blocked row saying
     //     why they cannot serve still prints the name the tag exists to hide,
     //     which is the tag failing at the one job it has.
@@ -357,6 +372,11 @@
 
         return (people || []).filter(person => {
             if (isInactive(person)) return false;
+            // ⚠ ABOVE THE ELDER BYPASS. That bypass exists because those tags
+            // hide people FROM everyone else for elders — a privacy rule. This
+            // is not one. A four-year-old is not offered for coffee to an elder
+            // either.
+            if (doesNotServe(person)) return false;
             if (seesHidden) return true;
             if (person && person.shepherdingHidden) return false;
             return !((person && person.tags) || []).some(tag => hiding.indexOf(tag) !== -1);
@@ -850,6 +870,7 @@
         slugify,
         // eligibility
         isInactive,
+        doesNotServe,
         candidatesFor,
         warningsFor,
         // relationship group membership (MS-141)

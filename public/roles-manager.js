@@ -141,13 +141,18 @@ window.RolesManager = () => ({
         ]);
     },
 
-    // For the allowlist picker only. Names, so a rule reads as people rather
-    // than as ids — an id nobody can resolve is shown as missing rather than
-    // quietly dropped, the same treatment an unshared Relationship Type gets.
+    // For the allowlist picker and the non-servers list. Names, so a rule reads
+    // as people rather than as ids — an id nobody can resolve is shown as
+    // missing rather than quietly dropped, the same treatment an unshared
+    // Relationship Type gets.
     async loadPeople() {
         try {
             const snap = await db.collection('people').orderBy('name').get();
-            this.people = snap.docs.map(d => ({ id: d.id, name: (d.data() || {}).name || '' }));
+            this.people = snap.docs.map(d => ({
+                id: d.id,
+                name: (d.data() || {}).name || '',
+                doesNotServe: (d.data() || {}).doesNotServe === true,
+            }));
         } catch (e) {
             console.error('Could not read people:', e);
             this.people = [];
@@ -533,6 +538,51 @@ window.RolesManager = () => ({
     // Everyone not already picked, so the same person cannot be added twice.
     get allowlistOptions() {
         return this.people.filter(p => this.newAllowlist.indexOf(p.id) === -1);
+    },
+
+    // ── Who does not serve ───────────────────────────────────────────────────
+    //
+    // ⚠ A FACT ABOUT THE PERSON, so it is a field on their record rather than a
+    // list kept here. A Role's allowlist answers "who may do THIS"; this answers
+    // "who does none of it", and the moment that answer is copied onto each Role
+    // it starts going out of step with the next Role somebody adds.
+    //
+    // It is not a privacy setting and it does not hide anybody: the name is
+    // still everywhere it was. It is only never OFFERED for a Role.
+
+    nonServerSearch: '',
+    savingNonServer: '',
+
+    get nonServers() {
+        return this.people.filter(p => p.doesNotServe);
+    },
+
+    // A search rather than a dropdown of the whole church, because the list this
+    // adds to is short and the church is not.
+    get nonServerMatches() {
+        const q = this.nonServerSearch.trim().toLowerCase();
+        if (!q) return [];
+        return this.people
+            .filter(p => !p.doesNotServe && String(p.name || '').toLowerCase().indexOf(q) !== -1)
+            .slice(0, 8);
+    },
+
+    async setDoesNotServe(personId, value) {
+        if (!personId || this.savingNonServer) return;
+        this.savingNonServer = personId;
+
+        try {
+            await db.collection('people').doc(personId).update({ doesNotServe: value });
+            this.people = this.people.map(p => (
+                p.id === personId ? Object.assign({}, p, { doesNotServe: value }) : p
+            ));
+            this.nonServerSearch = '';
+        } catch (e) {
+            console.error('Could not save that:', e);
+            this.showToast('Could not save that — nothing was changed', 'error');
+        } finally {
+            this.savingNonServer = '';
+        }
     },
 
     get newAllowlistNames() {

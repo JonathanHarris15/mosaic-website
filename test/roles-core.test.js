@@ -243,6 +243,44 @@ test('the shepherding system can hide somebody on its own', () => {
         Roles.assignablePeople(people, { rank: 'editor' }).map(p => p.id), ['p1']);
 });
 
+// ── Somebody who does not serve ─────────────────────────────────────────────
+//
+// The youngest children, anyone too frail, anyone in a season of not serving.
+// Absolute like Inactive: not a candidate who lost, so there is no reason to
+// show and no warning to leave.
+
+test('somebody who does not serve is never offered a Role', () => {
+    const people = [
+        { id: 'p1', name: 'Dave Rowe' },
+        { id: 'p2', name: 'Small Child', doesNotServe: true },
+    ];
+    assert.deepStrictEqual(
+        Roles.assignablePeople(people, { rank: 'editor' }).map(p => p.id), ['p1']);
+});
+
+// ⚠ ABOVE THE ELDER BYPASS. That bypass exists because hiding tags hide people
+// from everyone else FOR elders — a privacy rule. This is not one, and a
+// four-year-old is not offered for coffee to an elder either.
+test('no rank sees past somebody who does not serve', () => {
+    const people = [{ id: 'p2', name: 'Small Child', doesNotServe: true }];
+
+    ['editor', 'admin', 'elder', 'super_admin'].forEach(rank => {
+        assert.deepStrictEqual(Roles.assignablePeople(people, { rank: rank }), [],
+            rank + ' was offered somebody who does not serve');
+    });
+});
+
+// It is not a privacy setting and it hides nobody — which is the whole reason
+// it is a field of its own rather than one more hiding tag.
+test('not serving is one flag, and nothing else about the Person', () => {
+    assert.equal(Roles.doesNotServe({ id: 'p1', doesNotServe: true }), true);
+    assert.equal(Roles.doesNotServe({ id: 'p1' }), false);
+    assert.equal(Roles.doesNotServe({ id: 'p1', doesNotServe: false }), false);
+    assert.equal(Roles.doesNotServe(null), false);
+    assert.equal(Roles.doesNotServe({ id: 'p1', shepherdingHidden: true }), false,
+        'hidden and not-serving are different facts');
+});
+
 test('with no hiding tags configured, everybody active is offered', () => {
     const people = [{ id: 'p1', tags: ['member'] }, { id: 'p2' }];
     assert.deepStrictEqual(Roles.assignablePeople(people, { rank: 'editor' }).map(p => p.id),
