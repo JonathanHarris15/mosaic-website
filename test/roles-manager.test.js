@@ -616,15 +616,18 @@ test('the rule kinds on offer include a relationship rule only when a Type is sh
     // The allowlist is always on offer and always last: it needs nothing shared
     // to build, and it is the blunt one — right for the four who serve
     // communion, wrong for anything a tag could say.
+    // The GROUP rules are always on offer too, because Family and Marriage come
+    // from the Membership Directory and need nobody to share them.
     const withShared = await mountPage({ relationship_types: { t1: MARRIAGE } });
     assert.deepStrictEqual(
         withShared.ruleKindOptions.map(o => o.value),
-        ['requireTag', 'excludeTag', 'notTogether', 'allowlist']
+        ['requireTag', 'excludeTag', 'notTogether', 'notSameGroup', 'sameGroup', 'allowlist']
     );
 
     const withNone = await mountPage({ relationship_types: { t2: DISCIPLESHIP } });
-    assert.deepStrictEqual(withNone.ruleKindOptions.map(o => o.value), ['requireTag', 'excludeTag', 'allowlist'],
-        'offering a rule there is nothing to build is a dead end');
+    assert.deepStrictEqual(withNone.ruleKindOptions.map(o => o.value),
+        ['requireTag', 'excludeTag', 'notSameGroup', 'sameGroup', 'allowlist'],
+        'the PAIRWISE rule is the dead end without a shared Type; the group ones never are');
     // And every label is a sentence opener, not a field name.
     withShared.ruleKindOptions.forEach(o => assert.doesNotMatch(o.label, /Tag[A-Z]|kind|typeId/));
 });
@@ -678,7 +681,9 @@ test('adding a rule with nothing chosen says so rather than adding a rule about 
 
 test('shared Group-kind Types are offered for group rules, and pairwise ones are not', async () => {
     const page = await mountPage({ relationship_types: { t1: MARRIAGE, t3: HOUSE_GROUP } });
-    assert.deepStrictEqual(page.groupRuleOptions.map(t => t.id), ['t3']);
+    // Family and Marriage lead, always: they are the commonest rule in a church
+    // and the Membership Directory already knows them.
+    assert.deepStrictEqual(page.groupRuleOptions.map(t => t.id), ['family', 'marriage', 't3']);
     assert.deepStrictEqual(page.relationshipRuleOptions.map(t => t.id), ['t1'],
         'the two lists stay separate — a Type is one kind or the other');
 });
@@ -687,7 +692,9 @@ test('an unshared Group Type is offered nowhere', async () => {
     const page = await mountPage({
         relationship_types: { t3: { ...HOUSE_GROUP, sharedWithEditors: false } },
     });
-    assert.deepStrictEqual(page.groupRuleOptions, []);
+    assert.deepStrictEqual(page.customGroupTypes, [],
+        'the directory pair are always there; a CUSTOM Type still has to be shared');
+    assert.doesNotMatch(JSON.stringify(page.groupRuleOptions), /House Group/);
     assert.doesNotMatch(JSON.stringify(page.ruleKindOptions) + page.relationshipTypesNotice, /House Group/);
 });
 
@@ -699,7 +706,8 @@ test('the rule kinds follow what is actually shared, pairwise and group independ
 
     const pairOnly = await mountPage({ relationship_types: { t1: MARRIAGE } });
     assert.deepStrictEqual(pairOnly.ruleKindOptions.map(o => o.value),
-        ['requireTag', 'excludeTag', 'notTogether', 'allowlist']);
+        ['requireTag', 'excludeTag', 'notTogether', 'notSameGroup', 'sameGroup', 'allowlist'],
+        'the group rules do not wait on a shared Type any more');
 
     const both = await mountPage({ relationship_types: { t1: MARRIAGE, t3: HOUSE_GROUP } });
     assert.deepStrictEqual(both.ruleKindOptions.map(o => o.value),
@@ -724,7 +732,7 @@ test('the group pickers offer groups, and composing a group rule saves one', asy
     page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
 
     page.newRuleKind = Roles.RESTRICTIONS.SAME_GROUP;
-    assert.deepStrictEqual(page.ruleValueOptions.map(o => o.id), ['t3']);
+    assert.deepStrictEqual(page.ruleValueOptions.map(o => o.id), ['family', 'marriage', 't3']);
     assert.match(page.ruleValuePlaceholder, /group/i);
     page.newRuleValue = 't3';
     page.addComposedRule();

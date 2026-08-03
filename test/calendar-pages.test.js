@@ -59,6 +59,7 @@ function loadComponent(scriptFile, factoryName, overrides) {
     sandbox.EventsStore = require('../public/events-store.js');
     sandbox.CalendarView = require('../public/calendar-view.js');
     sandbox.RolesCore = require('../public/roles-core.js');
+    sandbox.FamilyCore = require('../public/family-core.js');
     sandbox.EventsCore = require('../public/events-core.js');
     sandbox.FairnessCore = require('../public/fairness-core.js');
     sandbox.DateUtils = require('../public/date-utils.js');

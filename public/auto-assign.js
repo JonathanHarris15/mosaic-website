@@ -34,6 +34,7 @@
     const Edit = window.AutoAssignEditCore;
     const Panel = window.AutoAssignPanelCore;
     const Saved = window.AutoAssignSavedCore;
+    const Families = window.FamilyCore;
     const View = window.CalendarView;
     const Dates = window.DateUtils;
 
@@ -375,19 +376,28 @@
             async loadForDraft() {
                 const dates = this.resolvedDates;
 
-                const [people, roles, rels, groups] = await Promise.all([
+                const [people, roles, rels, groups, families] = await Promise.all([
                     db.collection('people').get(),
                     db.collection('roles').get(),
                     db.collection('relationships').where('sharedWithEditors', '==', true).get()
                         .catch(() => ({ docs: [] })),
                     db.collection('relationship_groups').where('sharedWithEditors', '==', true).get()
                         .catch(() => ({ docs: [] })),
+                    // Family and Marriage come from the Membership Directory,
+                    // not from a hand-rostered group — so they need no sharing,
+                    // and they arrive in the shape the rules already read.
+                    db.collection('families').get().catch(() => ({ docs: [] })),
                 ]);
 
                 this.people = people.docs.map(d => Object.assign({ id: d.id }, d.data()));
                 this.roleDefinitions = roles.docs.map(d => Object.assign({ id: d.id }, d.data()));
                 this.relationships = rels.docs.map(d => d.data());
-                this.groups = groups.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                this.groups = groups.docs
+                    .map(d => Object.assign({ id: d.id }, d.data()))
+                    .concat(Families.servingGroups(
+                        families.docs.map(d => Object.assign({ id: d.id }, d.data())),
+                        this.people
+                    ));
 
                 await this.loadHidingTags();
                 await Promise.all([this.loadHistory(dates), this.loadLiturgy(dates)]);

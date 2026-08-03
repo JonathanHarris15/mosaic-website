@@ -450,8 +450,23 @@ window.RolesManager = () => ({
         return this.sharedRelationshipTypes.filter(type => type.kind === 'pairwise');
     },
 
-    get groupRuleOptions() {
+    get customGroupTypes() {
         return this.sharedRelationshipTypes.filter(type => type.kind === 'group');
+    },
+
+    // The two the Membership Directory answers come FIRST and are always there.
+    // They need no elder to share them: a Family is a household an editor
+    // already keeps, not an arbitrary grouping somebody has to invent, and
+    // making the commonest rule in a church wait on a setup step nobody knows
+    // about is how it never gets written.
+    get directoryGroupTypes() {
+        return RolesCore.DIRECTORY_GROUP_TYPES;
+    },
+
+    get groupRuleOptions() {
+        return this.directoryGroupTypes.concat(
+            this.sharedRelationshipTypes.filter(type => type.kind === 'group')
+        );
     },
 
     // Said out loud, because an empty picker and a denied query look identical
@@ -463,9 +478,12 @@ window.RolesManager = () => ({
             return 'We couldn\'t load relationship types — this account may not have permission to read them. ' +
                 'Nothing is missing from your Roles; ask an elder or admin to check.';
         }
-        if (this.relationshipRuleOptions.length === 0 && this.groupRuleOptions.length === 0) {
-            return 'No relationship types have been shared with editors yet, so there is nothing to build a ' +
-                'relationship rule from. An elder can share one in Manage Tags and Relationships.';
+        // Family and Marriage are always on offer, so "nothing to build from"
+        // is now only ever true of the PAIRWISE side.
+        if (this.relationshipRuleOptions.length === 0 && this.customGroupTypes.length === 0) {
+            return 'Family and Marriage come from the Membership Directory and are always available. ' +
+                'For anything else — a house group, a book study — an elder can share a relationship ' +
+                'type in Manage Tags and Relationships.';
         }
         return '';
     },

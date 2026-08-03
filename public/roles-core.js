@@ -240,6 +240,21 @@
         ALLOWLIST: 'allowlist',             // only these named people
     });
 
+    // ── The two Group Types the Membership Directory answers ─────────────────
+    //
+    // "No two people from the same Family" is not an arbitrary grouping somebody
+    // has to invent in Manage Tags and Relationships — it is the household
+    // record an editor already keeps. So these two ids are RESERVED, always
+    // available, and never need sharing.
+    //
+    // ⚠ The membership behind them is projected by `FamilyCore.servingGroups`,
+    // which stamps these same ids. Two modules, one pair of strings, held
+    // together by a test — the same arrangement as `inGroup` and `belongsTo`.
+    const DIRECTORY_GROUP_TYPES = Object.freeze([
+        Object.freeze({ id: 'family', name: 'Family', kind: 'group', sharedWithEditors: true }),
+        Object.freeze({ id: 'marriage', name: 'Marriage', kind: 'group', sharedWithEditors: true }),
+    ]);
+
     // Why somebody was passed over. The Roles tab and auto-assign both have to
     // explain themselves, so ineligibility is always a reason, never a silent
     // omission from the list.
@@ -710,8 +725,11 @@
         }
 
         // Only Types this user can actually see are offered. An unknown Type is
-        // treated as unavailable rather than assumed shared.
-        const type = (availableTypes || []).find(t => t && t.id === rule.typeId);
+        // treated as unavailable rather than assumed shared — EXCEPT the two the
+        // Membership Directory answers, which are always available and need no
+        // elder to share them.
+        const type = DIRECTORY_GROUP_TYPES.find(t => t.id === rule.typeId)
+            || (availableTypes || []).find(t => t && t.id === rule.typeId);
         if (!type) {
             errors.push(
                 'That relationship type is not available. An elder has to share it ' +
@@ -812,6 +830,7 @@
         REQUIREMENTS,
         REQUIREMENT_VALUES,
         RESTRICTIONS,
+        DIRECTORY_GROUP_TYPES,
         REASONS,
         LITURGICAL_ROLES,
         LITURGICAL_SLUGS,

@@ -272,7 +272,86 @@
         };
     }
 
+    // ── Families as serving groups (ADR-0012, MS-18) ─────────────────────────
+    //
+    // A serving Role can say "no two people from the same Family" or "…the same
+    // Marriage". Both are questions about the MEMBERSHIP DIRECTORY, so both are
+    // answered from the `families` collection — the household record an editor
+    // already keeps — and never from a hand-rostered Relationship Group.
+    //
+    // ⚠ WHY NOT A RELATIONSHIP GROUP TYPE. Manage Tags and Relationships defines
+    // ARBITRARY groupings; a Family is a specific one the app already models and
+    // already maintains. A second, hand-built Family roster would be the same
+    // fact recorded twice, and the copy nobody remembers to update is the one
+    // the rota would quietly trust.
+    //
+    // These two ids are RESERVED. A custom Relationship Type may not use them,
+    // or a rule naming "family" would find two different answers.
+    const SERVING_GROUP_TYPES = Object.freeze({ FAMILY: 'family', MARRIAGE: 'marriage' });
+
+    const nameIn = (people, personId) => {
+        const found = (people || []).find(p => p && p.id === personId);
+        return (found && found.name) || null;
+    };
+
+    // A household reads by its people, because "Family 7QxK" tells an editor
+    // nothing. Falls back through whoever is actually on the record.
+    function familyGroupName(family, people) {
+        const spouses = [family.husbandId, family.wifeId]
+            .map(id => nameIn(people, id))
+            .filter(Boolean);
+        if (spouses.length === 2) return spouses.join(' and ');
+        if (spouses.length === 1) return spouses[0] + '’s family';
+        const first = (family.childIds || []).map(id => nameIn(people, id)).filter(Boolean)[0];
+        return first ? first + '’s family' : 'A family';
+    }
+
+    // Every Family and every Marriage, in the shape the restriction rules
+    // already read: `{ id, typeId, name, memberIds }`. Nothing in roles-core
+    // changes — it cannot tell these apart from a Relationship Group, which is
+    // the point.
+    //
+    // A Family with one person in it is left out of both: a group of one can
+    // never put two people in a Role together, and drawing it would only pad
+    // the list an editor reads.
+    function servingGroups(families, people) {
+        const groups = [];
+
+        (families || []).forEach(family => {
+            if (!family || !family.id) return;
+
+            const household = [family.husbandId, family.wifeId]
+                .concat(family.childIds || [])
+                .filter(Boolean);
+            if (household.length > 1) {
+                groups.push({
+                    id: 'family:' + family.id,
+                    typeId: SERVING_GROUP_TYPES.FAMILY,
+                    name: familyGroupName(family, people),
+                    memberIds: household,
+                });
+            }
+
+            // A marriage is the two spouses and nobody else — the narrower rule,
+            // for the Role where a couple serving together is the problem but
+            // their teenager helping is not.
+            if (family.husbandId && family.wifeId) {
+                groups.push({
+                    id: 'marriage:' + family.id,
+                    typeId: SERVING_GROUP_TYPES.MARRIAGE,
+                    name: familyGroupName(family, people),
+                    memberIds: [family.husbandId, family.wifeId],
+                });
+            }
+        });
+
+        return groups;
+    }
+
     const FamilyCore = {
+        SERVING_GROUP_TYPES,
+        servingGroups,
+        familyGroupName,
         familyOfSpouse,
         familyOfChild,
         spouseOf,

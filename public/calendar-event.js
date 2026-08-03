@@ -25,6 +25,7 @@
     const Roles = window.RolesCore;
     const Events = window.EventsCore;
     const Fairness = window.FairnessCore;
+    const FamilyCore = window.FamilyCore;
 
     const params = new URLSearchParams(window.location.search);
 
@@ -348,15 +349,24 @@
             async ensurePickerData() {
                 if (this.pickerDataLoaded) return;
 
-                const [rels, groups] = await Promise.all([
+                const [rels, groups, families] = await Promise.all([
                     // Serving rules may only name a Relationship Type an elder has
                     // shared with editors, so the query is constrained the same way
                     // the Roles Manager constrains it. Unconstrained it would error.
                     db.collection('relationships').where('sharedWithEditors', '==', true).get().catch(() => ({ docs: [] })),
                     db.collection('relationship_groups').where('sharedWithEditors', '==', true).get().catch(() => ({ docs: [] })),
+                    // Family and Marriage are answered from the Membership
+                    // Directory, not from a hand-rostered group, so they need no
+                    // sharing and arrive in the same shape as a real group.
+                    db.collection('families').get().catch(() => ({ docs: [] })),
                 ]);
                 this.relationships = rels.docs.map(d => d.data());
-                this.groups = groups.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                this.groups = groups.docs
+                    .map(d => Object.assign({ id: d.id }, d.data()))
+                    .concat(FamilyCore.servingGroups(
+                        families.docs.map(d => Object.assign({ id: d.id }, d.data())),
+                        this.people
+                    ));
                 await this.loadHidingTags();
 
                 this.pickerDataLoaded = true;
