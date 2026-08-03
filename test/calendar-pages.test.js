@@ -3764,6 +3764,7 @@ test('the panel no longer explains the runners-up, it offers to change them', ()
     assert.doesNotMatch(html, /Nothing this season/);
     assert.match(html, /Somebody else instead/);
     assert.match(html, /Carrying more than we know/);
+    assert.doesNotMatch(html, /A new baby, a parent in hospital/);
     assert.match(html, /Out for the rest of the range/);
     // ⚠ The arrow is drawn INSIDE the box, over the last characters of the
     // longest option — "Children's Ministry" reads as "Children's Minist⌄".
