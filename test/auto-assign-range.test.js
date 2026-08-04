@@ -371,14 +371,14 @@ test('the module requires nothing — the solve and the rules are injected', () 
 
 // ── Somebody who is not there ───────────────────────────────────────────────
 //
-// An editor knows things the church has no record of. Away is a fact about a
+// An editor knows things the church has no record of. Out is a drafting move
 // person on a DATE, so it is asked per date: out on the 11th says nothing about
 // the 18th.
 
-test('somebody away on a date is not drafted onto it', () => {
+test('somebody left out of a date is not drafted onto it', () => {
     const out = AutoAssign.draft(options({
         people: [person('ann')],
-        awayOn: date => (date === RANGE[1] ? ['ann'] : []),
+        outOn: date => (date === RANGE[1] ? ['ann'] : []),
     }));
 
     assert.deepEqual(whoIsOn(out, 0), ['ann']);
@@ -390,17 +390,17 @@ test('somebody away on a date is not drafted onto it', () => {
 // ⚠ HELD SEATS TOO. A place they were already down for is exactly the place the
 // editor is trying to empty — honouring the hold would be the one case where
 // taking somebody out did nothing.
-test('being away takes them off a place they were already down for', () => {
+test('being left out takes them off a place they were already down for', () => {
     const out = AutoAssign.draft(options({
         existing: { [RANGE[0]]: [held('coffee', 's1', 'ann', AutoAssign.STATES.CONFIRMED)] },
-        awayOn: date => (date === RANGE[0] ? ['ann'] : []),
+        outOn: date => (date === RANGE[0] ? ['ann'] : []),
     }));
 
     assert.equal(whoIsOn(out, 0).indexOf('ann'), -1);
     assert.equal(whoIsOn(out, 0).length, 1, 'and somebody else gets the place');
 });
 
-test('a date left out keeps what it had, minus whoever is away', () => {
+test('a date left out keeps what it had, minus whoever the editor took out', () => {
     const out = AutoAssign.draft(options({
         roles: [role('coffee', 2)],
         choice: AutoAssign.CHOICES.LEAVE_OUT,
@@ -410,7 +410,7 @@ test('a date left out keeps what it had, minus whoever is away', () => {
                 held('coffee', 's2', 'ben', AutoAssign.STATES.CONFIRMED),
             ],
         },
-        awayOn: date => (date === RANGE[0] ? ['ann'] : []),
+        outOn: date => (date === RANGE[0] ? ['ann'] : []),
     }));
 
     assert.deepEqual(whoIsOn(out, 0), ['ben']);
@@ -471,11 +471,11 @@ test('a fill reads the dates before it as history', () => {
     assert.notEqual(wanted, base.dates[1].seats[0].personId);
 });
 
-test('somebody away cannot be filled back into the place they left', () => {
+test('somebody taken out cannot be filled back into the place they left', () => {
     const opts = options({
         people: SIX.slice(0, 2),
         roles: [role('coffee', 1)],
-        awayOn: date => (date === RANGE[0] ? ['ann'] : []),
+        outOn: date => (date === RANGE[0] ? ['ann'] : []),
     });
     const base = AutoAssign.draft(options({ people: SIX.slice(0, 2), roles: [role('coffee', 1)] }));
 

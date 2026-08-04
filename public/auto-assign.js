@@ -139,7 +139,12 @@
             // editor knows while planning this stretch, and neither writes a
             // record anybody would later find and wonder about.
             nudges: {},             // personId → weeks added to their load
-            away: {},               // date → [personId]
+            out: {},                // date → [personId] left out of THIS draft
+
+            // date → [personId] who said THEMSELVES they are away. Read from
+            // their records, never edited here, and never saved with the draft —
+            // it is not the draft's to remember.
+            awayByDate: {},
 
             replaceSearch: '',
             outScope: null,         // 'date' | 'rest', while the choice is open
@@ -438,12 +443,16 @@
 
                 try {
                     await this.loadForDraft();
+                    // Before the solve, not after: a draft that ignored somebody's
+                    // own word and then had it pointed out is a draft the editor
+                    // has to redo by hand.
+                    await this.loadAway();
                     this.draft = Loop.draft(this.draftOptions());
                     this.displaced = [];
-                    // Away is about a range of dates; a new range is a new
+                    // Out is about a range of dates; a new range is a new
                     // question. A nudge is about a person's season, so it
                     // survives a re-draft the way the serve log does.
-                    this.away = {};
+                    this.out = {};
                     this.staleFrom = null;
                     this.edited = {};
                     this.seenProblems = false;
@@ -641,6 +650,13 @@
                     candidatesFor: Roles.candidatesFor,
                     intensityOf: record => this.intensityForRecord(record),
                     nudges: this.nudges,
+                    outOn: date => this.outOn(date),
+                    // What people said about THEMSELVES (MS-188), which is a
+                    // different thing from the editor leaving them out and
+                    // reaches the solve a different way — handed to the
+                    // eligibility check, so an unfilled place can name it.
+                    // A solve seats only eligible people, so it can never draft
+                    // over somebody's own word.
                     awayOn: date => this.awayOn(date),
                     liturgicalSlugs: Roles.LITURGICAL_SLUGS,
                     liturgicalHoldersFor: date => (this.liturgical[date] || []).map(h => h.personId),
@@ -1462,15 +1478,37 @@
 
             // ── Taking somebody out ──────────────────────────────────────────
             //
-            // Away is a fact about a person on a DATE, so it is kept per date:
-            // out on the 16th says nothing about the 23rd. Emptying their places
+            // Out is per DATE: out on the 16th says nothing about the 23rd.
+            // It dies with the draft and says nothing about the person — that is
+            // what [[Away]] is for (MS-188). Emptying their places
             // and keeping them out of the next draft are the same act, which is
             // why this writes the record before it clears the seats.
 
-            awayOn(date) { return this.away[date] || []; },
+            outOn(date) { return this.out[date] || []; },
 
-            isAway(date, personId) {
-                return this.awayOn(date).indexOf(personId) !== -1;
+            awayOn(date) { return this.awayByDate[date] || []; },
+
+            // Loaded for the whole range at once rather than per date — one read
+            // for a quarter's drafting, and the solve asks per date off the map.
+            async loadAway() {
+                this.awayByDate = {};
+                if (typeof window.AwayStore === 'undefined') return;
+                const dates = this.resolvedDates;
+                if (!dates.length) return;
+                try {
+                    this.awayByDate = await window.AwayStore.loadAwayBetween(
+                        db, dates[0], dates[dates.length - 1]
+                    );
+                } catch (e) {
+                    // A draft that does not know who is away is worse than one
+                    // that does, but it is still a draft the editor reviews
+                    // before anything is written.
+                    console.error('Away load failed:', e);
+                }
+            },
+
+            isOut(date, personId) {
+                return this.outOn(date).indexOf(personId) !== -1;
             },
 
             // 'date' — this one occurrence. 'rest' — here to the end of the
@@ -1522,13 +1560,13 @@
                 const dates = this.outDates;
                 const personId = s.personId;
 
-                const away = Object.assign({}, this.away);
+                const out = Object.assign({}, this.out);
                 dates.forEach(date => {
-                    if ((away[date] || []).indexOf(personId) === -1) {
-                        away[date] = (away[date] || []).concat([personId]);
+                    if ((out[date] || []).indexOf(personId) === -1) {
+                        out[date] = (out[date] || []).concat([personId]);
                     }
                 });
-                this.away = away;
+                this.out = out;
 
                 // Out of every place on those dates. Not displaced — they are
                 // not waiting to be put somewhere, they are not there.
@@ -1569,21 +1607,21 @@
             // Back on the rota. The places they lost stay as they are — putting
             // them back would undo whoever the editor has since put there.
             bringBack(personId, date) {
-                const away = Object.assign({}, this.away);
-                Object.keys(away).forEach(d => {
+                const out = Object.assign({}, this.out);
+                Object.keys(out).forEach(d => {
                     if (date && d !== date) return;
-                    away[d] = away[d].filter(id => id !== personId);
-                    if (!away[d].length) delete away[d];
+                    out[d] = out[d].filter(id => id !== personId);
+                    if (!out[d].length) delete out[d];
                 });
-                this.away = away;
+                this.out = out;
                 this.remember();
             },
 
             // Everybody the editor has taken out, for the line that says so.
-            get awayNames() {
+            get outNames() {
                 const seen = {};
-                Object.keys(this.away).forEach(date => {
-                    (this.away[date] || []).forEach(id => {
+                Object.keys(this.out).forEach(date => {
+                    (this.out[date] || []).forEach(id => {
                         seen[id] = (seen[id] || []).concat([date]);
                     });
                 });
@@ -1796,7 +1834,7 @@
                     choice: this.choice,
                     displaced: this.displaced,
                     nudges: this.nudges,
-                    away: this.away,
+                    out: this.out,
                     savedAt: new Date().toISOString(),
                 };
             },
@@ -1839,7 +1877,9 @@
                 this.draft = this.offered.draft;
                 this.displaced = this.offered.displaced || [];
                 this.nudges = this.offered.nudges || {};
-                this.away = this.offered.away || {};
+                // The old key too: a draft saved before the MS-188 rename is
+                // still sitting in somebody's browser.
+                this.out = this.offered.out || this.offered.away || {};
                 this.offered = null;
                 this.selected = null;
                 this.seenProblems = false;
@@ -1996,7 +2036,7 @@
                 this.forgetDraft();
                 this.displaced = [];
                 this.nudges = {};
-                this.away = {};
+                this.out = {};
                 this.selected = null;
                 this.backToSetup();
             },

@@ -211,7 +211,7 @@
             background: rgba(242, 240, 236, .94);
             pointer-events: none;
         }
-        .aa-away-chip {
+        .aa-out-chip {
             display: flex; align-items: center; gap: 7px; padding: 4px 8px;
             border: 1px solid #DAD0C0; border-radius: 999px;
             background: rgba(242, 240, 236, .7);
@@ -1224,16 +1224,21 @@
                 </template>
 
                 <!-- Taken out, not displaced. A displaced person is waiting to
-                     be put somewhere; somebody who is away is not there at all.
+                     be put somewhere; somebody left out is not there at all.
                      Shown here anyway, because this is the only line on the
                      screen that says who is off the rota — and an editor who
-                     took the wrong person out needs a way back. -->
-                <div x-show="awayNames.length" class="flex items-center gap-2 shrink-0 ml-auto">
+                     took the wrong person out needs a way back.
+
+                     "Out", not "Away" (MS-188). Away is the person's own word
+                     about their own diary; this is the editor leaving somebody
+                     out of one draft, and labelling them the same thing would
+                     put a claim in their mouth they never made. -->
+                <div x-show="outNames.length" class="flex items-center gap-2 shrink-0 ml-auto">
                     <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
-                        Away
+                        Left out
                     </span>
-                    <template x-for="a in awayNames" :key="a.personId">
-                        <span class="aa-away-chip shrink-0">
+                    <template x-for="a in outNames" :key="a.personId">
+                        <span class="aa-out-chip shrink-0">
                             <span class="text-[12px] text-on-surface truncate" x-text="a.name"></span>
                             <span class="text-[10.5px] text-on-surface-variant tabular-nums"
                                   x-text="a.dates === 1 ? '1 date' : a.dates + ' dates'"></span>
@@ -1333,6 +1338,8 @@
 <script src="events-core.js"></script>
 <script src="events-occurrence-core.js"></script>
 <script src="events-store.js"></script>
+    <script src="away-core.js"></script>
+    <script src="away-store.js"></script>
 <script src="fairness-core.js"></script>
 <script src="auto-assign-core.js"></script>
 <script src="calendar-view.js"></script>

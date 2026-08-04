@@ -128,18 +128,33 @@
 
     // ── Who is out ────────────────────────────────────────────────────────────
     //
-    // An editor knows things the church has no record of: somebody is away that
-    // weekend, or off for the rest of the term. Away is a fact about a PERSON on
-    // a DATE, so it is asked per date rather than filtered out of the people
-    // list once — being out on the 16th says nothing about the 23rd.
+    // Who the editor has left OUT of this draft — a drafting move, and not a
+    // claim about the person (MS-188). It is asked per date rather than filtered
+    // out of the people list once, because being out on the 16th says nothing
+    // about the 23rd.
+    //
+    // ⚠ NOT the same thing as [[Away]], which is a fact about a Person's diary,
+    // stored on their record and honoured by the solve as a hard no. This used
+    // to be called `away` too, and one word for both meant an editor thinking
+    // aloud and a person's own word were indistinguishable in the code.
     //
     // It applies to held seats too. A place they were already down for is
     // exactly the place the editor is trying to empty.
+    function outOn(o, date) {
+        return (typeof o.outOn === 'function' ? o.outOn(date) : []) || [];
+    }
+
+    // Who said THEMSELVES they would not be here on this date (MS-188). A
+    // different question from `outOn`, from a different author, and it reaches
+    // the solve a different way: an Away is handed to the eligibility check so
+    // an unfilled place can name it, where being Out simply removes the person
+    // from the pool. The solve seats only eligible people, so neither can ever
+    // be drafted over — but only one of them is a claim about the person.
     function awayOn(o, date) {
         return (typeof o.awayOn === 'function' ? o.awayOn(date) : []) || [];
     }
 
-    const withoutAway = (list, out, idOf) => (
+    const excluding = (list, out, idOf) => (
         out.length ? (list || []).filter(x => out.indexOf(idOf(x)) === -1) : (list || [])
     );
 
@@ -147,21 +162,22 @@
     // the range and by filling a single date's gaps, so both read the same
     // window and hand the solve the same shape.
     function solveDate(o, date, index, history, held) {
-        const out = awayOn(o, date);
-        const seated = withoutAway(held, out, a => a.personId);
+        const out = outOn(o, date);
+        const seated = excluding(held, out, a => a.personId);
 
         const heldByKey = {};
         seated.forEach(a => { heldByKey[a.roleSlug + '|' + a.slotId] = a; });
 
         const result = o.solve({
             roles: o.roles,
-            people: withoutAway(o.people, out, p => p && p.id),
+            people: excluding(o.people, out, p => p && p.id),
             history: history,
             occurrenceDates: windowFor(o.dates, index, o.pastDates),
             windowSize: o.windowSize,
             seriesId: o.seriesId,
             date: date,
             seated: seated.map(asSeat),
+            awayPersonIds: awayOn(o, date),
             candidatesFor: o.candidatesFor,
             intensityOf: o.intensityOf,
             nudges: o.nudges,
@@ -201,8 +217,8 @@
         // Left out: the date keeps exactly what it had and is not drafted. It
         // still counts as history, because those people are still serving.
         if (choice === CHOICES.LEAVE_OUT && existing.length) {
-            const kept = withoutAway(
-                heldSeats(existing, CHOICES.KEEP), awayOn(o, date), a => a.personId
+            const kept = excluding(
+                heldSeats(existing, CHOICES.KEEP), outOn(o, date), a => a.personId
             );
             return {
                 date: date,

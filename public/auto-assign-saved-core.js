@@ -67,7 +67,11 @@
             // What the editor knows and the church has not recorded. Kept with
             // the draft, because that is the only thing it is true of.
             nudges: (context || {}).nudges || {},
-            away: (context || {}).away || {},
+            // `out`, renamed from `away` in MS-188 so it stops colliding with
+            // the Person's own Away. A draft saved before that rename is still
+            // in somebody's browser, so the old key is read as a fallback —
+            // losing an editor's out-list to tidy a name would be a poor trade.
+            out: (context || {}).out || (context || {}).away || {},
             against: fingerprint(context),
             draft: draft,
         };
