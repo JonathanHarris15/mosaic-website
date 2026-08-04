@@ -550,43 +550,66 @@ document.addEventListener('alpine:init', () => {
                 }
 
                 // 3. Migrate Sub-collections
-                const migrateSub = async (collName) => {
+                //
+                // `identity` answers two things per record: which target record
+                // it is the same as (so a merge never duplicates), and what doc
+                // ID it should land under. Involvement records carry auto-IDs and
+                // are matched on their fields. Pastoral prayer history is keyed
+                // BY the service date — that ID is how a later save addresses the
+                // record it wants to remove — so it has to be carried across, not
+                // reissued. Landing it under an auto-ID left the record counted
+                // but unaddressable: unselecting that Sunday's subject afterwards
+                // deleted nothing, and reselecting them wrote a second copy.
+                const migrateSub = async (collName, identity) => {
                     const sourceSnap = await sourceRef.collection(collName).get(FRESH_READ);
                     const targetSnap = await targetRef.collection(collName).get(FRESH_READ);
-                    
-                    // Two serves of the same Role on the same date are only the
-                    // same serve if they were the same Event series — so the key
-                    // includes it. Read through seriesIdOf, never the raw field,
-                    // or a pre-backfill record would fail to match its
-                    // already-stamped twin and the merge would duplicate it.
-                    const involvementKey = d =>
-                        `${d.serviceDate}_${d.type || ''}_${EventsCore.seriesIdOf(d)}`;
 
-                    const existingKeys = new Set(targetSnap.docs.map(doc => involvementKey(doc.data())));
+                    const existingKeys = new Set(targetSnap.docs.map(doc => identity(doc).key));
 
                     const batch = db.batch();
                     for (const doc of sourceSnap.docs) {
-                        const data = doc.data();
-                        const key = involvementKey(data);
+                        const { key, id } = identity(doc);
                         if (!existingKeys.has(key)) {
-                            batch.set(targetRef.collection(collName).doc(), data);
+                            const targetCol = targetRef.collection(collName);
+                            batch.set(id ? targetCol.doc(id) : targetCol.doc(), doc.data());
+                            existingKeys.add(key);
                         }
                         batch.delete(doc.ref);
                     }
                     await batch.commit();
                 };
 
-                await migrateSub('involvement');
-                await migrateSub('pastoral_prayer_history');
+                // Two serves of the same Role on the same date are only the same
+                // serve if they were the same Event series — so the key includes
+                // it. Read through seriesIdOf, never the raw field, or a
+                // pre-backfill record would fail to match its already-stamped
+                // twin and the merge would duplicate it.
+                await migrateSub('involvement', doc => {
+                    const d = doc.data();
+                    return { key: `${d.serviceDate}_${d.type || ''}_${EventsCore.seriesIdOf(d)}`, id: null };
+                });
+
+                // One Sunday is one prayer record, so the date is both the
+                // identity and the doc ID.
+                await migrateSub(PastoralPrayerCore.HISTORY_COLLECTION, doc => {
+                    const date = doc.data().serviceDate || doc.id;
+                    return { key: date, id: PastoralPrayerCore.historyDocId(date) };
+                });
 
                 // 4. Update Target Metadata
-                const finalInvSnap = await targetRef.collection('involvement').get();
-                const finalPrayerSnap = await targetRef.collection('pastoral_prayer_history').get();
-                
-                const pastoralPrayers = finalPrayerSnap.docs
-                    .map(doc => doc.data().serviceDate)
-                    .sort();
-                const lastDate = pastoralPrayers.length > 0 ? pastoralPrayers[pastoralPrayers.length - 1] : (this.mergeTarget.lastPastoralPrayerDate || null);
+                const finalInvSnap = await targetRef.collection('involvement').get(FRESH_READ);
+                const finalPrayerSnap = await targetRef
+                    .collection(PastoralPrayerCore.HISTORY_COLLECTION).get(FRESH_READ);
+
+                // History first; the two cached dates only stand in for a person
+                // whose prayer dates were imported without history records
+                // behind them, which a merge must not quietly drop.
+                const lastDate = PastoralPrayerCore.latestDate(
+                    finalPrayerSnap.docs.map(doc => doc.data().serviceDate || doc.id)
+                ) || PastoralPrayerCore.latestDate([
+                    this.mergeTarget.lastPastoralPrayerDate,
+                    this.mergeSource.lastPastoralPrayerDate,
+                ]);
 
                 updates.totalInvolvements = finalInvSnap.size;
                 updates.lastPastoralPrayerDate = lastDate;

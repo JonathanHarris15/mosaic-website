@@ -744,7 +744,7 @@
                                                                                                 <template x-for="p in suggestions" :key="p.id">
                                                                                                     <button @click="select(p)" class="w-full text-left px-3 py-2 hover:bg-primary-container/20 flex flex-col transition-colors border-b border-outline-variant/10">
                                                                                                         <span class="text-sm font-bold text-primary" x-text="p.name"></span>
-                                                                                                        <span class="text-[9px] text-secondary font-medium uppercase" x-text="p.lastPastoralPrayerDate && p.lastPastoralPrayerDate !== '0000-00-00' ? `Last: ${p.lastPastoralPrayerDate}` : 'Never prayed for'"></span>
+                                                                                                        <span class="text-[9px] text-secondary font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
                                                                                                     </button>
                                                                                                 </template>
                                                                                             </div>
@@ -758,7 +758,7 @@
                                                                                                     </template>
                                                                                                 </div>
                                                                                                 <template x-if="!p.isNew">
-                                                                                                    <span class="text-[9px] text-secondary font-medium uppercase" x-text="p.lastPastoralPrayerDate ? `Last: ${p.lastPastoralPrayerDate}` : 'Never prayed for'"></span>
+                                                                                                    <span class="text-[9px] text-secondary font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
                                                                                                 </template>
                                                                                             </button>
                                                                                         </template>
@@ -782,7 +782,7 @@
                                                                                                 <template x-for="p in suggestions" :key="p.id">
                                                                                                     <button @click="select(p)" class="w-full text-left px-3 py-2 hover:bg-primary-container/20 flex flex-col transition-colors border-b border-outline-variant/10">
                                                                                                         <span class="text-sm font-bold text-primary" x-text="p.name"></span>
-                                                                                                        <span class="text-[9px] text-secondary font-medium uppercase" x-text="p.lastPastoralPrayerDate && p.lastPastoralPrayerDate !== '0000-00-00' ? `Last: ${p.lastPastoralPrayerDate}` : 'Never prayed for'"></span>
+                                                                                                        <span class="text-[9px] text-secondary font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
                                                                                                     </button>
                                                                                                 </template>
                                                                                             </div>
@@ -796,7 +796,7 @@
                                                                                                     </template>
                                                                                                 </div>
                                                                                                 <template x-if="!p.isNew">
-                                                                                                    <span class="text-[9px] text-secondary font-medium uppercase" x-text="p.lastPastoralPrayerDate ? `Last: ${p.lastPastoralPrayerDate}` : 'Never prayed for'"></span>
+                                                                                                    <span class="text-[9px] text-secondary font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
                                                                                                 </template>
                                                                                             </button>
                                                                                         </template>
@@ -1199,6 +1199,7 @@
     <script src="date-utils.js"></script>
     <!-- Who serves at a Sunday, and when that becomes a serve record (MS-16). -->
     <script src="service-involvement-core.js"></script>
+    <script src="pastoral-prayer-core.js"></script>
     <script src="prayer-suggestions.js"></script>
     <!-- Service Guide engine/catalog/seed/store: the Order of Service editor picks
          the week's Service Guide Template (or toggles legacy) and gates its

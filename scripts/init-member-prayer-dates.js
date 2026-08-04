@@ -1,6 +1,14 @@
 /**
  * @fileoverview Script to ensure every Member has a 'lastPastoralPrayerDate' field.
  * Defaults to '0000-00-00' if no history is found.
+ *
+ * SUPERSEDED — do not run. This is where the '0000-00-00' sentinel in live data
+ * came from, and ADR-0022 settled on `null` for "never prayed for". It also
+ * prefers a stale stored date over an empty history, so it can never correct a
+ * person whose last prayer record was deleted. Use
+ * `scripts/sync-pastoral-prayer-dates.js`, which rebuilds the field from the
+ * history and clears it when there is none. Kept only as the record of how the
+ * field was first populated.
  */
 
 const admin = require('firebase-admin');

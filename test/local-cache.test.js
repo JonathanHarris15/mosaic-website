@@ -194,12 +194,12 @@ test('every read that decides a write asks the server', () => {
     // added in between. Nothing else in the codebase would notice.
     const sites = [
         ['profile.js', 3],                 // user↔person link: old + new person, and the user doc
-        ['service-builder.js', 2],         // clearing involvements, and a baptism date
-        ['service-calendar.js', 1],        // clearing involvements
+        ['service-builder.js', 3],         // clearing involvements, a baptism date, and the prayer history a new lastPastoralPrayerDate is computed from
+        ['service-calendar.js', 2],        // clearing involvements, and re-deriving lastPastoralPrayerDate
         ['shepherding-profile.js', 3],     // deleting notes, activity, and status/tag history
         ['shepherding-relationships.js', 1], // re-projecting a shared type
         ['shepherding-tags.js', 4],        // merge carriers + their activity, and both hide-people sweeps
-        ['peoples-page.js', 2],            // merging two people's sub-collections
+        ['peoples-page.js', 4],            // merging two people's sub-collections, then re-counting what landed
     ];
     for (const [file, expected] of sites) {
         const src = read(file);

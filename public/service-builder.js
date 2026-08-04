@@ -701,7 +701,9 @@ function serviceForm() {
 
         // ── Prayer Requests (pastoral-prayer subjects) ─────────────────────────
         // Elder/super-admin only. Each subject's Prayer Request and send-state
-        // live on people/{id}/pastoral_prayer_history/{serviceDate}.
+        // live on people/{id}/prayer_requests/{serviceDate} — a separate record
+        // from the pastoral_prayer_history entry that says they were a subject
+        // at all, because a request is sensitive and the history is not.
 
         subjectFor(which) {
             return which === 'male' ?
@@ -1129,24 +1131,37 @@ function serviceForm() {
                 }
 
                 // 2. Process Pastoral Prayer Roles (Liturgy)
-                for (const { field, role } of liturgyRoles) {
+                // Who is a subject *after* this edit, so the cache below is
+                // recomputed against the final state of the service rather than
+                // against whichever slot happened to be processed last. A person
+                // moved between the two slots is added and removed in the same
+                // save, and only the final answer is worth writing.
+                const subjectIds = new Set(
+                    liturgyRoles
+                        .map(({ field }) => this.service.liturgy[field] && this.service.liturgy[field].id)
+                        .filter(Boolean)
+                );
+
+                for (const { field } of liturgyRoles) {
                     const oldId = original.liturgy[field] ? original.liturgy[field].id : null;
                     const newId = this.service.liturgy[field].id;
                     if (oldId !== newId) {
-                        if (oldId) {
-                            await this._removePastoralPrayer(batch, oldId);
-                            peopleToRecalculate.add(oldId);
-                        }
-                        if (newId) {
-                            await this._addPastoralPrayer(batch, newId);
-                            peopleToRecalculate.add(newId);
-                        }
+                        if (oldId) peopleToRecalculate.add(oldId);
+                        if (newId) peopleToRecalculate.add(newId);
                     }
                 }
 
-                // Recalculate lastPastoralPrayerDate for affected people
                 for (const personId of peopleToRecalculate) {
-                    const latestDate = await this._calculateLatestPastoralPrayer(personId);
+                    if (subjectIds.has(personId)) await this._addPastoralPrayer(batch, personId);
+                    else await this._removePastoralPrayer(batch, personId);
+                }
+
+                // Recalculate lastPastoralPrayerDate for affected people. Written
+                // into the same batch as the history change above, so the cache
+                // and the record it caches can never land apart.
+                for (const personId of peopleToRecalculate) {
+                    const latestDate = await this._calculateLatestPastoralPrayer(
+                        personId, subjectIds.has(personId));
                     batch.update(db.collection('people').doc(personId), {
                         lastPastoralPrayerDate: latestDate
                     });
@@ -1798,30 +1813,37 @@ function serviceForm() {
             }
         },
 
+        _pastoralPrayerHistory(personId) {
+            return db.collection('people').doc(personId)
+                .collection(PastoralPrayerCore.HISTORY_COLLECTION);
+        },
+
         async _addPastoralPrayer(batch, personId) {
-            const personRef = db.collection('people').doc(personId);
-            const histRef = personRef.collection('pastoral_prayer_history').doc(this.date);
-            batch.set(histRef, {
-                serviceDate: this.date,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
+            const histRef = this._pastoralPrayerHistory(personId)
+                .doc(PastoralPrayerCore.historyDocId(this.date));
+            batch.set(histRef, Object.assign(
+                PastoralPrayerCore.historyRecord(this.date),
+                { createdAt: firebase.firestore.FieldValue.serverTimestamp() }
+            ));
         },
 
         async _removePastoralPrayer(batch, personId) {
-            const personRef = db.collection('people').doc(personId);
-            const histRef = personRef.collection('pastoral_prayer_history').doc(this.date);
+            const histRef = this._pastoralPrayerHistory(personId)
+                .doc(PastoralPrayerCore.historyDocId(this.date));
             batch.delete(histRef);
         },
 
-        async _calculateLatestPastoralPrayer(personId) {
-            const personRef = db.collection('people').doc(personId);
-            const histSnap = await personRef.collection('pastoral_prayer_history')
-                .orderBy('serviceDate', 'desc')
-                .limit(1)
-                .get();
-            
-            if (histSnap.empty) return null;
-            return histSnap.docs[0].data().serviceDate;
+        // What this person's `lastPastoralPrayerDate` should be once this save
+        // lands. The history change is sitting in the same uncommitted batch, so
+        // reading the newest stored date would answer the question as it stood
+        // before the edit — the bug that left a subject you had just chosen
+        // still reading as overdue, and a subject you had just removed still
+        // reading as prayed for. Read what is stored, then apply the pending
+        // change on top of it.
+        async _calculateLatestPastoralPrayer(personId, isSubject) {
+            const histSnap = await this._pastoralPrayerHistory(personId).get(FRESH_READ);
+            const dates = histSnap.docs.map(d => d.data().serviceDate || d.id);
+            return PastoralPrayerCore.nextLastPrayerDate(dates, this.date, isSubject);
         }
     };
 }

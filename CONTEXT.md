@@ -331,13 +331,13 @@ An individual whose involvement with the church is tracked. This is the primary 
   - `membership`: (Nested Object) Status and church relationship.
     - `status`: 'member', 'regular_attender', 'visitor', or 'inactive'.
     - `joinedAt`: Date they became a member.
-  - `lastPastoralPrayerDate`: The date (YYYY-MM-DD) of the last time this person was prayed for in the pastoral prayer.
+  - `lastPastoralPrayerDate`: The newest date (YYYY-MM-DD) in this person's `pastoral_prayer_history`, denormalised so the prayer rotation can rank everybody without opening a subcollection each. A **cache, never the record** — the history is the record, and anything holding the history reads that instead (ADR-0022). A Sunday still ahead counts: being booked is already a commitment to pray for that person, so it must stop the rotation offering them. `null` means never prayed for; the legacy `'0000-00-00'` is normalised away on read.
   - `baptismDate`: The date (YYYY-MM-DD) this person was baptized, derived from the Service at which they were a Baptism Candidate. Absent if they have not been recorded as baptized.
   - `createdAt`: Timestamp when the record was created.
   - `updatedAt`: Timestamp of the last modification.
 - **Sub-collections**:
   - `involvement`: Records of active participation in services (e.g., preaching, leading).
-  - `pastoral_prayer_history`: Records of when the person was the subject of the pastoral prayer.
+  - `pastoral_prayer_history`: Records of when the person was the subject of the pastoral prayer — one doc per Sunday, whose **doc ID is the service date**. That ID is how a save addresses the record it means to remove, so anything copying these records (a merge, a schedule shift) carries it across rather than reissuing it (ADR-0022).
 
 ### Service
 A liturgical event (usually a Sunday service), identified by its date (YYYY-MM-DD).

@@ -108,28 +108,41 @@ export function analyticsPage() {
                 });
 
                 // Fetch Pastoral Prayer History (Collection Group)
-                const prayerSnap = await db.collectionGroup('pastoral_prayer_history').get();
-                const prayerMap = {}; // { personId: { count: 0, lastDate: '', dates: [] } }
-                
+                //
+                // The history is the record; `lastPastoralPrayerDate` on the
+                // Person is only a cache of it, so this page reads the history
+                // and does not defer to the cache.
+                //
+                // Two different questions, two different date sets. How OFTEN
+                // someone has been prayed for, and how far apart, can only count
+                // Sundays that have happened — a booking six weeks out is not a
+                // prayer yet. But "last prayed for" has to include it, or the
+                // page shows a member as long overdue on the very week they are
+                // already down for.
+                const prayerSnap = await db.collectionGroup(PastoralPrayerCore.HISTORY_COLLECTION).get();
+                const prayerMap = {}; // { personId: { count, lastDate, dates, allDates } }
+
                 prayerSnap.forEach(doc => {
                     const personId = doc.ref.parent.parent.id;
-                    const prayerData = doc.data();
-                    const sDate = prayerData.serviceDate;
-                    
-                    if (sDate && sDate <= todayStr) {
-                        if (!prayerMap[personId]) {
-                            prayerMap[personId] = { count: 0, lastDate: '', dates: [] };
-                        }
+                    const sDate = PastoralPrayerCore.normalizeDate(doc.data().serviceDate || doc.id);
+                    if (!sDate) return;
+
+                    if (!prayerMap[personId]) {
+                        prayerMap[personId] = { count: 0, lastDate: null, dates: [], allDates: [] };
+                    }
+                    prayerMap[personId].allDates.push(sDate);
+
+                    if (sDate <= todayStr) {
                         prayerMap[personId].count++;
                         prayerMap[personId].dates.push(sDate);
                     }
                 });
-                
+
                 // Finalize prayer stats (sort dates, calculate intervals)
                 Object.values(prayerMap).forEach(stat => {
                     stat.dates.sort();
-                    stat.lastDate = stat.dates[stat.dates.length - 1];
-                    
+                    stat.lastDate = PastoralPrayerCore.latestDate(stat.allDates);
+
                     if (stat.dates.length >= 2) {
                         let totalDiff = 0;
                         for (let i = 1; i < stat.dates.length; i++) {
@@ -241,6 +254,12 @@ export function analyticsPage() {
                         .map(r => r[0]);
 
                     const pStats = this.prayerStats?.[pId] || { count: 0, lastDate: null, avgInterval: null };
+                    // The cache stands in only where there is no history behind
+                    // it — a person whose dates came in from an import. It is
+                    // normalized because the old write paths stored '0000-00-00'
+                    // for "never", which is truthy and would print as a date.
+                    const lastPrayerDate = pStats.lastDate
+                        || PastoralPrayerCore.normalizeDate(data.lastPastoralPrayerDate);
 
                     return {
                         id: pId,
@@ -250,7 +269,7 @@ export function analyticsPage() {
                         topRoles: topRoles,
                         tags: data.tags || [],
                         prayerCount: pStats.count,
-                        lastPrayerDate: data.lastPastoralPrayerDate || pStats.lastDate,
+                        lastPrayerDate: lastPrayerDate,
                         avgInterval: pStats.avgInterval
                     };
                 });

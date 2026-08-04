@@ -218,7 +218,7 @@
                             <template x-for="p in suggestions" :key="p.id">
                                 <button @click="select(p)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed/30 flex flex-col transition-colors border-b last:border-0">
                                     <span class="font-label-md text-sm text-primary" x-text="p.name"></span>
-                                    <span class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="p.lastPastoralPrayerDate && p.lastPastoralPrayerDate !== '0000-00-00' ? `Last: ${p.lastPastoralPrayerDate}` : 'Never prayed for'"></span>
+                                    <span class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
                                 </button>
                             </template>
                         </div>
@@ -233,8 +233,8 @@
                                 <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
                                 <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
                             </div>
-                            <template x-if="!p.isNew && p.lastPastoralPrayerDate">
-                                <span class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="p.lastPastoralPrayerDate !== '0000-00-00' ? `Last: ${p.lastPastoralPrayerDate}` : 'Never prayed for'"></span>
+                            <template x-if="!p.isNew">
+                                <span class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
                             </template>
                         </button>
                     </template>
@@ -591,6 +591,7 @@
     </div>
 
     <script src="date-utils.js"></script>
+    <script src="pastoral-prayer-core.js"></script>
     <script src="prayer-suggestions.js"></script>
     <!-- Guide engine + store: lets navigateToGuide compute v2 completeness from
          the frozen snapshot (ADR-0008) instead of a hardcoded field list. -->

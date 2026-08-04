@@ -252,9 +252,9 @@
                                         <div class="flex items-center flex-wrap gap-x-3 gap-y-1 pt-1.5">
                                             <!-- Last Prayed For & Involvements Row -->
                                             <div class="flex items-center gap-2">
-                                                <div x-show="person.lastPastoralPrayerDate" class="flex items-center gap-1.5 text-secondary text-[10px] font-bold">
+                                                <div class="flex items-center gap-1.5 text-secondary text-[10px] font-bold">
                                                     <span class="material-symbols-outlined text-[14px]">volunteer_activism</span>
-                                                    <span x-text="person.lastPastoralPrayerDate === '0000-00-00' ? 'Last: Never' : `Last: ${person.lastPastoralPrayerDate}`"></span>
+                                                    <span x-text="PastoralPrayerCore.lastPrayedLabel(person.lastPastoralPrayerDate)"></span>
                                                 </div>
                                                 <span class="bg-secondary-container text-on-secondary-container text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-tighter border border-secondary/10" 
                                                       x-text="`${person.totalInvolvements || 0} Involvements`"></span>
@@ -729,6 +729,7 @@
         </button>
     </div>
 
+    <script src="pastoral-prayer-core.js"></script>
     <script src="shepherding-core.js"></script>
     <script src="family-core.js"></script>
     <script src="events-core.js"></script>
