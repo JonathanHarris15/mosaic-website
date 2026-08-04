@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/tokens/fonts.css">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/tokens/colors.css">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/tokens/typography.css">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/tokens/spacing.css">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/tokens/base.css">
+  <link rel="stylesheet" href="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/styles.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&amp;display=swap">
+  <script src="_ds/mosaic-website-design-f2292e35-4adc-4d33-a42d-7ca9373364c9/_ds_bundle.js"></script>
+  <style>
+    a{color:var(--secondary);text-decoration:none}
+    a:hover{color:var(--primary)}
+    .aw-row:hover{background:var(--surface-container-low)}
+    .aw-cell:hover{filter:brightness(.95)}
+    .aw-in{font-family:var(--font-sans);font-size:14.5px;color:var(--on-surface);outline:none}
+    .aw-in:focus{border-color:var(--tertiary);box-shadow:0 0 0 3px rgba(93,148,169,.18)}
+    .aw-x:hover{background:var(--surface-container-high);color:var(--on-surface)}
+  </style>
+</helmet>
+
+<section style="display:flex;flex-direction:column;gap:22px;padding:40px;background:var(--background);font-family:var(--font-sans);color:var(--on-surface)">
+  <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+    <span style="font-family:var(--font-display);font-size:22px;letter-spacing:.02em;color:var(--primary)">Away — MS-188</span>
+    <span style="font-size:12.5px;color:var(--on-surface-variant)">Desktop <a href="#1a">1a</a> · Empty <a href="#1b">1b</a> · Phone, paged month <a href="#1c">1c</a> · Phone, one long scroll <a href="#1d">1d</a> · The clash <a href="#1e">1e</a> · How an editor reads it <a href="#1f">1f</a>. Every screen picks dates the same way: tap the first day, tap the last. All three grids are live.</span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:48px">
+
+    <!-- ════════ 1a · DESKTOP ════════ -->
+    <div id="1a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">1a</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Desktop · 1200px · two months, drag-free range</span>
+      </div>
+
+      <div style="width:1280px;background:var(--background);border:1px solid var(--outline-variant);border-radius:14px;overflow:hidden">
+        <header style="max-width:1200px;margin:0 auto;padding:18px 40px 0;display:flex;align-items:center;justify-content:space-between">
+          <span style="display:flex;align-items:center;gap:5px;color:var(--on-surface-variant);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase">
+            <span class="material-symbols-outlined" style="font-size:19px">arrow_back</span>Calendar
+          </span>
+          <span style="width:34px;height:34px;border-radius:50%;background:var(--surface-container-high);border:1px solid var(--outline-variant);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--navy-900)">{{ initials }}</span>
+        </header>
+
+        <div style="max-width:1200px;margin:0 auto;padding:26px 40px 48px">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:32px;padding-bottom:20px;border-bottom:1px solid var(--outline-variant)">
+            <div>
+              <h1 style="margin:0;font-family:var(--font-display);font-weight:600;font-size:32px;letter-spacing:.02em;color:var(--primary)">Away</h1>
+              <p style="margin:8px 0 0;font-size:14px;line-height:1.55;color:var(--on-surface-variant);max-width:66ch;text-wrap:pretty">Whole days you won't be here. Nothing is put on you on these days. Nobody approves it — you say it and it's true.</p>
+            </div>
+            <span style="display:flex;align-items:center;gap:7px;flex-shrink:0;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);background:var(--surface-container);border:1px solid var(--outline-variant);border-radius:6px;padding:7px 11px">
+              <span class="material-symbols-outlined" style="font-size:17px">lock</span>Only you and the rota editors
+            </span>
+          </div>
+
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:28px;align-items:start;margin-top:26px">
+
+            <!-- THE CALENDAR — the whole primary action -->
+            <div style="background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:10px;padding:22px 24px 24px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;padding-bottom:16px;border-bottom:1px solid var(--outline-variant)">
+                <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant)">{{ pickPrompt }}</span>
+                <div style="display:flex;gap:2px">
+                  <button type="button" onClick="{{ onPrev }}" title="Earlier months" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:10px 0 0 10px;cursor:pointer;color:var(--on-surface-variant)">
+                    <span class="material-symbols-outlined" style="font-size:19px">chevron_left</span>
+                  </button>
+                  <button type="button" onClick="{{ onNext }}" title="Later months" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:0 10px 10px 0;cursor:pointer;color:var(--on-surface-variant)">
+                    <span class="material-symbols-outlined" style="font-size:19px">chevron_right</span>
+                  </button>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:32px;margin-top:18px">
+                <sc-for list="{{ months }}" as="m" hint-placeholder-count="2">
+                  <div>
+                    <div style="text-align:center;font-family:var(--font-display);font-size:17px;letter-spacing:.02em;color:var(--primary);padding-bottom:12px">{{ m.label }}</div>
+                    <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">
+                      <sc-for list="{{ weekdays }}" as="w" hint-placeholder-count="7">
+                        <div style="text-align:center;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--outline);padding-bottom:8px">{{ w }}</div>
+                      </sc-for>
+                      <sc-for list="{{ m.cells }}" as="c" hint-placeholder-count="35">
+                        <button class="aw-cell" type="button" onClick="{{ c.onTap }}" title="{{ c.title }}" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;height:46px;padding:0;border:none;cursor:{{ c.cursor }};background:{{ c.bg }};border-radius:{{ c.radius }};transition:background 150ms cubic-bezier(0.2,0,0,1)">
+                          <span style="font-family:var(--font-sans);font-size:14.5px;font-weight:{{ c.weight }};color:{{ c.fg }}">{{ c.day }}</span>
+                          <span style="display:flex;gap:3px;height:5px">
+                            <sc-for list="{{ c.dots }}" as="d" hint-placeholder-count="0">
+                              <span style="width:5px;height:5px;border-radius:50%;background:{{ d.color }}"></span>
+                            </sc-for>
+                          </span>
+                        </button>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:18px;margin-top:18px;padding-top:16px;border-top:1px solid var(--outline-variant);font-size:11.5px;color:var(--on-surface-variant)">
+                <span style="display:flex;align-items:center;gap:7px"><span style="width:13px;height:13px;border-radius:4px;background:var(--primary)"></span>The days you're choosing</span>
+                <span style="display:flex;align-items:center;gap:7px"><span style="width:13px;height:13px;border-radius:4px;background:var(--secondary-container);border:1px solid var(--secondary)"></span>Already on record</span>
+                <span style="display:flex;align-items:center;gap:7px"><span style="width:6px;height:6px;border-radius:50%;background:var(--sand)"></span>You're serving</span>
+              </div>
+
+              <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-top:20px">
+                <p style="margin:0;font-family:var(--font-serif);font-size:19px;line-height:1.4;color:var(--on-surface);text-wrap:pretty;max-width:38ch">{{ rangeSentence }}</p>
+                <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+                  <button type="button" onClick="{{ onClear }}" style="font-family:var(--font-sans);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--on-surface-variant);background:transparent;border:none;cursor:pointer;padding:8px 4px">Start again</button>
+                  <button type="button" onClick="{{ onAdd }}" style="display:flex;align-items:center;gap:8px;font-family:var(--font-sans);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border:1px solid var(--primary);border-radius:10px;padding:14px 22px;cursor:pointer;box-shadow:var(--shadow-xs);opacity:{{ addOpacity }}">
+                    <span class="material-symbols-outlined" style="font-size:19px">check</span>I'm away these days
+                  </button>
+                </div>
+              </div>
+
+              <!-- THE CLASH -->
+              <sc-if value="{{ hasClash }}" hint-placeholder-val="{{ true }}">
+                <div style="background:{{ amberBg }};border:1px solid var(--warning);border-radius:10px;padding:20px 22px 22px;margin-top:20px">
+                  <div style="display:flex;align-items:flex-start;gap:12px">
+                    <span class="material-symbols-outlined" style="font-size:22px;color:var(--warning);margin-top:1px">event_upcoming</span>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-family:var(--font-display);font-size:18px;letter-spacing:.02em;color:var(--primary)">{{ clashHeading }}</div>
+                      <p style="margin:7px 0 0;font-size:13.5px;line-height:1.55;color:var(--on-surface-variant);max-width:62ch;text-wrap:pretty">These days are still yours — saying you're away doesn't take them off you. Find someone to swap with before you go.</p>
+                    </div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;margin-top:16px;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:10px;overflow:hidden">
+                    <sc-for list="{{ clashes }}" as="c" hint-placeholder-count="3">
+                      <div style="display:flex;align-items:center;gap:16px;padding:14px 16px;border-bottom:1px solid var(--outline-variant)">
+                        <span style="width:2px;align-self:stretch;background:var(--warning);border-radius:2px;flex-shrink:0"></span>
+                        <div style="flex:1;min-width:0">
+                          <div style="font-family:var(--font-serif);font-size:17px;line-height:1.3;color:var(--on-surface)">{{ c.role }}</div>
+                          <div style="font-size:12.5px;color:var(--on-surface-variant);margin-top:2px">{{ c.when }} · {{ c.event }}</div>
+                        </div>
+                        <span style="width:168px;flex-shrink:0;text-align:right;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--outline)">Yours to sort</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ noClash }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:11px;margin-top:20px;padding:16px 20px;background:var(--surface-container-low);border:1px solid var(--outline-variant);border-radius:10px">
+                  <span class="material-symbols-outlined" style="font-size:20px;color:var(--success)">check_circle</span>
+                  <span style="font-family:var(--font-serif);font-size:16.5px;color:var(--on-surface)">Nothing of yours falls in these dates.</span>
+                </div>
+              </sc-if>
+            </div>
+
+            <!-- RAIL: what's on record -->
+            <div style="display:flex;flex-direction:column;gap:18px">
+              <div style="background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:10px;padding:20px">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--outline-variant)">
+                  <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant)">What you've said so far</span>
+                  <span style="font-size:12px;color:var(--on-surface-variant)">{{ recordCount }}</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px">
+                  <sc-for list="{{ stretches }}" as="s" hint-placeholder-count="2">
+                    <div class="aw-row" style="display:flex;align-items:center;gap:12px;padding:13px 14px;background:var(--surface-container-low);border:1px solid var(--outline-variant);border-left:3px solid var(--secondary);border-radius:10px;transition:background 150ms cubic-bezier(0.2,0,0,1)">
+                      <div style="flex:1;min-width:0">
+                        <div style="font-family:var(--font-serif);font-size:17px;line-height:1.3;color:var(--on-surface)">{{ s.range }}</div>
+                        <div style="font-size:12px;color:var(--on-surface-variant);margin-top:2px">{{ s.meta }}</div>
+                      </div>
+                      <button class="aw-x" type="button" onClick="{{ s.onRemove }}" title="Remove these days" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--outline-variant);border-radius:10px;color:var(--on-surface-variant);cursor:pointer;flex-shrink:0;transition:background 150ms cubic-bezier(0.2,0,0,1)">
+                        <span class="material-symbols-outlined" style="font-size:18px">close</span>
+                      </button>
+                    </div>
+                  </sc-for>
+                </div>
+                <sc-if value="{{ pastOn }}" hint-placeholder-val="{{ true }}">
+                  <div style="margin-top:14px">
+                    <button class="aw-row" type="button" onClick="{{ onTogglePast }}" style="display:flex;align-items:center;gap:9px;width:100%;font-family:var(--font-sans);font-size:12.5px;line-height:1.4;color:var(--on-surface-variant);background:transparent;border:none;border-top:1px dashed var(--outline-variant);padding:14px 2px 0;cursor:pointer;text-align:left">
+                      <span class="material-symbols-outlined" style="font-size:18px;color:var(--outline)">{{ pastIcon }}</span>{{ pastLabel }}
+                    </button>
+                    <sc-if value="{{ showPast }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+                        <sc-for list="{{ pastStretches }}" as="p" hint-placeholder-count="2">
+                          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface-container-low);border:1px solid var(--outline-variant);border-radius:10px;opacity:.7">
+                            <span style="font-family:var(--font-serif);font-size:15.5px;color:var(--on-surface-variant)">{{ p.range }}</span>
+                            <span style="font-size:11.5px;color:var(--outline);margin-left:auto">{{ p.meta }}</span>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+              </div>
+
+              <div style="background:var(--primary);border-radius:10px;padding:20px">
+                <div style="font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--primary-fixed-dim)">The deal</div>
+                <p style="margin:8px 0 0;font-family:var(--font-serif);font-size:17px;line-height:1.45;color:var(--on-primary);text-wrap:pretty">Say it before the rota is made and nothing ever puts you there. Say it after, and the place stays yours to hand on.</p>
+              </div>
+
+              <div style="background:var(--surface-container-low);border:1px solid var(--outline-variant);border-radius:10px;padding:20px">
+                <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:12px">Worth knowing</div>
+                <div style="display:flex;flex-direction:column;gap:11px">
+                  <sc-for list="{{ notes }}" as="n" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:flex-start;gap:9px;font-size:13px;line-height:1.5;color:var(--on-surface-variant)">
+                      <span class="material-symbols-outlined" style="font-size:17px;color:var(--outline);margin-top:1px;flex-shrink:0">{{ n.icon }}</span>
+                      <span style="text-wrap:pretty">{{ n.text }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:flex-start;gap:9px;max-width:1280px;font-size:12.5px;line-height:1.5;color:var(--on-surface-variant)">
+        <span class="material-symbols-outlined" style="font-size:17px;color:var(--outline);margin-top:1px">draw</span>
+        <span style="text-wrap:pretty">No date fields anywhere: the grid is the input on every size. First tap sets the first day, second tap the last, a tap before the first day starts again from there. The 168px column on each clash row is held open for MS-190's <em>Offer it to someone</em>; today it reads "Yours to sort", so the button arrives without moving anything.</span>
+      </div>
+    </div>
+
+    <!-- ════════ 1b · EMPTY ════════ -->
+    <div id="1b" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">1b</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Desktop · never used this before · nothing tapped yet</span>
+      </div>
+
+      <div style="width:920px;background:var(--background);border:1px solid var(--outline-variant);border-radius:14px;padding:34px 40px 44px">
+        <h1 style="margin:0;font-family:var(--font-display);font-weight:600;font-size:32px;letter-spacing:.02em;color:var(--primary)">Away</h1>
+        <p style="margin:8px 0 0;font-size:14px;line-height:1.55;color:var(--on-surface-variant);max-width:66ch;text-wrap:pretty">Whole days you won't be here. Nothing is put on you on these days. Nobody approves it — you say it and it's true.</p>
+
+        <div style="margin-top:24px;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:10px;padding:22px 24px 24px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;padding-bottom:16px;border-bottom:1px solid var(--outline-variant)">
+            <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant)">Tap the first day you're away</span>
+            <div style="display:flex;gap:2px">
+              <span style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:1px solid var(--outline-variant);border-radius:10px 0 0 10px;color:var(--on-surface-variant)"><span class="material-symbols-outlined" style="font-size:19px">chevron_left</span></span>
+              <span style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:1px solid var(--outline-variant);border-radius:0 10px 10px 0;color:var(--on-surface-variant)"><span class="material-symbols-outlined" style="font-size:19px">chevron_right</span></span>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:32px;margin-top:18px">
+            <sc-for list="{{ emptyMonths }}" as="m" hint-placeholder-count="2">
+              <div>
+                <div style="text-align:center;font-family:var(--font-display);font-size:17px;letter-spacing:.02em;color:var(--primary);padding-bottom:12px">{{ m.label }}</div>
+                <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">
+                  <sc-for list="{{ weekdays }}" as="w" hint-placeholder-count="7">
+                    <div style="text-align:center;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--outline);padding-bottom:8px">{{ w }}</div>
+                  </sc-for>
+                  <sc-for list="{{ m.cells }}" as="c" hint-placeholder-count="35">
+                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;height:46px;border-radius:{{ c.radius }};background:{{ c.bg }}">
+                      <span style="font-size:14.5px;font-weight:{{ c.weight }};color:{{ c.fg }}">{{ c.day }}</span>
+                      <span style="display:flex;gap:3px;height:5px">
+                        <sc-for list="{{ c.dots }}" as="d" hint-placeholder-count="0">
+                          <span style="width:5px;height:5px;border-radius:50%;background:{{ d.color }}"></span>
+                        </sc-for>
+                      </span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-top:20px;padding-top:16px;border-top:1px solid var(--outline-variant)">
+            <p style="margin:0;font-family:var(--font-serif);font-size:19px;line-height:1.4;color:var(--on-surface-variant);text-wrap:pretty;max-width:38ch">Tap a day to start. Tap a second day if you're away for longer than one.</p>
+            <span style="display:flex;align-items:center;gap:8px;flex-shrink:0;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:10px;padding:14px 22px;opacity:.4"><span class="material-symbols-outlined" style="font-size:19px">check</span>I'm away these days</span>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;padding:30px;background:var(--surface-container-low);border:1px dashed var(--outline-variant);border-radius:10px;text-align:center">
+          <span class="material-symbols-outlined" style="font-size:30px;color:var(--outline)">luggage</span>
+          <div style="font-family:var(--font-display);font-size:19px;letter-spacing:.02em;color:var(--primary);margin-top:10px">You haven't said you're away yet</div>
+          <p style="margin:8px auto 0;max-width:50ch;font-family:var(--font-serif);font-size:16.5px;line-height:1.5;color:var(--on-surface-variant);text-wrap:pretty">Holidays, a weekend at a wedding, a term off — mark the days above and the rota will work around them. Only you and the people who make the rota see this.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ 1c · PHONE A ════════ -->
+    <div id="1c" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">1c</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Phone A · one month at a time, paged</span>
+      </div>
+
+      <div style="width:390px;background:var(--background);border:1px solid var(--outline-variant);border-radius:22px;overflow:hidden">
+        <div style="padding:16px 18px 0;display:flex;align-items:center;justify-content:space-between">
+          <span class="material-symbols-outlined" style="font-size:22px;color:var(--on-surface-variant)">arrow_back</span>
+          <span style="font-family:var(--font-display);font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--primary)">Away</span>
+          <span class="material-symbols-outlined" style="font-size:20px;color:var(--on-surface-variant)">lock</span>
+        </div>
+
+        <div style="padding:16px 18px 0">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant)">{{ pPrompt }}</div>
+        </div>
+
+        <div style="padding:12px 18px 0">
+          <div style="background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:10px;padding:14px 12px 16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px 12px">
+              <button type="button" onClick="{{ onPPrev }}" style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;cursor:pointer;color:var(--on-surface-variant)"><span class="material-symbols-outlined" style="font-size:22px">chevron_left</span></button>
+              <span style="font-family:var(--font-display);font-size:17px;letter-spacing:.02em;color:var(--primary)">{{ pMonthLabel }}</span>
+              <button type="button" onClick="{{ onPNext }}" style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;cursor:pointer;color:var(--on-surface-variant)"><span class="material-symbols-outlined" style="font-size:22px">chevron_right</span></button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">
+              <sc-for list="{{ weekdays }}" as="w" hint-placeholder-count="7">
+                <div style="text-align:center;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--outline);padding-bottom:7px">{{ w }}</div>
+              </sc-for>
+              <sc-for list="{{ pCells }}" as="c" hint-placeholder-count="35">
+                <button class="aw-cell" type="button" onClick="{{ c.onTap }}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:48px;border:none;cursor:{{ c.cursor }};padding:0;background:{{ c.bg }};border-radius:{{ c.radius }};transition:background 150ms cubic-bezier(0.2,0,0,1)">
+                  <span style="font-family:var(--font-sans);font-size:15px;font-weight:{{ c.weight }};color:{{ c.fg }}">{{ c.day }}</span>
+                  <span style="display:flex;gap:3px;height:5px">
+                    <sc-for list="{{ c.dots }}" as="d" hint-placeholder-count="0">
+                      <span style="width:5px;height:5px;border-radius:50%;background:{{ d.color }}"></span>
+                    </sc-for>
+                  </span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:14px 18px 0;display:flex;align-items:center;justify-content:space-between;gap:14px">
+          <p style="margin:0;font-family:var(--font-serif);font-size:17px;line-height:1.4;color:var(--on-surface);text-wrap:pretty">{{ pSentence }}</p>
+          <button type="button" onClick="{{ onPClear }}" style="flex-shrink:0;font-family:var(--font-sans);font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--on-surface-variant);background:transparent;border:none;cursor:pointer;padding:10px 2px">Start again</button>
+        </div>
+
+        <sc-if value="{{ pHasClash }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:12px 18px 0">
+            <div style="background:{{ amberBg }};border:1px solid var(--warning);border-radius:10px;padding:14px 15px">
+              <div style="display:flex;align-items:flex-start;gap:9px">
+                <span class="material-symbols-outlined" style="font-size:19px;color:var(--warning)">event_upcoming</span>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13.5px;font-weight:700;color:var(--on-surface);line-height:1.35">{{ pClashHeading }}</div>
+                  <div style="display:flex;flex-direction:column;gap:5px;margin-top:9px">
+                    <sc-for list="{{ pClashes }}" as="c" hint-placeholder-count="2">
+                      <div style="font-size:12.5px;line-height:1.4;color:var(--on-surface-variant)"><span style="font-family:var(--font-serif);font-size:15px;color:var(--on-surface)">{{ c.role }}</span> — {{ c.when }}</div>
+                    </sc-for>
+                  </div>
+                  <div style="font-size:12.5px;line-height:1.45;color:var(--on-surface-variant);margin-top:10px;text-wrap:pretty">Still yours. Find someone to swap with before you go.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <div style="padding:16px 18px 20px">
+          <button type="button" onClick="{{ onPhoneAdd }}" style="display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:52px;font-family:var(--font-sans);font-size:12.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border:1px solid var(--primary);border-radius:10px;cursor:pointer;box-shadow:var(--shadow-xs);opacity:{{ pAddOpacity }}">
+            <span class="material-symbols-outlined" style="font-size:20px">check</span>I'm away these days
+          </button>
+        </div>
+
+        <div style="padding:0 18px 26px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant);padding-bottom:9px">What you've said so far</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <sc-for list="{{ stretches }}" as="s" hint-placeholder-count="2">
+              <div style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-left:3px solid var(--secondary);border-radius:10px">
+                <div style="flex:1;min-width:0">
+                  <div style="font-family:var(--font-serif);font-size:16.5px;line-height:1.3;color:var(--on-surface)">{{ s.range }}</div>
+                  <div style="font-size:12px;color:var(--on-surface-variant);margin-top:2px">{{ s.meta }}</div>
+                </div>
+                <button type="button" onClick="{{ s.onRemove }}" title="Remove these days" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--outline-variant);border-radius:10px;color:var(--on-surface-variant);cursor:pointer;flex-shrink:0">
+                  <span class="material-symbols-outlined" style="font-size:19px">close</span>
+                </button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ 1d · PHONE B ════════ -->
+    <div id="1d" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">1d</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Phone B · months run on, one long scroll · summary sticks to the bottom</span>
+      </div>
+
+      <div style="width:390px;height:844px;position:relative;background:var(--background);border:1px solid var(--outline-variant);border-radius:22px;overflow:hidden">
+        <div style="padding:16px 18px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--outline-variant);background:var(--background)">
+          <span class="material-symbols-outlined" style="font-size:22px;color:var(--on-surface-variant)">arrow_back</span>
+          <span style="font-family:var(--font-display);font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--primary)">Away</span>
+          <span class="material-symbols-outlined" style="font-size:20px;color:var(--on-surface-variant)">lock</span>
+        </div>
+
+        <div style="position:absolute;top:53px;bottom:{{ bTrayHeight }};left:0;right:0;overflow:auto;padding:14px 18px 24px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant);padding-bottom:14px">{{ bPrompt }}</div>
+          <div style="display:flex;flex-direction:column;gap:26px">
+            <sc-for list="{{ bMonths }}" as="m" hint-placeholder-count="3">
+              <div>
+                <div style="font-family:var(--font-display);font-size:16px;letter-spacing:.02em;color:var(--primary);padding-bottom:10px">{{ m.label }}</div>
+                <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr))">
+                  <sc-for list="{{ weekdays }}" as="w" hint-placeholder-count="7">
+                    <div style="text-align:center;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--outline);padding-bottom:7px">{{ w }}</div>
+                  </sc-for>
+                  <sc-for list="{{ m.cells }}" as="c" hint-placeholder-count="35">
+                    <button class="aw-cell" type="button" onClick="{{ c.onTap }}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:48px;border:none;cursor:{{ c.cursor }};padding:0;background:{{ c.bg }};border-radius:{{ c.radius }};transition:background 150ms cubic-bezier(0.2,0,0,1)">
+                      <span style="font-family:var(--font-sans);font-size:15px;font-weight:{{ c.weight }};color:{{ c.fg }}">{{ c.day }}</span>
+                      <span style="display:flex;gap:3px;height:5px">
+                        <sc-for list="{{ c.dots }}" as="d" hint-placeholder-count="0">
+                          <span style="width:5px;height:5px;border-radius:50%;background:{{ d.color }}"></span>
+                        </sc-for>
+                      </span>
+                    </button>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="position:absolute;left:0;right:0;bottom:0;background:var(--surface-container-lowest);border-top:1px solid var(--outline-variant);padding:16px 18px 22px;box-shadow:0 -8px 24px rgba(14,28,54,.10)">
+          <sc-if value="{{ bHasClash }}" hint-placeholder-val="{{ true }}">
+            <div style="background:{{ amberBg }};border:1px solid var(--warning);border-radius:10px;padding:12px 13px;margin-bottom:12px">
+              <div style="display:flex;align-items:flex-start;gap:9px">
+                <span class="material-symbols-outlined" style="font-size:18px;color:var(--warning)">event_upcoming</span>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13px;font-weight:700;color:var(--on-surface);line-height:1.35">{{ bClashHeading }}</div>
+                  <div style="display:flex;flex-direction:column;gap:4px;margin-top:7px">
+                    <sc-for list="{{ bClashes }}" as="c" hint-placeholder-count="2">
+                      <div style="font-size:12px;line-height:1.4;color:var(--on-surface-variant)"><span style="font-family:var(--font-serif);font-size:14.5px;color:var(--on-surface)">{{ c.role }}</span> — {{ c.when }}</div>
+                    </sc-for>
+                  </div>
+                  <div style="font-size:12px;line-height:1.45;color:var(--on-surface-variant);margin-top:8px;text-wrap:pretty">Still yours. Find someone to swap with before you go.</div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px">
+            <p style="margin:0;font-family:var(--font-serif);font-size:16.5px;line-height:1.35;color:var(--on-surface);text-wrap:pretty">{{ bSentence }}</p>
+            <button type="button" onClick="{{ onBClear }}" style="flex-shrink:0;font-family:var(--font-sans);font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--on-surface-variant);background:transparent;border:none;cursor:pointer;padding:8px 2px">Start again</button>
+          </div>
+          <button type="button" onClick="{{ onBAdd }}" style="display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:52px;font-family:var(--font-sans);font-size:12.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border:1px solid var(--primary);border-radius:10px;cursor:pointer;box-shadow:var(--shadow-xs);opacity:{{ bAddOpacity }}">
+            <span class="material-symbols-outlined" style="font-size:20px">check</span>I'm away these days
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ 1e · THE CLASH ════════ -->
+    <div id="1e" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">1e</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">The clash · one place, several places, and none</span>
+      </div>
+
+      <div style="width:760px;display:flex;flex-direction:column;gap:16px">
+        <div style="background:{{ amberBg }};border:1px solid var(--warning);border-radius:10px;padding:22px 24px 24px">
+          <div style="display:flex;align-items:flex-start;gap:12px">
+            <span class="material-symbols-outlined" style="font-size:22px;color:var(--warning);margin-top:1px">event_upcoming</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-family:var(--font-display);font-size:18px;letter-spacing:.02em;color:var(--primary)">One of these days is a day you're serving.</div>
+              <p style="margin:7px 0 0;font-size:13.5px;line-height:1.55;color:var(--on-surface-variant);max-width:62ch;text-wrap:pretty">This day is still yours — saying you're away doesn't take it off you. Find someone to swap with before you go.</p>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:16px;margin-top:18px;padding:14px 16px;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:10px">
+            <span style="width:2px;align-self:stretch;background:var(--warning);border-radius:2px"></span>
+            <div style="flex:1;min-width:0">
+              <div style="font-family:var(--font-serif);font-size:17px;line-height:1.3;color:var(--on-surface)">Coffee</div>
+              <div style="font-size:12.5px;color:var(--on-surface-variant);margin-top:2px">Sunday 6 September · Sunday Service</div>
+            </div>
+            <span style="width:168px;flex-shrink:0;text-align:right;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--outline)">Yours to sort</span>
+          </div>
+        </div>
+
+        <div style="background:{{ amberBg }};border:1px solid var(--warning);border-radius:10px;padding:22px 24px 24px">
+          <div style="display:flex;align-items:flex-start;gap:12px">
+            <span class="material-symbols-outlined" style="font-size:22px;color:var(--warning);margin-top:1px">event_upcoming</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-family:var(--font-display);font-size:18px;letter-spacing:.02em;color:var(--primary)">Later, once MS-190 lands</div>
+              <p style="margin:7px 0 0;font-size:13.5px;line-height:1.55;color:var(--on-surface-variant);max-width:62ch;text-wrap:pretty">Same card, same words, same row height — the reserved column fills with one button per place.</p>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;margin-top:18px;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:10px;overflow:hidden">
+            <sc-for list="{{ futureRows }}" as="f" hint-placeholder-count="2">
+              <div style="display:flex;align-items:center;gap:16px;padding:14px 16px;border-bottom:1px solid var(--outline-variant)">
+                <span style="width:2px;align-self:stretch;background:var(--warning);border-radius:2px;flex-shrink:0"></span>
+                <div style="flex:1;min-width:0">
+                  <div style="font-family:var(--font-serif);font-size:17px;line-height:1.3;color:var(--on-surface)">{{ f.role }}</div>
+                  <div style="font-size:12.5px;color:var(--on-surface-variant);margin-top:2px">{{ f.when }} · {{ f.event }}</div>
+                </div>
+                <span style="width:168px;flex-shrink:0;display:flex;justify-content:flex-end">
+                  <span style="display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--secondary);background:var(--surface-container-lowest);border:1px dashed var(--secondary);border-radius:10px;padding:9px 13px">Offer it to someone</span>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:11px;padding:16px 20px;background:var(--surface-container-low);border:1px solid var(--outline-variant);border-radius:10px">
+          <span class="material-symbols-outlined" style="font-size:20px;color:var(--success)">check_circle</span>
+          <span style="font-family:var(--font-serif);font-size:16.5px;color:var(--on-surface)">Nothing of yours falls in these dates.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ 1f · EDITOR WORDING ════════ -->
+    <div id="1f" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-primary);background:var(--primary);border-radius:6px;padding:4px 8px">1f</span>
+        <span style="font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--on-surface-variant)">Not a screen here · the words an editor sees in the person picker</span>
+      </div>
+
+      <div style="width:760px;display:flex;gap:20px;align-items:flex-start">
+        <div style="flex:1;min-width:0;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:10px;overflow:hidden">
+          <div style="padding:12px 16px;background:var(--surface-container-low);border-bottom:1px solid var(--outline-variant);font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant)">Who's taking this place? · Sunday 6 September</div>
+          <sc-for list="{{ pickerRows }}" as="p" hint-placeholder-count="5">
+            <div class="aw-row" style="display:flex;align-items:center;gap:13px;padding:12px 16px;border-bottom:1px solid var(--outline-variant);background:{{ p.bg }};transition:background 150ms cubic-bezier(0.2,0,0,1)">
+              <span style="width:32px;height:32px;border-radius:50%;background:var(--surface-container-high);border:1px solid var(--outline-variant);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--navy-900);flex-shrink:0;opacity:{{ p.opacity }}">{{ p.initials }}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:14.5px;font-weight:600;color:{{ p.nameFg }}">{{ p.name }}</div>
+                <div style="font-size:12.5px;line-height:1.4;margin-top:1px;font-family:{{ p.noteFont }};color:{{ p.noteFg }};text-wrap:pretty">{{ p.note }}</div>
+              </div>
+              <sc-if value="{{ p.away }}" hint-placeholder-val="{{ false }}">
+                <span class="material-symbols-outlined" style="font-size:18px;color:var(--warning);flex-shrink:0">luggage</span>
+              </sc-if>
+              <sc-if value="{{ p.blocked }}" hint-placeholder-val="{{ false }}">
+                <span class="material-symbols-outlined" style="font-size:18px;color:var(--outline);flex-shrink:0">block</span>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="width:280px;display:flex;flex-direction:column;gap:16px">
+          <div style="background:var(--surface-container-low);border:1px solid var(--outline-variant);border-radius:10px;padding:20px">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:10px">Why it's attributed</div>
+            <p style="margin:0;font-family:var(--font-serif);font-size:16px;line-height:1.5;color:var(--on-surface);text-wrap:pretty">Every other reason is a rule the church wrote. This one is a person's own words, so it carries their name. Overruling a rule is judgement; overruling Sarah should feel like what it is.</p>
+          </div>
+          <div style="background:var(--surface-container-low);border:1px solid var(--outline-variant);border-radius:10px;padding:20px">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:12px">The two strings</div>
+            <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;line-height:1.45;color:var(--on-surface-variant)">
+              <div><span style="font-family:var(--font-serif);font-size:15.5px;color:var(--on-surface)">Sarah said she's away</span><br>she entered it herself</div>
+              <div><span style="font-family:var(--font-serif);font-size:15.5px;color:var(--on-surface)">Ann marked Sarah away</span><br>an editor entered it for her</div>
+              <div style="padding-top:10px;border-top:1px solid var(--outline-variant);color:var(--outline)">Never <span style="text-decoration:line-through">Unavailable</span>. Greyed, but still placeable.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#182F57"/><rect x="26" y="30" width="48" height="42" rx="5" fill="none" stroke="#F2EAE2" stroke-width="2.5"/><path d="M26 40h48" stroke="#F2EAE2" stroke-width="2.5"/><rect x="34" y="48" width="30" height="8" rx="4" fill="#5D94A9"/><circle cx="38" cy="63" r="3" fill="#B89B6A"/></svg></template>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:1300},&quot;personName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Sarah Whitfield&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;monthsShown&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:2,&quot;min&quot;:1,&quot;max&quot;:3,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Open questions&quot;},&quot;pastStretches&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Open questions&quot;},&quot;amberFill&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;rgba(184,134,46,.10)&quot;,&quot;options&quot;:[&quot;rgba(184,134,46,.10)&quot;,&quot;rgba(184,134,46,.16)&quot;,&quot;#F6EEDD&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Open questions&quot;}}">
+const MS = 86400000;
+const DOWL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MONL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const WORDS = ['No','One','Two','Three','Four','Five','Six','Seven','Eight'];
+
+const dt = s => new Date(s + 'T00:00:00Z');
+const isoOf = d => d.toISOString().slice(0, 10);
+const span = (a, b) => Math.round((dt(b) - dt(a)) / MS) + 1;
+const longD = s => DOWL[dt(s).getUTCDay()] + ' ' + dt(s).getUTCDate() + ' ' + MONL[dt(s).getUTCMonth()];
+const midD = s => DOWL[dt(s).getUTCDay()].slice(0, 3) + ' ' + dt(s).getUTCDate() + ' ' + MONL[dt(s).getUTCMonth()];
+
+// Sarah's places, from the rota
+const PLACES = [
+  { date: '2026-08-02', role: 'Coffee',        event: 'Sunday Service' },
+  { date: '2026-08-09', role: 'Kids Ministry', event: 'Sunday Service' },
+  { date: '2026-09-06', role: 'Coffee',        event: 'Sunday Service' },
+  { date: '2026-09-09', role: 'Sound',         event: 'Midweek Gathering' },
+  { date: '2026-09-13', role: 'Reading',       event: 'Sunday Service' },
+  { date: '2026-09-20', role: 'Coffee',        event: 'Sunday Service' },
+  { date: '2026-10-25', role: 'Welcome',       event: 'Sunday Service' },
+];
+
+class Component extends DCLogic {
+  state = {
+    // desktop: two months from September 2026
+    anchor: 8, start: '2026-09-04', end: '2026-09-20', next: 'start',
+    // phone A: one paged month
+    pAnchor: 8, pStart: '2026-09-04', pEnd: '2026-09-20', pNext: 'start',
+    // phone B: continuous scroll
+    bStart: '2026-09-11', bEnd: '2026-09-13', bNext: 'start',
+    showPast: false,
+    stretches: [
+      { start: '2026-08-07', end: '2026-08-23' },
+      { start: '2026-10-24', end: '2026-10-25' },
+    ],
+  };
+
+  clashesIn(a, b) {
+    if (!a || !b || b < a) return [];
+    return PLACES.filter(p => p.date >= a && p.date <= b)
+      .map(p => ({ role: p.role, event: p.event, when: longD(p.date) }));
+  }
+
+  sentence(a, b) {
+    if (!a) return 'Nothing chosen yet — tap the day you leave.';
+    if (!b) return longD(a) + ' — now tap the last day, or press below for the one day.';
+    const n = span(a, b);
+    if (n === 1) return longD(a) + ' — one day.';
+    return longD(a) + ' to ' + longD(b) + ' — ' + n + ' days.';
+  }
+
+  heading(n) { return n === 1 ? "One of these days is a day you're serving." : WORDS[n] + " of these days are days you're serving."; }
+
+  prompt(start, end) {
+    if (!start) return "Tap the first day you're away";
+    if (!end) return 'Now tap the last day';
+    return 'Tap again to choose different days';
+  }
+
+  // one tap handler shared by every grid
+  tap(keys) {
+    const [kStart, kEnd, kNext] = keys;
+    return iso => this.setState(st => {
+      if (st[kNext] === 'start' || !st[kStart] || iso < st[kStart]) {
+        const o = {}; o[kStart] = iso; o[kEnd] = iso; o[kNext] = 'end'; return o;
+      }
+      const o = {}; o[kEnd] = iso; o[kNext] = 'start'; return o;
+    });
+  }
+
+  month(y, m, start, end, onTap, recorded) {
+    const onRecordList = recorded || [];
+    const first = new Date(Date.UTC(y, m, 1)).getUTCDay();
+    const total = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    const rows = Math.ceil((first + total) / 7);
+    const cells = [];
+    for (let i = 0; i < rows * 7; i++) {
+      const n = i - first + 1;
+      const inMonth = n >= 1 && n <= total;
+      const iso = inMonth ? y + '-' + String(m + 1).padStart(2, '0') + '-' + String(n).padStart(2, '0') : null;
+      const isStart = iso && iso === start;
+      const isEnd = iso && iso === end;
+      const inRange = iso && start && end && iso > start && iso < end;
+      const edge = isStart || isEnd;
+      const onRecord = iso && onRecordList.some(s => iso >= s.start && iso <= s.end);
+      const place = iso && PLACES.find(p => p.date === iso);
+      const dots = [];
+      if (place) dots.push({ color: edge || inRange ? 'var(--warning)' : 'var(--sand)' });
+      cells.push({
+        day: inMonth ? n : '',
+        title: place && inMonth ? place.role + ' · ' + place.event : '',
+        weight: edge ? '700' : onRecord ? '600' : '500',
+        fg: edge ? 'var(--on-primary)' : onRecord ? 'var(--on-secondary-container)' : inMonth ? 'var(--on-surface)' : 'transparent',
+        bg: !inMonth ? 'transparent'
+          : edge ? 'var(--primary)'
+          : inRange ? 'var(--surface-container-high)'
+          : onRecord ? 'var(--secondary-container)' : 'transparent',
+        radius: isStart && isEnd ? '10px' : isStart ? '10px 0 0 10px' : isEnd ? '0 10px 10px 0' : inRange ? '0' : '10px',
+        dots: dots,
+        cursor: inMonth ? 'pointer' : 'default',
+        onTap: inMonth ? () => onTap(iso) : () => {},
+      });
+    }
+    return { label: MONL[m] + ' ' + y, cells: cells };
+  }
+
+  monthsFrom(anchor, count, start, end, onTap, recorded) {
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      const m = ((anchor + i) % 12 + 12) % 12;
+      const y = 2026 + Math.floor((anchor + i) / 12);
+      out.push(this.month(y, m, start, end, onTap, recorded === undefined ? this.state.stretches : recorded));
+    }
+    return out;
+  }
+
+  stretchRows() {
+    return this.state.stretches.slice().sort((x, y) => x.start < y.start ? -1 : 1).map(s => {
+      const n = span(s.start, s.end);
+      const c = this.clashesIn(s.start, s.end).length;
+      return {
+        range: n === 1 ? longD(s.start) : midD(s.start) + ' to ' + midD(s.end),
+        meta: (n === 1 ? 'One day' : n + ' days') + (c ? ' · ' + WORDS[c].toLowerCase() + ' place' + (c > 1 ? 's' : '') + ' of yours inside' : ' · nothing of yours inside'),
+        onRemove: () => this.setState(st => ({ stretches: st.stretches.filter(x => x !== s) })),
+      };
+    });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const pastOn = this.props.pastStretches ?? true;
+    const amber = this.props.amberFill ?? 'rgba(184,134,46,.10)';
+    const dCount = this.props.monthsShown ?? 2;
+
+    const clashes = this.clashesIn(s.start, s.end);
+    const pClashes = this.clashesIn(s.pStart, s.pEnd);
+    const bClashes = this.clashesIn(s.bStart, s.bEnd);
+
+    return {
+      initials: (this.props.personName ?? 'Sarah Whitfield').split(' ').map(w => w[0]).join('').slice(0, 2),
+      amberBg: amber,
+      weekdays: ['S','M','T','W','T','F','S'],
+
+      // ── desktop
+      pickPrompt: this.prompt(s.start, s.end),
+      months: this.monthsFrom(s.anchor, dCount, s.start, s.end, this.tap(['start','end','next'])),
+      onPrev: () => this.setState(st => ({ anchor: st.anchor - 1 })),
+      onNext: () => this.setState(st => ({ anchor: st.anchor + 1 })),
+      onClear: () => this.setState({ start: null, end: null, next: 'start' }),
+      rangeSentence: this.sentence(s.start, s.end),
+      addOpacity: s.start && s.end ? '1' : '.4',
+      onAdd: () => this.setState(st => st.start && st.end
+        ? { stretches: st.stretches.concat([{ start: st.start, end: st.end }]), start: null, end: null, next: 'start' }
+        : {}),
+      hasClash: clashes.length > 0,
+      noClash: clashes.length === 0 && !!s.start && !!s.end,
+      clashes: clashes,
+      clashHeading: this.heading(clashes.length),
+
+      emptyMonths: this.monthsFrom(8, 2, null, null, () => {}, []),
+
+      // ── on record
+      recordCount: s.stretches.length === 1 ? 'One stretch' : s.stretches.length + ' stretches',
+      stretches: this.stretchRows(),
+      pastOn: pastOn,
+      showPast: s.showPast,
+      pastIcon: s.showPast ? 'expand_less' : 'expand_more',
+      pastLabel: s.showPast ? 'Hide the days that have passed' : 'Two stretches earlier this year have passed',
+      onTogglePast: () => this.setState(st => ({ showPast: !st.showPast })),
+      pastStretches: [
+        { range: 'Mon 6 April to Fri 10 April', meta: 'Five days' },
+        { range: 'Sat 30 May to Sun 31 May', meta: 'Two days' },
+      ],
+
+      // ── phone A
+      pPrompt: this.prompt(s.pStart, s.pEnd),
+      pMonthLabel: MONL[((s.pAnchor % 12) + 12) % 12] + ' ' + (2026 + Math.floor(s.pAnchor / 12)),
+      pCells: this.monthsFrom(s.pAnchor, 1, s.pStart, s.pEnd, this.tap(['pStart','pEnd','pNext']))[0].cells,
+      onPPrev: () => this.setState(st => ({ pAnchor: st.pAnchor - 1 })),
+      onPNext: () => this.setState(st => ({ pAnchor: st.pAnchor + 1 })),
+      onPClear: () => this.setState({ pStart: null, pEnd: null, pNext: 'start' }),
+      pSentence: this.sentence(s.pStart, s.pEnd),
+      pHasClash: pClashes.length > 0,
+      pClashes: pClashes,
+      pClashHeading: this.heading(pClashes.length),
+      pAddOpacity: s.pStart && s.pEnd ? '1' : '.4',
+      onPhoneAdd: () => this.setState(st => st.pStart && st.pEnd
+        ? { stretches: st.stretches.concat([{ start: st.pStart, end: st.pEnd }]), pStart: null, pEnd: null, pNext: 'start' }
+        : {}),
+
+      // ── phone B
+      bPrompt: this.prompt(s.bStart, s.bEnd),
+      bMonths: this.monthsFrom(8, 4, s.bStart, s.bEnd, this.tap(['bStart','bEnd','bNext'])),
+      bSentence: this.sentence(s.bStart, s.bEnd),
+      bTrayHeight: bClashes.length ? '272px' : '150px',
+      bHasClash: bClashes.length > 0,
+      bClashes: bClashes,
+      bClashHeading: this.heading(bClashes.length),
+      bAddOpacity: s.bStart && s.bEnd ? '1' : '.4',
+      onBClear: () => this.setState({ bStart: null, bEnd: null, bNext: 'start' }),
+      onBAdd: () => this.setState(st => st.bStart && st.bEnd
+        ? { stretches: st.stretches.concat([{ start: st.bStart, end: st.bEnd }]), bStart: null, bEnd: null, bNext: 'start' }
+        : {}),
+
+      futureRows: [
+        { role: 'Coffee', event: 'Sunday Service', when: 'Sunday 6 September' },
+        { role: 'Sound', event: 'Midweek Gathering', when: 'Wednesday 9 September' },
+      ],
+      notes: [
+        { icon: 'event_available', text: 'Whole days only — if you are away on the 14th, you are away for all of it.' },
+        { icon: 'lock', text: 'Nobody but you and the rota editors sees this. No reason is asked for and none is stored.' },
+        { icon: 'history_toggle_off', text: 'Days that have passed drop out of the list on their own.' },
+      ],
+      pickerRows: [
+        { name: 'Hannah Boyce', note: 'Coffee, 4 times this year', ok: true },
+        { name: 'Sarah Whitfield', note: "Sarah said she's away · 4–20 September", away: true },
+        { name: 'Ruth Kessler', note: 'Ann marked Ruth away · 1–8 September', away: true },
+        { name: 'Priya Anand', note: 'Excluded by tag', blocked: true },
+        { name: 'Caleb Munro', note: 'This place needs a woman', blocked: true },
+      ].map(p => ({
+        name: p.name,
+        initials: p.name.split(' ').map(w => w[0]).join(''),
+        note: p.note,
+        away: !!p.away,
+        blocked: !!p.blocked,
+        noteFont: p.away ? 'var(--font-serif)' : 'var(--font-sans)',
+        noteFg: p.away ? 'var(--on-surface)' : 'var(--on-surface-variant)',
+        nameFg: p.ok ? 'var(--on-surface)' : 'var(--on-surface-variant)',
+        opacity: p.ok ? '1' : '.55',
+        bg: p.ok ? 'transparent' : 'var(--surface-container-low)',
+      })),
+    };
+  }
+}
+</script>
+</body>
+</html>
+
