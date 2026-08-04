@@ -5,6 +5,19 @@
 // minute old silently drops whoever was added in that minute. Ignored on the
 // web, where reads were always live.
 var FRESH_READ = { source: 'server' };
+
+// Re-derive a Person's `lastPastoralPrayerDate` from their stored history. Only
+// safe once the history change it is meant to reflect has been committed — a
+// batch is invisible to a read until it lands. Callers that still have an open
+// batch should compute the answer with PastoralPrayerCore.nextLastPrayerDate
+// instead and write it in that same batch.
+async function recomputeLastPrayerDate(personId) {
+    const pRef = db.collection('people').doc(personId);
+    const histSnap = await pRef.collection(PastoralPrayerCore.HISTORY_COLLECTION).get(FRESH_READ);
+    const dates = histSnap.docs.map(d => d.data().serviceDate || d.id);
+    await pRef.update({ lastPastoralPrayerDate: PastoralPrayerCore.latestDate(dates) });
+}
+
 function calendarPage() {
     return {
         view: localStorage.getItem('calendarView') || 'list',
@@ -162,7 +175,9 @@ function calendarPage() {
                     if (oldId) {
                         const oldPersonRef = db.collection('people').doc(oldId);
                         if (role === 'pastoral_prayer') {
-                            batch.delete(oldPersonRef.collection('pastoral_prayer_history').doc(this.selectorDateKey));
+                            batch.delete(oldPersonRef
+                                .collection(PastoralPrayerCore.HISTORY_COLLECTION)
+                                .doc(PastoralPrayerCore.historyDocId(this.selectorDateKey)));
                         } else {
                             let query = oldPersonRef.collection('involvement')
                                 .where('serviceDate', '==', this.selectorDateKey)
@@ -179,10 +194,14 @@ function calendarPage() {
                     if (newId) {
                         const newPersonRef = db.collection('people').doc(newId);
                         if (role === 'pastoral_prayer') {
-                            batch.set(newPersonRef.collection('pastoral_prayer_history').doc(this.selectorDateKey), {
-                                serviceDate: this.selectorDateKey,
-                                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                            });
+                            batch.set(
+                                newPersonRef
+                                    .collection(PastoralPrayerCore.HISTORY_COLLECTION)
+                                    .doc(PastoralPrayerCore.historyDocId(this.selectorDateKey)),
+                                Object.assign(
+                                    PastoralPrayerCore.historyRecord(this.selectorDateKey),
+                                    { createdAt: firebase.firestore.FieldValue.serverTimestamp() }
+                                ));
                         } else {
                             // The series this serve belonged to, so fairness can
                             // be counted per Event series (ADR-0016 §5). The
@@ -244,10 +263,7 @@ function calendarPage() {
                 if (role === 'pastoral_prayer') {
                     const idsToFix = [oldId, newId].filter(id => id);
                     for (const pid of idsToFix) {
-                        const pRef = db.collection('people').doc(pid);
-                        const histSnap = await pRef.collection('pastoral_prayer_history').orderBy('serviceDate', 'desc').limit(1).get();
-                        const latestDate = histSnap.empty ? '0000-00-00' : histSnap.docs[0].data().serviceDate;
-                        await pRef.update({ lastPastoralPrayerDate: latestDate });
+                        await recomputeLastPrayerDate(pid);
                     }
                 }
 
@@ -534,7 +550,7 @@ window.injectServiceAtDate = async function (fromDate) {
         if (sd && sd >= fromDate) affectedInv.push(doc);
     });
 
-    const prayerSnap = await db.collectionGroup('pastoral_prayer_history').get();
+    const prayerSnap = await db.collectionGroup(PastoralPrayerCore.HISTORY_COLLECTION).get();
     const affectedPrayers = [];
     prayerSnap.forEach(doc => {
         const sd = doc.data().serviceDate || doc.id;
@@ -576,10 +592,10 @@ window.injectServiceAtDate = async function (fromDate) {
     });
     const prayerNewPaths = new Set();
     prayersDesc.forEach(doc => {
-        const oldDate = prayerDate(doc);
-        const newRef = doc.ref.parent.doc(addWeek(oldDate));
+        const newDate = addWeek(prayerDate(doc));
+        const newRef = doc.ref.parent.doc(PastoralPrayerCore.historyDocId(newDate));
         prayerNewPaths.add(newRef.path);
-        setsAndUpdates.push({ kind: 'set', ref: newRef, data: { ...doc.data(), serviceDate: addWeek(oldDate) } });
+        setsAndUpdates.push({ kind: 'set', ref: newRef, data: { ...doc.data(), serviceDate: newDate } });
     });
     prayersDesc.forEach(doc => {
         if (!prayerNewPaths.has(doc.ref.path)) deletes.push({ kind: 'delete', ref: doc.ref });
@@ -612,10 +628,7 @@ window.injectServiceAtDate = async function (fromDate) {
     // --- Recompute lastPastoralPrayerDate for affected people --------------
     const affectedPeopleIds = new Set(affectedPrayers.map(doc => doc.ref.parent.parent.id));
     for (const pid of affectedPeopleIds) {
-        const pRef = db.collection('people').doc(pid);
-        const histSnap = await pRef.collection('pastoral_prayer_history').orderBy('serviceDate', 'desc').limit(1).get();
-        const latestDate = histSnap.empty ? '0000-00-00' : histSnap.docs[0].data().serviceDate;
-        await pRef.update({ lastPastoralPrayerDate: latestDate });
+        await recomputeLastPrayerDate(pid);
     }
 
     return {
