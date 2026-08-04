@@ -1719,3 +1719,115 @@ test('a visibility nobody recognises is refused rather than stored', async () =>
     const db = fakeDb({ event_occurrences: stored }, { rank: 'editor' });
     await assert.rejects(() => Store.saveOccurrenceDetails(db, 'harvest', { visibility: 'staff' }), /visibility/i);
 });
+
+// ── Taking everybody off a run of dates ───────────────────────────────────────
+//
+// The one bulk delete on the recurring events grid. Two things it has to get
+// right, and both are invisible from the screen that calls it: the derived
+// fields the SECURITY RULE reads have to move in the same write, and the
+// occurrence document itself has to survive, because a date carries more than
+// its rota.
+
+function rosteredDb() {
+    return fakeDb({
+        events: { sunday_service: { name: 'Sunday Service' } },
+        event_occurrences: {
+            'sunday_service_2026-08-09': {
+                seriesId: 'sunday_service', date: '2026-08-09',
+                visibility: 'public', participantIds: ['p1', 'p2'], needsAttention: true,
+                cancelled: false, notes: 'Communion',
+            },
+            'sunday_service_2026-08-16': {
+                seriesId: 'sunday_service', date: '2026-08-16',
+                visibility: 'public', participantIds: ['p1'], needsAttention: false,
+            },
+            // Nobody on this one, and no roster subcollection at all.
+            'sunday_service_2026-08-23': {
+                seriesId: 'sunday_service', date: '2026-08-23',
+                visibility: 'public', participantIds: [],
+            },
+        },
+        'event_occurrences/sunday_service_2026-08-09/roster': {
+            coffee__s1__p1: { roleSlug: 'coffee', slotId: 's1', personId: 'p1', state: 'confirmed' },
+            setup__s1__p2: { roleSlug: 'setup', slotId: 's1', personId: 'p2', state: 'declined' },
+        },
+        'event_occurrences/sunday_service_2026-08-16/roster': {
+            coffee__s1__p1: { roleSlug: 'coffee', slotId: 's1', personId: 'p1', state: 'pending' },
+        },
+    }, { rank: 'editor', personId: 'p9' });
+}
+
+test('emptying a run of dates deletes every assignment on them', async () => {
+    const db = rosteredDb();
+
+    const out = await Store.clearRosters(db, 'sunday_service', ['2026-08-09', '2026-08-16']);
+
+    assert.deepStrictEqual(out.dates, ['2026-08-09', '2026-08-16']);
+    assert.strictEqual(out.assignments, 3);
+
+    const deleted = db._flatWrites().filter(w => w.kind === 'delete').map(w => w.path).sort();
+    assert.deepStrictEqual(deleted, [
+        'event_occurrences/sunday_service_2026-08-09/roster/coffee__s1__p1',
+        'event_occurrences/sunday_service_2026-08-09/roster/setup__s1__p2',
+        'event_occurrences/sunday_service_2026-08-16/roster/coffee__s1__p1',
+    ]);
+});
+
+test('emptying a date resets the fields the security rule reads', async () => {
+    // `participantIds` is the rule's only answer to `participant` visibility, so
+    // a stale one leaves people able to read an Event they are no longer on —
+    // and the roster rows they would then be shown are gone, so the date reads
+    // as an empty gathering they are somehow invited to.
+    const db = rosteredDb();
+
+    await Store.clearRosters(db, 'sunday_service', ['2026-08-09']);
+
+    const doc = db._flatWrites().find(w =>
+        w.kind === 'set' && w.path === 'event_occurrences/sunday_service_2026-08-09');
+
+    assert.ok(doc, 'the occurrence document was left claiming its old participants');
+    assert.deepStrictEqual(doc.data.participantIds, []);
+    assert.strictEqual(doc.data.needsAttention, false, 'a declined flag with no decline left behind it');
+    assert.ok(doc.options && doc.options.merge, 'overwrote the whole document to empty its rota');
+});
+
+test('emptying a date keeps the date, and everything on it that is not the rota', async () => {
+    // A cancellation, an order of service, a note. Deleting the document to
+    // clear the rota would take all of it, and the pattern would simply draw the
+    // date again with none of it.
+    const db = rosteredDb();
+
+    await Store.clearRosters(db, 'sunday_service', ['2026-08-09']);
+
+    const killed = db._flatWrites().find(w =>
+        w.kind === 'delete' && w.path === 'event_occurrences/sunday_service_2026-08-09');
+    assert.strictEqual(killed, undefined, 'deleted the whole date to empty its rota');
+
+    const doc = db._flatWrites().find(w =>
+        w.kind === 'set' && w.path === 'event_occurrences/sunday_service_2026-08-09');
+    assert.strictEqual('notes' in doc.data, false, 'rewrote fields it was not asked to touch');
+    assert.strictEqual('visibility' in doc.data, false, 'restamped visibility it had no opinion about');
+});
+
+test('a date with nobody on it is not written to at all', async () => {
+    // Sparseness in reverse. Stamping an empty participant list onto a date that
+    // has no document would create one for nothing.
+    const db = rosteredDb();
+
+    const out = await Store.clearRosters(db, 'sunday_service', ['2026-08-23']);
+
+    assert.deepStrictEqual(out.dates, [], 'reported emptying a date that was already empty');
+    assert.strictEqual(out.assignments, 0);
+    assert.deepStrictEqual(db._flatWrites(), [], 'wrote to a date it had nothing to do to');
+});
+
+test('emptying nothing is nothing, not a crash', async () => {
+    const db = rosteredDb();
+    const out = await Store.clearRosters(db, 'sunday_service', []);
+    assert.deepStrictEqual(out, { dates: [], assignments: 0 });
+});
+
+test('a rota belongs to an event, and emptying one without saying which is refused', async () => {
+    const db = rosteredDb();
+    await assert.rejects(() => Store.clearRosters(db, '', ['2026-08-09']), /belongs to an event/);
+});

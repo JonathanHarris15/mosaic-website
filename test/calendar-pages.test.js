@@ -4814,3 +4814,185 @@ test('the liturgical Roles are never drafted as fillable places', () => {
     assert.deepEqual(page.draftableRoles.map(r => r.slug), ['coffee'],
         'liturgy is fields on the Service that the printed booklet reads (ADR-0018 §2)');
 });
+
+// ── Emptying the ticked dates ─────────────────────────────────────────────────
+//
+// The one write on a screen that is otherwise deliberately read-only, and it
+// sits an inch from the button that opens the draft room. Everything below is
+// about the two of them not being mistaken for each other.
+
+function recurringPageWith(occurrences, overrides) {
+    const calls = [];
+    const Store = Object.assign({}, require('../public/events-store.js'), {
+        async clearRosters(db, seriesId, dates) {
+            calls.push({ seriesId: seriesId, dates: dates });
+            dates.forEach(d => { delete occurrences[d]; });
+            return { dates: dates, assignments: 0 };
+        },
+        async loadSeriesWindow() { return occurrences; },
+    });
+
+    const page = loadComponent('recurring-events.js', 'recurringEventsPage', Object.assign({
+        EventsStore: Store,
+        DateUtils: Object.assign({}, require('../public/date-utils.js'), {
+            todayStr: () => '2026-08-01',
+        }),
+        confirm: () => true,
+    }, overrides || {}));
+
+    page.seriesId = 'sunday_service';
+    page.rank = 'editor';
+    page.allDates = ['2026-08-09', '2026-08-16', '2026-08-23', '2026-08-30'];
+    page.anchor = '2026-08-09';
+    page.occurrences = occurrences;
+    page._calls = calls;
+    return page;
+}
+
+const ROSTERED_WINDOW = () => ({
+    '2026-08-09': { assignments: [
+        { roleSlug: 'coffee', slotId: 's1', personId: 'p1', state: 'confirmed' },
+        { roleSlug: 'setup', slotId: 's1', personId: 'p2', state: 'pending' },
+    ] },
+    '2026-08-16': { assignments: [
+        { roleSlug: 'coffee', slotId: 's1', personId: 'p1', state: 'pending' },
+    ] },
+    '2026-08-30': { assignments: [
+        { roleSlug: 'coffee', slotId: 's1', personId: 'p3', state: 'pending' },
+    ] },
+});
+
+test('emptying the ticked dates writes to those dates and no others', () => {
+    // The button beside it sweeps the dates in between. This one must not, and
+    // an editor an inch away from the wrong one has only the words to go on.
+    const page = recurringPageWith(ROSTERED_WINDOW());
+    page.selected = ['2026-08-09', '2026-08-30'];
+
+    assert.strictEqual(page.draftLabel, 'Auto-assign 4 dates', 'the sweep this is contrasted with is gone');
+    assert.strictEqual(page.canWipe, true);
+
+    return page.takeEverybodyOff().then(() => {
+        assert.strictEqual(page._calls.length, 1);
+        assert.strictEqual(page._calls[0].seriesId, 'sunday_service');
+        assert.strictEqual(page._calls[0].dates.join(), '2026-08-09,2026-08-30');
+        assert.strictEqual(page.selected.length, 0, 'left the ticks armed over dates that are now blank');
+    });
+});
+
+test('the two buttons cannot both be called clearing', () => {
+    // "Clear" unticks. The other one deletes a rota. They sit an inch apart on
+    // one row, and sharing a word is how an editor loses eight Sundays reaching
+    // for the tick.
+    const html = readPage('recurring-events.html');
+    const from = html.indexOf('clearSelection()');
+    const panel = html.slice(from, html.indexOf('</div>', html.indexOf('takeEverybodyOff()', from)));
+
+    assert.notStrictEqual(html.indexOf('takeEverybodyOff()'), -1, 'no way to empty the ticked dates');
+    assert.strictEqual((panel.match(/>Clear</g) || []).length, 1,
+        'two controls on the same row both read as clearing');
+
+    // The label comes from the component, so the two places this button could
+    // be drawn cannot word it differently — and so this assertion holds
+    // wherever it is drawn.
+    assert.match(panel, /x-text="wipeLabel"/, 'the emptying button hardcodes its own words');
+
+    const page = loadComponent('recurring-events.js', 'recurringEventsPage');
+    assert.doesNotMatch(page.wipeLabel, /clear/i, 'the emptying button borrows the unticking button\'s word');
+    assert.match(page.wipeLabel, /off/, 'the emptying button does not say what it does');
+});
+
+test('a yes about to be un-said is put in the question, not discovered after', () => {
+    const page = recurringPageWith(ROSTERED_WINDOW());
+    page.selected = ['2026-08-09'];
+
+    const asked = page.wipeQuestion;
+    assert.match(asked, /2 people/, 'did not say how many people come off');
+    assert.match(asked, /9 August/, 'did not name the date');
+    assert.match(asked, /already said yes/, 'a confirmed person was taken off in silence');
+    assert.match(asked, /cannot be undone/);
+});
+
+test('saying no to the question leaves the rota exactly where it was', () => {
+    const page = recurringPageWith(ROSTERED_WINDOW(), { confirm: () => false });
+    page.selected = ['2026-08-09'];
+
+    return page.takeEverybodyOff().then(() => {
+        assert.strictEqual(page._calls.length, 0, 'emptied the dates anyway');
+        assert.strictEqual(page.selected.join(), '2026-08-09', 'threw away the ticks it did not act on');
+    });
+});
+
+test('the past is not emptied, and the button says so rather than sitting dead', () => {
+    const page = recurringPageWith(ROSTERED_WINDOW(), {
+        DateUtils: Object.assign({}, require('../public/date-utils.js'), {
+            todayStr: () => '2026-08-20',
+        }),
+    });
+    page.selected = ['2026-08-09', '2026-08-16'];
+
+    assert.strictEqual(page.canWipe, false);
+    assert.match(page.wipeNote, /record of who served/, 'a dead button with no explanation on it');
+
+    // Mixed: the reachable date goes, the past ones are named in the question.
+    page.selected = ['2026-08-09', '2026-08-30'];
+    assert.strictEqual(page.canWipe, true);
+    assert.match(page.wipeQuestion, /left alone/, 'took a past date without saying so');
+
+    return page.takeEverybodyOff().then(() => {
+        assert.strictEqual(page._calls[0].dates.join(), '2026-08-30', 'rewrote history');
+    });
+});
+
+test('ticking dates nobody is on offers nothing to do, and says which', () => {
+    const page = recurringPageWith(ROSTERED_WINDOW());
+    page.selected = ['2026-08-23'];
+
+    assert.strictEqual(page.canWipe, false);
+    assert.strictEqual(page.wipeNote, 'There is nobody on the dates you ticked.');
+});
+
+test('the note speaks only when the button will do less than the ticks say', () => {
+    // A line repeating the count an inch to its left is noise, and noise is what
+    // an editor learns to read past on the day it matters.
+    const page = recurringPageWith(ROSTERED_WINDOW());
+
+    page.selected = ['2026-08-09', '2026-08-16'];
+    assert.strictEqual(page.wipeNote, '', 'said again what the panel already says');
+
+    page.selected = ['2026-08-09', '2026-08-23'];
+    assert.match(page.wipeNote, /would empty 1 date/, 'silently did less than was ticked');
+    assert.match(page.wipeNote, /nobody on the other one/);
+});
+
+test('a failed emptying reloads the grid instead of claiming nothing happened', async () => {
+    // The write goes date by date, so a failure half way through has really
+    // emptied half. Saying "that did not work" would be a lie about the ones
+    // that did.
+    const occurrences = ROSTERED_WINDOW();
+    let reloaded = 0;
+
+    const Store = require('../public/events-store.js');
+    const original = Store.clearRosters;
+    const failing = Object.assign({}, Store, {
+        async clearRosters() { throw new Error('permission-denied'); },
+        async loadSeriesWindow() { reloaded++; return occurrences; },
+    });
+
+    const failed = loadComponent('recurring-events.js', 'recurringEventsPage', {
+        EventsStore: failing,
+        DateUtils: Object.assign({}, require('../public/date-utils.js'), { todayStr: () => '2026-08-01' }),
+        confirm: () => true,
+    });
+    failed.seriesId = 'sunday_service';
+    failed.allDates = ['2026-08-09'];
+    failed.anchor = '2026-08-09';
+    failed.occurrences = occurrences;
+    failed.selected = ['2026-08-09'];
+
+    await failed.takeEverybodyOff();
+
+    assert.match(failed.error, /what is really stored/, 'claimed a clean failure it cannot know it had');
+    assert.strictEqual(reloaded, 1, 'left the grid showing a rota that may already be gone');
+    assert.strictEqual(failed.clearing, false, 'the button is stuck spinning');
+    assert.strictEqual(Store.clearRosters, original, 'the real store was mutated by a test');
+});

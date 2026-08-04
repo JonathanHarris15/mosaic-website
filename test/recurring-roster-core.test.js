@@ -258,3 +258,105 @@ test('a series with no dates lays out as nothing, not as a crash', () => {
 test('laying out without dates is a programming error, and says so', () => {
     assert.throws(() => Core.rosterGrid({}), /options\.dates/);
 });
+
+// ── Emptying the ticked columns ───────────────────────────────────────────────
+//
+// The dangerous half of this module. The button sits an inch from the one that
+// opens the draft room, and the two must not behave alike: the draft room works
+// in a RANGE and sweeps the dates in between, this works in the SET that was
+// ticked. An editor emptying two Sundays a month apart must not lose the three
+// between them.
+
+const ROSTERED = {
+    '2026-08-09': [
+        { roleSlug: 'coffee', slotId: 's1', personId: 'p1', state: 'confirmed' },
+        { roleSlug: 'setup_teardown', slotId: 's1', personId: 'p2', state: 'pending' },
+    ],
+    '2026-08-16': [
+        { roleSlug: 'coffee', slotId: 's1', personId: 'p1', state: 'pending' },
+    ],
+    // Nobody on the 23rd at all.
+    '2026-08-30': [
+        { roleSlug: 'coffee', slotId: 's1', personId: 'p3', state: 'declined' },
+    ],
+};
+
+const wipe = (selected, today) => Core.wipeFor(selected, {
+    today: today || '2026-08-01',
+    assignmentsAt: date => ROSTERED[date] || [],
+});
+
+test('emptying takes the dates that were ticked and not one more', () => {
+    // The draft room would sweep the 16th and 23rd along with these two. This
+    // must not, and the assertion is the whole reason the two functions are
+    // separate rather than one shared notion of "the range".
+    const w = wipe(['2026-08-09', '2026-08-30']);
+    assert.deepStrictEqual(w.dates, ['2026-08-09', '2026-08-30']);
+
+    const range = Core.rangeFor(['2026-08-09', '2026-08-30'], DATES);
+    assert.strictEqual(range.spans, 4, 'the draft room no longer sweeps, so this test proves nothing');
+});
+
+test('emptying counts the people and the places, not just the dates', () => {
+    const w = wipe(['2026-08-09', '2026-08-16']);
+    assert.strictEqual(w.assignments, 3);
+    assert.deepStrictEqual(w.people, ['p1', 'p2'], 'one person on two dates was counted twice');
+});
+
+test('a yes about to be un-said is counted, so it can be said out loud first', () => {
+    // The one thing an editor cannot see from the grid at a glance, and the one
+    // that costs somebody else something.
+    assert.strictEqual(wipe(['2026-08-09']).confirmed, 1);
+    assert.strictEqual(wipe(['2026-08-16']).confirmed, 0);
+    assert.strictEqual(wipe(['2026-08-30']).confirmed, 0, 'a decline was read as a yes');
+});
+
+test('a ticked date with nobody on it is not a date to write to', () => {
+    const w = wipe(['2026-08-09', '2026-08-23']);
+    assert.deepStrictEqual(w.dates, ['2026-08-09'], 'would have written to an empty date');
+    assert.deepStrictEqual(w.alreadyEmpty, ['2026-08-23']);
+    assert.strictEqual(w.any, true);
+});
+
+test('ticking only empty dates is nothing to do, and says which', () => {
+    const w = wipe(['2026-08-23']);
+    assert.strictEqual(w.any, false);
+    assert.deepStrictEqual(w.dates, []);
+    assert.deepStrictEqual(w.alreadyEmpty, ['2026-08-23']);
+});
+
+test('the past is left alone, however hard it is ticked', () => {
+    // What is stored against a date that has been is the nearest thing there is
+    // to a record of who actually turned up. A sweep across eight columns is the
+    // wrong instrument for editing it.
+    const w = wipe(['2026-08-09', '2026-08-16', '2026-08-30'], '2026-08-20');
+    assert.deepStrictEqual(w.dates, ['2026-08-30']);
+    assert.deepStrictEqual(w.past, ['2026-08-09', '2026-08-16']);
+    assert.strictEqual(w.confirmed, 0, 'counted a yes on a date it is not going to touch');
+    assert.deepStrictEqual(w.people, ['p3'], 'counted people it is not going to move');
+});
+
+test("today's own date is still ahead of the sweep", () => {
+    // The service has not happened yet at breakfast. A rota you can still change
+    // on the single-date screen has to be changeable here too.
+    const w = wipe(['2026-08-09'], '2026-08-09');
+    assert.deepStrictEqual(w.dates, ['2026-08-09']);
+    assert.deepStrictEqual(w.past, []);
+});
+
+test('every ticked date being in the past is nothing to do, and not an error', () => {
+    const w = wipe(['2026-08-09'], '2026-09-01');
+    assert.strictEqual(w.any, false);
+    assert.deepStrictEqual(w.past, ['2026-08-09']);
+    assert.deepStrictEqual(w.alreadyEmpty, [], 'a past date was blamed on being empty');
+});
+
+test('nothing ticked is nothing at all, the same way the draft range is', () => {
+    assert.strictEqual(wipe([]), null);
+    assert.strictEqual(Core.wipeFor(null, {}), null);
+});
+
+test('the dates come back in order however they were ticked', () => {
+    const w = wipe(['2026-08-30', '2026-08-09', '2026-08-16']);
+    assert.deepStrictEqual(w.dates, ['2026-08-09', '2026-08-16', '2026-08-30']);
+});

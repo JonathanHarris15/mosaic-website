@@ -12,9 +12,15 @@
 //   the DRAFT ROOM        redraw the dates you ticked (auto-assign.html)
 //   one DATE              who is on that one, and change a single person
 //
-// Read-only, deliberately. Everything here already has a screen that owns it,
-// and a fourth surface that half-edits a roster is how two of them start
-// disagreeing about the same Sunday.
+// Almost read-only, deliberately. Everything on this grid already has a screen
+// that owns it, and a fourth surface that half-edits a roster is how two of them
+// start disagreeing about the same Sunday.
+//
+// The one exception is EMPTYING the ticked dates. It earns its place because it
+// is the only change that reads across a run rather than down a single date, and
+// because the alternative was drafting a rota through auto-assign purely in
+// order to throw the result away. It cannot half-edit anything: it takes
+// everybody off, or it does nothing.
 //
 // Editors only, like the button it replaces. What a member wants from a series
 // is their own part, which the Calendar already answers.
@@ -68,6 +74,7 @@
 
             selected: [],
             gridLoading: false,
+            clearing: false,
 
             // ── Loading ──────────────────────────────────────────────────────
 
@@ -348,6 +355,150 @@
             // works in ranges, so a scattered selection brings the dates in
             // between along with it — and redrawing a Sunday nobody chose is
             // exactly the surprise this sentence exists to prevent.
+            // ── Taking everybody off the ticked dates ────────────────────────
+            //
+            // The one write on this screen. It is here rather than in the draft
+            // room because emptying a stretch is not a rota you are proposing —
+            // there is nothing to weigh up, nothing to balance, and making an
+            // editor draft eight dates in order to throw the result away is a
+            // long way round to a blank grid.
+            //
+            // It works on the SET that was ticked, not the range. The button
+            // next to it sweeps the dates in between; this one must not, and
+            // the two sitting side by side is exactly why that has to hold.
+
+            get wipe() {
+                return Grid.wipeFor(this.selected, {
+                    today: Dates.todayStr(),
+                    assignmentsAt: date => (this.occurrences[date] || {}).assignments || [],
+                });
+            },
+
+            get canWipe() {
+                return !!this.wipe && this.wipe.any && !this.gridLoading && !this.clearing;
+            },
+
+            // No count on it, unlike the button beside it. Auto-assign has to
+            // carry one because the range it opens can be wider than the tick;
+            // this touches the ticked dates or fewer, the panel is already
+            // saying how many are ticked an inch to the left, and a third long
+            // uppercase label wraps the row on a narrow desktop. Where the
+            // number really does differ, `wipeNote` says so in words.
+            //
+            // A getter rather than markup so the two places this button could
+            // ever be drawn cannot word it differently — and so the word "clear"
+            // can be kept out of it by a test. The button above unticks; this
+            // one deletes a rota, and they sit an inch apart.
+            get wipeLabel() { return 'Take everybody off'; },
+
+            // Why the button is dead, when it is — and when it is alive, which
+            // of the ticked dates it is quietly not going to touch. A control
+            // that correctly does nothing and says nothing cannot be told from a
+            // broken one, and one that silently does less than you ticked is
+            // worse.
+            get wipeNote() {
+                const wipe = this.wipe;
+                if (!wipe) return '';
+
+                const pastNote = wipe.past.length === 1
+                    ? 'The date you ticked in the past is left alone — its rota is the record of who served.'
+                    : 'The ' + wipe.past.length + ' dates you ticked in the past are left alone — '
+                        + 'their rotas are the record of who served.';
+
+                if (!wipe.any) {
+                    if (wipe.past.length && !wipe.alreadyEmpty.length) return pastNote;
+                    return 'There is nobody on the dates you ticked.';
+                }
+
+                // Silent when the button will do exactly what the ticks say. A
+                // line that repeats the count above it is noise, and noise is
+                // what an editor learns to read past on the day it matters.
+                if (!wipe.past.length && !wipe.alreadyEmpty.length) return '';
+
+                const parts = ['Taking everybody off would empty '
+                    + (wipe.dates.length === 1 ? '1 date' : wipe.dates.length + ' dates')
+                    + ' — ' + View.listSentence(wipe.dates.map(d => this.shortDate(d))) + '.'];
+                if (wipe.past.length) parts.push(pastNote);
+                if (wipe.alreadyEmpty.length) {
+                    parts.push('There is nobody on the '
+                        + (wipe.alreadyEmpty.length === 1 ? 'other one' : 'other '
+                            + wipe.alreadyEmpty.length) + '.');
+                }
+                return parts.join(' ');
+            },
+
+            // Said before, not discovered after. Two things an editor cannot see
+            // from the grid: that a yes is about to be un-said, and that the
+            // past columns they ticked are not coming.
+            get wipeWarning() {
+                const wipe = this.wipe;
+                if (!wipe || !wipe.any) return '';
+
+                const parts = [];
+                if (wipe.confirmed) {
+                    parts.push(wipe.confirmed === 1
+                        ? 'One of them has already said yes.'
+                        : wipe.confirmed + ' of them have already said yes.');
+                }
+                if (wipe.past.length) {
+                    parts.push('The ' + (wipe.past.length === 1 ? 'date' : wipe.past.length + ' dates')
+                        + ' you ticked in the past ' + (wipe.past.length === 1 ? 'is' : 'are')
+                        + ' left alone — that rota is the record of who served.');
+                }
+                return parts.join(' ');
+            },
+
+            // The whole of what is about to happen, in one breath, because this
+            // is the only thing on the screen that throws work away.
+            get wipeQuestion() {
+                const wipe = this.wipe;
+                if (!wipe || !wipe.any) return '';
+
+                const n = wipe.people.length;
+                const lead = 'Take ' + (n === 1 ? 'one person' : n + ' people')
+                    + ' off ' + (wipe.dates.length === 1 ? 'one date' : wipe.dates.length + ' dates')
+                    + ' — ' + View.listSentence(wipe.dates.map(d => this.shortDate(d))) + '?';
+
+                const tail = 'The dates themselves stay, along with anything else on them. '
+                    + 'This cannot be undone.';
+
+                return [lead, this.wipeWarning, tail].filter(Boolean).join('\n\n');
+            },
+
+            async takeEverybodyOff() {
+                const wipe = this.wipe;
+                if (!wipe || !wipe.any || this.clearing) return;
+
+                if (typeof confirm === 'function' && !confirm(this.wipeQuestion)) return;
+
+                this.clearing = true;
+                this.error = '';
+                let failure = '';
+                try {
+                    await Store.clearRosters(db, this.seriesId, wipe.dates);
+                } catch (e) {
+                    console.error('Could not empty those dates:', e);
+                    // The write goes date by date, so a failure half way through
+                    // has really emptied half. "That did not work" would be a
+                    // lie about the ones that did.
+                    failure = 'Some of those dates could not be emptied. The grid below is '
+                        + 'what is really stored — read it before trying again.';
+                } finally {
+                    this.clearing = false;
+                }
+
+                // The ticks go with the rota they were pointing at. Leaving them
+                // would arm the same button over dates that are now blank.
+                this.selected = [];
+                await this.loadWindow();
+
+                // ⚠ AFTER the reload, not before. `loadWindow` starts by
+                // clearing the error — rightly, since it is about to say what it
+                // found — and announcing the failure first would have it wiped
+                // by the very read sent to prove it.
+                if (failure) this.error = failure;
+            },
+
             get sweepNote() {
                 const range = this.range;
                 if (!range || range.contiguous) return '';

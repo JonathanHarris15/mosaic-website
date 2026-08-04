@@ -284,11 +284,33 @@
                                 <span x-text="range && range.count === 1 ? ' date ticked' : ' dates ticked'"></span>
                             </p>
                             <p x-show="sweepNote" class="text-[12.5px] text-on-surface-variant mt-0.5" x-text="sweepNote"></p>
+                            <!-- Why the emptying button is dead, when it is. A
+                                 control that correctly does nothing and says
+                                 nothing cannot be told from a broken one. -->
+                            <p x-show="wipeNote" class="text-[12.5px] text-on-surface-variant mt-0.5" x-text="wipeNote"></p>
                         </div>
                         <div class="shrink-0 flex items-center gap-sm">
                             <button @click="clearSelection()"
                                     class="px-3 py-2 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
                                            text-on-surface-variant re-motion re-focus hover:bg-surface-container">Clear</button>
+                            <!-- "Clear" above unticks; this empties. They cannot
+                                 both be called clearing, and the words have to
+                                 do the separating because the two controls sit
+                                 an inch apart.
+
+                                 Outlined rather than filled, and second in the
+                                 row: the ordinary journey from here is the draft
+                                 room, and this should be findable without ever
+                                 being the thing your eye lands on. -->
+                            <button @click="takeEverybodyOff()" :disabled="!canWipe"
+                                    class="flex items-center gap-1 border border-error text-error px-3 py-2 rounded-lg
+                                           font-label-md text-[11.5px] uppercase tracking-wider re-motion re-press re-focus
+                                           hover:bg-error-container disabled:opacity-40 disabled:hover:bg-transparent">
+                                <span class="material-symbols-outlined text-[16px]"
+                                      x-text="clearing ? 'progress_activity' : 'person_remove'"
+                                      :class="clearing ? 'animate-spin' : ''"></span>
+                                <span x-text="wipeLabel"></span>
+                            </button>
                             <!-- The same door as the button above the grid, said
                                  the same way. Repeated here because this is
                                  where the ticking happened, and the header can
