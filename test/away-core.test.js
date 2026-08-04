@@ -205,11 +205,14 @@ test('the prompt says what the grid wants next', () => {
     assert.strictEqual(Core.prompt({ start: '2026-09-04', end: '2026-09-06', awaiting: 'start' }), 'Tap again to choose different days');
 });
 
-test('the clash heading counts in words and never scolds', () => {
-    assert.strictEqual(Core.clashHeading(1), "One of these days is a day you're serving.");
-    assert.strictEqual(Core.clashHeading(3), "Three of these days are days you're serving.");
+test('the conflict heading counts in words and never scolds', () => {
+    // It has to read the same whether the days were just chosen or chosen a
+    // fortnight ago, because the panel covers both — so it says nothing about
+    // "these days" or anything else that assumes a selection is in hand.
+    assert.strictEqual(Core.conflictHeading(1), "One place of yours falls on a day you're away.");
+    assert.strictEqual(Core.conflictHeading(3), "Three places of yours fall on days you're away.");
     // Nothing in it reads as an error — the Away is recorded either way.
-    assert.doesNotMatch(Core.clashHeading(2), /can't|cannot|error|invalid/i);
+    assert.doesNotMatch(Core.conflictHeading(2), /can't|cannot|error|invalid/i);
 });
 
 test('a row says how long it is and whether anything of yours is inside', () => {
@@ -232,8 +235,8 @@ test('nothing anywhere says unavailable, blackout or absence', () => {
         Core.prompt(Core.EMPTY_SELECTION),
         Core.sentence(Core.EMPTY_SELECTION),
         Core.sentence({ start: '2026-09-04', end: '2026-09-06', awaiting: 'start' }),
-        Core.clashHeading(1),
-        Core.clashHeading(4),
+        Core.conflictHeading(1),
+        Core.conflictHeading(4),
         Core.stretchRow({ start: '2026-09-06', end: '2026-09-13' }, PLACES).meta,
     ].join(' | ');
     assert.doesNotMatch(strings, /unavailab|blackout|absence|submit|request|pending|approv/i);
@@ -325,6 +328,38 @@ test('the grid is the same computation on every size', () => {
     const one = Core.monthGrid(2026, 8, gridOpts);
     const fromRun = Core.monthsFrom(2026, 8, 2, gridOpts)[0];
     assert.deepStrictEqual(fromRun, one);
+});
+
+// ── A conflict stands until one side of it moves ─────────────────────────────
+
+test('conflicts cover every stretch, not just the one being chosen', () => {
+    const stretches = [
+        { start: '2026-09-06', end: '2026-09-06' },
+        { start: '2026-09-20', end: '2026-09-20' },
+    ];
+    const found = Core.conflictsIn(PLACES, stretches);
+    assert.deepStrictEqual(found.map(p => p.role), ['Coffee', 'Setup']);
+});
+
+test('a conflict already on record is still reported with nothing selected', () => {
+    // The bug this replaced: the clash was computed from the range in hand, so a
+    // conflict locked in last week vanished the moment you stopped choosing.
+    const found = Core.conflictsIn(PLACES, [{ start: '2026-09-13', end: '2026-09-13' }]);
+    assert.strictEqual(found.length, 1);
+    assert.strictEqual(found[0].role, 'Sound desk');
+});
+
+test('conflicts come back in date order across separate stretches', () => {
+    const found = Core.conflictsIn(PLACES, [
+        { start: '2026-09-20', end: '2026-09-20' },
+        { start: '2026-09-06', end: '2026-09-06' },
+    ]);
+    assert.deepStrictEqual(found.map(p => p.date), ['2026-09-06', '2026-09-20']);
+});
+
+test('no stretches means no conflicts, rather than everything', () => {
+    assert.deepStrictEqual(Core.conflictsIn(PLACES, []), []);
+    assert.deepStrictEqual(Core.conflictsIn(PLACES, null), []);
 });
 
 // ── Whose days, and whose word (MS-196) ──────────────────────────────────────

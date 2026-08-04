@@ -197,7 +197,7 @@
                     </div>
                 </div>
                 <div class="flex flex-col mt-4 bg-surface-container-lowest border border-outline-variant rounded-[10px] overflow-hidden">
-                    <template x-for="c in clashes" :key="c.occurrenceId + c.role">
+                    <template x-for="c in conflicts" :key="c.occurrenceId + c.role">
                         <div class="flex items-center gap-4 px-4 py-3.5 border-b border-outline-variant last:border-b-0">
                             <span class="w-[2px] self-stretch bg-warning rounded-sm shrink-0"></span>
                             <div class="flex-1 min-w-0">
@@ -353,7 +353,7 @@
                     <div class="flex-1 min-w-0">
                         <div class="text-[13px] font-semibold leading-[1.35] text-on-warning-container" x-text="clashHeading"></div>
                         <div class="flex flex-col gap-1 mt-2">
-                            <template x-for="c in clashes" :key="c.occurrenceId + c.role">
+                            <template x-for="c in conflicts" :key="c.occurrenceId + c.role">
                                 <div class="text-[12px] leading-[1.4] text-on-warning-container">
                                     <span class="font-headline-lg text-[14.5px]" x-text="c.role"></span>
                                     <span> — </span><span x-text="c.when"></span>

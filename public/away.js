@@ -250,8 +250,25 @@
                 return Core.clashesIn(this.places, this.selection.start, this.selection.end);
             },
 
-            get hasClash() { return this.clashes.length > 0; },
-            get clashHeading() { return Core.clashHeading(this.clashes.length); },
+            // Everything on record, PLUS whatever is being chosen right now — one
+            // list, because from the person's side they are the same fact: a
+            // place of theirs on a day they are away.
+            get conflictStretches() {
+                const list = this.stretches.slice();
+                if (this.selectionMade) {
+                    list.push({ start: this.selection.start, end: this.selection.end });
+                }
+                return list;
+            },
+
+            // ⚠ NOT GATED ON THE SELECTION. A conflict locked in a fortnight ago
+            // is still theirs to sort out, and a screen that only mentions it
+            // while they happen to be mid-selection is a screen that lets them
+            // forget it. It stands until one side of it moves.
+            get conflicts() { return Core.conflictsIn(this.places, this.conflictStretches); },
+
+            get hasClash() { return this.conflicts.length > 0; },
+            get clashHeading() { return Core.conflictHeading(this.conflicts.length); },
 
             // WARN EARLY, REASSURE LATE — and the asymmetry is deliberate. A
             // clash shows as soon as the selection could be saved, because it is
@@ -261,6 +278,12 @@
             // the moment the range closed. Silence is honest; premature
             // reassurance that later reverses is not.
             get allClear() { return this.rangeReady && !this.hasClash; },
+
+            get allClearLineText() {
+                return this.isMine
+                    ? "Nothing of yours falls on a day you're away."
+                    : "Nothing of theirs falls on a day they're away.";
+            },
 
             get rangeReady() {
                 return !!this.selection.start && !!this.selection.end
@@ -464,11 +487,7 @@
                         + this.subjectName + '. Somebody has to hand them on.';
             },
 
-            get allClearLine() {
-                return this.isMine
-                    ? 'Nothing of yours falls in these dates.'
-                    : 'Nothing of theirs falls in these dates.';
-            },
+            get allClearLine() { return this.allClearLineText; },
 
             get emptyLine() {
                 return this.isMine

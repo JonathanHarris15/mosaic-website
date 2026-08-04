@@ -163,6 +163,19 @@
             .sort((a, b) => (a.date < b.date ? -1 : 1));
     }
 
+    // Every place that falls inside ANY of these stretches — what is on record
+    // as well as whatever is being chosen right now.
+    //
+    // ⚠ NOT ONLY THE RANGE IN HAND. A place you are serving on a day you already
+    // said you were away is still your problem tomorrow, and a screen that
+    // mentions it only while you happen to be mid-selection is a screen that
+    // helps you forget it. The obligation is standing, so the telling is too.
+    function conflictsIn(places, stretches) {
+        return (places || [])
+            .filter(p => p && p.date && isAwayOn(stretches, p.date))
+            .sort((a, b) => (a.date < b.date ? -1 : 1));
+    }
+
     function clashCount(places, stretch) {
         const one = normalise(stretch);
         return one ? clashesIn(places, one.start, one.end).length : 0;
@@ -248,11 +261,12 @@
     }
 
     // Not a warning that something went wrong. The moment the person learns they
-    // have something to do.
-    function clashHeading(n) {
+    // have something to do — and it has to read the same whether they just chose
+    // the days or chose them a fortnight ago, because it covers both.
+    function conflictHeading(n) {
         return n === 1
-            ? "One of these days is a day you're serving."
-            : inWords(n) + " of these days are days you're serving.";
+            ? "One place of yours falls on a day you're away."
+            : inWords(n) + " places of yours fall on days you're away.";
     }
 
     // The row in "what you've said so far".
@@ -384,6 +398,7 @@
         past,
         // clash
         clashesIn,
+        conflictsIn,
         clashCount,
         // choosing
         nextSelection,
@@ -397,7 +412,7 @@
         monthLabel,
         prompt,
         sentence,
-        clashHeading,
+        conflictHeading,
         stretchRow,
         awayNote,
         // grid

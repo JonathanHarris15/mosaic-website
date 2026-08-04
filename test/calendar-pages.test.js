@@ -346,6 +346,44 @@ test('anything the button will save has been checked first', () => {
     });
 });
 
+test('a conflict already on record shows with nothing selected at all', () => {
+    // The screen opens on it. A place you are serving on a day you already said
+    // you were away is still yours to sort out tomorrow, so it is not something
+    // the screen mentions only while you happen to be mid-selection.
+    const page = loadComponent('away.js', 'awayPage');
+    page.places = [{ date: '2026-09-27', when: 'Sunday 27 September', role: 'Coffee', event: 'Sunday Service', occurrenceId: 'o1' }];
+    page.stretches = [{ id: 'a1', start: '2026-09-27', end: '2026-09-27' }];
+
+    assert.equal(page.selectionMade, false, 'nothing is selected');
+    assert.equal(page.hasClash, true, 'and it still says so');
+    assert.equal(page.conflicts.length, 1);
+    assert.match(page.clashHeading, /falls on a day you're away/);
+});
+
+test('a conflict does not vanish once the days are saved', () => {
+    // What saving looks like from the panel's side: the selection clears, the
+    // stretch lands, and the conflict carries straight over rather than blinking
+    // out at the exact moment it becomes real.
+    const page = loadComponent('away.js', 'awayPage');
+    page.places = [{ date: '2026-09-27', when: 'Sunday 27 September', role: 'Coffee', event: 'Sunday Service', occurrenceId: 'o1' }];
+
+    page.tap('2026-09-27');
+    assert.equal(page.conflicts.length, 1, 'while choosing');
+
+    page.stretches = [{ id: 'a1', start: '2026-09-27', end: '2026-09-27' }];
+    page.clearSelection();
+    assert.equal(page.conflicts.length, 1, 'and after saving');
+});
+
+test('a place inside both a saved stretch and the selection is listed once', () => {
+    const page = loadComponent('away.js', 'awayPage');
+    page.places = [{ date: '2026-09-27', when: 'Sunday 27 September', role: 'Coffee', event: 'Sunday Service', occurrenceId: 'o1' }];
+    page.stretches = [{ id: 'a1', start: '2026-09-27', end: '2026-09-27' }];
+
+    page.tap('2026-09-27');
+    assert.equal(page.conflicts.length, 1, 'not doubled');
+});
+
 test('the all-clear waits for a settled range, unlike the clash', () => {
     // Warn early, reassure late. Said one tap into an intended fortnight, "nothing
     // of yours falls in these dates" answers a question about a single day nobody
