@@ -365,6 +365,16 @@
             case R.INACTIVE:
                 return 'No longer active';
 
+            // The only reason on this list a PERSON wrote. Every other one is a
+            // rule the church made about its own roster, and reads impersonally
+            // because it is impersonal. This one carries a name — an editor
+            // overruling a rule is exercising judgement, and an editor
+            // overruling "Sarah said she's away" should feel like what it is.
+            //
+            // Never "Unavailable". The editor may still place them.
+            case R.AWAY:
+                return ctx.awayNote || 'Said they are away that day';
+
             case R.ALREADY_ASSIGNED:
                 return 'Already in this Role';
 

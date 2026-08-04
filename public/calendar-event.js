@@ -67,6 +67,13 @@
             relationships: [],
             groups: [],
 
+            // Who said they would not be here on THIS date, and the stretch each
+            // of them said it in (MS-188). Editors only — the collection-group
+            // rule closes it to everyone else, and a member does not need it:
+            // nobody else's picker is theirs to open.
+            awayPersonIds: [],
+            awayStretchBy: {},
+
             // What fairness knows about this occurrence: the serve history for
             // this series inside the window, and the window's own dates. Loaded
             // once per occurrence rather than per Role — load is per person per
@@ -87,6 +94,11 @@
             async init() {
                 await this.resolveViewer();
                 await this.load();
+                // After the page, never before it. A picker cannot be opened
+                // until the Event is drawn, so this read has no business
+                // holding the Event up — and a refusal here must cost a reason
+                // on a row, not the whole screen.
+                this.loadAway();
             },
 
             // A dropped read is not a broken page, it is a read that did not come
@@ -116,6 +128,39 @@
                         resolve();
                     });
                 });
+            },
+
+            // ── Who is away on this date ─────────────────────────────────────
+
+            async loadAway() {
+                this.awayPersonIds = [];
+                this.awayStretchBy = {};
+                if (!this.isEditor || !this.occurrence || !this.occurrence.date) return;
+                if (typeof window.AwayStore === 'undefined') return;
+                try {
+                    const date = this.occurrence.date;
+                    const stretches = await window.AwayStore.loadStretchesOn(db, date);
+                    stretches.forEach(s => { this.awayStretchBy[s.personId] = s; });
+                    this.awayPersonIds = stretches.map(s => s.personId);
+                } catch (e) {
+                    // A picker that cannot say "Sarah is away" is worse than one
+                    // that can, but it is not a broken Event page.
+                    console.error('Away load failed:', e);
+                }
+            },
+
+            // Their own words, or the editor's if an editor entered it. The
+            // attribution is the safeguard: overruling a rule is judgement,
+            // overruling somebody's own word is disbelief, and the sentence has
+            // to make the difference visible.
+            awayNoteFor(personId) {
+                const stretch = this.awayStretchBy[personId];
+                if (!stretch) return null;
+                const subject = this.people.find(p => p && p.id === personId) || null;
+                const author = stretch.authorPersonId
+                    ? this.people.find(p => p && p.id === stretch.authorPersonId) || null
+                    : null;
+                return window.AwayCore.awayNote(stretch, subject, author);
             },
 
             // ── Creating ─────────────────────────────────────────────────────
@@ -1362,6 +1407,11 @@
                     groups: this.groups,
                     assigned: seated,
                     assignedElsewhere: elsewhere,
+                    // Who said they would not be here on THIS date (MS-188).
+                    // Shown, with their own words, and still placeable — the
+                    // editor keeps the final say. It is the solve that treats
+                    // this as absolute, not the person reading the screen.
+                    awayPersonIds: this.awayPersonIds,
                 });
 
                 const q = String(this.picker.query || '').trim().toLowerCase();
@@ -1408,6 +1458,7 @@
                                     requirement: slot.requirement,
                                     otherRoles: otherRoles,
                                     groupName: this.groupNameFor(c.personId),
+                                    awayNote: this.awayNoteFor(c.personId),
                                 }),
                         });
                     })
