@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Away | Mosaic</title>
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <script src="mobile/destinations.js"></script>
+    <script>window.MOBILE_HEADER = { title: 'Away', menu: false, back: 'calendar.html', route: 'events' };</script>
+    <script src="mobile-shell-header.js"></script>
+
+    <style>
+        [x-cloak] { display: none !important; }
+
+        /* The steel-teal focus ring, matching the Input component — the one raw
+           value on the page, as on the Calendar. */
+        .aw-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(93,148,169,.18); }
+
+        /* Motion: background, opacity and border only. */
+        .aw-motion { transition: background-color 150ms cubic-bezier(0.2,0,0,1),
+                                 opacity 150ms cubic-bezier(0.2,0,0,1),
+                                 border-color 150ms cubic-bezier(0.2,0,0,1); }
+
+        /* The shell draws its own header with the page title in it. */
+        html.shell-mobile .aw-page-title { display: none; }
+
+        /* The phone's tray is pinned; the scroll above it needs room to clear. */
+        .aw-tray-clearance { padding-bottom: 220px; }
+    </style>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+
+    <script src="local-cache.js"></script>
+    <script src="auth.js"></script>
+    <script src="date-utils.js"></script>
+    <script src="roles-core.js"></script>
+    <script src="events-core.js"></script>
+    <script src="events-occurrence-core.js"></script>
+    <script src="events-store.js"></script>
+    <script src="away-core.js"></script>
+    <script src="away-store.js"></script>
+    <script src="away.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+</head>
+
+<body class="bg-background text-on-surface font-body-md antialiased" x-data="awayPage()" x-cloak>
+
+<div class="max-w-[1200px] mx-auto px-margin">
+
+    <!-- ── Header ──────────────────────────────────────────────────────── -->
+    <header class="flex items-center justify-between pt-md aw-page-title">
+        <a :href="calendarHref"
+           class="flex items-center gap-1 text-on-surface-variant font-label-md text-xs uppercase tracking-wider hover:text-primary aw-motion aw-focus">
+            <span class="material-symbols-outlined text-[19px]">arrow_back</span>Calendar
+        </a>
+        <div id="auth-container" class="flex items-center"><div class="h-10"></div></div>
+    </header>
+
+    <!-- ── Title ───────────────────────────────────────────────────────── -->
+    <div class="flex items-end justify-between gap-8 pt-md pb-md border-b border-outline-variant">
+        <div>
+            <h1 class="font-display-lg text-[32px] text-primary tracking-[.02em] aw-page-title" x-text="title"></h1>
+            <p class="mt-2 text-[14px] leading-[1.55] text-on-surface-variant max-w-[66ch]" x-text="intro"></p>
+        </div>
+        <span class="hidden md:flex items-center gap-2 shrink-0 font-label-md text-[11px] uppercase tracking-[.12em]
+                     text-on-surface-variant bg-surface-container border border-outline-variant rounded-md px-3 py-2">
+            <span class="material-symbols-outlined text-[17px]">lock</span><span x-text="isMine ? 'Only you and the rota editors' : 'Only them and the rota editors'"></span>
+        </span>
+    </div>
+
+    <!-- ── Whose days (MS-196) ─────────────────────────────────────────────
+         An editor gets the SAME screen with a different name on it, rather than
+         a second surface somewhere else. Most of this information still arrives
+         after the service, spoken to whoever is doing the rota; if the only way
+         in were the person's own screen, it would go back to living in an
+         editor's head. Anything entered here is stamped with the editor's name,
+         so the picker reads "Ann marked Sarah away". -->
+    <div x-show="!loading && personId && isEditor" class="mt-md flex items-center gap-sm flex-wrap">
+        <span class="font-label-md text-[11px] uppercase tracking-[.14em] text-on-surface-variant">Whose days</span>
+        <select @change="setSubject($event.target.value)"
+                class="text-sm rounded-lg border border-outline-variant bg-surface-container-lowest py-2 pl-3 pr-9 aw-focus">
+            <option :value="personId" :selected="isMine">Mine</option>
+            <template x-for="p in people" :key="p.id">
+                <option :value="p.id" :selected="p.id === subjectId" x-text="p.name"></option>
+            </template>
+        </select>
+        <span x-show="!isMine" class="flex items-center gap-1.5 font-label-md text-[10.5px] uppercase tracking-[.12em]
+                                      text-on-warning-container bg-warning-container border border-warning rounded-md px-2.5 py-1.5">
+            <span class="material-symbols-outlined text-[15px]">edit_note</span>Recorded in your name
+        </span>
+    </div>
+
+    <!-- ── Not signed in, or no linked Person ──────────────────────────── -->
+    <template x-if="!loading && !personId">
+        <section class="mt-md bg-surface-container-low border border-outline-variant rounded-lg p-md flex items-start gap-sm">
+            <span class="material-symbols-outlined text-[22px] text-outline shrink-0">person_off</span>
+            <div>
+                <p class="text-[14.5px] text-on-surface">
+                    This page is about your own days, so it needs to know who you are.
+                </p>
+                <p class="text-[13px] text-on-surface-variant mt-1">
+                    Sign in, and if it still says this, ask the church office to link your account to your name in the directory.
+                </p>
+                <a href="login.html" class="inline-flex items-center gap-1 mt-3 text-secondary font-label-md text-xs uppercase tracking-wider aw-focus">
+                    Sign in <span class="material-symbols-outlined text-[16px]">north_east</span>
+                </a>
+            </div>
+        </section>
+    </template>
+
+    <template x-if="error">
+        <div class="mt-md bg-error-container border border-error rounded-lg px-md py-3 text-[13.5px] text-on-error-container" x-text="error"></div>
+    </template>
+
+    <!-- ══════════════ DESKTOP ══════════════ -->
+    <div x-show="!loading && personId && !phone" class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-md items-start mt-md pb-lg">
+
+        <!-- The grid IS the primary action -->
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-[10px] p-md">
+            <div class="flex items-center justify-between gap-5 pb-sm border-b border-outline-variant">
+                <span class="font-label-md text-[11px] uppercase tracking-[.14em] text-on-surface-variant" x-text="prompt"></span>
+                <div class="flex gap-px">
+                    <button type="button" @click="prevMonths()" title="Earlier months"
+                            class="w-[34px] h-[34px] flex items-center justify-center bg-surface-container-lowest border border-outline-variant
+                                   rounded-l-[10px] text-on-surface-variant hover:bg-surface-container-low aw-motion aw-focus">
+                        <span class="material-symbols-outlined text-[19px]">chevron_left</span>
+                    </button>
+                    <button type="button" @click="nextMonths()" title="Later months"
+                            class="w-[34px] h-[34px] flex items-center justify-center bg-surface-container-lowest border border-outline-variant
+                                   rounded-r-[10px] text-on-surface-variant hover:bg-surface-container-low aw-motion aw-focus">
+                        <span class="material-symbols-outlined text-[19px]">chevron_right</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-4">
+                <template x-for="m in months" :key="m.label">
+                    <div>
+                        <div class="text-center font-display text-[17px] tracking-[.02em] text-primary pb-3" x-text="m.label"></div>
+                        <div class="grid grid-cols-7">
+                            <template x-for="(w, i) in weekdays" :key="i">
+                                <div class="text-center font-label-md text-[10px] uppercase tracking-[.12em] text-outline pb-2" x-text="w"></div>
+                            </template>
+                            <template x-for="(c, i) in m.cells" :key="i">
+                                <button type="button" :disabled="!c.inMonth" @click="tap(c.iso)" :title="c.title"
+                                        class="relative flex flex-col items-center justify-center gap-[3px] h-[46px] border-0 aw-motion aw-focus"
+                                        :class="[cellClass(c), cellRadius(c), c.inMonth ? 'cursor-pointer' : 'cursor-default']">
+                                    <span class="text-[14.5px]" x-text="c.day"></span>
+                                    <span class="w-[5px] h-[5px] rounded-full" :class="dotClass(c)"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Legend -->
+            <div class="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-outline-variant text-[11.5px] text-on-surface-variant">
+                <span class="flex items-center gap-2"><span class="w-[13px] h-[13px] rounded bg-primary"></span>The days you're choosing</span>
+                <span class="flex items-center gap-2"><span class="w-[13px] h-[13px] rounded bg-secondary-container border border-secondary"></span>Already on record</span>
+                <span class="flex items-center gap-2"><span class="w-[6px] h-[6px] rounded-full bg-sand"></span>You're serving</span>
+            </div>
+
+            <!-- The sentence and the one button -->
+            <div class="flex items-end justify-between gap-6 mt-5">
+                <p class="font-headline-lg text-[19px] leading-[1.4] text-on-surface max-w-[38ch]" x-text="sentence"></p>
+                <div class="flex items-center gap-3 shrink-0">
+                    <button type="button" @click="clearSelection()" x-show="selection.start"
+                            class="font-label-md text-[11px] uppercase tracking-[.1em] text-on-surface-variant px-1 py-2 hover:text-primary aw-motion aw-focus">
+                        Start again
+                    </button>
+                    <button type="button" @click="add()" :disabled="!canAdd || saving"
+                            class="flex items-center gap-2 font-label-md text-[12px] uppercase tracking-[.08em] text-on-primary bg-primary
+                                   border border-primary rounded-[10px] px-5 py-3.5 shadow-xs aw-motion aw-focus
+                                   disabled:opacity-40 disabled:cursor-not-allowed">
+                        <span class="material-symbols-outlined text-[19px]">check</span>
+                        <span x-text="addLabel"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- THE CLASH — information with a next step, never an error -->
+            <div x-show="hasClash" class="bg-warning-container border border-warning rounded-[10px] p-md mt-5">
+                <div class="flex items-start gap-3">
+                    <span class="material-symbols-outlined text-[22px] text-warning mt-px shrink-0">event_upcoming</span>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-display text-[18px] tracking-[.02em] text-primary" x-text="clashHeading"></div>
+                        <p class="mt-2 text-[13.5px] leading-[1.55] text-on-warning-container max-w-[62ch]"
+                           x-text="clashLead"></p>
+                    </div>
+                </div>
+                <div class="flex flex-col mt-4 bg-surface-container-lowest border border-outline-variant rounded-[10px] overflow-hidden">
+                    <template x-for="c in clashes" :key="c.occurrenceId + c.role">
+                        <div class="flex items-center gap-4 px-4 py-3.5 border-b border-outline-variant last:border-b-0">
+                            <span class="w-[2px] self-stretch bg-warning rounded-sm shrink-0"></span>
+                            <div class="flex-1 min-w-0">
+                                <div class="font-headline-lg text-[17px] leading-[1.3] text-on-surface" x-text="c.role"></div>
+                                <div class="text-[12.5px] text-on-surface-variant mt-0.5">
+                                    <span x-text="c.when"></span> · <span x-text="c.event"></span>
+                                </div>
+                            </div>
+                            <!-- Held open for MS-190's "Offer it to someone", so the
+                                 button arrives without redrawing the row. -->
+                            <span class="w-[168px] shrink-0 text-right font-label-md text-[11px] uppercase tracking-[.1em] text-outline">Yours to sort</span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div x-show="allClear" class="flex items-center gap-3 mt-5 px-5 py-4 bg-surface-container-low border border-outline-variant rounded-[10px]">
+                <span class="material-symbols-outlined text-[20px] text-success">check_circle</span>
+                <span class="font-headline-lg text-[16.5px] text-on-surface" x-text="allClearLine"></span>
+            </div>
+        </div>
+
+        <!-- ── Rail ────────────────────────────────────────────────────── -->
+        <div class="flex flex-col gap-md">
+            <div class="bg-surface-container-lowest border border-outline-variant rounded-[10px] p-5">
+                <div class="flex items-baseline justify-between gap-3 pb-3 border-b border-outline-variant">
+                    <span class="font-label-md text-[11px] uppercase tracking-[.14em] text-on-surface-variant">What you've said so far</span>
+                    <span class="text-[12px] text-on-surface-variant" x-text="recordCount"></span>
+                </div>
+
+                <div class="flex flex-col gap-2 mt-3.5">
+                    <template x-for="s in upcomingStretches" :key="s.id">
+                        <div class="flex items-center gap-3 px-3.5 py-3 bg-surface-container-low border border-outline-variant
+                                    border-l-[3px] border-l-secondary rounded-[10px]">
+                            <div class="flex-1 min-w-0">
+                                <div class="font-headline-lg text-[17px] leading-[1.3] text-on-surface" x-text="s.range"></div>
+                                <div class="text-[12px] text-on-surface-variant mt-0.5" x-text="s.meta"></div>
+                            </div>
+                            <button type="button" @click="remove(s.id)" title="Remove these days" :disabled="saving"
+                                    class="w-[34px] h-[34px] flex items-center justify-center border border-outline-variant rounded-[10px]
+                                           text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface shrink-0 aw-motion aw-focus">
+                                <span class="material-symbols-outlined text-[18px]">close</span>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+
+                <p x-show="!upcomingStretches.length" class="mt-3.5 text-[13px] leading-[1.5] text-on-surface-variant"
+                   x-text="emptyLine"></p>
+
+                <!-- Past stretches fall out of the list and are offered back on tap -->
+                <div x-show="pastStretches.length" class="mt-3.5">
+                    <button type="button" @click="togglePast()"
+                            class="flex items-center gap-2 w-full font-body-md text-[12.5px] leading-[1.4] text-on-surface-variant
+                                   border-t border-dashed border-outline-variant pt-3.5 px-0.5 text-left hover:text-primary aw-motion aw-focus">
+                        <span class="material-symbols-outlined text-[18px] text-outline" x-text="showPast ? 'expand_less' : 'expand_more'"></span>
+                        <span x-text="pastLabel"></span>
+                    </button>
+                    <div x-show="showPast" class="flex flex-col gap-2 mt-3">
+                        <template x-for="p in pastStretches" :key="p.id">
+                            <div class="flex items-center gap-3 px-3.5 py-3 bg-surface-container-low border border-outline-variant rounded-[10px] opacity-70">
+                                <span class="font-headline-lg text-[15.5px] text-on-surface-variant" x-text="p.range"></span>
+                                <span class="text-[11.5px] text-outline ml-auto" x-text="p.meta"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-primary rounded-[10px] p-5">
+                <div class="font-label-md text-[10.5px] uppercase tracking-[.14em] text-primary-fixed-dim">The deal</div>
+                <p class="mt-2 font-headline-lg text-[17px] leading-[1.45] text-on-primary">
+                    Say it before the rota is made and nothing ever puts you there.
+                    Say it after, and the place stays yours to hand on.
+                </p>
+            </div>
+
+            <div class="bg-surface-container-low border border-outline-variant rounded-[10px] p-5">
+                <div class="font-label-md text-[11px] uppercase tracking-[.14em] text-on-surface-variant mb-3">Worth knowing</div>
+                <div class="flex flex-col gap-3">
+                    <div class="flex items-start gap-2.5 text-[13px] leading-[1.5] text-on-surface-variant">
+                        <span class="material-symbols-outlined text-[17px] text-outline mt-px shrink-0">wb_sunny</span>
+                        <span>Whole days only — if you're away on the 14th, you're away for everything on the 14th.</span>
+                    </div>
+                    <div class="flex items-start gap-2.5 text-[13px] leading-[1.5] text-on-surface-variant">
+                        <span class="material-symbols-outlined text-[17px] text-outline mt-px shrink-0">visibility_off</span>
+                        <span>Only you and the rota editors can see this. No reason is asked for or stored.</span>
+                    </div>
+                    <div class="flex items-start gap-2.5 text-[13px] leading-[1.5] text-on-surface-variant">
+                        <span class="material-symbols-outlined text-[17px] text-outline mt-px shrink-0">edit_calendar</span>
+                        <span>Change your mind any time — remove the days and they're simply gone.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════ PHONE ══════════════ -->
+    <!-- Months run on in one scroll, so a range crossing a month boundary is one
+         flick rather than a page turn that loses the half-made selection. The
+         summary, the clash and the button live in a tray pinned to the bottom. -->
+    <div x-show="!loading && personId && phone" class="mt-4">
+        <div class="font-label-md text-[11px] uppercase tracking-[.14em] text-on-surface-variant pb-3" x-text="prompt"></div>
+
+        <div class="flex flex-col gap-7 aw-tray-clearance">
+            <template x-for="m in months" :key="m.label">
+                <div>
+                    <div class="font-display text-[16px] tracking-[.02em] text-primary pb-2.5" x-text="m.label"></div>
+                    <div class="grid grid-cols-7">
+                        <template x-for="(w, i) in weekdays" :key="i">
+                            <div class="text-center font-label-md text-[9.5px] uppercase tracking-[.1em] text-outline pb-1.5" x-text="w"></div>
+                        </template>
+                        <template x-for="(c, i) in m.cells" :key="i">
+                            <button type="button" :disabled="!c.inMonth" @click="tap(c.iso)"
+                                    class="flex flex-col items-center justify-center gap-0.5 h-[48px] border-0 aw-motion aw-focus"
+                                    :class="[cellClass(c), cellRadius(c), c.inMonth ? 'cursor-pointer' : 'cursor-default']">
+                                <span class="text-[15px]" x-text="c.day"></span>
+                                <span class="w-[5px] h-[5px] rounded-full" :class="dotClass(c)"></span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+            </template>
+
+            <button type="button" @click="showMoreMonths()"
+                    class="w-full py-3 font-label-md text-[11px] uppercase tracking-[.1em] text-on-surface-variant
+                           border border-dashed border-outline-variant rounded-[10px] aw-focus">
+                Further ahead
+            </button>
+
+            <!-- What's on record, underneath the grid on a phone -->
+            <div x-show="upcomingStretches.length" class="bg-surface-container-lowest border border-outline-variant rounded-[10px] p-4">
+                <div class="font-label-md text-[11px] uppercase tracking-[.14em] text-on-surface-variant pb-3 border-b border-outline-variant">
+                    What you've said so far
+                </div>
+                <div class="flex flex-col gap-2 mt-3">
+                    <template x-for="s in upcomingStretches" :key="s.id">
+                        <div class="flex items-center gap-3 px-3 py-3 bg-surface-container-low border border-outline-variant
+                                    border-l-[3px] border-l-secondary rounded-[10px]">
+                            <div class="flex-1 min-w-0">
+                                <div class="font-headline-lg text-[16px] leading-[1.3] text-on-surface" x-text="s.range"></div>
+                                <div class="text-[12px] text-on-surface-variant mt-0.5" x-text="s.meta"></div>
+                            </div>
+                            <button type="button" @click="remove(s.id)" title="Remove these days" :disabled="saving"
+                                    class="w-[38px] h-[38px] flex items-center justify-center border border-outline-variant rounded-[10px]
+                                           text-on-surface-variant shrink-0 aw-focus">
+                                <span class="material-symbols-outlined text-[18px]">close</span>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- The tray -->
+        <div class="fixed left-0 right-0 bottom-0 bg-surface-container-lowest border-t border-outline-variant px-margin pt-4 pb-6"
+             style="box-shadow:0 -8px 24px rgba(14,28,54,.10)">
+            <div x-show="hasClash" class="bg-warning-container border border-warning rounded-[10px] px-3.5 py-3 mb-3">
+                <div class="flex items-start gap-2.5">
+                    <span class="material-symbols-outlined text-[18px] text-warning shrink-0">event_upcoming</span>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-[13px] font-semibold leading-[1.35] text-on-warning-container" x-text="clashHeading"></div>
+                        <div class="flex flex-col gap-1 mt-2">
+                            <template x-for="c in clashes" :key="c.occurrenceId + c.role">
+                                <div class="text-[12px] leading-[1.4] text-on-warning-container">
+                                    <span class="font-headline-lg text-[14.5px]" x-text="c.role"></span>
+                                    <span> — </span><span x-text="c.when"></span>
+                                </div>
+                            </template>
+                        </div>
+                        <div class="text-[12px] leading-[1.45] text-on-warning-container mt-2"
+                             x-text="isMine ? 'Still yours. Find someone to swap with before you go.' : 'Still theirs. Somebody has to hand them on.'"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between gap-3 pb-3">
+                <p class="font-headline-lg text-[16.5px] leading-[1.35] text-on-surface" x-text="sentence"></p>
+                <button type="button" @click="clearSelection()" x-show="selection.start"
+                        class="shrink-0 font-label-md text-[10.5px] uppercase tracking-[.1em] text-on-surface-variant px-0.5 py-2 aw-focus">
+                    Start again
+                </button>
+            </div>
+
+            <button type="button" @click="add()" :disabled="!canAdd || saving"
+                    class="flex items-center justify-center gap-2.5 w-full min-h-[52px] font-label-md text-[12.5px] uppercase tracking-[.08em]
+                           text-on-primary bg-primary border border-primary rounded-[10px] shadow-xs aw-focus
+                           disabled:opacity-40 disabled:cursor-not-allowed">
+                <span class="material-symbols-outlined text-[20px]">check</span>
+                <span x-text="addLabel"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ── Loading ─────────────────────────────────────────────────────── -->
+    <div x-show="loading" class="py-lg text-center text-on-surface-variant text-[13.5px]">Loading your days…</div>
+
+</div>
+
+</body>
+</html>

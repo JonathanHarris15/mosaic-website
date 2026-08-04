@@ -69,6 +69,8 @@ function loadComponent(scriptFile, factoryName, overrides) {
     sandbox.AutoAssignPanelCore = require('../public/auto-assign-panel-core.js');
     sandbox.AutoAssignSavedCore = require('../public/auto-assign-saved-core.js');
     sandbox.RecurringRosterCore = require('../public/recurring-roster-core.js');
+    sandbox.AwayCore = require('../public/away-core.js');
+    sandbox.AwayStore = require('../public/away-store.js');
 
     // The browser-only edges, stubbed just enough to construct the component.
     sandbox.location = { search: '?id=midweek_2026-07-15', href: '' };
@@ -277,7 +279,7 @@ function xIfRootCounts(html) {
     return counts;
 }
 
-const CALENDAR_PAGES = ['calendar.html', 'calendar-event.html', 'auto-assign.html', 'recurring-events.html'];
+const CALENDAR_PAGES = ['calendar.html', 'calendar-event.html', 'auto-assign.html', 'recurring-events.html', 'away.html'];
 
 test('every calendar page is well-formed markup', () => {
     CALENDAR_PAGES.forEach(file => {
@@ -311,6 +313,13 @@ test('the Auto-assign page only binds to things its component defines', () => {
 
 test('the Recurring Events page only binds to things its component defines', () => {
     checkPage('recurring-events.html', 'recurring-events.js', 'recurringEventsPage');
+});
+
+test('the Away page only binds to things its component defines', () => {
+    // MS-188. This page draws the SAME day cell twice — once for the desktop
+    // pair of months and once for the phone's scroll — so a helper renamed on
+    // one and not the other is exactly the blank-cell bug this file exists for.
+    checkPage('away.html', 'away.js', 'awayPage');
 });
 
 // ── How auth.js actually exposes itself ───────────────────────────────────────
@@ -369,6 +378,10 @@ test('each page loads every module its component reaches for', () => {
                              'auto-assign-edit-core.js', 'auto-assign-panel-core.js',
                              'auto-assign-saved-core.js',
                              'calendar-view.js', 'date-utils.js', 'auto-assign.js'],
+        // Away reads the Calendar's own occurrences to find the places a
+        // stretch clashes with, rather than opening a second read path.
+        'away.html': ['away-core.js', 'away-store.js', 'events-store.js', 'events-occurrence-core.js',
+                      'roles-core.js', 'date-utils.js', 'away.js'],
     };
 
     Object.keys(NEEDED).forEach(page => {
@@ -3866,8 +3879,8 @@ test('out on a date empties their places on it and nothing else', () => {
 
     assert.deepEqual(ON(page, '2026-10-04'), []);
     assert.deepEqual(ON(page, '2026-10-11'), ['p1'], 'the next date is a different question');
-    assert.equal(page.isAway('2026-10-04', 'p1'), true);
-    assert.equal(page.isAway('2026-10-11', 'p1'), false);
+    assert.equal(page.isOut('2026-10-04', 'p1'), true);
+    assert.equal(page.isOut('2026-10-11', 'p1'), false);
 });
 
 test('out for the rest of the range takes every date from here on', () => {
@@ -3925,10 +3938,10 @@ test('the two answers are opposite, and neither happens until one is picked', ()
     page.cancelOut();
     assert.equal(page.outScope, null);
     assert.deepEqual(ON(page, '2026-10-04'), ['p1']);
-    assert.deepEqual(page.away, {});
+    assert.deepEqual(page.out, {});
 });
 
-test('being away survives a re-draft — that is the point of recording it', () => {
+test('being left out survives a re-draft — that is the point of recording it', () => {
     const page = placedPage({
         '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
     });
@@ -3936,8 +3949,8 @@ test('being away survives a re-draft — that is the point of recording it', () 
     page.markOut('rest');
     page.takeOut(false);
 
-    assert.deepEqual(page.draftOptions().awayOn('2026-10-04'), ['p1']);
-    assert.deepEqual(page.draftOptions().awayOn('2026-10-11'), ['p1']);
+    assert.deepEqual(page.draftOptions().outOn('2026-10-04'), ['p1']);
+    assert.deepEqual(page.draftOptions().outOn('2026-10-11'), ['p1']);
 });
 
 test('bringing somebody back clears every date they were out on', () => {
@@ -3947,13 +3960,13 @@ test('bringing somebody back clears every date they were out on', () => {
 
     page.markOut('rest');
     page.takeOut(false);
-    assert.equal(page.awayNames.length, 1);
-    assert.equal(page.awayNames[0].dates, page.resolvedDates.length,
+    assert.equal(page.outNames.length, 1);
+    assert.equal(page.outNames[0].dates, page.resolvedDates.length,
         '"the rest of the range" is the range, not just the drafted part of it');
 
     page.bringBack('p1', null);
-    assert.deepEqual(page.away, {});
-    assert.deepEqual(page.awayNames, []);
+    assert.deepEqual(page.out, {});
+    assert.deepEqual(page.outNames, []);
 });
 
 // ── Somebody else instead ───────────────────────────────────────────────────
@@ -3995,7 +4008,7 @@ test('the search narrows who is offered, without hiding a warning', () => {
     assert.deepEqual(page.placement.replacements, []);
 });
 
-test('a nudge and an away list ride with the saved draft', () => {
+test('a nudge and an out list ride with the saved draft', () => {
     const box = {};
     const page = draftedPage(null, {
         localStorage: {
@@ -4007,13 +4020,13 @@ test('a nudge and an away list ride with the saved draft', () => {
     page.draft = { dates: [drafted('2026-10-04')] };
     page.buildGrid();
     page.nudges = { p1: 3 };
-    page.away = { '2026-10-04': ['p2'] };
+    page.out = { '2026-10-04': ['p2'] };
 
     page.remember();
     const kept = JSON.parse(box[page.savedKey]);
 
     assert.deepEqual(kept.nudges, { p1: 3 });
-    assert.deepEqual(kept.away, { '2026-10-04': ['p2'] });
+    assert.deepEqual(kept.out, { '2026-10-04': ['p2'] });
 });
 
 // ── The same panel, about a person rather than a place ──────────────────────
@@ -4067,11 +4080,11 @@ test('a person can be nudged and taken out from the directory too', () => {
     assert.deepEqual(page.outDates, page.resolvedDates);
     page.takeOut(false);
 
-    assert.equal(page.isAway('2026-10-04', 'p2'), true);
+    assert.equal(page.isOut('2026-10-04', 'p2'), true);
     assert.deepEqual(ON(page, '2026-10-11'), []);
 });
 
-test('discarding a draft takes the nudges and the away list with it', () => {
+test('discarding a draft takes the nudges and the out list with it', () => {
     const page = placedPage({
         '2026-10-04': [{ roleSlug: 'coffee', slotId: 's1', personId: 'p1', recency: 2 }],
     });
@@ -4085,7 +4098,7 @@ test('discarding a draft takes the nudges and the away list with it', () => {
     // Neither writes a record anywhere else, so a discard that left them
     // behind would bias the next draft with numbers nobody can see.
     assert.deepEqual(page.nudges, {});
-    assert.deepEqual(page.away, {});
+    assert.deepEqual(page.out, {});
     assert.deepEqual(page.displaced, []);
 });
 
