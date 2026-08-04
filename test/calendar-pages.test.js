@@ -315,6 +315,51 @@ test('the Recurring Events page only binds to things its component defines', () 
     checkPage('recurring-events.html', 'recurring-events.js', 'recurringEventsPage');
 });
 
+// ── The Away page's one piece of real logic ──────────────────────────────────
+
+test('a single tapped day is checked for clashes, not just a settled range', () => {
+    // REPORTED FROM THE PREVIEW. The first tap sets both ends of the selection,
+    // so the button goes live one tap in and the sentence explicitly offers it —
+    // "press below for the one day". But the clash was gated on the range being
+    // SETTLED, so you could tap a Sunday you were serving on, press the button,
+    // and never be told. That is the one thing this screen exists to tell you.
+    const page = loadComponent('away.js', 'awayPage');
+    page.places = [{ date: '2026-09-27', when: 'Sunday 27 September', role: 'Coffee', event: 'Sunday Service', occurrenceId: 'o1' }];
+
+    page.tap('2026-09-27');
+
+    assert.equal(page.canAdd, true, 'one tap in, the day is saveable');
+    assert.equal(page.clashes.length, 1, 'so one tap in, it must already be checked');
+    assert.equal(page.hasClash, true);
+});
+
+test('anything the button will save has been checked first', () => {
+    // The invariant behind the bug above: `canAdd` and the clash check must
+    // never disagree about whether a selection is real.
+    const page = loadComponent('away.js', 'awayPage');
+    page.places = [{ date: '2026-09-27', when: 'Sunday 27 September', role: 'Coffee', event: 'Sunday Service', occurrenceId: 'o1' }];
+
+    ['2026-09-27', '2026-09-28', '2026-10-04'].forEach(iso => {
+        page.tap(iso);
+        assert.equal(page.canAdd, page.selectionMade,
+            'the button and the check disagree after tapping ' + iso);
+    });
+});
+
+test('the all-clear waits for a settled range, unlike the clash', () => {
+    // Warn early, reassure late. Said one tap into an intended fortnight, "nothing
+    // of yours falls in these dates" answers a question about a single day nobody
+    // meant — and then flips when the range closes.
+    const page = loadComponent('away.js', 'awayPage');
+    page.places = [];
+
+    page.tap('2026-09-07');
+    assert.equal(page.allClear, false, 'silence, not premature reassurance');
+
+    page.tap('2026-09-20');
+    assert.equal(page.allClear, true, 'once the range is settled, say so');
+});
+
 test('the Away page only binds to things its component defines', () => {
     // MS-188. This page draws the SAME day cell twice — once for the desktop
     // pair of months and once for the phone's scroll — so a helper renamed on

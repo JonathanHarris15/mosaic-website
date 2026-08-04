@@ -238,19 +238,28 @@
             get prompt() { return Core.prompt(this.selection); },
             get sentence() { return Core.sentence(this.selection); },
 
-            // A half-made range clashes with nothing, so this stays quiet until
-            // there is something to be quiet about.
+            // ⚠ CHECKED THE MOMENT IT CAN BE SAVED, not once the range is
+            // settled. A single day is addable one tap in — the sentence even
+            // offers it — so gating the clash on a *finished* range meant
+            // somebody could tap one day, press the button, and never be told
+            // they were serving on it. That defeats the point of the screen:
+            // being told while you are still thinking about it is the whole
+            // reason the message exists.
             get clashes() {
-                if (!this.rangeReady) return [];
+                if (!this.selectionMade) return [];
                 return Core.clashesIn(this.places, this.selection.start, this.selection.end);
             },
 
             get hasClash() { return this.clashes.length > 0; },
             get clashHeading() { return Core.clashHeading(this.clashes.length); },
 
-            // "Nothing of yours falls in these dates" is only worth saying once a
-            // whole range is chosen — said one tap in it would be answering a
-            // question the person has not finished asking.
+            // WARN EARLY, REASSURE LATE — and the asymmetry is deliberate. A
+            // clash shows as soon as the selection could be saved, because it is
+            // the thing they need to know. The all-clear still waits for a
+            // settled range: said one tap into an intended fortnight it would
+            // answer a question about a single day nobody meant, and then flip
+            // the moment the range closed. Silence is honest; premature
+            // reassurance that later reverses is not.
             get allClear() { return this.rangeReady && !this.hasClash; },
 
             get rangeReady() {
@@ -258,9 +267,14 @@
                     && this.selection.awaiting === 'start';
             },
 
+            // A selection exists as soon as one day has been tapped — the first
+            // tap sets both ends. `canAdd` and the clash check MUST agree on
+            // this: anything the button will save has to have been checked.
+            get selectionMade() { return !!this.selection.start && !!this.selection.end; },
+
             // The single day is offerable one tap in: "away Saturday" should not
             // need the same day tapped twice.
-            get canAdd() { return !!this.selection.start && !!this.selection.end; },
+            get canAdd() { return this.selectionMade; },
 
             // Lives here rather than in the markup because the desktop and the
             // phone both draw this button, and a promise made in two places is a
