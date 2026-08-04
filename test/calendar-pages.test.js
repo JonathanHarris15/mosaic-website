@@ -1384,6 +1384,120 @@ test('the move form refuses the date it is already on before writing anything', 
     assert.strictEqual(page.moveValid, true);
 });
 
+// ── Getting rid of an Event ───────────────────────────────────────────────────
+//
+// Two different asks that look like one. A one-off is DELETED — it is its own
+// single document and there is nothing above it. One date of a repeating Event
+// is SKIPPED — the pattern still produces that date, so deleting the document
+// would only remove the note saying it is off and the Calendar would draw the
+// event straight back.
+
+test('a one-off can be deleted from its own page; a date of a series cannot', () => {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.rank = 'editor';
+
+    page.occurrence = { id: 'harvest', seriesId: null, date: '2026-08-02' };
+    assert.strictEqual(page.canDelete, true);
+
+    page.occurrence = { id: 'p_2026-08-02', seriesId: 'p', date: '2026-08-02' };
+    assert.strictEqual(page.canDelete, false, 'the pattern would draw it back');
+
+    // A member never gets the offer.
+    page.rank = 'member';
+    page.occurrence = { id: 'harvest', seriesId: null, date: '2026-08-02' };
+    assert.strictEqual(page.canDelete, false);
+});
+
+test('the page offers both, and says which people go with it', () => {
+    const html = readPage('calendar-event.html');
+    assert.ok(/deleteThisEvent\(\)/.test(html), 'a one-off has no way to be deleted');
+    assert.ok(/skipThisOne\(\)/.test(html), 'a date of a series has no way to be skipped');
+    assert.ok(/pendingDelete/.test(html), 'deleting an event happens without a word of warning');
+
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.assignments = [];
+    assert.match(page.deleteSentence, /Nobody/);
+    page.assignments = [{ personId: 'p1' }];
+    assert.match(page.deleteSentence, /^One person/);
+    page.assignments = [{ personId: 'p1' }, { personId: 'p2' }];
+    assert.match(page.deleteSentence, /^2 people/);
+});
+
+test('deleting a one-off takes its roster and leaves the page', async () => {
+    const writes = [];
+    const fakeDb = {
+        collection: name => ({
+            doc: id => ({
+                path: name + '/' + id,
+                async get() {
+                    return { exists: true, id: id, data: () => ({ seriesId: null, date: '2026-08-02' }) };
+                },
+                collection: sub => ({
+                    async get() {
+                        return {
+                            docs: [{ id: 'r1', ref: { path: name + '/' + id + '/' + sub + '/r1' } }],
+                        };
+                    },
+                }),
+            }),
+        }),
+        batch: () => ({
+            delete: ref => writes.push(ref.path),
+            set() {}, update() {},
+            async commit() {},
+        }),
+    };
+
+    const location = { search: '?id=harvest', href: '' };
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', { db: fakeDb, location });
+    page.rank = 'editor';
+    page.occurrence = { id: 'harvest', seriesId: null, date: '2026-08-02' };
+    page.pendingDelete = true;
+
+    await page.deleteThisEvent();
+
+    assert.deepStrictEqual(writes, ['event_occurrences/harvest/roster/r1', 'event_occurrences/harvest']);
+    assert.match(location.href, /calendar\.html/,
+        'the page stays open on something that is gone');
+});
+
+// The bug: "Skip this one" is usually the FIRST thing to land on a date, so its
+// write is usually the write that CREATES the document — and it wrote the flag
+// alone. An occurrence with no `visibility` is refused to everyone by the rule
+// and dropped by every list query, so the skip vanished and the Calendar drew
+// the date as though nothing had happened.
+test('skipping a date nobody has touched hands over the series, so the date is stamped', async () => {
+    let written = null;
+    const fakeDb = {
+        collection: name => ({
+            doc: id => ({
+                path: name + '/' + id,
+                async get() {
+                    const err = new Error('Missing or insufficient permissions.');
+                    err.code = 'permission-denied';
+                    throw err;
+                },
+                async set(data, options) { written = { path: name + '/' + id, data, options }; },
+            }),
+        }),
+    };
+
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', { db: fakeDb });
+    page.rank = 'editor';
+    page.occurrence = { id: 'p_2026-08-02', seriesId: 'p', date: '2026-08-02', cancelled: false };
+    page.series = { id: 'p', visibility: 'participant', rosterShared: true };
+
+    await page.skipThisOne();
+
+    assert.strictEqual(page.occurrence.cancelled, true);
+    assert.strictEqual(written.path, 'event_occurrences/p_2026-08-02');
+    assert.strictEqual(written.data.cancelled, true);
+    assert.strictEqual(written.data.visibility, 'participant',
+        'unstamped, the skip is invisible to everyone including the editor who made it');
+    assert.strictEqual(written.data.seriesId, 'p');
+    assert.strictEqual(written.data.date, '2026-08-02');
+});
+
 // ── The details of a repeating Event ──────────────────────────────────────────
 //
 // They live on the SERIES, because they are true of every date of it. So the

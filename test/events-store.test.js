@@ -526,8 +526,15 @@ test('an Event with no name, or no audience, is refused', async () => {
     await assert.rejects(() => Store.createEvent(db, { name: 'X', visibility: 'everyone' }), /who can see it/);
 });
 
+const MIDWEEK_SERIES = {
+    midweek: {
+        name: 'Midweek Gathering', visibility: 'member', rosterShared: false,
+        recurrence: { freq: 'weekly', startDate: '2026-07-01', weekday: 3, ends: { kind: 'never' } },
+    },
+};
+
 test('cancelling one date leaves the rest of the series untouched', async () => {
-    const db = fakeDb({ event_occurrences: {} }, { rank: 'editor' });
+    const db = fakeDb({ event_occurrences: {}, events: MIDWEEK_SERIES }, { rank: 'editor' });
     await Store.cancelOccurrence(db, 'midweek', '2026-07-15', true);
 
     const writes = db._flatWrites();
@@ -538,10 +545,87 @@ test('cancelling one date leaves the rest of the series untouched', async () => 
     assert.deepStrictEqual(writes[0].options, { merge: true });
 });
 
+// The bug this whole file exists to catch, on the one write most likely to
+// create a document. A skip that lands unstamped is refused to everyone and
+// dropped by every list query, so it reads as a button that does nothing: the
+// Calendar rebuilds the date from the pattern and draws the event anyway.
+test('skipping a date nobody has touched stamps it, so the skip can be read back', async () => {
+    const db = fakeDb({ event_occurrences: {}, events: MIDWEEK_SERIES }, { rank: 'editor' });
+    await Store.cancelOccurrence(db, 'midweek', '2026-07-15', true);
+
+    const written = db._flatWrites()[0].data;
+    assert.strictEqual(written.visibility, 'member', 'unstamped means invisible to everyone');
+    assert.strictEqual(written.seriesId, 'midweek', 'without this it belongs to no Event');
+    assert.strictEqual(written.date, '2026-07-15', 'the list queries filter on date');
+    assert.deepStrictEqual(written.participantIds, []);
+
+    // And the fake enforces the rule the same way production does, so the
+    // stamped document is genuinely readable.
+    const stored = Object.assign({ id: 'midweek_2026-07-15' }, written);
+    assert.ok(Core.canSee('member', stored, 'p1'));
+});
+
+test('skipping a date that already has a roster only adds the flag', async () => {
+    const db = fakeDb({
+        event_occurrences: {
+            'midweek_2026-07-15': {
+                seriesId: 'midweek', date: '2026-07-15', visibility: 'participant',
+                participantIds: ['p1', 'p2'], rosterShared: true,
+            },
+        },
+        events: MIDWEEK_SERIES,
+    }, { rank: 'editor' });
+
+    await Store.cancelOccurrence(db, 'midweek', '2026-07-15', true);
+
+    const written = db._flatWrites()[0].data;
+    assert.deepStrictEqual(Object.keys(written), ['cancelled'],
+        're-stamping would wipe participantIds, and the people stood down would lose sight of it');
+});
+
 test('a cancelled date can be put back', async () => {
-    const db = fakeDb({ event_occurrences: {} }, { rank: 'editor' });
+    const db = fakeDb({ event_occurrences: {}, events: MIDWEEK_SERIES }, { rank: 'editor' });
     await Store.cancelOccurrence(db, 'midweek', '2026-07-15', false);
     assert.strictEqual(db._flatWrites()[0].data.cancelled, false);
+});
+
+// ── Deleting a one-off ────────────────────────────────────────────────────────
+
+test('deleting a one-off takes its roster with it, roster first', async () => {
+    const db = fakeDb({
+        event_occurrences: {
+            supper: { seriesId: null, date: '2026-07-11', name: 'Harvest Supper', visibility: 'member', participantIds: ['p1'] },
+        },
+        'event_occurrences/supper/roster': {
+            'welcome__1': { personId: 'p1', roleSlug: 'welcome', slotId: '1', state: 'pending' },
+        },
+    }, { rank: 'editor' });
+
+    const result = await Store.deleteOccurrence(db, 'supper');
+
+    const writes = db._flatWrites();
+    assert.strictEqual(result.assignments, 1);
+    assert.ok(writes.every(w => w.kind === 'delete'));
+    assert.deepStrictEqual(
+        writes.map(w => w.path),
+        ['event_occurrences/supper/roster/welcome__1', 'event_occurrences/supper'],
+        'the document goes last — the other way round orphans its roster'
+    );
+});
+
+test('a date of a series is never deleted — the pattern would draw it back', async () => {
+    const db = fakeDb({ event_occurrences: OCCURRENCES }, { rank: 'editor' });
+    await assert.rejects(
+        () => Store.deleteOccurrence(db, 'midweek_2026-07-15'),
+        /Skip it or move it/
+    );
+    assert.strictEqual(db._flatWrites().length, 0, 'nothing is written');
+});
+
+test('deleting an event that is not there says so rather than writing', async () => {
+    const db = fakeDb({ event_occurrences: {} }, { rank: 'editor' });
+    await assert.rejects(() => Store.deleteOccurrence(db, 'gone'), /not there/);
+    assert.strictEqual(db._flatWrites().length, 0);
 });
 
 // ── Restamping ────────────────────────────────────────────────────────────────

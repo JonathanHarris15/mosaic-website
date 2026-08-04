@@ -520,14 +520,98 @@
         return { kind: 'series', id: ref.id };
     }
 
-    // Cancel ONE date of a series without touching the rest. This is the first
-    // thing that lands on that date, so it is also the first time a document
-    // exists for it — exactly the sparse rule working.
-    async function cancelOccurrence(db, seriesId, date, cancelled) {
+    // Cancel ONE date of a series without touching the rest. This is usually the
+    // first thing that lands on that date, so it is also usually the first time a
+    // document exists for it — exactly the sparse rule working.
+    //
+    // ⚠ AND THAT IS WHY IT HAS TO STAMP. A skip is the one write most likely to
+    // CREATE an occurrence, and for a long time it wrote `{ cancelled: true }`
+    // and nothing else. A document with no `visibility` is refused to everyone by
+    // the rule and is dropped by every list query, so the skip landed in the
+    // database and then vanished: the Calendar rebuilt the date from the pattern
+    // and drew the event as though nothing had happened, and reopening the date
+    // was denied the document and rebuilt it too, with the flag gone. Pressing
+    // "Skip this one" appeared to do nothing at all.
+    //
+    // `options.series` lets a caller that already holds the series hand it over
+    // rather than making this read it again — and an editor may be refused an
+    // elder-level series, which would otherwise turn a skip into an error.
+    async function cancelOccurrence(db, seriesId, date, cancelled, options) {
         const id = Core.occurrenceId(seriesId, date);
         if (!id) throw new Error('Only a date of a series can be cancelled.');
-        await occurrenceRef(db, id).set({ cancelled: cancelled !== false }, { merge: true });
+
+        // A MISSING DOCUMENT IS DENIED, NOT ABSENT — the rule reads
+        // `resource.data` and `resource` is null for a document that is not
+        // there. Sparse dates are the ordinary case, so a refusal here means
+        // "nothing has landed on this date yet", not "you may not".
+        const doc = await occurrenceRef(db, id).get().catch(e => {
+            if (e && e.code === 'permission-denied') return null;
+            throw e;
+        });
+
+        const patch = { cancelled: cancelled !== false };
+
+        // Only when creating. On a date that already has a document, re-stamping
+        // from the series would overwrite whatever that date carries, and
+        // `participantIds: []` would wipe the very list the rule uses to let the
+        // people on the roster see they have been stood down.
+        if (!doc || !doc.exists) {
+            const series = (options && options.series)
+                || await loadSeries(db, seriesId);
+            Object.assign(patch, {
+                seriesId: seriesId,
+                date: date,
+                participantIds: [],
+                needsAttention: false,
+            }, stampFor(series, seriesId));
+        }
+
+        await occurrenceRef(db, id).set(patch, { merge: true });
         return id;
+    }
+
+    // ── Deleting a ONE-OFF outright ──────────────────────────────────────────
+    //
+    // A one-off Event IS its occurrence document, so deleting the document
+    // deletes the Event. There is no pattern above it to argue with.
+    //
+    // ⚠ A DATE OF A SERIES IS NEVER DELETED. The pattern still produces that
+    // date, so removing the document does not remove the date — it only removes
+    // the note saying otherwise, and the Calendar draws the event straight back.
+    // That is what "Skip this one" and "Move this one" are for, and both leave a
+    // marker behind for exactly this reason.
+    //
+    // Serving already recorded on people is NOT touched. An Involvement is the
+    // fact that somebody served (ADR-0018 §1); deleting the plan afterwards does
+    // not un-happen it, and a past Event's serve records belong to the people,
+    // not to this document.
+    async function deleteOccurrence(db, id) {
+        if (!id) throw new Error('There is no event to delete.');
+
+        const doc = await occurrenceRef(db, id).get().catch(e => {
+            if (e && e.code === 'permission-denied') return null;
+            throw e;
+        });
+        if (!doc || !doc.exists) throw new Error('That event is not there to delete.');
+
+        if ((doc.data() || {}).seriesId) {
+            throw new Error(
+                'This is one date of a repeating event. Skip it or move it — deleting ' +
+                'the date only makes the pattern draw it again.'
+            );
+        }
+
+        const roster = await occurrenceRef(db, id).collection(ROSTER).get()
+            .catch(() => ({ docs: [] }));
+
+        // The roster FIRST, the document last. The other way round leaves a
+        // subcollection under a document that is gone — rows nothing can reach
+        // and nothing will ever clean up.
+        const writes = roster.docs.map(d => ({ kind: 'delete', ref: d.ref }));
+        writes.push({ kind: 'delete', ref: occurrenceRef(db, id) });
+
+        await commitInBatches(db, writes);
+        return { assignments: roster.docs.length };
     }
 
     // ── Moving ONE instance, without touching the pattern ────────────────────
@@ -1226,6 +1310,7 @@
         // writing
         createEvent,
         cancelOccurrence,
+        deleteOccurrence,
         moveOccurrence,
         recurrenceFor,
         SUNDAY_RULE,

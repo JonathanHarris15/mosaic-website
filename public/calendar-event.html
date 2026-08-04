@@ -792,6 +792,19 @@
                                                disabled:opacity-40">Save details</button>
                             </div>
                         </div>
+
+                        <!-- Deleting the Event itself. A one-off IS its one
+                             document, so there is nothing above it to argue with.
+                             Quiet and last, because it is not what anybody came
+                             to this panel to do. -->
+                        <div x-show="canDelete" class="mt-md pt-sm border-t border-outline-variant flex justify-end">
+                            <button @click="pendingDelete = true" :disabled="saving"
+                                    class="text-error px-3 py-1.5 rounded-lg font-label-md text-[11.5px] uppercase
+                                           tracking-wider cal-motion cal-focus hover:bg-surface-container
+                                           disabled:opacity-40">
+                                Delete this event
+                            </button>
+                        </div>
                     </section>
 
                     <!-- Who can see this. A ONE-OFF only: for a repeating Event this
@@ -1149,6 +1162,39 @@
                         class="bg-error text-on-error px-md py-2 rounded-lg shadow-xs font-label-md
                                text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">
                     Take it off
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Deleting a one-off Event ───────────────────────────────────────── -->
+    <!-- It names the event and says who is on it, because "are you sure" on its
+         own tells nobody anything they did not already know. -->
+    <div x-show="pendingDelete" @keydown.escape.window="pendingDelete = false"
+         class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
+        <div class="bg-surface-container-lowest rounded-lg border border-outline-variant w-full max-w-[460px] mt-[14vh]">
+            <div class="px-md py-md flex items-start gap-sm">
+                <span class="material-symbols-outlined text-[22px] text-error shrink-0 mt-0.5">delete</span>
+                <div class="min-w-0">
+                    <h3 class="font-display text-[20px] text-primary">
+                        Delete <span x-text="occurrence && (occurrence.name || 'this event')"></span>?
+                    </h3>
+                    <p class="font-headline-lg text-[16px] leading-[1.55] text-on-surface mt-2"
+                       x-text="deleteSentence"></p>
+                    <p class="text-[13px] text-on-surface-variant mt-2">
+                        This event happens once, so this is all of it. Serving already recorded
+                        on people stays on their record.
+                    </p>
+                </div>
+            </div>
+            <div class="px-md py-md border-t border-outline-variant flex items-center justify-end gap-sm">
+                <button @click="pendingDelete = false"
+                        class="px-md py-2 rounded-lg font-label-md text-xs uppercase tracking-wider
+                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Keep it</button>
+                <button @click="deleteThisEvent()" :disabled="saving"
+                        class="bg-error text-on-error px-md py-2 rounded-lg shadow-xs font-label-md
+                               text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">
+                    Delete it
                 </button>
             </div>
         </div>

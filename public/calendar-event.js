@@ -189,19 +189,62 @@
                 }
             },
 
-            // Cancel one date without disturbing the rest of the series.
+            // Cancel one date without disturbing the rest of the series. The
+            // series goes with it because this write is usually the one that
+            // CREATES the date's document, and it has to stamp the series'
+            // visibility onto it — handing over the series we already hold saves
+            // a read, and saves being refused one we may not read.
             async skipThisOne() {
                 if (!this.series || !this.occurrence) return;
                 this.saving = true;
                 try {
                     await Store.cancelOccurrence(
-                        db, this.series.id, this.occurrence.date, !this.occurrence.cancelled
+                        db, this.series.id, this.occurrence.date, !this.occurrence.cancelled,
+                        { series: this.series }
                     );
                     this.occurrence.cancelled = !this.occurrence.cancelled;
+                    this.occurrence.stored = true;
                 } catch (e) {
                     console.error('Cancel failed:', e);
                     this.error = 'That date could not be changed.';
                 } finally {
+                    this.saving = false;
+                }
+            },
+
+            // ── Deleting a one-off ───────────────────────────────────────────
+            //
+            // Only a one-off. One date of a repeating Event is skipped or moved,
+            // never deleted: the pattern still produces the date, so deleting the
+            // document only removes the note saying it is off, and the Calendar
+            // draws the event straight back.
+            pendingDelete: false,
+
+            get canDelete() { return this.isEditor && this.isOneOff && !cfg.rolesOnly; },
+
+            // Named, and honest about the two things people ask when they hover
+            // over a delete: does anyone find out, and what happens to the
+            // serving already on the books.
+            get deleteSentence() {
+                const n = (this.assignments || []).length;
+                if (!n) return 'Nobody is on it, so nothing else goes with it.';
+                return n === 1
+                    ? 'One person is on it. They are dropped, and nobody is told.'
+                    : n + ' people are on it. They are dropped, and nobody is told.';
+            },
+
+            async deleteThisEvent() {
+                if (!this.canDelete || this.saving) return;
+                this.saving = true;
+                try {
+                    await Store.deleteOccurrence(db, this.occurrence.id);
+                    // Nothing left to be on, so leave rather than showing the
+                    // page for something that is gone.
+                    window.location.href = 'calendar.html';
+                } catch (e) {
+                    console.error('Delete failed:', e);
+                    this.error = (e && e.message) || 'That event could not be deleted.';
+                    this.pendingDelete = false;
                     this.saving = false;
                 }
             },
