@@ -257,13 +257,14 @@
             <div class="flex-grow p-md">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <template x-for="person in filteredPeople" :key="person.id">
-                        <!-- The lift on hover is an affordance, so it is only offered to
-                             someone the card actually responds to. A member's card has
-                             nothing to click — no Edit, no Merge, no delete — and a card
-                             that rises under the pointer and then does nothing reads as
-                             broken rather than as read-only. -->
+                        <!-- The lift on hover is an affordance, so it is offered only when
+                             the card actually responds — which is in Edit Mode and nowhere
+                             else. Outside it the card has nothing to click for anyone, and
+                             one that rises under the pointer and then does nothing reads as
+                             broken rather than as read-only. `editMode` alone is the right
+                             test: only an editor can turn it on. -->
                         <div class="bg-surface border border-outline-variant/20 p-4 rounded-xl transition-all group relative shadow-sm"
-                             :class="canEdit ? 'hover:border-primary/40 hover:shadow-md' : ''">
+                             :class="editMode ? 'hover:border-primary/40 hover:shadow-md' : ''">
                             <div class="flex justify-between items-start">
                                 <!-- Photo slot (photo upload wired later; shows a placeholder until a photo is set) -->
                                 <div class="flex-shrink-0 mr-3">
