@@ -49,13 +49,26 @@
            shell header — a divider dividing nothing from nothing. */
         html.shell-mobile .cal-title-block { border-bottom: none; padding-bottom: 0; }
 
-        /* And with the title gone, these two actions ARE the row. Right-aligned
+        /* And with the title gone, these actions ARE the row. Right-aligned
            against nothing they sit off-centre and short of every card below
            them, so on a phone they share the full width and their edges line up
-           with the month panel and the day list. */
+           with the month panel and the day list.
+
+           ⚠ THEY WRAP, AND THE BASIS IS HALF A ROW. There were two of these
+           once and they were told to share the width equally — which a flex
+           item cannot do below the width of its own label, so the third one
+           (New event) simply hung off the right edge of the phone. Half-width
+           basis means two sit side by side, a third drops to its own full-width
+           line, and a member who only sees Away gets one button the width of
+           the screen. No count is written down anywhere, so the next button
+           added here lands somewhere sensible on its own. */
         html.shell-mobile .cal-title-heading { display: none; }
-        html.shell-mobile .cal-title-actions { flex: 1 1 auto; }
-        html.shell-mobile .cal-title-actions > a { flex: 1 1 0; justify-content: center; }
+        html.shell-mobile .cal-title-actions { flex: 1 1 auto; flex-wrap: wrap; }
+        html.shell-mobile .cal-title-actions > a {
+            flex: 1 1 calc(50% - 0.5rem);
+            min-width: 0;
+            justify-content: center;
+        }
 
         /* An event name TRUNCATES on a desktop row, where there is room for it to
            be unusual. On a phone the date block, the Sunday badge and the chevron
@@ -88,6 +101,33 @@
         @media (min-width: 900px) {
             .cal-layout { grid-template-columns: minmax(0, 1fr) 300px; }
             .cal-layout > .cal-rail { order: 0; }
+        }
+
+        /* ── The months, on a rail ────────────────────────────────────────────
+           Five months in one row, with the one on screen a window onto it, so
+           paging slides instead of swapping one grid for another. The same rail
+           the Away screen runs on.
+
+           ⚠ IT MOVES BY TRANSFORM, NOT BY SCROLLING. A clipped box will not
+           smooth-scroll — `scrollTo({behavior:'smooth'})` on one lands instantly
+           at the far end, which is the hard swap this replaces.
+
+           `touch-action: pan-y` leaves vertical scrolling to the page and keeps
+           sideways gestures for the swipe. */
+        .cal-rail-months { overflow: hidden; position: relative; touch-action: pan-y; }
+        .cal-rail-track {
+            display: grid;
+            grid-auto-flow: column;
+            grid-auto-columns: 100%;
+            transition: transform 380ms cubic-bezier(0.2, 0, 0, 1);
+        }
+        /* One frame with the easing off, so re-anchoring the rail does not glide
+           sideways for no reason. See `recentreRail`. */
+        .cal-rail-track.cal-rail-snap { transition: none; }
+        /* Asked for less movement, given none. The jump is the old behaviour,
+           which was never wrong, only abrupt. */
+        @media (prefers-reduced-motion: reduce) {
+            .cal-rail-track { transition: none; }
         }
     </style>
 
@@ -141,6 +181,14 @@
                      Still not the liturgy: that is built one Sunday at a time in
                      the order of service, which is what keeps the printed
                      booklet safe. -->
+                <!-- Away (MS-188). Anybody with a Person to their name, not just
+                     an editor: it is the one action on this page that is about
+                     the person looking rather than about the church's week. -->
+                <a x-show="personId" href="away.html"
+                   class="flex items-center gap-1 border border-outline-variant text-on-surface-variant px-md py-2 rounded-lg
+                          font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
+                    <span class="material-symbols-outlined text-[18px]">luggage</span> Away
+                </a>
                 <a x-show="canCreate" href="recurring-events.html"
                    class="flex items-center gap-1 border border-secondary text-secondary px-md py-2 rounded-lg
                           font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
@@ -210,9 +258,17 @@
                     </button>
                 </div>
                 <h2 class="font-display text-[21px] text-primary" x-text="monthLabel"></h2>
-                <button @click="goToToday()"
-                        class="text-secondary font-label-md text-xs uppercase tracking-wider px-2 py-1
-                               rounded hover:bg-surface-container cal-motion cal-focus">Today</button>
+                <!-- The way back. Bordered like the arrows beside it because it
+                     is the same kind of thing — a plain word in the quiet colour
+                     read as a caption, and got looked straight past. -->
+                <button @click="goToToday()" :disabled="!awayFromToday"
+                        class="flex items-center gap-1 rounded-lg border border-outline-variant px-2.5 h-[34px]
+                               text-on-surface-variant font-label-md text-xs uppercase tracking-wider
+                               hover:bg-surface-container disabled:opacity-40 disabled:hover:bg-transparent
+                               cal-motion cal-press cal-focus">
+                    <span class="material-symbols-outlined text-[18px]">today</span>
+                    Today
+                </button>
             </div>
 
             <div class="flex items-center gap-sm">
@@ -224,7 +280,7 @@
 
                 <div class="flex gap-0.5 bg-surface-container rounded-lg p-[3px]">
                     <template x-for="opt in [['month','Month','calendar_month'],['list','List','view_agenda']]" :key="opt[0]">
-                        <button @click="view = opt[0]"
+                        <button @click="setView(opt[0])"
                                 class="min-w-[96px] rounded-lg px-3 py-1 flex items-center justify-center gap-1
                                        font-label-md text-xs uppercase tracking-wider cal-motion cal-focus"
                                 :class="view === opt[0]
@@ -245,38 +301,36 @@
              day you tapped — or the whole month, if you asked for the list. -->
         <div class="cal-phone-only mt-md flex-col gap-md">
 
-            <!-- Navy, because it is the one thing on this screen that is about
-                 the person holding it rather than about the church's diary. -->
-            <section class="bg-primary rounded-lg px-[18px] py-4">
-                <div class="flex items-center justify-between gap-sm">
-                    <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-primary-fixed-dim">
-                        Upcoming
-                    </div>
-                    <!-- Light on the navy, not navy on the navy. A select's drop
-                         -down is drawn by the browser and inherits the control's
-                         own colours, so white-on-navy here is a list of options
-                         nobody can read once it opens. -->
-                    <select @change="setUpcomingWindow($event.target.value)" aria-label="How far ahead to look"
-                            class="shrink-0 bg-primary-fixed-dim rounded-md px-2 py-1
-                                   text-[11.5px] font-label-md text-primary cal-focus">
-                        <template x-for="w in upcomingWindows" :key="w.id">
-                            <option :value="w.id" :selected="w.id === upcomingWindow" x-text="w.label"></option>
-                        </template>
-                    </select>
-                </div>
-                <p class="font-headline-lg text-[19px] leading-[1.35] mt-1.5 text-on-primary" x-text="mySentence"></p>
-            </section>
-
             <div class="flex items-center justify-between gap-sm">
-                <div class="flex items-center gap-1">
+                <!-- `min-w-0` so the month's name is what gives way on a very
+                     narrow phone. Without it the row is as wide as its longest
+                     month and simply overflows — "September 2026" plus four
+                     controls is 7px too much at 320px. -->
+                <div class="flex items-center gap-1 min-w-0">
                     <button @click="prevMonth()" aria-label="Previous month"
-                            class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
+                            class="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
                         <span class="material-symbols-outlined text-[20px]">chevron_left</span>
                     </button>
-                    <h2 class="font-display text-[17px] text-primary" x-text="monthLabel"></h2>
+                    <h2 class="font-display text-[17px] text-primary truncate" x-text="monthLabel"></h2>
                     <button @click="nextMonth()" aria-label="Next month"
-                            class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
+                            class="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
                         <span class="material-symbols-outlined text-[20px]">chevron_right</span>
+                    </button>
+                    <!-- ⚠ ONLY ONCE THERE IS SOMEWHERE TO GO BACK TO. The row
+                         already carries two arrows, a month and a view toggle;
+                         a fourth control that does nothing most of the time is
+                         what made this row cramped the last time. Off this
+                         month it is the most useful thing on the row.
+
+                         Icon only, for the same reason as the view toggle
+                         opposite: the word costs 48px, and on a 360px phone in
+                         September that is the difference between the row
+                         fitting and not. -->
+                    <button x-show="awayFromToday" @click="goToToday()" aria-label="Back to today"
+                            class="ml-0.5 shrink-0 w-8 h-8 flex items-center justify-center rounded-lg
+                                   border border-outline-variant text-secondary
+                                   cal-motion cal-press cal-focus">
+                        <span class="material-symbols-outlined text-[18px]">today</span>
                     </button>
                 </div>
 
@@ -285,7 +339,7 @@
                      same two everywhere else in the app. -->
                 <div class="shrink-0 flex gap-[3px] bg-surface-container border border-outline-variant rounded-lg p-[3px]">
                     <template x-for="opt in [['month','calendar_month','Month'],['list','view_agenda','List']]" :key="opt[0]">
-                        <button @click="view = opt[0]" :aria-label="opt[2]"
+                        <button @click="setView(opt[0])" :aria-label="opt[2]"
                                 class="w-9 h-[30px] flex items-center justify-center rounded-lg cal-motion cal-focus"
                                 :class="view === opt[0] ? 'bg-surface-container-lowest text-primary' : 'text-on-surface-variant'">
                             <span class="material-symbols-outlined text-[18px]" x-text="opt[1]"></span>
@@ -294,35 +348,92 @@
                 </div>
             </div>
 
-            <!-- The month, as a strip. A dot per event, the day's own colour,
-                 and the same red for needs-sorting as everywhere else.
+            <!-- The month, as a strip of dots — now five months of them on a
+                 rail, with the one you are on a window onto it. Swipe it or use
+                 the arrows above; both end up in `goToMonth`.
 
                  Only in Month. List means a list: the strip above one is a
                  second answer to a question already answered underneath, and it
                  pushes the first card most of a screen down. -->
-            <div x-show="view === 'month'" class="grid gap-0.5"
-                 style="grid-template-columns: repeat(7, minmax(0,1fr));">
-                <template x-for="(d, i) in ['S','M','T','W','T','F','S']" :key="i">
-                    <div class="text-center pb-1 text-[9.5px] font-label-md tracking-[.1em] uppercase text-outline"
-                         x-text="d"></div>
-                </template>
-                <template x-for="cell in cells" :key="cell.date">
-                    <button @click="focusDay(cell)"
-                            class="flex flex-col items-center gap-[3px] py-1.5 rounded-lg cal-motion cal-focus"
-                            :class="cell.date === focusedDate ? 'bg-surface-container' : ''">
-                        <span class="text-[12px] font-label-md"
-                              :class="cell.date === focusedDate
-                                ? 'text-primary font-bold'
-                                : (cell.inMonth ? 'text-on-surface' : 'text-outline')"
-                              x-text="cell.day"></span>
-                        <span class="flex gap-0.5 h-[5px]">
-                            <template x-for="(colour, i) in stripDots(cell)" :key="i">
-                                <span class="w-[5px] h-[5px] rounded-full" :style="'background:' + colour"></span>
+            <!-- ⚠ THE GATE IS ON A WRAPPER, NOT ON THE RAIL ITSELF. With
+                 `x-show` on the rail element, the directive stopped
+                 re-evaluating after the first render: the strip was hidden at
+                 load (a phone starts on the list) and never came back when you
+                 switched to Month. Everything else on the page kept reacting,
+                 so it read as the rail being broken rather than the gate. -->
+            <div x-show="view === 'month'">
+            <div class="cal-rail-months" x-ref="monthRail"
+                 @touchstart="swipeFrom($event)" @touchend="swipeTo($event)">
+                <div class="cal-rail-track" :class="railSnap ? 'cal-rail-snap' : ''" :style="railStyle">
+                    <!-- ⚠ `data-rail-month` rather than counting children:
+                         Alpine leaves its own <template> as the track's first
+                         element, so the nth month is not the nth child. -->
+                    <template x-for="(m, i) in railMonths" :key="m.month">
+                        <div data-rail-month :inert="!onRail(i)" class="grid gap-0.5 self-start"
+                             style="grid-template-columns: repeat(7, minmax(0,1fr));">
+                            <template x-for="(d, j) in ['S','M','T','W','T','F','S']" :key="j">
+                                <div class="text-center pb-1 text-[9.5px] font-label-md tracking-[.1em] uppercase text-outline"
+                                     x-text="d"></div>
                             </template>
-                        </span>
-                    </button>
-                </template>
+                            <template x-for="cell in m.cells" :key="cell.date">
+                                <button @click="focusDay(cell)"
+                                        class="flex flex-col items-center gap-[3px] py-1.5 rounded-lg cal-motion cal-focus"
+                                        :class="cell.date === focusedDate ? 'bg-surface-container' : ''">
+                                    <span class="text-[12px] font-label-md"
+                                          :class="cell.date === focusedDate
+                                            ? 'text-primary font-bold'
+                                            : (cell.inMonth ? 'text-on-surface' : 'text-outline')"
+                                          x-text="cell.day"></span>
+                                    <span class="flex gap-0.5 h-[5px]">
+                                        <template x-for="(colour, k) in stripDots(cell)" :key="k">
+                                            <span class="w-[5px] h-[5px] rounded-full" :style="'background:' + colour"></span>
+                                        </template>
+                                    </span>
+                                </button>
+                            </template>
+                        </div>
+                    </template>
+                </div>
             </div>
+            </div>
+
+            <!-- ── You, in the month on screen ─────────────────────────────
+                 Under the calendar and above the list, so the month it means is
+                 the month you are looking at and the heading only has to
+                 confirm it. It used to be a navy card at the TOP of the page
+                 answering for its own window of days, where nothing said which
+                 stretch of time it covered.
+
+                 Navy still, because it is the one thing here that is about the
+                 person holding the phone rather than about the church's diary.
+
+                 Only for somebody the church knows by name — with no Person
+                 there is no "you" for it to answer about. -->
+            <section x-show="personId" class="bg-primary rounded-lg px-[18px] py-4">
+                <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-primary-fixed-dim"
+                     x-text="myMonthHeading"></div>
+                <p class="font-headline-lg text-[19px] leading-[1.35] mt-1.5 text-on-primary" x-text="mySentence"></p>
+
+                <div x-show="myCommitments.length" class="mt-3.5 flex flex-col gap-2.5">
+                    <template x-for="c in myCommitments" :key="c.occurrenceId + c.roleLabel">
+                        <div class="flex items-start gap-3">
+                            <div class="w-[30px] shrink-0 text-center">
+                                <div class="text-[9.5px] font-label-md tracking-[.12em] uppercase text-primary-fixed-dim"
+                                     x-text="weekdayShort(c.date)"></div>
+                                <div class="font-display text-[17px] text-on-primary" x-text="dayNumber(c.date)"></div>
+                            </div>
+                            <div class="min-w-0 flex-grow">
+                                <div class="text-[13.5px] font-label-md font-semibold text-on-primary truncate"
+                                     x-text="c.roleLabel"></div>
+                                <div class="text-[12px] text-primary-fixed-dim truncate" x-text="c.eventName"></div>
+                            </div>
+                            <span x-show="c.state === 'pending'"
+                                  class="shrink-0 text-[10px] font-label-md tracking-[.1em] uppercase text-primary-fixed-dim
+                                         border border-primary-fixed-dim rounded px-1.5 py-0.5">Not answered</span>
+                        </div>
+                    </template>
+                </div>
+            </section>
 
             <!-- One body for both views, so the card is written once. Month is
                  the day you tapped; List is the whole month, grouped by week. -->
@@ -434,8 +545,16 @@
                     </template>
                 </div>
 
-                <div class="grid" style="grid-template-columns: repeat(7, minmax(0,1fr));">
-                    <template x-for="cell in cells" :key="cell.date">
+                <!-- Five months on the rail, the same one the phone slides.
+                     The weekday heading above stays put: it is the same seven
+                     words every month, and sliding it would be motion for
+                     nothing. -->
+                <div class="cal-rail-months" x-ref="monthRailWide">
+                <div class="cal-rail-track" :class="railSnap ? 'cal-rail-snap' : ''" :style="railStyle">
+                <template x-for="(m, i) in railMonths" :key="m.month">
+                <div data-rail-month :inert="!onRail(i)" class="grid self-start"
+                     style="grid-template-columns: repeat(7, minmax(0,1fr));">
+                    <template x-for="cell in m.cells" :key="cell.date">
                         <!-- The whole cell is the target, so the empty space under
                              the chips is what you click to add something to the day.
                              A chip stops its own click, or the same gesture would
@@ -504,6 +623,9 @@
                         </div>
                     </template>
                 </div>
+                </template>
+                </div>
+                </div>
 
                 <div class="flex flex-wrap gap-[18px] px-md py-sm text-[11.5px] text-on-surface-variant border-t border-outline-variant">
                     <span class="flex items-center gap-1.5">
@@ -562,10 +684,22 @@
                                     </div>
                                 </div>
                                 <div class="shrink-0 flex items-center gap-sm">
+                                    <!-- ⚠ THE TERNARY IS NOT BELT AND BRACES.
+                                         `x-show` hides an element; it does not
+                                         stop the other directives on it being
+                                         evaluated. Guarded only by
+                                         `x-show="ev.mine"`, this threw on every
+                                         event you are NOT on — and threw
+                                         silently, because Alpine swallows a
+                                         failed expression and leaves the span
+                                         blank, which is exactly what a hidden
+                                         span looks like. The same badge two
+                                         hundred lines up already said it twice
+                                         for this reason. -->
                                     <span x-show="ev.mine"
                                           class="rounded-md bg-surface-container px-2 py-1 text-[11.5px] font-label-md
                                                  text-on-surface-variant whitespace-nowrap"
-                                          x-text="'You · ' + ev.mine.label"></span>
+                                          x-text="ev.mine ? 'You · ' + ev.mine.label : ''"></span>
                                     <span x-show="placesToFill(ev)"
                                           class="inline-flex items-center gap-1 rounded-md bg-warning-container
                                                  text-on-warning-container px-2 py-1 text-[11.5px] font-label-md whitespace-nowrap">
@@ -592,53 +726,36 @@
             <!-- ── The right rail ─────────────────────────────────────────── -->
             <aside class="cal-rail flex flex-col gap-gutter min-w-0">
 
-                <!-- The phone says this at the top of its own screen, in navy.
-                     Two of them on one page is the same sentence twice. -->
-                <section class="cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
-                    <!-- Not "You in July". This card runs from today forward,
-                         over the window you pick, so it keeps answering "what am
-                         I down for" while the grid beside it pages through
-                         months. -->
-                    <div class="flex items-center justify-between gap-sm">
-                        <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
-                            Upcoming
-                        </div>
-                        <!-- `:selected` rather than `x-model`: the options are
-                             drawn by the loop INSIDE the select, and a two-way
-                             binding initialises before they exist — leaving the
-                             box showing "Next week" while the card underneath it
-                             answers for a fortnight. -->
-                        <select @change="setUpcomingWindow($event.target.value)" aria-label="How far ahead to look"
-                                class="shrink-0 bg-surface-container border border-outline-variant rounded-md
-                                       px-2 py-1 text-[11.5px] font-label-md text-on-surface cal-focus">
-                            <template x-for="w in upcomingWindows" :key="w.id">
-                                <option :value="w.id" :selected="w.id === upcomingWindow" x-text="w.label"></option>
-                            </template>
-                        </select>
-                    </div>
+                <!-- ── You, in the month on screen ─────────────────────────
+                     Beside the grid, not under it: a desktop month is most of a
+                     screen tall, so below it this would be a scroll away from
+                     the thing it answers about. The phone puts it under the
+                     calendar because there that IS next to the month — see the
+                     navy copy on that layout.
+
+                     It carried a window of its own once, and a control to say
+                     which window. Now that it follows the month on screen, the
+                     heading is the whole of the answer. -->
+                <section x-show="personId"
+                         class="cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                    <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant"
+                         x-text="myMonthHeading"></div>
                     <p class="font-headline-lg text-[16.5px] leading-[1.4] mt-2 text-on-surface" x-text="mySentence"></p>
 
-                    <div class="mt-md flex flex-col gap-2.5">
+                    <div x-show="myCommitments.length" class="mt-md flex flex-col gap-2.5">
                         <template x-for="c in myCommitments" :key="c.occurrenceId + c.roleLabel">
                             <div class="flex items-start gap-sm">
                                 <div class="w-[34px] shrink-0 text-center">
                                     <div class="text-[10px] font-label-md tracking-wider uppercase text-on-surface-variant"
                                          x-text="weekdayShort(c.date)"></div>
                                     <div class="font-display text-[17px] text-on-surface" x-text="dayNumber(c.date)"></div>
-                                    <!-- The window runs over the end of the month more often
-                                         than not, and two rows both saying "2" is a card
-                                         nobody can read in order. Only the ones that have
-                                         left this month say which one they are in. -->
-                                    <div x-show="inLaterMonth(c.date)"
-                                         class="text-[9px] font-label-md tracking-wider uppercase text-outline"
-                                         x-text="monthShort(c.date)"></div>
                                 </div>
                                 <div class="min-w-0 flex-grow">
                                     <div class="text-[13.5px] font-label-md font-semibold truncate" x-text="c.roleLabel"></div>
                                     <div class="text-[12px] text-on-surface-variant truncate" x-text="c.eventName"></div>
                                 </div>
                                 <div class="shrink-0 flex items-center gap-1.5 pt-0.5">
-                                    <!-- Pending is a hollow ring: the resting
+                                <!-- Pending is a hollow ring: the resting
                                          state, and quiet on purpose. -->
                                     <span class="w-[7px] h-[7px] rounded-full"
                                           :class="{

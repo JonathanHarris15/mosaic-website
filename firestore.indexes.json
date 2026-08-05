@@ -4,43 +4,82 @@
       "collectionGroup": "involvement",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "seriesId", "order": "ASCENDING" },
-        { "fieldPath": "serviceDate", "order": "DESCENDING" }
+        {
+          "fieldPath": "seriesId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "serviceDate",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "involvement",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "seriesId", "order": "ASCENDING" },
-        { "fieldPath": "type", "order": "ASCENDING" },
-        { "fieldPath": "serviceDate", "order": "DESCENDING" }
+        {
+          "fieldPath": "seriesId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "serviceDate",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "event_occurrences",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "visibility", "order": "ASCENDING" },
-        { "fieldPath": "date", "order": "ASCENDING" }
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "event_occurrences",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "visibility", "order": "ASCENDING" },
-        { "fieldPath": "participantIds", "arrayConfig": "CONTAINS" },
-        { "fieldPath": "date", "order": "ASCENDING" }
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "participantIds",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "date",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "event_occurrences",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "visibility", "order": "ASCENDING" },
-        { "fieldPath": "seriesId", "order": "ASCENDING" },
-        { "fieldPath": "date", "order": "ASCENDING" }
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "seriesId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],
@@ -49,33 +88,74 @@
       "collectionGroup": "shepherding_activity",
       "fieldPath": "createdAt",
       "indexes": [
-        { "order": "ASCENDING",  "queryScope": "COLLECTION" },
-        { "order": "DESCENDING", "queryScope": "COLLECTION" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        }
       ]
     },
     {
       "collectionGroup": "shepherding_activity",
       "fieldPath": "kind",
       "indexes": [
-        { "order": "ASCENDING",  "queryScope": "COLLECTION" },
-        { "order": "ASCENDING",  "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     },
     {
       "collectionGroup": "shepherding_activity",
       "fieldPath": "tagId",
       "indexes": [
-        { "order": "ASCENDING",  "queryScope": "COLLECTION" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        }
       ]
     },
     {
       "collectionGroup": "shepherding_notes",
       "fieldPath": "createdAt",
       "indexes": [
-        { "order": "ASCENDING",  "queryScope": "COLLECTION" },
-        { "order": "DESCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING",  "queryScope": "COLLECTION_GROUP" },
-        { "order": "DESCENDING", "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "away",
+      "fieldPath": "end",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     }
   ]

@@ -379,6 +379,16 @@
                 groups: o.groups,
                 assigned: seats,
                 assignedElsewhere: o.assignedElsewhere,
+                // Who said they would not be here on this date (MS-188). Passed
+                // through rather than filtered out of `people` up front, so an
+                // unfilled place can still name the reason — "everybody left is
+                // away" is an answer, and a silently short lineup is not.
+                //
+                // This is where the solve's half of the Away asymmetry lives: a
+                // solve seats only `eligible` people, so it can never place
+                // somebody who is away, while an editor doing it by hand still
+                // can and is warned.
+                awayPersonIds: o.awayPersonIds,
             });
 
             const allowed = {};
@@ -525,6 +535,7 @@
                     candidatesFor: candidatesFor,
                     tieBreak: memoTieBreak,
                     held: held,
+                    awayPersonIds: o.awayPersonIds,
                     // Exclusivity is the one thread tying the Roles together, so
                     // it is the only cross-Role state the per-Role search sees.
                     // Each seat carries its own Role's flag, stamped when it was

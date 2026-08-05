@@ -257,6 +257,27 @@ service cloud.firestore {
       match /prayer_requests/{requestId} {
         allow read, write: if isElder();
       }
+
+      // Away (MS-188): stretches of whole days this Person said they will not
+      // be here.
+      //
+      // ⚠ NOT A FIELD ON THE PERSON, AND THIS RULE IS THE REASON. The Person
+      // document above is `allow read: if true` — every name, email, phone
+      // number and home address, readable by anyone at all. ADR-0018 accepted
+      // that posture for `participantIds` because ids disclose little that is
+      // not already out. It does not stretch to this: a name, an address and
+      // "away 10-24 August" together say a particular house is empty on
+      // particular dates. Rules are per-path, so this subcollection is closed
+      // even though its parent is open.
+      //
+      // The person themselves and editors above them, and nobody else. A member
+      // has no business knowing who is on holiday, and every reader is blast
+      // radius. It carries no reason — a *why* is pastoral and belongs in a
+      // Shepherding Note, behind isElder().
+      match /away/{stretchId} {
+        allow read, create, update, delete: if isEditor()
+          || (request.auth != null && personId == myPersonId());
+      }
     }
 
     // Allow collection group queries for pastoral_prayer_history
@@ -268,6 +289,18 @@ service cloud.firestore {
     // to re-key role assignments when services are shifted to a later Sunday)
     match /{path=**}/involvement/{involvementId} {
       allow read: if true;
+    }
+
+    // Away across everybody at once (MS-188) — what the person picker, the
+    // fairness solve and auto-assign ask before they seat anyone. Editors and
+    // above only, matching the per-person rule above; a member reading the whole
+    // church's holidays is exactly what that rule exists to prevent.
+    //
+    // ⚠ Constrain this query. Firestore fails the WHOLE read if any returned
+    // document would fail, so a member running it does not get their own rows
+    // back — they get an error that reads like "nobody is ever away".
+    match /{path=**}/away/{stretchId} {
+      allow read: if isEditor();
     }
 
     match /people_tags/{tagId} {

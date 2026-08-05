@@ -1088,6 +1088,70 @@
         };
     }
 
+    // ── Taking everybody off a run of dates ──────────────────────────────────
+    //
+    // The inverse of accepting a draft. Auto-assign can already empty a place by
+    // drafting nobody into it, but only one Role at a time and only through a
+    // proposal — and an editor who wants a whole stretch back to blank should
+    // not have to draft a rota in order to throw it away.
+    //
+    // The roster rows go. The OCCURRENCE stays, because a date carries things
+    // that are not its roster — a cancellation, an order of service, a one-off
+    // job somebody still means to fill — and deleting the document to empty the
+    // rota would take those with it.
+    //
+    // ⚠ THE TWO DERIVED FIELDS MOVE IN THE SAME WRITE. `participantIds` is what
+    // the security rule reads to decide who may see the date at all, so a stale
+    // one leaves people able to read an Event they are no longer on.
+    // `needsAttention` is a declined flag with no declines left behind it. They
+    // are never maintained by hand — both are recomputed from the empty roster
+    // by the same core the ordinary save uses.
+    //
+    // A SERVE IS NOT UNDONE. The fact that somebody served is theirs and lives
+    // on the Person (ADR-0018 §1); this deletes the plan, and for a past date it
+    // would delete the plan while leaving the history — which is why the caller
+    // is expected to keep its dates in the future.
+    //
+    // Not atomic across the range, for the same reason accepting is not: a long
+    // one exceeds a batch. It reports which dates landed, and a caller that
+    // stops half way has really cleared half.
+    async function clearRosters(db, seriesId, dates) {
+        if (!seriesId) throw new Error('A rota belongs to an event.');
+
+        const cleared = [];
+        let assignments = 0;
+
+        for (const date of (dates || [])) {
+            const id = Core.occurrenceId(seriesId, date);
+            if (!id) continue;
+
+            const ref = occurrenceRef(db, id);
+            const roster = await ref.collection(ROSTER).get();
+
+            // Sparseness holds in reverse: a date with nothing on it needs no
+            // write at all, and stamping an empty participant list onto a
+            // document that has none would create one for nothing.
+            if (!roster.docs.length) continue;
+
+            const writes = roster.docs.map(d => ({ kind: 'delete', ref: d.ref }));
+            writes.push({
+                kind: 'set',
+                ref: ref,
+                options: { merge: true },
+                data: {
+                    participantIds: Core.participantIds([]),
+                    needsAttention: Core.needsAttention({ assignments: [] }),
+                },
+            });
+
+            await commitInBatches(db, writes);
+            cleared.push(date);
+            assignments += roster.docs.length;
+        }
+
+        return { dates: cleared, assignments: assignments };
+    }
+
     // ── Seeding a serve (MS-182) ─────────────────────────────────────────────
     //
     // ⚠ THIS IS THE ONE THING ON THE AUTO-ASSIGN SCREEN THAT WRITES AT ONCE.
@@ -1329,6 +1393,7 @@
         COLOUR_SLUGS,
         saveRoster,
         acceptDraft,
+        clearRosters,
         // seeding a serve (MS-182) — the one write that does not wait for accept
         seedServe,
         removeServe,

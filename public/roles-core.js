@@ -260,6 +260,18 @@
     // omission from the list.
     const REASONS = Object.freeze({
         INACTIVE: 'inactive',
+        // The one reason a PERSON authored rather than the church (MS-188). It
+        // behaves like any other here — shown, and the editor may place them
+        // anyway — but it is worded as their own words wherever it is drawn,
+        // because overruling a rule is judgement and overruling "Sarah said
+        // she's away" is disbelief.
+        //
+        // The asymmetry that matters falls out of putting it here: FAIRNESS AND
+        // AUTO-ASSIGN ONLY EVER SEAT `eligible` PEOPLE, so a solve treats this
+        // as an absolute no while a human keeps the final word. A program
+        // placing somebody who said they would not be there is indefensible in
+        // a way a person knowingly doing it is not.
+        AWAY: 'away',
         ALREADY_ASSIGNED: 'alreadyAssigned',
         SERVING_ELSEWHERE: 'servingElsewhere',          // holding another Role at this Event
         SEX_MISMATCH: 'sexMismatch',
@@ -467,6 +479,16 @@
     // and the solver calls this tens of thousands of times.
     function ineligibilityFor(def, slot, candidate, context, seated, busy) {
         if (isInactive(candidate)) return { reason: REASONS.INACTIVE };
+
+        // Second only to having left the church, and above every rule about the
+        // roster: somebody who is not going to be there cannot be judged on
+        // whether this place wants a man or whether their spouse is on it. The
+        // date is resolved by the caller — `awayPersonIds` is who is Away on
+        // THIS date, because being away on the 16th says nothing about the 23rd.
+        if (context && context.awayPersonIds
+            && context.awayPersonIds.indexOf(candidate.id) !== -1) {
+            return { reason: REASONS.AWAY };
+        }
 
         if (seated.some(a => a.personId === candidate.id)) {
             return { reason: REASONS.ALREADY_ASSIGNED };

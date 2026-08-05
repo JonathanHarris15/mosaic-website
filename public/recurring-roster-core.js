@@ -7,8 +7,10 @@
 // time and holding the answer in your head.
 //
 // So: Roles down the side, dates across the top, what is really stored in the
-// cells. Read-only. Changing any of it is the draft room's job, and the columns
-// you tick here are how you get there.
+// cells. Filling any of it is the draft room's job, and the columns you tick
+// here are how you get there. EMPTYING them is the one change that belongs
+// here — see `wipeFor` — because it is the only one that reads across a run of
+// dates rather than down a single one.
 //
 // ── What is deliberately NOT a row ───────────────────────────────────────────
 //
@@ -244,6 +246,64 @@
         };
     }
 
+    // ── Ticked columns, turned into what emptying them would cost ────────────
+    //
+    // The inverse of the door above, and it must not behave like it. The draft
+    // room works in RANGES and sweeps the dates in between; this works in the
+    // SET that was ticked and touches nothing else. An editor who ticks two
+    // Sundays a month apart to empty them must not lose the three between.
+    //
+    // ⚠ THE PAST IS LEFT ALONE. What is stored against a date that has been is
+    // the nearest thing there is to a record of who actually turned up, and a
+    // sweep across eight columns is the wrong instrument for editing it. The
+    // single-date screen still does that, one date at a time, deliberately.
+    //
+    // Counts rather than sentences: this arranges, the page phrases.
+    function wipeFor(selected, options) {
+        const o = options || {};
+        const at = o.assignmentsAt || (() => []);
+        const today = o.today || '';
+
+        const picked = (selected || []).slice().sort();
+        if (!picked.length) return null;
+
+        const past = picked.filter(d => today && d < today);
+        const reachable = picked.filter(d => !today || d >= today);
+
+        const dates = [];
+        const people = [];
+        let assignments = 0;
+        let confirmed = 0;
+
+        reachable.forEach(date => {
+            const on = (at(date) || []).filter(a => a && a.personId);
+            if (!on.length) return;
+            dates.push(date);
+            assignments += on.length;
+            on.forEach(a => {
+                if (a.state === 'confirmed') confirmed++;
+                if (people.indexOf(a.personId) === -1) people.push(a.personId);
+            });
+        });
+
+        return {
+            // Exactly the dates a write would touch.
+            dates: dates,
+            // Ticked, but behind today, and so going nowhere.
+            past: past,
+            // Ticked, reachable, and already empty. Nothing to do on them, and
+            // worth naming — otherwise a button that correctly does nothing
+            // reads as a broken one.
+            alreadyEmpty: reachable.filter(d => dates.indexOf(d) === -1),
+            assignments: assignments,
+            people: people,
+            // Somebody said yes to these. Emptying the date un-says it, and
+            // that is the part an editor should be told before, not after.
+            confirmed: confirmed,
+            any: dates.length > 0,
+        };
+    }
+
     // The address of the draft room. One place, so the page and any later caller
     // cannot disagree about the parameter names.
     //
@@ -298,6 +358,7 @@
     const RecurringRosterCore = {
         rosterGrid,
         rangeFor,
+        wipeFor,
         draftRoomHref,
         windowOf,
         previousAnchor,

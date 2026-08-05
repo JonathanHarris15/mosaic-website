@@ -22,6 +22,29 @@
 
     const todayStr = () => window.DateUtils.todayStr();
 
+    // Months drawn at once, and where the month on screen sits among them after
+    // a re-centre. Five, so there is always one either side already drawn and
+    // already loaded — a month you can slide to but not see the contents of is
+    // the swap this replaced, one frame later.
+    const RAIL_MONTHS = 5;
+    const RAIL_CENTRE = 2;
+
+    // How far a finger travels before it counts as a page turn, and how much
+    // more sideways than up-and-down. Well past the browser's own tap slop, so
+    // a swipe never also lands on the day it started on.
+    const SWIPE_MIN = 45;
+    const SWIPE_BIAS = 1.4;
+
+    // Run something once the browser has drawn what was just asked for.
+    //
+    // Two frames, not one: a frame callback runs BEFORE that frame is drawn, so
+    // the first is still too early. Off a browser — in a test — there is nothing
+    // to wait for and it simply runs.
+    function afterPaint(fn) {
+        if (typeof requestAnimationFrame !== 'function') return fn();
+        requestAnimationFrame(() => requestAnimationFrame(fn));
+    }
+
     const monthOf = dateStr => String(dateStr).slice(0, 7);
 
     // First and last day of a month, as YYYY-MM-DD.
@@ -35,6 +58,13 @@
         const [y, m] = month.split('-').map(Number);
         const d = new Date(y, m - 1 + by, 1);
         return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    }
+
+    // How many months from a to b, signed. The rail's whole arithmetic.
+    function monthsBetween(a, b) {
+        const [ay, am] = String(a).split('-').map(Number);
+        const [by, bm] = String(b).split('-').map(Number);
+        return (by - ay) * 12 + (bm - am);
     }
 
     function monthLabel(month) {
@@ -81,6 +111,7 @@
             // starts on the list, which was already built and reads well one
             // finger-width at a time. Month is still one tap away.
             view: window.MOSAIC_SHELL === 'mobile' ? 'list' : 'month',
+            phone: window.MOSAIC_SHELL === 'mobile',
             onlyMine: false,
             month: monthOf(todayStr()),
             today: todayStr(),
@@ -89,15 +120,24 @@
             people: [],
             hiddenSeries: [],       // series unticked in the "Show" filters
 
-            // ── Upcoming ────────────────────────────────────────────────────
+            // ── The rail ────────────────────────────────────────────────────
             //
-            // Its own rows, its own query. The card answers "what am I down
-            // for", which runs from today forward — so paging the grid back to
-            // April must not change the answer, and a window of two weeks
-            // crosses the end of the month more often than not.
-            upcoming: [],
-            upcomingWindow: View.DEFAULT_UPCOMING_WINDOW,
-            upcomingWindows: View.UPCOMING_WINDOWS,
+            // Five months laid out in one row with the month on screen a window
+            // onto it, so paging SLIDES rather than swapping one grid for
+            // another. The same rail the Away screen runs on, and for the same
+            // reason: a person choosing a date across a month boundary needs to
+            // see where they came from.
+            //
+            // ⚠ THE LOAD FOLLOWS THE RAIL, NOT THE MONTH. Every month on the
+            // rail is drawn, so every month on the rail needs its events —
+            // sliding to an empty grid that fills in a moment later is worse
+            // than not sliding. One query covers all five, and the happy
+            // consequence is that paging inside the rail needs no read at all.
+            railAnchor: null,       // the month the rail starts on
+            railShift: 0,           // how far it has slid, in pixels the browser measured
+            railSnap: false,        // suppress the easing for one frame — see recentreRail
+            loadedRange: { from: '', to: '' },
+            swipe: null,            // where a finger went down, while it is still down
 
             // The Roles and their slots, so the grid can count the places still
             // to fill. Editors only — nobody else is shown that count, and
@@ -116,11 +156,23 @@
                 // wrong rank either over-asks (and errors) or under-asks (and
                 // quietly hides somebody's own commitments).
                 this.rank = await this.resolveRank();
-                // The grid first — it is the page. The card beside it and the
-                // Role definitions behind the warnings follow on their own, so
-                // neither can hold the calendar up.
+                // The grid first — it is the page. The Role definitions behind
+                // the warnings follow on their own, so they cannot hold the
+                // calendar up.
+                this.railAnchor = shiftMonth(this.month, -RAIL_CENTRE);
                 await this.load();
-                this.loadUpcoming();
+                // ⚠ THE RAIL DOES NOT START WHERE IT LOOKS LIKE IT SHOULD. This
+                // month is the THIRD of the five drawn, so a rail left at zero
+                // shows the month two back — the heading said August over a grid
+                // of June, and nothing on the page contradicted it. Every other
+                // way onto a month slides; opening the page has to as well.
+                //
+                // It waits for a drawn frame because until `loading` clears
+                // there is no grid laid out to measure, and it goes through
+                // `recentreRail` because arriving is not a move — the calendar
+                // should be ON this month, not glide onto it from two months
+                // back every time the page opens.
+                afterPaint(() => this.recentreRail());
                 this.loadRoleDefinitions();
             },
 
@@ -155,11 +207,25 @@
                 });
             },
 
-            async load() {
-                this.loading = true;
+            // ⚠ A QUIET LOAD DOES NOT TOUCH `loading`, AND THAT IS THE WHOLE
+            // POINT OF THE FLAG. `loading` hides the entire page behind a
+            // spinner, which is right the first time and wrong every time
+            // after: the rail tops itself up as it grows, and every other press
+            // was blanking the calendar mid-slide and putting it back. It read
+            // as the page reloading itself for no reason.
+            //
+            // Quiet is safe here because what is on screen is already in hand.
+            // The read is only fetching the months the rail has just grown
+            // into, and nobody is looking at those yet.
+            async load(options) {
+                const quiet = !!(options && options.quiet);
+                if (!quiet) this.loading = true;
                 this.error = '';
                 try {
-                    const range = monthRange(this.month);
+                    // The whole rail, not just the month on screen. See the
+                    // note on `railAnchor`.
+                    const range = this.railRange;
+                    this.loadedRange = range;
                     const rows = await Store.loadCalendar(db, {
                         rank: this.rank,
                         personId: this.personId,
@@ -189,31 +255,14 @@
                     // A building index fixes itself, so the page offers to try
                     // again rather than making somebody reload by hand.
                     this.retryable = !!(e && e.code === 'failed-precondition');
-                    this.occurrences = [];
+                    // A quiet read that fails keeps what it already had. The
+                    // five months in hand are not wrong, they are just no longer
+                    // growing — and emptying the calendar somebody is reading
+                    // because the month after next could not be fetched would
+                    // be a far worse answer than the sentence above.
+                    if (!quiet) this.occurrences = [];
                 } finally {
-                    this.loading = false;
-                }
-            },
-
-            // The Upcoming card's own read: today through the end of the chosen
-            // window, whatever month the grid is showing.
-            //
-            // It fails quietly. This card sits beside the calendar rather than
-            // being it, and an error sentence over the grid because a side panel
-            // could not load would say the whole page had failed when it had not.
-            async loadUpcoming() {
-                if (!this.personId) { this.upcoming = []; return; }
-                const range = View.upcomingRange(this.today, this.upcomingWindow);
-                try {
-                    this.upcoming = await Store.loadCalendar(db, {
-                        rank: this.rank,
-                        personId: this.personId,
-                        from: range.from,
-                        to: range.to,
-                    });
-                } catch (e) {
-                    console.error('Upcoming load failed:', e);
-                    this.upcoming = [];
+                    if (!quiet) this.loading = false;
                 }
             },
 
@@ -262,6 +311,9 @@
                 };
             },
 
+            // Everything loaded, filtered by what the Show ticks and Only mine
+            // say. Spans the whole rail, so it is what the GRIDS are built from
+            // — each one takes the dates it wants.
             get visible() {
                 return this.occurrences.filter(o => {
                     if (this.onlyMine && !o.mine) return false;
@@ -270,9 +322,179 @@
                 });
             },
 
+            // ⚠ THE MONTH ON SCREEN, not everything in hand. Since the rail
+            // load, `occurrences` holds five months — so anything that means
+            // "this month" has to say so, or the list shows five of them and
+            // "You in August" answers for the summer.
+            get monthRows() {
+                return this.visible.filter(o => monthOf(o.date) === this.month);
+            },
+
             get cells() { return View.monthGrid(this.month, this.visible, this.today); },
-            get groups() { return View.weekGroups(this.visible, this.today); },
+
+            // ── The rail ─────────────────────────────────────────────────────
+
+            get railRange() {
+                const anchor = this.railAnchor || shiftMonth(this.month, -RAIL_CENTRE);
+                return {
+                    from: monthRange(anchor).from,
+                    to: monthRange(shiftMonth(anchor, RAIL_MONTHS - 1)).to,
+                };
+            },
+
+            // Every month drawn, each with its own grid. Built from `visible`,
+            // which spans the whole rail, so a month waiting off to the side
+            // already has its dots on it before you reach it.
+            get railMonths() {
+                const anchor = this.railAnchor || shiftMonth(this.month, -RAIL_CENTRE);
+                const out = [];
+                for (let i = 0; i < RAIL_MONTHS; i++) {
+                    const month = shiftMonth(anchor, i);
+                    out.push({
+                        month: month,
+                        label: monthLabel(month),
+                        cells: View.monthGrid(month, this.visible, this.today),
+                    });
+                }
+                return out;
+            },
+
+            get railIndex() {
+                return monthsBetween(this.railAnchor || this.month, this.month);
+            },
+
+            // Whether a month is the one being looked at. Everything else on the
+            // rail is drawn but inert, or a keyboard would tab through five
+            // months of days nobody can see.
+            onRail(index) { return index === this.railIndex; },
+
+            // ⚠ THE TWO LAYOUTS BOTH CARRY A RAIL AND BOTH ARE ALWAYS IN THE
+            // DOM — they are swapped by a CSS class, not by `x-if`. So they
+            // cannot share a ref name: `$refs` keeps whichever registered last,
+            // which was the desktop's, and inside a display:none block every
+            // offset reads zero. The rail simply never moved.
+            get rail() {
+                return this.phone ? this.$refs.monthRail : this.$refs.monthRailWide;
+            },
+
+            get railStyle() {
+                return 'transform: translateX(' + (-this.railShift) + 'px)';
+            },
+
+            // Slide so the month on screen sits at the left edge.
+            //
+            // ⚠ MEASURED OFF THE DOM. A month is a percentage of the container
+            // wide; the one thing that knows what that is in pixels is the
+            // browser, and a number worked out here would drift the moment the
+            // window changed width. `offsetLeft` is a layout position, so a
+            // transform does not move it and measuring mid-slide still answers.
+            slideRail() {
+                this.$nextTick(() => {
+                    const rail = this.rail;
+                    if (!rail) return;
+                    // ⚠ A HIDDEN RAIL MEASURES ZERO, AND ZERO IS A REAL ANSWER
+                    // — it is the first month on the rail, two months back from
+                    // the one you are on. The arrows sit in the header row and
+                    // work in List, where the grid is not drawn, so paging
+                    // there used to leave the rail parked on the wrong month
+                    // and you found out on switching to Month.
+                    //
+                    // So a rail that is not laid out is not measured. `setView`
+                    // slides it the moment it appears.
+                    if (!rail.offsetParent || !rail.offsetWidth) return;
+                    const month = rail.querySelectorAll('[data-rail-month]')[this.railIndex];
+                    if (!month) return;
+                    this.railShift = month.offsetLeft;
+                });
+            },
+
+            // Month and List. The grid is only laid out in Month, so this is
+            // where the rail catches up with any paging done while it was away.
+            setView(next) {
+                this.view = next;
+                if (next === 'month') this.slideRail();
+            },
+
+            // Put the month on screen back in the middle of the rail, without
+            // it appearing to move.
+            //
+            // ⚠ THE EASING HAS TO BE OFF FOR THIS. Re-anchoring shifts every
+            // month along by two places, so the SAME month ends up at a
+            // different offset — the picture is identical but the number is
+            // not, and eased, the rail would glide sideways for no reason.
+            // `railSnap` turns the transition off for exactly one frame.
+            //
+            // ⚠ AND THE FRAME HAS TO BE A REAL ONE. Turning the easing off and
+            // on again inside microtasks does nothing at all: the browser only
+            // decides what to animate when it comes to draw, and by then it has
+            // seen the class arrive and leave and both moves collapse into one.
+            // What it then eases is the sum — a step forward minus a re-anchor
+            // of two months back, which is a step BACKWARDS. That was the rail
+            // sliding the wrong way on every other press.
+            //
+            // So the release waits on two animation frames. The first paints
+            // the re-anchored position with the easing off; the second is the
+            // earliest moment the browser can be sure of having drawn it.
+            //
+            // It happens BEFORE the move that needs it rather than after the
+            // one that caused it: there is nothing to wait for, no transition
+            // to listen for, and nothing to go wrong if the easing was never
+            // running because somebody asked for less movement.
+            // `centreOn` is the month about to be moved TO, not the one on
+            // screen: anchoring on where you are heading leaves two months
+            // spare on both sides, so the rail re-centres every other press
+            // rather than every one.
+            recentreRail(centreOn) {
+                this.railSnap = true;
+                this.railAnchor = shiftMonth(centreOn || this.month, -RAIL_CENTRE);
+                return new Promise(resolve => {
+                    this.$nextTick(() => {
+                        const rail = this.rail;
+                        const month = rail && rail.offsetParent && rail.offsetWidth
+                            && rail.querySelectorAll('[data-rail-month]')[this.railIndex];
+                        if (month) this.railShift = month.offsetLeft;
+                        afterPaint(() => {
+                            this.railSnap = false;
+                            resolve();
+                        });
+                    });
+                });
+            },
+
+            // ── Swiping (MS-188's gesture, on the Calendar's grid) ───────────
+            //
+            // Decided on RELEASE rather than dragging the rail under the finger.
+            // A drag fights the page's own vertical scroll for every pixel, and
+            // a calendar that stutters up and down while you move it sideways is
+            // worse than one that simply answers. Nothing is prevented, so a
+            // vertical gesture scrolls the page exactly as before.
+            swipeFrom(event) {
+                const touch = event && event.changedTouches && event.changedTouches[0];
+                this.swipe = touch ? { x: touch.clientX, y: touch.clientY } : null;
+            },
+
+            swipeTo(event) {
+                const from = this.swipe;
+                const touch = event && event.changedTouches && event.changedTouches[0];
+                this.swipe = null;
+                if (!from || !touch) return;
+
+                const dx = touch.clientX - from.x;
+                const dy = touch.clientY - from.y;
+                if (Math.abs(dx) < SWIPE_MIN) return;
+                if (Math.abs(dx) < Math.abs(dy) * SWIPE_BIAS) return;
+
+                // Dragged left, the next month comes from the right — the way
+                // the paper would move, not the way the finger went.
+                return dx < 0 ? this.nextMonth() : this.prevMonth();
+            },
+            get groups() { return View.weekGroups(this.monthRows, this.today); },
             get monthLabel() { return monthLabel(this.month); },
+
+            // Whether "Today" has anywhere to take you. A way back only earns
+            // its place on the row once you have wandered off — on the phone it
+            // is a third control fighting the month's name for the same inch.
+            get awayFromToday() { return this.month !== monthOf(this.today); },
 
             // ── The right rail ───────────────────────────────────────────────
 
@@ -281,19 +503,33 @@
             // series with counts beside them — and a serve of your own is not
             // something a display filter over a different stretch of time should
             // be able to hide from you.
-            get myCommitments() { return View.myCommitments(this.upcoming, this.personId); },
-            get mySentence() {
-                return View.myCommitmentsSentence(
-                    this.myCommitments, View.upcomingWindow(this.upcomingWindow).phrase);
+            get myCommitments() {
+                return View.myCommitments(
+                    this.occurrences.filter(o => monthOf(o.date) === this.month), this.personId);
             },
-            get needsSorting() { return View.needsSorting(this.visible, this.people); },
+            get mySentence() { return View.myCommitmentsSentence(this.myCommitments); },
 
-            // A window is a different question, not a different filter, so it
-            // goes back to the database rather than trimming what is in hand.
-            setUpcomingWindow(id) {
-                this.upcomingWindow = id;
-                return this.loadUpcoming();
-            },
+            // "You in August", and it means it. This block used to be an
+            // Upcoming card at the top of the page reading its own window of
+            // days — today through a fortnight, whatever the grid was showing —
+            // and it was a separate query for that reason.
+            //
+            // It now answers for THE MONTH ON SCREEN, which is why it can be
+            // read straight off the rows the grid already has. Two reads became
+            // one, and the two can no longer disagree about the same Sunday.
+            //
+            // The old objection to this — that paging back to April changed
+            // what you were down for — was really an objection to the card
+            // sitting at the TOP of the page, where nothing said which month it
+            // meant. Underneath the grid, with the month in its own heading, the
+            // question and the answer are next to each other.
+            //
+            // `myCommitments` drops anything already past, so this month runs
+            // from today and a month ahead runs whole — with no arithmetic here
+            // to get that wrong.
+            get myMonthHeading() { return 'You in ' + this.monthLabel; },
+
+            get needsSorting() { return View.needsSorting(this.monthRows, this.people); },
 
             // ── Places still to fill ─────────────────────────────────────────
             //
@@ -337,7 +573,7 @@
             },
 
             get focusedEvents() {
-                return this.visible.filter(o => o.date === this.focusedDate);
+                return this.monthRows.filter(o => o.date === this.focusedDate);
             },
 
             // "Wednesday 29 July" — the heading over the one day.
@@ -391,7 +627,7 @@
             // One row per series, with a count, for the "Show" filters.
             get seriesFilters() {
                 const counts = new Map();
-                this.occurrences.forEach(o => {
+                this.occurrences.filter(o => monthOf(o.date) === this.month).forEach(o => {
                     const key = o.seriesId || o.id;
                     const name = o.name || o.seriesName || 'Event';
                     if (!counts.has(key)) counts.set(key, { id: key, name: name, count: 0 });
@@ -410,12 +646,47 @@
 
             // ── Navigation ───────────────────────────────────────────────────
 
+            // Moving a month is a SLIDE ALONG THE RAIL when the month is one
+            // already drawn, and only then a read. Five months are in hand, so
+            // most presses cost nothing at all — which is the second thing the
+            // rail bought, after the animation.
+            //
+            // A month off the rail entirely — "Today" from six months away, or a
+            // corner date tapped in a neighbouring month — cannot be slid to,
+            // because there is nothing between here and there to slide past. It
+            // rebuilds around the target and lands.
             async goToMonth(month) {
-                this.month = month;
+                if (month === this.month) return;
+
+                const jump = Math.abs(monthsBetween(this.month, month)) > 1;
+
                 // A day tapped in July means nothing in August, and leaving it
                 // set would highlight a day the strip is no longer showing.
                 this.focusDate = null;
-                await this.load();
+
+                if (jump) {
+                    this.month = month;
+                    await this.recentreRail();
+                    // Loud: this one lands on a month nothing has been read for,
+                    // so there really is nothing to show until it arrives.
+                    await this.load();
+                    return;
+                }
+
+                // Keep one month spare on the side we are heading for, so the
+                // one being slid to is drawn AND loaded before it appears.
+                const at = monthsBetween(this.railAnchor || month, month);
+                if (at < 1 || at > RAIL_MONTHS - 2) await this.recentreRail(month);
+
+                this.month = month;
+                this.slideRail();
+
+                // The read is only for the months the rail has just grown into.
+                // What is on screen is already in hand, so nothing waits on it.
+                const have = this.railRange;
+                if (have.from !== this.loadedRange.from || have.to !== this.loadedRange.to) {
+                    await this.load({ quiet: true });
+                }
             },
             prevMonth() { return this.goToMonth(shiftMonth(this.month, -1)); },
             nextMonth() { return this.goToMonth(shiftMonth(this.month, 1)); },
@@ -519,12 +790,9 @@
                     .toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
             },
             dayNumber(dateStr) { return window.DateUtils.parseDateStr(dateStr).getDate(); },
-            monthShort(dateStr) {
-                return window.DateUtils.parseDateStr(dateStr)
-                    .toLocaleDateString('en-GB', { month: 'short' });
-            },
-            // Past the end of this month — which the Upcoming window usually is.
-            inLaterMonth(dateStr) { return monthOf(dateStr) !== monthOf(this.today); },
+            // No `monthShort` any more. It stamped the month onto a row that
+            // had run past the end of this one, which the old Upcoming window
+            // usually did. Every row now belongs to the month in the heading.
             weekdayShort(dateStr) {
                 return window.DateUtils.parseDateStr(dateStr)
                     .toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase();

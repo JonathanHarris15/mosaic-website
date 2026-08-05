@@ -365,6 +365,16 @@
             case R.INACTIVE:
                 return 'No longer active';
 
+            // The only reason on this list a PERSON wrote. Every other one is a
+            // rule the church made about its own roster, and reads impersonally
+            // because it is impersonal. This one carries a name — an editor
+            // overruling a rule is exercising judgement, and an editor
+            // overruling "Sarah said she's away" should feel like what it is.
+            //
+            // Never "Unavailable". The editor may still place them.
+            case R.AWAY:
+                return ctx.awayNote || 'Said they are away that day';
+
             case R.ALREADY_ASSIGNED:
                 return 'Already in this Role';
 
@@ -543,36 +553,22 @@
     // Derived from the events themselves and sorted by date. Never a second
     // list — a parallel list is a list that goes stale.
     //
-    // This card used to be "You in July" — the browsed month, whichever month
-    // that was. Two things were wrong with that. A serve you have already done
-    // sat in it as though it were still to do, and paging the grid back to
-    // April changed the answer to "what am I down for", which is a question
-    // about the days ahead and has nothing to do with which month is on screen.
+    // "You in August" — what you are down for over the month the grid is
+    // showing, read off the rows the grid already has.
     //
-    // So it runs from today forward, over a window you choose, and it is
-    // anchored to today rather than to the grid.
-
-    const UPCOMING_WINDOWS = Object.freeze([
-        { id: 'week', label: 'Next week', phrase: 'the next week', days: 7 },
-        { id: 'fortnight', label: 'Next 2 weeks', phrase: 'the next two weeks', days: 14 },
-        // Thirty days, not "the same day next month" — the card is a look
-        // ahead, not a date calculation somebody has to check.
-        { id: 'month', label: 'Next month', phrase: 'the next month', days: 30 },
-    ]);
-
-    const DEFAULT_UPCOMING_WINDOW = 'fortnight';
-
-    function upcomingWindow(id) {
-        return UPCOMING_WINDOWS.find(w => w.id === id) ||
-            UPCOMING_WINDOWS.find(w => w.id === DEFAULT_UPCOMING_WINDOW);
-    }
-
-    // What to ask the database for: today, through the end of the window.
-    function upcomingRange(today, id) {
-        const end = parseDate(today);
-        end.setDate(end.getDate() + upcomingWindow(id).days);
-        return { from: today, to: formatDate(end) };
-    }
+    // It was this once, then it was an Upcoming card at the top of the page
+    // with a window of its own — today through a fortnight, whatever month was
+    // on screen — because paging the grid back to April changed the answer to
+    // "what am I down for". That complaint was really about WHERE the card sat:
+    // at the top, detached, nothing said which month it meant. Under the grid
+    // with the month in its own heading, the question and the answer are next
+    // to each other and following the grid is the obvious behaviour.
+    //
+    // ⚠ ANYTHING ALREADY PAST IS DROPPED, and that is what keeps the word
+    // "past" out of a block headed "You in August". A serve you have already
+    // done must not sit in it looking like something still to do. It also means
+    // the current month runs from today while a month ahead runs whole, with no
+    // arithmetic anywhere to get that wrong.
 
     function myCommitments(occurrences, personId) {
         if (!personId) return [];
@@ -595,15 +591,15 @@
         return mine.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     }
 
-    // The EB Garamond sentence at the top of the card: what you are down for,
-    // and how many are still waiting on your yes. `windowLabel` is the window's
-    // own words — "the next two weeks" — so the empty line names the same
-    // stretch of time the rows underneath it cover.
-    function myCommitmentsSentence(commitments, windowLabel) {
+    // The EB Garamond sentence at the head of the block: what you are down for
+    // over the month on screen, and how many are still waiting on your yes.
+    //
+    // It does not name the month. The heading above it does, and a sentence
+    // that repeated it read as though the two were answering different
+    // questions.
+    function myCommitmentsSentence(commitments) {
         const list = commitments || [];
-        if (!list.length) {
-            return 'Nothing on for you' + (windowLabel ? ' in ' + windowLabel : '') + '.';
-        }
+        if (!list.length) return 'Nothing on for you.';
 
         const names = list.map(c => c.roleLabel);
         const head = list.length === 1
@@ -753,10 +749,6 @@
         unconfirmedPrompt,
         serveTickSummary,
         // the rail
-        UPCOMING_WINDOWS,
-        DEFAULT_UPCOMING_WINDOW,
-        upcomingWindow,
-        upcomingRange,
         myCommitments,
         myCommitmentsSentence,
         openPlaces,
