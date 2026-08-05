@@ -5254,3 +5254,29 @@ test('every rule in the Away stylesheet actually closes its comment', () => {
     assert.match(css, /\.aw-rail \{[^}]*overflow:\s*hidden/,
         'the rail does not clip, so the whole year of months shows');
 });
+
+test('the pinned tray carries its own safe-area inset', () => {
+    // ⚠ A `position: fixed` box is laid against the VIEWPORT, so the body
+    // padding mobile-shell.css uses to keep content clear of the home indicator
+    // never reaches it. The tray had a flat 24px standing in for that — too
+    // little on a phone that has an indicator, and 24px of nothing on every
+    // phone and browser that does not. It now asks the device.
+    const html = readPage('away.html');
+    const css = html.slice(html.indexOf('<style>') + 7, html.indexOf('</style>'));
+
+    assert.match(css, /\.aw-tray \{[^}]*env\(safe-area-inset-bottom/,
+        'the tray does not ask the device where the home indicator is');
+    assert.match(html, /class="aw-tray fixed/, 'nothing carries the class the rule selects on');
+    assert.doesNotMatch(html, /class="aw-tray fixed[^"]*\bpb-\d/,
+        'a flat bottom padding is fighting the safe-area inset');
+
+    // The scroll above it clears two different trays, because a clash adds a
+    // whole panel to it. One number would either hide the last card behind the
+    // warning or leave a hole under it.
+    assert.match(html, /hasClash \? 'aw-tray-clearance-clash' : 'aw-tray-clearance'/,
+        'the scroll clears one size of tray but the tray has two');
+    ['aw-tray-clearance', 'aw-tray-clearance-clash'].forEach(name => {
+        assert.match(css, new RegExp('\\.' + name + ' \\{[^}]*padding-bottom'),
+            name + ' is used but never defined, so the tray covers the last card');
+    });
+});

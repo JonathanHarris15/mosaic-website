@@ -30,8 +30,22 @@
         html.shell-mobile .aw-page-title { display: none; }
         html.shell-mobile .aw-title-block { display: none; }
 
-        /* The phone's tray is pinned; the scroll above it needs room to clear. */
-        .aw-tray-clearance { padding-bottom: 220px; }
+        /* ── The phone's pinned tray ──────────────────────────────────────────
+           ⚠ THE TRAY IS `position: fixed`, SO THE BODY'S SAFE-AREA PADDING DOES
+           NOT REACH IT. mobile-shell.css keeps scrollable content clear of the
+           home indicator by padding the body, but a fixed box is laid against
+           the viewport and sails straight under it. This carries its own inset,
+           which is both safer on a phone that has an indicator and thinner on
+           every phone and browser that does not — a flat 24px was the wrong
+           number in both directions. */
+        .aw-tray { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.75rem); }
+
+        /* The scroll above it needs room to clear it. Two numbers because the
+           tray grows a whole panel taller when the days you are choosing clash
+           with something you are down to do — one clearance would either hide
+           the last card behind the warning or leave a hole under it. */
+        .aw-tray-clearance { padding-bottom: 130px; }
+        .aw-tray-clearance-clash { padding-bottom: 290px; }
 
         /* ── The months, on a rail ────────────────────────────────────────────
            Every month the screen can reach is laid out in one row and the
@@ -380,7 +394,7 @@
             </div>
         </div>
 
-        <div class="flex flex-col gap-7 aw-tray-clearance">
+        <div class="flex flex-col gap-7" :class="hasClash ? 'aw-tray-clearance-clash' : 'aw-tray-clearance'">
             <!-- The same rail the desktop slides, one month wide. The swipe is
                  read on the whole rail rather than per day, so a thumb landing
                  anywhere on the calendar can move it. -->
@@ -433,7 +447,7 @@
         </div>
 
         <!-- The tray -->
-        <div class="fixed left-0 right-0 bottom-0 bg-surface-container-lowest border-t border-outline-variant px-margin pt-4 pb-6"
+        <div class="aw-tray fixed left-0 right-0 bottom-0 bg-surface-container-lowest border-t border-outline-variant px-margin pt-3"
              style="box-shadow:0 -8px 24px rgba(14,28,54,.10)">
             <div x-show="hasClash" class="bg-warning-container border border-warning rounded-[10px] px-3.5 py-3 mb-3">
                 <div class="flex items-start gap-2.5">
@@ -454,16 +468,24 @@
                 </div>
             </div>
 
-            <div class="flex items-center justify-between gap-3 pb-3">
-                <p class="font-headline-lg text-[16.5px] leading-[1.35] text-on-surface" x-text="sentence"></p>
+            <!-- The sentence is a size down from the desktop's. It is the same
+                 words, but here it is one line of caption above a button rather
+                 than the largest thing in a panel — at 16.5px it wrapped to two
+                 lines in the empty state and made the tray a third taller for
+                 saying what the heading already says. -->
+            <div class="flex items-center justify-between gap-3 pb-2.5">
+                <p class="font-headline-lg text-[14.5px] leading-[1.35] text-on-surface" x-text="sentence"></p>
                 <button type="button" @click="clearSelection()" x-show="selection.start"
-                        class="shrink-0 font-label-md text-[10.5px] uppercase tracking-[.1em] text-on-surface-variant px-0.5 py-2 aw-focus">
+                        class="shrink-0 font-label-md text-[10.5px] uppercase tracking-[.1em] text-on-surface-variant px-0.5 py-1.5 aw-focus">
                     Start again
                 </button>
             </div>
 
+            <!-- 46px, not 52. Still comfortably past the 44px anybody's
+                 guidance asks of a thumb, and the tray is pinned so this is
+                 never a target you have to aim at while the page moves. -->
             <button type="button" @click="add()" :disabled="!canAdd || saving"
-                    class="flex items-center justify-center gap-2.5 w-full min-h-[52px] font-label-md text-[12.5px] uppercase tracking-[.08em]
+                    class="flex items-center justify-center gap-2.5 w-full min-h-[46px] font-label-md text-[12.5px] uppercase tracking-[.08em]
                            text-on-primary bg-primary border border-primary rounded-[10px] shadow-xs aw-focus
                            disabled:opacity-40 disabled:cursor-not-allowed">
                 <span class="material-symbols-outlined text-[20px]">check</span>
