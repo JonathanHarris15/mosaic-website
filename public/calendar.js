@@ -35,6 +35,16 @@
     const SWIPE_MIN = 45;
     const SWIPE_BIAS = 1.4;
 
+    // Run something once the browser has drawn what was just asked for.
+    //
+    // Two frames, not one: a frame callback runs BEFORE that frame is drawn, so
+    // the first is still too early. Off a browser — in a test — there is nothing
+    // to wait for and it simply runs.
+    function afterPaint(fn) {
+        if (typeof requestAnimationFrame !== 'function') return fn();
+        requestAnimationFrame(() => requestAnimationFrame(fn));
+    }
+
     const monthOf = dateStr => String(dateStr).slice(0, 7);
 
     // First and last day of a month, as YYYY-MM-DD.
@@ -151,6 +161,18 @@
                 // calendar up.
                 this.railAnchor = shiftMonth(this.month, -RAIL_CENTRE);
                 await this.load();
+                // ⚠ THE RAIL DOES NOT START WHERE IT LOOKS LIKE IT SHOULD. This
+                // month is the THIRD of the five drawn, so a rail left at zero
+                // shows the month two back — the heading said August over a grid
+                // of June, and nothing on the page contradicted it. Every other
+                // way onto a month slides; opening the page has to as well.
+                //
+                // It waits for a drawn frame because until `loading` clears
+                // there is no grid laid out to measure, and it goes through
+                // `recentreRail` because arriving is not a move — the calendar
+                // should be ON this month, not glide onto it from two months
+                // back every time the page opens.
+                afterPaint(() => this.recentreRail());
                 this.loadRoleDefinitions();
             },
 
@@ -402,6 +424,18 @@
             // not, and eased, the rail would glide sideways for no reason.
             // `railSnap` turns the transition off for exactly one frame.
             //
+            // ⚠ AND THE FRAME HAS TO BE A REAL ONE. Turning the easing off and
+            // on again inside microtasks does nothing at all: the browser only
+            // decides what to animate when it comes to draw, and by then it has
+            // seen the class arrive and leave and both moves collapse into one.
+            // What it then eases is the sum — a step forward minus a re-anchor
+            // of two months back, which is a step BACKWARDS. That was the rail
+            // sliding the wrong way on every other press.
+            //
+            // So the release waits on two animation frames. The first paints
+            // the re-anchored position with the easing off; the second is the
+            // earliest moment the browser can be sure of having drawn it.
+            //
             // It happens BEFORE the move that needs it rather than after the
             // one that caused it: there is nothing to wait for, no transition
             // to listen for, and nothing to go wrong if the easing was never
@@ -419,7 +453,7 @@
                         const month = rail && rail.offsetParent && rail.offsetWidth
                             && rail.querySelectorAll('[data-rail-month]')[this.railIndex];
                         if (month) this.railShift = month.offsetLeft;
-                        this.$nextTick(() => {
+                        afterPaint(() => {
                             this.railSnap = false;
                             resolve();
                         });

@@ -5457,6 +5457,64 @@ test('the rail re-centres before it runs out, and reads only what it grew into',
         { from: '2026-08-01', to: '2026-12-31' });
 });
 
+test('opening the page puts the rail on this month, not on the first one drawn', async () => {
+    // ⚠ THE RAIL DOES NOT START WHERE IT LOOKS LIKE IT SHOULD. This month is the
+    // third of the five, so a rail left where it was built shows the month two
+    // back — and the heading, the list and the "you" block all still say this
+    // one. August written over a grid of June, with nothing to contradict it.
+    const months = Array.from({ length: 5 }, (_, i) => ({ offsetLeft: i * 400 }));
+    const page = withAlpine(loadComponent('calendar.js', 'calendarPage', {
+        EventsStore: Object.assign({}, require('../public/events-store.js'), {
+            async loadCalendar() { return []; },
+            async loadVisibleSeries() { return []; },
+        }),
+        auth: { onAuthStateChanged(cb) { cb({ uid: 'u1' }); } },
+        getUserData: async () => ({ personId: 'p1', permissionLevel: 'editor' }),
+    }));
+    page.$refs.monthRailWide = {
+        offsetParent: {}, offsetWidth: 400, querySelectorAll: () => months,
+    };
+    page.month = '2026-08';
+
+    await page.init();
+
+    assert.strictEqual(page.railIndex, 2);
+    assert.strictEqual(page.railShift, 800, 'the calendar opened on a month it was not showing');
+    assert.strictEqual(page.railSnap, false, 'the easing was left off');
+});
+
+test('the easing stays off until the browser has actually drawn the re-anchoring', async () => {
+    // ⚠ THE BUG THIS EXISTS FOR: re-centring turned the easing off and straight
+    // back on again inside microtasks. The browser only decides what to animate
+    // when it comes to draw, and by then the class had been and gone — so it
+    // eased the SUM of the re-anchor and the step. That sum points backwards,
+    // and the rail slid the wrong way on every other press.
+    //
+    // A frame callback runs BEFORE its frame is drawn, so one is not enough.
+    const frames = [];
+    const page = withAlpine(loadComponent('calendar.js', 'calendarPage', {
+        EventsStore: Object.assign({}, require('../public/events-store.js'), {
+            async loadCalendar() { return []; },
+        }),
+        requestAnimationFrame: fn => frames.push(fn),
+    }));
+    page.month = '2026-08';
+    page.railAnchor = '2026-06';
+
+    const done = page.recentreRail('2026-10');
+    assert.strictEqual(page.railSnap, true, 'the easing was never turned off');
+    assert.strictEqual(frames.length, 1, 'the release did not wait for a frame at all');
+
+    frames.shift()();
+    assert.strictEqual(page.railSnap, true,
+        'the easing came back on inside the frame, before it was drawn');
+    assert.strictEqual(frames.length, 1, 'the release waited for only one frame');
+
+    frames.shift()();
+    await done;
+    assert.strictEqual(page.railSnap, false, 'the easing never came back');
+});
+
 test('a month too far to slide to is landed on, not slid to', async () => {
     // "Today" from six months away, or a date typed into the address bar. There
     // is nothing between here and there to slide past, so it rebuilds around
