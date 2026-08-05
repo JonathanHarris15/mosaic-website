@@ -173,14 +173,41 @@
             creating: false,
             draft: {
                 name: '', date: '', time: '', location: '', description: '',
+                // The last day, for something that runs over several — a
+                // half-term, a conference, a week away. Blank means one day,
+                // which is nearly everything.
+                endDate: '',
                 visibility: 'member', rosterShared: false,
                 recurrence: { freq: 'once', startDate: '', weekday: null, time: '', ends: { kind: 'never' } },
+            },
+
+            // What is wrong with the run of days, in a sentence, or empty. Shown
+            // as it is typed rather than saved and rejected — "the last day is
+            // before the first" is worth knowing before pressing the button.
+            get draftSpanError() {
+                if (this.draft.recurrence.freq !== 'once') return '';
+                return Core.spanError({ date: this.draft.date, endDate: this.draft.endDate }) || '';
+            },
+
+            get draftSpanSentence() {
+                return View.spanSentence({ date: this.draft.date, endDate: this.draft.endDate });
             },
 
             get draftSentence() {
                 const rule = Object.assign({}, this.draft.recurrence, {
                     startDate: this.draft.date, time: this.draft.time,
                 });
+                // A run of days is not a pattern, so it does not belong in
+                // `recurrenceSentence` — but it IS the thing the editor most
+                // needs read back to them, because "once, on Monday" is a
+                // truthful sentence about a five-day conference and a useless
+                // one. So it replaces the sentence rather than trailing it.
+                const span = View.spanSentence({ date: this.draft.date, endDate: this.draft.endDate });
+                if (span) {
+                    const days = View.spanLengthSentence({ date: this.draft.date, endDate: this.draft.endDate });
+                    const at = this.draft.time ? ', from ' + View.formatTime(this.draft.time) : '';
+                    return span + at + ' — ' + days + '.';
+                }
                 return View.recurrenceSentence(rule);
             },
 
@@ -192,7 +219,7 @@
             },
 
             get draftValid() {
-                return !!(String(this.draft.name).trim() && this.draft.date);
+                return !!(String(this.draft.name).trim() && this.draft.date) && !this.draftSpanError;
             },
 
             async createEvent() {
@@ -213,6 +240,10 @@
                     const made = await Store.createEvent(db, {
                         name: this.draft.name,
                         date: this.draft.date,
+                        // Only a one-off can run over several days — a pattern
+                        // says how often, not how long, and the store refuses
+                        // the combination rather than half-honouring it.
+                        endDate: this.draft.recurrence.freq === 'once' ? (this.draft.endDate || null) : null,
                         time: this.draft.time,
                         location: this.draft.location,
                         description: this.draft.description,
@@ -473,6 +504,14 @@
             // of this screen say 4:30 am while the bottom said 4:30 pm.
             get eventTime() {
                 return Core.timeOf(this.occurrence, this.series && this.series.recurrence);
+            },
+
+            // "to Friday 27 November · 5 days" — empty for a single-day Event,
+            // so the header shows nothing rather than a range of one.
+            get eventSpan() {
+                const end = Core.endDateOf(this.occurrence);
+                if (!end) return '';
+                return 'to ' + this.longDate(end) + ' · ' + View.spanLengthSentence(this.occurrence);
             },
 
             // ── Who is looking ───────────────────────────────────────────────
@@ -1689,7 +1728,7 @@
             // It was creatable and then frozen. Wrong time, wrong hall, wrong
             // name, and no way back to any of it.
 
-            occurrenceDraft: { name: '', date: '', time: '', location: '', description: '' },
+            occurrenceDraft: { name: '', date: '', endDate: '', time: '', location: '', description: '' },
 
             get isOneOff() { return !!this.occurrence && !this.occurrence.seriesId; },
 
@@ -1698,6 +1737,7 @@
                 this.occurrenceDraft = {
                     name: o.name || '',
                     date: o.date || '',
+                    endDate: o.endDate || '',
                     time: o.time || '',
                     location: o.location || '',
                     description: o.description || '',
@@ -1706,14 +1746,30 @@
 
             get occurrenceDetailsChanged() {
                 const o = this.occurrence || {};
-                return ['name', 'date', 'time', 'location', 'description'].some(
+                return ['name', 'date', 'endDate', 'time', 'location', 'description'].some(
                     f => String(this.occurrenceDraft[f] || '') !== String(o[f] || '')
                 );
             },
 
             get occurrenceDetailsValid() {
                 return !!String(this.occurrenceDraft.name || '').trim()
-                    && !!this.occurrenceDraft.date;
+                    && !!this.occurrenceDraft.date
+                    && !this.occurrenceSpanError;
+            },
+
+            // Same check the create form runs, against the draft being edited.
+            get occurrenceSpanError() {
+                return Core.spanError({
+                    date: this.occurrenceDraft.date,
+                    endDate: this.occurrenceDraft.endDate,
+                }) || '';
+            },
+
+            get occurrenceSpanSentence() {
+                return View.spanSentence({
+                    date: this.occurrenceDraft.date,
+                    endDate: this.occurrenceDraft.endDate,
+                });
             },
 
             async saveOccurrenceDetails() {

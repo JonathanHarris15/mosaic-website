@@ -54,6 +54,15 @@
         return { from: month + '-01', to: month + '-' + String(last).padStart(2, '0') };
     }
 
+    // Whether an Event is ON at any point in a month — NOT whether it starts in
+    // one. An Event that runs over several days is stored under its first day,
+    // so a break beginning on 28 December is on for three days of January and
+    // `monthOf(o.date)` would say January has never heard of it.
+    function onInMonth(occurrence, month) {
+        const range = monthRange(month);
+        return Core.overlapsRange(occurrence, range.from, range.to);
+    }
+
     function shiftMonth(month, by) {
         const [y, m] = month.split('-').map(Number);
         const d = new Date(y, m - 1 + by, 1);
@@ -327,7 +336,7 @@
             // "this month" has to say so, or the list shows five of them and
             // "You in August" answers for the summer.
             get monthRows() {
-                return this.visible.filter(o => monthOf(o.date) === this.month);
+                return this.visible.filter(o => onInMonth(o, this.month));
             },
 
             get cells() { return View.monthGrid(this.month, this.visible, this.today); },
@@ -505,7 +514,7 @@
             // be able to hide from you.
             get myCommitments() {
                 return View.myCommitments(
-                    this.occurrences.filter(o => monthOf(o.date) === this.month), this.personId);
+                    this.occurrences.filter(o => onInMonth(o, this.month)), this.personId);
             },
             get mySentence() { return View.myCommitmentsSentence(this.myCommitments); },
 
@@ -627,7 +636,7 @@
             // One row per series, with a count, for the "Show" filters.
             get seriesFilters() {
                 const counts = new Map();
-                this.occurrences.filter(o => monthOf(o.date) === this.month).forEach(o => {
+                this.occurrences.filter(o => onInMonth(o, this.month)).forEach(o => {
                     const key = o.seriesId || o.id;
                     const name = o.name || o.seriesName || 'Event';
                     if (!counts.has(key)) counts.set(key, { id: key, name: name, count: 0 });
@@ -784,6 +793,10 @@
 
             initials(name) { return View.initials(name); },
             formatTime(t) { return View.formatTime(t); },
+            // "23–27 November" for an Event that runs over several days, empty
+            // for one that does not — so a template can show it unconditionally.
+            spanSentence(ev) { return View.spanSentence(ev); },
+            spanDayLabel(ev) { return View.spanDayLabel(ev); },
             // "15 Jul" — short enough to sit inside a rail sentence on one line.
             formatDayMonthShort(dateStr) {
                 return window.DateUtils.parseDateStr(dateStr)

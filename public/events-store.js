@@ -52,8 +52,22 @@
         const opts = options || {};
         const q = Core.visibilityQueryFor(opts.rank, opts.personId);
 
+        // ⚠ THE QUERY REACHES BACK FURTHER THAN THE WINDOW ASKED FOR.
+        //
+        // An Event that runs over several days is stored under its FIRST day, so
+        // a plain `date >= from` drops any run that started before the window and
+        // is still going inside it — a break from 28 December to 3 January simply
+        // would not appear in January. Firestore cannot express "starts before
+        // `from` but ends after it" (that is two ranges on two fields), so the
+        // read widens by the longest span the model allows and the overlap is
+        // settled in `Core.overlapsRange` on the way back.
+        //
+        // The cap is what makes this affordable: the widening is bounded at 60
+        // days, not "since records began".
+        const windowFrom = shiftDays(opts.from, -Core.MAX_SPAN_DAYS);
+
         const inRange = query => query
-            .where('date', '>=', opts.from)
+            .where('date', '>=', windowFrom)
             .where('date', '<=', opts.to);
 
         // 1. By rank. `rungs` is never empty — a signed-out visitor still asks
@@ -77,7 +91,11 @@
         const snaps = await Promise.all(reads);
         const sets = snaps.map(snap => snap.docs.map(d => Object.assign({ id: d.id }, d.data())));
 
+        // The widened read is trimmed back to what the caller actually asked for.
+        // A single-day Event outside the window fails this exactly as the query
+        // used to; a run that reaches into it survives.
         return Core.mergeVisibleOccurrences(sets[0], sets[1] || [])
+            .filter(o => Core.overlapsRange(o, opts.from, opts.to))
             .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     }
 
@@ -340,7 +358,13 @@
         //
         // A ONE-OFF keeps its own time — its occurrence IS the whole Event, so
         // there is no rule for the time to live on.
-        if (payload.seriesId) delete payload.time;
+        // A span is a one-off's alone (see `endDateOf`). On a date of a series it
+        // is meaningless, and stored it would draw that one date across a week
+        // the series knows nothing about.
+        if (payload.seriesId) {
+            delete payload.time;
+            delete payload.endDate;
+        }
         return payload;
     }
 
@@ -489,10 +513,17 @@
 
         if (oneOff) {
             const ref = db.collection(OCCURRENCES).doc();
+            const date = rule.startDate || s.date;
+            // Refused rather than quietly dropped: somebody who typed a last day
+            // and got a one-day event back would have no idea why.
+            const spanFault = Core.spanError({ date: date, endDate: s.endDate });
+            if (spanFault) throw new Error(spanFault);
+
             const payload = occurrencePayload(Object.assign({
                 id: ref.id,
                 seriesId: null,
-                date: rule.startDate || s.date,
+                date: date,
+                endDate: s.endDate || null,
                 name: String(s.name).trim(),
                 time: s.time || null,
                 location: s.location || null,
@@ -810,7 +841,7 @@
     // A PATCH, for the same reason the series one is. The roster and the derived
     // participant list are not in `OCCURRENCE_DETAIL_FIELDS`, so a screen that
     // does not know about them cannot clear them by omission.
-    const OCCURRENCE_DETAIL_FIELDS = ['name', 'location', 'description', 'time', 'date'];
+    const OCCURRENCE_DETAIL_FIELDS = ['name', 'location', 'description', 'time', 'date', 'endDate'];
 
     async function saveOccurrenceDetails(db, id, details) {
         if (!id) throw new Error('Details need an event to belong to.');
@@ -838,6 +869,25 @@
                     'which moves it properly and leaves a note on the original date.'
                 );
             }
+        }
+
+        // A span is checked against the first day, and a patch may carry only one
+        // of the two — "make it end on the 27th" says nothing about when it
+        // starts. So the stored date is fetched when the patch does not supply
+        // one, rather than the span being waved through unchecked.
+        if ('endDate' in d && d.endDate) {
+            const seriesOccurrence = Core.parseOccurrenceId(id);
+            let date = d.date;
+            if (!date && !seriesOccurrence) {
+                const doc = await occurrenceRef(db, id).get();
+                date = doc.exists ? doc.data().date : null;
+            }
+            const spanFault = Core.spanError({
+                date: date || (seriesOccurrence && seriesOccurrence.date),
+                endDate: d.endDate,
+                seriesId: seriesOccurrence ? seriesOccurrence.seriesId : null,
+            });
+            if (spanFault) throw new Error(spanFault);
         }
 
         const payload = {};
@@ -1324,10 +1374,18 @@
             // The state, who set it and when, and therefore the participant list
             // all travel untouched — a shift moves a roster, it does not rewrite
             // one.
+            // An Event running over several days moves as a WHOLE. Shifting the
+            // first day and leaving the last where it was would slide a five-day
+            // break into a run that ends before it starts — and the model would
+            // then read the span as absent, so the event would quietly shrink to
+            // one day rather than announce itself.
+            const shifted = { id: newId, date: newDate };
+            if (item.data.endDate) shifted.endDate = shiftDays(item.data.endDate, step);
+
             setsAndUpdates.push({
                 kind: 'set',
                 ref: occurrenceRef(db, newId),
-                data: Object.assign({}, item.data, { id: newId, date: newDate }),
+                data: Object.assign({}, item.data, shifted),
             });
             item.roster.forEach(r => {
                 setsAndUpdates.push({

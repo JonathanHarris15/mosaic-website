@@ -411,6 +411,20 @@
                                class="mt-1 w-full rounded-lg border border-outline-variant bg-surface px-3 py-2
                                       text-[15px] text-on-surface cal-focus" />
                     </label>
+                    <!-- Runs until. Only a one-off can run over several days:
+                         how long something lasts is a different question from
+                         how often it comes round, and a pattern answers the
+                         second. Blank is one day, which is nearly everything. -->
+                    <label class="block" x-show="draft.recurrence.freq === 'once'">
+                        <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Last day</span>
+                        <input type="date" x-model="draft.endDate" :min="draft.date"
+                               class="mt-1 w-full rounded-lg border bg-surface px-3 py-2
+                                      text-[15px] text-on-surface cal-focus"
+                               :class="draftSpanError ? 'border-error' : 'border-outline-variant'" />
+                        <span class="mt-1 block text-[11.5px] text-on-surface-variant">
+                            Leave blank unless it runs over several days.
+                        </span>
+                    </label>
                     <label class="block">
                         <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Starts at</span>
                         <input type="time" x-model="draft.time"
@@ -473,9 +487,16 @@
                 <!-- Reads as: the whole pattern as one sentence, so the editor
                      checks their intent in English rather than reading the form
                      back to themselves. -->
-                <div x-show="draft.date" class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
+                <div x-show="draft.date" class="bg-surface-container-low border rounded-lg p-md"
+                     :class="draftSpanError ? 'border-error' : 'border-outline-variant'">
                     <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Reads as</span>
-                    <p class="font-headline-lg text-[19px] text-on-surface mt-1" x-text="draftSentence"></p>
+                    <!-- A span that cannot be stored says so HERE, where the
+                         editor is already checking their intent, rather than
+                         after they press the button. -->
+                    <p x-show="draftSpanError" class="font-label-md text-[14px] text-error mt-1"
+                       x-text="draftSpanError"></p>
+                    <p x-show="!draftSpanError"
+                       class="font-headline-lg text-[19px] text-on-surface mt-1" x-text="draftSentence"></p>
                     <div class="mt-2 flex flex-wrap gap-1.5 items-center">
                         <template x-for="d in draftDates" :key="d">
                             <span class="rounded-md bg-surface-container px-2 py-0.5 text-[11.5px] text-on-surface-variant"
@@ -568,6 +589,14 @@
                         <span class="flex items-center gap-1">
                             <span class="cal-when-icon material-symbols-outlined text-[17px]">event</span>
                             <span x-text="longDate(occurrence.date)"></span>
+                        </span>
+                        <!-- "to Friday 27 November · 5 days". Said after the first
+                             day rather than instead of it, so the header answers
+                             "when does it start" before "how long does it run". -->
+                        <span x-show="eventSpan" class="text-outline">·</span>
+                        <span x-show="eventSpan" class="flex items-center gap-1">
+                            <span class="cal-when-icon material-symbols-outlined text-[17px]">date_range</span>
+                            <span x-text="eventSpan"></span>
                         </span>
                         <span x-show="eventTime" class="text-outline">·</span>
                         <span x-show="eventTime" class="flex items-center gap-1">
@@ -768,6 +797,24 @@
                                                   text-[15px] text-on-surface cal-focus" />
                                 </label>
                             </div>
+
+                            <!-- Runs over several days. A one-off's occurrence IS
+                                 the whole Event, so this is where its span lives. -->
+                            <label class="block">
+                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Last day</span>
+                                <input type="date" x-model="occurrenceDraft.endDate" :min="occurrenceDraft.date"
+                                       class="mt-1 w-full bg-surface border rounded-lg px-3 py-2
+                                              text-[15px] text-on-surface cal-focus"
+                                       :class="occurrenceSpanError ? 'border-error' : 'border-outline-variant'" />
+                                <span x-show="!occurrenceSpanError && !occurrenceSpanSentence"
+                                      class="mt-1 block text-[11.5px] text-on-surface-variant">
+                                    Leave blank unless it runs over several days.
+                                </span>
+                                <span x-show="occurrenceSpanSentence" class="mt-1 block text-[11.5px] text-on-surface-variant"
+                                      x-text="'Runs ' + occurrenceSpanSentence + '.'"></span>
+                                <span x-show="occurrenceSpanError" class="mt-1 block text-[11.5px] text-error"
+                                      x-text="occurrenceSpanError"></span>
+                            </label>
 
                             <label class="block">
                                 <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Where</span>
