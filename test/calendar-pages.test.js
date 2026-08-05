@@ -5685,3 +5685,55 @@ test('paging in List leaves the rail right, not parked on the wrong month', () =
             'the grid came back showing a month the heading disagrees with');
     });
 });
+
+// ── x-show hides; it does not guard ───────────────────────────────────────────
+
+test('nothing dereferences the very thing its x-show is checking for', () => {
+    // REPORTED FROM THE LIVE SITE, as a console full of
+    // "Cannot read properties of null (reading 'label')".
+    //
+    // `x-show` sets display:none. It does NOT stop the other directives on the
+    // same element being evaluated — so `x-text="'You · ' + ev.mine.label"`
+    // guarded by `x-show="ev.mine"` threw on every event you were not on. It
+    // threw SILENTLY: Alpine swallows a failed expression and leaves the
+    // element blank, which is exactly what a hidden element looks like, so
+    // nothing on screen was wrong and nothing in this suite could see it.
+    //
+    // The fix is a ternary in the expression itself. This is the check that
+    // says so, across every page rather than the one that reported it.
+    const ATTR = /(x-show|x-text|x-html)\s*=\s*"([^"]*)"/g;
+    const offenders = [];
+
+    fs.readdirSync(PUBLIC).filter(f => f.endsWith('.html')).forEach(file => {
+        const html = readPage(file);
+        (html.match(/<[a-zA-Z][^>]*>/g) || []).forEach(tag => {
+            const attrs = {};
+            let m;
+            ATTR.lastIndex = 0;
+            while ((m = ATTR.exec(tag))) if (!(m[1] in attrs)) attrs[m[1]] = m[2];
+
+            const guard = (attrs['x-show'] || '').trim();
+            // Only a bare path can be read as "this thing exists". Anything with
+            // an operator in it is already saying something more careful.
+            if (!guard || !/^[\w$.]+$/.test(guard)) return;
+
+            ['x-text', 'x-html'].forEach(key => {
+                const expr = attrs[key];
+                if (!expr) return;
+                const reaches = new RegExp(guard.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\.');
+                // Saying it again in the expression is the fix — a ternary, a
+                // short-circuit, or optional chaining (which never reaches the
+                // `.` this looks for, so it passes without being named).
+                const guarded = new RegExp(
+                    guard.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*(\\?|&&)');
+                if (reaches.test(expr) && !guarded.test(expr)) {
+                    offenders.push(file + ': x-show="' + guard + '" with ' + key + '="' + expr + '"');
+                }
+            });
+        });
+    });
+
+    assert.deepStrictEqual(offenders, [],
+        'x-show hides an element, it does not stop its own directives running:\n  ' +
+        offenders.join('\n  '));
+});

@@ -656,10 +656,22 @@
                                     </div>
                                 </div>
                                 <div class="shrink-0 flex items-center gap-sm">
+                                    <!-- ⚠ THE TERNARY IS NOT BELT AND BRACES.
+                                         `x-show` hides an element; it does not
+                                         stop the other directives on it being
+                                         evaluated. Guarded only by
+                                         `x-show="ev.mine"`, this threw on every
+                                         event you are NOT on — and threw
+                                         silently, because Alpine swallows a
+                                         failed expression and leaves the span
+                                         blank, which is exactly what a hidden
+                                         span looks like. The same badge two
+                                         hundred lines up already said it twice
+                                         for this reason. -->
                                     <span x-show="ev.mine"
                                           class="rounded-md bg-surface-container px-2 py-1 text-[11.5px] font-label-md
                                                  text-on-surface-variant whitespace-nowrap"
-                                          x-text="'You · ' + ev.mine.label"></span>
+                                          x-text="ev.mine ? 'You · ' + ev.mine.label : ''"></span>
                                     <span x-show="placesToFill(ev)"
                                           class="inline-flex items-center gap-1 rounded-md bg-warning-container
                                                  text-on-warning-container px-2 py-1 text-[11.5px] font-label-md whitespace-nowrap">
