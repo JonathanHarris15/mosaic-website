@@ -185,8 +185,19 @@
                 });
             },
 
-            async load() {
-                this.loading = true;
+            // ⚠ A QUIET LOAD DOES NOT TOUCH `loading`, AND THAT IS THE WHOLE
+            // POINT OF THE FLAG. `loading` hides the entire page behind a
+            // spinner, which is right the first time and wrong every time
+            // after: the rail tops itself up as it grows, and every other press
+            // was blanking the calendar mid-slide and putting it back. It read
+            // as the page reloading itself for no reason.
+            //
+            // Quiet is safe here because what is on screen is already in hand.
+            // The read is only fetching the months the rail has just grown
+            // into, and nobody is looking at those yet.
+            async load(options) {
+                const quiet = !!(options && options.quiet);
+                if (!quiet) this.loading = true;
                 this.error = '';
                 try {
                     // The whole rail, not just the month on screen. See the
@@ -222,9 +233,14 @@
                     // A building index fixes itself, so the page offers to try
                     // again rather than making somebody reload by hand.
                     this.retryable = !!(e && e.code === 'failed-precondition');
-                    this.occurrences = [];
+                    // A quiet read that fails keeps what it already had. The
+                    // five months in hand are not wrong, they are just no longer
+                    // growing — and emptying the calendar somebody is reading
+                    // because the month after next could not be fetched would
+                    // be a far worse answer than the sentence above.
+                    if (!quiet) this.occurrences = [];
                 } finally {
-                    this.loading = false;
+                    if (!quiet) this.loading = false;
                 }
             },
 
@@ -354,10 +370,27 @@
                 this.$nextTick(() => {
                     const rail = this.rail;
                     if (!rail) return;
+                    // ⚠ A HIDDEN RAIL MEASURES ZERO, AND ZERO IS A REAL ANSWER
+                    // — it is the first month on the rail, two months back from
+                    // the one you are on. The arrows sit in the header row and
+                    // work in List, where the grid is not drawn, so paging
+                    // there used to leave the rail parked on the wrong month
+                    // and you found out on switching to Month.
+                    //
+                    // So a rail that is not laid out is not measured. `setView`
+                    // slides it the moment it appears.
+                    if (!rail.offsetParent || !rail.offsetWidth) return;
                     const month = rail.querySelectorAll('[data-rail-month]')[this.railIndex];
                     if (!month) return;
                     this.railShift = month.offsetLeft;
                 });
+            },
+
+            // Month and List. The grid is only laid out in Month, so this is
+            // where the rail catches up with any paging done while it was away.
+            setView(next) {
+                this.view = next;
+                if (next === 'month') this.slideRail();
             },
 
             // Put the month on screen back in the middle of the rail, without
@@ -383,7 +416,8 @@
                 return new Promise(resolve => {
                     this.$nextTick(() => {
                         const rail = this.rail;
-                        const month = rail && rail.querySelectorAll('[data-rail-month]')[this.railIndex];
+                        const month = rail && rail.offsetParent && rail.offsetWidth
+                            && rail.querySelectorAll('[data-rail-month]')[this.railIndex];
                         if (month) this.railShift = month.offsetLeft;
                         this.$nextTick(() => {
                             this.railSnap = false;
@@ -594,6 +628,8 @@
                 if (jump) {
                     this.month = month;
                     await this.recentreRail();
+                    // Loud: this one lands on a month nothing has been read for,
+                    // so there really is nothing to show until it arrives.
                     await this.load();
                     return;
                 }
@@ -610,7 +646,7 @@
                 // What is on screen is already in hand, so nothing waits on it.
                 const have = this.railRange;
                 if (have.from !== this.loadedRange.from || have.to !== this.loadedRange.to) {
-                    await this.load();
+                    await this.load({ quiet: true });
                 }
             },
             prevMonth() { return this.goToMonth(shiftMonth(this.month, -1)); },

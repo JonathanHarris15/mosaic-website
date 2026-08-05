@@ -5573,3 +5573,115 @@ test('the rail is gated from a wrapper, and the two layouts do not share a ref',
     const page = loadComponent('calendar.js', 'calendarPage');
     assert.ok('rail' in page, 'nothing picks which of the two rails is the live one');
 });
+
+test('paging never blanks the calendar to fetch months nobody is looking at', () => {
+    // REPORTED FROM THE PREVIEW: "every two slides it still does a hard
+    // reload". Every other press re-centres the rail and reads the months it
+    // has just grown into — and `load` set `loading`, which hides the whole
+    // page behind a spinner. So the calendar vanished mid-slide and came back,
+    // which is exactly what a page reloading itself looks like.
+    //
+    // The read is real and still happens. It just says nothing, because what is
+    // on screen was already in hand before the press.
+    const seen = [];
+    const page = withAlpine(loadComponent('calendar.js', 'calendarPage', {
+        EventsStore: Object.assign({}, require('../public/events-store.js'), {
+            async loadCalendar() { seen.push('loading=' + page.loading); return []; },
+        }),
+    }));
+    page.personId = 'p1';
+    page.today = '2026-08-05';
+    page.month = '2026-08';
+    page.railAnchor = '2026-06';
+
+    return page.load()
+        .then(() => {
+            assert.strictEqual(seen[0], 'loading=true', 'the first read draws nothing and says nothing');
+            return page.nextMonth();          // inside the rail — no read at all
+        })
+        .then(() => {
+            assert.strictEqual(seen.length, 1, 'a month already in hand was fetched again');
+            return page.nextMonth();          // re-centres, so it tops up
+        })
+        .then(() => {
+            assert.strictEqual(seen.length, 2, 'the rail grew without reading what it grew into');
+            assert.strictEqual(seen[1], 'loading=false',
+                'the calendar was hidden behind a spinner to fetch a month nobody had asked for');
+            assert.strictEqual(page.loading, false);
+        });
+});
+
+test('a quiet read that fails keeps the months already on screen', () => {
+    // Emptying a calendar somebody is reading because the month after next
+    // could not be fetched is a far worse answer than the sentence.
+    let first = true;
+    const page = withAlpine(loadComponent('calendar.js', 'calendarPage', {
+        EventsStore: Object.assign({}, require('../public/events-store.js'), {
+            async loadCalendar() {
+                if (first) {
+                    first = false;
+                    return [{ id: 'a', date: '2026-08-09', name: 'Sunday Service', assignments: [] }];
+                }
+                const e = new Error('nope'); e.code = 'unavailable'; throw e;
+            },
+        }),
+    }));
+    page.personId = 'p1';
+    page.today = '2026-08-05';
+    page.month = '2026-08';
+    page.railAnchor = '2026-06';
+
+    return page.load()
+        .then(() => page.nextMonth())
+        .then(() => page.nextMonth())        // re-centres, tops up, fails
+        .then(() => {
+            assert.strictEqual(page.occurrences.length, 1, 'the calendar emptied itself over a failed top-up');
+            assert.ok(page.error, 'it failed silently instead');
+            assert.strictEqual(page.loading, false);
+        });
+});
+
+test('paging in List leaves the rail right, not parked on the wrong month', () => {
+    // ⚠ A HIDDEN RAIL MEASURES ZERO, AND ZERO IS A REAL ANSWER — it is the
+    // first month drawn, two back from the one you are on. The arrows live in
+    // the header row and work in List, where the grid is not laid out, so
+    // paging there wrote a shift of nothing and you found out on switching to
+    // Month: a heading saying September over a grid showing July.
+    let measured = 0;
+    const page = withAlpine(loadComponent('calendar.js', 'calendarPage', {
+        EventsStore: Object.assign({}, require('../public/events-store.js'), {
+            async loadCalendar() { return []; },
+        }),
+    }));
+    page.personId = 'p1';
+    page.today = '2026-08-05';
+    page.month = '2026-08';
+    page.railAnchor = '2026-06';
+    page.view = 'list';
+    page.railShift = 999;   // whatever it was left on
+
+    // A rail that is in the DOM but not laid out — exactly what List gives.
+    const hidden = { offsetParent: null, offsetWidth: 0, querySelectorAll: () => { measured++; return []; } };
+    page.$refs = { monthRail: hidden, monthRailWide: hidden };
+    page.phone = true;
+
+    return page.nextMonth().then(() => {
+        assert.strictEqual(page.month, '2026-09', 'the arrow did not turn the month');
+        assert.strictEqual(page.railShift, 999,
+            'a rail nobody can see was measured, and answered zero');
+        assert.strictEqual(measured, 0, 'it went looking for months in a box with no layout');
+
+        // And switching to Month is where it catches up.
+        const laid = {
+            offsetParent: {}, offsetWidth: 358,
+            querySelectorAll: () => [{ offsetLeft: 0 }, { offsetLeft: 358 }, { offsetLeft: 716 },
+                { offsetLeft: 1074 }, { offsetLeft: 1432 }],
+        };
+        page.$refs = { monthRail: laid, monthRailWide: laid };
+        page.setView('month');
+
+        assert.strictEqual(page.view, 'month');
+        assert.strictEqual(page.railShift, 1074,
+            'the grid came back showing a month the heading disagrees with');
+    });
+});

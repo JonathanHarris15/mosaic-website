@@ -272,7 +272,7 @@
 
                 <div class="flex gap-0.5 bg-surface-container rounded-lg p-[3px]">
                     <template x-for="opt in [['month','Month','calendar_month'],['list','List','view_agenda']]" :key="opt[0]">
-                        <button @click="view = opt[0]"
+                        <button @click="setView(opt[0])"
                                 class="min-w-[96px] rounded-lg px-3 py-1 flex items-center justify-center gap-1
                                        font-label-md text-xs uppercase tracking-wider cal-motion cal-focus"
                                 :class="view === opt[0]
@@ -311,7 +311,7 @@
                      same two everywhere else in the app. -->
                 <div class="shrink-0 flex gap-[3px] bg-surface-container border border-outline-variant rounded-lg p-[3px]">
                     <template x-for="opt in [['month','calendar_month','Month'],['list','view_agenda','List']]" :key="opt[0]">
-                        <button @click="view = opt[0]" :aria-label="opt[2]"
+                        <button @click="setView(opt[0])" :aria-label="opt[2]"
                                 class="w-9 h-[30px] flex items-center justify-center rounded-lg cal-motion cal-focus"
                                 :class="view === opt[0] ? 'bg-surface-container-lowest text-primary' : 'text-on-surface-variant'">
                             <span class="material-symbols-outlined text-[18px]" x-text="opt[1]"></span>
