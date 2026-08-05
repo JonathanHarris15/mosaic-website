@@ -75,13 +75,15 @@ async function initProfile() {
             // contact details, birthday, and (set-once) sex. Everything else on
             // the Person — Membership Track, tags, shepherding — is read-only here
             // and enforced by the Firestore rules.
+            drUser = user;
             if (userData && userData.personId) {
+                drPersonId = userData.personId;
                 initMyInfo(userData.personId);
             } else {
                 // Not a Linked User yet. Rather than showing this person an empty
                 // page and leaving them to wait for an admin to notice their
                 // account, let them ask (ADR-0025).
-                initLinkRequest(user);
+                initLinkPanel(user);
             }
         } catch (error) {
             console.error("Error fetching user data:", error);
@@ -115,6 +117,15 @@ async function initMyInfo(personId) {
             document.getElementById('my-sex-locked').classList.remove('hidden');
         }
         panel.classList.remove('hidden');
+
+        // The name is shown but not editable, with a way to ask for a spelling
+        // fix; the household is proposed the same way. Both need the People
+        // list to turn ids into names (ADR-0027).
+        await loadPeopleCache();
+        const requests = await loadMyRequests(currentUserUid);
+        renderMyName(p, requests.find(
+            r => r.kind === DRC.KIND.NAME_FIX && r.status !== DRC.STATUS.APPROVED));
+        await initFamilyPanel(personId, requests);
     } catch (e) {
         console.error('Error loading my info:', e);
         return;
@@ -157,17 +168,26 @@ async function initMyInfo(personId) {
     });
 }
 
-// --- LINK REQUEST: ASKING TO JOIN THE DIRECTORY (ADR-0025) ---
+// --- DIRECTORY REQUESTS (ADR-0025, ADR-0027) ---
 //
-// A User with no Person sees this instead of nothing. They either point at the
-// Person they already are, or say they are not listed and offer their details.
-// An editor or elder resolves it from the Membership Directory. Approval is a
-// privileged act and happens in the resolveLinkRequest callable — this file only
-// ever creates or withdraws a request.
+// The directory is editor-authored on purpose, which leaves the person it
+// describes unable to fix it. A Directory Request is how they ask. Four kinds,
+// one queue, all answered by an editor or elder in the Membership Directory:
+//
+//   link_match / link_new — for someone with no Person yet (panel below)
+//   name_fix              — "my name is spelt wrong" (inside My Information)
+//   family                — "this is my household" (the Family panel)
+//
+// This file only ever CREATES or WITHDRAWS a request. Approval is privileged
+// and happens in the resolveDirectoryRequest callable.
 
-let lrKind = LinkRequestCore.KIND.MATCH;
-let lrChosenPersonId = null;
-let lrCurrentUser = null;
+const DRC = window.DirectoryRequestCore;
+
+let drKind = DRC.KIND.LINK_MATCH;
+let drChosenPersonId = null;
+let drUser = null;
+let drPersonId = null;          // the signed-in user's own Person, when linked
+let drFamilies = [];
 
 function escapeHtml(value) {
     return String(value == null ? '' : value)
@@ -175,79 +195,99 @@ function escapeHtml(value) {
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-async function initLinkRequest(user) {
-    const panel = document.getElementById('link-request-panel');
-    if (!panel) return;
-    lrCurrentUser = user;
-    panel.classList.remove('hidden');
+function personName(personId) {
+    const p = peopleCache.find(x => x.id === personId);
+    return p ? p.name : null;
+}
 
-    let request = null;
+// Every request this user has open, by kind — so each panel can show its own
+// waiting state without four separate reads.
+async function loadMyRequests(uid) {
     try {
-        const snap = await db.collection(LinkRequestCore.REQUEST_PATH).doc(user.uid).get();
-        request = snap.exists ? snap.data() : null;
+        const snap = await db.collection(DRC.REQUEST_PATH)
+            .where('uid', '==', uid).get();
+        return snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
     } catch (e) {
-        console.error('Error loading link request:', e);
-    }
-
-    if (LinkRequestCore.isPending(request) || (request && request.status === LinkRequestCore.STATUS.DECLINED)) {
-        await renderLinkRequestState(request);
-    } else {
-        await showLinkRequestForm();
+        console.error('Error loading directory requests:', e);
+        return [];
     }
 }
 
-// The waiting / declined face of the panel. A pending request offers to be
-// withdrawn; a declined one offers a fresh start, which is why the rules let a
-// requester delete their own request in any state.
-async function renderLinkRequestState(request) {
+async function withdrawRequest(requestId) {
+    await db.collection(DRC.REQUEST_PATH).doc(requestId).delete();
+}
+
+// ── Panel 1: connect an unlinked account to the directory ────────────────────
+
+async function initLinkPanel(user) {
+    const panel = document.getElementById('link-request-panel');
+    if (!panel) return;
+    drUser = user;
+    panel.classList.remove('hidden');
+
+    const mine = await loadMyRequests(user.uid);
+    const request = mine.find(r => DRC.isLinkKind(r.kind) && r.status !== DRC.STATUS.APPROVED);
+
+    if (request) {
+        await loadPeopleCache();
+        renderLinkState(request);
+    } else {
+        await showLinkForm();
+    }
+}
+
+function renderLinkState(request) {
     const stateEl = document.getElementById('link-request-state');
     const formEl = document.getElementById('link-request-form');
     const icon = document.getElementById('link-request-state-icon');
     const text = document.getElementById('link-request-state-text');
     const withdraw = document.getElementById('link-request-withdraw');
 
-    let personName = null;
-    if (request.kind === LinkRequestCore.KIND.MATCH && request.personId) {
-        try {
-            const snap = await db.collection('people').doc(request.personId).get();
-            personName = snap.exists ? (snap.data().name || null) : null;
-        } catch (e) {
-            console.error('Error loading requested person:', e);
-        }
-    }
-
-    const pending = LinkRequestCore.isPending(request);
+    const pending = DRC.isPending(request);
     icon.textContent = pending ? 'hourglass_top' : 'info';
     icon.className = 'material-symbols-outlined ' + (pending ? 'text-primary' : 'text-error');
-    text.textContent = LinkRequestCore.statusMessage(request, personName);
+    text.textContent = DRC.statusMessage(request, personName);
     withdraw.textContent = pending ? 'Withdraw request' : 'Start a new request';
+    withdraw.onclick = async () => {
+        const status = document.getElementById('link-request-state-status');
+        status.textContent = 'Working…';
+        status.className = 'text-[11px] font-body-md text-primary animate-pulse';
+        try {
+            await withdrawRequest(request.id);
+            drChosenPersonId = null;
+            status.textContent = '';
+            document.getElementById('lr-chosen').classList.add('hidden');
+            await showLinkForm();
+        } catch (e) {
+            console.error('Error withdrawing request:', e);
+            status.textContent = 'Could not withdraw that request: ' + e.message;
+            status.className = 'text-[11px] font-body-md text-error';
+        }
+    };
 
-    withdraw.onclick = withdrawLinkRequest;
     formEl.classList.add('hidden');
     stateEl.classList.remove('hidden');
 }
 
-async function showLinkRequestForm() {
-    const stateEl = document.getElementById('link-request-state');
-    const formEl = document.getElementById('link-request-form');
-    stateEl.classList.add('hidden');
-    formEl.classList.remove('hidden');
+async function showLinkForm() {
+    document.getElementById('link-request-state').classList.add('hidden');
+    document.getElementById('link-request-form').classList.remove('hidden');
 
     await loadPeopleCache();
-    setLinkRequestKind(LinkRequestCore.KIND.MATCH);
+    setLinkKind(DRC.KIND.LINK_MATCH);
 
     const search = document.getElementById('lr-search');
-    search.oninput = () => renderLinkRequestMatches(search.value);
-    renderLinkRequestMatches('');
+    search.oninput = () => renderLinkMatches(search.value);
+    renderLinkMatches('');
 
-    document.getElementById('lr-tab-match').onclick = () => setLinkRequestKind(LinkRequestCore.KIND.MATCH);
-    document.getElementById('lr-tab-new').onclick = () => setLinkRequestKind(LinkRequestCore.KIND.NEW);
+    document.getElementById('lr-tab-match').onclick = () => setLinkKind(DRC.KIND.LINK_MATCH);
+    document.getElementById('lr-tab-new').onclick = () => setLinkKind(DRC.KIND.LINK_NEW);
     document.getElementById('lr-submit').onclick = submitLinkRequest;
 }
 
-function setLinkRequestKind(kind) {
-    lrKind = kind;
-    const isMatch = kind === LinkRequestCore.KIND.MATCH;
+function setLinkKind(kind) {
+    drKind = kind;
+    const isMatch = kind === DRC.KIND.LINK_MATCH;
     const on = 'flex-1 px-3 py-2 rounded-lg border border-primary bg-primary/10 text-primary font-label-md text-[10px] uppercase tracking-widest transition-all';
     const off = 'flex-1 px-3 py-2 rounded-lg border border-outline-variant/50 text-on-surface-variant hover:text-primary font-label-md text-[10px] uppercase tracking-widest transition-all';
     document.getElementById('lr-tab-match').className = isMatch ? on : off;
@@ -260,7 +300,7 @@ function setLinkRequestKind(kind) {
 // The directory is publicly readable, so a viewer can find themselves. People
 // already claimed by another account are shown but not selectable — seeing the
 // name is how someone realises the church has them twice.
-function renderLinkRequestMatches(query) {
+function renderLinkMatches(query) {
     const list = document.getElementById('lr-results');
     const q = (query || '').toLowerCase().trim();
     if (!q) {
@@ -280,7 +320,7 @@ function renderLinkRequestMatches(query) {
     list.innerHTML = matches.map(p => {
         const taken = !!p.userId;
         return `
-            <button type="button" ${taken ? 'disabled' : `onclick="chooseLinkRequestPerson('${p.id}')"`}
+            <button type="button" ${taken ? 'disabled' : `onclick="chooseLinkPerson('${p.id}')"`}
                     class="w-full text-left px-3 py-2 flex items-center justify-between gap-2 transition-colors ${taken ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary/5'}">
                 <span class="flex flex-col">
                     <span class="text-sm text-on-surface">${escapeHtml(p.name)}</span>
@@ -292,10 +332,10 @@ function renderLinkRequestMatches(query) {
     }).join('');
 }
 
-function chooseLinkRequestPerson(personId) {
+function chooseLinkPerson(personId) {
     const person = peopleCache.find(p => p.id === personId);
     if (!person) return;
-    lrChosenPersonId = personId;
+    drChosenPersonId = personId;
 
     const chosen = document.getElementById('lr-chosen');
     chosen.classList.remove('hidden');
@@ -319,14 +359,14 @@ async function submitLinkRequest() {
     const button = document.getElementById('lr-submit');
 
     const draft = {
-        uid: lrCurrentUser.uid,
-        email: lrCurrentUser.email || '',
-        kind: lrKind,
-        personId: lrKind === LinkRequestCore.KIND.MATCH ? lrChosenPersonId : null,
+        uid: drUser.uid,
+        email: drUser.email || '',
+        kind: drKind,
+        personId: drKind === DRC.KIND.LINK_MATCH ? drChosenPersonId : null,
         note: document.getElementById('lr-note').value,
         proposed: {
             name: document.getElementById('lr-name').value,
-            email: document.getElementById('lr-email').value || lrCurrentUser.email || '',
+            email: document.getElementById('lr-email').value || drUser.email || '',
             phone: document.getElementById('lr-phone').value,
             address: document.getElementById('lr-address').value,
             birthday: document.getElementById('lr-birthday').value,
@@ -334,7 +374,7 @@ async function submitLinkRequest() {
         },
     };
 
-    const check = LinkRequestCore.validateDraft(draft);
+    const check = DRC.validateDraft(draft);
     if (!check.ok) {
         status.textContent = check.error;
         status.className = 'text-[11px] font-body-md text-error';
@@ -346,12 +386,13 @@ async function submitLinkRequest() {
     status.className = 'text-[11px] font-body-md text-primary animate-pulse';
 
     try {
-        const doc = LinkRequestCore.buildRequest(draft);
+        const doc = DRC.buildRequest(draft);
         doc.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-        await db.collection(LinkRequestCore.REQUEST_PATH).doc(lrCurrentUser.uid).set(doc);
-        await renderLinkRequestState(doc);
+        const id = DRC.requestId(drUser.uid, drKind);
+        await db.collection(DRC.REQUEST_PATH).doc(id).set(doc);
+        renderLinkState(Object.assign({ id: id }, doc));
     } catch (e) {
-        console.error('Error sending link request:', e);
+        console.error('Error sending request:', e);
         status.textContent = 'Could not send that request: ' + e.message;
         status.className = 'text-[11px] font-body-md text-error';
     } finally {
@@ -359,20 +400,241 @@ async function submitLinkRequest() {
     }
 }
 
-async function withdrawLinkRequest() {
-    const status = document.getElementById('link-request-state-status');
-    status.textContent = 'Working…';
+// ── Panel 2: the name, and asking for a spelling fix ─────────────────────────
+//
+// The name is NOT self-editable — it is how the whole church refers to this
+// person, and a member renaming themselves silently would break every place a
+// name is read. But being unable to correct your own misspelt name is worse, so
+// it is shown here, read-only, with a way to ask.
+
+function renderMyName(person, pending) {
+    const nameEl = document.getElementById('my-name-value');
+    const askBtn = document.getElementById('my-name-ask');
+    const form = document.getElementById('my-name-form');
+    const state = document.getElementById('my-name-pending');
+    if (!nameEl) return;
+
+    nameEl.textContent = person.name || '(no name on record)';
+
+    if (pending) {
+        askBtn.classList.add('hidden');
+        form.classList.add('hidden');
+        state.classList.remove('hidden');
+        document.getElementById('my-name-pending-text').textContent =
+            DRC.statusMessage(pending, personName);
+        document.getElementById('my-name-withdraw').onclick = async () => {
+            await withdrawRequest(pending.id);
+            renderMyName(person, null);
+        };
+        return;
+    }
+
+    state.classList.add('hidden');
+    form.classList.add('hidden');
+    askBtn.classList.remove('hidden');
+    askBtn.onclick = () => {
+        askBtn.classList.add('hidden');
+        form.classList.remove('hidden');
+        document.getElementById('my-name-input').value = person.name || '';
+        document.getElementById('my-name-input').focus();
+    };
+    document.getElementById('my-name-cancel').onclick = () => {
+        form.classList.add('hidden');
+        askBtn.classList.remove('hidden');
+        document.getElementById('my-name-status').textContent = '';
+    };
+    document.getElementById('my-name-send').onclick = () => submitNameFix(person);
+}
+
+async function submitNameFix(person) {
+    const status = document.getElementById('my-name-status');
+    const draft = {
+        uid: drUser.uid,
+        email: drUser.email || '',
+        kind: DRC.KIND.NAME_FIX,
+        personId: drPersonId,
+        currentName: person.name || '',
+        proposed: { name: document.getElementById('my-name-input').value },
+        note: '',
+    };
+
+    const check = DRC.validateDraft(draft);
+    if (!check.ok) {
+        status.textContent = check.error;
+        status.className = 'text-[11px] font-body-md text-error';
+        return;
+    }
+
+    status.textContent = 'Sending…';
     status.className = 'text-[11px] font-body-md text-primary animate-pulse';
     try {
-        await db.collection(LinkRequestCore.REQUEST_PATH).doc(lrCurrentUser.uid).delete();
-        lrChosenPersonId = null;
+        const doc = DRC.buildRequest(draft);
+        doc.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+        const id = DRC.requestId(drUser.uid, DRC.KIND.NAME_FIX);
+        await db.collection(DRC.REQUEST_PATH).doc(id).set(doc);
         status.textContent = '';
-        document.getElementById('lr-chosen').classList.add('hidden');
-        await showLinkRequestForm();
+        renderMyName(person, Object.assign({ id: id }, doc));
     } catch (e) {
-        console.error('Error withdrawing link request:', e);
-        status.textContent = 'Could not withdraw that request: ' + e.message;
+        console.error('Error requesting a name fix:', e);
+        status.textContent = 'Could not send that request: ' + e.message;
         status.className = 'text-[11px] font-body-md text-error';
+    }
+}
+
+// ── Panel 3: my family ───────────────────────────────────────────────────────
+//
+// A Family is editor-authored (ADR-0012) and its shape has real rules — one
+// husband, one wife, a Person is a child in at most one Family. So a member
+// does not edit it; they propose one relation at a time, and approval REPLAYS
+// the proposal through the same FamilyCore planners the directory uses. A
+// proposal that the planner could never apply is therefore never approvable,
+// and the member finds that out from the approver rather than from a silent
+// no-op.
+
+async function initFamilyPanel(personId, requests) {
+    const panel = document.getElementById('my-family-panel');
+    if (!panel) return;
+    panel.classList.remove('hidden');
+
+    try {
+        const snap = await db.collection('families').get();
+        drFamilies = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+    } catch (e) {
+        console.error('Error loading families:', e);
+        drFamilies = [];
+    }
+
+    renderFamily(personId, requests.filter(r => r.kind === DRC.KIND.FAMILY));
+
+    const search = document.getElementById('fam-search');
+    search.oninput = () => renderFamilyCandidates(personId, search.value);
+    document.getElementById('fam-relation').onchange = () =>
+        renderFamilyCandidates(personId, search.value);
+    renderFamilyCandidates(personId, '');
+}
+
+function relationRow(label, otherId, relation, pendingRemoval) {
+    const name = personName(otherId) || '(record missing)';
+    if (pendingRemoval) {
+        return `
+            <div class="flex items-center justify-between gap-2 px-3 py-2 text-sm border-b border-surface-container last:border-b-0 opacity-60">
+                <span><span class="text-on-surface-variant">${escapeHtml(label)}</span> ${escapeHtml(name)}</span>
+                <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">Removal requested</span>
+            </div>`;
+    }
+    return `
+        <div class="flex items-center justify-between gap-2 px-3 py-2 text-sm border-b border-surface-container last:border-b-0">
+            <span><span class="text-on-surface-variant">${escapeHtml(label)}</span> ${escapeHtml(name)}</span>
+            <button type="button" onclick="askFamilyChange('remove','${relation}','${otherId}')"
+                    class="text-error/70 hover:text-error text-[9px] font-label-md uppercase tracking-widest px-2 py-1 rounded transition-all">Ask to remove</button>
+        </div>`;
+}
+
+function renderFamily(personId, familyRequests) {
+    const list = document.getElementById('fam-current');
+    const rel = FamilyCore.resolveRelations(drFamilies, personId);
+    const pendingRemove = {};
+    for (const r of familyRequests) {
+        if (DRC.isPending(r) && r.family && r.family.op === 'remove') {
+            pendingRemove[r.family.otherId] = true;
+        }
+    }
+
+    const rows = [];
+    if (rel.spouseId) rows.push(relationRow('Spouse', rel.spouseId, 'spouse', pendingRemove[rel.spouseId]));
+    for (const id of rel.parentIds) rows.push(relationRow('Parent', id, 'parent', pendingRemove[id]));
+    for (const id of rel.childIds) rows.push(relationRow('Child', id, 'child', pendingRemove[id]));
+
+    list.innerHTML = rows.length ? rows.join('') :
+        '<div class="px-3 py-3 text-[11px] italic text-on-surface-variant">We have no household recorded for you yet.</div>';
+
+    // Requests still waiting, so nobody asks twice for the same thing.
+    const waiting = familyRequests.filter(r => DRC.isPending(r) || r.status === DRC.STATUS.DECLINED);
+    const waitEl = document.getElementById('fam-pending');
+    waitEl.innerHTML = waiting.map(r => `
+        <div class="flex items-center justify-between gap-2 px-3 py-2 text-[11px] border-b border-surface-container last:border-b-0">
+            <span class="${r.status === DRC.STATUS.DECLINED ? 'text-error' : 'text-on-surface-variant'}">${escapeHtml(DRC.statusMessage(r, personName))}</span>
+            <button type="button" onclick="withdrawFamilyRequest('${r.id}')"
+                    class="text-on-surface-variant hover:text-primary text-[9px] font-label-md uppercase tracking-widest px-2 py-1 whitespace-nowrap">Withdraw</button>
+        </div>
+    `).join('');
+}
+
+// Who can be offered. Nobody already in the relation, never yourself, and never
+// somebody whose record another account has claimed as a different relation —
+// the planner would refuse those anyway, so offering them would be a promise we
+// cannot keep.
+function renderFamilyCandidates(personId, query) {
+    const list = document.getElementById('fam-results');
+    const q = (query || '').toLowerCase().trim();
+    if (!q) {
+        list.innerHTML = '<div class="px-3 py-2 text-[11px] text-on-surface-variant italic">Search for the person.</div>';
+        return;
+    }
+    const rel = FamilyCore.resolveRelations(drFamilies, personId);
+    const already = new Set([personId, rel.spouseId].concat(rel.parentIds, rel.childIds).filter(Boolean));
+
+    const matches = peopleCache
+        .filter(p => !already.has(p.id) && p.name.toLowerCase().includes(q))
+        .slice(0, 20);
+
+    list.innerHTML = matches.length ? matches.map(p => `
+        <button type="button" onclick="askFamilyChangeFromPicker('${p.id}')"
+                class="w-full text-left px-3 py-2 text-sm hover:bg-primary/5 transition-colors border-b border-surface-container last:border-b-0">
+            ${escapeHtml(p.name)}
+        </button>
+    `).join('') : '<div class="px-3 py-2 text-[11px] italic text-on-surface-variant">No one by that name.</div>';
+}
+
+function askFamilyChangeFromPicker(otherId) {
+    askFamilyChange('add', document.getElementById('fam-relation').value, otherId);
+}
+
+async function askFamilyChange(op, relation, otherId) {
+    const status = document.getElementById('fam-status');
+    const draft = {
+        uid: drUser.uid,
+        email: drUser.email || '',
+        kind: DRC.KIND.FAMILY,
+        personId: drPersonId,
+        family: { op: op, relation: relation, otherId: otherId },
+        note: '',
+    };
+
+    const check = DRC.validateDraft(draft);
+    if (!check.ok) {
+        status.textContent = check.error;
+        status.className = 'text-[11px] font-body-md text-error';
+        return;
+    }
+
+    status.textContent = 'Sending…';
+    status.className = 'text-[11px] font-body-md text-primary animate-pulse';
+    try {
+        const doc = DRC.buildRequest(draft);
+        doc.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+        const id = DRC.requestId(drUser.uid, DRC.KIND.FAMILY, doc.family);
+        await db.collection(DRC.REQUEST_PATH).doc(id).set(doc);
+        document.getElementById('fam-search').value = '';
+        renderFamilyCandidates(drPersonId, '');
+        status.textContent = 'Sent. Someone from the church will confirm it.';
+        status.className = 'text-[11px] font-body-md text-green-600';
+        const mine = await loadMyRequests(drUser.uid);
+        renderFamily(drPersonId, mine.filter(r => r.kind === DRC.KIND.FAMILY));
+    } catch (e) {
+        console.error('Error requesting a family change:', e);
+        status.textContent = 'Could not send that request: ' + e.message;
+        status.className = 'text-[11px] font-body-md text-error';
+    }
+}
+
+async function withdrawFamilyRequest(requestId) {
+    try {
+        await withdrawRequest(requestId);
+        const mine = await loadMyRequests(drUser.uid);
+        renderFamily(drPersonId, mine.filter(r => r.kind === DRC.KIND.FAMILY));
+    } catch (e) {
+        console.error('Error withdrawing family request:', e);
     }
 }
 
@@ -795,6 +1057,9 @@ window.deleteUser = deleteUser;
 window.updateUserPasswordAdmin = updateUserPasswordAdmin;
 window.copyToClipboard = copyToClipboard;
 window.togglePasswordVisibility = togglePasswordVisibility;
-window.chooseLinkRequestPerson = chooseLinkRequestPerson;
+window.chooseLinkPerson = chooseLinkPerson;
+window.askFamilyChange = askFamilyChange;
+window.askFamilyChangeFromPicker = askFamilyChangeFromPicker;
+window.withdrawFamilyRequest = withdrawFamilyRequest;
 
 initProfile();

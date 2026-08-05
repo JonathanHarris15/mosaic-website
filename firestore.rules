@@ -59,34 +59,50 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // Link Requests (ADR-0025): a User's own request to become a Linked User —
-    // either claiming an existing Person ("match") or asking to be added to the
-    // directory ("new"). The document id IS the requesting user's uid, which is
-    // what makes "one live request per account" true by construction.
+    // Directory Requests (ADR-0025, ADR-0027): anything a person asks the church
+    // to change about their own directory record — connect me to a record, add
+    // me to the directory, fix my name's spelling, record my household.
     //
-    // Note what is missing: there is no `allow update`. Resolving a request also
-    // writes users/{uid}.personId, and `users` is admin-only above — a rule wide
+    // Document ids are namespaced `${uid}_...`, and this rule REQUIRES it. That
+    // is what keeps one person's requests out of everyone else's namespace
+    // without the rules having to trust a field, and it is why a second ask of
+    // the same kind overwrites the first instead of piling up.
+    //
+    // Note what is missing: there is no `allow update`. Resolving a request
+    // writes users/{uid}.personId, people/{id}.name, or the families
+    // collection — on behalf of someone who may be a plain member. A rule wide
     // enough to let an editor approve here would be a rule wide enough to let
     // them change permission levels. So approval goes through the
-    // resolveLinkRequest callable, which runs with admin privileges and bypasses
-    // these rules entirely. No browser ever updates a request.
-    match /link_requests/{uid} {
+    // resolveDirectoryRequest callable, which runs with admin privileges and
+    // bypasses these rules entirely. No browser ever updates a request.
+    match /directory_requests/{requestId} {
       // The requester sees their own; editors, elders and admins see the queue.
-      allow read: if request.auth != null && (request.auth.uid == uid || isEditor());
+      allow read: if request.auth != null
+        && (requestId.matches(request.auth.uid + '_.*') || isEditor());
 
-      // You may only ask on your own behalf, only as pending, and only while you
-      // are not already linked — an existing link is the thing a request is for.
+      // You may only ask on your own behalf, only as pending, and only in your
+      // own id namespace. A link request additionally requires that you are not
+      // already linked — an existing link is the thing it is for.
       allow create: if request.auth != null
-        && request.auth.uid == uid
-        && request.resource.data.uid == uid
+        && request.resource.data.uid == request.auth.uid
+        && requestId.matches(request.auth.uid + '_.*')
         && request.resource.data.status == 'pending'
-        && request.resource.data.kind in ['match', 'new']
-        && myPersonId() == null;
+        && request.resource.data.kind in ['link_match', 'link_new', 'name_fix', 'family']
+        && (
+          !(request.resource.data.kind in ['link_match', 'link_new'])
+          || myPersonId() == null
+        )
+        // A name fix or a family change is only ever about your OWN Person.
+        && (
+          !(request.resource.data.kind in ['name_fix', 'family'])
+          || request.resource.data.personId == myPersonId()
+        );
 
       // Withdraw your own request (and so file a fresh one after a decline);
       // approvers may clear resolved requests out of the queue. Deleting a
-      // request never touches the link itself, which lives on users/people.
-      allow delete: if request.auth != null && (request.auth.uid == uid || isEditor());
+      // request never touches what it asked for.
+      allow delete: if request.auth != null
+        && (requestId.matches(request.auth.uid + '_.*') || isEditor());
     }
 
     match /hymns/{hymnId} {

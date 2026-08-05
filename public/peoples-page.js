@@ -650,39 +650,47 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // ── Link Requests (ADR-0025) ─────────────────────────────────────────
-        // People asking to be connected to a directory record. The queue lives
-        // here rather than in the admin panel because the question a request
-        // asks — "is this person who they say they are?" — is answered by
-        // someone who knows the congregation, which is the editor and elder
-        // set, not the admin set.
+        // ── Directory Requests (ADR-0025, ADR-0027) ──────────────────────────
+        // Anything a person asks the church to change about their own record:
+        // connect me to a record, add me to the directory, fix my name's
+        // spelling, record my household. The queue lives here rather than in the
+        // admin panel because the questions these ask — is this person who they
+        // say they are, is that really their spouse — are answered by someone who
+        // knows the congregation, which is the editor and elder set, not the
+        // admin set.
 
         async loadLinkRequests() {
             if (!this.canEdit) { this.linkRequests = []; return; }
             try {
-                const snap = await db.collection(LinkRequestCore.REQUEST_PATH)
-                    .where('status', '==', LinkRequestCore.STATUS.PENDING).get(FRESH_READ);
+                const snap = await db.collection(DirectoryRequestCore.REQUEST_PATH)
+                    .where('status', '==', DirectoryRequestCore.STATUS.PENDING).get(FRESH_READ);
                 // Sorted here rather than in the query: ordering a filtered query
                 // would need a composite index for no gain at this size.
                 this.linkRequests = snap.docs
                     .map(doc => Object.assign({ id: doc.id }, doc.data()))
                     .sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
             } catch (e) {
-                console.error('Error loading link requests:', e);
+                console.error('Error loading directory requests:', e);
                 this.linkRequests = [];
             }
         },
 
-        // The Person a match request claims — resolved against the loaded list so
-        // an approver sees a name, not an id.
-        requestPersonName(request) {
-            if (request.kind !== LinkRequestCore.KIND.MATCH) return null;
-            const person = this.people.find(p => p.id === request.personId);
+        // Resolve a Person id to a name against the loaded list, so an approver
+        // reads names rather than ids.
+        personNameById(personId) {
+            const person = this.people.find(p => p.id === personId);
             return person ? person.name : null;
         },
 
         requestSummary(request) {
-            return LinkRequestCore.summarize(request, this.requestPersonName(request));
+            return DirectoryRequestCore.summarize(request, id => this.personNameById(id));
+        },
+
+        // Only a link request can be redirected onto a different record. A name
+        // fix or a family change is already about a known Person — the requester's
+        // own — so there is nothing to redirect.
+        isLinkRequest(request) {
+            return DirectoryRequestCore.isLinkKind(request.kind);
         },
 
         // Candidate records when an approver redirects a "please add me" request
@@ -701,7 +709,7 @@ document.addEventListener('alpine:init', () => {
             this.overrideSearch = (request.proposed && request.proposed.name) || '';
         },
 
-        async resolveLinkRequest(request, decision, overridePersonId) {
+        async resolveDirectoryRequest(request, decision, overridePersonId) {
             if (decision === 'decline') {
                 const reason = prompt(
                     'Why are you declining? This is shown to the person who asked (optional).', '');
@@ -714,15 +722,16 @@ document.addEventListener('alpine:init', () => {
         async callResolve(request, decision, personId, reason) {
             this.resolvingUid = request.id;
             try {
-                const resolve = firebase.functions().httpsCallable('resolveLinkRequest');
-                await resolve({ uid: request.id, decision, personId, reason });
+                const resolve = firebase.functions().httpsCallable('resolveDirectoryRequest');
+                await resolve({ requestId: request.id, decision, personId, reason });
                 this.overrideFor = null;
                 this.overrideSearch = '';
                 await this.loadLinkRequests();
                 await this.loadPeople();
+                await this.loadFamilies();
                 this.showToast(decision === 'approve' ? 'Request approved' : 'Request declined');
             } catch (e) {
-                console.error('Error resolving link request:', e);
+                console.error('Error resolving directory request:', e);
                 this.showToast(e.message || 'Could not resolve that request', 'error');
             } finally {
                 this.resolvingUid = null;

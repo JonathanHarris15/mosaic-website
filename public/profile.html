@@ -268,6 +268,34 @@
                             </h2>
                             <p class="text-[11px] text-on-surface-variant mt-1">Keep your own contact details current. Your membership standing is managed by the church office.</p>
                         </div>
+                        <!-- Name. Read-only: it is how the whole church refers to this
+                             person, so it is not self-editable — but being stuck with
+                             your own name misspelt is worse, so there is a way to ask
+                             (ADR-0027). -->
+                        <div class="px-md pt-md flex flex-col gap-2">
+                            <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Name</span>
+                            <div class="flex flex-wrap items-center gap-3">
+                                <span id="my-name-value" class="font-headline-md text-sm text-on-surface">…</span>
+                                <button type="button" id="my-name-ask" class="hidden text-[9px] font-label-md uppercase tracking-widest text-primary hover:underline">Spelt wrong?</button>
+                            </div>
+
+                            <div id="my-name-form" class="hidden flex flex-col gap-2 bg-surface-container-low/40 border border-outline-variant/30 rounded-lg p-3">
+                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">The correct spelling</label>
+                                <input id="my-name-input" type="text" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                <div class="flex items-center gap-2">
+                                    <button type="button" id="my-name-send" class="px-4 py-2 bg-primary text-on-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-primary-container transition-all">Ask the church</button>
+                                    <button type="button" id="my-name-cancel" class="px-3 py-2 text-on-surface-variant font-label-md text-[10px] uppercase tracking-widest hover:text-primary transition-all">Cancel</button>
+                                    <span id="my-name-status" class="text-[11px] font-body-md"></span>
+                                </div>
+                            </div>
+
+                            <div id="my-name-pending" class="hidden flex flex-wrap items-center gap-3 bg-primary/5 rounded-lg px-3 py-2">
+                                <span class="material-symbols-outlined text-primary text-base">hourglass_top</span>
+                                <span id="my-name-pending-text" class="text-[11px] font-body-md text-on-surface"></span>
+                                <button type="button" id="my-name-withdraw" class="text-[9px] font-label-md uppercase tracking-widest text-on-surface-variant hover:text-primary">Withdraw</button>
+                            </div>
+                        </div>
+
                         <form id="my-info-form" class="p-md grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div class="flex flex-col gap-1">
                                 <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email</label>
@@ -302,7 +330,49 @@
                     </div>
                 </section>
 
-                <section id="admin-panel" class="hidden flex flex-col gap-lg">
+<!-- My Family — a Linked User proposes their household, an editor
+                     approves it (ADR-0027). Not an editor: a Family has real rules
+                     (one husband, one wife, a Person is a child in at most one
+                     Family), so a member proposes one relation at a time and the
+                     approval replays it through the same planners the directory
+                     uses. -->
+                <section id="my-family-panel" class="hidden">
+                    <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-sm overflow-hidden">
+                        <div class="p-md bg-surface-container-low/50 border-b border-outline-variant/20">
+                            <h2 class="font-headline-md text-headline-md text-primary flex items-center gap-3">
+                                <span class="material-symbols-outlined">family_restroom</span>
+                                My Family
+                            </h2>
+                            <p class="text-[11px] text-on-surface-variant mt-1">Tell us who is in your household. Every change is confirmed by the church before it appears in the directory.</p>
+                        </div>
+
+                        <div class="p-md flex flex-col gap-4">
+                            <div class="flex flex-col gap-1">
+                                <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">As we have it</span>
+                                <div id="fam-current" class="rounded-lg border border-outline-variant/30 overflow-hidden"></div>
+                            </div>
+
+                            <div id="fam-pending" class="rounded-lg border border-primary/20 bg-primary/5 overflow-hidden empty:hidden"></div>
+
+                            <div class="flex flex-col gap-2 pt-2 border-t border-surface-container">
+                                <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Add someone</span>
+                                <div class="flex flex-col sm:flex-row gap-2">
+                                    <select id="fam-relation" class="sm:w-40 text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none">
+                                        <option value="spouse">My spouse</option>
+                                        <option value="parent">My parent</option>
+                                        <option value="child">My child</option>
+                                    </select>
+                                    <input id="fam-search" type="text" placeholder="Search the directory…" autocomplete="off" class="flex-grow text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                </div>
+                                <div id="fam-results" class="max-h-52 overflow-y-auto rounded-lg border border-outline-variant/30 empty:hidden"></div>
+                                <span id="fam-status" class="text-[11px] font-body-md"></span>
+                                <p class="text-[10px] text-on-surface-variant leading-relaxed">Whoever you name is not told. Only the church sees the request.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                                <section id="admin-panel" class="hidden flex flex-col gap-lg">
                     <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-sm overflow-hidden">
                         <div class="p-md bg-surface-container-low/50 border-b border-outline-variant/20">
                             <h2 class="font-headline-md text-headline-md text-primary flex items-center gap-3">
@@ -399,7 +469,8 @@
     </div>
 
     <script src="shepherding-core.js"></script>
-    <script src="link-request-core.js"></script>
+    <script src="family-core.js"></script>
+    <script src="directory-request-core.js"></script>
     <script src="profile.js"></script>
 </body>
 </html>
