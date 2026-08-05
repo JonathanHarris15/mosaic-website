@@ -154,17 +154,11 @@
                         <p class="font-body-md text-body-md text-on-surface-variant">View upcoming and past service dates.</p>
                     </a>
 
-                    <!-- Service Analytics -->
-                    <a href="analytics.html" data-card-key="service-analytics"
-                        class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
-                        <div
-                            class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
-                            <span class="material-symbols-outlined text-[32px] text-primary"
-                                style='font-variation-settings: "FILL" 1;'>monitoring</span>
-                        </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Service Analytics</h2>
-                        <p class="font-body-md text-body-md text-on-surface-variant">Insights into historical services.</p>
-                    </a>
+                    <!-- Service Analytics is NOT here. It is editor-and-above, so
+                         it is injected below with the other gated cards rather
+                         than sitting in the page for everyone — a card in the
+                         markup is a card a member can see and click, and being
+                         refused on arrival is worse than never being offered. -->
                 </div>
             </div>
 
@@ -349,6 +343,33 @@
                     `;
                     // Place it right after the Hymn Directory card
                     grid.insertBefore(card, grid.children[1] || null);
+                }
+
+                // Service Analytics — editors and above. It reads the whole
+                // history of the church's services and turns it into who has
+                // served, how often, and when they last did: a planning tool for
+                // the people who staff Sundays, not a public record of anybody's
+                // serving. It sat in the page markup for everyone until MS-99's
+                // successor work; the page gates itself too, because a card can
+                // be hidden and a URL cannot.
+                if (grid && !document.getElementById('service-analytics-card') &&
+                    ['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
+                    const card = document.createElement('a');
+                    card.id = 'service-analytics-card';
+                    // ⚠ The STORED key behind every user's saved card order.
+                    // Renaming it would silently drop this card to the end of
+                    // every dashboard that has ever been arranged.
+                    card.dataset.cardKey = 'service-analytics';
+                    card.href = 'analytics.html';
+                    card.className = cardClass;
+                    card.innerHTML = `
+                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
+                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>monitoring</span>
+                        </div>
+                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Service Analytics</h2>
+                        <p class="font-body-md text-body-md text-on-surface-variant">Insights into historical services.</p>
+                    `;
+                    grid.appendChild(card);
                 }
 
                 // Roles Manager — editors and above (author the serving Roles).

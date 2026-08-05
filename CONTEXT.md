@@ -681,6 +681,13 @@ The list of every [[Event series]] the signed-in person may see — the room the
 #### Month strip
 The phone's month: seven columns of day numbers, each carrying up to **three dots** — one per Event on that day, in the Event's own `colour`, with the needs-sorting red overriding it exactly as a chip's bar does. A glance, not a list: the count lives in the cards underneath. Tapping a day shows that day; tapping into a neighbouring month's corner goes to that month, because those dates are not loaded and drawing "nothing on this day" for one of them would be a lie rather than an empty day.
 
+### Service Analytics
+The read over the whole history of the church's services — hymn usage, a Bible heat map, each Person's serving history, and who has been the pastoral-prayer subject and when. At `analytics.html`, reached from a dashboard card.
+- **Editors and above.** It turns the service record into *who has served, how often, and when they last did* — a planning tool for the people who staff Sundays, and a different thing from a member reading the rota. The card is injected behind the same gate rather than sitting in the page, because a card in the markup is a card a member clicks and is refused on arrival.
+- **The refusal lands before the read, not after the draw.** A page that assembles every Person's serving history and then declines to render it has already handed it to the browser.
+- ⚠ **A door, not a lock.** `services`, `people` and `involvement` are world-readable in `firestore.rules` — the congregant-facing Service Guide needs them — so this closes the screen, not the data. Anyone who can write a query can still assemble it. Closing that is a rules change with the printed booklet on the other side of it.
+- People carrying a tag with `hidePeople` are filtered out of the People's Involvement table for anyone below elder — the same per-tag visibility the [[Membership Directory]] honours.
+
 ## Flagged ambiguities
 
 - **"Calendar"** meant the Sunday-only Service Calendar before MS-99. It now means the all-Events [[Calendar]]; the Sunday view is [[Services]]. Code, labels and docs saying "Service Calendar" refer to Services.

@@ -43,6 +43,9 @@ export function analyticsPage() {
         currentPermissionLevel: 'viewer',
         tagMetadata: {},
 
+        // Signed in, below editor. The page says so instead of drawing.
+        refused: false,
+
         async init() {
             auth.onAuthStateChanged(async (user) => {
                 if (!user) {
@@ -51,6 +54,33 @@ export function analyticsPage() {
                 }
                 const userData = await getUserData(user.uid);
                 this.currentPermissionLevel = (userData && userData.permissionLevel) || (userData && userData.role) || 'viewer';
+
+                // ── Editors and above ────────────────────────────────────────
+                //
+                // This screen reads the WHOLE history of the church's services
+                // and turns it into who has done what, how often, and when they
+                // last did it. That is a planning tool for the people who staff
+                // Sundays, not a public record of anybody's serving — a member
+                // browsing how many times each person has been on the rota is a
+                // different thing from a member reading the rota.
+                //
+                // ⚠ REFUSED BEFORE THE READ, not after the draw. The tab bar and
+                // every panel are gated on the same flag, but the read is what
+                // actually assembles the history, and a page that fetches it and
+                // then hides it has still handed it to the browser.
+                //
+                // ⚠ AND IT IS A DOOR, NOT A LOCK. `services`, `involvement` and
+                // `people` are all world-readable in firestore.rules — the
+                // congregant-facing Service Guide needs them — so this stops the
+                // screen, not the data. Anyone who can write a query can still
+                // assemble it. Closing that is a rules change with the printed
+                // booklet on the other side of it, and it is not this.
+                if (!this.isEditor) {
+                    this.refused = true;
+                    this.loading = false;
+                    return;
+                }
+
                 await this.loadTagMetadata();
                 await this.fetchAndProcessData();
                 this.loading = false;

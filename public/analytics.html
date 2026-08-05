@@ -58,7 +58,7 @@
     </header>
 
     <!-- Navigation and Controls (Fixed) -->
-    <div x-show="!loading" x-cloak class="flex-none bg-background z-[90] border-b border-outline-variant/30">
+    <div x-show="!loading && !refused" x-cloak class="flex-none bg-background z-[90] border-b border-outline-variant/30">
         <div class="px-margin">
             <!-- Navigation Tabs -->
             <div class="flex border-b border-outline-variant">
@@ -82,6 +82,32 @@
     <!-- Scrollable Content Area -->
     <main class="flex-1 overflow-hidden">
         <div class="px-margin h-full">
+            <!-- Signed in, below editor. Named rather than blanked: a screen
+                 that draws nothing is indistinguishable from one that broke, and
+                 the person is not doing anything wrong by having arrived. -->
+            <template x-if="refused">
+                <div x-cloak class="py-lg h-full flex items-start justify-center">
+                    <div class="card p-xl max-w-lg w-full text-center">
+                        <span class="material-symbols-outlined text-[34px] text-on-surface-variant">lock</span>
+                        <h2 class="font-headline-md text-headline-md text-on-surface mt-3">This one is for editors.</h2>
+                        <p class="font-body-md text-body-md text-on-surface-variant mt-2">
+                            Service Analytics reads the whole history of the church's services —
+                            who has served, how often, and when they last did. It is a planning
+                            tool for the people who staff Sundays.
+                        </p>
+                        <p class="font-body-md text-body-md text-on-surface-variant mt-3">
+                            Anything you are down for is on the Calendar, and on your profile.
+                        </p>
+                        <a href="index.html"
+                           class="inline-flex items-center gap-1 mt-6 border border-secondary text-secondary px-md py-2
+                                  rounded-lg font-label-md text-xs uppercase tracking-wider hover:bg-surface-container
+                                  transition-colors duration-200">
+                            <span class="material-symbols-outlined text-[18px]">arrow_back</span> Back to the dashboard
+                        </a>
+                    </div>
+                </div>
+            </template>
+
             <!-- Loading State -->
             <template x-if="loading">
                 <div class="py-lg h-full flex items-center justify-center">
@@ -98,7 +124,7 @@
             </template>
 
             <!-- Main Content -->
-            <template x-if="!loading">
+            <template x-if="!loading && !refused">
                 <div x-cloak class="h-full animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
                     <!-- Hymn Tab -->
                     <div x-show="activeTab === 'hymns'" x-transition class="h-full py-6 flex flex-col">
