@@ -5457,6 +5457,43 @@ test('the rail re-centres before it runs out, and reads only what it grew into',
         { from: '2026-08-01', to: '2026-12-31' });
 });
 
+test('the way back appears once there is somewhere to come back from', () => {
+    const page = railedCalendar();          // today is 2026-08-05, month is 2026-08
+
+    assert.strictEqual(page.awayFromToday, false, 'a way back was offered from where it leads');
+    page.month = '2026-09';
+    assert.strictEqual(page.awayFromToday, true);
+    page.month = '2026-07';
+    assert.strictEqual(page.awayFromToday, true, 'the past is somewhere to come back from too');
+});
+
+test('both layouts carry a way back to today, and the phone hides its when it would do nothing', () => {
+    // ⚠ THE PHONE ROW IS THE CONSTRAINT. Two arrows, the month's name and the
+    // view toggle already fill it; a fourth control that sits there doing
+    // nothing most of the time is what made the row cramped before. So the
+    // desktop, which has the room, greys its out and the phone drops its.
+    const html = readPage('calendar.html');
+    // The phone BLOCK, not the rule that hides it — the class name appears in
+    // the stylesheet at the top of the file, long before either toolbar.
+    const phoneAt = html.indexOf('class="cal-phone-only mt-md');
+    const backs = [...html.matchAll(/goToToday\(\)/g)].map(m => m.index);
+
+    assert.strictEqual(backs.length, 2, 'a layout is without a way back to today');
+    assert.ok(backs[0] < phoneAt, 'the desktop toolbar has no way back');
+    assert.ok(backs[1] > phoneAt, 'the phone row has no way back');
+
+    // Each is gated on the getter, so neither can be pressed to no effect.
+    const desktop = html.slice(backs[0] - 400, backs[0] + 400);
+    const phone = html.slice(backs[1] - 400, backs[1] + 400);
+    assert.ok(/:disabled="!awayFromToday"/.test(desktop),
+        'the desktop way back stays live on the month it goes to');
+    assert.ok(/x-show="awayFromToday"/.test(phone),
+        'the phone way back sits on the row when it has nothing to do');
+
+    // Icon-only, so it needs a name of its own.
+    assert.ok(/aria-label="Back to today"/.test(phone), 'the phone way back is an unlabelled glyph');
+});
+
 test('opening the page puts the rail on this month, not on the first one drawn', async () => {
     // ⚠ THE RAIL DOES NOT START WHERE IT LOOKS LIKE IT SHOULD. This month is the
     // third of the five, so a rail left where it was built shows the month two

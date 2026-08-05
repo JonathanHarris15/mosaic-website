@@ -258,9 +258,17 @@
                     </button>
                 </div>
                 <h2 class="font-display text-[21px] text-primary" x-text="monthLabel"></h2>
-                <button @click="goToToday()"
-                        class="text-secondary font-label-md text-xs uppercase tracking-wider px-2 py-1
-                               rounded hover:bg-surface-container cal-motion cal-focus">Today</button>
+                <!-- The way back. Bordered like the arrows beside it because it
+                     is the same kind of thing — a plain word in the quiet colour
+                     read as a caption, and got looked straight past. -->
+                <button @click="goToToday()" :disabled="!awayFromToday"
+                        class="flex items-center gap-1 rounded-lg border border-outline-variant px-2.5 h-[34px]
+                               text-on-surface-variant font-label-md text-xs uppercase tracking-wider
+                               hover:bg-surface-container disabled:opacity-40 disabled:hover:bg-transparent
+                               cal-motion cal-press cal-focus">
+                    <span class="material-symbols-outlined text-[18px]">today</span>
+                    Today
+                </button>
             </div>
 
             <div class="flex items-center gap-sm">
@@ -294,15 +302,35 @@
         <div class="cal-phone-only mt-md flex-col gap-md">
 
             <div class="flex items-center justify-between gap-sm">
-                <div class="flex items-center gap-1">
+                <!-- `min-w-0` so the month's name is what gives way on a very
+                     narrow phone. Without it the row is as wide as its longest
+                     month and simply overflows — "September 2026" plus four
+                     controls is 7px too much at 320px. -->
+                <div class="flex items-center gap-1 min-w-0">
                     <button @click="prevMonth()" aria-label="Previous month"
-                            class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
+                            class="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
                         <span class="material-symbols-outlined text-[20px]">chevron_left</span>
                     </button>
-                    <h2 class="font-display text-[17px] text-primary" x-text="monthLabel"></h2>
+                    <h2 class="font-display text-[17px] text-primary truncate" x-text="monthLabel"></h2>
                     <button @click="nextMonth()" aria-label="Next month"
-                            class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
+                            class="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant cal-motion cal-focus">
                         <span class="material-symbols-outlined text-[20px]">chevron_right</span>
+                    </button>
+                    <!-- ⚠ ONLY ONCE THERE IS SOMEWHERE TO GO BACK TO. The row
+                         already carries two arrows, a month and a view toggle;
+                         a fourth control that does nothing most of the time is
+                         what made this row cramped the last time. Off this
+                         month it is the most useful thing on the row.
+
+                         Icon only, for the same reason as the view toggle
+                         opposite: the word costs 48px, and on a 360px phone in
+                         September that is the difference between the row
+                         fitting and not. -->
+                    <button x-show="awayFromToday" @click="goToToday()" aria-label="Back to today"
+                            class="ml-0.5 shrink-0 w-8 h-8 flex items-center justify-center rounded-lg
+                                   border border-outline-variant text-secondary
+                                   cal-motion cal-press cal-focus">
+                        <span class="material-symbols-outlined text-[18px]">today</span>
                     </button>
                 </div>
 

@@ -491,6 +491,11 @@
             get groups() { return View.weekGroups(this.monthRows, this.today); },
             get monthLabel() { return monthLabel(this.month); },
 
+            // Whether "Today" has anywhere to take you. A way back only earns
+            // its place on the row once you have wandered off — on the phone it
+            // is a third control fighting the month's name for the same inch.
+            get awayFromToday() { return this.month !== monthOf(this.today); },
+
             // ── The right rail ───────────────────────────────────────────────
 
             // Upcoming reads its own rows, and deliberately ignores "Only mine"
