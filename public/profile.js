@@ -178,11 +178,14 @@ async function initMyInfo(personId) {
 //
 // Framing is stored beside the image rather than baked into it, so reframing
 // later edits two numbers instead of needing the original file, which most
-// people no longer have.
+// people no longer have. It happens in a modal: dragging a picture into place
+// needs room, and on a phone the inline version had a 96px circle, a slider and
+// three buttons all fighting for one row.
 
 let myPhotoCrop = null;      // the crop as saved
 let myPhotoDraft = null;     // the crop being dragged, before Save framing
 let myPhotoPersonId = null;
+let myPhotoUrl = null;
 
 function initMyPhoto(personId, person) {
     const input = document.getElementById('my-photo-input');
@@ -211,18 +214,16 @@ function initMyPhoto(personId, person) {
         }
 
         choose.disabled = true;
-        closeReframer();
         status.textContent = 'Uploading…';
         status.className = 'text-[11px] font-body-md text-primary animate-pulse';
         try {
             const saved = await PersonPhotoCore.uploadPersonPhoto(db, personId, file);
             myPhotoCrop = PersonPhotoCore.normalizeCrop(saved.crop);
             showMyPhoto(saved.url);
-            // A group shot in a circle almost always needs moving, so offer that
-            // straight away rather than making them find the button.
+            status.textContent = '';
+            // A group shot in a circle almost always needs moving, so go straight
+            // there rather than making them find the button.
             openReframer();
-            status.textContent = 'Uploaded. Drag it into place.';
-            status.className = 'text-[11px] font-body-md text-green-600';
         } catch (e) {
             console.error('Photo upload failed:', e);
             status.textContent = e.message || 'That upload did not work.';
@@ -239,7 +240,6 @@ function initMyPhoto(personId, person) {
         try {
             await PersonPhotoCore.clearPersonPhoto(db, personId);
             myPhotoCrop = PersonPhotoCore.normalizeCrop(null);
-            closeReframer();
             showMyPhoto(null);
             status.textContent = '';
         } catch (e) {
@@ -250,39 +250,51 @@ function initMyPhoto(personId, person) {
     };
 
     reframe.onclick = openReframer;
-    document.getElementById('my-photo-crop-cancel').onclick = () => {
-        myPhotoDraft = null;
-        applyMyPhotoStyle(myPhotoCrop);
-        closeReframer();
-    };
-    document.getElementById('my-photo-crop-reset').onclick = () => {
+    // Tapping the picture is the obvious gesture on a phone, so it opens the
+    // reframer too — but only once there is a photo to reframe.
+    document.getElementById('my-photo-open').onclick = () => { if (myPhotoUrl) openReframer(); };
+
+    wireReframer();
+}
+
+// ── The reframing modal ──────────────────────────────────────────────────────
+
+function wireReframer() {
+    const frame = document.getElementById('reframe-frame');
+    const modal = document.getElementById('photo-reframe-modal');
+    if (!frame || frame.dataset.wired) return;
+    frame.dataset.wired = '1';
+
+    document.getElementById('reframe-close').onclick = closeReframer;
+    document.getElementById('reframe-cancel').onclick = closeReframer;
+    document.getElementById('reframe-save').onclick = saveMyPhotoCrop;
+    document.getElementById('reframe-reset').onclick = () => {
         myPhotoDraft = Object.assign({}, PersonPhotoCore.DEFAULT_CROP);
-        document.getElementById('my-photo-zoom').value = myPhotoDraft.zoom;
+        document.getElementById('reframe-zoom').value = myPhotoDraft.zoom;
         applyMyPhotoStyle(myPhotoDraft);
     };
-    document.getElementById('my-photo-crop-save').onclick = saveMyPhotoCrop;
-    document.getElementById('my-photo-zoom').oninput = (e) => {
+    document.getElementById('reframe-zoom').oninput = (e) => {
         myPhotoDraft = PersonPhotoCore.normalizeCrop(
             Object.assign({}, myPhotoDraft || myPhotoCrop, { zoom: parseFloat(e.target.value) }));
         applyMyPhotoStyle(myPhotoDraft);
     };
+    // Tapping the backdrop closes, but a drag that happens to end there must not
+    // — so only a press that STARTED on the backdrop counts.
+    modal.addEventListener('pointerdown', (e) => {
+        if (e.target === modal) modal.dataset.pressedBackdrop = '1';
+    });
+    modal.addEventListener('pointerup', (e) => {
+        if (e.target === modal && modal.dataset.pressedBackdrop === '1') closeReframer();
+        delete modal.dataset.pressedBackdrop;
+    });
 
-    wireMyPhotoDrag();
-}
-
-// Drag the picture under the frame. Pointer events so a finger on a phone works
-// the same as a mouse, and pointer capture so letting go outside the small
-// circle still ends the drag.
-function wireMyPhotoDrag() {
-    const frame = document.getElementById('my-photo-frame');
-    const img = document.getElementById('my-photo-img');
-    if (!frame) return;
+    // Pointer events so a finger works like a mouse, and pointer capture so
+    // letting go outside the circle still ends the drag.
     let dragging = false;
     let lastX = 0;
     let lastY = 0;
 
     frame.addEventListener('pointerdown', (e) => {
-        if (document.getElementById('my-photo-reframer').classList.contains('hidden')) return;
         dragging = true;
         lastX = e.clientX;
         lastY = e.clientY;
@@ -292,9 +304,10 @@ function wireMyPhotoDrag() {
 
     frame.addEventListener('pointermove', (e) => {
         if (!dragging) return;
-        const size = frame.getBoundingClientRect().width;
         myPhotoDraft = PersonPhotoCore.panCrop(
-            myPhotoDraft || myPhotoCrop, e.clientX - lastX, e.clientY - lastY, size);
+            myPhotoDraft || myPhotoCrop,
+            e.clientX - lastX, e.clientY - lastY,
+            frame.getBoundingClientRect().width);
         lastX = e.clientX;
         lastY = e.clientY;
         applyMyPhotoStyle(myPhotoDraft);
@@ -307,26 +320,31 @@ function wireMyPhotoDrag() {
     };
     frame.addEventListener('pointerup', stop);
     frame.addEventListener('pointercancel', stop);
-    if (img) img.addEventListener('dragstart', (e) => e.preventDefault());
 }
 
 function openReframer() {
-    if (!document.getElementById('my-photo-img').src) return;
+    if (!myPhotoUrl) return;
     myPhotoDraft = Object.assign({}, myPhotoCrop);
-    document.getElementById('my-photo-zoom').value = myPhotoDraft.zoom;
-    document.getElementById('my-photo-reframer').classList.remove('hidden');
-    document.getElementById('my-photo-reframe-hint').classList.remove('hidden');
-    document.getElementById('my-photo-frame').classList.add('cursor-move');
+    document.getElementById('reframe-img').src = myPhotoUrl;
+    document.getElementById('reframe-zoom').value = myPhotoDraft.zoom;
+    document.getElementById('reframe-status').textContent = '';
+    applyMyPhotoStyle(myPhotoDraft);
+    document.getElementById('photo-reframe-modal').classList.remove('hidden');
+    // Stop the page behind scrolling under the drag.
+    document.body.style.overflow = 'hidden';
 }
 
 function closeReframer() {
-    document.getElementById('my-photo-reframer').classList.add('hidden');
-    document.getElementById('my-photo-reframe-hint').classList.add('hidden');
-    document.getElementById('my-photo-frame').classList.remove('cursor-move');
+    myPhotoDraft = null;
+    applyMyPhotoStyle(myPhotoCrop);
+    document.getElementById('photo-reframe-modal').classList.add('hidden');
+    document.body.style.overflow = '';
 }
 
 async function saveMyPhotoCrop() {
-    const status = document.getElementById('my-photo-status');
+    const status = document.getElementById('reframe-status');
+    const save = document.getElementById('reframe-save');
+    save.disabled = true;
     status.textContent = 'Saving…';
     status.className = 'text-[11px] font-body-md text-primary animate-pulse';
     try {
@@ -334,23 +352,30 @@ async function saveMyPhotoCrop() {
             db, myPhotoPersonId, myPhotoDraft || myPhotoCrop);
         myPhotoDraft = null;
         applyMyPhotoStyle(myPhotoCrop);
-        closeReframer();
-        status.textContent = 'Framing saved.';
-        status.className = 'text-[11px] font-body-md text-green-600';
-        setTimeout(() => { status.textContent = ''; }, 4000);
+        document.getElementById('photo-reframe-modal').classList.add('hidden');
+        document.body.style.overflow = '';
     } catch (e) {
         console.error('Could not save the framing:', e);
         status.textContent = e.message || 'Could not save that framing.';
         status.className = 'text-[11px] font-body-md text-error';
+    } finally {
+        save.disabled = false;
     }
 }
 
+// One crop, both circles. The modal's is 272px and the inline one 96px, and the
+// stored crop is percentages plus a scale — so they render the same picture, and
+// so does the directory's 56px card.
 function applyMyPhotoStyle(crop) {
-    document.getElementById('my-photo-img').style.cssText =
-        'width:100%;height:100%;' + PersonPhotoCore.frameStyle(crop);
+    const style = 'width:100%;height:100%;' + PersonPhotoCore.frameStyle(crop);
+    const inline = document.getElementById('my-photo-img');
+    const modal = document.getElementById('reframe-img');
+    if (inline) inline.style.cssText = style;
+    if (modal) modal.style.cssText = style;
 }
 
 function showMyPhoto(url) {
+    myPhotoUrl = url || null;
     const img = document.getElementById('my-photo-img');
     const placeholder = document.getElementById('my-photo-placeholder');
     const choose = document.getElementById('my-photo-choose');

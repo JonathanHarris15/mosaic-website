@@ -100,9 +100,17 @@ phone months ago. This way reframing edits two numbers.
 
 `PersonPhotoCore.frameStyle` is the only place a crop becomes CSS, and the
 reframing preview, the profile page and every directory card all call it. That
-is what makes the preview honest: the circle someone drags in is the real frame
-carrying the real style, so what they let go of is literally what the
-congregation sees.
+is what makes the preview honest: the circle someone drags in carries the real
+style, so what they let go of is literally what the congregation sees.
+
+Reframing happens in a **modal**, not inline. The first attempt put the controls
+beside the 96px avatar, which was cramped on a desktop and unusable on a phone —
+a circle too small to drag a picture around inside, a slider and three buttons
+all competing for one row. The modal gives the preview 272px and stacks its
+actions. Nothing about the stored crop changes with the size it is edited at:
+percentages and a scale render the same picture at 272px, at 96px and at the
+directory's 56px, which is exactly why a big editor can be trusted to represent a
+small card.
 
 A new upload resets to centred. Carrying the previous crop over would frame the
 new picture by where the *old* one happened to need looking at.

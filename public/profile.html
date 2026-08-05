@@ -272,45 +272,28 @@
                         <!-- Photo. Self-editable, unlike the name beside it: a photo is a
                              fact about you that only you have, and nothing else in the app
                              reads it as an identifier (ADR-0029). So it goes straight in,
-                             no approval. -->
+                             no approval. Reframing opens a modal — a 96px circle is not a
+                             surface you can drag a picture around inside of, least of all
+                             on a phone. -->
                         <div class="px-md pt-md flex items-center gap-4">
-                            <div id="my-photo-frame" class="w-24 h-24 rounded-full bg-surface-container-high border border-outline-variant/30 flex items-center justify-center overflow-hidden flex-shrink-0 relative">
-                                <img id="my-photo-img" class="hidden w-full h-full select-none" alt="Your directory photo" draggable="false" />
+                            <button type="button" id="my-photo-open" class="w-24 h-24 rounded-full bg-surface-container-high border border-outline-variant/30 flex items-center justify-center overflow-hidden flex-shrink-0 relative">
+                                <img id="my-photo-img" class="hidden w-full h-full" alt="Your directory photo" draggable="false" />
                                 <span id="my-photo-placeholder" class="material-symbols-outlined text-outline-variant text-[44px]">person</span>
-                                <div id="my-photo-reframe-hint" class="hidden absolute inset-0 rounded-full border-2 border-dashed border-on-primary/70 pointer-events-none"></div>
-                            </div>
-                            <div class="flex flex-col gap-2">
+                            </button>
+                            <div class="flex flex-col gap-2 min-w-0">
                                 <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Directory photo</span>
                                 <div class="flex flex-wrap items-center gap-2">
                                     <input type="file" id="my-photo-input" accept="image/jpeg,image/png,image/webp" class="hidden" />
                                     <button type="button" id="my-photo-choose" class="px-4 py-2 bg-surface-container-high text-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-outline-variant/20 transition-all">Upload a photo</button>
-                                    <button type="button" id="my-photo-reframe" class="hidden px-3 py-2 text-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-primary/10 transition-all">Reframe</button>
+                                    <button type="button" id="my-photo-reframe" class="hidden px-4 py-2 border border-primary/40 text-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-primary/10 transition-all">Reframe</button>
                                     <button type="button" id="my-photo-remove" class="hidden px-3 py-2 text-error font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-error-container/20 transition-all">Remove</button>
                                 </div>
-
-                                <!-- Reframing. The circle to the left is the real frame at the
-                                     real style, so what you drag to is exactly what the
-                                     directory shows (ADR-0029 §6). -->
-                                <div id="my-photo-reframer" class="hidden flex flex-col gap-2 bg-surface-container-low/40 border border-outline-variant/30 rounded-lg p-3 max-w-sm">
-                                    <span class="text-[11px] font-body-md text-on-surface">Drag the photo to move it, and use the slider to zoom.</span>
-                                    <div class="flex items-center gap-2">
-                                        <span class="material-symbols-outlined text-on-surface-variant text-[16px]">zoom_out</span>
-                                        <input type="range" id="my-photo-zoom" min="1" max="4" step="0.05" value="1" class="flex-grow accent-primary" />
-                                        <span class="material-symbols-outlined text-on-surface-variant text-[16px]">zoom_in</span>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <button type="button" id="my-photo-crop-save" class="px-4 py-2 bg-primary text-on-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-primary-container transition-all">Save framing</button>
-                                        <button type="button" id="my-photo-crop-cancel" class="px-3 py-2 text-on-surface-variant font-label-md text-[10px] uppercase tracking-widest hover:text-primary transition-all">Cancel</button>
-                                        <button type="button" id="my-photo-crop-reset" class="px-3 py-2 text-on-surface-variant font-label-md text-[10px] uppercase tracking-widest hover:text-primary transition-all">Recentre</button>
-                                    </div>
-                                </div>
-
                                 <span id="my-photo-status" class="text-[11px] font-body-md"></span>
-                                <p class="text-[10px] text-on-surface-variant leading-relaxed max-w-sm">Everyone in the church directory can see this. JPEG, PNG or WebP.</p>
+                                <p class="text-[10px] text-on-surface-variant leading-relaxed">Everyone in the church directory can see this. JPEG, PNG or WebP.</p>
                             </div>
                         </div>
 
-                                                <!-- Name. Read-only: it is how the whole church refers to this
+                        <!-- Name. Read-only: it is how the whole church refers to this
                              person, so it is not self-editable — but being stuck with
                              your own name misspelt is worse, so there is a way to ask
                              (ADR-0027). -->
@@ -507,6 +490,51 @@
                 </div>
             </div>
             <div id="link-people-list" class="flex-grow overflow-y-auto min-h-[8rem]"></div>
+        </div>
+    </div>
+
+    <!-- Reframing (ADR-0029 §6). Its own surface, because dragging a picture into
+         place needs room — and because the inline version was unusable on a phone,
+         where a 96px circle and a slider and three buttons all fought for one row.
+         The preview here is large, but the stored crop is expressed in percentages
+         and a scale, so it renders identically at 256px and at the directory's
+         56px. That is what keeps this honest at any size. -->
+    <div id="photo-reframe-modal" class="hidden fixed inset-0 z-[60] bg-primary/30 backdrop-blur-sm flex items-end sm:items-center justify-center">
+        <div class="bg-surface-container-lowest w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl border border-outline-variant/30 flex flex-col max-h-[92vh] overflow-y-auto">
+            <div class="p-md border-b border-outline-variant/20 flex items-center justify-between gap-3">
+                <h2 class="font-headline-md text-headline-md text-primary flex items-center gap-2">
+                    <span class="material-symbols-outlined">crop_free</span>
+                    Reframe your photo
+                </h2>
+                <button type="button" id="reframe-close" class="text-on-surface-variant hover:text-primary transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <div class="p-md flex flex-col items-center gap-4">
+                <div id="reframe-frame"
+                     class="w-[min(17rem,72vw)] aspect-square rounded-full overflow-hidden bg-surface-container-high border-2 border-primary/30 relative cursor-move touch-none select-none">
+                    <img id="reframe-img" class="w-full h-full" alt="Your photo" draggable="false" />
+                </div>
+
+                <p class="text-[11px] font-body-md text-on-surface-variant text-center">
+                    Drag the photo to move it. This circle is exactly what the directory shows.
+                </p>
+
+                <div class="flex items-center gap-3 w-full">
+                    <span class="material-symbols-outlined text-on-surface-variant text-[18px]">zoom_out</span>
+                    <input type="range" id="reframe-zoom" min="1" max="4" step="0.05" value="1" class="flex-grow h-2 accent-primary" />
+                    <span class="material-symbols-outlined text-on-surface-variant text-[18px]">zoom_in</span>
+                </div>
+
+                <div id="reframe-status" class="text-[11px] font-body-md min-h-[1rem]"></div>
+            </div>
+
+            <div class="p-md border-t border-outline-variant/20 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end sticky bottom-0 bg-surface-container-lowest">
+                <button type="button" id="reframe-reset" class="px-4 py-3 sm:py-2 text-on-surface-variant font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-surface-container transition-all">Recentre</button>
+                <button type="button" id="reframe-cancel" class="px-4 py-3 sm:py-2 border border-outline-variant text-on-surface-variant font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-surface-container transition-all">Cancel</button>
+                <button type="button" id="reframe-save" class="px-5 py-3 sm:py-2 bg-primary text-on-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-primary-container transition-all">Save framing</button>
+            </div>
         </div>
     </div>
 
