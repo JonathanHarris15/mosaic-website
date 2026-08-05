@@ -7,12 +7,17 @@
 // dropped — they competed with the grid for the same tap and made the common
 // case look like a form.
 //
-// TWO LAYOUTS, ONE STATE. The desktop shows two months side by side with a rail
-// beside them; the phone runs several months on in one scroll with the summary
-// pinned to the bottom, so a range crossing a month boundary is one flick rather
-// than a page turn that loses the half-made selection. Swapped on the shell
-// rather than on a media query — the same 390px window on a desktop still has a
-// mouse — which is the Calendar's own rule.
+// TWO LAYOUTS, ONE STATE, ONE RAIL. The desktop shows two months side by side
+// with a summary rail beside them; the phone shows one month with the summary
+// pinned to the bottom. Both page along the SAME rail of months — arrows on
+// either, and a swipe on the phone. Swapped on the shell rather than on a media
+// query, since the same 390px window on a desktop still has a mouse, which is
+// the Calendar's own rule.
+//
+// The phone used to run four months on in one vertical scroll. It made a range
+// crossing a month boundary one flick — but it also put the calendar in a
+// scroll inside a scroll, and a month you wanted was a hunt rather than a tap.
+// One month that answers to a thumb beats four you have to go looking through.
 //
 // NOTHING HERE IS A REQUEST. There is no submit, no pending, no approval. The
 // person says it and it is true, which is why the button reads "I'm away these
@@ -26,11 +31,16 @@
 
     const todayStr = () => window.DateUtils.todayStr();
 
-    // How many months the grid offers at once. The desktop pair pages a month at
-    // a time; the phone's scroll is long enough to cover most of a plan without
-    // reaching for more, and extends when you reach the end.
+    // How many months the grid offers at once. Both layouts page along the same
+    // rail, a month at a time — the phone shows one of them, the desktop two.
     const DESKTOP_MONTHS = 2;
-    const PHONE_MONTHS = 4;
+    const PHONE_MONTHS = 1;
+
+    // How far a finger has to travel across the rail before it counts as a page
+    // turn, and how much more sideways than up-and-down it has to be. Well past
+    // the browser's own tap slop, so a swipe never also lands on a day.
+    const SWIPE_MIN = 45;
+    const SWIPE_BIAS = 1.4;
 
     // How much of the desktop's rail is drawn to begin with, and how much more
     // it grows by on reaching the end. Generous, because the drawing is what
@@ -97,6 +107,8 @@
             railLength: RAIL_MONTHS,
             // How far the rail has been slid, in pixels the browser measured.
             railShift: 0,
+            // Where a finger went down on the rail, while it is still down.
+            swipe: null,
             showPast: false,
 
             weekdays: Core.WEEKDAYS,
@@ -235,28 +247,17 @@
 
             // ── What is on screen ────────────────────────────────────────────
 
-            // The furthest month anything on screen can reach, which is what
-            // `loadPlaces` measures a clash against. The phone's is the end of
-            // its scroll; the desktop's is the end of the RAIL, not the end of
-            // the pair on show — the months waiting off to the right are already
-            // drawn, and a serving dot that only appears once you scroll to it
-            // is a dot you cannot plan around.
+            // The furthest month the screen can reach, which is what
+            // `loadPlaces` measures a clash against. The end of the RAIL, not
+            // the end of what is on show — the months waiting off to the right
+            // are already drawn, and a serving dot that only appears once you
+            // page to it is a dot you cannot plan around.
             get lastMonth() {
-                const span = this.phone ? this.monthsShown : this.railLength;
-                const total = this.firstMonth.monthIndex + span - 1;
+                const total = this.firstMonth.monthIndex + this.railLength - 1;
                 return {
                     year: this.firstMonth.year + Math.floor(total / 12),
                     monthIndex: ((total % 12) + 12) % 12,
                 };
-            },
-
-            // The phone's list: months from the anchor, growing as it is
-            // scrolled. The anchor never moves, because the phone never pages.
-            get months() {
-                return Core.monthsFrom(
-                    this.anchor.year, this.anchor.monthIndex, this.monthsShown,
-                    this.gridOptions()
-                );
             },
 
             gridOptions() {
@@ -268,27 +269,29 @@
                 };
             },
 
-            // ── The desktop's rail ───────────────────────────────────────────
+            // ── The rail ─────────────────────────────────────────────────────
             //
             // Every month the screen can reach, laid out in one row, with the
-            // arrows scrolling a window of two along it. The pair on show is a
-            // VIEW of the rail rather than two slots whose contents get swapped
-            // — which is the whole of why it can slide: nothing is being
-            // rebuilt, so there is something continuous to move.
+            // arrows sliding a window along it — two months wide on a desktop,
+            // one on a phone. What is on show is a VIEW of the rail rather than
+            // slots whose contents get swapped, which is the whole of why it can
+            // slide: nothing is rebuilt, so there is something continuous to
+            // move.
+            //
+            // ⚠ ONE RAIL EXISTS AT A TIME. The two layouts are `x-if`, not
+            // `x-show`, so only the live one is in the DOM. Two would both
+            // answer to `$refs.rail` and the slide would end up measuring the
+            // hidden one, where every offset is zero.
             //
             // It starts at THIS month and never runs back past it. Away is a
             // thing you say before (ADR-0023 §4), so a month that has been holds
             // nothing left to choose, and the rail growing only forwards is what
-            // keeps the scroll position honest — appending never shifts what is
+            // keeps its measurements honest — appending never shifts what is
             // already drawn.
 
             get firstMonth() { return monthPartsOf(this.today); },
 
             get railMonths() {
-                // Both layouts are always in the DOM — the phone's is hidden
-                // rather than absent — so without this a phone would build a
-                // year of months nobody can see, on every tap.
-                if (this.phone) return [];
                 return Core.monthsFrom(
                     this.firstMonth.year, this.firstMonth.monthIndex,
                     this.railLength, this.gridOptions()
@@ -469,12 +472,40 @@
                 };
             },
 
-            // The phone reaches further by growing its scroll rather than paging
-            // — the whole point of that layout is that a range never spans a
-            // page turn. Nothing is capped: an Away can be a year out.
-            async showMoreMonths() {
-                this.monthsShown += PHONE_MONTHS;
-                await this.loadPlaces();
+            // ── Swiping the rail ─────────────────────────────────────────────
+            //
+            // The arrows are small and a calendar on a phone is a thing you
+            // push about with a thumb. Same rail, same easing — a swipe just
+            // reaches `prevMonths`/`nextMonths` by another road.
+            //
+            // It DECIDES ON RELEASE rather than dragging the rail under the
+            // finger. A drag has to fight the page's own vertical scroll for
+            // every pixel, and a calendar that stutters up and down while you
+            // try to move it sideways is worse than one that simply answers.
+            //
+            // Nothing is prevented, so a diagonal or vertical gesture scrolls
+            // the page exactly as before. `SWIPE_MIN` is well past the browser's
+            // own tap slop, so a swipe never also lands on the day it started on.
+
+            swipeFrom(event) {
+                const touch = event && event.changedTouches && event.changedTouches[0];
+                this.swipe = touch ? { x: touch.clientX, y: touch.clientY } : null;
+            },
+
+            swipeTo(event) {
+                const from = this.swipe;
+                const touch = event && event.changedTouches && event.changedTouches[0];
+                this.swipe = null;
+                if (!from || !touch) return;
+
+                const dx = touch.clientX - from.x;
+                const dy = touch.clientY - from.y;
+                if (Math.abs(dx) < SWIPE_MIN) return;
+                if (Math.abs(dx) < Math.abs(dy) * SWIPE_BIAS) return;
+
+                // Dragged left, the months come from the right — the direction
+                // the paper would move, not the direction of travel.
+                if (dx < 0) this.nextMonths(); else this.prevMonths();
             },
 
             togglePast() { this.showPast = !this.showPast; },

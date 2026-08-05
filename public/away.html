@@ -28,16 +28,18 @@
 
         /* The shell draws its own header with the page title in it. */
         html.shell-mobile .aw-page-title { display: none; }
+        html.shell-mobile .aw-title-block { display: none; }
 
         /* The phone's tray is pinned; the scroll above it needs room to clear. */
         .aw-tray-clearance { padding-bottom: 220px; }
 
-        /* ── The desktop's months, on a rail ──────────────────────────────────
+        /* ── The months, on a rail ────────────────────────────────────────────
            Every month the screen can reach is laid out in one row and the
-           arrows scroll it. Paging used to swap the two on show for two others,
-           which gave a person choosing a range across a month boundary nothing
-           to hold on to — the days they had just been looking at were simply
-           gone. Sliding keeps them in sight on the way past.
+           arrows slide it — two months wide on a desktop, one on a phone, where
+           a swipe moves it too. Paging used to swap what was on show for
+           something else, which gave a person choosing a range across a month
+           boundary nothing to hold on to: the days they had just been looking
+           at were simply gone. Sliding keeps them in sight on the way past.
 
            The arrows are the control, so the rail is clipped rather than
            scrollable — a half-swiped rail sitting between two months is a state
@@ -46,15 +48,22 @@
            ⚠ IT MOVES BY TRANSFORM, NOT BY SCROLLING. A clipped box will not
            smooth-scroll: `scrollTo({behavior:'smooth'})` on it lands instantly
            at the far end, which is the hard snap this replaced. A transform
-           transitions whatever the overflow is. */
-        .aw-rail { overflow: hidden; position: relative; }
+           transitions whatever the overflow is.
+
+           ⚠ THE COLUMN WIDTH IS KEYED ON THE SHELL, NOT ON A MEDIA QUERY — it
+           has to agree with `monthsShown`, which is, and a breakpoint would put
+           them on different switches. A tablet-width mobile shell would then
+           show two months while the component believed one was on screen, and
+           the second would be drawn inert.
+
+           `touch-action: pan-y` on the rail leaves vertical scrolling to the
+           page and keeps sideways gestures for the swipe. */
+        .aw-rail { overflow: hidden; position: relative; touch-action: pan-y; }
         .aw-rail-track {
-            grid-auto-columns: 100%;
+            grid-auto-columns: calc((100% - 2rem) / 2);
             transition: transform 420ms cubic-bezier(0.2, 0, 0, 1);
         }
-        @media (min-width: 768px) {
-            .aw-rail-track { grid-auto-columns: calc((100% - 2rem) / 2); }
-        }
+        html.shell-mobile .aw-rail-track { grid-auto-columns: 100%; }
         /* Asked for less movement, given none. The jump is the old behaviour,
            which was never wrong — only abrupt. */
         @media (prefers-reduced-motion: reduce) {
@@ -92,8 +101,13 @@
         <div id="auth-container" class="flex items-center"><div class="h-10"></div></div>
     </header>
 
-    <!-- ── Title ───────────────────────────────────────────────────────── -->
-    <div class="flex items-end justify-between gap-8 pt-md pb-md border-b border-outline-variant">
+    <!-- ── Title ─────────────────────────────────────────────────────────
+         The whole block goes on a phone, not just the heading. The shell
+         already draws "Away" above it, the lock chip is repeated word for word
+         in "Worth knowing" below, and the standfirst was the only thing between
+         the header and the calendar — three lines of preamble in front of the
+         one thing the screen is for. -->
+    <div class="aw-title-block flex items-end justify-between gap-8 pt-md pb-md border-b border-outline-variant">
         <div>
             <h1 class="font-display-lg text-[32px] text-primary tracking-[.02em] aw-page-title" x-text="title"></h1>
             <p class="mt-2 text-[14px] leading-[1.55] text-on-surface-variant max-w-[66ch]" x-text="intro"></p>
@@ -149,7 +163,12 @@
     </template>
 
     <!-- ══════════════ DESKTOP ══════════════ -->
-    <div x-show="!loading && personId && !phone" class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-md items-start mt-md pb-lg">
+    <!-- ⚠ `x-if`, NOT `x-show`. Both layouts carry a rail and both name it
+         `rail`, so with the other one merely hidden the component would end up
+         measuring whichever registered last — and inside a display:none block
+         every offset reads zero, so the rail would never move. -->
+    <template x-if="!loading && personId && !phone">
+    <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-md items-start mt-md pb-lg">
 
         <!-- The grid IS the primary action -->
         <div class="bg-surface-container-lowest border border-outline-variant rounded-[10px] p-md">
@@ -331,39 +350,63 @@
             </div>
         </div>
     </div>
+    </template>
 
     <!-- ══════════════ PHONE ══════════════ -->
-    <!-- Months run on in one scroll, so a range crossing a month boundary is one
-         flick rather than a page turn that loses the half-made selection. The
-         summary, the clash and the button live in a tray pinned to the bottom. -->
-    <div x-show="!loading && personId && phone" class="mt-4">
-        <div class="font-label-md text-[11px] uppercase tracking-[.14em] text-on-surface-variant pb-3" x-text="prompt"></div>
+    <!-- One month, paged the same way the desktop pages: the arrows, or a swipe
+         across the calendar. The summary, the clash and the button live in a
+         tray pinned to the bottom.
+
+         It ran four months on in one vertical scroll before. That made a range
+         crossing a month boundary one flick — but it put the calendar in a
+         scroll inside a scroll, and finding the month you wanted was a hunt
+         rather than a tap. -->
+    <template x-if="!loading && personId && phone">
+    <div class="mt-4">
+        <div class="flex items-center justify-between gap-4 pb-3">
+            <span class="font-label-md text-[11px] uppercase tracking-[.14em] text-on-surface-variant" x-text="prompt"></span>
+            <div class="flex gap-px shrink-0">
+                <button type="button" @click="prevMonths()" title="Earlier months" :disabled="!canGoBack"
+                        class="w-[38px] h-[38px] flex items-center justify-center bg-surface-container-lowest border border-outline-variant
+                               rounded-l-[10px] text-on-surface-variant aw-motion aw-focus
+                               disabled:opacity-30">
+                    <span class="material-symbols-outlined text-[19px]">chevron_left</span>
+                </button>
+                <button type="button" @click="nextMonths()" title="Later months"
+                        class="w-[38px] h-[38px] flex items-center justify-center bg-surface-container-lowest border border-outline-variant
+                               rounded-r-[10px] text-on-surface-variant aw-motion aw-focus">
+                    <span class="material-symbols-outlined text-[19px]">chevron_right</span>
+                </button>
+            </div>
+        </div>
 
         <div class="flex flex-col gap-7 aw-tray-clearance">
-            <template x-for="m in months" :key="m.label">
-                <div>
-                    <div class="font-display text-[16px] tracking-[.02em] text-primary pb-2.5" x-text="m.label"></div>
-                    <div class="grid grid-cols-7">
-                        <template x-for="(w, i) in weekdays" :key="i">
-                            <div class="text-center font-label-md text-[9.5px] uppercase tracking-[.1em] text-outline pb-1.5" x-text="w"></div>
-                        </template>
-                        <template x-for="(c, i) in m.cells" :key="i">
-                            <button type="button" :disabled="!c.inMonth" @click="tap(c.iso)"
-                                    class="flex flex-col items-center justify-center gap-0.5 h-[48px] border-0 aw-motion aw-focus"
-                                    :class="[cellClass(c), cellRadius(c), c.inMonth ? 'cursor-pointer' : 'cursor-default']">
-                                <span class="text-[15px]" x-text="c.day"></span>
-                                <span class="w-[5px] h-[5px] rounded-full" :class="dotClass(c)"></span>
-                            </button>
-                        </template>
-                    </div>
+            <!-- The same rail the desktop slides, one month wide. The swipe is
+                 read on the whole rail rather than per day, so a thumb landing
+                 anywhere on the calendar can move it. -->
+            <div class="aw-rail" x-ref="rail"
+                 @touchstart="swipeFrom($event)" @touchend="swipeTo($event)">
+                <div class="aw-rail-track grid grid-flow-col gap-8" :style="railStyle">
+                    <template x-for="(m, i) in railMonths" :key="m.label">
+                        <div data-rail-month :inert="!onRail(i)">
+                            <div class="font-display text-[16px] tracking-[.02em] text-primary pb-2.5" x-text="m.label"></div>
+                            <div class="grid grid-cols-7">
+                                <template x-for="(w, i) in weekdays" :key="i">
+                                    <div class="text-center font-label-md text-[9.5px] uppercase tracking-[.1em] text-outline pb-1.5" x-text="w"></div>
+                                </template>
+                                <template x-for="(c, i) in m.cells" :key="i">
+                                    <button type="button" :disabled="!c.inMonth" @click="tap(c.iso)"
+                                            class="flex flex-col items-center justify-center gap-0.5 h-[48px] border-0 aw-motion aw-focus"
+                                            :class="[cellClass(c), cellRadius(c), c.inMonth ? 'cursor-pointer' : 'cursor-default']">
+                                        <span class="text-[15px]" x-text="c.day"></span>
+                                        <span class="w-[5px] h-[5px] rounded-full" :class="dotClass(c)"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
                 </div>
-            </template>
-
-            <button type="button" @click="showMoreMonths()"
-                    class="w-full py-3 font-label-md text-[11px] uppercase tracking-[.1em] text-on-surface-variant
-                           border border-dashed border-outline-variant rounded-[10px] aw-focus">
-                Further ahead
-            </button>
+            </div>
 
             <!-- What's on record, underneath the grid on a phone -->
             <div x-show="upcomingStretches.length" class="bg-surface-container-lowest border border-outline-variant rounded-[10px] p-4">
@@ -428,6 +471,7 @@
             </button>
         </div>
     </div>
+    </template>
 
     <!-- ── Loading ─────────────────────────────────────────────────────── -->
     <div x-show="loading" class="py-lg text-center text-on-surface-variant text-[13.5px]">Loading your days…</div>

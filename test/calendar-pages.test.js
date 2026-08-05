@@ -5091,21 +5091,68 @@ test('a clash is measured against the whole rail, not the pair on show', async (
     assert.strictEqual(page.lastMonth.monthIndex, 6, 'paging moved the reach, which is the rail\'s job');
 });
 
-test('the phone has no rail, and its months are still its own scroll', () => {
-    // Two layouts, one state. The phone never pages — it grows one continuous
-    // scroll — so the rail must not quietly become its list.
+test('the phone rides the same rail, one month wide', () => {
+    // Two layouts, one state, ONE rail. The phone used to run four months on in
+    // a vertical scroll of its own; it now pages the way the desktop pages, so
+    // everything below this line is shared and there is no second notion of
+    // which month you are looking at.
     const page = railPage({ MOSAIC_SHELL: 'mobile' });
     page.phone = true;
 
-    assert.strictEqual(page.months.length, 4, 'the phone lost its scroll');
-    assert.strictEqual(page.railMonths.length, 0,
-        'a phone builds a year of months it will never show, on every tap');
-    assert.strictEqual(page.lastMonth.monthIndex, 10, 'the phone reads places for a rail it does not have');
+    assert.strictEqual(page.monthsShown, 1, 'the phone shows more than one month');
+    assert.strictEqual(page.railMonths.length, 12, 'the phone has no rail to slide');
+    assert.strictEqual(page.onRail(0), true);
+    assert.strictEqual(page.onRail(1), false, 'a phone shows two months at once');
 
-    return page.showMoreMonths().then(() => {
-        assert.strictEqual(page.months.length, 8);
-        assert.strictEqual(page.lastMonth.year, 2027, 'growing the scroll did not extend the reach');
+    // The reach is the rail's, not the window's — same as the desktop.
+    assert.strictEqual(page.lastMonth.year, 2027);
+    assert.strictEqual(page.lastMonth.monthIndex, 6);
+
+    return page.nextMonths().then(() => {
+        assert.strictEqual(page.railIndex, 1);
+        assert.strictEqual(page.onRail(1), true, 'paging did not move what the phone is looking at');
     });
+});
+
+test('a swipe across the rail turns the page the way paper would', () => {
+    const page = railPage();
+    const drag = (dx, dy) => {
+        page.swipeFrom({ changedTouches: [{ clientX: 200, clientY: 300 }] });
+        page.swipeTo({ changedTouches: [{ clientX: 200 + dx, clientY: 300 + dy }] });
+    };
+
+    // Dragged LEFT, the months come from the right.
+    drag(-90, 4);
+    assert.strictEqual(page.railIndex, 1, 'swiping left did not move forward');
+    drag(90, -4);
+    assert.strictEqual(page.railIndex, 0, 'swiping right did not come back');
+
+    // Nothing behind this month, so a swipe cannot go there either.
+    drag(90, 0);
+    assert.strictEqual(page.railIndex, 0, 'a swipe walked back past this month');
+});
+
+test('a scroll is not a swipe, and a nudge is not either', () => {
+    // The gesture is read on release with nothing prevented, so a finger moving
+    // down the page must not also turn the calendar — and a thumb resting on a
+    // day must not turn it by a pixel.
+    const page = railPage();
+    const drag = (dx, dy) => {
+        page.swipeFrom({ changedTouches: [{ clientX: 200, clientY: 300 }] });
+        page.swipeTo({ changedTouches: [{ clientX: 200 + dx, clientY: 300 + dy }] });
+    };
+
+    drag(-20, 0);
+    assert.strictEqual(page.railIndex, 0, 'a nudge shorter than a tap\'s slop turned the page');
+
+    drag(-60, 200);
+    assert.strictEqual(page.railIndex, 0, 'scrolling down the page turned the calendar sideways');
+
+    // A touch that never started here (the finger came from somewhere else)
+    // is not a swipe at all.
+    page.swipe = null;
+    page.swipeTo({ changedTouches: [{ clientX: 40, clientY: 300 }] });
+    assert.strictEqual(page.railIndex, 0, 'a release with no matching press turned the page');
 });
 
 test('the rail is scrolled to, rather than having its months swapped', () => {
@@ -5120,6 +5167,21 @@ test('the rail is scrolled to, rather than having its months swapped', () => {
     assert.match(html, /aw-rail-track/, 'the months are not laid out in one row');
 
     assert.match(html, /:style="railStyle"/, 'nothing moves the rail');
+
+    // ⚠ ONE RAIL AT A TIME. Both layouts carry one and both name it `rail`, so
+    // if the idle layout were merely hidden rather than absent, `$refs.rail`
+    // could resolve to it — and inside a display:none block every offset reads
+    // zero, so the calendar would silently stop sliding.
+    assert.strictEqual((html.match(/x-ref="rail"/g) || []).length, 2,
+        'the two layouts no longer carry one rail each');
+    [/x-if="!loading && personId && !phone"/, /x-if="!loading && personId && phone"/].forEach(re => {
+        assert.match(html, re, 'a layout block is shown rather than built, so both rails exist at once');
+    });
+
+    // The phone's calendar is swipeable; the desktop's has a mouse.
+    assert.match(html, /@touchstart="swipeFrom\(\$event\)"/, 'the phone calendar cannot be swiped');
+    assert.match(html, /touch-action:\s*pan-y/,
+        'the rail takes vertical gestures too, so the page cannot be scrolled past it');
     assert.match(html, /prefers-reduced-motion[\s\S]{0,120}aw-rail-track/,
         'the slide is imposed on somebody who asked for less movement');
 });
@@ -5154,4 +5216,41 @@ test('the phone\'s action row is allowed to wrap, however many actions it grows'
     assert.ok(controls.length >= 3, 'the row this test is about is not there any more');
     assert.deepStrictEqual([...new Set(controls)], ['<a'],
         'an action in this row is not an <a>, so the phone\'s layout rule does not reach it');
+});
+
+test('the phone gets the calendar, not three lines about it first', () => {
+    // The standfirst was the only thing between the shell's header and the one
+    // thing the screen is for. It is not deleted — a desktop has room for it,
+    // and it is the sentence that says nobody has to approve any of this — but
+    // on a phone the shell already writes "Away" above it and "Worth knowing"
+    // repeats the lock chip word for word further down.
+    const html = readPage('away.html');
+
+    assert.match(html, /x-text="intro"/, 'the desktop lost the sentence that says nobody approves this');
+    assert.match(html, /html\.shell-mobile \.aw-title-block \{ display: none/,
+        'a phone still reads a standfirst before it can reach the calendar');
+    assert.match(html, /class="aw-title-block/, 'nothing carries the class the rule selects on');
+});
+
+test('every rule in the Away stylesheet actually closes its comment', () => {
+    // HOW THIS BROKE. A comment gained a paragraph and the `*/` ended up in the
+    // middle of it, so everything after — including `overflow: hidden` on the
+    // rail — was silently dropped. The page still rendered; it just stopped
+    // clipping, and twelve months of calendar hung off the side of the phone.
+    // Nothing else here can see a stylesheet, so nothing else could catch it.
+    const html = readPage('away.html');
+    const css = html.slice(html.indexOf('<style>') + 7, html.indexOf('</style>'));
+
+    let depth = 0;
+    for (let i = 0; i < css.length - 1; i++) {
+        if (css.startsWith('/*', i)) { depth++; i++; }
+        else if (css.startsWith('*/', i)) { depth--; i++; }
+        assert.ok(depth === 0 || depth === 1,
+            'a comment closes twice or nests, around character ' + i);
+    }
+    assert.strictEqual(depth, 0, 'a comment is left open, so the rules after it never load');
+
+    // And the rule that broke, specifically.
+    assert.match(css, /\.aw-rail \{[^}]*overflow:\s*hidden/,
+        'the rail does not clip, so the whole year of months shows');
 });
