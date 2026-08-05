@@ -2076,16 +2076,52 @@ test('the card is Upcoming, not the month the grid happens to be on', () => {
     const html = readPage('calendar.html');
     assert.ok(!/'You in ' \+ monthLabel/.test(html), 'the card is still tied to the browsed month');
 
-    // Both copies carry the window picker, or the phone can see the answer
+    // Both copies carry the window control, or the phone can see the answer
     // without being able to change the question.
-    const pickers = html.split(/setUpcomingWindow\(\$event\.target\.value\)/).length - 1;
+    const pickers = html.split(/cycleUpcomingWindow\(\)/).length - 1;
     assert.strictEqual(pickers, 2);
 
-    // And each option says which one it is. Bound with `x-model` instead, the
-    // select initialises before the loop inside it has drawn any options, and
-    // the box reads "Next week" while the card answers for a fortnight.
-    const marked = html.split(/:selected="w\.id === upcomingWindow"/).length - 1;
-    assert.strictEqual(marked, 2, 'the picker can open showing a window it is not on');
+    // ⚠ IT IS A BUTTON, NOT A SELECT. A select's list is drawn by the browser
+    // rather than by the page, so neither where it lands nor what colour it
+    // comes out is ours to decide — and in the shell's WebView it landed
+    // halfway up the screen over the toolbar, and on the navy card it drew
+    // white-on-navy. Three windows are few enough to walk round instead.
+    assert.doesNotMatch(html, /<select[^>]*UpcomingWindow/,
+        'the window is chosen from a list the page cannot place or paint');
+    const shown = html.split(/x-text="upcomingWindowLabel"/).length - 1;
+    assert.strictEqual(shown, 2, 'a control does not say which window it is on');
+});
+
+test('the Upcoming button walks round every window and comes back', async () => {
+    // The whole bargain of cycling: every option has to be reachable, and
+    // pressing on past the last one has to return to the first rather than
+    // stopping on it.
+    const windows = [];
+    const page = loadComponent('calendar.js', 'calendarPage', {
+        EventsStore: Object.assign({}, require('../public/events-store.js'), {
+            async loadCalendar() { return []; },
+        }),
+    });
+    page.personId = 'p1';
+    page.today = '2026-08-05';
+
+    const all = page.upcomingWindows.map(w => w.id);
+    assert.ok(all.length >= 3, 'there are too few windows for cycling to be the right control');
+
+    for (let i = 0; i < all.length + 1; i++) {
+        windows.push(page.upcomingWindow);
+        await page.cycleUpcomingWindow();
+    }
+
+    // Started on the default, reached every one, wrapped back round.
+    assert.deepStrictEqual(windows.slice(0, all.length).slice().sort(), all.slice().sort(),
+        'a window cannot be reached by pressing the button');
+    assert.strictEqual(windows[all.length], windows[0], 'the button stops on the last window');
+
+    // And it says what pressing it will do, for anybody who cannot watch the
+    // label change.
+    assert.match(page.upcomingWindowHint, /^Showing .+\. Press for .+\.$/);
+    assert.notStrictEqual(page.upcomingWindowLabel, page.upcomingWindowHint);
 });
 
 test('Upcoming asks for its own days, not the month on screen', async () => {

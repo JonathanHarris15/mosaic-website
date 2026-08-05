@@ -295,6 +295,36 @@
                 return this.loadUpcoming();
             },
 
+            get upcomingWindowLabel() {
+                return View.upcomingWindow(this.upcomingWindow).label;
+            },
+
+            // ⚠ A BUTTON THAT CYCLES, NOT A DROP-DOWN. This was a <select>, and
+            // a select's list is drawn by the browser rather than by the page:
+            // inside the shell's WebView it landed halfway up the screen over
+            // the toolbar, and on the navy card it inherited white-on-navy and
+            // came out unreadable. Neither is fixable from here — the list is
+            // not ours to place or paint.
+            //
+            // There are three windows. Walking round them costs at most two taps
+            // to reach any one, which is cheaper than a list that opens in the
+            // wrong place, and the control is then an ordinary button that the
+            // page draws and can see.
+            cycleUpcomingWindow() {
+                const list = this.upcomingWindows;
+                const at = list.findIndex(w => w.id === this.upcomingWindow);
+                return this.setUpcomingWindow(list[(at + 1) % list.length].id);
+            },
+
+            // Said out loud for anybody who cannot see the button change, since
+            // "Next 2 weeks" alone does not tell you pressing it does anything.
+            get upcomingWindowHint() {
+                const list = this.upcomingWindows;
+                const at = list.findIndex(w => w.id === this.upcomingWindow);
+                return 'Showing ' + list[at].label.toLowerCase()
+                    + '. Press for ' + list[(at + 1) % list.length].label.toLowerCase() + '.';
+            },
+
             // ── Places still to fill ─────────────────────────────────────────
             //
             // Editors only, and only on the days ahead. Somebody who cannot fill

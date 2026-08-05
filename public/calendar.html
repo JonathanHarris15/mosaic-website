@@ -273,17 +273,18 @@
                     <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-primary-fixed-dim">
                         Upcoming
                     </div>
-                    <!-- Light on the navy, not navy on the navy. A select's drop
-                         -down is drawn by the browser and inherits the control's
-                         own colours, so white-on-navy here is a list of options
-                         nobody can read once it opens. -->
-                    <select @change="setUpcomingWindow($event.target.value)" aria-label="How far ahead to look"
-                            class="shrink-0 bg-primary-fixed-dim rounded-md px-2 py-1
-                                   text-[11.5px] font-label-md text-primary cal-focus">
-                        <template x-for="w in upcomingWindows" :key="w.id">
-                            <option :value="w.id" :selected="w.id === upcomingWindow" x-text="w.label"></option>
-                        </template>
-                    </select>
+                    <!-- Presses round the three windows rather than opening a
+                         list. A select's list is drawn by the browser, not by
+                         the page: in the shell's WebView it landed halfway up
+                         the screen over the toolbar, and on this navy card it
+                         inherited white-on-navy and came out unreadable. -->
+                    <button type="button" @click="cycleUpcomingWindow()" :aria-label="upcomingWindowHint"
+                            :title="upcomingWindowHint"
+                            class="shrink-0 flex items-center gap-1 bg-primary-fixed-dim rounded-md pl-2.5 pr-2 py-1
+                                   text-[11.5px] font-label-md text-primary cal-motion cal-press cal-focus">
+                        <span x-text="upcomingWindowLabel"></span>
+                        <span class="material-symbols-outlined text-[14px] opacity-70">autorenew</span>
+                    </button>
                 </div>
                 <p class="font-headline-lg text-[19px] leading-[1.35] mt-1.5 text-on-primary" x-text="mySentence"></p>
             </section>
@@ -624,18 +625,19 @@
                         <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
                             Upcoming
                         </div>
-                        <!-- `:selected` rather than `x-model`: the options are
-                             drawn by the loop INSIDE the select, and a two-way
-                             binding initialises before they exist — leaving the
-                             box showing "Next week" while the card underneath it
-                             answers for a fortnight. -->
-                        <select @change="setUpcomingWindow($event.target.value)" aria-label="How far ahead to look"
-                                class="shrink-0 bg-surface-container border border-outline-variant rounded-md
-                                       px-2 py-1 text-[11.5px] font-label-md text-on-surface cal-focus">
-                            <template x-for="w in upcomingWindows" :key="w.id">
-                                <option :value="w.id" :selected="w.id === upcomingWindow" x-text="w.label"></option>
-                            </template>
-                        </select>
+                        <!-- The same control as the phone's, for the same
+                             reason it changed there: one thing, one way. A
+                             desktop select worked, but keeping it would leave
+                             the same choice made through two different controls
+                             depending on what you happened to open it on. -->
+                        <button type="button" @click="cycleUpcomingWindow()" :aria-label="upcomingWindowHint"
+                                :title="upcomingWindowHint"
+                                class="shrink-0 flex items-center gap-1 bg-surface-container border border-outline-variant rounded-md
+                                       pl-2.5 pr-2 py-1 text-[11.5px] font-label-md text-on-surface
+                                       cal-motion cal-press cal-focus hover:bg-surface-container-high">
+                            <span x-text="upcomingWindowLabel"></span>
+                            <span class="material-symbols-outlined text-[14px] text-on-surface-variant">autorenew</span>
+                        </button>
                     </div>
                     <p class="font-headline-lg text-[16.5px] leading-[1.4] mt-2 text-on-surface" x-text="mySentence"></p>
 
