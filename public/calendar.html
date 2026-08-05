@@ -102,6 +102,33 @@
             .cal-layout { grid-template-columns: minmax(0, 1fr) 300px; }
             .cal-layout > .cal-rail { order: 0; }
         }
+
+        /* ── The months, on a rail ────────────────────────────────────────────
+           Five months in one row, with the one on screen a window onto it, so
+           paging slides instead of swapping one grid for another. The same rail
+           the Away screen runs on.
+
+           ⚠ IT MOVES BY TRANSFORM, NOT BY SCROLLING. A clipped box will not
+           smooth-scroll — `scrollTo({behavior:'smooth'})` on one lands instantly
+           at the far end, which is the hard swap this replaces.
+
+           `touch-action: pan-y` leaves vertical scrolling to the page and keeps
+           sideways gestures for the swipe. */
+        .cal-rail-months { overflow: hidden; position: relative; touch-action: pan-y; }
+        .cal-rail-track {
+            display: grid;
+            grid-auto-flow: column;
+            grid-auto-columns: 100%;
+            transition: transform 380ms cubic-bezier(0.2, 0, 0, 1);
+        }
+        /* One frame with the easing off, so re-anchoring the rail does not glide
+           sideways for no reason. See `recentreRail`. */
+        .cal-rail-track.cal-rail-snap { transition: none; }
+        /* Asked for less movement, given none. The jump is the old behaviour,
+           which was never wrong, only abrupt. */
+        @media (prefers-reduced-motion: reduce) {
+            .cal-rail-track { transition: none; }
+        }
     </style>
 
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -293,34 +320,53 @@
                 </div>
             </div>
 
-            <!-- The month, as a strip. A dot per event, the day's own colour,
-                 and the same red for needs-sorting as everywhere else.
+            <!-- The month, as a strip of dots — now five months of them on a
+                 rail, with the one you are on a window onto it. Swipe it or use
+                 the arrows above; both end up in `goToMonth`.
 
                  Only in Month. List means a list: the strip above one is a
                  second answer to a question already answered underneath, and it
                  pushes the first card most of a screen down. -->
-            <div x-show="view === 'month'" class="grid gap-0.5"
-                 style="grid-template-columns: repeat(7, minmax(0,1fr));">
-                <template x-for="(d, i) in ['S','M','T','W','T','F','S']" :key="i">
-                    <div class="text-center pb-1 text-[9.5px] font-label-md tracking-[.1em] uppercase text-outline"
-                         x-text="d"></div>
-                </template>
-                <template x-for="cell in cells" :key="cell.date">
-                    <button @click="focusDay(cell)"
-                            class="flex flex-col items-center gap-[3px] py-1.5 rounded-lg cal-motion cal-focus"
-                            :class="cell.date === focusedDate ? 'bg-surface-container' : ''">
-                        <span class="text-[12px] font-label-md"
-                              :class="cell.date === focusedDate
-                                ? 'text-primary font-bold'
-                                : (cell.inMonth ? 'text-on-surface' : 'text-outline')"
-                              x-text="cell.day"></span>
-                        <span class="flex gap-0.5 h-[5px]">
-                            <template x-for="(colour, i) in stripDots(cell)" :key="i">
-                                <span class="w-[5px] h-[5px] rounded-full" :style="'background:' + colour"></span>
+            <!-- ⚠ THE GATE IS ON A WRAPPER, NOT ON THE RAIL ITSELF. With
+                 `x-show` on the rail element, the directive stopped
+                 re-evaluating after the first render: the strip was hidden at
+                 load (a phone starts on the list) and never came back when you
+                 switched to Month. Everything else on the page kept reacting,
+                 so it read as the rail being broken rather than the gate. -->
+            <div x-show="view === 'month'">
+            <div class="cal-rail-months" x-ref="monthRail"
+                 @touchstart="swipeFrom($event)" @touchend="swipeTo($event)">
+                <div class="cal-rail-track" :class="railSnap ? 'cal-rail-snap' : ''" :style="railStyle">
+                    <!-- ⚠ `data-rail-month` rather than counting children:
+                         Alpine leaves its own <template> as the track's first
+                         element, so the nth month is not the nth child. -->
+                    <template x-for="(m, i) in railMonths" :key="m.month">
+                        <div data-rail-month :inert="!onRail(i)" class="grid gap-0.5 self-start"
+                             style="grid-template-columns: repeat(7, minmax(0,1fr));">
+                            <template x-for="(d, j) in ['S','M','T','W','T','F','S']" :key="j">
+                                <div class="text-center pb-1 text-[9.5px] font-label-md tracking-[.1em] uppercase text-outline"
+                                     x-text="d"></div>
                             </template>
-                        </span>
-                    </button>
-                </template>
+                            <template x-for="cell in m.cells" :key="cell.date">
+                                <button @click="focusDay(cell)"
+                                        class="flex flex-col items-center gap-[3px] py-1.5 rounded-lg cal-motion cal-focus"
+                                        :class="cell.date === focusedDate ? 'bg-surface-container' : ''">
+                                    <span class="text-[12px] font-label-md"
+                                          :class="cell.date === focusedDate
+                                            ? 'text-primary font-bold'
+                                            : (cell.inMonth ? 'text-on-surface' : 'text-outline')"
+                                          x-text="cell.day"></span>
+                                    <span class="flex gap-0.5 h-[5px]">
+                                        <template x-for="(colour, k) in stripDots(cell)" :key="k">
+                                            <span class="w-[5px] h-[5px] rounded-full" :style="'background:' + colour"></span>
+                                        </template>
+                                    </span>
+                                </button>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
             </div>
 
             <!-- ── You, in the month on screen ─────────────────────────────
@@ -471,8 +517,16 @@
                     </template>
                 </div>
 
-                <div class="grid" style="grid-template-columns: repeat(7, minmax(0,1fr));">
-                    <template x-for="cell in cells" :key="cell.date">
+                <!-- Five months on the rail, the same one the phone slides.
+                     The weekday heading above stays put: it is the same seven
+                     words every month, and sliding it would be motion for
+                     nothing. -->
+                <div class="cal-rail-months" x-ref="monthRailWide">
+                <div class="cal-rail-track" :class="railSnap ? 'cal-rail-snap' : ''" :style="railStyle">
+                <template x-for="(m, i) in railMonths" :key="m.month">
+                <div data-rail-month :inert="!onRail(i)" class="grid self-start"
+                     style="grid-template-columns: repeat(7, minmax(0,1fr));">
+                    <template x-for="cell in m.cells" :key="cell.date">
                         <!-- The whole cell is the target, so the empty space under
                              the chips is what you click to add something to the day.
                              A chip stops its own click, or the same gesture would
@@ -540,6 +594,9 @@
                             </div>
                         </div>
                     </template>
+                </div>
+                </template>
+                </div>
                 </div>
 
                 <div class="flex flex-wrap gap-[18px] px-md py-sm text-[11.5px] text-on-surface-variant border-t border-outline-variant">

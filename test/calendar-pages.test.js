@@ -90,6 +90,16 @@ function loadComponent(scriptFile, factoryName, overrides) {
     return sandbox[factoryName]();
 }
 
+// Alpine gives every component `$nextTick` and `$refs`; the raw object built
+// here has neither. A page that measures its own layout needs both to exist —
+// with no DOM behind them the measuring simply finds nothing and stops, which
+// is what a test wants.
+function withAlpine(page) {
+    page.$nextTick = fn => fn();
+    page.$refs = {};
+    return page;
+}
+
 // Every member the component exposes, including getters (which live on the
 // object as accessor descriptors, so a plain `in` check finds them).
 function membersOf(component) {
@@ -2050,11 +2060,13 @@ test('List means a list — the strip belongs to Month', () => {
     const dots = html.indexOf('stripDots(cell)');
     assert.ok(dots !== -1, 'the strip moved — this test no longer looks at it');
 
-    // The seven-column grid nearest above that call IS the strip, and its own
-    // opening tag is what has to carry the gate.
-    const columns = html.lastIndexOf('grid-template-columns', dots);
-    const tag = html.slice(html.lastIndexOf('<div', columns), columns);
-    assert.ok(/x-show="view === 'month'"/.test(tag),
+    // The strip is on a rail now, and the gate is on the WRAPPER around it —
+    // see the note on that. So the nearest x-show above the call is what has to
+    // carry it.
+    const gate = html.lastIndexOf('x-show=', dots);
+    assert.ok(gate !== -1, 'nothing gates the phone strip at all');
+    assert.strictEqual(html.slice(gate, html.indexOf('>', gate)).trim(),
+        'x-show="view === \'month\'"',
         'the phone draws its month strip in List as well as Month');
 });
 
@@ -2078,7 +2090,7 @@ test('the "you" block sits under the calendar, not above it', () => {
 
     // Phone: after the month strip and before the list body, so it is below the
     // calendar in Month and above the list in List.
-    const strip = html.indexOf('x-show="view === \'month\'" class="grid gap-0.5"');
+    const strip = html.indexOf('class="cal-rail-months" x-ref="monthRail"');
     const you = html.indexOf('x-text="myMonthHeading"');
     const body = html.indexOf('x-for="group in phoneGroups"');
     assert.ok(strip !== -1 && you !== -1 && body !== -1, 'the phone lost one of its three pieces');
@@ -2113,7 +2125,7 @@ test('the "you" block reads the month the grid loaded, and asks for nothing more
     // two could disagree about the same Sunday. It now reads the rows the grid
     // has already fetched, so paging is the only thing that changes it.
     const asked = [];
-    const page = loadComponent('calendar.js', 'calendarPage', {
+    const page = withAlpine(loadComponent('calendar.js', 'calendarPage', {
         EventsStore: Object.assign({}, require('../public/events-store.js'), {
             async loadCalendar(db, opts) {
                 asked.push(opts);
@@ -2123,23 +2135,29 @@ test('the "you" block reads the month the grid loaded, and asks for nothing more
                 }];
             },
         }),
-    });
+    }));
     page.personId = 'p1';
     page.today = '2026-08-05';
     page.month = '2026-08';
+    page.railAnchor = '2026-06';
 
     await page.load();
 
+    // ⚠ ONE READ, AND IT COVERS THE WHOLE RAIL. Every month drawn needs its
+    // events, or sliding lands on an empty grid that fills in a moment later —
+    // which is the swap this replaced, one frame down. The happy consequence is
+    // that paging inside the rail costs no read at all.
     assert.strictEqual(asked.length, 1, 'the block still fetches a second time');
     assert.deepStrictEqual({ from: asked[0].from, to: asked[0].to },
-        { from: '2026-08-01', to: '2026-08-31' });
-    assert.strictEqual(page.myCommitments.length, 1);
+        { from: '2026-06-01', to: '2026-10-31' });
+    assert.strictEqual(page.myCommitments.length, 1, 'the block answered for the whole rail');
     assert.strictEqual(page.myMonthHeading, 'You in August 2026');
 
-    // Paging moves it, which is the whole point of the change.
+    // Paging moves it, which is the whole point of the change — and it moves
+    // without going back to the database, because September is already in hand.
     await page.goToMonth('2026-09');
     assert.strictEqual(page.myMonthHeading, 'You in September 2026');
-    assert.strictEqual(asked.length, 2, 'paging did not go back for the new month');
+    assert.strictEqual(asked.length, 1, 'a month already on the rail was fetched again');
 });
 
 test('a day already gone is not something the month says you have on', async () => {
@@ -2164,7 +2182,7 @@ test('a day already gone is not something the month says you have on', async () 
 
     await page.load();
 
-    assert.deepStrictEqual(page.myCommitments.map(c => c.date), ['2026-08-09'],
+    assert.strictEqual(page.myCommitments.map(c => c.date).join(), '2026-08-09',
         'a serve already done is listed as something still to do');
 });
 
@@ -2342,8 +2360,9 @@ test('tapping a corner day of the strip goes to that month', async () => {
     // The strip's first and last cells belong to the neighbouring months, which
     // are not loaded. Showing "nothing on this day" for one of those would be a
     // lie rather than an empty day.
-    const page = loadComponent('calendar.js', 'calendarPage');
+    const page = withAlpine(loadComponent('calendar.js', 'calendarPage'));
     page.month = '2026-07';
+    page.railAnchor = '2026-05';
     page.load = async () => {};
 
     await page.focusDay({ date: '2026-06-30', inMonth: false });
@@ -2353,8 +2372,9 @@ test('tapping a corner day of the strip goes to that month', async () => {
 });
 
 test('changing month lets go of the day that was tapped', async () => {
-    const page = loadComponent('calendar.js', 'calendarPage');
+    const page = withAlpine(loadComponent('calendar.js', 'calendarPage'));
     page.month = '2026-07';
+    page.railAnchor = '2026-05';
     page.today = '2026-07-29';
     page.load = async () => {};
 
@@ -5339,4 +5359,217 @@ test('the pinned tray carries its own safe-area inset', () => {
         assert.match(css, new RegExp('\\.' + name + ' \\{[^}]*padding-bottom'),
             name + ' is used but never defined, so the tray covers the last card');
     });
+});
+
+// ── The Calendar's months, on a rail ──────────────────────────────────────────
+//
+// The same rail the Away screen runs on, and the same reason: paging used to
+// swap one grid for another, so somebody reading across a month boundary lost
+// what they had just been looking at. The difference here is that a month has
+// EVENTS in it, which have to be fetched — so the rail's real cost is the load,
+// and everything below is about that load covering what the rail draws.
+
+function railedCalendar(rows) {
+    const asked = [];
+    const page = withAlpine(loadComponent('calendar.js', 'calendarPage', {
+        EventsStore: Object.assign({}, require('../public/events-store.js'), {
+            async loadCalendar(db, opts) { asked.push(opts); return rows || []; },
+        }),
+    }));
+    page.personId = 'p1';
+    page.today = '2026-08-05';
+    page.month = '2026-08';
+    page.railAnchor = '2026-06';
+    page._asked = asked;
+    return page;
+}
+
+test('the rail draws five months, with the one on screen in the middle', () => {
+    const page = railedCalendar();
+
+    assert.strictEqual(page.railMonths.map(m => m.month).join(),
+        '2026-06,2026-07,2026-08,2026-09,2026-10');
+    assert.strictEqual(page.railIndex, 2);
+    assert.strictEqual(page.railMonths[2].label, 'August 2026');
+
+    // Every month drawn has a grid of its own — that is what there is to slide.
+    page.railMonths.forEach(m => {
+        assert.ok(m.cells.length >= 35, m.month + ' was drawn without its days');
+    });
+});
+
+test('every month on the rail is drawn, and only the one on screen is reachable', () => {
+    // Five months of days are in the DOM. Without `inert` a keyboard would tab
+    // through four months nobody can see.
+    const page = railedCalendar();
+    assert.strictEqual([0, 1, 2, 3, 4].map(i => page.onRail(i)).join(),
+        'false,false,true,false,false');
+
+    const html = readPage('calendar.html');
+    assert.strictEqual((html.match(/:inert="!onRail\(i\)"/g) || []).length, 2,
+        'a layout draws the rail without making the months off it inert');
+});
+
+test('the load covers the whole rail, not just the month on screen', async () => {
+    // A month you can slide to but cannot see the contents of is the swap this
+    // replaced, one frame later.
+    const page = railedCalendar();
+    await page.load();
+
+    assert.deepStrictEqual({ from: page._asked[0].from, to: page._asked[0].to },
+        { from: '2026-06-01', to: '2026-10-31' });
+});
+
+test('paging inside the rail slides without going back to the database', async () => {
+    // The second thing the rail bought, after the animation. Five months are in
+    // hand, so most presses cost nothing at all.
+    const page = railedCalendar();
+    await page.load();
+    const reads = page._asked.length;
+
+    await page.nextMonth();
+    assert.strictEqual(page.month, '2026-09');
+    assert.strictEqual(page.railIndex, 3, 'the window did not move along the rail');
+    assert.strictEqual(page._asked.length, reads, 'a month already in hand was fetched again');
+
+    await page.prevMonth();
+    await page.prevMonth();
+    assert.strictEqual(page.month, '2026-07');
+    assert.strictEqual(page.railIndex, 1);
+    assert.strictEqual(page._asked.length, reads, 'going back re-read months already drawn');
+});
+
+test('the rail re-centres before it runs out, and reads only what it grew into', async () => {
+    // ⚠ RE-CENTRING KEEPS ONE MONTH SPARE ON THE SIDE BEING HEADED FOR, so the
+    // month slid to is always already drawn and already loaded. Landing on the
+    // last month of the rail and re-centring afterwards would mean sliding onto
+    // an empty grid.
+    const page = railedCalendar();
+    await page.load();
+
+    await page.nextMonth();   // 09, index 3
+    await page.nextMonth();   // would be index 4 — re-centres first
+    assert.strictEqual(page.month, '2026-10');
+    assert.strictEqual(page.railIndex, 2, 'the month on screen is not back in the middle');
+    assert.strictEqual(page.railMonths.map(m => m.month).join(),
+        '2026-08,2026-09,2026-10,2026-11,2026-12');
+    assert.deepStrictEqual({ from: page._asked[1].from, to: page._asked[1].to },
+        { from: '2026-08-01', to: '2026-12-31' });
+});
+
+test('a month too far to slide to is landed on, not slid to', async () => {
+    // "Today" from six months away, or a date typed into the address bar. There
+    // is nothing between here and there to slide past, so it rebuilds around
+    // the target rather than animating through half a year.
+    const page = railedCalendar();
+    await page.load();
+
+    await page.goToMonth('2027-03');
+
+    assert.strictEqual(page.month, '2027-03');
+    assert.strictEqual(page.railIndex, 2, 'a jump left the rail pointing somewhere else');
+    assert.strictEqual(page.railMonths[2].month, '2027-03');
+    assert.deepStrictEqual({ from: page._asked[1].from, to: page._asked[1].to },
+        { from: '2027-01-01', to: '2027-05-31' });
+});
+
+test('the list and the "you" block still mean the month on screen, not the rail', async () => {
+    // ⚠ THE ONE THING THE RAIL LOAD COULD HAVE BROKEN. `occurrences` holds five
+    // months now, so anything meaning "this month" has to say so — or the list
+    // shows five of them and "You in August" answers for the summer.
+    const page = railedCalendar([
+        { id: 'jul', date: '2026-07-12', name: 'Sunday Service', seriesId: 'sunday_service',
+          assignments: [{ personId: 'p1', roleSlug: 'coffee', slotId: 's1', state: 'pending', label: 'Coffee' }] },
+        { id: 'aug', date: '2026-08-09', name: 'Sunday Service', seriesId: 'sunday_service',
+          assignments: [{ personId: 'p1', roleSlug: 'coffee', slotId: 's1', state: 'pending', label: 'Coffee' }] },
+        { id: 'sep', date: '2026-09-06', name: 'Sunday Service', seriesId: 'sunday_service', assignments: [] },
+    ]);
+    await page.load();
+
+    assert.strictEqual(page.occurrences.length, 3, 'the rail load did not bring the neighbours');
+    assert.strictEqual(page.monthRows.map(o => o.id).join(), 'aug',
+        'the month on screen took in its neighbours');
+    assert.strictEqual(page.groups.flatMap(g => g.events.map(e => e.id)).join(), 'aug',
+        'the list is showing five months');
+    assert.strictEqual(page.myCommitments.map(c => c.date).join(), '2026-08-09',
+        '"You in August" answered for July as well');
+    assert.strictEqual(page.seriesFilters.map(f => f.count).join(), '1',
+        'the Show filters counted months nobody is looking at');
+
+    // But the GRIDS are built from everything, so a month waiting off to the
+    // side already has its dots before you reach it.
+    assert.ok(page.railMonths[1].cells.some(c => c.date === '2026-07-12' && c.events.length),
+        'the month next door slides in empty and fills afterwards');
+});
+
+test('a swipe across the calendar turns the month the way paper would', async () => {
+    const page = railedCalendar();
+    await page.load();
+    const drag = (dx, dy) => page.swipeFrom({ changedTouches: [{ clientX: 200, clientY: 300 }] })
+        || page.swipeTo({ changedTouches: [{ clientX: 200 + dx, clientY: 300 + dy }] });
+
+    await drag(-90, 4);
+    assert.strictEqual(page.month, '2026-09', 'swiping left did not go forward');
+    await drag(90, -4);
+    assert.strictEqual(page.month, '2026-08', 'swiping right did not come back');
+
+    // A scroll is not a swipe, and a nudge is not either.
+    await drag(-20, 0);
+    assert.strictEqual(page.month, '2026-08', 'a nudge inside the tap slop turned the month');
+    await drag(-60, 200);
+    assert.strictEqual(page.month, '2026-08', 'scrolling the page turned the month sideways');
+
+    // A release with no matching press is not a gesture at all.
+    page.swipe = null;
+    await page.swipeTo({ changedTouches: [{ clientX: 40, clientY: 300 }] });
+    assert.strictEqual(page.month, '2026-08');
+});
+
+test('the rail is slid by transform, and the phone can swipe it', () => {
+    const html = readPage('calendar.html');
+
+    assert.strictEqual((html.match(/x-ref="monthRail(Wide)?"/g) || []).length, 2,
+        'the two layouts no longer carry one rail each');
+    assert.strictEqual((html.match(/:style="railStyle"/g) || []).length, 2);
+    assert.match(html, /@touchstart="swipeFrom\(\$event\)"/, 'the calendar cannot be swiped');
+
+    const css = html.slice(html.indexOf('<style>') + 7, html.indexOf('</style>'));
+    assert.match(css, /\.cal-rail-months \{[^}]*overflow:\s*hidden/, 'the rail does not clip');
+    assert.match(css, /\.cal-rail-months \{[^}]*touch-action:\s*pan-y/,
+        'the rail takes vertical gestures, so the page cannot be scrolled past it');
+    assert.match(css, /\.cal-rail-track \{[^}]*transition:\s*transform/, 'nothing eases the slide');
+    assert.match(css, /cal-rail-snap \{ transition: none/,
+        're-anchoring the rail glides sideways for no reason');
+    assert.match(css, /prefers-reduced-motion[\s\S]{0,120}cal-rail-track/,
+        'the slide is imposed on somebody who asked for less movement');
+});
+
+test('the rail is gated from a wrapper, and the two layouts do not share a ref', () => {
+    // ⚠ TWO BUGS THE TESTS COULD NOT SEE, both found by opening the page.
+    //
+    // ONE REF, TWO RAILS. Both layouts carry a rail and both are always in the
+    // DOM — they are swapped by a CSS class, not by `x-if`. Sharing a ref name
+    // meant `$refs` kept whichever registered last, which was the desktop's,
+    // and inside a display:none block every offset reads zero. The rail simply
+    // never moved, silently.
+    //
+    // AND THE GATE GOES ON A WRAPPER. With `x-show="view === 'month'"` on the
+    // rail element itself the directive stopped re-evaluating after the first
+    // render — the strip was hidden at load (a phone starts on the list) and
+    // never came back when you switched to Month, while every other binding on
+    // the page kept reacting.
+    const html = readPage('calendar.html');
+
+    assert.match(html, /x-ref="monthRail"/, 'the phone rail lost its ref');
+    assert.match(html, /x-ref="monthRailWide"/, 'the desktop rail lost its ref');
+    assert.strictEqual((html.match(/x-ref="monthRail"/g) || []).length, 1,
+        'both layouts answer to one ref again, so the slide measures the hidden one');
+
+    const railTag = html.slice(html.indexOf('<div class="cal-rail-months" x-ref="monthRail"'),
+        html.indexOf('>', html.indexOf('<div class="cal-rail-months" x-ref="monthRail"')));
+    assert.doesNotMatch(railTag, /x-show/,
+        'the gate is back on the rail element, where it stops re-evaluating');
+
+    const page = loadComponent('calendar.js', 'calendarPage');
+    assert.ok('rail' in page, 'nothing picks which of the two rails is the live one');
 });
