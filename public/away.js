@@ -32,6 +32,13 @@
     const DESKTOP_MONTHS = 2;
     const PHONE_MONTHS = 4;
 
+    // How much of the desktop's rail is drawn to begin with, and how much more
+    // it grows by on reaching the end. Generous, because the drawing is what
+    // makes the slide possible — a month that is not there yet cannot be scrolled
+    // to — and cheap, because a month is forty-two cells of arithmetic.
+    const RAIL_MONTHS = 12;
+    const RAIL_STEP = 6;
+
     function monthPartsOf(iso) {
         const parts = String(iso).split('-');
         return { year: Number(parts[0]), monthIndex: Number(parts[1]) - 1 };
@@ -85,6 +92,11 @@
             selection: Object.assign({}, Core.EMPTY_SELECTION),
             anchor: null,           // { year, monthIndex } — the first month shown
             monthsShown: window.MOSAIC_SHELL === 'mobile' ? PHONE_MONTHS : DESKTOP_MONTHS,
+            // How much rail the desktop has drawn to slide along. Grown, never
+            // shortened, and never grown backwards.
+            railLength: RAIL_MONTHS,
+            // How far the rail has been slid, in pixels the browser measured.
+            railShift: 0,
             showPast: false,
 
             weekdays: Core.WEEKDAYS,
@@ -98,6 +110,14 @@
                 this.subjectId = this.personId;
                 await this.load();
                 if (this.isEditor) this.loadPeople();
+
+                // The rail is held in pixels the browser measured, so a window
+                // that changes width leaves it holding an old month's worth of
+                // them — and the pair on show slides half out of the frame.
+                // Re-measuring is cheap and the answer is always right.
+                if (!this.phone && typeof window.addEventListener === 'function') {
+                    window.addEventListener('resize', () => this.slide());
+                }
             },
 
             async resolveRank() {
@@ -215,24 +235,78 @@
 
             // ── What is on screen ────────────────────────────────────────────
 
+            // The furthest month anything on screen can reach, which is what
+            // `loadPlaces` measures a clash against. The phone's is the end of
+            // its scroll; the desktop's is the end of the RAIL, not the end of
+            // the pair on show — the months waiting off to the right are already
+            // drawn, and a serving dot that only appears once you scroll to it
+            // is a dot you cannot plan around.
             get lastMonth() {
-                const total = this.anchor.monthIndex + this.monthsShown - 1;
+                const span = this.phone ? this.monthsShown : this.railLength;
+                const total = this.firstMonth.monthIndex + span - 1;
                 return {
-                    year: this.anchor.year + Math.floor(total / 12),
+                    year: this.firstMonth.year + Math.floor(total / 12),
                     monthIndex: ((total % 12) + 12) % 12,
                 };
             },
 
+            // The phone's list: months from the anchor, growing as it is
+            // scrolled. The anchor never moves, because the phone never pages.
             get months() {
                 return Core.monthsFrom(
                     this.anchor.year, this.anchor.monthIndex, this.monthsShown,
-                    {
-                        selection: this.selection,
-                        stretches: this.stretches,
-                        places: this.places,
-                        today: this.today,
-                    }
+                    this.gridOptions()
                 );
+            },
+
+            gridOptions() {
+                return {
+                    selection: this.selection,
+                    stretches: this.stretches,
+                    places: this.places,
+                    today: this.today,
+                };
+            },
+
+            // ── The desktop's rail ───────────────────────────────────────────
+            //
+            // Every month the screen can reach, laid out in one row, with the
+            // arrows scrolling a window of two along it. The pair on show is a
+            // VIEW of the rail rather than two slots whose contents get swapped
+            // — which is the whole of why it can slide: nothing is being
+            // rebuilt, so there is something continuous to move.
+            //
+            // It starts at THIS month and never runs back past it. Away is a
+            // thing you say before (ADR-0023 §4), so a month that has been holds
+            // nothing left to choose, and the rail growing only forwards is what
+            // keeps the scroll position honest — appending never shifts what is
+            // already drawn.
+
+            get firstMonth() { return monthPartsOf(this.today); },
+
+            get railMonths() {
+                // Both layouts are always in the DOM — the phone's is hidden
+                // rather than absent — so without this a phone would build a
+                // year of months nobody can see, on every tap.
+                if (this.phone) return [];
+                return Core.monthsFrom(
+                    this.firstMonth.year, this.firstMonth.monthIndex,
+                    this.railLength, this.gridOptions()
+                );
+            },
+
+            // How far along the rail the leftmost month on show sits.
+            get railIndex() {
+                return (this.anchor.year - this.firstMonth.year) * 12
+                    + (this.anchor.monthIndex - this.firstMonth.monthIndex);
+            },
+
+            get canGoBack() { return this.railIndex > 0; },
+
+            // Whether a month is one of the ones being looked at. Everything
+            // else on the rail is drawn but inert — see the note in the markup.
+            onRail(index) {
+                return index >= this.railIndex && index < this.railIndex + this.monthsShown;
             },
 
             get prompt() { return Core.prompt(this.selection); },
@@ -342,13 +416,49 @@
             },
 
             async prevMonths() {
+                if (!this.canGoBack) return;
                 this.anchor = this.stepAnchor(-1);
-                await this.loadPlaces();
+                this.slide();
             },
 
             async nextMonths() {
+                // Grow the rail before moving onto it, so the month being slid
+                // to is already drawn. Growing APPENDS, which cannot shift what
+                // is on screen — that is why the rail only ever runs forwards.
+                if (this.railIndex + this.monthsShown + 1 > this.railLength) {
+                    this.railLength += RAIL_STEP;
+                    await this.loadPlaces();
+                }
                 this.anchor = this.stepAnchor(1);
-                await this.loadPlaces();
+                this.slide();
+            },
+
+            // Slide the rail so the anchor month sits at the left edge.
+            //
+            // ⚠ MEASURED OFF THE DOM, NOT COMPUTED. A month is a percentage of
+            // the container wide and the gap between them is in rem, so the one
+            // thing that knows what a month is worth in pixels is the browser. A
+            // number worked out here would drift the moment the window changed
+            // width, and drift on a calendar reads as the dates being wrong
+            // rather than the arithmetic.
+            //
+            // `offsetLeft` is a layout position and a transform does not move it,
+            // so measuring mid-slide still gives the right answer.
+            //
+            // The easing itself is CSS, which is also where the person who asked
+            // for less movement is answered — see the rail's styles.
+            slide() {
+                this.$nextTick(() => {
+                    const rail = this.$refs.rail;
+                    if (!rail) return;
+                    const month = rail.querySelectorAll('[data-rail-month]')[this.railIndex];
+                    if (!month) return;
+                    this.railShift = month.offsetLeft;
+                });
+            },
+
+            get railStyle() {
+                return 'transform: translateX(' + (-this.railShift) + 'px)';
             },
 
             stepAnchor(by) {

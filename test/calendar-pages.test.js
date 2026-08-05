@@ -98,7 +98,7 @@ function membersOf(component) {
 
 // ── Pulling the identifiers out of the markup ─────────────────────────────────
 
-const ALPINE_ATTRS = /(?:x-text|x-show|x-if|x-model[.\w]*|x-html|x-for|@click|@change|@keydown[.\w]*|:class|:href|:disabled|:checked|:selected|:value|:aria-label|:style)\s*=\s*"([^"]*)"/g;
+const ALPINE_ATTRS = /(?:x-text|x-show|x-if|x-model[.\w]*|x-html|x-for|@click|@change|@keydown[.\w]*|:class|:href|:disabled|:checked|:selected|:value|:aria-label|:style|:inert)\s*=\s*"([^"]*)"/g;
 
 // Things a template may legitimately name that are not component members.
 const ALLOWED = new Set([
@@ -4995,4 +4995,131 @@ test('a failed emptying reloads the grid instead of claiming nothing happened', 
     assert.strictEqual(reloaded, 1, 'left the grid showing a rota that may already be gone');
     assert.strictEqual(failed.clearing, false, 'the button is stuck spinning');
     assert.strictEqual(Store.clearRosters, original, 'the real store was mutated by a test');
+});
+
+// ── The desktop's months, on a rail ───────────────────────────────────────────
+//
+// Paging used to swap the two months on show for two others. It now slides
+// along a rail of months that are all already drawn — which is the only reason
+// there is anything to slide. Everything below is about the rail staying honest
+// about which months those are.
+
+function railPage(overrides) {
+    const page = loadComponent('away.js', 'awayPage', Object.assign({
+        DateUtils: Object.assign({}, require('../public/date-utils.js'), {
+            todayStr: () => '2026-08-04',
+        }),
+    }, overrides || {}));
+
+    // Alpine's, in the browser. The rail is measured off the DOM, so a test
+    // without one drives everything up to the scroll and stops there.
+    const scrolled = [];
+    page.$nextTick = fn => fn();
+    page.$refs = {};   // no DOM, so `slide` measures nothing and stops
+    page._scrolled = scrolled;
+    page.anchor = { year: 2026, monthIndex: 7 };
+    page.loadPlaces = async () => {};
+    return page;
+}
+
+test('the rail starts on this month and has every month after it already drawn', () => {
+    // Drawn, not fetched on arrival: a month that is not in the DOM cannot be
+    // scrolled to, so the rail being ahead of the window is the whole trick.
+    const page = railPage();
+
+    assert.strictEqual(page.railMonths.length, 12);
+    assert.strictEqual(page.railMonths[0].label, 'August 2026');
+    assert.strictEqual(page.railIndex, 0, 'the window did not start at the near end');
+    assert.strictEqual(page.onRail(0), true);
+    assert.strictEqual(page.onRail(1), true, 'the second month on show is not on show');
+    assert.strictEqual(page.onRail(2), false, 'a month off screen is reachable by keyboard');
+});
+
+test('the rail does not run back past this month', () => {
+    // Away is a thing you say BEFORE (ADR-0023 §4), so a month that has been
+    // holds nothing left to choose. It is also what keeps the scroll honest:
+    // the rail only ever grows forwards, and appending cannot shift what is
+    // already on screen.
+    const page = railPage();
+
+    assert.strictEqual(page.canGoBack, false, 'the back arrow is live with nothing behind it');
+    return page.prevMonths().then(() => {
+        assert.strictEqual(page.anchor.monthIndex, 7, 'paged back into a month that has been');
+        assert.strictEqual(page.railMonths[0].label, 'August 2026', 'the rail grew backwards');
+    });
+});
+
+test('paging forward moves the window along the rail, not the rail past the window', async () => {
+    const page = railPage();
+
+    await page.nextMonths();
+    assert.strictEqual(page.railIndex, 1);
+    assert.strictEqual(page.canGoBack, true);
+    assert.strictEqual(page.railMonths[0].label, 'August 2026', 'the months already drawn were rebuilt');
+    assert.strictEqual(page.onRail(0), false, 'the month scrolled past is still in the tab order');
+    assert.strictEqual(page.onRail(1), true);
+
+    await page.prevMonths();
+    assert.strictEqual(page.railIndex, 0, 'going back did not undo going forward');
+});
+
+test('the rail grows before the window reaches its end, never after', async () => {
+    // The month being slid to has to be in the DOM already — scrolling to
+    // something that is not there yet is a jump, which is the thing this
+    // replaced.
+    const page = railPage();
+
+    for (let i = 0; i < 10; i++) await page.nextMonths();
+
+    assert.strictEqual(page.railIndex, 10);
+    assert.ok(page.railMonths.length >= 12, 'the rail shrank');
+    assert.ok(page.railMonths.length > page.railIndex + 1,
+        'the window ran off the end of the rail it is supposed to slide along');
+    assert.strictEqual(page.railMonths[page.railIndex].label, 'June 2027',
+        'the rail and the window disagree about which month is on screen');
+});
+
+test('a clash is measured against the whole rail, not the pair on show', async () => {
+    // Every month on the rail is drawn, so a serving dot that only appeared
+    // once you scrolled to it would be a dot you could not plan around.
+    const page = railPage();
+
+    assert.strictEqual(page.lastMonth.year, 2027);
+    assert.strictEqual(page.lastMonth.monthIndex, 6, 'the rail reaches further than the places read for it');
+
+    await page.nextMonths();
+    assert.strictEqual(page.lastMonth.monthIndex, 6, 'paging moved the reach, which is the rail\'s job');
+});
+
+test('the phone has no rail, and its months are still its own scroll', () => {
+    // Two layouts, one state. The phone never pages — it grows one continuous
+    // scroll — so the rail must not quietly become its list.
+    const page = railPage({ MOSAIC_SHELL: 'mobile' });
+    page.phone = true;
+
+    assert.strictEqual(page.months.length, 4, 'the phone lost its scroll');
+    assert.strictEqual(page.railMonths.length, 0,
+        'a phone builds a year of months it will never show, on every tap');
+    assert.strictEqual(page.lastMonth.monthIndex, 10, 'the phone reads places for a rail it does not have');
+
+    return page.showMoreMonths().then(() => {
+        assert.strictEqual(page.months.length, 8);
+        assert.strictEqual(page.lastMonth.year, 2027, 'growing the scroll did not extend the reach');
+    });
+});
+
+test('the rail is scrolled to, rather than having its months swapped', () => {
+    // The markup half of the same promise. If the window were two slots whose
+    // contents got replaced there would be nothing continuous to move, and no
+    // amount of easing would make it slide.
+    const html = readPage('away.html');
+
+    assert.match(html, /x-ref="rail"/, 'nothing for the component to scroll');
+    assert.match(html, /x-for="\(m, i\) in railMonths"/, 'the desktop still draws only the pair on show');
+    assert.match(html, /:inert="!onRail\(i\)"/, 'every month on the rail is in the tab order');
+    assert.match(html, /aw-rail-track/, 'the months are not laid out in one row');
+
+    assert.match(html, /:style="railStyle"/, 'nothing moves the rail');
+    assert.match(html, /prefers-reduced-motion[\s\S]{0,120}aw-rail-track/,
+        'the slide is imposed on somebody who asked for less movement');
 });

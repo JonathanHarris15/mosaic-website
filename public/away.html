@@ -31,6 +31,35 @@
 
         /* The phone's tray is pinned; the scroll above it needs room to clear. */
         .aw-tray-clearance { padding-bottom: 220px; }
+
+        /* ── The desktop's months, on a rail ──────────────────────────────────
+           Every month the screen can reach is laid out in one row and the
+           arrows scroll it. Paging used to swap the two on show for two others,
+           which gave a person choosing a range across a month boundary nothing
+           to hold on to — the days they had just been looking at were simply
+           gone. Sliding keeps them in sight on the way past.
+
+           The arrows are the control, so the rail is clipped rather than
+           scrollable — a half-swiped rail sitting between two months is a state
+           nothing else on the screen can describe.
+
+           ⚠ IT MOVES BY TRANSFORM, NOT BY SCROLLING. A clipped box will not
+           smooth-scroll: `scrollTo({behavior:'smooth'})` on it lands instantly
+           at the far end, which is the hard snap this replaced. A transform
+           transitions whatever the overflow is. */
+        .aw-rail { overflow: hidden; position: relative; }
+        .aw-rail-track {
+            grid-auto-columns: 100%;
+            transition: transform 420ms cubic-bezier(0.2, 0, 0, 1);
+        }
+        @media (min-width: 768px) {
+            .aw-rail-track { grid-auto-columns: calc((100% - 2rem) / 2); }
+        }
+        /* Asked for less movement, given none. The jump is the old behaviour,
+           which was never wrong — only abrupt. */
+        @media (prefers-reduced-motion: reduce) {
+            .aw-rail-track { transition: none; }
+        }
     </style>
 
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -127,9 +156,13 @@
             <div class="flex items-center justify-between gap-5 pb-sm border-b border-outline-variant">
                 <span class="font-label-md text-[11px] uppercase tracking-[.14em] text-on-surface-variant" x-text="prompt"></span>
                 <div class="flex gap-px">
-                    <button type="button" @click="prevMonths()" title="Earlier months"
+                    <!-- The rail starts at this month and there is nothing
+                         behind it: Away is a thing you say BEFORE, so a month
+                         that has been holds nothing to choose. -->
+                    <button type="button" @click="prevMonths()" title="Earlier months" :disabled="!canGoBack"
                             class="w-[34px] h-[34px] flex items-center justify-center bg-surface-container-lowest border border-outline-variant
-                                   rounded-l-[10px] text-on-surface-variant hover:bg-surface-container-low aw-motion aw-focus">
+                                   rounded-l-[10px] text-on-surface-variant hover:bg-surface-container-low aw-motion aw-focus
+                                   disabled:opacity-30 disabled:hover:bg-surface-container-lowest">
                         <span class="material-symbols-outlined text-[19px]">chevron_left</span>
                     </button>
                     <button type="button" @click="nextMonths()" title="Later months"
@@ -140,25 +173,37 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-4">
-                <template x-for="m in months" :key="m.label">
-                    <div>
-                        <div class="text-center font-display text-[17px] tracking-[.02em] text-primary pb-3" x-text="m.label"></div>
-                        <div class="grid grid-cols-7">
-                            <template x-for="(w, i) in weekdays" :key="i">
-                                <div class="text-center font-label-md text-[10px] uppercase tracking-[.12em] text-outline pb-2" x-text="w"></div>
-                            </template>
-                            <template x-for="(c, i) in m.cells" :key="i">
-                                <button type="button" :disabled="!c.inMonth" @click="tap(c.iso)" :title="c.title"
-                                        class="relative flex flex-col items-center justify-center gap-[3px] h-[46px] border-0 aw-motion aw-focus"
-                                        :class="[cellClass(c), cellRadius(c), c.inMonth ? 'cursor-pointer' : 'cursor-default']">
-                                    <span class="text-[14.5px]" x-text="c.day"></span>
-                                    <span class="w-[5px] h-[5px] rounded-full" :class="dotClass(c)"></span>
-                                </button>
-                            </template>
+            <!-- One row holding every month the screen can reach; the arrows
+                 scroll it. The pair on show is a window onto the rail, not a
+                 pair of slots that get their contents swapped. -->
+            <div class="aw-rail mt-4" x-ref="rail">
+                <div class="aw-rail-track grid grid-flow-col gap-8" :style="railStyle">
+                    <!-- ⚠ EVERY month on the rail is in the DOM, on screen or
+                         not, so without `inert` a keyboard would tab through
+                         three hundred days nobody can see. It also stops a
+                         half-passed month taking a click mid-slide. -->
+                    <!-- ⚠ `data-rail-month` rather than counting children:
+                         Alpine leaves its own <template> as the track's first
+                         element, so the nth month is not the nth child. -->
+                    <template x-for="(m, i) in railMonths" :key="m.label">
+                        <div data-rail-month :inert="!onRail(i)">
+                            <div class="text-center font-display text-[17px] tracking-[.02em] text-primary pb-3" x-text="m.label"></div>
+                            <div class="grid grid-cols-7">
+                                <template x-for="(w, i) in weekdays" :key="i">
+                                    <div class="text-center font-label-md text-[10px] uppercase tracking-[.12em] text-outline pb-2" x-text="w"></div>
+                                </template>
+                                <template x-for="(c, i) in m.cells" :key="i">
+                                    <button type="button" :disabled="!c.inMonth" @click="tap(c.iso)" :title="c.title"
+                                            class="relative flex flex-col items-center justify-center gap-[3px] h-[46px] border-0 aw-motion aw-focus"
+                                            :class="[cellClass(c), cellRadius(c), c.inMonth ? 'cursor-pointer' : 'cursor-default']">
+                                        <span class="text-[14.5px]" x-text="c.day"></span>
+                                        <span class="w-[5px] h-[5px] rounded-full" :class="dotClass(c)"></span>
+                                    </button>
+                                </template>
+                            </div>
                         </div>
-                    </div>
-                </template>
+                    </template>
+                </div>
             </div>
 
             <!-- Legend -->
