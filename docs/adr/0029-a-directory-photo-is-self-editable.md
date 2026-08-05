@@ -85,6 +85,28 @@ someone attaching an upload to a Person they do not control is the **Firestore**
 rule on `people`, which now allows `photoUrl` and `photoPath` alongside contact,
 birthday and sex — and only on your own linked record.
 
+### 6. The framing is stored, not baked in
+
+A photo is almost never a headshot. It is a group shot, or a wide picture with
+the person off to one side, and a circular 56px frame shows whatever happens to
+be in the middle. So the Person carries a **crop** beside the image —
+`photoCrop: {x, y, zoom}` — where `x`/`y` are the percentages CSS
+`object-position` takes and `zoom` multiplies an `object-fit: cover` baseline.
+
+Storing the crop rather than re-encoding the cropped pixels is what makes
+reframing possible *later*. Baking it in would mean every adjustment needs the
+original file, which by then most people no longer have — they uploaded it from a
+phone months ago. This way reframing edits two numbers.
+
+`PersonPhotoCore.frameStyle` is the only place a crop becomes CSS, and the
+reframing preview, the profile page and every directory card all call it. That
+is what makes the preview honest: the circle someone drags in is the real frame
+carrying the real style, so what they let go of is literally what the
+congregation sees.
+
+A new upload resets to centred. Carrying the previous crop over would frame the
+new picture by where the *old* one happened to need looking at.
+
 ## Consequences
 
 - The `people` self-edit allow-list grows by two fields. It is still an

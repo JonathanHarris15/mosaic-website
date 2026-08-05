@@ -781,6 +781,12 @@ document.addEventListener('alpine:init', () => {
             return mine ? mine.id : null;
         },
 
+        // The one place a stored crop becomes CSS, shared with the profile page's
+        // reframing preview — so what somebody drags to is what this renders.
+        photoStyle(person) {
+            return PersonPhotoCore.frameStyle(person && person.photoCrop);
+        },
+
         choosePhoto(person) {
             if (!PersonPhotoCore.canManagePhoto(
                 this.effectivePermissionLevel, this.myPersonId, person.id)) {

@@ -175,14 +175,25 @@ async function initMyInfo(personId) {
 // Self-editable, like contact details and unlike the name: a photo is a fact
 // about you that only you have, and nothing in the app reads it as an
 // identifier. So there is no approval queue — it goes straight onto the Person.
+//
+// Framing is stored beside the image rather than baked into it, so reframing
+// later edits two numbers instead of needing the original file, which most
+// people no longer have.
+
+let myPhotoCrop = null;      // the crop as saved
+let myPhotoDraft = null;     // the crop being dragged, before Save framing
+let myPhotoPersonId = null;
 
 function initMyPhoto(personId, person) {
     const input = document.getElementById('my-photo-input');
     const choose = document.getElementById('my-photo-choose');
     const remove = document.getElementById('my-photo-remove');
+    const reframe = document.getElementById('my-photo-reframe');
     const status = document.getElementById('my-photo-status');
     if (!input) return;
 
+    myPhotoPersonId = personId;
+    myPhotoCrop = PersonPhotoCore.normalizeCrop(person.photoCrop);
     showMyPhoto(person.photoUrl || null);
 
     choose.onclick = () => input.click();
@@ -200,14 +211,18 @@ function initMyPhoto(personId, person) {
         }
 
         choose.disabled = true;
+        closeReframer();
         status.textContent = 'Uploading…';
         status.className = 'text-[11px] font-body-md text-primary animate-pulse';
         try {
             const saved = await PersonPhotoCore.uploadPersonPhoto(db, personId, file);
+            myPhotoCrop = PersonPhotoCore.normalizeCrop(saved.crop);
             showMyPhoto(saved.url);
-            status.textContent = 'Photo updated.';
+            // A group shot in a circle almost always needs moving, so offer that
+            // straight away rather than making them find the button.
+            openReframer();
+            status.textContent = 'Uploaded. Drag it into place.';
             status.className = 'text-[11px] font-body-md text-green-600';
-            setTimeout(() => { status.textContent = ''; }, 4000);
         } catch (e) {
             console.error('Photo upload failed:', e);
             status.textContent = e.message || 'That upload did not work.';
@@ -223,6 +238,8 @@ function initMyPhoto(personId, person) {
         status.className = 'text-[11px] font-body-md text-primary animate-pulse';
         try {
             await PersonPhotoCore.clearPersonPhoto(db, personId);
+            myPhotoCrop = PersonPhotoCore.normalizeCrop(null);
+            closeReframer();
             showMyPhoto(null);
             status.textContent = '';
         } catch (e) {
@@ -231,6 +248,106 @@ function initMyPhoto(personId, person) {
             status.className = 'text-[11px] font-body-md text-error';
         }
     };
+
+    reframe.onclick = openReframer;
+    document.getElementById('my-photo-crop-cancel').onclick = () => {
+        myPhotoDraft = null;
+        applyMyPhotoStyle(myPhotoCrop);
+        closeReframer();
+    };
+    document.getElementById('my-photo-crop-reset').onclick = () => {
+        myPhotoDraft = Object.assign({}, PersonPhotoCore.DEFAULT_CROP);
+        document.getElementById('my-photo-zoom').value = myPhotoDraft.zoom;
+        applyMyPhotoStyle(myPhotoDraft);
+    };
+    document.getElementById('my-photo-crop-save').onclick = saveMyPhotoCrop;
+    document.getElementById('my-photo-zoom').oninput = (e) => {
+        myPhotoDraft = PersonPhotoCore.normalizeCrop(
+            Object.assign({}, myPhotoDraft || myPhotoCrop, { zoom: parseFloat(e.target.value) }));
+        applyMyPhotoStyle(myPhotoDraft);
+    };
+
+    wireMyPhotoDrag();
+}
+
+// Drag the picture under the frame. Pointer events so a finger on a phone works
+// the same as a mouse, and pointer capture so letting go outside the small
+// circle still ends the drag.
+function wireMyPhotoDrag() {
+    const frame = document.getElementById('my-photo-frame');
+    const img = document.getElementById('my-photo-img');
+    if (!frame) return;
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    frame.addEventListener('pointerdown', (e) => {
+        if (document.getElementById('my-photo-reframer').classList.contains('hidden')) return;
+        dragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        frame.setPointerCapture(e.pointerId);
+        e.preventDefault();
+    });
+
+    frame.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        const size = frame.getBoundingClientRect().width;
+        myPhotoDraft = PersonPhotoCore.panCrop(
+            myPhotoDraft || myPhotoCrop, e.clientX - lastX, e.clientY - lastY, size);
+        lastX = e.clientX;
+        lastY = e.clientY;
+        applyMyPhotoStyle(myPhotoDraft);
+    });
+
+    const stop = (e) => {
+        if (!dragging) return;
+        dragging = false;
+        try { frame.releasePointerCapture(e.pointerId); } catch (err) { /* already released */ }
+    };
+    frame.addEventListener('pointerup', stop);
+    frame.addEventListener('pointercancel', stop);
+    if (img) img.addEventListener('dragstart', (e) => e.preventDefault());
+}
+
+function openReframer() {
+    if (!document.getElementById('my-photo-img').src) return;
+    myPhotoDraft = Object.assign({}, myPhotoCrop);
+    document.getElementById('my-photo-zoom').value = myPhotoDraft.zoom;
+    document.getElementById('my-photo-reframer').classList.remove('hidden');
+    document.getElementById('my-photo-reframe-hint').classList.remove('hidden');
+    document.getElementById('my-photo-frame').classList.add('cursor-move');
+}
+
+function closeReframer() {
+    document.getElementById('my-photo-reframer').classList.add('hidden');
+    document.getElementById('my-photo-reframe-hint').classList.add('hidden');
+    document.getElementById('my-photo-frame').classList.remove('cursor-move');
+}
+
+async function saveMyPhotoCrop() {
+    const status = document.getElementById('my-photo-status');
+    status.textContent = 'Saving…';
+    status.className = 'text-[11px] font-body-md text-primary animate-pulse';
+    try {
+        myPhotoCrop = await PersonPhotoCore.savePersonCrop(
+            db, myPhotoPersonId, myPhotoDraft || myPhotoCrop);
+        myPhotoDraft = null;
+        applyMyPhotoStyle(myPhotoCrop);
+        closeReframer();
+        status.textContent = 'Framing saved.';
+        status.className = 'text-[11px] font-body-md text-green-600';
+        setTimeout(() => { status.textContent = ''; }, 4000);
+    } catch (e) {
+        console.error('Could not save the framing:', e);
+        status.textContent = e.message || 'Could not save that framing.';
+        status.className = 'text-[11px] font-body-md text-error';
+    }
+}
+
+function applyMyPhotoStyle(crop) {
+    document.getElementById('my-photo-img').style.cssText =
+        'width:100%;height:100%;' + PersonPhotoCore.frameStyle(crop);
 }
 
 function showMyPhoto(url) {
@@ -238,12 +355,19 @@ function showMyPhoto(url) {
     const placeholder = document.getElementById('my-photo-placeholder');
     const choose = document.getElementById('my-photo-choose');
     const remove = document.getElementById('my-photo-remove');
+    const reframe = document.getElementById('my-photo-reframe');
 
     img.classList.toggle('hidden', !url);
     placeholder.classList.toggle('hidden', !!url);
     remove.classList.toggle('hidden', !url);
+    reframe.classList.toggle('hidden', !url);
     choose.textContent = url ? 'Replace photo' : 'Upload a photo';
-    if (url) img.src = url;
+    if (url) {
+        img.src = url;
+        applyMyPhotoStyle(myPhotoCrop);
+    } else {
+        img.removeAttribute('src');
+    }
 }
 
 // --- DIRECTORY REQUESTS (ADR-0025, ADR-0027) ---

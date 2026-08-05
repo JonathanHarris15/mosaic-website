@@ -274,17 +274,37 @@
                              reads it as an identifier (ADR-0029). So it goes straight in,
                              no approval. -->
                         <div class="px-md pt-md flex items-center gap-4">
-                            <div class="w-24 h-24 rounded-full bg-surface-container-high border border-outline-variant/30 flex items-center justify-center overflow-hidden flex-shrink-0">
-                                <img id="my-photo-img" class="hidden w-full h-full object-cover" alt="Your directory photo" />
+                            <div id="my-photo-frame" class="w-24 h-24 rounded-full bg-surface-container-high border border-outline-variant/30 flex items-center justify-center overflow-hidden flex-shrink-0 relative">
+                                <img id="my-photo-img" class="hidden w-full h-full select-none" alt="Your directory photo" draggable="false" />
                                 <span id="my-photo-placeholder" class="material-symbols-outlined text-outline-variant text-[44px]">person</span>
+                                <div id="my-photo-reframe-hint" class="hidden absolute inset-0 rounded-full border-2 border-dashed border-on-primary/70 pointer-events-none"></div>
                             </div>
                             <div class="flex flex-col gap-2">
                                 <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Directory photo</span>
                                 <div class="flex flex-wrap items-center gap-2">
                                     <input type="file" id="my-photo-input" accept="image/jpeg,image/png,image/webp" class="hidden" />
                                     <button type="button" id="my-photo-choose" class="px-4 py-2 bg-surface-container-high text-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-outline-variant/20 transition-all">Upload a photo</button>
+                                    <button type="button" id="my-photo-reframe" class="hidden px-3 py-2 text-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-primary/10 transition-all">Reframe</button>
                                     <button type="button" id="my-photo-remove" class="hidden px-3 py-2 text-error font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-error-container/20 transition-all">Remove</button>
                                 </div>
+
+                                <!-- Reframing. The circle to the left is the real frame at the
+                                     real style, so what you drag to is exactly what the
+                                     directory shows (ADR-0029 §6). -->
+                                <div id="my-photo-reframer" class="hidden flex flex-col gap-2 bg-surface-container-low/40 border border-outline-variant/30 rounded-lg p-3 max-w-sm">
+                                    <span class="text-[11px] font-body-md text-on-surface">Drag the photo to move it, and use the slider to zoom.</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-on-surface-variant text-[16px]">zoom_out</span>
+                                        <input type="range" id="my-photo-zoom" min="1" max="4" step="0.05" value="1" class="flex-grow accent-primary" />
+                                        <span class="material-symbols-outlined text-on-surface-variant text-[16px]">zoom_in</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" id="my-photo-crop-save" class="px-4 py-2 bg-primary text-on-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-primary-container transition-all">Save framing</button>
+                                        <button type="button" id="my-photo-crop-cancel" class="px-3 py-2 text-on-surface-variant font-label-md text-[10px] uppercase tracking-widest hover:text-primary transition-all">Cancel</button>
+                                        <button type="button" id="my-photo-crop-reset" class="px-3 py-2 text-on-surface-variant font-label-md text-[10px] uppercase tracking-widest hover:text-primary transition-all">Recentre</button>
+                                    </div>
+                                </div>
+
                                 <span id="my-photo-status" class="text-[11px] font-body-md"></span>
                                 <p class="text-[10px] text-on-surface-variant leading-relaxed max-w-sm">Everyone in the church directory can see this. JPEG, PNG or WebP.</p>
                             </div>

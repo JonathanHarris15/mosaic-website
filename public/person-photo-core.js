@@ -81,6 +81,13 @@
         return { photoUrl: null, photoPath: null };
     }
 
+    async function savePersonCrop(db, personId, crop) {
+        const update = buildCropUpdate(crop);
+        update.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+        await db.collection('people').doc(personId).update(update);
+        return update.photoCrop;
+    }
+
     // May this user set or clear this Person's photo? Your own if you are linked
     // to it; anyone's if you are an editor or above. Mirrors the Firestore rule.
     function canManagePhoto(permissionLevel, myPersonId, personId) {
@@ -89,6 +96,71 @@
             return true;
         }
         return !!myPersonId && myPersonId === personId;
+    }
+
+    // ── Framing ──────────────────────────────────────────────────────────────
+    //
+    // A photo is almost never a headshot. It is a group shot, or a wide picture
+    // with the person off to one side, and a circular 56px frame shows whatever
+    // happens to be in the middle. So the Person carries a CROP alongside the
+    // image: where to look, and how close.
+    //
+    // The crop is stored rather than baked into the file, so reframing later is
+    // editing two numbers instead of finding and re-uploading the original —
+    // which most people no longer have.
+    //
+    // `x`/`y` are percentages, the same ones CSS `object-position` takes: 0% is
+    // the left/top edge of the source, 100% the right/bottom. `zoom` is a plain
+    // multiplier on top of an object-fit: cover baseline.
+
+    const DEFAULT_CROP = { x: 50, y: 50, zoom: 1 };
+    const MIN_ZOOM = 1;   // below 1 the image would no longer fill the circle
+    const MAX_ZOOM = 4;
+
+    function clamp(value, low, high) {
+        const n = Number(value);
+        if (!isFinite(n)) return low;
+        return Math.min(high, Math.max(low, n));
+    }
+
+    // Always yields a usable crop, whatever it is handed — a Person saved before
+    // framing existed has no crop at all, and must still render.
+    function normalizeCrop(crop) {
+        const c = crop || {};
+        return {
+            x: Math.round(clamp(c.x === undefined ? DEFAULT_CROP.x : c.x, 0, 100)),
+            y: Math.round(clamp(c.y === undefined ? DEFAULT_CROP.y : c.y, 0, 100)),
+            zoom: Math.round(clamp(c.zoom === undefined ? DEFAULT_CROP.zoom : c.zoom,
+                MIN_ZOOM, MAX_ZOOM) * 100) / 100,
+        };
+    }
+
+    // The ONE place a crop becomes CSS. The reframing preview, the profile page
+    // and every directory card call this, which is what makes the preview
+    // honest: what you drag to is literally the style everyone else gets.
+    function frameStyle(crop) {
+        const c = normalizeCrop(crop);
+        return `object-fit: cover; object-position: ${c.x}% ${c.y}%; ` +
+            `transform: scale(${c.zoom}); transform-origin: ${c.x}% ${c.y}%;`;
+    }
+
+    function buildCropUpdate(crop) {
+        return { photoCrop: normalizeCrop(crop) };
+    }
+
+    // Dragging across the frame pans the image the other way — you are moving
+    // the picture under a fixed window, so pulling it right reveals what was off
+    // to the left. Movement is expressed as a fraction of the frame so a drag
+    // feels the same on a 56px card and a 96px profile preview, and it is
+    // divided by the zoom because a zoomed-in image should not fly past.
+    function panCrop(crop, dx, dy, frameSize) {
+        const c = normalizeCrop(crop);
+        const size = Math.max(1, frameSize || 1);
+        return normalizeCrop({
+            x: c.x - (dx / size) * 100 / c.zoom,
+            y: c.y - (dy / size) * 100 / c.zoom,
+            zoom: c.zoom,
+        });
     }
 
     // ── Browser half ─────────────────────────────────────────────────────────
@@ -139,14 +211,18 @@
         const snap = await ref.put(blob, { contentType: 'image/jpeg' });
         const url = await snap.ref.getDownloadURL();
 
+        // A new photo starts centred. Carrying the old crop over would frame the
+        // new picture by where the previous one happened to need looking at.
         const update = buildPhotoUpdate(url, path);
+        update.photoCrop = Object.assign({}, DEFAULT_CROP);
         update.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
         await db.collection('people').doc(personId).update(update);
-        return { url, path };
+        return { url, path, crop: update.photoCrop };
     }
 
     async function clearPersonPhoto(db, personId) {
         const update = buildPhotoClear();
+        update.photoCrop = null;
         update.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
         await db.collection('people').doc(personId).update(update);
     }
@@ -164,10 +240,18 @@
         buildPhotoUpdate,
         buildPhotoClear,
         canManagePhoto,
+        DEFAULT_CROP,
+        MIN_ZOOM,
+        MAX_ZOOM,
+        normalizeCrop,
+        frameStyle,
+        buildCropUpdate,
+        panCrop,
         // browser-only
         resizeToBlob,
         uploadPersonPhoto,
         clearPersonPhoto,
+        savePersonCrop,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

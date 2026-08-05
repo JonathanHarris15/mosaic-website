@@ -138,3 +138,105 @@ test('a missing Person is never manageable, whoever is asking', () => {
     assert.ok(!Photo.canManagePhoto('super_admin', 'p1', null));
     assert.ok(!Photo.canManagePhoto('member', 'p1', ''));
 });
+
+// ── Framing (ADR-0029 §6) ────────────────────────────────────────────────────
+//
+// A photo is almost never a headshot, so the Person carries a crop alongside
+// the image: where to look and how close. It is stored rather than baked in, so
+// reframing later edits two numbers instead of needing the original file.
+
+test('a Person saved before framing existed still renders, centred', () => {
+    assert.deepStrictEqual(Photo.normalizeCrop(undefined), Photo.DEFAULT_CROP);
+    assert.deepStrictEqual(Photo.normalizeCrop(null), Photo.DEFAULT_CROP);
+    assert.deepStrictEqual(Photo.normalizeCrop({}), Photo.DEFAULT_CROP);
+});
+
+test('the default crop is centred and unzoomed', () => {
+    assert.deepStrictEqual(Photo.DEFAULT_CROP, { x: 50, y: 50, zoom: 1 });
+});
+
+test('panning past an edge stops at the edge', () => {
+    assert.deepStrictEqual(Photo.normalizeCrop({ x: -40, y: 300, zoom: 1 }), { x: 0, y: 100, zoom: 1 });
+});
+
+test('zoom never drops below 1 — the image must keep filling the circle', () => {
+    assert.strictEqual(Photo.normalizeCrop({ zoom: 0.2 }).zoom, Photo.MIN_ZOOM);
+    assert.strictEqual(Photo.normalizeCrop({ zoom: -3 }).zoom, Photo.MIN_ZOOM);
+});
+
+test('zoom is capped, so nobody stores a 400x magnification of one pixel', () => {
+    assert.strictEqual(Photo.normalizeCrop({ zoom: 99 }).zoom, Photo.MAX_ZOOM);
+});
+
+test('junk values fall back rather than producing NaN in a style string', () => {
+    const crop = Photo.normalizeCrop({ x: 'left', y: NaN, zoom: Infinity });
+    assert.ok(Number.isFinite(crop.x) && Number.isFinite(crop.y) && Number.isFinite(crop.zoom));
+    assert.ok(!Photo.frameStyle({ x: 'left' }).includes('NaN'));
+});
+
+test('a crop is stored as round numbers, not fifteen decimal places', () => {
+    const crop = Photo.normalizeCrop({ x: 33.33333, y: 66.66666, zoom: 1.23456 });
+    assert.strictEqual(crop.x, 33);
+    assert.strictEqual(crop.y, 67);
+    assert.strictEqual(crop.zoom, 1.23);
+});
+
+test('the style covers the frame and positions by the crop', () => {
+    const style = Photo.frameStyle({ x: 20, y: 80, zoom: 2 });
+    assert.match(style, /object-fit: cover/);
+    assert.match(style, /object-position: 20% 80%/);
+    assert.match(style, /scale\(2\)/);
+});
+
+test('normalizing is idempotent — a stored crop reads back unchanged', () => {
+    const once = Photo.normalizeCrop({ x: 12.7, y: 91.2, zoom: 2.345 });
+    assert.deepStrictEqual(Photo.normalizeCrop(once), once);
+});
+
+test('dragging right reveals what was off to the left', () => {
+    // You are moving the picture under a fixed window, so the crop travels the
+    // opposite way to the pointer.
+    const panned = Photo.panCrop({ x: 50, y: 50, zoom: 1 }, 20, 0, 100);
+    assert.ok(panned.x < 50);
+    assert.strictEqual(panned.y, 50);
+});
+
+test('dragging down reveals what was above', () => {
+    const panned = Photo.panCrop({ x: 50, y: 50, zoom: 1 }, 0, 20, 100);
+    assert.ok(panned.y < 50);
+});
+
+test('a drag feels the same on a small frame as a large one', () => {
+    // Same fraction of the frame crossed → same movement, so the 56px card and
+    // the 96px preview behave alike.
+    const small = Photo.panCrop({ x: 50, y: 50, zoom: 1 }, 10, 0, 50);
+    const large = Photo.panCrop({ x: 50, y: 50, zoom: 1 }, 20, 0, 100);
+    assert.strictEqual(small.x, large.x);
+});
+
+test('a zoomed-in image pans more slowly, not faster', () => {
+    const near = Photo.panCrop({ x: 50, y: 50, zoom: 1 }, 20, 0, 100);
+    const far = Photo.panCrop({ x: 50, y: 50, zoom: 4 }, 20, 0, 100);
+    assert.ok(Math.abs(50 - far.x) < Math.abs(50 - near.x));
+});
+
+test('panning keeps the zoom it was given', () => {
+    assert.strictEqual(Photo.panCrop({ x: 50, y: 50, zoom: 2.5 }, 5, 5, 100).zoom, 2.5);
+});
+
+test('panning cannot escape the frame', () => {
+    const panned = Photo.panCrop({ x: 50, y: 50, zoom: 1 }, 100000, -100000, 100);
+    assert.strictEqual(panned.x, 0);
+    assert.strictEqual(panned.y, 100);
+});
+
+test('a zero-sized frame does not divide by zero', () => {
+    const panned = Photo.panCrop({ x: 50, y: 50, zoom: 1 }, 10, 10, 0);
+    assert.ok(Number.isFinite(panned.x) && Number.isFinite(panned.y));
+});
+
+test('saving a crop writes only the crop field', () => {
+    assert.deepStrictEqual(
+        Photo.buildCropUpdate({ x: 10, y: 20, zoom: 1.5 }),
+        { photoCrop: { x: 10, y: 20, zoom: 1.5 } });
+});

@@ -283,7 +283,7 @@ service cloud.firestore {
       // identifier — unlike the name, which needs an editor (ADR-0027).
       allow update: if request.auth != null
         && resource.data.userId == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['contact', 'birthday', 'sex', 'photoUrl', 'photoPath', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['contact', 'birthday', 'sex', 'photoUrl', 'photoPath', 'photoCrop', 'updatedAt'])
         && (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['sex'])
           || !('sex' in resource.data)

@@ -279,7 +279,8 @@
                                 <div class="flex-shrink-0 mr-3">
                                     <div class="w-14 h-14 rounded-full bg-surface-container-high border border-outline-variant/30 flex items-center justify-center overflow-hidden relative group/photo">
                                         <template x-if="person.photoUrl">
-                                            <img :src="person.photoUrl" :alt="person.name" class="w-full h-full object-cover">
+                                            <img :src="person.photoUrl" :alt="person.name"
+                                                 class="w-full h-full" :style="photoStyle(person)">
                                         </template>
                                         <template x-if="!person.photoUrl">
                                             <span class="material-symbols-outlined text-outline-variant text-[28px]">person</span>
