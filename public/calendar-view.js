@@ -70,6 +70,42 @@
         return DAYS[parseDate(dateStr).getDay()];
     }
 
+    // ── An Event that runs over several days, in words ───────────────────────
+
+    // "23–27 November", or "28 December – 3 January" when it crosses a month.
+    // The month is said once where it can be, because "23 November – 27
+    // November" is a sentence nobody says out loud.
+    //
+    // Empty for a single-day Event: the date is already on the row, and "15
+    // July – 15 July" is noise.
+    function spanSentence(occurrence) {
+        const o = occurrence || {};
+        const end = Core.endDateOf(o);
+        if (!end) return '';
+
+        const from = parseDate(o.date);
+        const to = parseDate(end);
+        if (from.getMonth() === to.getMonth() && from.getFullYear() === to.getFullYear()) {
+            return from.getDate() + '–' + to.getDate() + ' ' + MONTHS[to.getMonth()];
+        }
+        return formatDayMonth(o.date) + ' – ' + formatDayMonth(end);
+    }
+
+    // "Day 2 of 5", for a cell in the middle of a run. What tells a reader the
+    // chip they are looking at is the same Event as yesterday's rather than
+    // another one like it.
+    function spanDayLabel(occurrence) {
+        const o = occurrence || {};
+        if (!o.spanOf || o.spanOf < 2) return '';
+        return 'Day ' + o.spanDay + ' of ' + o.spanOf;
+    }
+
+    // How long it runs, for the detail page's summary line.
+    function spanLengthSentence(occurrence) {
+        const days = Core.spanLength(occurrence);
+        return days < 2 ? '' : plural(days, 'day');
+    }
+
     // ── The visibility ladder, in plain words ────────────────────────────────
     //
     // Five rungs an editor has to tell apart at a glance, without reading
@@ -282,11 +318,33 @@
         const daysInMonth = new Date(year, mon, 0).getDate();
         const rows = Math.ceil((first.getDay() + daysInMonth) / 7);
 
+        // An Event that runs over several days is ONE Event on every day it
+        // covers, not one event repeated. So it lands in each of those cells
+        // carrying which day of the run this is — the chip then says its name
+        // once, on the first day, and reads as a continuation after that. Drawn
+        // as a full chip on all five days, a half-term would look like five
+        // separate half-terms.
         const byDate = new Map();
+        const place = (date, event) => {
+            if (!byDate.has(date)) byDate.set(date, []);
+            byDate.get(date).push(event);
+        };
+
         (occurrences || []).forEach(o => {
             if (!o || !o.date) return;
-            if (!byDate.has(o.date)) byDate.set(o.date, []);
-            byDate.get(o.date).push(o);
+            const dates = Core.spanDates(o);
+            if (dates.length < 2) { place(o.date, o); return; }
+
+            dates.forEach((date, i) => place(date, Object.assign({}, o, {
+                // The span's own facts, per cell. `spanDay` is 1-based because
+                // it is shown to people ("day 2 of 5"), never used as an index.
+                spanDay: i + 1,
+                spanOf: dates.length,
+                spanStart: i === 0,
+                spanEnd: i === dates.length - 1,
+                // The one a template asks: does this cell repeat the name?
+                spanContinues: i > 0,
+            })));
         });
 
         const cells = [];
@@ -736,6 +794,10 @@
         // recurrence
         recurrenceSentence,
         nextDates,
+        // running over several days
+        spanSentence,
+        spanDayLabel,
+        spanLengthSentence,
         // layout
         monthGrid,
         weekGroups,

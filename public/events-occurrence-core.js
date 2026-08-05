@@ -228,6 +228,119 @@
         return all.filter(d => d >= from && d <= to);
     }
 
+    // ── An Event that runs over several days ──────────────────────────────────
+    //
+    // A half-term, a conference, a week away. `date` is the first day and
+    // `endDate` the last, INCLUSIVE — "23rd to 27th" is five days, because that
+    // is what a person means by it and an exclusive end would make every event
+    // read a day short to whoever typed it.
+    //
+    // ⚠ A SPAN BELONGS TO A ONE-OFF AND NOWHERE ELSE.
+    //
+    // How long an Event runs is true of every date of it, so on a repeating Event
+    // it belongs to the series beside the pattern — never to one occurrence of
+    // it. Written on one date it would be the same trap `time` and `seriesColour`
+    // were pulled out of: indistinguishable from a deliberate choice about that
+    // one date, so the series could never move it again. A one-off has no series,
+    // and its occurrence IS the whole Event, so its own span is the only one
+    // there is.
+    //
+    // (No repeating Event in this church runs over several days, so a span on a
+    // series is deliberately not built rather than half-built. It goes on the
+    // recurrence rule the day one does.)
+    //
+    // A run of days is not an all-day flag. An Event with a `time` still has one:
+    // a conference starting at 9am on the Friday is both.
+    const MAX_SPAN_DAYS = 60;
+
+    // The end of a span, or null when there isn't one. Null for anything that
+    // does not survive the rules above, so every caller can trust the answer
+    // without re-checking it:
+    //
+    //   • not a date, or before the start — meaningless
+    //   • equal to the start — a one-day event, which is just an event
+    //   • on a date of a series — refused, per the rule above
+    //   • longer than the cap — a typo in the year paints a calendar solid
+    function endDateOf(occurrence) {
+        const o = occurrence || {};
+        if (o.seriesId) return null;
+        if (!isDateStr(o.date) || !isDateStr(o.endDate)) return null;
+        if (o.endDate <= o.date) return null;
+        if (spanDays(o.date, o.endDate) > MAX_SPAN_DAYS) return null;
+        return o.endDate;
+    }
+
+    // How many days a start and end cover, inclusive. 23rd → 27th is 5.
+    function spanDays(from, to) {
+        const ms = parseDate(to).getTime() - parseDate(from).getTime();
+        return Math.round(ms / 86400000) + 1;
+    }
+
+    function isMultiDay(occurrence) {
+        return endDateOf(occurrence) !== null;
+    }
+
+    // How many days this Event covers. Always at least 1 — a single-day Event is
+    // a span of one, so a caller never has to branch on whether there is a span.
+    function spanLength(occurrence) {
+        const end = endDateOf(occurrence);
+        return end ? spanDays(occurrence.date, end) : 1;
+    }
+
+    // Every date the Event covers, first to last. A single-day Event returns its
+    // one date, for the same reason.
+    function spanDates(occurrence) {
+        const o = occurrence || {};
+        if (!isDateStr(o.date)) return [];
+        const end = endDateOf(o);
+        if (!end) return [o.date];
+
+        const dates = [];
+        for (let cursor = o.date; cursor <= end; cursor = addDays(cursor, 1)) {
+            dates.push(cursor);
+        }
+        return dates;
+    }
+
+    // Whether this Event is on, on that day — the question the Calendar asks of
+    // every cell, and the one a list of dates would answer slowly.
+    function coversDate(occurrence, date) {
+        const o = occurrence || {};
+        if (!isDateStr(date) || !isDateStr(o.date)) return false;
+        return date >= o.date && date <= (endDateOf(o) || o.date);
+    }
+
+    // Whether any of it falls inside a window. NOT `date >= from`, which is what
+    // a database range query can ask and is the reason one is not enough: a break
+    // running 28 December to 3 January starts outside January and is on for three
+    // days of it.
+    function overlapsRange(occurrence, from, to) {
+        const o = occurrence || {};
+        if (!isDateStr(o.date)) return false;
+        if (isDateStr(from) && (endDateOf(o) || o.date) < from) return false;
+        if (isDateStr(to) && o.date > to) return false;
+        return true;
+    }
+
+    // Refuse what cannot be stored, rather than storing it and drawing it wrong.
+    // Returns an error sentence, or null when the span is fine.
+    function spanError(occurrence) {
+        const o = occurrence || {};
+        if (!o.endDate) return null;
+        if (!isDateStr(o.endDate)) return 'The last day is not a date.';
+        if (!isDateStr(o.date)) return 'An event that runs over several days needs a first day.';
+        if (o.seriesId) {
+            return 'One date of a repeating event cannot run over several days — ' +
+                'how long it runs is true of every date, so it belongs on the event itself.';
+        }
+        if (o.endDate < o.date) return 'The last day is before the first day.';
+        if (spanDays(o.date, o.endDate) > MAX_SPAN_DAYS) {
+            return 'An event cannot run longer than ' + MAX_SPAN_DAYS + ' days. ' +
+                'Check the year on the last day.';
+        }
+        return null;
+    }
+
     // ── Occurrence identity ───────────────────────────────────────────────────
 
     // Deterministic, so two editors cannot create the same occurrence twice. A
@@ -735,8 +848,17 @@
         ONE_OFF_SLUG,
         VISIBILITY_ORDER,
         SUNDAY_SERVICE_ID,
+        MAX_SPAN_DAYS,
         // occurrences
         datesBetween,
+        // running over several days
+        endDateOf,
+        isMultiDay,
+        spanLength,
+        spanDates,
+        coversDate,
+        overlapsRange,
+        spanError,
         occurrenceId,
         parseOccurrenceId,
         LITURGICAL_SERVICE_FIELDS,
