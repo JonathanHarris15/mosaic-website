@@ -360,3 +360,67 @@ test('the dates come back in order however they were ticked', () => {
     const w = wipe(['2026-08-30', '2026-08-09', '2026-08-16']);
     assert.deepStrictEqual(w.dates, ['2026-08-09', '2026-08-16', '2026-08-30']);
 });
+
+// ── What a member sees when they open one ─────────────────────────────────────
+//
+// Not the grid. A member is not staffing anything, so opening a series answers
+// the two questions they came with: when does it next fall, and am I on it.
+
+function upcoming(overrides) {
+    return Core.upcoming(Object.assign({
+        dates: DATES,
+        from: '2026-08-09',
+        personId: 'p1',
+        occurrenceAt: () => null,
+    }, overrides || {}));
+}
+
+test('opening a recurring event lists the dates it falls on from today forward', () => {
+    const rows = upcoming({ from: '2026-08-16' });
+    assert.deepStrictEqual(rows.map(r => r.date),
+        ['2026-08-16', '2026-08-23', '2026-08-30'],
+        'a date already gone was offered as something coming up');
+});
+
+test('the list is capped when asked, and uncapped when not', () => {
+    assert.strictEqual(upcoming({ count: 2 }).length, 2);
+    assert.strictEqual(upcoming().length, DATES.length);
+});
+
+// A member who turns up to a midweek that was called off has been failed by a
+// list that quietly left it out. It is shown, and it says so.
+test('a cancelled date is kept and marked rather than dropped', () => {
+    const rows = upcoming({
+        occurrenceAt: date => date === '2026-08-16' ? { cancelled: true } : null,
+    });
+    assert.deepStrictEqual(rows.map(r => r.date), DATES, 'a cancelled date vanished');
+    assert.deepStrictEqual(rows.filter(r => r.cancelled).map(r => r.date), ['2026-08-16']);
+});
+
+// ⚠ Answered against the person id, never "does this date have a roster". The
+// same occurrence read hands an EDITOR the whole roster and a member only their
+// own row, so counting rows would tell an editor they were on every staffed
+// date in the church.
+test('“you are on this one” is answered against the person, not the roster’s size', () => {
+    const roster = {
+        '2026-08-09': { assignments: [{ personId: 'p2' }, { personId: 'p3' }] },
+        '2026-08-23': { assignments: [{ personId: 'p3' }, { personId: 'p1' }] },
+    };
+    const rows = upcoming({ occurrenceAt: date => roster[date] || null });
+
+    assert.deepStrictEqual(rows.filter(r => r.mine).map(r => r.date), ['2026-08-23']);
+});
+
+test('nobody signed in to a Person is on nothing, rather than on everything', () => {
+    const rows = upcoming({
+        personId: null,
+        occurrenceAt: () => ({ assignments: [{ personId: 'p2' }] }),
+    });
+    assert.ok(rows.every(r => !r.mine), 'someone with no Person was told they were serving');
+});
+
+test('a date nobody has touched is a date, not a gap', () => {
+    const rows = upcoming();
+    assert.strictEqual(rows.length, DATES.length);
+    assert.ok(rows.every(r => !r.cancelled && !r.mine));
+});

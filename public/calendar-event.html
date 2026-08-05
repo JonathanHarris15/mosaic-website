@@ -59,9 +59,9 @@
       x-data="eventDetailPage()" x-cloak>
 
     <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a href="calendar.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary cal-motion">
+        <a :href="backHref" class="flex items-center gap-1 text-on-surface-variant hover:text-primary cal-motion">
             <span class="material-symbols-outlined text-[20px]">arrow_back</span>
-            <span class="text-xs font-label-md uppercase tracking-wider">Calendar</span>
+            <span class="text-xs font-label-md uppercase tracking-wider" x-text="backLabel"></span>
         </a>
         <div id="auth-container" class="flex items-center"><div class="h-10"></div></div>
     </header>
@@ -110,10 +110,10 @@
                     <p class="font-body-md text-body-md text-on-surface-variant mt-xs"
                        x-text="seriesPattern"></p>
                 </div>
-                <a href="calendar.html"
+                <a :href="backHref"
                    class="shrink-0 border border-secondary text-secondary px-md py-2 rounded-lg font-label-md
                           text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
-                    Back to the calendar
+                    <span x-text="backSentence"></span>
                 </a>
             </div>
 
@@ -548,7 +548,7 @@
                 </div>
 
                 <div class="flex items-center justify-end gap-sm pt-sm border-t border-outline-variant">
-                    <a href="calendar.html"
+                    <a :href="backHref"
                        class="px-md py-2 rounded-lg font-label-md text-xs uppercase tracking-wider
                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Cancel</a>
                     <button @click="createEvent()" :disabled="!draftValid || saving"

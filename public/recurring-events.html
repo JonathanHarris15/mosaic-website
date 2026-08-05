@@ -112,17 +112,128 @@
                       text-[11.5px] uppercase tracking-wider re-motion re-press re-focus">Sign in</a>
         </div>
 
-        <div x-show="refused"
-             class="mb-md bg-surface-container-low border border-outline-variant rounded-lg px-md py-3
-                    flex items-start gap-sm">
-            <span class="material-symbols-outlined text-[20px] text-outline shrink-0">lock</span>
-            <div class="min-w-0">
-                <p class="text-[14px] text-on-surface">This one is for editors.</p>
-                <p class="text-[12.5px] text-on-surface-variant mt-0.5">
-                    Anything you are down for is on the Calendar, and on your profile.
+        <!-- ── Browsing: signed in, nothing to change ─────────────────────── -->
+        <!-- The same events, the same order, minus every control that writes.
+             Tap one to see when it next falls. -->
+        <template x-if="browsing">
+        <div class="max-w-[620px]">
+            <div class="re-title-block pb-md border-b border-outline-variant">
+                <h1 class="re-page-title font-display text-headline-lg tracking-[.02em] text-primary">
+                    Recurring events
+                </h1>
+                <p class="text-[13px] text-on-surface-variant mt-1 max-w-[52ch]">
+                    Everything that comes round again. Open one to see when it next falls.
                 </p>
             </div>
+
+            <div x-show="error"
+                 class="mt-md bg-error-container text-on-error-container border border-outline-variant
+                        rounded-lg p-md flex items-start gap-sm">
+                <span class="material-symbols-outlined text-[20px]">error</span>
+                <p class="font-body-md text-body-md" x-text="error"></p>
+            </div>
+
+            <div x-show="!series.length"
+                 class="mt-gutter bg-surface-container-lowest border border-outline-variant rounded-lg p-lg text-center">
+                <span class="material-symbols-outlined text-[34px] text-outline">event_repeat</span>
+                <h2 class="font-display text-[20px] text-primary mt-2">Nothing repeats yet.</h2>
+                <p class="text-[13.5px] text-on-surface-variant mt-1 max-w-[46ch] mx-auto">
+                    When the church has something that comes round — a Sunday, a midweek
+                    gathering — it appears here.
+                </p>
+            </div>
+
+            <div x-show="series.length" class="mt-gutter flex flex-col gap-2">
+                <template x-for="s in series" :key="s.id">
+                    <div class="rounded-lg border re-motion overflow-hidden"
+                         :class="isOpen(s.id)
+                            ? 'border-primary bg-surface-container-low'
+                            : 'border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low'">
+
+                        <button @click="toggleSeries(s.id)" :disabled="gridLoading"
+                                :aria-expanded="isOpen(s.id) ? 'true' : 'false'"
+                                class="w-full text-left px-3 py-3 flex items-start gap-2 re-focus disabled:opacity-60">
+                            <span class="w-[10px] h-[10px] rounded-full mt-1.5 shrink-0 border border-black/10"
+                                  :style="'background:' + colourOf(s).bar"></span>
+                            <span class="min-w-0 flex-grow">
+                                <span class="block text-[15px] text-on-surface"
+                                      :class="isOpen(s.id) ? 'font-semibold' : ''"
+                                      x-text="s.name"></span>
+                                <span class="block text-[12.5px] text-on-surface-variant mt-0.5"
+                                      x-text="patternOf(s)"></span>
+                                <span class="block text-[11.5px] text-outline mt-0.5">
+                                    Next <span x-text="nextDateOf(s)"></span>
+                                </span>
+                            </span>
+                            <span class="material-symbols-outlined text-[20px] text-on-surface-variant shrink-0
+                                         re-motion mt-0.5"
+                                  :style="isOpen(s.id) ? 'transform:rotate(180deg)' : ''">expand_more</span>
+                        </button>
+
+                        <!-- x-if, not x-show. The dates below belong to whichever
+                             row is OPEN, so a hidden copy under every other row
+                             would be that row rendering someone else's dates and
+                             merely not showing them. -->
+                        <template x-if="isOpen(s.id)">
+                        <div class="border-t border-outline-variant px-3 py-3">
+
+                            <p x-show="s.description" class="text-[13px] text-on-surface-variant mb-3"
+                               x-text="s.description"></p>
+
+                            <div x-show="gridLoading" class="flex items-center gap-1.5 text-[12.5px] text-on-surface-variant py-1">
+                                <span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                                Reading the dates
+                            </div>
+
+                            <div x-show="!gridLoading">
+                                <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant mb-2">
+                                    Coming up
+                                </div>
+
+                                <p x-show="finished" class="text-[13px] text-on-surface-variant">
+                                    This one has finished — there are no more dates coming.
+                                </p>
+
+                                <div class="flex flex-col gap-1">
+                                    <template x-for="row in upcoming" :key="row.date">
+                                        <a :href="dateHref(row.date)"
+                                           class="flex items-center gap-2 px-2 py-2 rounded-lg re-motion re-focus
+                                                  hover:bg-surface-container">
+                                            <span class="material-symbols-outlined text-[18px] shrink-0"
+                                                  :class="row.cancelled ? 'text-outline' : 'text-on-surface-variant'"
+                                                  x-text="row.cancelled ? 'event_busy' : 'event'"></span>
+                                            <span class="min-w-0 flex-grow text-[13.5px]"
+                                                  :class="row.cancelled ? 'text-outline line-through' : 'text-on-surface'"
+                                                  x-text="longDate(row.date)"></span>
+                                            <!-- Two things worth flagging on a date,
+                                                 and neither is guessable from the
+                                                 date itself. -->
+                                            <span x-show="row.cancelled"
+                                                  class="shrink-0 text-[11px] font-label-md uppercase tracking-wider text-outline">
+                                                Not on
+                                            </span>
+                                            <span x-show="row.mine && !row.cancelled"
+                                                  class="shrink-0 flex items-center gap-1 text-[11px] font-label-md
+                                                         uppercase tracking-wider text-secondary">
+                                                <span class="material-symbols-outlined text-[14px]">person_check</span>
+                                                You're on
+                                            </span>
+                                            <span class="material-symbols-outlined text-[16px] text-outline shrink-0">chevron_right</span>
+                                        </a>
+                                    </template>
+                                </div>
+
+                                <p x-show="upcoming.length" class="mt-2 text-[11.5px] text-outline">
+                                    The Calendar has the rest.
+                                </p>
+                            </div>
+                        </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
         </div>
+        </template>
 
         <template x-if="isEditor">
         <div>

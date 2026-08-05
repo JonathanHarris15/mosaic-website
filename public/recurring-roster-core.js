@@ -355,10 +355,45 @@
         return next < all.length ? all[next] : null;
     }
 
+    // ── What a member sees when they open a recurring event ──────────────────
+    //
+    // Not the grid. A member is not staffing anything, and the grid answers a
+    // question they cannot act on — so opening a series tells them the two things
+    // they came for: WHEN it next falls, and whether THEY are on any of those
+    // dates.
+    //
+    // `mine` is answered against the person id rather than "is there a roster
+    // here", because the same occurrence read gives an editor the WHOLE roster
+    // and a member only their own row (`attachRosters`). Counting rows would make
+    // this say "you are on it" to an editor about everybody else's date.
+    //
+    // A cancelled date is KEPT and marked rather than dropped. Somebody who turns
+    // up to a cancelled midweek has been failed by a list that quietly omitted it.
+    function upcoming(options) {
+        const o = options || {};
+        const from = o.from || '';
+        const occurrenceAt = typeof o.occurrenceAt === 'function' ? o.occurrenceAt : () => null;
+
+        return (o.dates || []).slice().sort()
+            .filter(date => date >= from)
+            .slice(0, o.count == null ? Infinity : o.count)
+            .map(date => {
+                const stored = occurrenceAt(date) || {};
+                const assignments = stored.assignments || [];
+                return {
+                    date: date,
+                    cancelled: !!stored.cancelled,
+                    mine: !!o.personId
+                        && assignments.some(a => a && a.personId === o.personId),
+                };
+            });
+    }
+
     const RecurringRosterCore = {
         rosterGrid,
         rangeFor,
         wipeFor,
+        upcoming,
         draftRoomHref,
         windowOf,
         previousAnchor,

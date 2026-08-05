@@ -29,6 +29,43 @@
 
     const params = new URLSearchParams(window.location.search);
 
+    // ── Where "back" goes ────────────────────────────────────────────────────
+    //
+    // A SERIES is only ever reached from the Recurring Events list — the Calendar
+    // draws dates, and a pattern is not a date, so it has no chip to come from.
+    // Sending it back to the Calendar therefore ended the journey somewhere that
+    // could not show the thing just left, and the way back to the list was to
+    // find it again from the Calendar's header.
+    //
+    // One date still belongs to the Calendar. That is where a date is met.
+    //
+    // Read from the address bar rather than from loaded state, so the header is
+    // right on the first paint rather than after the read that fills it in.
+    const BACK = (function () {
+        const seriesId = params.get('series');
+        if (seriesId) {
+            return {
+                href: 'recurring-events.html?series=' + encodeURIComponent(seriesId),
+                label: 'Recurring events',
+                sentence: 'Back to recurring events',
+            };
+        }
+        // Creating an event that REPEATS is a journey that starts on the
+        // Recurring Events page — `?repeats=1` is that page's own doing.
+        if (params.get('new') === '1' && params.get('repeats') === '1') {
+            return {
+                href: 'recurring-events.html',
+                label: 'Recurring events',
+                sentence: 'Back to recurring events',
+            };
+        }
+        return {
+            href: 'calendar.html',
+            label: 'Calendar',
+            sentence: 'Back to the calendar',
+        };
+    })();
+
     // This component is the Event detail SCREEN, and it is also the behaviour
     // behind the Roles panel wherever that is mounted (MS-16). The service page
     // mounts it for one Sunday, beside the order of service, so that staffing a
@@ -54,6 +91,14 @@
 
             // Filling Roles is always on offer; deciding which Roles exist is not.
             canEditRoleSet: !cfg.rolesOnly,
+
+            // The one way out, said the same way everywhere it is drawn — the
+            // header arrow, the button beside the title, and the create form's
+            // Cancel. Three copies of a literal is three chances for one of them
+            // to keep pointing at the Calendar.
+            backHref: BACK.href,
+            backLabel: BACK.label,
+            backSentence: BACK.sentence,
 
             rank: null,
             personId: null,
@@ -253,11 +298,14 @@
                     });
 
                     // A one-off has a document to open. A series does not yet —
-                    // nothing has landed on any of its dates — so the Calendar is
-                    // where you see it.
+                    // nothing has landed on any of its dates — so it goes to the
+                    // list of what repeats, opened on the one just made. The
+                    // Calendar used to be the answer for both, which meant making
+                    // a recurring event and then hunting the calendar for a date
+                    // of it in order to see it had worked.
                     window.location.href = made.kind === 'occurrence'
                         ? 'calendar-event.html?id=' + encodeURIComponent(made.id)
-                        : 'calendar.html';
+                        : 'recurring-events.html?series=' + encodeURIComponent(made.id);
                 } catch (e) {
                     console.error('Create failed:', e);
                     this.error = e.message || 'That event could not be created.';

@@ -190,7 +190,12 @@
                           font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
                     <span class="material-symbols-outlined text-[18px]">luggage</span> Away
                 </a>
-                <a x-show="canCreate" href="recurring-events.html"
+                <!-- Anybody signed in, not just an editor. "What runs every week,
+                     and until when?" is an ordinary question, and the Calendar
+                     answers it a month at a time — the wrong shape for a thing
+                     defined by its pattern. The page itself shows a member the
+                     list and none of the controls. -->
+                <a x-show="rank" href="recurring-events.html"
                    class="flex items-center gap-1 border border-secondary text-secondary px-md py-2 rounded-lg
                           font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
                     <span class="material-symbols-outlined text-[18px]">event_repeat</span> Recurring events

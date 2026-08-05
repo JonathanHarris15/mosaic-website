@@ -5869,3 +5869,122 @@ test('nothing dereferences the very thing its x-show is checking for', () => {
         'x-show hides an element, it does not stop its own directives running:\n  ' +
         offenders.join('\n  '));
 });
+
+// ── The two lanes on the Recurring Events page ────────────────────────────────
+
+test('a member is shown the events that repeat rather than a wall', () => {
+    // This page used to answer a member with "this one is for editors". But
+    // "what runs every week, and until when?" is an ordinary question for
+    // anybody in the church, and the Calendar answers it a month at a time,
+    // which is the wrong shape for a thing defined by its pattern.
+    const page = loadComponent('recurring-events.js', 'recurringEventsPage');
+    page.loading = false;
+
+    page.rank = 'viewer';
+    assert.ok(page.browsing, 'a viewer is walled out of the list of what repeats');
+    assert.ok(!page.isEditor);
+
+    page.rank = 'member';
+    assert.ok(page.browsing);
+
+    page.rank = 'editor';
+    assert.ok(!page.browsing, 'an editor was sent down the read-only lane');
+
+    // Signed out is a door, not a wall, and stays its own answer.
+    page.rank = null;
+    assert.ok(!page.browsing && page.signedOut);
+});
+
+test('the browse lane opens and shuts one event at a time', async () => {
+    // An accordion, not a selection. The editor lane cannot land on nothing —
+    // an empty column beside a list reads as a grid that failed — but a list of
+    // rows where every one is already open is not a list.
+    const filters = [];
+    const query = {
+        where(field, op, value) { filters.push({ field, op, value }); return query; },
+        async get() { return { docs: [] }; },
+    };
+    const fakeDb = { collection: () => query };
+
+    const page = loadComponent('recurring-events.js', 'recurringEventsPage', { db: fakeDb });
+    page.rank = 'member';
+    page.personId = 'p1';
+    page.series = [
+        { id: 'midweek', name: 'Midweek', recurrence: { freq: 'weekly', weekday: 3, startDate: '2026-01-07' } },
+    ];
+
+    assert.strictEqual(page.seriesId, '', 'the list opened itself before anybody asked');
+
+    await page.toggleSeries('midweek');
+    assert.ok(page.isOpen('midweek'));
+    assert.strictEqual(page.error, '', 'opening an event as a member failed the read');
+
+    // ⚠ The member's read is constrained like every other. Unconstrained it does
+    // not return fewer rows, it errors — and the error reads as "this event has
+    // no dates", which is exactly what this lane exists to answer.
+    assert.ok(filters.some(f => f.field === 'visibility' && f.op === 'in'),
+        'the browse lane reads occurrences without naming a rung');
+
+    await page.toggleSeries('midweek');
+    assert.ok(!page.isOpen('midweek'), 'tapping the open row again did not shut it');
+});
+
+test('the browse lane offers nothing that writes', () => {
+    // Everything that changes a series lives inside the editor template. A
+    // control that leaks into the member's half is one they will be refused on
+    // arrival, which is worse than never offering it.
+    const html = readPage('recurring-events.html');
+    const lane = html.slice(html.indexOf('x-if="browsing"'), html.indexOf('x-if="isEditor"'));
+
+    assert.ok(lane.length > 400, 'the browse lane is not where this test thinks it is');
+    [
+        'takeEverybodyOff', 'draftHref', 'newEventHref', 'seriesHref', 'eventHref',
+        'toggle(', 'clearSelection',
+    ].forEach(control => {
+        assert.ok(lane.indexOf(control) === -1,
+            'the browse lane offers ' + control + ', which a member may not do');
+    });
+
+    assert.ok(/toggleSeries\(/.test(lane), 'nothing in the browse lane opens an event');
+    assert.ok(/dateHref\(/.test(lane), 'a member cannot reach a single date from the list');
+});
+
+// ── Where "back" goes ─────────────────────────────────────────────────────────
+
+test('a series goes back to the list of what repeats, a date to the Calendar', () => {
+    // A pattern has no chip on the Calendar — the Calendar draws dates — so a
+    // series is only ever reached from the Recurring Events list. Sending it
+    // back to the Calendar ended the journey somewhere that could not show the
+    // thing just left.
+    const series = loadComponent('calendar-event.js', 'eventDetailPage',
+        { location: { search: '?series=midweek', href: '' } });
+    assert.strictEqual(series.backHref, 'recurring-events.html?series=midweek');
+    assert.strictEqual(series.backLabel, 'Recurring events');
+
+    const date = loadComponent('calendar-event.js', 'eventDetailPage',
+        { location: { search: '?id=midweek_2026-07-15', href: '' } });
+    assert.strictEqual(date.backHref, 'calendar.html', 'one date belongs to the Calendar');
+    assert.strictEqual(date.backSentence, 'Back to the calendar');
+
+    // Making an event that REPEATS is a journey that starts on that list too —
+    // `?repeats=1` is the list's own doing.
+    const making = loadComponent('calendar-event.js', 'eventDetailPage',
+        { location: { search: '?new=1&repeats=1', href: '' } });
+    assert.strictEqual(making.backHref, 'recurring-events.html');
+
+    const makingOne = loadComponent('calendar-event.js', 'eventDetailPage',
+        { location: { search: '?new=1', href: '' } });
+    assert.strictEqual(makingOne.backHref, 'calendar.html');
+});
+
+test('the Event page says the way back once, and the page draws it three times', () => {
+    // The header arrow, the button beside the title, and the create form's
+    // Cancel. Three literals is three chances for one of them to keep pointing
+    // at the Calendar after the other two moved.
+    const html = readPage('calendar-event.html');
+    const hardCoded = (html.match(/href="calendar\.html"/g) || []).length;
+    assert.strictEqual(hardCoded, 0,
+        'a way out of the Event page still points at the Calendar whatever it is showing');
+    assert.ok((html.match(/:href="backHref"/g) || []).length >= 3,
+        'not every way out of the Event page reads the same answer');
+});

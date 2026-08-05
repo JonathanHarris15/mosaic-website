@@ -22,8 +22,22 @@
 // order to throw the result away. It cannot half-edit anything: it takes
 // everybody off, or it does nothing.
 //
-// Editors only, like the button it replaces. What a member wants from a series
-// is their own part, which the Calendar already answers.
+// TWO LANES, not one door and one wall.
+//
+// An editor gets all of the above. Everybody else gets the same list of events
+// and nothing that writes: tap one and it opens to show when it next falls, and
+// which of those dates they are on. No rota, no auto-assign, no emptying, no
+// door to the Event itself.
+//
+// This used to be an editors-only page that told a member "this one is for
+// editors" — but "when does the Core Seminar run until?" is an ordinary question
+// for anybody in the church, and the Calendar answers it a month at a time,
+// which is the wrong shape for a thing defined by its pattern. The list of what
+// repeats is not privileged; changing it is.
+//
+// Each lane still only ever sees the events its own rank may see — the series
+// read is constrained by visibility like every other, so a member's list simply
+// does not contain the elders' meeting.
 
 (function () {
     'use strict';
@@ -80,10 +94,17 @@
 
             async init() {
                 this.rank = await this.resolveRank();
-                if (!this.isEditor) { this.loading = false; return; }
+                if (!this.rank) { this.loading = false; return; }
 
                 try {
-                    await Promise.all([this.loadSeries(), this.loadDirectory()]);
+                    // The directory is the GRID's ingredient — names for the
+                    // cards, definitions for the rows — and the browse lane draws
+                    // neither. Reading the whole church to list some dates would
+                    // be a page-load spent on nothing.
+                    await Promise.all([
+                        this.loadSeries(),
+                        this.isEditor ? this.loadDirectory() : Promise.resolve(),
+                    ]);
                 } catch (e) {
                     console.error('Could not read the recurring events:', e);
                     this.error = 'The recurring events could not be read. That is a permissions '
@@ -92,11 +113,19 @@
                     return;
                 }
 
-                // Opened for a particular series, or the first one there is.
+                // Opened for a particular series — which is how the Event page
+                // sends you back here, so you land on the one you just left.
                 const asked = new URLSearchParams(window.location.search).get('series');
-                const opening = this.series.some(s => s.id === asked)
-                    ? asked
-                    : (this.series[0] && this.series[0].id) || '';
+                const named = this.series.some(s => s.id === asked) ? asked : '';
+
+                // The editor lane opens on something, because an empty right-hand
+                // column beside a list of events reads as a grid that failed to
+                // load. The browse lane opens on NOTHING unless it was sent to
+                // one: it is a list of closed rows, and every row springing open
+                // at once is not a list any more.
+                const opening = named || (this.isEditor
+                    ? (this.series[0] && this.series[0].id) || ''
+                    : '');
 
                 this.loading = false;
                 if (opening) await this.choose(opening);
@@ -153,7 +182,10 @@
 
             get isEditor() { return EDITOR_RANKS.indexOf(this.rank) !== -1; },
             get signedOut() { return !this.loading && !this.rank; },
-            get refused() { return !this.loading && !!this.rank && !this.isEditor; },
+
+            // Signed in, no rank to change anything. Not a refusal — the list is
+            // the same list, minus every control that writes.
+            get browsing() { return !this.loading && !!this.rank && !this.isEditor; },
 
             get signInHref() {
                 return window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/login' : 'login.html';
@@ -186,6 +218,39 @@
                 this.anchor = Dates.todayStr();
                 this.recomputeDates();
                 await this.loadWindow();
+            },
+
+            // ── Opening one, in the browse lane ──────────────────────────────
+            //
+            // An accordion, not a selection: the row you tap opens under itself,
+            // and tapping it again shuts it. `choose` cannot do this on its own —
+            // it is the editor lane's "load the grid for this one", where landing
+            // on nothing selected would be a bug rather than a closed row.
+            async toggleSeries(id) {
+                if (this.gridLoading) return;
+                if (this.seriesId === id) { this.seriesId = ''; return; }
+                await this.choose(id);
+            },
+
+            isOpen(id) { return this.seriesId === id; },
+
+            // When it next falls, and which of those dates are yours. `dates` is
+            // already the window from today forward, so this is the next stretch
+            // of it rather than a history.
+            get upcoming() {
+                if (!this.chosen) return [];
+                return Grid.upcoming({
+                    dates: this.dates,
+                    from: Dates.todayStr(),
+                    personId: this.personId,
+                    occurrenceAt: date => this.occurrences[date] || null,
+                });
+            },
+
+            // A pattern that has run out. Said in words, because a row that opens
+            // onto nothing looks like a read that failed.
+            get finished() {
+                return !!this.chosen && !this.gridLoading && !this.upcoming.length;
             },
 
             recomputeDates() {
