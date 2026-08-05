@@ -2457,6 +2457,43 @@ test('the Event screen reads the time through the model, not off the document', 
         'the top of the screen still disagrees with the bottom');
 });
 
+// ── Where it is, on the date you are looking at ───────────────────────────────
+//
+// A repeating Event's place is typed once, on the Event. The Event screen read
+// it off the DATE, which never has one — so a gathering with "the hall" filled
+// in one screen away showed no place at all on every date of it.
+
+test('a date of a series shows the place typed on the Event', () => {
+    const Core = require('../public/events-occurrence-core.js');
+    const date = { id: 's_2026-08-02', seriesId: 's', date: '2026-08-02' };
+    assert.strictEqual(Core.locationOf(date, { id: 's', location: 'The hall' }), 'The hall');
+    // Nothing typed anywhere is nowhere, not an empty chip.
+    assert.strictEqual(Core.locationOf(date, { id: 's' }), null);
+});
+
+test('a place given to one date beats the series, unlike its time', () => {
+    const Core = require('../public/events-occurrence-core.js');
+    // A moved instance carries the details it was given, and a one-off's
+    // occurrence IS the whole Event — so a stored place is deliberate.
+    assert.strictEqual(
+        Core.locationOf({ seriesId: 's', location: 'The manse' }, { location: 'The hall' }),
+        'The manse');
+    assert.strictEqual(Core.locationOf({ seriesId: null, location: 'The park' }, null), 'The park');
+});
+
+test('the Event screen reads the place through the model, not off the document', () => {
+    const html = readPage('calendar-event.html');
+    assert.ok(!/occurrence\.location/.test(html),
+        'the title line still reads the date alone, so a repeating Event shows no place');
+    assert.ok(/x-text="eventLocation"/.test(html), 'the title line shows no place at all');
+
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.occurrence = { id: 's_2026-08-02', seriesId: 's', date: '2026-08-02' };
+    page.series = { id: 's', location: 'The hall', recurrence: { freq: 'monthly' } };
+    assert.strictEqual(page.eventLocation, 'The hall',
+        'the header says nowhere while the Event says the hall');
+});
+
 // ── Signed out is not the same as an empty church ─────────────────────────────
 //
 // The phone app opened on its home screen whoever you were. Signed out, that

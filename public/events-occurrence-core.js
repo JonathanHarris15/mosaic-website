@@ -409,6 +409,28 @@
         return o.time || null;
     }
 
+    // ── Where a date happens ─────────────────────────────────────────────────
+    //
+    // A REPEATING EVENT'S PLACE LIVES ON THE SERIES. "The hall" is a fact about
+    // the Midweek Gathering, not about the fifteenth of July, and it is typed
+    // once on the Event. So a date with nothing of its own reads the series'
+    // place rather than showing nowhere — which is what the Event screen did,
+    // with the place plainly filled in one screen away.
+    //
+    // UNLIKE `timeOf`, a date's own place WINS. Time has no per-date home at all
+    // (nothing can set one, so every stored copy is a stale stamp), but a place
+    // does: a one-off's occurrence IS the whole Event, and a moved instance
+    // carries the details it was given. A stored place is therefore somebody's
+    // deliberate answer, and it stands.
+    //
+    // Read through, never stamped on. Copied onto the occurrence it would ride
+    // into the document on the next save and freeze that one date at the old
+    // place — the trap `seriesColour` and `time` were pulled out of.
+    function locationOf(occurrence, series) {
+        const o = occurrence || {};
+        return o.location || (series && series.location) || null;
+    }
+
     // Says WHERE it went, not just that it went. "Not happening" on the first
     // Sunday, with nothing about the fifteenth, is how somebody turns up to an
     // empty hall.
@@ -865,6 +887,7 @@
         liturgicalHolders,
         notHappening,
         timeOf,
+        locationOf,
         movedNote,
         dayMonth,
         mergeOccurrences,

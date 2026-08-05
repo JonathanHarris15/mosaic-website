@@ -506,6 +506,14 @@
                 return Core.timeOf(this.occurrence, this.series && this.series.recurrence);
             },
 
+            // Where this date happens. Read through the model, because a
+            // repeating Event's place is typed on the EVENT — a date of it has
+            // nothing of its own, and reading the document alone left the
+            // header saying nowhere while the Event said "the hall".
+            get eventLocation() {
+                return Core.locationOf(this.occurrence, this.series);
+            },
+
             // "to Friday 27 November · 5 days" — empty for a single-day Event,
             // so the header shows nothing rather than a range of one.
             get eventSpan() {

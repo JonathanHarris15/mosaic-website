@@ -603,10 +603,10 @@
                             <span class="cal-when-icon material-symbols-outlined text-[17px]">schedule</span>
                             <span x-text="formatTime(eventTime)"></span>
                         </span>
-                        <span x-show="occurrence.location" class="text-outline">·</span>
-                        <span x-show="occurrence.location" class="flex items-center gap-1">
+                        <span x-show="eventLocation" class="text-outline">·</span>
+                        <span x-show="eventLocation" class="flex items-center gap-1">
                             <span class="cal-when-icon material-symbols-outlined text-[17px]">location_on</span>
-                            <span x-text="occurrence.location"></span>
+                            <span x-text="eventLocation"></span>
                         </span>
                     </div>
                 </div>
