@@ -172,6 +172,92 @@
 
             <!-- Right Side: Administration -->
             <div class="lg:col-span-8 flex flex-col gap-lg">
+                <!-- Connect to the Directory — a Link Request (ADR-0025).
+                     Shown only to a signed-in User who is not yet a Linked User.
+                     Before this, such a user saw nothing at all and waited for an
+                     admin to notice them; now they can ask, and an editor or
+                     elder can answer. -->
+                <section id="link-request-panel" class="hidden">
+                    <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-sm overflow-hidden">
+                        <div class="p-md bg-surface-container-low/50 border-b border-outline-variant/20">
+                            <h2 class="font-headline-md text-headline-md text-primary flex items-center gap-3">
+                                <span class="material-symbols-outlined">connect_without_contact</span>
+                                Connect to the Directory
+                            </h2>
+                            <p id="link-request-intro" class="text-[11px] text-on-surface-variant mt-1">Your account isn’t connected to a church directory record yet. Tell us who you are and someone from the church will confirm it.</p>
+                        </div>
+
+                        <!-- An existing request: waiting, or declined -->
+                        <div id="link-request-state" class="hidden p-md flex flex-col gap-3">
+                            <div class="flex items-start gap-3">
+                                <span id="link-request-state-icon" class="material-symbols-outlined text-primary">hourglass_top</span>
+                                <p id="link-request-state-text" class="text-sm font-body-md text-on-surface leading-relaxed"></p>
+                            </div>
+                            <button id="link-request-withdraw" class="self-start px-4 py-2 border border-outline-variant text-on-surface-variant font-label-md text-[10px] uppercase tracking-widest rounded hover:bg-surface-container transition-all"></button>
+                            <div id="link-request-state-status" class="text-[11px] font-body-md"></div>
+                        </div>
+
+                        <!-- No request yet: ask for one -->
+                        <div id="link-request-form" class="hidden p-md flex flex-col gap-4">
+                            <div class="flex gap-2">
+                                <button type="button" id="lr-tab-match" class="flex-1 px-3 py-2 rounded-lg border font-label-md text-[10px] uppercase tracking-widest transition-all">I’m already listed</button>
+                                <button type="button" id="lr-tab-new" class="flex-1 px-3 py-2 rounded-lg border font-label-md text-[10px] uppercase tracking-widest transition-all">I’m not listed yet</button>
+                            </div>
+
+                            <!-- Claim an existing Person -->
+                            <div id="lr-match" class="flex flex-col gap-2">
+                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Find yourself in the directory</label>
+                                <input id="lr-search" type="text" placeholder="Type your name" autocomplete="off" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                <div id="lr-results" class="max-h-56 overflow-y-auto rounded-lg border border-outline-variant/30 divide-y divide-surface-container empty:hidden"></div>
+                                <div id="lr-chosen" class="hidden items-center gap-2 text-sm font-body-md text-on-surface bg-primary/5 rounded-lg px-3 py-2"></div>
+                            </div>
+
+                            <!-- Propose a new Person -->
+                            <div id="lr-new" class="hidden grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div class="flex flex-col gap-1 md:col-span-2">
+                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Full name</label>
+                                    <input id="lr-name" type="text" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email</label>
+                                    <input id="lr-email" type="email" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Phone</label>
+                                    <input id="lr-phone" type="tel" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                </div>
+                                <div class="flex flex-col gap-1 md:col-span-2">
+                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Address</label>
+                                    <input id="lr-address" type="text" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Birthday</label>
+                                    <input id="lr-birthday" type="date" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Sex</label>
+                                    <select id="lr-sex" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none">
+                                        <option value="">Prefer not to say</option>
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col gap-1">
+                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Anything that helps us place you (optional)</label>
+                                <textarea id="lr-note" rows="2" placeholder="e.g. I started coming in March, I sit with the Harris family" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none"></textarea>
+                            </div>
+
+                            <div class="flex items-center gap-3">
+                                <button type="button" id="lr-submit" class="px-5 py-2.5 bg-primary text-on-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-primary-container transition-all disabled:opacity-50">Send request</button>
+                                <span id="lr-status" class="text-[11px] font-body-md"></span>
+                            </div>
+                            <p class="text-[10px] text-on-surface-variant leading-relaxed">The church confirms every request by hand. Nothing about your membership standing changes because you asked.</p>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- My Information — self-service editing for a Linked User (MS-87) -->
                 <section id="my-info-panel" class="hidden">
                     <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-sm overflow-hidden">
@@ -313,6 +399,7 @@
     </div>
 
     <script src="shepherding-core.js"></script>
+    <script src="link-request-core.js"></script>
     <script src="profile.js"></script>
 </body>
 </html>

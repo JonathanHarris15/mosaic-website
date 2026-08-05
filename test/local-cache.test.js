@@ -199,7 +199,7 @@ test('every read that decides a write asks the server', () => {
         ['shepherding-profile.js', 3],     // deleting notes, activity, and status/tag history
         ['shepherding-relationships.js', 1], // re-projecting a shared type
         ['shepherding-tags.js', 4],        // merge carriers + their activity, and both hide-people sweeps
-        ['peoples-page.js', 4],            // merging two people's sub-collections, then re-counting what landed
+        ['peoples-page.js', 5],            // merging two people's sub-collections, then re-counting what landed; and the Link Request queue, which is a worklist — a cached copy offers an approver a request somebody already answered
     ];
     for (const [file, expected] of sites) {
         const src = read(file);

@@ -15,6 +15,7 @@ const {
 const pr = require("./prayer-request");
 const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
+const lr = require("./link-request");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -365,6 +366,160 @@ exports.updateUserPasswordSelf = onCall({cors: true, region: "us-central1"}, asy
     log(`Error updating self password: ${error.message}`);
     throw new Error(error.message);
   }
+});
+
+/* ------------------------------------------------------------------
+ * Link Requests (ADR-0025)
+ * ------------------------------------------------------------------ */
+
+/** Where a Link Request lives — one doc per requesting user, keyed by uid. */
+const LINK_REQUESTS_COLLECTION = "link_requests";
+
+/**
+ * Resolves a Link Request: a User's own request to become a Linked User,
+ * either by claiming an existing Person ("match") or by asking to be added to
+ * the directory ("new").
+ *
+ * @param {Object} request The callable request; `data` carries uid, decision,
+ *   an optional override personId and an optional decline reason.
+ * @return {Promise<Object>} The resulting status, and the Person id on approval.
+ *
+ * This is a callable rather than a Firestore rule because approving writes
+ * `users/{uid}.personId`, and the `users` collection is admin-only for a good
+ * reason: a rule loose enough to let an editor link an account would also let
+ * them edit permission levels. So editors and elders resolve requests here,
+ * and the privileged writes stay on the server.
+ *
+ * Approving is one atomic batch — create-or-claim the Person, write both sides
+ * of the link, close the request. Anything less and a half-approved request
+ * leaves a Person pointing at an account that does not point back.
+ *
+ * `personId` in the payload is the approver's OVERRIDE: an editor reading "add
+ * me to the directory" who recognises the person as someone already on file
+ * approves onto that record instead, which is the one-click answer to the
+ * duplicate-record problem.
+ */
+exports.resolveLinkRequest = onCall({cors: true, region: "us-central1"}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError(
+        "unauthenticated", "Sign in to resolve directory requests.");
+  }
+
+  const db = admin.firestore();
+  const callerUid = request.auth.uid;
+  const callerDoc = await db.collection("users").doc(callerUid).get();
+  const callerLevel = callerDoc.exists ?
+    (callerDoc.data().permissionLevel || callerDoc.data().role) : null;
+
+  if (!lr.canResolve(callerLevel)) {
+    throw new HttpsError(
+        "permission-denied",
+        "Only editors, elders and admins can resolve directory requests.");
+  }
+
+  const data = request.data || {};
+  const {uid, decision, personId: overridePersonId, reason} = data;
+  if (!uid) {
+    throw new HttpsError(
+        "invalid-argument", "Missing the request's account id.");
+  }
+  if (!["approve", "decline"].includes(decision)) {
+    throw new HttpsError(
+        "invalid-argument", "Decision must be 'approve' or 'decline'.");
+  }
+
+  const requestRef = db.collection(LINK_REQUESTS_COLLECTION).doc(uid);
+  const requestSnap = await requestRef.get();
+  if (!requestSnap.exists) {
+    throw new HttpsError("not-found", "That request no longer exists.");
+  }
+  const linkRequest = requestSnap.data();
+
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const resolution = {
+    resolvedAt: now,
+    resolvedBy: callerUid,
+    resolvedByEmail: (callerDoc.data() || {}).email || null,
+  };
+
+  if (decision === "decline") {
+    if (linkRequest.status !== lr.STATUS.PENDING) {
+      throw new HttpsError(
+          "failed-precondition", "This request has already been resolved.");
+    }
+    await requestRef.update(Object.assign({
+      status: lr.STATUS.DECLINED,
+      declineReason: (reason || "").trim() || null,
+    }, resolution));
+    log(`Link request ${uid} declined by ${callerUid}`);
+    return {status: lr.STATUS.DECLINED};
+  }
+
+  const userRef = db.collection("users").doc(uid);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) {
+    throw new HttpsError(
+        "failed-precondition", "That account no longer exists.");
+  }
+
+  // Everything the plan turns on is read fresh here, never taken from the
+  // request as filed — a request can sit in the queue for days while an admin
+  // links the account by hand or the Person is merged away.
+  const targetId = overridePersonId ||
+    (linkRequest.kind === lr.KIND.MATCH ? linkRequest.personId : null);
+  let target = null;
+  if (targetId) {
+    const targetSnap = await db.collection("people").doc(targetId).get();
+    target = {
+      exists: targetSnap.exists,
+      userId: targetSnap.exists ? (targetSnap.data().userId || null) : null,
+    };
+  }
+
+  const plan = lr.planApproval(linkRequest, {
+    requesterPersonId: userSnap.data().personId || null,
+    overridePersonId: overridePersonId || null,
+    target: target,
+  });
+
+  if (plan.action === "refuse") {
+    throw new HttpsError("failed-precondition", plan.reason);
+  }
+
+  const batch = db.batch();
+  let personId = plan.personId;
+
+  if (plan.action === "create") {
+    const personRef = db.collection("people").doc();
+    personId = personRef.id;
+    const fields = lr.newPersonFields(linkRequest.proposed);
+    batch.set(personRef, Object.assign(fields, {
+      userId: uid,
+      createdAt: now,
+      updatedAt: now,
+    }));
+    // Register the starting Membership Tag so it appears in the Tags Manager,
+    // the same way the Elder Tag projection registers its own tag.
+    for (const tag of lr.INITIAL_STAGE_TAGS) {
+      batch.set(
+          db.collection("people_tags").doc(tag), {name: tag}, {merge: true});
+    }
+  } else {
+    batch.update(
+        db.collection("people").doc(personId), {userId: uid, updatedAt: now});
+  }
+
+  batch.update(userRef, {personId: personId});
+  batch.update(requestRef, Object.assign({
+    status: lr.STATUS.APPROVED,
+    personId: personId,
+    declineReason: null,
+  }, resolution));
+
+  await batch.commit();
+  log(`Link request ${uid} approved by ${callerUid} ` +
+      `→ person ${personId} (${plan.action})`);
+  return {status: lr.STATUS.APPROVED, personId: personId};
 });
 
 /**

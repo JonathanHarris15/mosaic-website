@@ -45,6 +45,13 @@ document.addEventListener('alpine:init', () => {
             prayerText: ''
         },
         
+        // Link Requests (ADR-0025): people asking to be connected to a directory
+        // record. Editors and elders resolve them from the directory itself.
+        linkRequests: [],
+        resolvingUid: null,      // the request currently being approved/declined
+        overrideFor: null,       // a "new" request being redirected onto an existing Person
+        overrideSearch: '',
+
         // UI State
         showAddPersonModal: false,
         showInvolvementModal: false,
@@ -82,6 +89,7 @@ document.addEventListener('alpine:init', () => {
                 this.loadPeople();
                 this.loadTags();
                 this.loadFamilies();
+                this.loadLinkRequests();
             });
         },
 
@@ -639,6 +647,85 @@ document.addEventListener('alpine:init', () => {
             } else {
                 this.sortKey = key;
                 this.sortDirection = key === 'totalInvolvements' ? 'desc' : 'asc';
+            }
+        },
+
+        // ── Link Requests (ADR-0025) ─────────────────────────────────────────
+        // People asking to be connected to a directory record. The queue lives
+        // here rather than in the admin panel because the question a request
+        // asks — "is this person who they say they are?" — is answered by
+        // someone who knows the congregation, which is the editor and elder
+        // set, not the admin set.
+
+        async loadLinkRequests() {
+            if (!this.canEdit) { this.linkRequests = []; return; }
+            try {
+                const snap = await db.collection(LinkRequestCore.REQUEST_PATH)
+                    .where('status', '==', LinkRequestCore.STATUS.PENDING).get(FRESH_READ);
+                // Sorted here rather than in the query: ordering a filtered query
+                // would need a composite index for no gain at this size.
+                this.linkRequests = snap.docs
+                    .map(doc => Object.assign({ id: doc.id }, doc.data()))
+                    .sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+            } catch (e) {
+                console.error('Error loading link requests:', e);
+                this.linkRequests = [];
+            }
+        },
+
+        // The Person a match request claims — resolved against the loaded list so
+        // an approver sees a name, not an id.
+        requestPersonName(request) {
+            if (request.kind !== LinkRequestCore.KIND.MATCH) return null;
+            const person = this.people.find(p => p.id === request.personId);
+            return person ? person.name : null;
+        },
+
+        requestSummary(request) {
+            return LinkRequestCore.summarize(request, this.requestPersonName(request));
+        },
+
+        // Candidate records when an approver redirects a "please add me" request
+        // onto someone already on file — the one-click cure for the duplicate
+        // record this feature would otherwise create.
+        get overrideCandidates() {
+            const q = (this.overrideSearch || '').toLowerCase().trim();
+            if (!q) return [];
+            return this.people
+                .filter(p => !p.userId && (p.name || '').toLowerCase().includes(q))
+                .slice(0, 15);
+        },
+
+        openOverride(request) {
+            this.overrideFor = request;
+            this.overrideSearch = (request.proposed && request.proposed.name) || '';
+        },
+
+        async resolveLinkRequest(request, decision, overridePersonId) {
+            if (decision === 'decline') {
+                const reason = prompt(
+                    'Why are you declining? This is shown to the person who asked (optional).', '');
+                if (reason === null) return; // Cancelled the dialog entirely.
+                return this.callResolve(request, 'decline', null, reason);
+            }
+            return this.callResolve(request, 'approve', overridePersonId || null, null);
+        },
+
+        async callResolve(request, decision, personId, reason) {
+            this.resolvingUid = request.id;
+            try {
+                const resolve = firebase.functions().httpsCallable('resolveLinkRequest');
+                await resolve({ uid: request.id, decision, personId, reason });
+                this.overrideFor = null;
+                this.overrideSearch = '';
+                await this.loadLinkRequests();
+                await this.loadPeople();
+                this.showToast(decision === 'approve' ? 'Request approved' : 'Request declined');
+            } catch (e) {
+                console.error('Error resolving link request:', e);
+                this.showToast(e.message || 'Could not resolve that request', 'error');
+            } finally {
+                this.resolvingUid = null;
             }
         },
 

@@ -77,6 +77,11 @@ async function initProfile() {
             // and enforced by the Firestore rules.
             if (userData && userData.personId) {
                 initMyInfo(userData.personId);
+            } else {
+                // Not a Linked User yet. Rather than showing this person an empty
+                // page and leaving them to wait for an admin to notice their
+                // account, let them ask (ADR-0025).
+                initLinkRequest(user);
             }
         } catch (error) {
             console.error("Error fetching user data:", error);
@@ -150,6 +155,218 @@ async function initMyInfo(personId) {
             status.className = 'text-[11px] font-body-md text-error';
         }
     });
+}
+
+// --- LINK REQUEST: ASKING TO JOIN THE DIRECTORY (ADR-0025) ---
+//
+// A User with no Person sees this instead of nothing. They either point at the
+// Person they already are, or say they are not listed and offer their details.
+// An editor or elder resolves it from the Membership Directory. Approval is a
+// privileged act and happens in the resolveLinkRequest callable — this file only
+// ever creates or withdraws a request.
+
+let lrKind = LinkRequestCore.KIND.MATCH;
+let lrChosenPersonId = null;
+let lrCurrentUser = null;
+
+function escapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+async function initLinkRequest(user) {
+    const panel = document.getElementById('link-request-panel');
+    if (!panel) return;
+    lrCurrentUser = user;
+    panel.classList.remove('hidden');
+
+    let request = null;
+    try {
+        const snap = await db.collection(LinkRequestCore.REQUEST_PATH).doc(user.uid).get();
+        request = snap.exists ? snap.data() : null;
+    } catch (e) {
+        console.error('Error loading link request:', e);
+    }
+
+    if (LinkRequestCore.isPending(request) || (request && request.status === LinkRequestCore.STATUS.DECLINED)) {
+        await renderLinkRequestState(request);
+    } else {
+        await showLinkRequestForm();
+    }
+}
+
+// The waiting / declined face of the panel. A pending request offers to be
+// withdrawn; a declined one offers a fresh start, which is why the rules let a
+// requester delete their own request in any state.
+async function renderLinkRequestState(request) {
+    const stateEl = document.getElementById('link-request-state');
+    const formEl = document.getElementById('link-request-form');
+    const icon = document.getElementById('link-request-state-icon');
+    const text = document.getElementById('link-request-state-text');
+    const withdraw = document.getElementById('link-request-withdraw');
+
+    let personName = null;
+    if (request.kind === LinkRequestCore.KIND.MATCH && request.personId) {
+        try {
+            const snap = await db.collection('people').doc(request.personId).get();
+            personName = snap.exists ? (snap.data().name || null) : null;
+        } catch (e) {
+            console.error('Error loading requested person:', e);
+        }
+    }
+
+    const pending = LinkRequestCore.isPending(request);
+    icon.textContent = pending ? 'hourglass_top' : 'info';
+    icon.className = 'material-symbols-outlined ' + (pending ? 'text-primary' : 'text-error');
+    text.textContent = LinkRequestCore.statusMessage(request, personName);
+    withdraw.textContent = pending ? 'Withdraw request' : 'Start a new request';
+
+    withdraw.onclick = withdrawLinkRequest;
+    formEl.classList.add('hidden');
+    stateEl.classList.remove('hidden');
+}
+
+async function showLinkRequestForm() {
+    const stateEl = document.getElementById('link-request-state');
+    const formEl = document.getElementById('link-request-form');
+    stateEl.classList.add('hidden');
+    formEl.classList.remove('hidden');
+
+    await loadPeopleCache();
+    setLinkRequestKind(LinkRequestCore.KIND.MATCH);
+
+    const search = document.getElementById('lr-search');
+    search.oninput = () => renderLinkRequestMatches(search.value);
+    renderLinkRequestMatches('');
+
+    document.getElementById('lr-tab-match').onclick = () => setLinkRequestKind(LinkRequestCore.KIND.MATCH);
+    document.getElementById('lr-tab-new').onclick = () => setLinkRequestKind(LinkRequestCore.KIND.NEW);
+    document.getElementById('lr-submit').onclick = submitLinkRequest;
+}
+
+function setLinkRequestKind(kind) {
+    lrKind = kind;
+    const isMatch = kind === LinkRequestCore.KIND.MATCH;
+    const on = 'flex-1 px-3 py-2 rounded-lg border border-primary bg-primary/10 text-primary font-label-md text-[10px] uppercase tracking-widest transition-all';
+    const off = 'flex-1 px-3 py-2 rounded-lg border border-outline-variant/50 text-on-surface-variant hover:text-primary font-label-md text-[10px] uppercase tracking-widest transition-all';
+    document.getElementById('lr-tab-match').className = isMatch ? on : off;
+    document.getElementById('lr-tab-new').className = isMatch ? off : on;
+    document.getElementById('lr-match').classList.toggle('hidden', !isMatch);
+    document.getElementById('lr-new').classList.toggle('hidden', isMatch);
+    document.getElementById('lr-status').textContent = '';
+}
+
+// The directory is publicly readable, so a viewer can find themselves. People
+// already claimed by another account are shown but not selectable — seeing the
+// name is how someone realises the church has them twice.
+function renderLinkRequestMatches(query) {
+    const list = document.getElementById('lr-results');
+    const q = (query || '').toLowerCase().trim();
+    if (!q) {
+        list.innerHTML = '<div class="px-3 py-2 text-[11px] text-on-surface-variant italic">Start typing to find your name.</div>';
+        return;
+    }
+
+    const matches = peopleCache
+        .filter(p => p.name.toLowerCase().includes(q) || (p.email && p.email.toLowerCase().includes(q)))
+        .slice(0, 25);
+
+    if (matches.length === 0) {
+        list.innerHTML = '<div class="px-3 py-2 text-[11px] text-on-surface-variant italic">No one by that name. If you’re new here, choose “I’m not listed yet”.</div>';
+        return;
+    }
+
+    list.innerHTML = matches.map(p => {
+        const taken = !!p.userId;
+        return `
+            <button type="button" ${taken ? 'disabled' : `onclick="chooseLinkRequestPerson('${p.id}')"`}
+                    class="w-full text-left px-3 py-2 flex items-center justify-between gap-2 transition-colors ${taken ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary/5'}">
+                <span class="flex flex-col">
+                    <span class="text-sm text-on-surface">${escapeHtml(p.name)}</span>
+                    ${p.email ? `<span class="text-[10px] text-on-surface-variant">${escapeHtml(p.email)}</span>` : ''}
+                </span>
+                ${taken ? '<span class="text-[9px] font-label-md uppercase tracking-widest text-on-surface-variant whitespace-nowrap">Already claimed</span>' : ''}
+            </button>
+        `;
+    }).join('');
+}
+
+function chooseLinkRequestPerson(personId) {
+    const person = peopleCache.find(p => p.id === personId);
+    if (!person) return;
+    lrChosenPersonId = personId;
+
+    const chosen = document.getElementById('lr-chosen');
+    chosen.classList.remove('hidden');
+    chosen.classList.add('flex');
+    chosen.innerHTML = `
+        <span class="material-symbols-outlined text-primary text-base">check_circle</span>
+        <span>You’ve chosen <strong>${escapeHtml(person.name)}</strong>.</span>
+    `;
+    document.getElementById('lr-status').textContent = '';
+}
+
+async function submitLinkRequest() {
+    const status = document.getElementById('lr-status');
+    const button = document.getElementById('lr-submit');
+
+    const draft = {
+        uid: lrCurrentUser.uid,
+        email: lrCurrentUser.email || '',
+        kind: lrKind,
+        personId: lrKind === LinkRequestCore.KIND.MATCH ? lrChosenPersonId : null,
+        note: document.getElementById('lr-note').value,
+        proposed: {
+            name: document.getElementById('lr-name').value,
+            email: document.getElementById('lr-email').value || lrCurrentUser.email || '',
+            phone: document.getElementById('lr-phone').value,
+            address: document.getElementById('lr-address').value,
+            birthday: document.getElementById('lr-birthday').value,
+            sex: document.getElementById('lr-sex').value,
+        },
+    };
+
+    const check = LinkRequestCore.validateDraft(draft);
+    if (!check.ok) {
+        status.textContent = check.error;
+        status.className = 'text-[11px] font-body-md text-error';
+        return;
+    }
+
+    button.disabled = true;
+    status.textContent = 'Sending…';
+    status.className = 'text-[11px] font-body-md text-primary animate-pulse';
+
+    try {
+        const doc = LinkRequestCore.buildRequest(draft);
+        doc.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+        await db.collection(LinkRequestCore.REQUEST_PATH).doc(lrCurrentUser.uid).set(doc);
+        await renderLinkRequestState(doc);
+    } catch (e) {
+        console.error('Error sending link request:', e);
+        status.textContent = 'Could not send that request: ' + e.message;
+        status.className = 'text-[11px] font-body-md text-error';
+    } finally {
+        button.disabled = false;
+    }
+}
+
+async function withdrawLinkRequest() {
+    const status = document.getElementById('link-request-state-status');
+    status.textContent = 'Working…';
+    status.className = 'text-[11px] font-body-md text-primary animate-pulse';
+    try {
+        await db.collection(LinkRequestCore.REQUEST_PATH).doc(lrCurrentUser.uid).delete();
+        lrChosenPersonId = null;
+        status.textContent = '';
+        document.getElementById('lr-chosen').classList.add('hidden');
+        await showLinkRequestForm();
+    } catch (e) {
+        console.error('Error withdrawing link request:', e);
+        status.textContent = 'Could not withdraw that request: ' + e.message;
+        status.className = 'text-[11px] font-body-md text-error';
+    }
 }
 
 // --- SELF PASSWORD CHANGE ---
@@ -571,5 +788,6 @@ window.deleteUser = deleteUser;
 window.updateUserPasswordAdmin = updateUserPasswordAdmin;
 window.copyToClipboard = copyToClipboard;
 window.togglePasswordVisibility = togglePasswordVisibility;
+window.chooseLinkRequestPerson = chooseLinkRequestPerson;
 
 initProfile();

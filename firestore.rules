@@ -59,6 +59,36 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Link Requests (ADR-0025): a User's own request to become a Linked User —
+    // either claiming an existing Person ("match") or asking to be added to the
+    // directory ("new"). The document id IS the requesting user's uid, which is
+    // what makes "one live request per account" true by construction.
+    //
+    // Note what is missing: there is no `allow update`. Resolving a request also
+    // writes users/{uid}.personId, and `users` is admin-only above — a rule wide
+    // enough to let an editor approve here would be a rule wide enough to let
+    // them change permission levels. So approval goes through the
+    // resolveLinkRequest callable, which runs with admin privileges and bypasses
+    // these rules entirely. No browser ever updates a request.
+    match /link_requests/{uid} {
+      // The requester sees their own; editors, elders and admins see the queue.
+      allow read: if request.auth != null && (request.auth.uid == uid || isEditor());
+
+      // You may only ask on your own behalf, only as pending, and only while you
+      // are not already linked — an existing link is the thing a request is for.
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.kind in ['match', 'new']
+        && myPersonId() == null;
+
+      // Withdraw your own request (and so file a fresh one after a decline);
+      // approvers may clear resolved requests out of the queue. Deleting a
+      // request never touches the link itself, which lives on users/people.
+      allow delete: if request.auth != null && (request.auth.uid == uid || isEditor());
+    }
+
     match /hymns/{hymnId} {
       allow read: if true;
       allow create, update, delete: if isEditor();
