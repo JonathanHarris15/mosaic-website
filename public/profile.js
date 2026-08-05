@@ -304,6 +304,13 @@ function chooseLinkRequestPerson(personId) {
         <span class="material-symbols-outlined text-primary text-base">check_circle</span>
         <span>You’ve chosen <strong>${escapeHtml(person.name)}</strong>.</span>
     `;
+
+    // Close the dropdown. The chip above is now the answer, so leaving a list of
+    // other names open under it just invites a second click. Emptying the list
+    // hides it outright (the container is `empty:hidden`); the search box is
+    // cleared with it, because it is a search rather than the chosen value.
+    document.getElementById('lr-search').value = '';
+    document.getElementById('lr-results').innerHTML = '';
     document.getElementById('lr-status').textContent = '';
 }
 
