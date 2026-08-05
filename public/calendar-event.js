@@ -845,7 +845,8 @@
                 this.error = '';
                 try {
                     await Store.restampSeriesVisibility(
-                        db, this.series.id, level, this.series.rosterShared === true
+                        db, this.series.id, level, this.series.rosterShared === true,
+                        { rank: this.rank }
                     );
                     this.series.visibility = level;
                 } catch (e) {
@@ -861,7 +862,8 @@
                 this.saving = true;
                 try {
                     await Store.restampSeriesVisibility(
-                        db, this.series.id, this.seriesVisibility, shared === true
+                        db, this.series.id, this.seriesVisibility, shared === true,
+                        { rank: this.rank }
                     );
                     this.series.rosterShared = shared === true;
                 } catch (e) {
@@ -1693,7 +1695,8 @@
                         // otherwise making something private leaves its history
                         // public.
                         await Store.restampSeriesVisibility(
-                            db, this.series.id, level, this.occurrence.rosterShared === true
+                            db, this.series.id, level, this.occurrence.rosterShared === true,
+                            { rank: this.rank }
                         );
                     } else {
                         // A one-off has no series to restamp. This control used
@@ -1717,7 +1720,9 @@
             async setRosterShared(shared) {
                 if (!this.visibilityEditable) return;
                 if (this.series) {
-                    await Store.restampSeriesVisibility(db, this.series.id, this.visibility, shared);
+                    await Store.restampSeriesVisibility(
+                        db, this.series.id, this.visibility, shared, { rank: this.rank }
+                    );
                 } else {
                     await Store.saveOccurrenceDetails(db, this.occurrence.id, {
                         visibility: this.visibility, rosterShared: shared === true,

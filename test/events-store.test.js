@@ -638,7 +638,7 @@ test('changing a series’ visibility restamps every occurrence, past ones inclu
     };
     const db = fakeDb({ event_occurrences: stored }, { rank: 'elder', personId: 'p1' });
 
-    const result = await Store.restampSeriesVisibility(db, 'midweek', 'elder', false);
+    const result = await Store.restampSeriesVisibility(db, 'midweek', 'elder', false, { rank: 'elder' });
 
     assert.strictEqual(result.occurrences, 2);
     const writes = db._flatWrites();
@@ -653,11 +653,45 @@ test('changing a series’ visibility restamps every occurrence, past ones inclu
 
 test('the restamp is not bounded by a date range — that would be the bug', async () => {
     const db = fakeDb({ event_occurrences: {} }, { rank: 'elder' });
-    await Store.restampSeriesVisibility(db, 'midweek', 'member', true);
+    await Store.restampSeriesVisibility(db, 'midweek', 'member', true, { rank: 'elder' });
 
     const q = db._queriesRun.find(x => x.collection === 'event_occurrences');
     assert.ok(!q.filters.some(f => f.field === 'date'),
         'a date filter here would leave past occurrences at their old visibility');
+});
+
+// ⚠ The bug this guards: this read used to name no rung at all, and it is the
+// only occurrence query in the app that could. A series with ONE legacy
+// occurrence carrying no stamp then failed the whole query — for a super admin,
+// who can see all five rungs — and the visibility control said
+// "Missing or insufficient permissions" with no way forward.
+test('the restamp names its rungs, so one unstamped occurrence cannot fail the whole read', async () => {
+    const stored = {
+        'midweek_2020-01-01': { seriesId: 'midweek', date: '2020-01-01', visibility: 'member', participantIds: [] },
+        // Written before the stamping fixes. Refused to EVERYONE by the rule.
+        'midweek_2021-06-06': { seriesId: 'midweek', date: '2021-06-06', participantIds: [] },
+    };
+    const db = fakeDb({ event_occurrences: stored }, { rank: 'super_admin', personId: 'p1' });
+
+    const result = await Store.restampSeriesVisibility(db, 'midweek', 'elder', false, { rank: 'super_admin' });
+
+    const q = db._queriesRun.find(x => x.collection === 'event_occurrences');
+    assert.ok(q.filters.some(f => f.field === 'visibility' && f.op === 'in'),
+        'an occurrence read that names no rung is refused whole the moment one row is unstamped');
+    assert.strictEqual(result.occurrences, 1, 'the readable date is restamped');
+    assert.ok(!db._flatWrites().some(w => w.path === 'event_occurrences/midweek_2021-06-06'),
+        'the unstamped one cannot be read, so it cannot be found — repairing it is a data job');
+});
+
+// Without a rank the read would fall back to `['public']` and restamp only the
+// public dates — a half-private Event with no error to say so.
+test('restamping refuses without a rank rather than quietly restamping half the series', async () => {
+    const db = fakeDb({ event_occurrences: {} }, { rank: 'elder' });
+    await assert.rejects(
+        () => Store.restampSeriesVisibility(db, 'midweek', 'member', false),
+        /who is asking/
+    );
+    assert.strictEqual(db._flatWrites().length, 0);
 });
 
 test('the Sunday Service’s visibility cannot be changed', async () => {

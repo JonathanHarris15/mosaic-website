@@ -777,7 +777,21 @@
     // series has to rewrite every one of them — PAST ONES INCLUDED. Otherwise
     // making something private would leave all of its history public, which is
     // the opposite of what the editor asked for.
-    async function restampSeriesVisibility(db, seriesId, visibility, rosterShared) {
+    //
+    // ⚠ THE READ IS CONSTRAINED BY VISIBILITY, like every other occurrence query
+    // here. It was not, and that was a bug that hit SUPER ADMINS: this is the one
+    // read in the app that asks for a series' dates without naming a rung, and an
+    // occurrence carrying NO stamp (written before the stamping fixes above) is
+    // refused to everyone — `stampedVisibility()` answers 'none', which matches no
+    // clause in the rule. Firestore fails the WHOLE query when one row is refused,
+    // so a single legacy document made "change the visibility" read
+    // `Missing or insufficient permissions` for a person allowed to see all five
+    // rungs. Naming the rungs leaves the unreadable row out of the result instead.
+    //
+    // An unstamped occurrence is therefore NOT restamped by this — it cannot be
+    // read, so it cannot be found. It is already invisible on every surface;
+    // repairing one is a data job, not something this can do from the client.
+    async function restampSeriesVisibility(db, seriesId, visibility, rosterShared, options) {
         if (seriesId === Core.SUNDAY_SERVICE_ID) {
             throw new Error('The Sunday Service is permanently public and its visibility cannot be changed.');
         }
@@ -785,9 +799,25 @@
             throw new Error('Unknown visibility: ' + visibility);
         }
 
+        // The caller's OWN rungs, not all five — the same constraint `openPattern`
+        // and `seriesRoleUsage` use. Anyone editing this series can already see it,
+        // so their rungs cover every date of it.
+        //
+        // The rank is REQUIRED, and a missing one is refused rather than defaulted.
+        // `rungsFor` falls back to `['public']` for a rank it does not know, which
+        // here would restamp the public dates of the series and quietly leave the
+        // rest at their old visibility — a half-private Event, and no error to say
+        // so. `shiftOccurrences` refuses a partial write for the same reason.
+        const rank = (options || {}).rank;
+        if (!rank) throw new Error('Changing an event’s visibility needs to know who is asking.');
+        const rungs = Core.visibilityQueryFor(rank).rungs;
+
         // No date filter. "Every occurrence, past ones included" is the whole
         // point — a range here would be the bug.
-        const snap = await db.collection(OCCURRENCES).where('seriesId', '==', seriesId).get();
+        const snap = await db.collection(OCCURRENCES)
+            .where('visibility', 'in', rungs)
+            .where('seriesId', '==', seriesId)
+            .get();
 
         const writes = snap.docs.map(doc => ({
             kind: 'update',
