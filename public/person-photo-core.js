@@ -144,6 +144,30 @@
             `transform: scale(${c.zoom}); transform-origin: ${c.x}% ${c.y}%;`;
     }
 
+    // The same style as an object, for the surfaces that build style objects
+    // rather than CSS strings — the phone app's components, chiefly. Same
+    // numbers, same result; two shapes of the one answer rather than two
+    // answers.
+    function frameStyleObject(crop) {
+        const c = normalizeCrop(crop);
+        return {
+            objectFit: 'cover',
+            objectPosition: `${c.x}% ${c.y}%`,
+            transform: `scale(${c.zoom})`,
+            transformOrigin: `${c.x}% ${c.y}%`,
+        };
+    }
+
+    // 1–2 letters for a Person with no photo. Every avatar in the app falls back
+    // to this, so it lives beside the photo rather than being reinvented per
+    // surface: first initial, plus the last name's if there is one.
+    function initialsOf(name) {
+        const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+        if (!parts.length) return '?';
+        if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+        return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    }
+
     function buildCropUpdate(crop) {
         return { photoCrop: normalizeCrop(crop) };
     }
@@ -245,6 +269,8 @@
         MAX_ZOOM,
         normalizeCrop,
         frameStyle,
+        frameStyleObject,
+        initialsOf,
         buildCropUpdate,
         panCrop,
         // browser-only

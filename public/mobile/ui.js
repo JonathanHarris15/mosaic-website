@@ -131,12 +131,29 @@
   }
 
   function initials(name) {
-    return String(name || "").trim().split(/\s+/).slice(0, 2).map(function (w) { return w[0] || ""; }).join("").toUpperCase();
+    return window.PersonPhotoCore.initialsOf(name);
   }
+
+  // The one avatar in the phone app. A Person's Directory Photo when they have
+  // one, their initials when they do not (ADR-0029) — so teaching this about
+  // photos is what puts them on the directory list, the person page and every
+  // other place an avatar appears here.
+  //
+  // The framing comes from PersonPhotoCore, the same function the web directory
+  // and the reframing preview use, so a photo somebody positioned on their
+  // profile page arrives here already looking right.
   function Avatar(props) {
     var size = props.size || 40;
+    var base = { width: size, height: size, borderRadius: "var(--radius-full)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" };
+    if (props.photoUrl) {
+      return html`
+        <span style=${Object.assign({}, base, { background: "var(--surface-container-high)" })}>
+          <img src=${props.photoUrl} alt=${props.name || ""}
+               style=${Object.assign({ width: "100%", height: "100%" }, window.PersonPhotoCore.frameStyleObject(props.photoCrop))} />
+        </span>`;
+    }
     return html`
-      <span style=${{ width: size, height: size, borderRadius: "var(--radius-full)", background: "var(--primary-fixed)", color: "var(--primary)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-sans)", fontWeight: 700, fontSize: Math.round(size * 0.4), flexShrink: 0 }}>${initials(props.name)}</span>`;
+      <span style=${Object.assign({}, base, { background: "var(--primary-fixed)", color: "var(--primary)", fontFamily: "var(--font-sans)", fontWeight: 700, fontSize: Math.round(size * 0.4) })}>${initials(props.name)}</span>`;
   }
 
   function Input(props) {

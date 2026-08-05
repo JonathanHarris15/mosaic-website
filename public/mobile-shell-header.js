@@ -57,12 +57,24 @@
         firebase.firestore().collection("users").doc(user.uid).get()
           .then(function (doc) {
             var d = (doc.exists && doc.data()) || {};
-            then({
+            var who = {
               // Same fallback chain as the app's own profile loader, so the two
               // drawers cannot end up calling one person two different things.
               name: d.name || d.displayName || user.displayName || (user.email || "").split("@")[0] || "Friend",
               permissionLevel: d.permissionLevel || d.role || "viewer",
-            });
+            };
+            // Your Directory Photo for the drawer's avatar. Only when you are a
+            // Linked User, and never at the cost of the drawer itself: a refused
+            // or slow read draws your initials rather than nothing.
+            if (!d.personId) return then(who);
+            firebase.firestore().collection("people").doc(d.personId).get()
+              .then(function (pd) {
+                var p = (pd.exists && pd.data()) || {};
+                who.photoUrl = p.photoUrl || null;
+                who.photoCrop = p.photoCrop || null;
+                then(who);
+              })
+              .catch(function () { then(who); });
           })
           .catch(function () { then({ name: "Friend", permissionLevel: "viewer" }); });
       });
@@ -152,7 +164,21 @@
     function draw(user) {
       var name = (user && user.name) || "Guest";
       who.textContent = name;
-      avatar.textContent = D.initials(name);
+      // Your Directory Photo when you have one, your initials when you do not
+      // (ADR-0029) — the same choice the phone app's drawer makes, so the two
+      // renderings of this one drawer keep agreeing.
+      if (user && user.photoUrl && window.PersonPhotoCore) {
+        avatar.textContent = "";
+        avatar.style.overflow = "hidden";
+        var img = document.createElement("img");
+        img.src = user.photoUrl;
+        img.alt = "";
+        img.style.cssText = "width:100%;height:100%;" +
+          window.PersonPhotoCore.frameStyle(user.photoCrop);
+        avatar.appendChild(img);
+      } else {
+        avatar.textContent = D.initials(name);
+      }
       role.textContent = user ? D.roleLabel(user.permissionLevel) : "Not signed in";
       if (user) {
         whoRow.href = D.routeHref("profile");

@@ -59,8 +59,18 @@
     return ((parts[0][0] || "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
   }
 
+  // This tab's own avatar — smaller and tinted, so it does not reuse ui.js's —
+  // but it makes the same choice: the Directory Photo when there is one,
+  // initials when there is not (ADR-0029).
   function Avatar(props) {
-    return html`<span style=${{ width: props.size || 26, height: props.size || 26, borderRadius: "50%", flexShrink: 0, background: props.tone === "ocean" ? "var(--secondary)" : "var(--primary)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-sans)", fontSize: 10.5, fontWeight: 700 }}>${initials(props.name)}</span>`;
+    var size = props.size || 26;
+    var base = { width: size, height: size, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" };
+    if (props.photoUrl) {
+      return html`<span style=${Object.assign({}, base, { background: "var(--surface-container-high)" })}>
+        <img src=${props.photoUrl} alt="" style=${Object.assign({ width: "100%", height: "100%" }, window.PersonPhotoCore.frameStyleObject(props.photoCrop))} />
+      </span>`;
+    }
+    return html`<span style=${Object.assign({}, base, { background: props.tone === "ocean" ? "var(--secondary)" : "var(--primary)", color: "#fff", fontFamily: "var(--font-sans)", fontSize: 10.5, fontWeight: 700 })}>${initials(props.name)}</span>`;
   }
 
   var BLANK_FORM = { name: "", kind: "pairwise", priority: false, holderLabel: "", counterpartLabel: "", leaderLabel: "", memberLabel: "", label: "" };
@@ -434,7 +444,7 @@
           ${opts.map(function (p) {
             return html`<button key=${p.id} onClick=${function () { choosePerson(p); }}
               style=${{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", border: "none", background: "transparent", borderRadius: "var(--radius)", cursor: "pointer", textAlign: "left" }}>
-              <${Avatar} name=${p.name} tone="ocean" />
+              <${Avatar} name=${p.name} photoUrl=${p.photoUrl} photoCrop=${p.photoCrop} tone="ocean" />
               <span style=${{ fontFamily: "var(--font-sans)", fontSize: 14, color: "var(--on-surface)" }}>${p.name}</span>
             </button>`;
           })}

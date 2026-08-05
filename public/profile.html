@@ -75,8 +75,6 @@
 
         /* Identity card — avatar · role · security · terminate, one card as in the design */
         html.shell-mobile #identity-card { padding: 18px; gap: 16px; box-shadow: none; }
-        html.shell-mobile #avatar-badge { width: 60px; height: 60px; background: #D8E2FF; }
-        html.shell-mobile #avatar-badge .material-symbols-outlined { font-size: 34px; }
         html.shell-mobile #user-email { font-size: 18px; }
         /* Permission tier → secondary pill badge */
         html.shell-mobile #user-role-display {
@@ -118,10 +116,7 @@
             <div class="lg:col-span-4 flex flex-col gap-md">
                 <div id="identity-card" class="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-md shadow-sm flex flex-col gap-md">
                     <div class="flex items-center gap-4">
-                        <div id="avatar-badge" class="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center text-primary">
-                            <span class="material-symbols-outlined text-3xl">account_circle</span>
-                        </div>
-                        <div class="flex flex-col">
+                        <div class="flex flex-col min-w-0">
                             <span id="user-email" class="font-headline-md text-headline-md text-primary truncate max-w-[200px]">Loading...</span>
                             <span id="user-role-badge" class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Loading Permission Level...</span>
                         </div>

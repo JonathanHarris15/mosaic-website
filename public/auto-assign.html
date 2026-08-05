@@ -102,14 +102,18 @@
             border-radius: 8px; padding: 7px 9px; min-height: 38px;
         }
 
-        /* A placeholder until real photographs land, so the card's shape does
-           not change on the day they do. */
+        /* Initials until a Person has a Directory Photo, the photo once they do
+           (ADR-0029) — the shape was sized for this from the start, so nothing
+           moved on the day they landed. overflow:hidden is what clips a
+           rectangular photo to the circle. */
         .aa-avatar {
             display: inline-flex; align-items: center; justify-content: center;
             width: 26px; height: 26px; border-radius: 999px; flex-shrink: 0;
             background: #EEE4D8; color: #5E6B82;
             font-size: 10px; letter-spacing: .02em;
+            overflow: hidden;
         }
+        .aa-avatar img { width: 100%; height: 100%; }
         .aa-avatar-sm { width: 21px; height: 21px; font-size: 9px; }
 
         /* ── Folding the liturgy away ──
@@ -683,7 +687,7 @@
                                                             <div class="flex items-center gap-2 px-2 py-1 rounded
                                                                         bg-surface-container-low">
                                                                 <span class="aa-avatar aa-avatar-sm"
-                                                                      x-text="h.initials"></span>
+                                                                      x-html="avatarInner(h.personId, h.initials)"></span>
                                                                 <span class="min-w-0">
                                                                     <span class="block text-[12.5px] text-on-surface truncate"
                                                                           x-text="h.name"></span>
@@ -748,7 +752,7 @@
                                                              class="aa-ghost">
                                                             <span class="material-symbols-outlined text-[15px] text-secondary shrink-0">swap_horiz</span>
                                                             <span class="aa-avatar aa-avatar-sm"
-                                                                  x-text="aimCard ? aimCard.initials : ''"></span>
+                                                                  x-html="aimCard ? avatarInner(aimCard.personId, aimCard.initials) : ''"></span>
                                                             <span class="text-[12.5px] text-on-surface truncate"
                                                                   x-text="aimCard ? aimCard.name : ''"></span>
                                                         </div>
@@ -766,7 +770,7 @@
                                                                      dragging && dragging.personId === place.card.personId
                                                                          ? 'aa-lifting' : '']">
                                                                 <div class="flex items-center gap-2">
-                                                                    <span class="aa-avatar" x-text="place.card.initials"></span>
+                                                                    <span class="aa-avatar" x-html="avatarInner(place.card.personId, place.card.initials)"></span>
                                                                     <span class="min-w-0 flex-grow">
                                                                         <span class="block text-[13px] text-on-surface truncate leading-tight"
                                                                               x-text="place.card.name"></span>
@@ -898,7 +902,7 @@
                                      @dragstart="startDrag($event, row.personId, null, 'directory')"
                                      @dragend="endDrag()"
                                      :class="row.spent ? 'aa-card-spent' : ''">
-                                    <span class="aa-avatar aa-avatar-sm" x-text="row.initials"></span>
+                                    <span class="aa-avatar aa-avatar-sm" x-html="avatarInner(row.personId, row.initials)"></span>
                                     <span class="min-w-0 flex-grow">
                                         <span class="block text-[12.5px] text-on-surface truncate leading-tight"
                                               x-text="row.name"></span>
@@ -924,7 +928,7 @@
                     <div class="flex flex-col min-h-0 h-full">
                         <div class="shrink-0 px-4 pt-3.5 pb-3 border-b border-outline-variant
                                     flex items-start gap-2">
-                            <span class="aa-avatar" x-text="placement.initials"></span>
+                            <span class="aa-avatar" x-html="avatarInner(placement.personId, placement.initials)"></span>
                             <div class="min-w-0 flex-grow">
                                 <span class="block text-[14px] text-on-surface truncate"
                                       x-text="placement.name"></span>
@@ -1153,7 +1157,7 @@
                                         <button type="button" @click="replaceWith(c.personId)"
                                                 class="flex items-start gap-2 text-[12px] text-left rounded-lg
                                                        px-2 py-1.5 hover:bg-surface-container aa-motion aa-focus">
-                                            <span class="aa-avatar aa-avatar-sm" x-text="c.initials"></span>
+                                            <span class="aa-avatar aa-avatar-sm" x-html="avatarInner(c.personId, c.initials)"></span>
                                             <span class="min-w-0 flex-grow">
                                                 <span class="block text-on-surface truncate" x-text="c.name"></span>
                                                 <!-- Eligibility advises; the editor
@@ -1202,7 +1206,7 @@
                      as well as on the place, because the rail is where they
                      will be looking for them afterwards. -->
                 <div x-show="intent === 'displace' && aimCard" class="aa-ghost-chip shrink-0">
-                    <span class="aa-avatar aa-avatar-sm" x-text="aimCard ? aimCard.initials : ''"></span>
+                    <span class="aa-avatar aa-avatar-sm" x-html="aimCard ? avatarInner(aimCard.personId, aimCard.initials) : ''"></span>
                     <span class="text-[12.5px] text-on-surface truncate"
                           x-text="aimCard ? aimCard.name : ''"></span>
                 </div>
@@ -1210,7 +1214,7 @@
                     <div class="aa-card shrink-0 flex items-center gap-2" draggable="true"
                          @dragstart="startDrag($event, d.personId, { date: d.date }, 'rail')"
                          @dragend="endDrag()">
-                        <span class="aa-avatar aa-avatar-sm" x-text="d.initials"></span>
+                        <span class="aa-avatar aa-avatar-sm" x-html="avatarInner(d.personId, d.initials)"></span>
                         <span class="min-w-0">
                             <span class="block text-[12.5px] text-on-surface truncate leading-tight"
                                   x-text="d.name"></span>
@@ -1347,7 +1351,8 @@
 <script src="auto-assign-edit-core.js"></script>
 <script src="auto-assign-panel-core.js"></script>
 <script src="auto-assign-saved-core.js"></script>
-<script src="auto-assign.js"></script>
+<script src="person-photo-core.js"></script>
+    <script src="auto-assign.js"></script>
 <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </body>
 </html>

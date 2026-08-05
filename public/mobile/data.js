@@ -54,6 +54,18 @@
         return data;
       })
       .then(function (data) {
+        // Your own Directory Photo, for the drawer's avatar (ADR-0029). Only
+        // fetched when you are a Linked User, because only then is there a
+        // Person to have a photo — and a failure here must not stop you seeing
+        // your own name, so it degrades to no photo rather than no profile.
+        if (!data.personId) return { data: data, person: null };
+        return get(db.collection("people").doc(data.personId))
+          .then(function (doc) { return { data: data, person: doc.exists ? doc.data() : null }; })
+          .catch(function () { return { data: data, person: null }; });
+      })
+      .then(function (both) {
+        var data = both.data;
+        var person = both.person || {};
         var name = data.name || data.displayName || user.displayName || (user.email ? user.email.split("@")[0] : "Friend");
         var permissionLevel = data.permissionLevel || data.role || "viewer";
         return {
@@ -63,6 +75,9 @@
           first: String(name).trim().split(/\s+/)[0],
           permissionLevel: permissionLevel,
           roleLabel: Destinations.roleLabel(permissionLevel),
+          personId: data.personId || null,
+          photoUrl: person.photoUrl || null,
+          photoCrop: person.photoCrop || null,
         };
       });
   }
@@ -210,6 +225,10 @@
           email: d.email || (d.contact && d.contact.email) || "",
           phone: d.phone || d.phoneNumber || (d.contact && d.contact.phone) || "",
           address: (d.contact && d.contact.address) || d.address || "",
+          // Directory Photo (ADR-0029) and its framing, so the phone's avatars
+          // show the same picture, positioned the same way, as the web.
+          photoUrl: d.photoUrl || null,
+          photoCrop: d.photoCrop || null,
           birthday: d.birthday || "",
           tags: Array.isArray(d.tags) ? d.tags : [],
           involvements: typeof d.involvements === "number" ? d.involvements : 0,

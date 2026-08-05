@@ -240,3 +240,43 @@ test('saving a crop writes only the crop field', () => {
         Photo.buildCropUpdate({ x: 10, y: 20, zoom: 1.5 }),
         { photoCrop: { x: 10, y: 20, zoom: 1.5 } });
 });
+
+// ── The same framing, in both shapes ─────────────────────────────────────────
+// Surfaces differ — some build CSS strings, the phone app builds style objects —
+// so the crop has two renderings. They must not be two answers.
+
+test('the object form carries the same numbers as the string form', () => {
+    const crop = { x: 20, y: 80, zoom: 2 };
+    const obj = Photo.frameStyleObject(crop);
+    const str = Photo.frameStyle(crop);
+    assert.strictEqual(obj.objectFit, 'cover');
+    assert.ok(str.includes(`object-position: ${obj.objectPosition}`));
+    assert.ok(str.includes(obj.transform));
+});
+
+test('the object form normalizes too, so a missing crop still renders', () => {
+    assert.deepStrictEqual(
+        Photo.frameStyleObject(undefined), Photo.frameStyleObject(Photo.DEFAULT_CROP));
+});
+
+// ── Initials, for a Person with no photo ─────────────────────────────────────
+
+test('initials take the first and last name', () => {
+    assert.strictEqual(Photo.initialsOf('Jonathan Harris'), 'JH');
+    assert.strictEqual(Photo.initialsOf('Mary Anne Jones'), 'MJ');
+});
+
+test('one name yields one letter', () => {
+    assert.strictEqual(Photo.initialsOf('Prince'), 'P');
+});
+
+test('no name yields something rather than an empty circle', () => {
+    assert.strictEqual(Photo.initialsOf(''), '?');
+    assert.strictEqual(Photo.initialsOf('   '), '?');
+    assert.strictEqual(Photo.initialsOf(null), '?');
+    assert.strictEqual(Photo.initialsOf(undefined), '?');
+});
+
+test('extra whitespace does not become an extra initial', () => {
+    assert.strictEqual(Photo.initialsOf('  Jonathan   Harris  '), 'JH');
+});

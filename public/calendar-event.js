@@ -1878,6 +1878,21 @@
                 return (p && p.name) || 'Someone';
             },
 
+            // A person's avatar contents: their Directory Photo when they have
+            // one, their initials otherwise (ADR-0029). `fallbackName` is for the
+            // one caller that already holds a name and no reliable id.
+            avatarInner(personId, fallbackName) {
+                const person = personId && this.people.find(x => x.id === personId);
+                if (person && person.photoUrl) {
+                    const url = String(person.photoUrl).replace(/"/g, '&quot;');
+                    return `<img src="${url}" alt="" style="width:100%;height:100%;` +
+                        `${PersonPhotoCore.frameStyle(person.photoCrop)}">`;
+                }
+                const name = (person && person.name) || fallbackName || this.personName(personId);
+                return PersonPhotoCore.initialsOf(name)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;');
+            },
+
             longDate(dateStr) {
                 return dateStr ? window.DateUtils.formatDateLong(dateStr, 'en-GB') : '';
             },

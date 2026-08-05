@@ -2066,6 +2066,23 @@
                 this.view = 'setup';
             },
 
+            // A person's avatar contents: their Directory Photo when they have
+            // one, their initials when they do not (ADR-0029). One helper rather
+            // than the same conditional at eight call sites, and it takes the
+            // initials the pure card builders already computed — those cores
+            // know nothing about photos and do not need to.
+            avatarInner(personId, initials) {
+                const person = personId && this.people.find(p => p.id === personId);
+                if (person && person.photoUrl) {
+                    const url = String(person.photoUrl).replace(/"/g, '&quot;');
+                    const style = PersonPhotoCore.frameStyle(person.photoCrop);
+                    return `<img src="${url}" alt="" style="${style}">`;
+                }
+                const safe = String(initials == null ? '' : initials)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                return safe;
+            },
+
             personName(personId) {
                 const p = this.people.filter(x => x.id === personId)[0];
                 return (p && p.name) || 'Someone';

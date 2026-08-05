@@ -115,6 +115,30 @@ small card.
 A new upload resets to centred. Carrying the previous crop over would frame the
 new picture by where the *old* one happened to need looking at.
 
+### 7. One photo, every avatar
+
+A photo nobody sees is not worth uploading, so it reaches every surface that
+draws a person: the Membership Directory on web and phone, the person detail
+page, the Auto-Assign scheduler's cards, the Calendar's assignment lists, the
+Relationships tab, and both renderings of the drawer.
+
+They do not share a component — the web is Alpine, the phone is Preact, the
+shell's drawer is plain DOM, and the scheduler builds HTML strings. What they
+share is the **decision**: `PersonPhotoCore` answers "what goes in this circle"
+in two shapes (`frameStyle` for CSS strings, `frameStyleObject` for style
+objects) and supplies the `initialsOf` fallback. Each surface asks the same
+question and gets the same answer, which is why a photo positioned once on the
+profile page arrives everywhere already framed correctly.
+
+The scheduler's pure card builders were left alone. They compute initials and
+know nothing about photos, and they should not have to — the lookup happens in
+the Alpine layer, where the People list already lives. That keeps their tests
+and their reasoning untouched.
+
+The generic placeholder is gone from the profile page's identity card. It was a
+grey silhouette next to an email address, telling you nothing, on the one page
+that now shows your actual photo two inches below it.
+
 ## Consequences
 
 - The `people` self-edit allow-list grows by two fields. It is still an

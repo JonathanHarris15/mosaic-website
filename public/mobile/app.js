@@ -317,7 +317,7 @@
             <${signedIn ? "button" : "div"} onClick=${signedIn ? function () { props.onNavigate("profile"); } : null}
               aria-label=${signedIn ? "Open your profile" : null}
               style=${{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, position: "relative", width: "100%", padding: 0, border: "none", background: "transparent", textAlign: "left", cursor: signedIn ? "pointer" : "default" }}>
-              <${Avatar} name=${user.name || "Guest"} size=${36} />
+              <${Avatar} name=${user.name || "Guest"} photoUrl=${user.photoUrl} photoCrop=${user.photoCrop} size=${36} />
               <div style=${{ minWidth: 0, flex: 1 }}>
                 <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 600, color: "var(--on-primary)" }}>${user.name || "Guest"}</div>
                 <div style=${{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--primary-fixed-dim)" }}>${user.roleLabel || "Not signed in"}</div>

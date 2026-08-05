@@ -170,7 +170,7 @@
                   var s = statusTone(p.shepherding);
                   return html`<button key=${p.id} onClick=${function () { props.nav("personDetail", { person: p }); }} style=${{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", padding: "12px 14px", cursor: "pointer", border: "none", background: "transparent", borderBottom: i === results.length - 1 ? "none" : "1px solid var(--outline-variant)" }}>
                     <div style=${{ position: "relative", flexShrink: 0 }}>
-                      <${Avatar} name=${p.name} size=${44} />
+                      <${Avatar} name=${p.name} photoUrl=${p.photoUrl} photoCrop=${p.photoCrop} size=${44} />
                       ${s ? html`<span style=${{ position: "absolute", right: -1, bottom: -1, width: 13, height: 13, borderRadius: "50%", background: s.color, border: "2px solid var(--surface-container-lowest)" }}></span>` : null}
                     </div>
                     <div style=${{ flex: 1, minWidth: 0 }}>
@@ -224,7 +224,7 @@
         <${TopBar} title="Directory" onBack=${props.back} serif=${false} />
         <${Body} style=${{ padding: "22px 16px calc(40px + env(safe-area-inset-bottom,0px))" }}>
           <div style=${{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 22 }}>
-            <${Avatar} name=${p.name} size=${82} />
+            <${Avatar} name=${p.name} photoUrl=${p.photoUrl} photoCrop=${p.photoCrop} size=${82} />
             <div style=${{ fontFamily: "var(--font-serif)", fontSize: 23, fontWeight: 600, color: "var(--on-surface)", marginTop: 12 }}>${p.name}</div>
             <div style=${{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
               ${membershipStageLabel(p) ? html`<${Badge} tone=${(p.membership && p.membership.inactive) ? "secondary" : "primary"}>${membershipStageLabel(p)}<//>` : null}
