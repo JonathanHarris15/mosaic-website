@@ -50,6 +50,11 @@ document.addEventListener('alpine:init', () => {
         linkRequests: [],
         resolvingUid: null,      // the request currently being approved/declined
         unlinkingId: null,       // the Person whose account is being disconnected
+
+        // Directory photos (ADR-0029). One shared file input serves the whole
+        // grid; photoTargetId remembers which card opened it.
+        photoTargetId: null,
+        photoBusyId: null,
         overrideFor: null,       // a "new" request being redirected onto an existing Person
         overrideSearch: '',
 
@@ -761,6 +766,72 @@ document.addEventListener('alpine:init', () => {
                 this.showToast(e.message || 'Could not disconnect that account', 'error');
             } finally {
                 this.unlinkingId = null;
+            }
+        },
+
+        // ── Directory photos (ADR-0029) ──────────────────────────────────────
+        // An editor sets or clears anyone's from the card; a person sets their
+        // own on their profile page. Same policy object either way, so the two
+        // surfaces cannot disagree about what is allowed.
+
+        // The Person this signed-in account is linked to, if any — so the photo
+        // check below is the same question the profile page asks.
+        get myPersonId() {
+            const mine = this.people.find(p => p.userId === this.currentUserUid);
+            return mine ? mine.id : null;
+        },
+
+        choosePhoto(person) {
+            if (!PersonPhotoCore.canManagePhoto(
+                this.effectivePermissionLevel, this.myPersonId, person.id)) {
+                this.showToast('You cannot change that photo', 'error');
+                return;
+            }
+            this.photoTargetId = person.id;
+            document.getElementById('directory-photo-input').click();
+        },
+
+        async onPhotoChosen(event) {
+            const input = event.target;
+            const file = input.files && input.files[0];
+            const personId = this.photoTargetId;
+            input.value = ''; // so picking the same file twice still fires
+            if (!file || !personId) return;
+
+            const check = PersonPhotoCore.validatePhotoFile(file);
+            if (!check.ok) { this.showToast(check.error, 'error'); return; }
+
+            this.photoBusyId = personId;
+            try {
+                await PersonPhotoCore.uploadPersonPhoto(db, personId, file);
+                await this.loadPeople();
+                this.showToast('Photo updated');
+            } catch (e) {
+                console.error('Photo upload failed:', e);
+                this.showToast(e.message || 'That upload did not work', 'error');
+            } finally {
+                this.photoBusyId = null;
+                this.photoTargetId = null;
+            }
+        },
+
+        async removePhoto(person) {
+            if (!PersonPhotoCore.canManagePhoto(
+                this.effectivePermissionLevel, this.myPersonId, person.id)) {
+                this.showToast('You cannot change that photo', 'error');
+                return;
+            }
+            if (!confirm(`Remove the photo for ${person.name}?`)) return;
+            this.photoBusyId = person.id;
+            try {
+                await PersonPhotoCore.clearPersonPhoto(db, person.id);
+                await this.loadPeople();
+                this.showToast('Photo removed');
+            } catch (e) {
+                console.error('Could not remove the photo:', e);
+                this.showToast(e.message || 'Could not remove that photo', 'error');
+            } finally {
+                this.photoBusyId = null;
             }
         },
 

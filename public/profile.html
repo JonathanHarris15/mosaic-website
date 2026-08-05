@@ -22,6 +22,7 @@
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
     <script src="vendor/firebase/firebase-firestore-compat.js"></script>
     <script src="vendor/firebase/firebase-functions-compat.js"></script>
+    <script src="vendor/firebase/firebase-storage-compat.js"></script>
     <!-- On-device cache for the phone app (no-op on the web). Must load before
          auth.js, which builds the Firestore handle persistence attaches to. -->
     <script src="local-cache.js"></script>
@@ -268,7 +269,28 @@
                             </h2>
                             <p class="text-[11px] text-on-surface-variant mt-1">Keep your own contact details current. Your membership standing is managed by the church office.</p>
                         </div>
-                        <!-- Name. Read-only: it is how the whole church refers to this
+                        <!-- Photo. Self-editable, unlike the name beside it: a photo is a
+                             fact about you that only you have, and nothing else in the app
+                             reads it as an identifier (ADR-0029). So it goes straight in,
+                             no approval. -->
+                        <div class="px-md pt-md flex items-center gap-4">
+                            <div class="w-24 h-24 rounded-full bg-surface-container-high border border-outline-variant/30 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                <img id="my-photo-img" class="hidden w-full h-full object-cover" alt="Your directory photo" />
+                                <span id="my-photo-placeholder" class="material-symbols-outlined text-outline-variant text-[44px]">person</span>
+                            </div>
+                            <div class="flex flex-col gap-2">
+                                <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Directory photo</span>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <input type="file" id="my-photo-input" accept="image/jpeg,image/png,image/webp" class="hidden" />
+                                    <button type="button" id="my-photo-choose" class="px-4 py-2 bg-surface-container-high text-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-outline-variant/20 transition-all">Upload a photo</button>
+                                    <button type="button" id="my-photo-remove" class="hidden px-3 py-2 text-error font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-error-container/20 transition-all">Remove</button>
+                                </div>
+                                <span id="my-photo-status" class="text-[11px] font-body-md"></span>
+                                <p class="text-[10px] text-on-surface-variant leading-relaxed max-w-sm">Everyone in the church directory can see this. JPEG, PNG or WebP.</p>
+                            </div>
+                        </div>
+
+                                                <!-- Name. Read-only: it is how the whole church refers to this
                              person, so it is not self-editable — but being stuck with
                              your own name misspelt is worse, so there is a way to ask
                              (ADR-0027). -->
@@ -470,6 +492,7 @@
 
     <script src="shepherding-core.js"></script>
     <script src="family-core.js"></script>
+    <script src="person-photo-core.js"></script>
     <script src="directory-request-core.js"></script>
     <script src="profile.js"></script>
 </body>

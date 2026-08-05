@@ -1,6 +1,28 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+
+    // Directory photos (ADR-0029). Storage rules cannot read Firestore, so they
+    // cannot tell whether this uploader owns this personId — that check lives in
+    // the Firestore rule on `people`, which is what decides whether an uploaded
+    // image can ever be ATTACHED to a Person. Bytes nobody can attach are inert.
+    //
+    // What IS enforceable here is the shape of the upload, and that is worth
+    // enforcing: without it this path accepts an executable, or a 2GB file, from
+    // any signed-in account.
+    match /people_photos/{personId}/{fileId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+
+      // No client deletes. These rules cannot tell whose photo this is, so
+      // allowing delete here would let any signed-in account wipe anyone's.
+      // The cleanUpReplacedPhoto trigger removes a replaced blob instead —
+      // which also catches the browser that closes mid-upload.
+      allow delete: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if request.auth != null;
     }

@@ -554,6 +554,43 @@ exports.resolveDirectoryRequest = onCall({cors: true, region: "us-central1"}, as
 });
 
 /**
+ * Deletes a directory photo's blob once the Person stops pointing at it
+ * (ADR-0029) — a replacement, a removal, or the Person being deleted outright.
+ *
+ * This lives on the server rather than in the browser that did the replacing,
+ * for two reasons. Storage rules cannot read Firestore, so a rule that let
+ * clients delete under people_photos/ would let ANY signed-in account delete
+ * ANYONE's photo. And a browser closed between the upload and the tidy-up would
+ * leak the old file for good.
+ *
+ * Best-effort by design: the blob may already be gone, and a failure to remove
+ * bytes must never look like a failure to change the photo, which has already
+ * happened by the time this runs.
+ */
+exports.cleanUpReplacedPhoto = onDocumentWritten(
+    {document: "people/{personId}", region: "us-central1"},
+    async (event) => {
+      const before = event.data && event.data.before && event.data.before.exists ?
+        event.data.before.data() : null;
+      const after = event.data && event.data.after && event.data.after.exists ?
+        event.data.after.data() : null;
+
+      const oldPath = before && before.photoPath;
+      if (!oldPath) return; // Nothing was stored — nothing to tidy.
+      const newPath = after && after.photoPath;
+      if (oldPath === newPath) return; // Still in use.
+
+      try {
+        await admin.storage().bucket().file(oldPath).delete();
+        log(`Removed replaced photo ${oldPath}`);
+      } catch (e) {
+        // Already gone, or never landed. Either way the Person is correct.
+        log(`Could not remove photo ${oldPath}: ${e.message}`);
+      }
+    },
+);
+
+/**
  * Breaks a Linked User: clears users/{uid}.personId and people/{id}.userId.
  *
  * A callable rather than a rule because the `users` collection is admin-only —

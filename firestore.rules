@@ -278,9 +278,12 @@ service cloud.firestore {
       // shepherding data are never self-editable. affectedKeys() reports the
       // top-level `contact` map when any contact sub-field changes, so listing
       // `contact` covers email/phone/address.
+      // photoUrl/photoPath joined this set in ADR-0029: a photo is a fact about
+      // you that only you have, and nothing else in the app reads it as an
+      // identifier — unlike the name, which needs an editor (ADR-0027).
       allow update: if request.auth != null
         && resource.data.userId == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['contact', 'birthday', 'sex', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['contact', 'birthday', 'sex', 'photoUrl', 'photoPath', 'updatedAt'])
         && (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['sex'])
           || !('sex' in resource.data)

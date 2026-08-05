@@ -254,6 +254,11 @@
                 </button>
             </div>
 
+            <!-- One file input for the whole grid: the card that opened it is held
+                 in photoTargetId, so this is not repeated per person. -->
+            <input type="file" id="directory-photo-input" accept="image/jpeg,image/png,image/webp"
+                   class="hidden" @change="onPhotoChosen($event)" />
+
             <div class="flex-grow p-md">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <template x-for="person in filteredPeople" :key="person.id">
@@ -267,15 +272,30 @@
                              :class="editMode ? 'hover:border-primary/40 hover:shadow-md' : ''">
                             <div class="flex justify-between items-start">
                                 <!-- Photo slot (photo upload wired later; shows a placeholder until a photo is set) -->
+                                <!-- Photo. An editor sets or clears anyone's from here; a
+                                     person sets their own on their profile page (ADR-0029).
+                                     The overlay only appears in Edit Mode, so a member's
+                                     avatar is a picture and not a broken-looking button. -->
                                 <div class="flex-shrink-0 mr-3">
-                                    <div class="w-14 h-14 rounded-full bg-surface-container-high border border-outline-variant/30 flex items-center justify-center overflow-hidden">
+                                    <div class="w-14 h-14 rounded-full bg-surface-container-high border border-outline-variant/30 flex items-center justify-center overflow-hidden relative group/photo">
                                         <template x-if="person.photoUrl">
                                             <img :src="person.photoUrl" :alt="person.name" class="w-full h-full object-cover">
                                         </template>
                                         <template x-if="!person.photoUrl">
                                             <span class="material-symbols-outlined text-outline-variant text-[28px]">person</span>
                                         </template>
+
+                                        <button x-show="editMode" @click.stop="choosePhoto(person)" :disabled="photoBusyId === person.id"
+                                                class="absolute inset-0 flex items-center justify-center bg-primary/70 text-on-primary opacity-0 group-hover/photo:opacity-100 focus:opacity-100 transition-opacity disabled:opacity-100"
+                                                :title="person.photoUrl ? 'Replace photo' : 'Add a photo'">
+                                            <span x-show="photoBusyId !== person.id" class="material-symbols-outlined text-[20px]">photo_camera</span>
+                                            <span x-show="photoBusyId === person.id" class="material-symbols-outlined text-[20px] animate-pulse">hourglass_top</span>
+                                        </button>
                                     </div>
+                                    <button x-show="editMode && person.photoUrl" @click.stop="removePhoto(person)" :disabled="photoBusyId === person.id"
+                                            class="mt-1 w-14 text-[8px] font-label-md uppercase tracking-widest text-error/70 hover:text-error transition-colors disabled:opacity-40">
+                                        Remove
+                                    </button>
                                 </div>
                                 <div class="flex-grow">
                                     <div class="flex items-center gap-2 mb-1">
@@ -815,6 +835,7 @@
     <script src="shepherding-core.js"></script>
     <script src="family-core.js"></script>
     <script src="events-core.js"></script>
+    <script src="person-photo-core.js"></script>
     <script src="directory-request-core.js"></script>
     <script src="peoples-page.js"></script>
 </body>

@@ -120,7 +120,9 @@ async function initMyInfo(personId) {
 
         // The name is shown but not editable, with a way to ask for a spelling
         // fix; the household is proposed the same way. Both need the People
-        // list to turn ids into names (ADR-0027).
+        // list to turn ids into names (ADR-0027). The photo, unlike the name,
+        // goes straight in (ADR-0029).
+        initMyPhoto(personId, p);
         await loadPeopleCache();
         const requests = await loadMyRequests(currentUserUid);
         renderMyName(p, requests.find(
@@ -166,6 +168,82 @@ async function initMyInfo(personId) {
             status.className = 'text-[11px] font-body-md text-error';
         }
     });
+}
+
+// --- MY DIRECTORY PHOTO (ADR-0029) ---
+//
+// Self-editable, like contact details and unlike the name: a photo is a fact
+// about you that only you have, and nothing in the app reads it as an
+// identifier. So there is no approval queue — it goes straight onto the Person.
+
+function initMyPhoto(personId, person) {
+    const input = document.getElementById('my-photo-input');
+    const choose = document.getElementById('my-photo-choose');
+    const remove = document.getElementById('my-photo-remove');
+    const status = document.getElementById('my-photo-status');
+    if (!input) return;
+
+    showMyPhoto(person.photoUrl || null);
+
+    choose.onclick = () => input.click();
+
+    input.onchange = async () => {
+        const file = input.files && input.files[0];
+        input.value = ''; // so picking the same file twice still fires
+        if (!file) return;
+
+        const check = PersonPhotoCore.validatePhotoFile(file);
+        if (!check.ok) {
+            status.textContent = check.error;
+            status.className = 'text-[11px] font-body-md text-error';
+            return;
+        }
+
+        choose.disabled = true;
+        status.textContent = 'Uploading…';
+        status.className = 'text-[11px] font-body-md text-primary animate-pulse';
+        try {
+            const saved = await PersonPhotoCore.uploadPersonPhoto(db, personId, file);
+            showMyPhoto(saved.url);
+            status.textContent = 'Photo updated.';
+            status.className = 'text-[11px] font-body-md text-green-600';
+            setTimeout(() => { status.textContent = ''; }, 4000);
+        } catch (e) {
+            console.error('Photo upload failed:', e);
+            status.textContent = e.message || 'That upload did not work.';
+            status.className = 'text-[11px] font-body-md text-error';
+        } finally {
+            choose.disabled = false;
+        }
+    };
+
+    remove.onclick = async () => {
+        if (!confirm('Remove your directory photo?')) return;
+        status.textContent = 'Removing…';
+        status.className = 'text-[11px] font-body-md text-primary animate-pulse';
+        try {
+            await PersonPhotoCore.clearPersonPhoto(db, personId);
+            showMyPhoto(null);
+            status.textContent = '';
+        } catch (e) {
+            console.error('Could not remove the photo:', e);
+            status.textContent = e.message || 'Could not remove that photo.';
+            status.className = 'text-[11px] font-body-md text-error';
+        }
+    };
+}
+
+function showMyPhoto(url) {
+    const img = document.getElementById('my-photo-img');
+    const placeholder = document.getElementById('my-photo-placeholder');
+    const choose = document.getElementById('my-photo-choose');
+    const remove = document.getElementById('my-photo-remove');
+
+    img.classList.toggle('hidden', !url);
+    placeholder.classList.toggle('hidden', !!url);
+    remove.classList.toggle('hidden', !url);
+    choose.textContent = url ? 'Replace photo' : 'Upload a photo';
+    if (url) img.src = url;
 }
 
 // --- DIRECTORY REQUESTS (ADR-0025, ADR-0027) ---
