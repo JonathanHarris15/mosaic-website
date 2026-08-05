@@ -23,7 +23,7 @@
  * hyphens only, and carry no underscore at all.
  */
 
-// ── The seven recurring Events ───────────────────────────────────────────────
+// ── The recurring Events ─────────────────────────────────────────────────────
 //
 // A pattern the model can actually express: weekly or monthly, one weekday, an
 // end date. Nothing here needed a fortnightly rule and nothing needed a count.
@@ -62,17 +62,20 @@ const SERIES = [
             { date: '2026-12-31', why: 'New Year' },
         ],
     },
-    {
-        id: 'members_meeting',
-        name: "Member's Meeting",
-        description: 'The first Sunday of the month.',
-        visibility: 'member',
-        colour: 'navy',
-        // Monthly means "the first Sunday", not "the 2nd of the month" — the nth
-        // is taken from the start date.
-        recurrence: { freq: 'monthly', weekday: 0, startDate: '2026-08-02', ends: { kind: 'onDate', date: '2026-12-06' } },
-        skip: [],
-    },
+    // ⚠ NO MEMBER'S MEETING HERE, AND THAT IS DELIBERATE.
+    //
+    // The church already had one — a "Members Meeting" series under an auto-id,
+    // the same rule (monthly, first Sunday, from 2 August), carrying on until
+    // further notice. The first run of this import did not know that and wrote a
+    // second one, so five dates briefly showed the meeting twice. The duplicate
+    // has been removed and the church's own kept: it is the better record, since
+    // it does not stop when this workbook happens to.
+    //
+    // The lesson generalises. This import creates series under ids it chose, so
+    // it cannot see an existing series that means the same thing under a
+    // different id. Before adding anything here, look at what is already in
+    // `events` — a duplicate is invisible in a dry run and obvious on the
+    // calendar.
     {
         id: 'core_seminar',
         name: 'Core Seminar',
@@ -155,7 +158,6 @@ const EXPECTED = {
         '2026-11-05', '2026-11-12', '2026-11-19', '2026-11-26',
         '2026-12-03', '2026-12-10', '2026-12-17', '2026-12-24', '2026-12-31',
     ],
-    members_meeting: ['2026-08-02', '2026-09-06', '2026-10-04', '2026-11-01', '2026-12-06'],
     core_seminar: [
         '2026-08-30', '2026-09-06', '2026-09-13', '2026-09-20', '2026-09-27',
         '2026-10-04', '2026-10-11', '2026-10-18', '2026-10-25',
