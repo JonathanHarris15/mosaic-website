@@ -266,29 +266,6 @@
              day you tapped — or the whole month, if you asked for the list. -->
         <div class="cal-phone-only mt-md flex-col gap-md">
 
-            <!-- Navy, because it is the one thing on this screen that is about
-                 the person holding it rather than about the church's diary. -->
-            <section class="bg-primary rounded-lg px-[18px] py-4">
-                <div class="flex items-center justify-between gap-sm">
-                    <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-primary-fixed-dim">
-                        Upcoming
-                    </div>
-                    <!-- Presses round the three windows rather than opening a
-                         list. A select's list is drawn by the browser, not by
-                         the page: in the shell's WebView it landed halfway up
-                         the screen over the toolbar, and on this navy card it
-                         inherited white-on-navy and came out unreadable. -->
-                    <button type="button" @click="cycleUpcomingWindow()" :aria-label="upcomingWindowHint"
-                            :title="upcomingWindowHint"
-                            class="shrink-0 flex items-center gap-1 bg-primary-fixed-dim rounded-md pl-2.5 pr-2 py-1
-                                   text-[11.5px] font-label-md text-primary cal-motion cal-press cal-focus">
-                        <span x-text="upcomingWindowLabel"></span>
-                        <span class="material-symbols-outlined text-[14px] opacity-70">autorenew</span>
-                    </button>
-                </div>
-                <p class="font-headline-lg text-[19px] leading-[1.35] mt-1.5 text-on-primary" x-text="mySentence"></p>
-            </section>
-
             <div class="flex items-center justify-between gap-sm">
                 <div class="flex items-center gap-1">
                     <button @click="prevMonth()" aria-label="Previous month"
@@ -345,6 +322,44 @@
                     </button>
                 </template>
             </div>
+
+            <!-- ── You, in the month on screen ─────────────────────────────
+                 Under the calendar and above the list, so the month it means is
+                 the month you are looking at and the heading only has to
+                 confirm it. It used to be a navy card at the TOP of the page
+                 answering for its own window of days, where nothing said which
+                 stretch of time it covered.
+
+                 Navy still, because it is the one thing here that is about the
+                 person holding the phone rather than about the church's diary.
+
+                 Only for somebody the church knows by name — with no Person
+                 there is no "you" for it to answer about. -->
+            <section x-show="personId" class="bg-primary rounded-lg px-[18px] py-4">
+                <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-primary-fixed-dim"
+                     x-text="myMonthHeading"></div>
+                <p class="font-headline-lg text-[19px] leading-[1.35] mt-1.5 text-on-primary" x-text="mySentence"></p>
+
+                <div x-show="myCommitments.length" class="mt-3.5 flex flex-col gap-2.5">
+                    <template x-for="c in myCommitments" :key="c.occurrenceId + c.roleLabel">
+                        <div class="flex items-start gap-3">
+                            <div class="w-[30px] shrink-0 text-center">
+                                <div class="text-[9.5px] font-label-md tracking-[.12em] uppercase text-primary-fixed-dim"
+                                     x-text="weekdayShort(c.date)"></div>
+                                <div class="font-display text-[17px] text-on-primary" x-text="dayNumber(c.date)"></div>
+                            </div>
+                            <div class="min-w-0 flex-grow">
+                                <div class="text-[13.5px] font-label-md font-semibold text-on-primary truncate"
+                                     x-text="c.roleLabel"></div>
+                                <div class="text-[12px] text-primary-fixed-dim truncate" x-text="c.eventName"></div>
+                            </div>
+                            <span x-show="c.state === 'pending'"
+                                  class="shrink-0 text-[10px] font-label-md tracking-[.1em] uppercase text-primary-fixed-dim
+                                         border border-primary-fixed-dim rounded px-1.5 py-0.5">Not answered</span>
+                        </div>
+                    </template>
+                </div>
+            </section>
 
             <!-- One body for both views, so the card is written once. Month is
                  the day you tapped; List is the whole month, grouped by week. -->
@@ -614,54 +629,36 @@
             <!-- ── The right rail ─────────────────────────────────────────── -->
             <aside class="cal-rail flex flex-col gap-gutter min-w-0">
 
-                <!-- The phone says this at the top of its own screen, in navy.
-                     Two of them on one page is the same sentence twice. -->
-                <section class="cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
-                    <!-- Not "You in July". This card runs from today forward,
-                         over the window you pick, so it keeps answering "what am
-                         I down for" while the grid beside it pages through
-                         months. -->
-                    <div class="flex items-center justify-between gap-sm">
-                        <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
-                            Upcoming
-                        </div>
-                        <!-- The same control as the phone's, for the same
-                             reason it changed there: one thing, one way. A
-                             desktop select worked, but keeping it would leave
-                             the same choice made through two different controls
-                             depending on what you happened to open it on. -->
-                        <button type="button" @click="cycleUpcomingWindow()" :aria-label="upcomingWindowHint"
-                                :title="upcomingWindowHint"
-                                class="shrink-0 flex items-center gap-1 bg-surface-container border border-outline-variant rounded-md
-                                       pl-2.5 pr-2 py-1 text-[11.5px] font-label-md text-on-surface
-                                       cal-motion cal-press cal-focus hover:bg-surface-container-high">
-                            <span x-text="upcomingWindowLabel"></span>
-                            <span class="material-symbols-outlined text-[14px] text-on-surface-variant">autorenew</span>
-                        </button>
-                    </div>
+                <!-- ── You, in the month on screen ─────────────────────────
+                     Beside the grid, not under it: a desktop month is most of a
+                     screen tall, so below it this would be a scroll away from
+                     the thing it answers about. The phone puts it under the
+                     calendar because there that IS next to the month — see the
+                     navy copy on that layout.
+
+                     It carried a window of its own once, and a control to say
+                     which window. Now that it follows the month on screen, the
+                     heading is the whole of the answer. -->
+                <section x-show="personId"
+                         class="cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                    <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant"
+                         x-text="myMonthHeading"></div>
                     <p class="font-headline-lg text-[16.5px] leading-[1.4] mt-2 text-on-surface" x-text="mySentence"></p>
 
-                    <div class="mt-md flex flex-col gap-2.5">
+                    <div x-show="myCommitments.length" class="mt-md flex flex-col gap-2.5">
                         <template x-for="c in myCommitments" :key="c.occurrenceId + c.roleLabel">
                             <div class="flex items-start gap-sm">
                                 <div class="w-[34px] shrink-0 text-center">
                                     <div class="text-[10px] font-label-md tracking-wider uppercase text-on-surface-variant"
                                          x-text="weekdayShort(c.date)"></div>
                                     <div class="font-display text-[17px] text-on-surface" x-text="dayNumber(c.date)"></div>
-                                    <!-- The window runs over the end of the month more often
-                                         than not, and two rows both saying "2" is a card
-                                         nobody can read in order. Only the ones that have
-                                         left this month say which one they are in. -->
-                                    <div x-show="inLaterMonth(c.date)"
-                                         class="text-[9px] font-label-md tracking-wider uppercase text-outline"
-                                         x-text="monthShort(c.date)"></div>
                                 </div>
                                 <div class="min-w-0 flex-grow">
                                     <div class="text-[13.5px] font-label-md font-semibold truncate" x-text="c.roleLabel"></div>
                                     <div class="text-[12px] text-on-surface-variant truncate" x-text="c.eventName"></div>
                                 </div>
                                 <div class="shrink-0 flex items-center gap-1.5 pt-0.5">
-                                    <!-- Pending is a hollow ring: the resting
+                                <!-- Pending is a hollow ring: the resting
                                          state, and quiet on purpose. -->
                                     <span class="w-[7px] h-[7px] rounded-full"
                                           :class="{

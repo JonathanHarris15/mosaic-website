@@ -89,16 +89,6 @@
             people: [],
             hiddenSeries: [],       // series unticked in the "Show" filters
 
-            // ── Upcoming ────────────────────────────────────────────────────
-            //
-            // Its own rows, its own query. The card answers "what am I down
-            // for", which runs from today forward — so paging the grid back to
-            // April must not change the answer, and a window of two weeks
-            // crosses the end of the month more often than not.
-            upcoming: [],
-            upcomingWindow: View.DEFAULT_UPCOMING_WINDOW,
-            upcomingWindows: View.UPCOMING_WINDOWS,
-
             // The Roles and their slots, so the grid can count the places still
             // to fill. Editors only — nobody else is shown that count, and
             // nobody else is allowed to read the definitions.
@@ -116,11 +106,10 @@
                 // wrong rank either over-asks (and errors) or under-asks (and
                 // quietly hides somebody's own commitments).
                 this.rank = await this.resolveRank();
-                // The grid first — it is the page. The card beside it and the
-                // Role definitions behind the warnings follow on their own, so
-                // neither can hold the calendar up.
+                // The grid first — it is the page. The Role definitions behind
+                // the warnings follow on their own, so they cannot hold the
+                // calendar up.
                 await this.load();
-                this.loadUpcoming();
                 this.loadRoleDefinitions();
             },
 
@@ -195,28 +184,6 @@
                 }
             },
 
-            // The Upcoming card's own read: today through the end of the chosen
-            // window, whatever month the grid is showing.
-            //
-            // It fails quietly. This card sits beside the calendar rather than
-            // being it, and an error sentence over the grid because a side panel
-            // could not load would say the whole page had failed when it had not.
-            async loadUpcoming() {
-                if (!this.personId) { this.upcoming = []; return; }
-                const range = View.upcomingRange(this.today, this.upcomingWindow);
-                try {
-                    this.upcoming = await Store.loadCalendar(db, {
-                        rank: this.rank,
-                        personId: this.personId,
-                        from: range.from,
-                        to: range.to,
-                    });
-                } catch (e) {
-                    console.error('Upcoming load failed:', e);
-                    this.upcoming = [];
-                }
-            },
-
             // Which Roles exist and how many places each one has. Without this
             // the grid cannot tell a date with nobody on it from a date that
             // needs nobody, so a viewer who is not an editor — who never sees
@@ -281,49 +248,30 @@
             // series with counts beside them — and a serve of your own is not
             // something a display filter over a different stretch of time should
             // be able to hide from you.
-            get myCommitments() { return View.myCommitments(this.upcoming, this.personId); },
-            get mySentence() {
-                return View.myCommitmentsSentence(
-                    this.myCommitments, View.upcomingWindow(this.upcomingWindow).phrase);
-            },
-            get needsSorting() { return View.needsSorting(this.visible, this.people); },
+            get myCommitments() { return View.myCommitments(this.occurrences, this.personId); },
+            get mySentence() { return View.myCommitmentsSentence(this.myCommitments); },
 
-            // A window is a different question, not a different filter, so it
-            // goes back to the database rather than trimming what is in hand.
-            setUpcomingWindow(id) {
-                this.upcomingWindow = id;
-                return this.loadUpcoming();
-            },
-
-            get upcomingWindowLabel() {
-                return View.upcomingWindow(this.upcomingWindow).label;
-            },
-
-            // ⚠ A BUTTON THAT CYCLES, NOT A DROP-DOWN. This was a <select>, and
-            // a select's list is drawn by the browser rather than by the page:
-            // inside the shell's WebView it landed halfway up the screen over
-            // the toolbar, and on the navy card it inherited white-on-navy and
-            // came out unreadable. Neither is fixable from here — the list is
-            // not ours to place or paint.
+            // "You in August", and it means it. This block used to be an
+            // Upcoming card at the top of the page reading its own window of
+            // days — today through a fortnight, whatever the grid was showing —
+            // and it was a separate query for that reason.
             //
-            // There are three windows. Walking round them costs at most two taps
-            // to reach any one, which is cheaper than a list that opens in the
-            // wrong place, and the control is then an ordinary button that the
-            // page draws and can see.
-            cycleUpcomingWindow() {
-                const list = this.upcomingWindows;
-                const at = list.findIndex(w => w.id === this.upcomingWindow);
-                return this.setUpcomingWindow(list[(at + 1) % list.length].id);
-            },
+            // It now answers for THE MONTH ON SCREEN, which is why it can be
+            // read straight off the rows the grid already has. Two reads became
+            // one, and the two can no longer disagree about the same Sunday.
+            //
+            // The old objection to this — that paging back to April changed
+            // what you were down for — was really an objection to the card
+            // sitting at the TOP of the page, where nothing said which month it
+            // meant. Underneath the grid, with the month in its own heading, the
+            // question and the answer are next to each other.
+            //
+            // `myCommitments` drops anything already past, so this month runs
+            // from today and a month ahead runs whole — with no arithmetic here
+            // to get that wrong.
+            get myMonthHeading() { return 'You in ' + this.monthLabel; },
 
-            // Said out loud for anybody who cannot see the button change, since
-            // "Next 2 weeks" alone does not tell you pressing it does anything.
-            get upcomingWindowHint() {
-                const list = this.upcomingWindows;
-                const at = list.findIndex(w => w.id === this.upcomingWindow);
-                return 'Showing ' + list[at].label.toLowerCase()
-                    + '. Press for ' + list[(at + 1) % list.length].label.toLowerCase() + '.';
-            },
+            get needsSorting() { return View.needsSorting(this.visible, this.people); },
 
             // ── Places still to fill ─────────────────────────────────────────
             //
@@ -549,12 +497,9 @@
                     .toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
             },
             dayNumber(dateStr) { return window.DateUtils.parseDateStr(dateStr).getDate(); },
-            monthShort(dateStr) {
-                return window.DateUtils.parseDateStr(dateStr)
-                    .toLocaleDateString('en-GB', { month: 'short' });
-            },
-            // Past the end of this month — which the Upcoming window usually is.
-            inLaterMonth(dateStr) { return monthOf(dateStr) !== monthOf(this.today); },
+            // No `monthShort` any more. It stamped the month onto a row that
+            // had run past the end of this one, which the old Upcoming window
+            // usually did. Every row now belongs to the month in the heading.
             weekdayShort(dateStr) {
                 return window.DateUtils.parseDateStr(dateStr)
                     .toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase();

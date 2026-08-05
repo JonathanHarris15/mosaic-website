@@ -2058,45 +2058,117 @@ test('List means a list — the strip belongs to Month', () => {
         'the phone draws its month strip in List as well as Month');
 });
 
-test('the phone says the Upcoming sentence once, not twice', () => {
-    // The rail's panel and the phone's navy hero are the same sentence. Both on
-    // one screen reads as a bug, because it is one.
+test('the "you" block says its sentence once, not twice', () => {
+    // The desktop's copy and the phone's navy one are the same sentence. Both
+    // on one screen reads as a bug, because it is one.
     const html = readPage('calendar.html');
     const said = html.split(/x-text="mySentence"/).length - 1;
     assert.strictEqual(said, 2, 'the sentence moved or was duplicated again');
-
-    // The rail's copy is the one that stands down.
-    const rail = html.indexOf('cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg p-md');
-    assert.ok(rail !== -1, 'the rail panel is drawn on a phone as well as the hero');
+    const heading = html.split(/x-text="myMonthHeading"/).length - 1;
+    assert.strictEqual(heading, 2, 'a copy of the block cannot say which month it means');
 });
 
-test('the card is Upcoming, not the month the grid happens to be on', () => {
-    // "You in July" answered a question nobody asked: paging the grid back to
-    // April changed what you were down for.
+test('the "you" block sits under the calendar, not above it', () => {
+    // WHERE IT SITS IS WHY IT CAN FOLLOW THE MONTH. It was a card at the top of
+    // the page with a window of its own — today through a fortnight, whatever
+    // the grid showed — precisely because up there, detached from any month,
+    // "You in July" answered a question nobody had asked. Underneath, with the
+    // month in its own heading, the question and the answer are together.
     const html = readPage('calendar.html');
-    assert.ok(!/'You in ' \+ monthLabel/.test(html), 'the card is still tied to the browsed month');
 
-    // Both copies carry the window control, or the phone can see the answer
-    // without being able to change the question.
-    const pickers = html.split(/cycleUpcomingWindow\(\)/).length - 1;
-    assert.strictEqual(pickers, 2);
+    // Phone: after the month strip and before the list body, so it is below the
+    // calendar in Month and above the list in List.
+    const strip = html.indexOf('x-show="view === \'month\'" class="grid gap-0.5"');
+    const you = html.indexOf('x-text="myMonthHeading"');
+    const body = html.indexOf('x-for="group in phoneGroups"');
+    assert.ok(strip !== -1 && you !== -1 && body !== -1, 'the phone lost one of its three pieces');
+    assert.ok(strip < you && you < body,
+        'the phone block is no longer between the calendar and the list');
 
-    // ⚠ IT IS A BUTTON, NOT A SELECT. A select's list is drawn by the browser
-    // rather than by the page, so neither where it lands nor what colour it
-    // comes out is ours to decide — and in the shell's WebView it landed
-    // halfway up the screen over the toolbar, and on the navy card it drew
-    // white-on-navy. Three windows are few enough to walk round instead.
-    assert.doesNotMatch(html, /<select[^>]*UpcomingWindow/,
-        'the window is chosen from a list the page cannot place or paint');
-    const shown = html.split(/x-text="upcomingWindowLabel"/).length - 1;
-    assert.strictEqual(shown, 2, 'a control does not say which window it is on');
+    // And it is gone from the top, where the toggle row and the month nav are.
+    const toggle = html.indexOf("x-for=\"opt in [['month','calendar_month','Month'],['list','view_agenda','List']]\"");
+    assert.ok(toggle < you, 'the block is still above the row that switches Calendar and List');
+
+    // ⚠ THE DESKTOP KEEPS IT IN THE RAIL, and that is not an oversight. A
+    // desktop month grid is most of a screen tall, so "below the calendar"
+    // there means a scroll away from the thing it answers about. On a phone the
+    // strip is a few rows deep and underneath it really is next to the month.
+    // Same block, same rule, placed where each layout puts it beside the month.
+    const rail = html.indexOf('<aside class="cal-rail');
+    const deskYou = html.lastIndexOf('x-text="myMonthHeading"');
+    assert.ok(deskYou > rail, 'the desktop copy sits below a screen-tall grid');
+    assert.ok(you < rail, 'the phone copy went into the desktop rail');
 });
 
-test('the Upcoming button walks round every window and comes back', async () => {
-    // The whole bargain of cycling: every option has to be reachable, and
-    // pressing on past the last one has to return to the first rather than
-    // stopping on it.
-    const windows = [];
+test('the block has no window to choose, because the grid already chose', () => {
+    const html = readPage('calendar.html');
+    assert.doesNotMatch(html, /cycleUpcomingWindow|setUpcomingWindow|upcomingWindowLabel/,
+        'the block still carries a control for a question the month answers');
+    assert.doesNotMatch(html, /<select/,
+        'a select is back, and its list is drawn where the page cannot reach it');
+});
+
+test('the "you" block reads the month the grid loaded, and asks for nothing more', async () => {
+    // TWO READS BECAME ONE. The block had a query of its own, which is how the
+    // two could disagree about the same Sunday. It now reads the rows the grid
+    // has already fetched, so paging is the only thing that changes it.
+    const asked = [];
+    const page = loadComponent('calendar.js', 'calendarPage', {
+        EventsStore: Object.assign({}, require('../public/events-store.js'), {
+            async loadCalendar(db, opts) {
+                asked.push(opts);
+                return [{
+                    id: 'a', date: '2026-08-09', seriesId: 'sunday_service', name: 'Sunday Service',
+                    assignments: [{ personId: 'p1', roleSlug: 'setup', slotId: 's1', state: 'pending', label: 'Setup' }],
+                }];
+            },
+        }),
+    });
+    page.personId = 'p1';
+    page.today = '2026-08-05';
+    page.month = '2026-08';
+
+    await page.load();
+
+    assert.strictEqual(asked.length, 1, 'the block still fetches a second time');
+    assert.deepStrictEqual({ from: asked[0].from, to: asked[0].to },
+        { from: '2026-08-01', to: '2026-08-31' });
+    assert.strictEqual(page.myCommitments.length, 1);
+    assert.strictEqual(page.myMonthHeading, 'You in August 2026');
+
+    // Paging moves it, which is the whole point of the change.
+    await page.goToMonth('2026-09');
+    assert.strictEqual(page.myMonthHeading, 'You in September 2026');
+    assert.strictEqual(asked.length, 2, 'paging did not go back for the new month');
+});
+
+test('a day already gone is not something the month says you have on', async () => {
+    // The current month runs from today; a month ahead runs whole. There is no
+    // arithmetic here doing that — `isPast` is stamped on every row by the one
+    // load, and the block simply drops those.
+    const page = loadComponent('calendar.js', 'calendarPage', {
+        EventsStore: Object.assign({}, require('../public/events-store.js'), {
+            async loadCalendar() {
+                return [
+                    { id: 'gone', date: '2026-08-02', name: 'Workday',
+                      assignments: [{ personId: 'p1', roleSlug: 'setup', slotId: 's1', state: 'confirmed', label: 'Setup' }] },
+                    { id: 'soon', date: '2026-08-09', name: 'Sunday Service',
+                      assignments: [{ personId: 'p1', roleSlug: 'coffee', slotId: 's1', state: 'pending', label: 'Coffee' }] },
+                ];
+            },
+        }),
+    });
+    page.personId = 'p1';
+    page.today = '2026-08-05';
+    page.month = '2026-08';
+
+    await page.load();
+
+    assert.deepStrictEqual(page.myCommitments.map(c => c.date), ['2026-08-09'],
+        'a serve already done is listed as something still to do');
+});
+
+test('a month you are not in says so, rather than showing nothing at all', async () => {
     const page = loadComponent('calendar.js', 'calendarPage', {
         EventsStore: Object.assign({}, require('../public/events-store.js'), {
             async loadCalendar() { return []; },
@@ -2104,69 +2176,20 @@ test('the Upcoming button walks round every window and comes back', async () => 
     });
     page.personId = 'p1';
     page.today = '2026-08-05';
+    page.month = '2026-11';
 
-    const all = page.upcomingWindows.map(w => w.id);
-    assert.ok(all.length >= 3, 'there are too few windows for cycling to be the right control');
+    await page.load();
 
-    for (let i = 0; i < all.length + 1; i++) {
-        windows.push(page.upcomingWindow);
-        await page.cycleUpcomingWindow();
-    }
-
-    // Started on the default, reached every one, wrapped back round.
-    assert.deepStrictEqual(windows.slice(0, all.length).slice().sort(), all.slice().sort(),
-        'a window cannot be reached by pressing the button');
-    assert.strictEqual(windows[all.length], windows[0], 'the button stops on the last window');
-
-    // And it says what pressing it will do, for anybody who cannot watch the
-    // label change.
-    assert.match(page.upcomingWindowHint, /^Showing .+\. Press for .+\.$/);
-    assert.notStrictEqual(page.upcomingWindowLabel, page.upcomingWindowHint);
+    assert.deepStrictEqual(page.myCommitments, []);
+    assert.strictEqual(page.mySentence, 'Nothing on for you.');
+    assert.strictEqual(page.myMonthHeading, 'You in November 2026');
 });
 
-test('Upcoming asks for its own days, not the month on screen', async () => {
-    const asked = [];
-    const page = loadComponent('calendar.js', 'calendarPage', {
-        EventsStore: Object.assign({}, require('../public/events-store.js'), {
-            async loadCalendar(db, opts) { asked.push(opts); return []; },
-        }),
-    });
-    page.personId = 'p1';
-    page.today = '2026-07-31';
-    page.month = '2026-04';           // the grid is somewhere else entirely
-
-    await page.loadUpcoming();
-    assert.deepStrictEqual(
-        { from: asked[0].from, to: asked[0].to },
-        { from: '2026-07-31', to: '2026-08-14' }
-    );
-
-    // Changing the window is a different question, so it goes back to the
-    // database rather than trimming what is already in hand.
-    await page.setUpcomingWindow('week');
-    assert.deepStrictEqual(
-        { from: asked[1].from, to: asked[1].to },
-        { from: '2026-07-31', to: '2026-08-07' }
-    );
-    assert.strictEqual(page.mySentence, 'Nothing on for you in the next week.');
-});
-
-test('a row that has left this month says which month it is in', async () => {
-    // Two rows both saying "2" is a card nobody can read in order, and the
-    // window runs over the end of the month more often than not.
-    const page = loadComponent('calendar.js', 'calendarPage');
-    page.today = '2026-07-31';
-
-    assert.strictEqual(page.inLaterMonth('2026-08-02'), true);
-    assert.strictEqual(page.inLaterMonth('2026-07-31'), false, 'this month says itself twice');
-    assert.strictEqual(page.monthShort('2026-08-02'), 'Aug');
-});
-
-test('Upcoming ignores the grid’s filters — your own serve is not a display option', async () => {
+test('the "you" block ignores the grid\u2019s filters \u2014 your own serve is not a display option', async () => {
     const page = loadComponent('calendar.js', 'calendarPage');
     page.personId = 'p1';
     page.today = '2026-07-31';
-    page.upcoming = [{
+    page.occurrences = [{
         id: 'x', date: '2026-08-02', seriesId: 'sunday_service', name: 'Sunday Service',
         assignments: [{ personId: 'p1', roleSlug: 'setup', slotId: 's1', state: 'confirmed', label: 'Setup' }],
     }];
@@ -2177,17 +2200,18 @@ test('Upcoming ignores the grid’s filters — your own serve is not a display 
         'unticking a series in Show hid something you agreed to do');
 });
 
-test('a signed-out page asks for no Upcoming at all', async () => {
-    const asked = [];
-    const page = loadComponent('calendar.js', 'calendarPage', {
-        EventsStore: Object.assign({}, require('../public/events-store.js'), {
-            async loadCalendar(db, opts) { asked.push(opts); return []; },
-        }),
-    });
+test('a signed-out page has no "you" to answer about', () => {
+    const page = loadComponent('calendar.js', 'calendarPage');
     page.personId = null;
+    page.occurrences = [{
+        id: 'x', date: '2026-08-02', name: 'Sunday Service',
+        assignments: [{ personId: 'p1', roleSlug: 'setup', slotId: 's1', state: 'confirmed', label: 'Setup' }],
+    }];
 
-    await page.loadUpcoming();
-    assert.strictEqual(asked.length, 0, 'a read nobody can be shown the answer to');
+    assert.deepStrictEqual(page.myCommitments, []);
+    // And the block is not drawn at all, rather than drawn saying "nothing".
+    assert.match(readPage('calendar.html'), /<section x-show="personId"/,
+        'a visitor is told they have nothing on, which is not the same as having no account');
 });
 
 // ── Places still to fill ──────────────────────────────────────────────────────

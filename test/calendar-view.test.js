@@ -451,28 +451,17 @@ test('the rail is derived from the events themselves, and sorted by date', () =>
     assert.deepStrictEqual(mine.map(c => c.roleLabel), ['Kids Ministry', 'Prayer']);
 });
 
-test('the window runs from today, not from the month the grid is on', () => {
-    assert.deepStrictEqual(View.upcomingRange('2026-07-31', 'week'),
-        { from: '2026-07-31', to: '2026-08-07' });
-    assert.deepStrictEqual(View.upcomingRange('2026-07-31', 'fortnight'),
-        { from: '2026-07-31', to: '2026-08-14' });
-    assert.deepStrictEqual(View.upcomingRange('2026-07-31', 'month'),
-        { from: '2026-07-31', to: '2026-08-30' });
-});
-
-test('a window nobody recognises falls back rather than asking for nothing', () => {
-    // A bad id used to be an empty range, which reads as "nothing on" — the one
-    // answer this card must never give by accident.
-    const fallback = View.upcomingRange('2026-07-31', 'wobble');
-    assert.deepStrictEqual(fallback, View.upcomingRange('2026-07-31', View.DEFAULT_UPCOMING_WINDOW));
-    assert.ok(fallback.to > fallback.from);
-});
-
-test('each window says its own name in the empty sentence', () => {
-    assert.strictEqual(
-        View.myCommitmentsSentence([], View.upcomingWindow('fortnight').phrase),
-        'Nothing on for you in the next two weeks.'
-    );
+test('the block reads the month it is under, and asks for nothing of its own', () => {
+    // It had a window and a query of its own — today through a fortnight,
+    // whatever month the grid was on — because it sat at the TOP of the page
+    // where nothing said which month it meant. Under the grid, it answers for
+    // the rows the grid already has, so there is no second read to keep in step
+    // and no window to pick.
+    assert.strictEqual(View.upcomingRange, undefined,
+        'the block still has a range of its own to fetch');
+    assert.strictEqual(View.UPCOMING_WINDOWS, undefined,
+        'the block still has windows to choose between');
+    assert.strictEqual(View.upcomingWindow, undefined);
 });
 
 test('a day already gone is not something you have on', () => {
@@ -487,15 +476,16 @@ test('a day already gone is not something you have on', () => {
     assert.deepStrictEqual(mine.map(c => c.date), ['2026-07-15', '2026-07-19']);
 });
 
-test('a window with nothing left says so plainly', () => {
+test('a month with nothing left in it says so plainly', () => {
+    // A month entirely behind you is the empty case, not an error — and the
+    // sentence does not name the month, because the heading above it does.
     const allPast = [
         { id: 'gone', date: '2026-07-29', name: 'Pluckers Trivia', isPast: true,
           assignments: [{ personId: 'me', roleSlug: 'contestants', slotId: 's1', state: 'confirmed', label: 'Contestants' }] },
     ];
     const mine = View.myCommitments(allPast, 'me');
     assert.deepStrictEqual(mine, []);
-    assert.strictEqual(View.myCommitmentsSentence(mine, 'the next week'),
-        'Nothing on for you in the next week.');
+    assert.strictEqual(View.myCommitmentsSentence(mine), 'Nothing on for you.');
 });
 
 test('the rail carries somebody else’s nothing', () => {
@@ -523,9 +513,10 @@ test('with nothing outstanding the sentence does not invent a nag', () => {
     assert.strictEqual(View.myCommitmentsSentence(confirmed), 'One thing — Setup.');
 });
 
-test('an empty window says so plainly', () => {
-    assert.strictEqual(View.myCommitmentsSentence([], 'the next month'),
-        'Nothing on for you in the next month.');
+test('the empty sentence does not repeat the month in the heading', () => {
+    assert.strictEqual(View.myCommitmentsSentence([]), 'Nothing on for you.');
+    // Nothing left over from when it took a window's words.
+    assert.strictEqual(View.myCommitmentsSentence([], 'the next month'), 'Nothing on for you.');
 });
 
 // ── Places still to fill ──────────────────────────────────────────────────────
