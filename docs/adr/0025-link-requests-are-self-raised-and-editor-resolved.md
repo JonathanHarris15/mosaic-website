@@ -118,11 +118,11 @@ themselves are exactly the fields a Linked User may later edit about themselves.
   `functions/link-request.js` decides what approval does. Their shared vocabulary
   is duplicated on purpose and pinned to each other by `test/link-request.test.js`
   — the same arrangement `functions/member-sync.js` already uses.
-- **Still open:** the existing add-only member sync will put the `Member` tag on
-  a newly created Visitor if the requesting account already sits at `member` or
-  above. That sync predates the Membership Track and treats the tag as a fact
-  rather than a projection of the stage. It is a pre-existing inconsistency this
-  ADR does not fix, and it should be reconciled with ADR 0012.
+- **Resolved by [ADR 0026](0026-the-account-sync-moves-the-stage-not-the-tag.md):**
+  the add-only member sync used to put the `Member` tag on a newly created
+  Visitor if the requesting account already sat at `member` or above, because it
+  predated the Membership Track and treated the tag as a fact rather than a
+  projection of the stage. It now moves the stage instead.
 - **Not decided here:** whether the mobile app gets a native request screen.
   `profile.html` is shell-adapted and opens inside the phone app, so the flow is
   reachable there today; a purpose-built screen is a later question.

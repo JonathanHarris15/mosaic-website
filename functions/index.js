@@ -529,24 +529,30 @@ exports.resolveLinkRequest = onCall({cors: true, region: "us-central1"}, async (
  * (`people/{personId}`) via reciprocal `personId` / `userId` fields. When the
  * link exists, "member" status is kept in sync in an ADD-ONLY fashion:
  *
- *   • A user whose role is member-or-higher marks their person with the
- *     "member" tag.
- *   • A person carrying the "member" tag promotes their user from viewer to
- *     member — but never demotes a user who already holds a higher role.
+ *   • A user whose permission level is member-or-higher advances their person
+ *     along the Membership Track to the `member` stage — which projects the
+ *     "Member" tag as a consequence (ADR-0012, ADR-0026). It does NOT write the
+ *     tag directly; that is what used to leave a Person whose stage said
+ *     Visitor and whose tags said Member.
+ *   • A person carrying the "Member" tag promotes their user from viewer to
+ *     member — but never demotes a user who already holds a higher level.
  *
- * Removing the role or the tag never strips the other side; that is cleared
+ * Removing the level or the tag never strips the other side; that is cleared
  * manually. Both triggers read the target before writing and skip the write
  * when no change is needed, which keeps the two triggers from looping into
  * each other.
  */
 const {
-  MEMBER_TAG,
   MEMBER_PERMISSION_LEVEL,
   isMemberOrHigher,
   hasMemberTag,
-  shouldAddMemberTag,
+  shouldAdvanceToMember,
+  memberAdvanceUpdate,
+  buildMemberAdvanceRecord,
   shouldPromoteToMember,
 } = require("./member-sync");
+
+const membershipTrack = require("./membership-track");
 
 const {
   ELDER_TAG,
@@ -555,9 +561,14 @@ const {
 } = require("./elder-sync");
 
 /**
- * Direction A: a user's role grants the linked person the "member" tag.
+ * Direction A: a user's permission level advances the linked person along the
+ * Membership Track to `member`.
+ *
+ * ⚠ RENAMED from `syncRoleToMemberTag` (ADR-0026). The old function must be
+ * DELETED on deploy — if both survive, the old one keeps stapling the Member
+ * tag onto Persons behind this one's back, which is the exact bug this fixes.
  */
-exports.syncRoleToMemberTag = onDocumentWritten(
+exports.syncPermissionLevelToMembershipStage = onDocumentWritten(
     {document: "users/{uid}", region: "us-central1"},
     async (event) => {
       const after = event.data && event.data.after && event.data.after.exists ?
@@ -566,23 +577,47 @@ exports.syncRoleToMemberTag = onDocumentWritten(
 
       const personId = after.personId;
       if (!personId) return; // Not linked to a person.
-      if (!isMemberOrHigher(after.permissionLevel || after.role)) return; // Viewer/unknown: never tag, never untag (skip the read).
+      const level = after.permissionLevel || after.role;
+      if (!isMemberOrHigher(level)) return; // Viewer/unknown: skip the read.
 
       const db = admin.firestore();
       const personRef = db.collection("people").doc(personId);
       const personSnap = await personRef.get();
       if (!personSnap.exists) return;
 
-      const tags = personSnap.data().tags || [];
-      if (!shouldAddMemberTag(after.permissionLevel || after.role, tags)) return; // Already tagged — skip write to avoid a trigger loop.
+      const person = personSnap.data();
+      const previous = person.membership || {};
+      // Already a member, already left, or marked inactive — all of which are
+      // decisions a permission level does not get to undo. Refusing also skips
+      // the write once in sync, so the reciprocal trigger never loops.
+      if (!shouldAdvanceToMember(level, previous)) return;
 
-      // Make sure the tag exists in the directory's tag registry so it shows in the Tags Manager.
-      await db.collection("people_tags").doc(MEMBER_TAG).set({name: MEMBER_TAG}, {merge: true});
-      await personRef.update({
-        tags: admin.firestore.FieldValue.arrayUnion(MEMBER_TAG),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      log(`Tagged person ${personId} as '${MEMBER_TAG}' (linked user permission level: ${after.permissionLevel || after.role}).`);
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const update = memberAdvanceUpdate(person.tags);
+      update.updatedAt = now;
+
+      // The stage move and its Pastoral Record entry are one batch: ADR-0005
+      // requires the denormalized field and the history to move together, and a
+      // stage that moved with nothing in the record credits the change to
+      // nobody.
+      const batch = db.batch();
+      batch.update(personRef, update);
+      batch.set(
+          personRef.collection("shepherding_activity").doc(),
+          Object.assign(
+              buildMemberAdvanceRecord(previous, level), {createdAt: now}));
+
+      // Register the projected tags so they show in the Tags Manager.
+      for (const tag of membershipTrack.membershipTagsFor(
+          {stage: membershipTrack.MEMBER_STAGE})) {
+        batch.set(
+            db.collection("people_tags").doc(tag), {name: tag}, {merge: true});
+      }
+
+      await batch.commit();
+      log(`Advanced person ${personId} from ` +
+          `'${previous.stage || "no stage"}' to ` +
+          `'${membershipTrack.MEMBER_STAGE}' (linked user is ${level}).`);
     },
 );
 

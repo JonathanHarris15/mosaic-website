@@ -15,6 +15,8 @@
 // copy by test/link-request.test.js, exactly as member-sync.js duplicates
 // MEMBER_TAG.
 
+const track = require("./membership-track");
+
 const STATUS = {
   PENDING: "pending",
   APPROVED: "approved",
@@ -40,19 +42,16 @@ function canResolve(permissionLevel) {
   return RESOLVER_LEVELS.includes(permissionLevel);
 }
 
-// A Person created from a NEW request starts as a Visitor — the first
-// Membership Stage. Someone who says "I'm not in your directory" is, as far as
-// the church's records go, exactly that until an editor moves them along the
-// Track; assuming anything further would let a stranger self-declare into
-// membership.
+// A Person created from a NEW request starts at the FIRST Membership Stage —
+// Visitor. Someone who says "I'm not in your directory" is, as far as the
+// church's records go, exactly that until an editor moves them along the Track;
+// assuming anything further would let a stranger self-declare into membership.
 //
 // The stage and its projected tag are written together because the Membership
-// Tag is a projection of the stage (ADR-0012). The canonical projection lives
-// in public/shepherding-core.js (MEMBERSHIP_STAGE_TAGS); this is the visitor
-// row of that table, duplicated for the same deploy-boundary reason as the
-// constants above and pinned to it by test/link-request.test.js.
-const INITIAL_STAGE = "visitor";
-const INITIAL_STAGE_TAGS = ["Visitor"];
+// Tag is a projection of the stage (ADR-0012), so the tags come from the
+// projection rather than being typed out here.
+const INITIAL_STAGE = track.MEMBERSHIP_STAGES[0];
+const INITIAL_STAGE_TAGS = track.membershipTagsFor({stage: INITIAL_STAGE});
 
 /**
  * The `people/{id}` document body for a NEW request's Person. The caller adds
