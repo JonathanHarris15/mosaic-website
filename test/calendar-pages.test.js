@@ -5123,3 +5123,35 @@ test('the rail is scrolled to, rather than having its months swapped', () => {
     assert.match(html, /prefers-reduced-motion[\s\S]{0,120}aw-rail-track/,
         'the slide is imposed on somebody who asked for less movement');
 });
+
+test('the phone\'s action row is allowed to wrap, however many actions it grows', () => {
+    // HOW THIS BROKE. The rule was written when there were two of these and it
+    // told them to share the width equally — `flex: 1 1 0`. A flex item will not
+    // shrink below its own label, so when Away made a third, it did not squeeze:
+    // it hung off the right edge of the phone, and "New event" was unreachable.
+    //
+    // A count baked into a layout rule is a trap for whoever adds the next
+    // button, so the row now wraps and each action asks for half a line. Two sit
+    // side by side, a third drops to its own full-width row, and a member who
+    // only sees Away gets one button the width of the screen — with no number
+    // written down anywhere.
+    //
+    // This can only read the rule, not lay it out. What it defends is the shape
+    // of the rule: that nothing here assumes how many actions there are.
+    const html = readPage('calendar.html');
+    const rule = html.slice(html.indexOf('html.shell-mobile .cal-title-actions'),
+        html.indexOf('}', html.indexOf('html.shell-mobile .cal-title-actions > a')) + 1);
+
+    assert.match(rule, /flex-wrap:\s*wrap/, 'the phone\'s actions cannot wrap, so a third one overflows');
+    assert.doesNotMatch(rule, /flex:\s*1 1 0/,
+        'the actions are told to share one line equally, which they cannot do below their own labels');
+    assert.match(rule, /flex:\s*1 1 calc\(50%/, 'no basis to wrap on');
+
+    // Every action in the row is an <a> — the rule selects on that, so a button
+    // added as a <button> would silently sit outside the layout it belongs to.
+    const row = html.slice(html.indexOf('cal-title-actions'), html.indexOf('<!-- Signed out'));
+    const controls = row.match(/<(a|button)\b/g) || [];
+    assert.ok(controls.length >= 3, 'the row this test is about is not there any more');
+    assert.deepStrictEqual([...new Set(controls)], ['<a'],
+        'an action in this row is not an <a>, so the phone\'s layout rule does not reach it');
+});

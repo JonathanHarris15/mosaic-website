@@ -49,13 +49,26 @@
            shell header — a divider dividing nothing from nothing. */
         html.shell-mobile .cal-title-block { border-bottom: none; padding-bottom: 0; }
 
-        /* And with the title gone, these two actions ARE the row. Right-aligned
+        /* And with the title gone, these actions ARE the row. Right-aligned
            against nothing they sit off-centre and short of every card below
            them, so on a phone they share the full width and their edges line up
-           with the month panel and the day list. */
+           with the month panel and the day list.
+
+           ⚠ THEY WRAP, AND THE BASIS IS HALF A ROW. There were two of these
+           once and they were told to share the width equally — which a flex
+           item cannot do below the width of its own label, so the third one
+           (New event) simply hung off the right edge of the phone. Half-width
+           basis means two sit side by side, a third drops to its own full-width
+           line, and a member who only sees Away gets one button the width of
+           the screen. No count is written down anywhere, so the next button
+           added here lands somewhere sensible on its own. */
         html.shell-mobile .cal-title-heading { display: none; }
-        html.shell-mobile .cal-title-actions { flex: 1 1 auto; }
-        html.shell-mobile .cal-title-actions > a { flex: 1 1 0; justify-content: center; }
+        html.shell-mobile .cal-title-actions { flex: 1 1 auto; flex-wrap: wrap; }
+        html.shell-mobile .cal-title-actions > a {
+            flex: 1 1 calc(50% - 0.5rem);
+            min-width: 0;
+            justify-content: center;
+        }
 
         /* An event name TRUNCATES on a desktop row, where there is room for it to
            be unusual. On a phone the date block, the Sunday badge and the chevron
