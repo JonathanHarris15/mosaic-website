@@ -49,6 +49,7 @@ document.addEventListener('alpine:init', () => {
         // record. Editors and elders resolve them from the directory itself.
         linkRequests: [],
         resolvingUid: null,      // the request currently being approved/declined
+        unlinkingId: null,       // the Person whose account is being disconnected
         overrideFor: null,       // a "new" request being redirected onto an existing Person
         overrideSearch: '',
 
@@ -735,6 +736,31 @@ document.addEventListener('alpine:init', () => {
                 this.showToast(e.message || 'Could not resolve that request', 'error');
             } finally {
                 this.resolvingUid = null;
+            }
+        },
+
+        // Break the link between an account and this record — for when the
+        // wrong one got connected. A callable, not a direct write: clearing
+        // users/{uid}.personId needs privileges an editor deliberately does not
+        // have (ADR-0028).
+        async unlinkAccount(person) {
+            if (!confirm(
+                `Disconnect the website account from ${person.name}?\n\n` +
+                'They will keep their directory record, their membership and every ' +
+                'shepherding note — they just will not be signed in as this person ' +
+                'any more. You can reconnect an account afterwards.')) return;
+
+            this.unlinkingId = person.id;
+            try {
+                const unlink = firebase.functions().httpsCallable('unlinkDirectoryPerson');
+                await unlink({ personId: person.id });
+                await this.loadPeople();
+                this.showToast('Account disconnected');
+            } catch (e) {
+                console.error('Error disconnecting account:', e);
+                this.showToast(e.message || 'Could not disconnect that account', 'error');
+            } finally {
+                this.unlinkingId = null;
             }
         },
 

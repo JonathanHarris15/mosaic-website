@@ -16,6 +16,7 @@ const pr = require("./prayer-request");
 const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
 const dr = require("./directory-request");
+const lu = require("./linked-user");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -550,6 +551,74 @@ exports.resolveDirectoryRequest = onCall({cors: true, region: "us-central1"}, as
   log(`Directory request ${requestId} (${req.kind}) approved by ` +
       `${callerUid} → ${plan.action}`);
   return {status: dr.STATUS.APPROVED, action: plan.action};
+});
+
+/**
+ * Breaks a Linked User: clears users/{uid}.personId and people/{id}.userId.
+ *
+ * A callable rather than a rule because the `users` collection is admin-only —
+ * a rule loose enough to let an editor clear a personId would also let them
+ * change permission levels — and the person who spots that an account is
+ * connected to the wrong record is an editor or elder looking at the directory,
+ * not an admin.
+ *
+ * Both sides go in one batch. Clearing only one leaves an account pointing at a
+ * Person that no longer points back, which is invisible and which the next
+ * editor to connect that account would be fighting.
+ *
+ * Deliberately does NOT touch the Person's membership, tags or shepherding
+ * records: this corrects an account connection, it does not say somebody
+ * stopped being a member. The Elder Tag clears itself, because the reciprocal
+ * trigger reconciles it from the (now absent) link.
+ */
+exports.unlinkDirectoryPerson = onCall({cors: true, region: "us-central1"}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Sign in to disconnect an account.");
+  }
+
+  const db = admin.firestore();
+  const callerUid = request.auth.uid;
+  const callerDoc = await db.collection("users").doc(callerUid).get();
+  const callerLevel = callerDoc.exists ?
+    (callerDoc.data().permissionLevel || callerDoc.data().role) : null;
+
+  if (!lu.canUnlink(callerLevel)) {
+    throw new HttpsError(
+        "permission-denied",
+        "Only editors, elders and admins can disconnect an account.");
+  }
+
+  const {personId} = request.data || {};
+  if (!personId) {
+    throw new HttpsError("invalid-argument", "Missing the directory record id.");
+  }
+
+  const personRef = db.collection("people").doc(personId);
+  const personSnap = await personRef.get();
+  const plan = lu.planUnlink(
+      personSnap.exists ? personSnap.data() : null);
+
+  if (plan.action === "refuse") {
+    throw new HttpsError("failed-precondition", plan.reason);
+  }
+
+  const del = admin.firestore.FieldValue.delete();
+  const batch = db.batch();
+  batch.update(personRef, {
+    userId: del,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  // The account may already be gone (a login deleted without the reciprocal
+  // clear). Its absence is not a reason to leave the Person half-linked, so the
+  // users write is conditional and the people write is not.
+  const userSnap = await db.collection("users").doc(plan.uid).get();
+  if (userSnap.exists) {
+    batch.update(db.collection("users").doc(plan.uid), {personId: del});
+  }
+
+  await batch.commit();
+  log(`Unlinked person ${personId} from account ${plan.uid} by ${callerUid}`);
+  return {success: true};
 });
 
 /**

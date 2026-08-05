@@ -276,10 +276,19 @@
                                         <span class="text-[9px] px-2 py-0.5 rounded-full font-label-md uppercase tracking-widest"
                                               :class="person.membership && person.membership.inactive ? 'bg-surface-container-high text-on-surface-variant' : 'bg-primary-fixed text-primary'"
                                               x-text="membershipStageLabel(person)"></span>
+                                        <!-- Connected to a login. In Edit Mode an editor can
+                                             break it, for when the wrong record got connected
+                                             (ADR-0028). The account's email is deliberately not
+                                             shown: reading `users` is admin-only. -->
                                         <span x-show="editMode && person.userId"
                                               class="inline-flex items-center gap-1 bg-primary/10 text-primary text-[9px] px-2 py-0.5 rounded-full font-label-md uppercase tracking-widest"
-                                              title="Linked to a website account">
+                                              title="Connected to a website account">
                                             <span class="material-symbols-outlined text-[12px]">link</span> Account
+                                            <button @click.stop="unlinkAccount(person)" :disabled="unlinkingId === person.id"
+                                                    class="ml-1 -mr-1 px-1 text-primary/60 hover:text-error transition-colors disabled:opacity-40"
+                                                    title="Disconnect this account from this record">
+                                                <span class="material-symbols-outlined text-[12px]">link_off</span>
+                                            </button>
                                         </span>
                                     </div>
                                     <!-- Self-service: a Person viewing their own card gets a link to edit their info (MS-87) -->
