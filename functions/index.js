@@ -17,6 +17,7 @@ const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
 const dr = require("./directory-request");
 const lu = require("./linked-user");
+const aa = require("./assignment-answer");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -657,6 +658,119 @@ exports.unlinkDirectoryPerson = onCall({cors: true, region: "us-central1"}, asyn
   log(`Unlinked person ${personId} from account ${plan.uid} by ${callerUid}`);
   return {success: true};
 });
+
+/**
+ * A member confirms or declines their own Assignment (MS-20).
+ *
+ * ⚠ WHY THIS EXISTS AT ALL. A member cannot make this change from the browser.
+ * It touches two documents at once — their row in the occurrence's `roster`
+ * subcollection, and the occurrence's own derived fields — and that occurrence
+ * is
+ * editor-only to write for good reason: opening it to members would let one
+ * restamp `visibility` or `participantIds`, which is what the whole five-rung
+ * ladder rests on. So the caller's own `personId` is checked against the
+ * Assignment they claim, and the writes go out under the Admin SDK.
+ *
+ * ⚠ THE THREE WRITES ARE ONE TRANSACTION. The roster row, the occurrence's
+ * derived fields, and the cover entry move together or not at all. Split up,
+ * the derived fields drift from the roster they describe — which is the failure
+ * events-store.js already warns about, and it drifts the very list the security
+ * rules read.
+ *
+ * Every decision is in `assignment-answer.js`, which is pure and tested without
+ * an emulator. This reads, asks, and writes.
+ */
+exports.answerAssignment = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated", "Sign in to answer for yourself.");
+      }
+
+      const db = admin.firestore();
+      const userSnap = await db.collection("users")
+          .doc(request.auth.uid).get();
+      const personId = userSnap.exists ?
+        (userSnap.data().personId || null) : null;
+
+      const {occurrenceId, roleSlug, slotId, state} = request.data || {};
+      if (!occurrenceId || !roleSlug) {
+        throw new HttpsError(
+            "invalid-argument", "Missing the place being answered.");
+      }
+
+      const occurrenceRef = db.collection("event_occurrences")
+          .doc(occurrenceId);
+      const rosterCol = occurrenceRef.collection("roster");
+      const today = ac.churchToday(new Date());
+
+      const result = await db.runTransaction(async (tx) => {
+        const occSnap = await tx.get(occurrenceRef);
+        if (!occSnap.exists) {
+          return {
+            ok: false, code: "not-found",
+            message: "That Event has gone.",
+          };
+        }
+        const occurrence = Object.assign({id: occSnap.id}, occSnap.data());
+
+        // The roster is a subcollection, not a field — Firestore cannot hide a
+        // field from a reader, so that is where the Assignments live. Read
+        // INSIDE the transaction, so a concurrent editor reassignment loses the
+        // race rather than being silently overwritten by it.
+        const rosterSnap = await tx.get(rosterCol);
+        const roster = rosterSnap.docs.map((d) => d.data());
+
+        // `roleName` is deliberately not passed. RolesCore.roleBySlug is the
+        // one way a slug becomes a human name and it lives in the browser;
+        // letting a caller send one up would put arbitrary text on other
+        // people's screens. A one-off Role carries its own label on the
+        // Assignment, and that is what gets used.
+        const plan = aa.planAnswer({
+          occurrence: occurrence,
+          roster: roster,
+          personId: personId,
+          roleSlug: roleSlug,
+          slotId: slotId || null,
+          state: state,
+          today: today,
+          now: admin.firestore.Timestamp.now(),
+        });
+        if (!plan.ok) return plan;
+
+        tx.set(rosterCol.doc(plan.rosterId), plan.assignment, {merge: true});
+        tx.update(occurrenceRef, {
+          participantIds: plan.derived.participantIds,
+          needsAttention: plan.derived.needsAttention,
+        });
+
+        const coverRef = db.collection("cover").doc(plan.cover.id);
+        if (plan.cover.action === "set") {
+          tx.set(coverRef, plan.cover.entry);
+        } else if (plan.cover.action === "delete") {
+          // Unconditional. An entry that should not be there is worth deleting
+          // twice, and deleting one that was never written costs nothing.
+          tx.delete(coverRef);
+        }
+
+        return plan;
+      });
+
+      if (!result.ok) {
+        throw new HttpsError(result.code, result.message);
+      }
+
+      log(`answerAssignment: ${personId} set ${roleSlug} on ` +
+          `${occurrenceId} to ${result.assignment.state} ` +
+          `(cover: ${result.cover.action})`);
+      return {
+        success: true,
+        state: result.assignment.state,
+        onCoverList: result.cover.action === "set",
+      };
+    },
+);
 
 /**
  * Member-status synchronisation between user accounts and directory people.
