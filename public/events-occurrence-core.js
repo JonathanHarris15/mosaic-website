@@ -930,6 +930,7 @@
         // visibility
         visibilityOf,
         isVisibilityEditable,
+        rungsFor,
         canSee,
         restampVisibility,
         visibilityQueryFor,
