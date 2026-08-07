@@ -23,6 +23,12 @@
     const Roles = (typeof require !== 'undefined')
         ? require('./roles-core.js')
         : global.RolesCore;
+    // What a Person is down for, assembled in ONE place (MS-20). The card below
+    // and the Commitments page must never be two lists that can disagree about
+    // the same Sunday.
+    const Commitments = (typeof require !== 'undefined')
+        ? require('./commitments-core.js')
+        : global.CommitmentsCore;
 
     // ── Small shared formatting ──────────────────────────────────────────────
 
@@ -628,25 +634,34 @@
     // the current month runs from today while a month ahead runs whole, with no
     // arithmetic anywhere to get that wrong.
 
+    // ⚠ THE LIST COMES FROM `commitments-core`, NOT FROM HERE (MS-20). This card
+    // and the Commitments page answer the same question — "what am I down for" —
+    // and two passes over the same rows would eventually disagree about one
+    // Sunday. This maps that model's rows into the shape this card and its
+    // sentence already read; it does not decide anything about them.
+    //
+    // No `services` are passed: the card has only ever shown Assignments, and a
+    // liturgical Role belongs to the page (which can say it is unanswerable) not
+    // to a one-line summary. No `today` either — the card drops what the grid
+    // already marked past, exactly as it did before.
+    //
+    // The state's wording is deliberately left as the editor's "Pending" rather
+    // than the owner's "Unconfirmed" the page uses. That is a visible change to
+    // a shipped surface and it belongs with the rest of the Calendar's wording
+    // in MS-207, not smuggled in here.
     function myCommitments(occurrences, personId) {
-        if (!personId) return [];
-        const mine = [];
-        (occurrences || []).forEach(o => {
-            if (o && o.isPast) return;
-            ((o && o.assignments) || []).forEach(a => {
-                if (a.personId !== personId) return;
-                mine.push({
-                    date: o.date,
-                    occurrenceId: o.id,
-                    eventName: o.name || o.seriesName || 'Event',
-                    roleLabel: a.label || a.roleSlug,
-                    state: a.state || Core.STATES.PENDING,
-                    stateLabel: Core.stateLabel(a),
-                    tone: Core.stateTone(a),
-                });
-            });
-        });
-        return mine.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+        return Commitments.commitmentsFor({
+            personId: personId,
+            occurrences: occurrences,
+        }).map(c => ({
+            date: c.date,
+            occurrenceId: c.occurrenceId,
+            eventName: c.eventName,
+            roleLabel: c.label || c.roleSlug,
+            state: c.state,
+            stateLabel: Core.stateLabel({ state: c.state }),
+            tone: c.tone,
+        }));
     }
 
     // The EB Garamond sentence at the head of the block: what you are down for
