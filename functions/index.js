@@ -23,6 +23,7 @@ const at = require("./assignment-take");
 // predeploy hook in firebase.json. functions/ cannot require across into
 // public/, and ADR-0030 needs this rule set on the SERVER.
 const coverCore = require("./shared/cover-core.js");
+const awayCore = require("./shared/away-core.js");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -714,7 +715,17 @@ exports.takeAssignment = onCall(
       // Read outside the transaction: the Person, the Role, and everything the
       // eligibility rules need. None of it is what the race is about — the race
       // is over who holds the slot, and that is re-read inside.
-      const context = await takeContext(db, personId, roleSlug);
+      //
+      // The date has to come off the DOCUMENT, not off the id. A series'
+      // occurrence id ends in its date, but a one-off Event's is an auto-id
+      // (ADR-0018 §3) — deriving the date from the id would judge Away against
+      // ten characters of random string on every one-off.
+      const dateSnap = await occurrenceRef.get();
+      if (!dateSnap.exists) {
+        throw new HttpsError("not-found", "That Event has gone.");
+      }
+      const context = await takeContext(
+          db, personId, roleSlug, dateSnap.data().date);
 
       const result = await db.runTransaction(async (tx) => {
         const occSnap = await tx.get(occurrenceRef);
@@ -794,34 +805,91 @@ exports.takeAssignment = onCall(
  * before the transaction opens. None of it is contended: the race is over who
  * holds the slot, and that is re-read inside.
  *
+ * ⚠ EVERY INPUT HERE IS PART OF THE WALL. A rule whose data is missing does not
+ * fail loudly — `candidatesFor` simply finds nothing to object to and waves the
+ * person through. An empty `groups` list silently disables every group
+ * restriction; an empty `awayPersonIds` silently forgets that somebody said
+ * they would not be there. So each one is either genuinely loaded or the Role
+ * genuinely has no rule that reads it, and `loaded` records which, so the
+ * caller can refuse rather than guess.
+ *
  * @param {Object} db the Firestore handle
  * @param {string} personId the caller's Person id, or null
  * @param {string} roleSlug the Role they want a place in
+ * @param {string} date the occurrence's own date, which Away is judged on
  * @return {Promise<Object>} the person, the Role definition, and the rules
  */
-async function takeContext(db, personId, roleSlug) {
-  if (!personId) {
-    return {
-      person: null, roleDef: null,
-      relationships: [], groups: [], awayPersonIds: [],
-    };
-  }
+async function takeContext(db, personId, roleSlug, date) {
+  const empty = {
+    person: null, roleDef: null,
+    relationships: [], groups: [], awayPersonIds: [],
+  };
+  if (!personId) return empty;
 
   const personSnap = await db.collection("people").doc(personId).get();
-  const person = personSnap.exists ?
-    Object.assign({id: personSnap.id}, personSnap.data()) : null;
+  if (!personSnap.exists) return empty;
+  const person = Object.assign({id: personSnap.id}, personSnap.data());
 
   const roleSnap = await db.collection("role_definitions")
       .where("slug", "==", roleSlug).limit(1).get();
   const roleDef = roleSnap.empty ? null :
     Object.assign({id: roleSnap.docs[0].id}, roleSnap.docs[0].data());
 
+  const restrictions = (roleDef && roleDef.restrictions) || [];
+  const kinds = restrictions.map((r) => r && r.kind);
+  const wantsEdges = kinds.indexOf("notTogether") !== -1;
+  const wantsGroups = kinds.indexOf("sameGroup") !== -1 ||
+    kinds.indexOf("notSameGroup") !== -1;
+
+  // Away is judged on the occurrence's own date — being away on the 16th says
+  // nothing about the 23rd. Their own Away does not refuse them (ADR-0030 §3),
+  // but cover-core still has to SEE it to warn them about it.
+  const awaySnap = await db.collection("people").doc(personId)
+      .collection("away").get();
+  const stretches = awaySnap.docs.map((d) => d.data());
+  const awayPersonIds = awayCore.isAwayOn(stretches, date) ? [personId] : [];
+
+  // Firestore cannot express "fromId == me OR toId == me" in one query, so an
+  // edge is looked for from both ends and merged.
+  const relationships = [];
+  if (wantsEdges) {
+    const [out, back] = await Promise.all([
+      db.collection("relationships").where("fromId", "==", personId).get(),
+      db.collection("relationships").where("toId", "==", personId).get(),
+    ]);
+    const seen = new Set();
+    [].concat(out.docs, back.docs).forEach((d) => {
+      if (seen.has(d.id)) return;
+      seen.add(d.id);
+      relationships.push(Object.assign({id: d.id}, d.data()));
+    });
+  }
+
+  // A Group's leader is deliberately NOT inside memberIds (ADR-0014 §5), so
+  // leading one has to be asked for separately or a leader would read as
+  // belonging to no group at all.
+  const groups = [];
+  if (wantsGroups) {
+    const [asMember, asLeader] = await Promise.all([
+      db.collection("relationship_groups")
+          .where("memberIds", "array-contains", personId).get(),
+      db.collection("relationship_groups")
+          .where("leaderId", "==", personId).get(),
+    ]);
+    const seen = new Set();
+    [].concat(asMember.docs, asLeader.docs).forEach((d) => {
+      if (seen.has(d.id)) return;
+      seen.add(d.id);
+      groups.push(Object.assign({id: d.id}, d.data()));
+    });
+  }
+
   return {
     person: person,
     roleDef: roleDef,
-    relationships: [],
-    groups: [],
-    awayPersonIds: [],
+    relationships: relationships,
+    groups: groups,
+    awayPersonIds: awayPersonIds,
   };
 }
 

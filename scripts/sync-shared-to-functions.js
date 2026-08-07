@@ -38,6 +38,7 @@ const MODULES = [
     'events-occurrence-core.js',
     'roles-core.js',
     'cover-core.js',
+    'away-core.js',
 ];
 
 const BANNER = [
