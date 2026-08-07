@@ -678,8 +678,22 @@
         [STATES.DECLINED]: 'attention',
     });
 
-    function stateLabel(assignment) {
-        return STATE_LABELS[stateOf(assignment)];
+    // What the PERSON THEMSELVES is shown. "Pending" is the organiser's word —
+    // it describes their wait, not your position. To the member who has not
+    // answered yet, the honest word is Unconfirmed (MS-20).
+    //
+    // The STATE does not change, only the label: `stateLabel` stays the one
+    // place a state becomes words, so a second wording cannot drift from this.
+    const OWNER_STATE_LABELS = Object.freeze({
+        [STATES.PENDING]: 'Unconfirmed',
+    });
+
+    function stateLabel(assignment, opts) {
+        const state = stateOf(assignment);
+        if (opts && opts.asOwner && OWNER_STATE_LABELS[state]) {
+            return OWNER_STATE_LABELS[state];
+        }
+        return STATE_LABELS[state];
     }
 
     function stateTone(assignment) {
@@ -904,6 +918,7 @@
         setOneOffState,
         // derived
         participantIds,
+        stateOf,
         stateLabel,
         stateTone,
         needsAttention,
