@@ -784,6 +784,7 @@ exports.takeAssignment = onCall(
         tx.update(occurrenceRef, {
           participantIds: plan.derived.participantIds,
           needsAttention: plan.derived.needsAttention,
+          outForCover: plan.derived.outForCover,
         });
         tx.delete(db.collection("cover").doc(plan.cover.id));
 
@@ -977,6 +978,7 @@ exports.answerAssignment = onCall(
         tx.update(occurrenceRef, {
           participantIds: plan.derived.participantIds,
           needsAttention: plan.derived.needsAttention,
+          outForCover: plan.derived.outForCover,
         });
 
         const coverRef = db.collection("cover").doc(plan.cover.id);

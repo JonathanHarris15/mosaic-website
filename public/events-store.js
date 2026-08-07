@@ -331,14 +331,22 @@
     //                    the person NAMES stay in the subcollection.
     //   needsAttention — so a calendar cell can show the declined flag without
     //                    reading a roster it may not be allowed to read.
+    //   outForCover    — whether that flag means "somebody is looking for cover"
+    //                    or "this one is going nowhere" (MS-20). The editor wants
+    //                    opposite things from those two, and needsAttention alone
+    //                    cannot tell them apart.
     //
-    // Both are DERIVED from the assignments in the same write. Never maintained
-    // by hand, or they drift from the truth security depends on.
+    // All three are DERIVED from the assignments in the same write. Never
+    // maintained by hand, or they drift from the truth security depends on.
     function occurrencePayload(occurrence) {
         const assignments = occurrence.assignments || [];
         const payload = Object.assign({}, occurrence, {
             participantIds: Core.participantIds(assignments),
             needsAttention: Core.needsAttention({ assignments: assignments }),
+            // Reads the rung as well as the states, so it is given the whole
+            // occurrence rather than just its assignments.
+            outForCover: Core.outForCover(
+                Object.assign({}, occurrence, { assignments: assignments })),
         });
         delete payload.assignments;
         // Read-time stamps, not stored fields. `seriesColour` is the series'
@@ -427,6 +435,8 @@
             if (rebuilt && roster.docs.length) {
                 rebuilt.assignments = roster.docs.map(d => d.data());
                 rebuilt.participantIds = Core.participantIds(rebuilt.assignments);
+                rebuilt.needsAttention = Core.needsAttention(rebuilt);
+                rebuilt.outForCover = Core.outForCover(rebuilt);
             }
             return rebuilt;
         }
@@ -594,6 +604,7 @@
                 date: date,
                 participantIds: [],
                 needsAttention: false,
+                outForCover: false,
             }, stampFor(series, seriesId));
         }
 
@@ -760,6 +771,7 @@
                 movedTo: toDate,
                 participantIds: [],
                 needsAttention: false,
+                outForCover: false,
             },
             options: { merge: true },
         });
@@ -1221,6 +1233,7 @@
                 data: {
                     participantIds: Core.participantIds([]),
                     needsAttention: Core.needsAttention({ assignments: [] }),
+                    outForCover: false,
                 },
             });
 

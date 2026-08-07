@@ -709,6 +709,34 @@
         return assignmentsOf(occurrence).some(a => stateOf(a) === STATES.DECLINED);
     }
 
+    // Can a declined place on this Event go looking for somebody? (MS-20)
+    //
+    // A `participant`-rung Event's cannot. The cover list exists to reach people
+    // who are NOT in the Event, and at that rung there is nobody it could reach
+    // without disclosing the very thing the rung protects. Fails closed on an
+    // unstamped or unrecognised occurrence — an unstamped one is refused to
+    // everybody by the security rule anyway, so listing it would only advertise
+    // a place nobody could then open.
+    //
+    // ⚠ THE ONE DEFINITION. The cover store, and both server callables, read
+    // this rather than restating the rung rule. Three copies of it was three
+    // chances for the list and the writer to disagree about the same Event.
+    function canBeCovered(occurrence) {
+        const visibility = visibilityOf(occurrence);
+        return !!visibility
+            && VISIBILITY_ORDER.indexOf(visibility) !== -1
+            && visibility !== 'participant';
+    }
+
+    // Is somebody out looking for cover here, or is this one going nowhere?
+    //
+    // `needsAttention` alone cannot tell an editor those apart, and they want
+    // opposite things from them: a place that is out for cover may well sort
+    // itself out, and one that cannot be listed is theirs to fill today.
+    function outForCover(occurrence) {
+        return needsAttention(occurrence) && canBeCovered(occurrence);
+    }
+
     // How many people were never heard from. Zero renders nothing — the past-event
     // prompt is scaffolding and must not nag when there is nothing to ask.
     function unconfirmedCount(occurrence) {
@@ -922,6 +950,8 @@
         stateLabel,
         stateTone,
         needsAttention,
+        canBeCovered,
+        outForCover,
         unconfirmedCount,
         // conversion
         conversion,

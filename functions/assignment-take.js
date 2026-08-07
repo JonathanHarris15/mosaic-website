@@ -26,6 +26,8 @@
  * PURE. No Firestore, no admin SDK, no clock.
  */
 
+const occurrences = require("./shared/events-occurrence-core.js");
+
 const STATES = {
   PENDING: "pending",
   CONFIRMED: "confirmed",
@@ -167,6 +169,8 @@ function planTake(spec) {
     derived: {
       participantIds: participantIdsOf(after),
       needsAttention: needsAttentionFor(after),
+      outForCover: occurrences.outForCover(
+          Object.assign({}, s.occurrence, {assignments: after})),
     },
     cover: {
       action: "delete",

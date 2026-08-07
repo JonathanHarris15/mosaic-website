@@ -26,6 +26,12 @@
  * them drifting.
  */
 
+// The occurrence model, copied into functions/shared by
+// scripts/sync-shared-to-functions.js. The rung rule that decides whether a
+// declined place may be listed has ONE definition, and this is how the server
+// reaches it — restating it here was three copies of one rule.
+const occurrences = require("./shared/events-occurrence-core.js");
+
 const STATES = {
   PENDING: "pending",
   CONFIRMED: "confirmed",
@@ -35,42 +41,10 @@ const STATES = {
 /** The only answers a person can give. Pending is where they started. */
 const ANSWERS = [STATES.CONFIRMED, STATES.DECLINED];
 
-const SUNDAY_SERVICE_ID = "sunday_service";
-
-const VISIBILITY_ORDER = [
-  "public", "member", "participant", "editor", "elder",
-];
-
 const refuse = (code, message) => ({ok: false, code, message});
 
-/**
- * The Sunday Service is permanently public and says so in code rather than
- * relying on a stamp, exactly as the security rules and the client model do.
- * @param {object} occurrence the Event occurrence
- * @return {?string} its visibility rung
- */
-function visibilityOf(occurrence) {
-  if (!occurrence) return null;
-  if (occurrence.seriesId === SUNDAY_SERVICE_ID) return "public";
-  return occurrence.visibility || null;
-}
-
-/**
- * Does a declined place on this Event belong on the cover list at all?
- *
- * A `participant`-rung Event never does. The list exists to reach people who
- * are NOT in the Event, and at that rung there is nobody it could reach without
- * disclosing the very thing the rung protects. Fails closed on an unstamped or
- * unrecognised occurrence.
- * @param {object} occurrence the Event occurrence
- * @return {boolean} whether its open places may be listed
- */
-function belongsOnList(occurrence) {
-  const visibility = visibilityOf(occurrence);
-  return !!visibility &&
-    VISIBILITY_ORDER.indexOf(visibility) !== -1 &&
-    visibility !== "participant";
-}
+const visibilityOf = occurrences.visibilityOf;
+const belongsOnList = occurrences.canBeCovered;
 
 /**
  * Deterministic, so declining, re-confirming and declining again cannot leave
@@ -222,6 +196,8 @@ function planAnswer(spec) {
     derived: {
       participantIds: participantIdsOf(after),
       needsAttention: needsAttentionFor(after),
+      outForCover: occurrences.outForCover(
+          Object.assign({}, s.occurrence, {assignments: after})),
     },
     cover: cover,
   };

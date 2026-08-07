@@ -69,18 +69,10 @@
         };
     }
 
-    // Does this Assignment's Event belong on the list at all?
-    //
-    // A `participant`-rung Event never does. The list exists to reach people who
-    // are NOT in the Event, and at that rung there is nobody it could reach
-    // without disclosing the very thing the rung protects. Those stay off it and
-    // remain the editor's to fill.
-    function belongsOnList(occurrence) {
-        const visibility = Core.visibilityOf(occurrence);
-        return !!visibility
-            && Core.VISIBILITY_ORDER.indexOf(visibility) !== -1
-            && visibility !== 'participant';
-    }
+    // Does this Assignment's Event belong on the list at all? One definition,
+    // in the occurrence model, because the cover store and both server callables
+    // all have to agree about the same Event.
+    const belongsOnList = Core.canBeCovered;
 
     // ── Reading it ───────────────────────────────────────────────────────────
     //
