@@ -18,6 +18,11 @@ const si = require("./service-involvement");
 const dr = require("./directory-request");
 const lu = require("./linked-user");
 const aa = require("./assignment-answer");
+const at = require("./assignment-take");
+// Copied from public/ by scripts/sync-shared-to-functions.js — see the
+// predeploy hook in firebase.json. functions/ cannot require across into
+// public/, and ADR-0030 needs this rule set on the SERVER.
+const coverCore = require("./shared/cover-core.js");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -658,6 +663,167 @@ exports.unlinkDirectoryPerson = onCall({cors: true, region: "us-central1"}, asyn
   log(`Unlinked person ${personId} from account ${plan.uid} by ${callerUid}`);
   return {success: true};
 });
+
+/**
+ * A member takes an Assignment off the cover list (MS-20, ADR-0030).
+ *
+ * ⚠ ELIGIBILITY IS DECIDED HERE, ON THE SERVER. ADR-0021 made the Role's rules
+ * advisory — they warn an editor and never refuse, because the editor authored
+ * them and overruling yourself is your own business. A member is not that
+ * person and nobody reviews what they pick, so for them the same rules are a
+ * wall. A wall enforced only by the screen is not a wall.
+ *
+ * `cover-core` is the module that answers it, and it is the SAME FILE the
+ * browser runs, copied into functions/shared by the predeploy hook. Restating
+ * it here by hand would put the one divergence nobody would notice in the one
+ * place it would matter most.
+ *
+ * ⚠ THE PLACE CHANGES HANDS AS A DELETE PLUS A CREATE. A roster row's id
+ * carries the personId, so the old row is a different document from the new
+ * one and would otherwise simply remain.
+ *
+ * Nothing is reserved while somebody reads the cover list. Two people can press
+ * Take in the same second; the transaction re-reads and `planTake` decides, so
+ * the loser is told plainly rather than overwriting whoever got there first.
+ */
+exports.takeAssignment = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Sign in to take a place.");
+      }
+
+      const db = admin.firestore();
+      const userSnap = await db.collection("users")
+          .doc(request.auth.uid).get();
+      const user = userSnap.exists ? userSnap.data() : {};
+      const personId = user.personId || null;
+      const rank = user.permissionLevel || user.role || null;
+
+      const {occurrenceId, roleSlug, slotId} = request.data || {};
+      if (!occurrenceId || !roleSlug) {
+        throw new HttpsError(
+            "invalid-argument", "Missing the place being taken.");
+      }
+
+      const occurrenceRef = db.collection("event_occurrences")
+          .doc(occurrenceId);
+      const rosterCol = occurrenceRef.collection("roster");
+      const today = ac.churchToday(new Date());
+
+      // Read outside the transaction: the Person, the Role, and everything the
+      // eligibility rules need. None of it is what the race is about — the race
+      // is over who holds the slot, and that is re-read inside.
+      const context = await takeContext(db, personId, roleSlug);
+
+      const result = await db.runTransaction(async (tx) => {
+        const occSnap = await tx.get(occurrenceRef);
+        if (!occSnap.exists) {
+          return {
+            ok: false, code: "not-found",
+            message: "That Event has gone.",
+          };
+        }
+        const occurrence = Object.assign({id: occSnap.id}, occSnap.data());
+
+        const rosterSnap = await tx.get(rosterCol);
+        const roster = rosterSnap.docs.map((d) => d.data());
+
+        const slot = (context.roleDef && (context.roleDef.slots || [])
+            .find((sl) => sl.id === (slotId || null))) || null;
+
+        const verdict = coverCore.verdictFor({
+          rank: rank,
+          person: context.person,
+          occurrence: occurrence,
+          roleDef: context.roleDef,
+          slot: slot,
+          context: {
+            people: context.person ? [context.person] : [],
+            relationships: context.relationships,
+            groups: context.groups,
+            awayPersonIds: context.awayPersonIds,
+            assigned: roster.filter((a) => a.roleSlug === roleSlug)
+                .map((a) => ({slotId: a.slotId, personId: a.personId})),
+            assignedElsewhere: roster.filter((a) => a.roleSlug !== roleSlug)
+                .map((a) => ({
+                  personId: a.personId,
+                  roleSlug: a.roleSlug,
+                  allowsAnotherRole: false,
+                })),
+          },
+        });
+
+        const plan = at.planTake({
+          occurrence: occurrence,
+          roster: roster,
+          personId: personId,
+          roleSlug: roleSlug,
+          slotId: slotId || null,
+          verdict: verdict,
+          today: today,
+          now: admin.firestore.Timestamp.now(),
+        });
+        if (!plan.ok) return plan;
+
+        // Delete then create — the id carries the person, so these are two
+        // different documents.
+        tx.delete(rosterCol.doc(plan.removeRosterId));
+        tx.set(rosterCol.doc(plan.rosterId), plan.assignment);
+        tx.update(occurrenceRef, {
+          participantIds: plan.derived.participantIds,
+          needsAttention: plan.derived.needsAttention,
+        });
+        tx.delete(db.collection("cover").doc(plan.cover.id));
+
+        return plan;
+      });
+
+      if (!result.ok) {
+        throw new HttpsError(result.code, result.message);
+      }
+
+      log(`takeAssignment: ${personId} took ${roleSlug} on ${occurrenceId}` +
+          (result.warning ? ` (warned: ${result.warning})` : ""));
+      return {success: true, warning: result.warning || null};
+    },
+);
+
+/**
+ * Everything the eligibility rules need about one Person and one Role, read
+ * before the transaction opens. None of it is contended: the race is over who
+ * holds the slot, and that is re-read inside.
+ *
+ * @param {Object} db the Firestore handle
+ * @param {string} personId the caller's Person id, or null
+ * @param {string} roleSlug the Role they want a place in
+ * @return {Promise<Object>} the person, the Role definition, and the rules
+ */
+async function takeContext(db, personId, roleSlug) {
+  if (!personId) {
+    return {
+      person: null, roleDef: null,
+      relationships: [], groups: [], awayPersonIds: [],
+    };
+  }
+
+  const personSnap = await db.collection("people").doc(personId).get();
+  const person = personSnap.exists ?
+    Object.assign({id: personSnap.id}, personSnap.data()) : null;
+
+  const roleSnap = await db.collection("role_definitions")
+      .where("slug", "==", roleSlug).limit(1).get();
+  const roleDef = roleSnap.empty ? null :
+    Object.assign({id: roleSnap.docs[0].id}, roleSnap.docs[0].data());
+
+  return {
+    person: person,
+    roleDef: roleDef,
+    relationships: [],
+    groups: [],
+    awayPersonIds: [],
+  };
+}
 
 /**
  * A member confirms or declines their own Assignment (MS-20).
