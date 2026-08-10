@@ -116,12 +116,11 @@
   // The congregation-facing directory: two tabs — Members (carries the Member
   // tag) and Non-members (active People without it). This surface browses as a
   // plain viewer (editors manage People in the shepherd screens), so Inactive
-  // People are hidden here. The stage label is derived from the Membership Track.
-  function membershipStageLabel(p) {
-    var m = p && p.membership;
-    if (m && m.inactive) return "Inactive";
-    if (m && m.stage) return window.ShepherdingCore.MEMBERSHIP_STAGE_LABEL[m.stage] || m.stage;
-    return null;
+  // People are hidden here.
+  // The stage is editors-only reading: a plain member is told Member or
+  // Non-member and nothing more. Same rule as the web directory, same function.
+  function membershipStageLabel(p, canEdit) {
+    return window.ShepherdingCore.directoryMembershipLabel(p && p.membership, canEdit);
   }
   // Which shepherding-tag ids are hidden from this viewer, keyed for O(1) lookup.
   // hiddenFromOthers → the tag chip itself is hidden; hidePeople → the whole
@@ -227,7 +226,7 @@
             <${Avatar} name=${p.name} photoUrl=${p.photoUrl} photoCrop=${p.photoCrop} size=${82} />
             <div style=${{ fontFamily: "var(--font-serif)", fontSize: 23, fontWeight: 600, color: "var(--on-surface)", marginTop: 12 }}>${p.name}</div>
             <div style=${{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
-              ${membershipStageLabel(p) ? html`<${Badge} tone=${(p.membership && p.membership.inactive) ? "secondary" : "primary"}>${membershipStageLabel(p)}<//>` : null}
+              <${Badge} tone=${(canEdit && p.membership && p.membership.inactive) ? "secondary" : "primary"}>${membershipStageLabel(p, canEdit)}<//>
               ${chipTags.map(function (t) { return html`<${Badge} key=${t} tone="neutral">${t}<//>`; })}
             </div>
           </div>

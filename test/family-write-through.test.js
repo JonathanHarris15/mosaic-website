@@ -94,6 +94,12 @@ test('a Person who is already a child somewhere cannot be adopted into a second 
     assert.match(plan.errors.join(' '), /already a child|family of origin/i);
 });
 
+test('a spouse cannot also be seated as a child of the same household', () => {
+    const plan = Family.planAddFamilyRelation(seeded(), ROB, 'child', MARY, personById);
+    assert.strictEqual(plan.valid, false);
+    assert.match(plan.errors.join(' '), /spouse, not their child/i);
+});
+
 test('a Person cannot be their own child', () => {
     const plan = Family.planAddFamilyRelation(seeded(), ROB, 'child', ROB, personById);
     assert.strictEqual(plan.valid, false);
@@ -120,6 +126,90 @@ test('a parent seat that is already taken cannot be filled twice', () => {
     const plan = Family.planAddFamilyRelation(seeded(), ALICE, 'parent', BEN, personById);
     assert.strictEqual(plan.valid, false);
     assert.match(plan.errors.join(' '), /already has a father|seat/i);
+});
+
+test('naming the parent you already have says so, rather than "already has a father"', () => {
+    const plan = Family.planAddFamilyRelation(seeded(), ALICE, 'parent', ROB, personById);
+    assert.strictEqual(plan.valid, false);
+    assert.match(plan.errors.join(' '), /already this Person's father/i);
+});
+
+// ── One couple is one household, however the children were added ──────────────
+// The bug this pins: a child with no family of origin used to get a BRAND NEW
+// Family every time, even when the parent was already married into one. Naming
+// both parents of each child in turn therefore recorded the same couple once per
+// child — five children, five Families, five spouse links in the Relations Viewer.
+
+test('a child joins the household their parent is already married into', () => {
+    const plan = Family.planAddFamilyRelation(seeded(), CARA, 'parent', ROB, personById);
+    assert.strictEqual(plan.action, 'update');
+    assert.strictEqual(plan.familyId, 'famA');           // Rob and Mary's, not a new one
+    assert.deepStrictEqual(plan.changes, { childIds: [ALICE, BEN, CARA] });
+});
+
+test('adding every child by naming its parents never mints a second Family', () => {
+    // Walk the exact sequence that caused it: marry the couple, then for each
+    // child name the father and then the mother.
+    let families = [{ id: 'famA', husbandId: ROB, wifeId: MARY, childIds: [] }];
+    const apply = (plan) => {
+        assert.strictEqual(plan.valid, true, plan.errors.join(' '));
+        assert.strictEqual(plan.action, 'update', 'a second Family was created');
+        families = families.map(f => f.id === plan.familyId ? { ...f, ...plan.changes } : f);
+    };
+    for (const child of [ALICE, BEN, CARA]) {
+        apply(Family.planAddFamilyRelation(families, child, 'parent', ROB, personById));
+        // The mother is now already seated in that same Family, so this is a no-op
+        // the planner refuses by name rather than a second household.
+        const mother = Family.planAddFamilyRelation(families, child, 'parent', MARY, personById);
+        assert.strictEqual(mother.valid, false);
+        assert.match(mother.errors.join(' '), /already this Person's mother/i);
+    }
+    assert.strictEqual(families.length, 1);
+    assert.deepStrictEqual(families[0].childIds, [ALICE, BEN, CARA]);
+});
+
+test('a parent already seated elsewhere is refused, not seated in a second household', () => {
+    // Cara's family of origin has only a mother; Rob is married into famA. Filling
+    // the empty father seat with him would make him a spouse in two Families.
+    const families = seeded().concat([{ id: 'famC', wifeId: CARA, childIds: [DAN] }]);
+    const plan = Family.planAddFamilyRelation(families, DAN, 'parent', ROB, personById);
+    assert.strictEqual(plan.valid, false);
+    assert.match(plan.errors.join(' '), /already seated in another Family/i);
+});
+
+test('two People who each head a household cannot be married into one of them', () => {
+    // Joining two households is a restructure — it would leave one of them a
+    // spouse in two Families, which the model does not allow.
+    const families = [
+        { id: 'famA', husbandId: ROB, childIds: [ALICE] },
+        { id: 'famB', wifeId: CARA, childIds: [BEN] },
+    ];
+    const plan = Family.planAddFamilyRelation(families, ROB, 'spouse', CARA, personById);
+    assert.strictEqual(plan.valid, false);
+    assert.match(plan.errors.join(' '), /already head a Family/i);
+});
+
+test('no plan ever seats a Person as a spouse in a Family they are not already in', () => {
+    // The invariant behind all of the above: an update may fill an EMPTY seat in a
+    // Family, and a create makes exactly one. Nothing else moves a spouse.
+    const families = seeded();
+    const seatKeys = ['husbandId', 'wifeId'];
+    for (const kind of ['spouse', 'parent', 'child']) {
+        for (const other of [ROB, MARY, ALICE, BEN, CARA]) {
+            for (const self of [ALICE, BEN, CARA]) {
+                const plan = Family.planAddFamilyRelation(families, self, kind, other, personById);
+                if (!plan.valid || plan.action !== 'update') continue;
+                const target = families.find(f => f.id === plan.familyId);
+                for (const seat of seatKeys) {
+                    if (!(seat in plan.changes)) continue;
+                    assert.ok(!target[seat], `${kind}: ${seat} was already taken in ${plan.familyId}`);
+                    const elsewhere = Family.familyOfSpouse(families, plan.changes[seat]);
+                    assert.ok(!elsewhere || elsewhere.id === plan.familyId,
+                        `${kind}: ${plan.changes[seat]} would be a spouse in two Families`);
+                }
+            }
+        }
+    }
 });
 
 // ── Removing a spouse: mutual ─────────────────────────────────────────────────

@@ -292,20 +292,27 @@ document.addEventListener('alpine:init', () => {
             ).slice(0, 8);
         },
 
+        // Only People who could actually be seated: not already a child somewhere
+        // else (a Person has one family of origin), and not this household's own
+        // spouse. Offering the rest would only earn a refusal from the planner.
         get childCandidates() {
             if (!this.selectedPerson) return [];
             const fam = this.selectedFamily;
             const existing = fam ? (fam.childIds || []) : [];
+            const spouseId = FamilyCore.spouseOf(fam, this.selectedPerson.id);
             const q = (this.familyChildQuery || '').toLowerCase();
             return this.people.filter(p =>
                 p.id !== this.selectedPerson.id &&
+                p.id !== spouseId &&
                 existing.indexOf(p.id) === -1 &&
+                !FamilyCore.familyOfChild(this.families, p.id) &&
                 (!q || p.name.toLowerCase().includes(q))
             ).slice(0, 8);
         },
 
-        // Write a change to the selected Person's Family, creating one if needed.
-        // The selected Person is anchored into their spousal role by sex.
+        // Write a plain FIELD of the selected Person's Family, creating the Family
+        // if they have none. Anniversary only — who is seated where is a relation,
+        // and relations go through the planners below.
         async saveFamily(patch) {
             const person = this.selectedPerson;
             if (!person) return;
@@ -333,30 +340,65 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        async setSpouse(spouseId) {
-            const spouse = this.people.find(p => p.id === spouseId);
-            const spouseRole = this.selectedSpouseRole === 'husband' ? 'wife' : 'husband';
-            if (!FamilyCore.spouseSexOk(spouse, spouseRole)) {
-                this.showToast('Spouse must be the opposite sex', 'error');
-                return;
+        // Who a Family relation is being changed for — the Person whose card is
+        // open. Every relation below goes through the FamilyCore planners, the
+        // same ones the quick-assign card and the Family Request approval use.
+        // They are the only place the household rules live: who may be seated
+        // where, and — the one that bit us — which Family a child belongs in when
+        // their parent is already married into one. A second writer with its own
+        // idea of the rules is how one couple ends up recorded five times.
+        async applyFamilyPlan(plan) {
+            if (!plan.valid) {
+                this.showToast(plan.errors[0], 'error');
+                return false;
             }
-            await this.saveFamily({ [spouseRole === 'husband' ? 'husbandId' : 'wifeId']: spouseId });
-            this.familySpouseQuery = '';
+            try {
+                if (plan.action === 'create') {
+                    const base = { husbandId: null, wifeId: null, childIds: [], anniversary: null, ...plan.changes };
+                    const ref = await db.collection('families').add(base);
+                    this.families.push({ id: ref.id, ...base });
+                } else {
+                    await db.collection('families').doc(plan.familyId).update(plan.changes);
+                    const fam = this.families.find(f => f.id === plan.familyId);
+                    if (fam) Object.assign(fam, plan.changes);
+                }
+                this.showToast('Family updated');
+                return true;
+            } catch (e) {
+                console.error('Error saving family:', e);
+                this.showToast('Error saving family', 'error');
+                return false;
+            }
+        },
+
+        planFamily(kind, otherId, removing) {
+            const personId = this.selectedPerson && this.selectedPerson.id;
+            const plan = removing
+                ? FamilyCore.planRemoveFamilyRelation(this.families, personId, kind, otherId)
+                : FamilyCore.planAddFamilyRelation(this.families, personId, kind, otherId,
+                    id => this.people.find(p => p.id === id) || null);
+            return plan;
+        },
+
+        async setSpouse(spouseId) {
+            if (await this.applyFamilyPlan(this.planFamily('spouse', spouseId))) {
+                this.familySpouseQuery = '';
+            }
+        },
+
+        async removeSpouse(spouseId) {
+            if (!confirm('End the marriage record for these two? Each keeps their own record.')) return;
+            await this.applyFamilyPlan(this.planFamily('spouse', spouseId, true));
         },
 
         async addChild(childId) {
-            const fam = this.selectedFamily;
-            const childIds = fam ? [...(fam.childIds || [])] : [];
-            if (childIds.indexOf(childId) === -1) childIds.push(childId);
-            await this.saveFamily({ childIds });
-            this.familyChildQuery = '';
+            if (await this.applyFamilyPlan(this.planFamily('child', childId))) {
+                this.familyChildQuery = '';
+            }
         },
 
         async removeChild(childId) {
-            const fam = this.selectedFamily;
-            if (!fam) return;
-            const childIds = (fam.childIds || []).filter(c => c !== childId);
-            await this.saveFamily({ childIds });
+            await this.applyFamilyPlan(this.planFamily('child', childId, true));
         },
 
         async setAnniversary(value) {
@@ -378,29 +420,33 @@ document.addEventListener('alpine:init', () => {
             return i === -1 ? 0 : i;
         },
 
+        // What this viewer is allowed to read off the Track. An editor sees the
+        // stage; everyone else sees only Member / Non-member — the Track itself
+        // is pastoral, not congregational (ShepherdingCore holds the rule).
         membershipStageLabel(person) {
-            if (person && person.membership && person.membership.inactive) return 'Inactive';
-            const stage = person && person.membership && person.membership.stage;
-            return ShepherdingCore.MEMBERSHIP_STAGE_LABEL[stage] || 'Not on the Track';
+            return ShepherdingCore.directoryMembershipLabel(
+                person && person.membership, this.canEdit);
         },
 
-        // Move the selected Person to the stage at the slider index. Never fired
-        // while Inactive (the slider is disabled then).
-        async setMembershipStageByIndex(index) {
+        // Move a Person to the stage at the slider index. Never fired while
+        // Inactive (the slider is disabled then). Defaults to the Person open in
+        // the modal, so the card slider and the modal slider are one control.
+        async setMembershipStageByIndex(index, person) {
             const stage = ShepherdingCore.MEMBERSHIP_STAGES[Number(index)];
             if (!stage) return;
-            await this.commitMembership({ stage, inactive: false });
+            await this.commitMembership({ stage, inactive: false }, person);
         },
 
         // Toggle Inactive: keep the retained stage, flip the flag. Clearing it
         // restores the stage (its tags come back via the projection).
-        async toggleMembershipInactive() {
-            const m = (this.selectedPerson && this.selectedPerson.membership) || {};
-            await this.commitMembership({ stage: m.stage || null, inactive: !m.inactive });
+        async toggleMembershipInactive(person) {
+            const target = person || this.selectedPerson;
+            const m = (target && target.membership) || {};
+            await this.commitMembership({ stage: m.stage || null, inactive: !m.inactive }, target);
         },
 
-        async commitMembership(next) {
-            const person = this.selectedPerson;
+        async commitMembership(next, target) {
+            const person = target || this.selectedPerson;
             if (!person) return;
             const previous = {
                 stage: (person.membership && person.membership.stage) || null,
@@ -423,6 +469,12 @@ document.addEventListener('alpine:init', () => {
                 const idx = this.people.findIndex(p => p.id === person.id);
                 if (idx !== -1) {
                     this.people[idx] = { ...this.people[idx], membership: person.membership, tags: newTags };
+                }
+                // The modal edits a clone, so a card move has to be echoed into
+                // it (and vice versa) or the two sliders disagree on screen.
+                if (this.selectedPerson && this.selectedPerson.id === person.id && this.selectedPerson !== person) {
+                    this.selectedPerson.membership = { ...person.membership };
+                    this.selectedPerson.tags = [...newTags];
                 }
                 this.showToast(ShepherdingCore.describeMembershipChange(
                     ShepherdingCore.buildMembershipChange({ previous, next })

@@ -529,6 +529,23 @@
         return true;
     }
 
+    // What the Membership Directory may say about a Person's place on the Track,
+    // for the viewer looking at it. The Track is pastoral information: where
+    // somebody sits between Visitor and Previous Member is the church's business
+    // with them, not the congregation's. So an ordinary member is told only the
+    // fact the directory is already organised around — Member or Non-member —
+    // while an editor reads the stage itself, because moving people along the
+    // Track is their job. `canEdit` is the viewer's edit capability, the same
+    // gate personMatchesDirectoryTab takes.
+    const NON_MEMBER_LABEL = 'Non-member';
+    const NO_STAGE_LABEL = 'Not on the Track';
+    function directoryMembershipLabel(membership, canEdit) {
+        if (!canEdit) return carriesMemberTag(membership) ? MEMBER_TAG_ID : NON_MEMBER_LABEL;
+        if (isInactiveMembership(membership)) return INACTIVE_TAG_ID;
+        const stage = membership && membership.stage;
+        return (stage && MEMBERSHIP_STAGE_LABEL[stage]) || NO_STAGE_LABEL;
+    }
+
     // The human sentence for a Membership Change in the Pastoral Record. Reads an
     // Inactive toggle first (it dominates), then compares stage positions on the
     // Track: later index = "Advanced to", earlier = "Moved back to", first
@@ -680,6 +697,7 @@
         buildMembershipChange,
         describeMembershipChange,
         personMatchesDirectoryTab,
+        directoryMembershipLabel,
         isInactiveMembership,
         buildSelfEditUpdate,
         commitMembershipChange,

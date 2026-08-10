@@ -303,6 +303,52 @@ test('an editor and a plain member see the same active People (Inactive aside)',
     }
 });
 
+// ── directoryMembershipLabel: what each viewer may read off the Track ──────────
+// The directory tells an ordinary member only what it is already organised
+// around — Member or Non-member. Where somebody actually sits on the Track is
+// pastoral, so only an editor reads the stage.
+
+test('a plain member is told Member or Non-member and nothing else', () => {
+    for (const stage of ['member', 'moving_membership']) {
+        assert.strictEqual(
+            Core.directoryMembershipLabel({ stage, inactive: false }, false), 'Member', stage);
+    }
+    for (const stage of ['visitor', 'regular_attender', 'prospective_member', 'previous_member']) {
+        assert.strictEqual(
+            Core.directoryMembershipLabel({ stage, inactive: false }, false), 'Non-member', stage);
+    }
+});
+
+test('no stage, and Inactive, both read as Non-member to a plain member', () => {
+    // Inactive People are hidden from a member anyway, but the label must not
+    // leak "Inactive" if one ever reaches the screen — and a Member marked
+    // Inactive is off the Track, so they are not a current member either.
+    assert.strictEqual(Core.directoryMembershipLabel(null, false), 'Non-member');
+    assert.strictEqual(Core.directoryMembershipLabel({}, false), 'Non-member');
+    assert.strictEqual(
+        Core.directoryMembershipLabel({ stage: 'member', inactive: true }, false), 'Non-member');
+});
+
+test('the label a member reads never names a stage', () => {
+    const stageNames = Object.values(Core.MEMBERSHIP_STAGE_LABEL).filter(l => l !== 'Member');
+    for (const stage of Core.MEMBERSHIP_STAGES) {
+        const label = Core.directoryMembershipLabel({ stage, inactive: false }, false);
+        assert.ok(!stageNames.includes(label), `${stage} leaked "${label}"`);
+    }
+});
+
+test('an editor reads the stage itself', () => {
+    for (const stage of Core.MEMBERSHIP_STAGES) {
+        assert.strictEqual(
+            Core.directoryMembershipLabel({ stage, inactive: false }, true),
+            Core.MEMBERSHIP_STAGE_LABEL[stage], stage);
+    }
+    assert.strictEqual(Core.directoryMembershipLabel({ stage: 'member', inactive: true }, true), 'Inactive');
+    assert.strictEqual(Core.directoryMembershipLabel({}, true), 'Not on the Track');
+    // The legacy status field is honoured, exactly as isInactiveMembership does.
+    assert.strictEqual(Core.directoryMembershipLabel({ status: 'inactive' }, true), 'Inactive');
+});
+
 // ── A membership_change is its own Pastoral Record entry, not a status group ──
 
 test('collapsePastoralRecord does not fold a membership_change into a status group', () => {
