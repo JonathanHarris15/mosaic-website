@@ -2934,6 +2934,43 @@ test('Auto-assign is offered beside a chosen event, to editors, and not on a pho
     assert.match(link[0], /re-desktop-only/, 'a phone is offered a page it will be refused');
 });
 
+// ── The other door into the same room (MS-219) ───────────────────────────────
+
+test('by hand sits beside auto-assign, carrying the same dates', () => {
+    // An editor who already knows who they want does not want a rota to undo.
+    // The long way round to a blank grid was: draft eight dates, then take
+    // everybody off them one at a time.
+    const page = loadComponent('recurring-events.js', 'recurringEventsPage');
+    page.seriesId = 'sunday_service';
+
+    assert.strictEqual(page.byHandHref, 'auto-assign.html?series=sunday_service&by=hand');
+    assert.strictEqual(page.byHandLabel, 'By hand');
+
+    page.allDates = ['2026-08-09', '2026-08-16', '2026-08-23'];
+    page.selected = ['2026-08-09', '2026-08-16'];
+
+    assert.strictEqual(page.byHandHref,
+        'auto-assign.html?series=sunday_service&from=2026-08-09&to=2026-08-16&by=hand');
+    // The count is on BOTH buttons. They open the same dates, so a count on one
+    // of them would read as the difference between them.
+    assert.strictEqual(page.byHandLabel, 'By hand, 2 dates');
+    assert.strictEqual(page.draftLabel, 'Auto-assign 2 dates');
+});
+
+test('both doors are drawn, and neither is offered to a phone', () => {
+    const html = readPage('recurring-events.html');
+    const links = html.match(/<a[^>]*:href="byHandHref"[\s\S]*?<\/a>/g);
+
+    assert.ok(links && links.length === 2,
+        'by hand is missing from the header or from the ticked panel — the header ' +
+        'scrolls off behind a long list of Roles, which is why it is said twice');
+    links.forEach(link => {
+        assert.match(link, /re-desktop-only/,
+            'a phone is offered a grid it will be refused on arrival');
+        assert.match(link, /byHandLabel/, 'the label is written out rather than bound');
+    });
+});
+
 // ⚠ A MISSING CORE FUNCTION IS INVISIBLE UNTIL SOMEBODY OPENS THE PAGE.
 // Alpine swallows a getter that throws — the span renders empty and the console
 // fills up where nobody is looking. `Core.dayMonth` shipped like that: defined
@@ -3609,6 +3646,94 @@ test('the page no longer promises that nothing is saved, because one thing is', 
         'seeding a serve writes at once, so the blanket promise became a lie');
     assert.match(html, /No rota is saved until you accept it/);
     assert.match(html, /Serve records save straight away/);
+});
+
+// ── Starting blank (MS-219) ─────────────────────────────────────────────────
+
+test('the setup step offers both doors, not just the drafted one', () => {
+    const html = readPage('auto-assign.html');
+
+    assert.match(html, /@click="runBlank\(\)"/, 'no way to start with an empty grid');
+    assert.match(html, /@click="runDraft\(\)"/);
+    // Which picture gets drawn FIRST is the whole of the choice, so it has to be
+    // made before the room opens — by the time you are looking at the wrong one
+    // it has already been drawn.
+    assert.ok(html.indexOf('runBlank()') < html.indexOf('runDraft()'),
+        'the blank door should read as the quieter alternative, first in the row');
+});
+
+test('the header says which grid you are looking at', () => {
+    // An editor who asked for an empty grid and got a header saying
+    // "Auto-assign" would reasonably wonder what it had assigned.
+    const page = draftedPage();
+    assert.equal(page.draftTitle, 'Auto-assign');
+
+    page.byHand = true;
+    assert.equal(page.draftTitle, 'By hand');
+
+    const html = readPage('auto-assign.html');
+    assert.match(html, /x-text="draftTitle"/, 'the header is hard-coded and cannot say');
+});
+
+test('re-drafting the whole range stops calling it a grid you filled in', () => {
+    const page = draftedPage();
+    page.byHand = true;
+    page.draft = { dates: [drafted('2026-10-04'), drafted('2026-10-11')] };
+
+    page.redraftAll();
+
+    assert.equal(page.byHand, false, 'every date on it has now been drafted');
+    assert.equal(page.draftTitle, 'Auto-assign');
+});
+
+test('re-drafting ONE column leaves the grid the editor\'s own', () => {
+    // The columns before that one are still their work. Re-drafting from the
+    // fifth date is a repair, not a change of authorship.
+    const page = draftedPage();
+    page.byHand = true;
+    page.draft = { dates: [drafted('2026-10-04'), drafted('2026-10-11')] };
+
+    page.redraftFrom(1);
+
+    assert.equal(page.byHand, true);
+});
+
+test('a blank grid asked for in the address bar is remembered and picked back up', () => {
+    // The stored draft is what survives a closed tab, and a draft resumed under
+    // the wrong heading has the editor looking for an assignment nothing made.
+    const page = draftedPage();
+    page.byHand = true;
+    assert.equal(page.savedContext().byHand, true);
+
+    page.byHand = false;
+    page.offered = { draft: { dates: [] }, byHand: true };
+    page.offerStale = [];
+    page.resumeDraft();
+    assert.equal(page.byHand, true);
+
+    // A draft saved before MS-219 has no such field, and reads as the ordinary
+    // kind — which is what every draft saved before it was.
+    page.offered = { draft: { dates: [] } };
+    page.offerStale = [];
+    page.resumeDraft();
+    assert.equal(page.byHand, false);
+});
+
+test('the address bar asks for a blank grid, and only in so many words', () => {
+    const asked = search => {
+        const page = loadComponent('auto-assign.js', 'autoAssignPage', {
+            location: { search: search, href: '' },
+        });
+        page.onRangeSettled = () => {};
+        page.series = [{ id: 'sunday_service', name: 'Sunday Service' }];
+        page.applyIncoming();
+        return page.startByHand;
+    };
+
+    assert.equal(asked('?series=sunday_service&by=hand'), true);
+    assert.equal(asked('?series=sunday_service'), false, 'the ordinary door');
+    assert.equal(asked('?series=sunday_service&by=magic'), false,
+        'a hand-typed link should open the ordinary page rather than guess');
 });
 
 // ── Staleness and re-draft from here (MS-181) ───────────────────────────────
@@ -5947,7 +6072,7 @@ test('the browse lane offers nothing that writes', () => {
 
     assert.ok(lane.length > 400, 'the browse lane is not where this test thinks it is');
     [
-        'takeEverybodyOff', 'draftHref', 'newEventHref', 'seriesHref', 'eventHref',
+        'takeEverybodyOff', 'draftHref', 'byHandHref', 'newEventHref', 'seriesHref', 'eventHref',
         'toggle(', 'clearSelection',
     ].forEach(control => {
         assert.ok(lane.indexOf(control) === -1,

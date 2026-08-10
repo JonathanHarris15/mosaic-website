@@ -318,7 +318,8 @@
                         class="material-symbols-outlined text-[20px] text-secondary p-1.5 rounded-lg
                                hover:bg-surface-container aa-motion aa-focus shrink-0">arrow_back</button>
                 <div class="flex flex-col gap-0.5 min-w-0">
-                    <span class="font-display text-[19px] text-primary tracking-[.02em] leading-none">Auto-assign</span>
+                    <span class="font-display text-[19px] text-primary tracking-[.02em] leading-none"
+                          x-text="draftTitle"></span>
                     <span class="text-[12px] text-on-surface-variant truncate" x-text="draftSubtitle"></span>
                 </div>
             </div>
@@ -364,8 +365,9 @@
                     <div class="text-[13px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">Rosters</div>
                     <h1 class="font-display text-display-lg text-primary tracking-[.02em] leading-[1.1]">Auto-assign</h1>
                     <p class="text-body-md leading-relaxed text-on-surface-variant max-w-[56ch] text-pretty">
-                        Draft who serves in each role across a stretch of dates, balanced so the same
-                        few people don't carry everything. No rota is saved until you accept it.
+                        Who serves in each role across a stretch of dates. Draft it and the work is
+                        spread so the same few people don't carry everything, or start with an empty
+                        grid and put people in yourself.
                     </p>
                 </div>
 
@@ -503,16 +505,31 @@
                         <p class="text-[12.5px] leading-snug text-on-surface-variant" x-text="choiceFootnote"></p>
                     </div>
 
-                    <!-- Go -->
-                    <div class="flex items-center justify-between gap-4 pt-1.5">
+                    <!-- Go. Two ways in, one room: a rota drafted for you, or
+                         the same grid empty for you to fill. The choice is which
+                         picture gets drawn first, so it has to be made here —
+                         by the time you are looking at the wrong one it has
+                         already been drawn. -->
+                    <div class="flex items-center justify-between gap-4 pt-1.5 flex-wrap">
+                        <!-- ⚠ "No ROTA is saved", never "nothing is saved". A
+                             seeded serve writes the moment it is typed, so the
+                             blanket promise is a lie and a test pins it. -->
                         <span class="text-[12.5px] text-on-surface-variant">
-                            You'll be able to rework the draft before anything is saved.
+                            No rota is saved until you accept it, drafted or by hand.
                         </span>
-                        <button @click="runDraft()" :disabled="!canDraft" type="button"
-                                class="shrink-0 bg-primary text-on-primary rounded-lg px-5 py-3.5 shadow-xs
-                                       font-label-md text-[12.5px] uppercase tracking-[.12em] aa-motion aa-focus
-                                       disabled:opacity-40 disabled:cursor-not-allowed"
-                                x-text="drafting ? 'Drafting…' : 'Draft the roster'"></button>
+                        <div class="shrink-0 flex items-center gap-2.5">
+                            <button @click="runBlank()" :disabled="!canDraft" type="button"
+                                    class="border border-secondary text-secondary rounded-lg px-4 py-3.5
+                                           font-label-md text-[12.5px] uppercase tracking-[.12em] aa-motion aa-focus
+                                           hover:bg-surface-container disabled:opacity-40 disabled:cursor-not-allowed">
+                                Fill it in by hand
+                            </button>
+                            <button @click="runDraft()" :disabled="!canDraft" type="button"
+                                    class="bg-primary text-on-primary rounded-lg px-5 py-3.5 shadow-xs
+                                           font-label-md text-[12.5px] uppercase tracking-[.12em] aa-motion aa-focus
+                                           disabled:opacity-40 disabled:cursor-not-allowed"
+                                    x-text="drafting ? 'Drafting…' : 'Draft the roster'"></button>
+                        </div>
                     </div>
                 </div>
             </div>

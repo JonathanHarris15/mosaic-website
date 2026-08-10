@@ -72,6 +72,10 @@
             // in somebody's browser, so the old key is read as a fallback —
             // losing an editor's out-list to tidy a name would be a poor trade.
             out: (context || {}).out || (context || {}).away || {},
+            // Whether the grid started blank (MS-219). Wording only, but a draft
+            // picked back up under the wrong heading has the editor looking for
+            // an assignment nothing ever made.
+            byHand: (context || {}).byHand === true,
             against: fingerprint(context),
             draft: draft,
         };

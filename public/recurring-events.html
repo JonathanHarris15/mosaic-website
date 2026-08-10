@@ -336,6 +336,16 @@
                                       font-label-md text-xs uppercase tracking-wider re-motion re-press re-focus hover:bg-surface-container">
                                 <span class="material-symbols-outlined text-[18px]">tune</span> Edit the event
                             </a>
+                            <!-- The same room, opened blank. Outlined and first,
+                                 so the ordinary journey stays the filled one
+                                 beside it — this is the answer to "I already
+                                 know who I want", not the common case. -->
+                            <a :href="byHandHref"
+                               class="re-desktop-only flex items-center gap-1 border border-secondary text-secondary px-md py-2 rounded-lg
+                                      font-label-md text-xs uppercase tracking-wider re-motion re-press re-focus hover:bg-surface-container">
+                                <span class="material-symbols-outlined text-[18px]">edit_note</span>
+                                <span x-text="byHandLabel"></span>
+                            </a>
                             <!-- Staffing a RUN of dates, for the series already
                                  open. Hidden on a phone, because the room it
                                  opens is a wide grid of dates against Roles and
@@ -357,8 +367,9 @@
                          expected "the ones on screen" should find that out here
                          rather than on the other side. -->
                     <p x-show="!range" class="re-desktop-only mt-2 text-[12px] text-on-surface-variant">
-                        Auto-assign drafts the next stretch of dates from tomorrow. Tick columns
-                        below to draft exactly those instead.
+                        Both buttons open the next stretch of dates from tomorrow — auto-assign
+                        with a rota drafted for you, by hand with the grid empty. Tick columns
+                        below to open exactly those dates instead.
                     </p>
 
                     <!-- Paging, and what the window covers -->
@@ -404,7 +415,7 @@
                                  nothing cannot be told from a broken one. -->
                             <p x-show="wipeNote" class="text-[12.5px] text-on-surface-variant mt-0.5" x-text="wipeNote"></p>
                         </div>
-                        <div class="shrink-0 flex items-center gap-sm">
+                        <div class="shrink-0 flex items-center justify-end gap-sm flex-wrap">
                             <button @click="clearSelection()"
                                     class="px-3 py-2 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
                                            text-on-surface-variant re-motion re-focus hover:bg-surface-container">Clear</button>
@@ -426,10 +437,17 @@
                                       :class="clearing ? 'animate-spin' : ''"></span>
                                 <span x-text="wipeLabel"></span>
                             </button>
-                            <!-- The same door as the button above the grid, said
+                            <!-- Both doors as they appear above the grid, said
                                  the same way. Repeated here because this is
                                  where the ticking happened, and the header can
                                  be scrolled off by a long list of Roles. -->
+                            <a :href="byHandHref"
+                               class="re-desktop-only flex items-center gap-1 border border-secondary text-secondary px-3 py-2 rounded-lg
+                                      font-label-md text-[11.5px] uppercase tracking-wider re-motion re-press re-focus
+                                      hover:bg-surface-container">
+                                <span x-text="byHandLabel"></span>
+                                <span class="material-symbols-outlined text-[16px]">north_east</span>
+                            </a>
                             <a :href="draftHref"
                                class="re-desktop-only flex items-center gap-1 bg-primary text-on-primary px-3 py-2 rounded-lg
                                       shadow-xs font-label-md text-[11.5px] uppercase tracking-wider re-motion re-press re-focus">

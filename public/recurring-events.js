@@ -416,6 +416,30 @@
                     + (range.spans === 1 ? ' date' : ' dates');
             },
 
+            // ── The other door into the same room ────────────────────────────
+            //
+            // The same dates, opened on a blank grid. An editor who already
+            // knows who they want does not want a draft to argue with, and the
+            // long way round to a blank grid was: draft eight dates, then take
+            // everybody off them one at a time.
+            //
+            // Beside the auto-assign button rather than inside the draft room,
+            // because the choice is which picture you want drawn FIRST, and by
+            // the time you are looking at the wrong one it has been drawn.
+            get byHandHref() {
+                return Grid.draftRoomHref(this.seriesId, this.range, { byHand: true });
+            },
+
+            // Worded to sit alongside its neighbour and carry the same count —
+            // both buttons open the same dates, so a count on one of them would
+            // read as the difference between them.
+            get byHandLabel() {
+                const range = this.range;
+                if (!range) return 'By hand';
+                return 'By hand, ' + range.spans
+                    + (range.spans === 1 ? ' date' : ' dates');
+            },
+
             // Said before the trip, not discovered after it. The draft room
             // works in ranges, so a scattered selection brings the dates in
             // between along with it — and redrawing a Sunday nobody chose is

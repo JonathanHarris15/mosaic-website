@@ -64,6 +64,16 @@
             // 'setup' → 'draft'. There is no third: accepting leaves the page.
             view: 'setup',
 
+            // ── Started blank (MS-219) ───────────────────────────────────────
+            //
+            // Whether the grid in front of the editor was drawn by the solve or
+            // handed to them empty. It changes the WORDING and nothing else —
+            // a blank grid is a draft like any other, and every control on it
+            // still means what it says, including the ones that draft.
+            byHand: false,
+            startByHand: false,     // asked for in the address bar
+            settling: null,         // the range read the auto-start waits on
+
             // ── Setup ────────────────────────────────────────────────────────
             series: [],
             seriesId: '',
@@ -200,6 +210,21 @@
                 // racing them, and only for a series this viewer can actually
                 // see — an id in the address bar is a request, not a permission.
                 this.applyIncoming();
+
+                // Arrived asking for a blank grid. Drawn HERE rather than after
+                // the spinner clears, because the setup step is not a stop on
+                // that journey — flashing it up and taking it away again reads
+                // as the page changing its mind.
+                //
+                // A resumable draft for this range beats the request: the
+                // editor's own hours of reworking are the one thing on this
+                // screen that cannot be redrawn in a second, so they are
+                // offered the choice rather than having it made for them.
+                if (this.startByHand) {
+                    await this.settling;
+                    if (!this.offered) await this.runBlank();
+                }
+
                 this.loading = false;
             },
 
@@ -219,6 +244,10 @@
                 const seriesId = params.get('series');
                 const from = params.get('from');
                 const to = params.get('to');
+
+                // Which picture to draw first. Only ever "draw me an empty one"
+                // — anything else, including nothing, is the ordinary page.
+                this.startByHand = params.get('by') === 'hand';
 
                 if (seriesId && this.series.some(s => s.id === seriesId)) {
                     this.seriesId = seriesId;
@@ -244,9 +273,18 @@
             // changes; a saved draft is checked at the same moment, so the
             // offer appears beside the range it belongs to rather than at load
             // time against whatever range happened to be default.
+            //
+            // Both halves are kept as a promise on `settling`. Nothing an editor
+            // presses needs to wait for them — by the time a hand reaches the
+            // button the reads are long done — but a draft the ADDRESS BAR asked
+            // for starts in the same breath, and one that did not wait would be
+            // drawn blank over dates whose rota had not arrived yet.
             onRangeSettled() {
-                this.onRangeChanged();
-                this.offerStored();
+                this.settling = Promise.all([
+                    this.onRangeChanged(),
+                    this.offerStored(),
+                ]);
+                return this.settling;
             },
 
             async resolveRank() {
@@ -361,12 +399,14 @@
 
             rangeToken: 0,
 
+            // Returns the read, so a caller that must not run before the rota is
+            // in hand can wait for it. Nobody has to.
             onRangeChanged() {
                 const token = ++this.rangeToken;
                 const dates = this.resolvedDates;
-                if (!dates.length) { this.occupied = []; return; }
+                if (!dates.length) { this.occupied = []; return Promise.resolve(); }
 
-                Store.loadVisibleOccurrences(db, {
+                return Store.loadVisibleOccurrences(db, {
                     rank: this.rank,
                     personId: this.personId,
                     from: dates[0],
@@ -448,6 +488,7 @@
                     // has to redo by hand.
                     await this.loadAway();
                     this.draft = Loop.draft(this.draftOptions());
+                    this.byHand = false;
                     this.displaced = [];
                     // Out is about a range of dates; a new range is a new
                     // question. A nudge is about a person's season, so it
@@ -464,6 +505,51 @@
                 } catch (e) {
                     console.error('Could not draft the roster:', e);
                     this.error = 'The roster could not be drafted. ' +
+                        (e && e.message ? e.message : 'Something went wrong reading the data it needs.');
+                } finally {
+                    this.drafting = false;
+                }
+            },
+
+            // ── Starting blank (MS-219) ──────────────────────────────────────
+            //
+            // The same range, the same grid, nobody in it. For the editor who
+            // already knows who they want: a draft they have to undo is worse
+            // than no draft at all, and the long way round to a blank grid was
+            // to draft eight dates and then take everybody off them.
+            //
+            // It loads exactly what a draft loads, even though nothing solves.
+            // The numbers on the cards, the warnings and the reasons in the
+            // panel are all read from that data the moment the editor places
+            // somebody — a blank grid is a grid you fill in, so it needs to know
+            // as much about the church as a full one does.
+            async runBlank() {
+                if (!this.canDraft) return;
+                this.drafting = true;
+                this.error = '';
+                this.notice = '';
+
+                try {
+                    await this.loadForDraft();
+                    // Nothing here can seat somebody over an Away, because
+                    // nothing here seats anybody. It is read anyway: the editor
+                    // is about to, and the screen has to be able to say so.
+                    await this.loadAway();
+                    this.draft = Loop.blank(this.draftOptions());
+                    this.byHand = true;
+                    this.displaced = [];
+                    this.out = {};
+                    this.staleFrom = null;
+                    this.edited = {};
+                    this.seenProblems = false;
+                    this.accepted = null;
+                    this.buildGrid();
+                    this.remember();
+                    this.focused = 0;
+                    this.showDraft();
+                } catch (e) {
+                    console.error('Could not open a blank roster:', e);
+                    this.error = 'The blank grid could not be opened. ' +
                         (e && e.message ? e.message : 'Something went wrong reading the data it needs.');
                 } finally {
                     this.drafting = false;
@@ -1835,6 +1921,7 @@
                     displaced: this.displaced,
                     nudges: this.nudges,
                     out: this.out,
+                    byHand: this.byHand,
                     savedAt: new Date().toISOString(),
                 };
             },
@@ -1880,6 +1967,10 @@
                 // The old key too: a draft saved before the MS-188 rename is
                 // still sitting in somebody's browser.
                 this.out = this.offered.out || this.offered.away || {};
+                // Absent on a draft saved before MS-219, which reads as an
+                // ordinary one — the safe way round, since that is what every
+                // draft saved before it was.
+                this.byHand = !!this.offered.byHand;
                 this.offered = null;
                 this.selected = null;
                 this.seenProblems = false;
@@ -2046,6 +2137,11 @@
             redraftAll() {
                 if (!this.draft) return;
                 this.draft = Loop.draft(this.draftOptions());
+                // Every date on it has now been drafted, so the header stops
+                // calling it a grid the editor filled in. Re-drafting from ONE
+                // column does not clear it — the columns before that one are
+                // still the editor's own, and the grid is still theirs.
+                this.byHand = false;
                 this.displaced = [];
                 this.selected = null;
                 this.seenProblems = false;
@@ -2053,6 +2149,14 @@
                 this.edited = {};
                 this.buildGrid();
                 this.remember();
+            },
+
+            // What the header calls the thing on screen. The one place the blank
+            // start shows up, because it is the one thing about it that differs:
+            // an editor who asked for an empty grid and got a header saying
+            // "Auto-assign" would reasonably wonder what it had assigned.
+            get draftTitle() {
+                return this.byHand ? 'By hand' : 'Auto-assign';
             },
 
             get draftSubtitle() {

@@ -210,6 +210,47 @@
         };
     }
 
+    // ── One date nobody solved ────────────────────────────────────────────────
+    //
+    // A blank grid (MS-219). Whoever is already on the date stays exactly where
+    // they are, and every other place comes back as a gap — so the screen draws
+    // it as an empty seat the editor can drop somebody onto, which is the same
+    // seat a solve would have left behind when it ran out of people.
+    //
+    // ⚠ THE GAPS CARRY NO REASON, and that is the whole of the difference. A
+    // reason means the solve tried this place and could not fill it; here it
+    // never ran, and "nobody was free" written against a place nobody asked
+    // about is a lie the editor would act on.
+    function blankDate(o, date, held) {
+        const seated = excluding(held, outOn(o, date), a => a.personId);
+
+        const taken = {};
+        seated.forEach(a => { taken[a.roleSlug + '|' + a.slotId] = true; });
+
+        const gaps = [];
+        (o.roles || []).forEach(role => {
+            const slots = (role && Array.isArray(role.slots)) ? role.slots : [];
+            slots.forEach(slot => {
+                if (taken[role.slug + '|' + slot.id]) return;
+                gaps.push({
+                    roleSlug: role.slug, slotId: slot.id, reason: null, detail: null,
+                });
+            });
+        });
+
+        return {
+            date: date,
+            skipped: false,
+            seats: seated.map(a => Object.assign(asSeat(a), {
+                held: true, state: a.state, recency: null, allowsAnotherRole: null,
+            })),
+            gaps: gaps,
+            widened: 0,
+            allSpent: false,
+            pool: [],
+        };
+    }
+
     function staff(o, date, index, history) {
         const existing = (o.existing || {})[date] || [];
         const choice = o.choice || CHOICES.KEEP;
@@ -233,12 +274,19 @@
             };
         }
 
-        return solveDate(o, date, index, history, heldSeats(existing, choice));
+        const held = heldSeats(existing, choice);
+        if (o.blank) return blankDate(o, date, held);
+        return solveDate(o, date, index, history, held);
     }
 
     // ── The range ─────────────────────────────────────────────────────────────
 
     function assertReady(o) {
+        // A blank draft never calls the solve, so it needs neither the solve nor
+        // the window the solve measures load against. Demanding them would make
+        // the caller hand over a judge it has already decided not to ask.
+        if (o.blank) return;
+
         if (typeof o.solve !== 'function') {
             throw new Error(
                 'AutoAssignCore needs options.solve — pass FairnessCore.solve. ' +
@@ -287,6 +335,19 @@
 
     function draft(options) {
         return run(options, 0, []);
+    }
+
+    // The same range, with nobody in it (MS-219). For the editor who already
+    // knows who they want and would rather place them than argue with a draft.
+    //
+    // It returns a DRAFT, not a different kind of thing. Everything downstream —
+    // the grid, the drag, the warnings, accepting — cannot tell a blank one from
+    // a solved one and must never have to: the two differ in how the first
+    // picture was drawn, not in what it is. So `redraftFrom` and `fillGaps` both
+    // still work on it, and the editor who starts by hand and gets bored halfway
+    // can hand the rest back.
+    function blank(options) {
+        return run(Object.assign({}, options || {}, { blank: true }), 0, []);
     }
 
     // Keep the chosen date and everything before it exactly as the editor left
@@ -343,6 +404,7 @@
         windowFor,
         // the range
         draft,
+        blank,
         redraftFrom,
         fillGaps,
     };

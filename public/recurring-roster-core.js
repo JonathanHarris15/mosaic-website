@@ -313,13 +313,20 @@
     // Auto-assign button on the Calendar used to mean. Without a range the draft
     // room applies its own default — the next stretch from tomorrow — which is
     // the only sensible reading of a series with no dates named.
-    function draftRoomHref(seriesId, range) {
+    //
+    // `byHand` opens the SAME room on a blank grid rather than a solved one
+    // (MS-219) — not a second screen, because everything an editor does to a
+    // draft after it is drawn is the thing they came to do either way, and a
+    // hand-only copy of the grid would be that whole screen written twice.
+    function draftRoomHref(seriesId, range, options) {
         if (!seriesId) return null;
-        const at = 'auto-assign.html?series=' + encodeURIComponent(seriesId);
-        if (!range) return at;
-        return at
-            + '&from=' + encodeURIComponent(range.from)
-            + '&to=' + encodeURIComponent(range.to);
+        let at = 'auto-assign.html?series=' + encodeURIComponent(seriesId);
+        if (range) {
+            at += '&from=' + encodeURIComponent(range.from)
+                + '&to=' + encodeURIComponent(range.to);
+        }
+        if (options && options.byHand) at += '&by=hand';
+        return at;
     }
 
     // ── The window of dates ──────────────────────────────────────────────────

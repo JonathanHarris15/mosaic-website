@@ -203,6 +203,25 @@ test('no ticked dates still opens the draft room, on the series alone', () => {
     );
 });
 
+test('by hand is the same room, asked for a blank grid (MS-219)', () => {
+    const range = Core.rangeFor(['2026-08-09', '2026-08-16'], DATES);
+    assert.strictEqual(
+        Core.draftRoomHref('sunday_service', range, { byHand: true }),
+        'auto-assign.html?series=sunday_service&from=2026-08-09&to=2026-08-16&by=hand'
+    );
+    assert.strictEqual(
+        Core.draftRoomHref('sunday_service', null, { byHand: true }),
+        'auto-assign.html?series=sunday_service&by=hand'
+    );
+});
+
+test('no options, or an option that is not by hand, is the ordinary door', () => {
+    const range = Core.rangeFor(['2026-08-09'], DATES);
+    const plain = Core.draftRoomHref('sunday_service', range);
+    assert.strictEqual(Core.draftRoomHref('sunday_service', range, {}), plain);
+    assert.strictEqual(Core.draftRoomHref('sunday_service', range, { byHand: false }), plain);
+});
+
 test('no series is no link at all, because there is nothing to draft', () => {
     const range = Core.rangeFor(['2026-08-09'], DATES);
     assert.strictEqual(Core.draftRoomHref('', range), null);
