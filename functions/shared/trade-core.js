@@ -1,3 +1,11 @@
+// ⚠ GENERATED FILE — DO NOT EDIT.
+//
+// Copied from public/trade-core.js by scripts/sync-shared-to-functions.js, because
+// functions/ deploys as its own bundle and cannot require across into
+// public/. Edit the original; run the script; commit both.
+//
+// test/functions-shared-sync.test.js fails if this copy is stale.
+
 // Trade Core — what a Trade is, and what may happen to it (MS-190, MS-208).
 //
 // A **Trade** is an offer against an Assignment looking for cover, naming the

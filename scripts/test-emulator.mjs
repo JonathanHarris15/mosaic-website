@@ -65,7 +65,14 @@ if (bin) {
     console.log('Using the Java runtime at ' + bin);
 }
 
-const inner = 'node --test ' + (process.argv[2] || 'test/emulator/*.test.js');
+// ⚠ ONE FILE AT A TIME. `node --test` runs test FILES in parallel by default,
+// and every suite here wipes the database between tests. Two of them running
+// together wipe each other's fixtures mid-test, and the failures land in
+// whichever suite was unlucky rather than the one that caused them — which is
+// exactly how this was found: MS-20's suite went red the day MS-190's was added,
+// having not been touched.
+const inner = 'node --test --test-concurrency=1 ' +
+    (process.argv[2] || 'test/emulator/*.test.js');
 const result = spawnSync('npx', [
     'firebase', 'emulators:exec',
     '--only', 'firestore',

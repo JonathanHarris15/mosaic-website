@@ -27,6 +27,10 @@ const lu = require("./linked-user");
 // functions/ cannot require across into public/, and ADR-0030 needs the
 // eligibility rules on the SERVER.
 const aw = require("./assignment-writes");
+// Every way a Trade moves (MS-190). Same split again: the decisions are in
+// shared/trade-core.js, pure; this takes a db so the transactions can be
+// exercised.
+const tw = require("./trade-writes");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -791,6 +795,148 @@ exports.answerAssignment = onCall(
         success: true,
         state: result.assignment.state,
         onCoverList: result.cover.action === "set",
+      };
+    },
+);
+
+/**
+ * Trades (MS-190). Five moves, one record.
+ *
+ * ⚠ EVERY TRANSITION COMES THROUGH HERE. `firestore.rules` refuses a client
+ * write of a Trade outright — editors included — so the state machine cannot be
+ * walked round with a browser console. "The screen only offers the legal
+ * buttons" is not a wall.
+ *
+ * ⚠ THE CALLER IS TRUSTED FOR IDS AND NOTHING ELSE. Dates, Event names and Role
+ * names are all resolved from Firestore inside `trade-writes`. The date is the
+ * only clock in this feature, and a caller who could send their own would be
+ * able to trade a Saturday that has already happened.
+ *
+ * @param {Object} request the callable request
+ * @param {function} run given a db and the caller's own details, does the move
+ * @return {Promise<Object>} what the move returned
+ */
+async function tradeMove(request, run) {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Sign in to arrange a swap.");
+  }
+
+  const db = admin.firestore();
+  const userSnap = await db.collection("users").doc(request.auth.uid).get();
+  const personId = userSnap.exists ?
+    (userSnap.data().personId || null) : null;
+  if (!personId) {
+    throw new HttpsError(
+        "permission-denied", "Only a linked account can arrange a swap.");
+  }
+
+  const result = await run(db, {
+    actorId: personId,
+    today: ac.churchToday(new Date()),
+    now: admin.firestore.Timestamp.now(),
+  });
+
+  if (!result.ok) throw new HttpsError(result.code, result.message);
+  return result;
+}
+
+exports.inviteToTrade = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const {occurrenceId, roleSlug, slotId, counterpartyId} =
+        request.data || {};
+      if (!occurrenceId || !roleSlug || !counterpartyId) {
+        throw new HttpsError("invalid-argument", "Missing who, or what.");
+      }
+
+      const result = await tradeMove(request, (db, base) => tw.invite(
+          db, Object.assign({
+            assignment: {occurrenceId, roleSlug, slotId: slotId || null},
+            counterpartyId: counterpartyId,
+          }, base)));
+
+      log(`inviteToTrade: ${counterpartyId} asked about ${roleSlug} ` +
+          `on ${occurrenceId}`);
+      return {success: true, tradeId: result.tradeId, state: result.state};
+    },
+);
+
+exports.withdrawTrade = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const {tradeId} = request.data || {};
+      if (!tradeId) throw new HttpsError("invalid-argument", "Missing which.");
+
+      const result = await tradeMove(request, (db, base) =>
+        tw.withdraw(db, Object.assign({tradeId}, base)));
+      return {success: true, state: result.state};
+    },
+);
+
+exports.refuseTrade = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const {tradeId} = request.data || {};
+      if (!tradeId) throw new HttpsError("invalid-argument", "Missing which.");
+
+      const result = await tradeMove(request, (db, base) =>
+        tw.refuse(db, Object.assign({tradeId}, base)));
+      return {success: true, state: result.state};
+    },
+);
+
+/**
+ * The reply, or an uninvited offer. `tradeId` says which: with one it
+ * answers an invitation, without one it opens a fresh offer.
+ *
+ * An empty `offered` on a reply SETTLES it — they were asked, so the
+ * answer is the agreement. An empty one with no tradeId is refused: taking
+ * something nobody offered you is the Take button on the cover list.
+ */
+exports.offerTrade = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const {tradeId, occurrenceId, roleSlug, slotId, holderId, offered} =
+        request.data || {};
+      if (!tradeId && (!occurrenceId || !roleSlug || !holderId)) {
+        throw new HttpsError("invalid-argument", "Missing what you are after.");
+      }
+
+      const result = await tradeMove(request, (db, base) => tw.offer(
+          db, Object.assign({
+            tradeId: tradeId || null,
+            assignment: tradeId ?
+              null : {occurrenceId, roleSlug, slotId: slotId || null},
+            holderId: holderId || null,
+            offered: Array.isArray(offered) ? offered : [],
+          }, base)));
+
+      return {
+        success: true,
+        tradeId: result.tradeId,
+        state: result.state,
+        settled: result.state === "settled",
+      };
+    },
+);
+
+exports.acceptTrade = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const {tradeId, chosen} = request.data || {};
+      if (!tradeId || !chosen) {
+        throw new HttpsError("invalid-argument", "Missing which one.");
+      }
+
+      const result = await tradeMove(request, (db, base) =>
+        tw.accept(db, Object.assign({tradeId, chosen}, base)));
+
+      log(`acceptTrade: ${tradeId} settled, ` +
+          `${(result.dying || []).length} others ended`);
+      return {
+        success: true,
+        state: result.state,
+        telling: result.telling || [],
       };
     },
 );

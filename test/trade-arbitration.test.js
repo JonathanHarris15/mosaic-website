@@ -280,3 +280,15 @@ test('nothing dies and nobody is told when the settlement did not stand', () => 
     assert.deepEqual(result.dying, []);
     assert.deepEqual(result.telling, []);
 });
+
+test('an offered Assignment its owner has since declined is refused', () => {
+    // Sarah put her Coffee up and then declined it herself. It is still hers,
+    // so nothing has moved — but handing Bob a place already looking for cover
+    // gives him back the very thing he was trying to get rid of.
+    const result = judge({
+        read: asRead({ [key(COFFEE)]: { personId: SARAH, state: 'declined' } }),
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, Trade.REASONS.OFFERED_DECLINED);
+});
