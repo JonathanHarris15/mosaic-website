@@ -49,7 +49,7 @@
 <body class="bg-background text-on-surface font-body-md antialiased"
       x-data="commitmentsPage()" x-cloak>
 
-<main class="max-w-[760px] mx-auto px-md pb-16">
+<main class="max-w-[760px] mx-auto px-4 sm:px-md pb-16">
 
     <a href="calendar.html"
        class="inline-flex items-center gap-1 mt-md text-on-surface-variant text-[11px] uppercase tracking-[.1em] hover:text-secondary">
@@ -58,7 +58,7 @@
 
     <!-- ── The head ──────────────────────────────────────────────────────── -->
     <div class="mt-3 pb-[18px] border-b border-outline-variant">
-        <h1 class="font-headline-lg text-[30px] tracking-[.02em] text-primary m-0">Your Commitments</h1>
+        <h1 class="font-headline-lg text-[26px] sm:text-[30px] tracking-[.02em] text-primary m-0">Your Commitments</h1>
         <!-- The sentence counts what still wants YOU. It is the whole reason
              the unanswered are hoisted below rather than left in date order. -->
         <p x-show="headline"
@@ -107,10 +107,10 @@
     <section x-show="hasUnanswered" class="mt-7">
         <div class="flex flex-col gap-3">
             <template x-for="row in unanswered" :key="row.key">
-                <article class="bg-surface-container-lowest border border-outline-variant border-l-[3px] rounded-lg px-[18px] py-4"
+                <article class="bg-surface-container-lowest border border-outline-variant border-l-[3px] rounded-lg px-4 sm:px-[18px] py-4"
                          style="border-left-color: var(--gold);">
 
-                    <div class="flex items-center gap-3.5">
+                    <div class="flex items-center gap-3 sm:gap-3.5">
                         <div class="w-[46px] shrink-0 text-center">
                             <div class="text-[9.5px] uppercase tracking-[.12em] text-on-surface-variant" x-text="row.mon"></div>
                             <div class="font-headline-lg text-[24px] text-primary leading-[1.1]" x-text="row.dayNum"></div>
@@ -164,55 +164,70 @@
         <div class="flex flex-col gap-2.5">
             <template x-for="row in settled" :key="row.key">
                 <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
-                    <div class="flex items-center gap-3.5 px-md py-3.5"
+                    <!-- ⚠ ON A PHONE THE CHIP AND CHANGE DROP UNDER THE NAME.
+                         Held on one line they squeeze the Role's name into a
+                         column of single words — "Setup / & / Tear" — and the
+                         chip lands on top of it. The date, the name and the
+                         answer are three things; on a narrow screen they get
+                         three lines. From `sm` up nothing moves. -->
+                    <div class="flex items-start sm:items-center gap-3 sm:gap-3.5 px-4 sm:px-md py-3.5"
                          :class="row.isLiturgical ? 'bg-surface-container-low' : ''">
 
-                        <div class="w-[46px] shrink-0 text-center">
+                        <div class="w-[42px] sm:w-[46px] shrink-0 text-center">
                             <div class="text-[9px] uppercase tracking-[.12em] text-on-surface-variant" x-text="row.mon"></div>
                             <div class="font-headline-lg text-[18px] text-on-surface" x-text="row.dayNum"></div>
                         </div>
 
-                        <div class="min-w-0 flex-grow">
-                            <!--
-                                 ⚠ A LITURGICAL ROLE READS AS SETTLED THROUGH TYPE
-                                 ALONE — serif italic, no controls, a quieter ground.
-                                 It was decided this page carries NO copy explaining
-                                 why; being on the printed booklet IS the commitment
-                                 (ADR-0019), and a sentence saying so would make the
-                                 one row nobody can act on the loudest on the page.
-                            -->
-                            <div class="text-on-surface leading-[1.3]"
-                                 :class="row.isLiturgical
-                                    ? 'font-serif italic text-[18px]'
-                                    : 'text-[15.5px]'"
-                                 x-text="row.roleName"></div>
-                            <div class="mt-0.5 text-[12.5px] text-on-surface-variant" x-text="row.eventName"></div>
-                        </div>
+                        <div class="min-w-0 flex-grow flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3.5">
+                            <div class="min-w-0 sm:flex-grow">
+                                <!--
+                                     ⚠ A LITURGICAL ROLE READS AS SETTLED THROUGH TYPE
+                                     ALONE — serif italic, no controls, a quieter ground.
+                                     It was decided this page carries NO copy explaining
+                                     why; being on the printed booklet IS the commitment
+                                     (ADR-0019), and a sentence saying so would make the
+                                     one row nobody can act on the loudest on the page.
+                                -->
+                                <div class="text-on-surface leading-[1.3]"
+                                     :class="row.isLiturgical
+                                        ? 'font-serif italic text-[18px]'
+                                        : 'text-[15.5px]'"
+                                     x-text="row.roleName"></div>
+                                <div class="mt-0.5 text-[12.5px] text-on-surface-variant" x-text="row.eventName"></div>
+                            </div>
 
-                        <div class="shrink-0 flex items-center gap-3">
-                            <span class="inline-flex items-center px-[9px] py-1 rounded-md text-[10.5px] uppercase tracking-[.1em]"
-                                  :class="row.chipClass" x-text="row.chipLabel"></span>
-                            <button x-show="!row.isLiturgical" type="button" @click="change(row)"
-                                    class="press text-[10.5px] uppercase tracking-[.1em] text-secondary">Change</button>
+                            <div class="shrink-0 flex items-center gap-3">
+                                <span class="inline-flex items-center px-[9px] py-1 rounded-md text-[10.5px] uppercase tracking-[.1em] whitespace-nowrap"
+                                      :class="row.chipClass" x-text="row.chipLabel"></span>
+                                <button x-show="!row.isLiturgical" type="button" @click="change(row)"
+                                        class="press py-1 text-[10.5px] uppercase tracking-[.1em] text-secondary whitespace-nowrap">Change</button>
+                            </div>
                         </div>
                     </div>
-                    <div x-show="row.isDeclined" class="px-[18px] py-3.5 border-t border-outline-variant bg-surface-container-low/40">
-                        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <div x-show="row.isDeclined" class="px-4 sm:px-[18px] py-3.5 border-t border-outline-variant bg-surface-container-low/40">
+                        <!-- ⚠ ON A PHONE THE CONTROLS STACK. Side by side they
+                             push "Closed invite" off the right edge, so the one
+                             word telling you the state of the place is the word
+                             you cannot read. -->
+                        <div class="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-x-3 sm:gap-y-2">
                             <!-- No date and no Role name here: the row directly
                                  above says both. They were only ever needed
                                  because this strip used to sit detached at the
                                  foot of the list, where it had to name what it
                                  was talking about. -->
-                            <template x-for="swap in swapsOn(row)" :key="swap.key">
-                                <span class="text-[11.5px] px-2 py-[3px] rounded-md border border-outline-variant
-                                             text-on-surface-variant" x-text="swap.headline"></span>
-                            </template>
+                            <div x-show="swapsOn(row).length" class="flex flex-wrap gap-2">
+                                <template x-for="swap in swapsOn(row)" :key="swap.key">
+                                    <span class="text-[11.5px] px-2 py-[3px] rounded-md border border-outline-variant
+                                                 text-on-surface-variant" x-text="swap.headline"></span>
+                                </template>
+                            </div>
 
-                            <span class="flex-grow"></span>
+                            <span class="hidden sm:block sm:flex-grow"></span>
 
                             <button type="button" :disabled="busy || invitesLeft(row) <= 0"
                                     @click="openAsk(row)"
-                                    class="press min-h-[38px] px-3.5 rounded-lg border border-outline-variant
+                                    class="press w-full sm:w-auto min-h-[44px] sm:min-h-[38px] px-3.5 rounded-lg
+                                           border border-outline-variant
                                            text-on-surface text-[11px] uppercase tracking-[.12em] disabled:opacity-40">
                                 Ask somebody
                             </button>
@@ -229,8 +244,14 @@
                                  It is labelled by what it turns on, not by the
                                  act: "On the open list", never "Put it on the
                                  open list". -->
+                            <!-- On a phone it becomes a settings row: the state
+                                 named on the left, the switch out at the right
+                                 where a thumb is. On `sm` up it goes back to
+                                 sitting beside the button. -->
                             <label x-show="coverable[row.occurrenceId] !== false"
-                                   class="flex items-center gap-2.5 cursor-pointer select-none"
+                                   class="flex items-center gap-2.5 cursor-pointer select-none
+                                          w-full sm:w-auto min-h-[32px] flex-row-reverse justify-between
+                                          sm:flex-row sm:justify-start"
                                    :class="busy ? 'opacity-50 pointer-events-none' : ''">
                                 <button type="button" role="switch"
                                         :aria-checked="(!row.quiet).toString()"
@@ -398,7 +419,7 @@
                             </div>
                             <button type="button" :disabled="busy"
                                     @click="clearNotice(swap)"
-                                    class="press shrink-0 min-h-[40px] px-4 rounded-lg border border-outline-variant
+                                    class="press shrink-0 self-start md:self-auto min-h-[40px] px-4 rounded-lg border border-outline-variant
                                            text-on-surface-variant text-[11px] uppercase tracking-[.12em]">
                                 Got it
                             </button>
@@ -427,7 +448,7 @@
                             </div>
                             <button x-show="swap.can.withdraw" type="button"
                                     :disabled="busy" @click="withdrawSwap(swap)"
-                                    class="press shrink-0 min-h-[40px] px-4 rounded-lg border border-outline-variant
+                                    class="press shrink-0 self-start md:self-auto min-h-[40px] px-4 rounded-lg border border-outline-variant
                                            text-on-surface-variant text-[11px] uppercase tracking-[.12em]">
                                 Take it back
                             </button>
