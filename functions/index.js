@@ -831,7 +831,10 @@ async function takeContext(db, personId, roleSlug, date) {
   if (!personSnap.exists) return empty;
   const person = Object.assign({id: personSnap.id}, personSnap.data());
 
-  const roleSnap = await db.collection("role_definitions")
+  // ⚠ THE COLLECTION IS `roles`. Named wrongly, this query returns nothing,
+  // roleDef is null, and every Role rule silently stops being checked — the
+  // eligibility wall would permit anything while looking like it worked.
+  const roleSnap = await db.collection("roles")
       .where("slug", "==", roleSlug).limit(1).get();
   const roleDef = roleSnap.empty ? null :
     Object.assign({id: roleSnap.docs[0].id}, roleSnap.docs[0].data());

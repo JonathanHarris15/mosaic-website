@@ -450,7 +450,16 @@
                    class="mt-4 pt-3 border-t border-primary-fixed-dim/30 flex items-center justify-between
                           text-[11px] font-label-md tracking-[.12em] uppercase text-primary-fixed-dim
                           cal-motion cal-focus rounded hover:text-on-primary">
-                    All your commitments
+                    <span class="flex items-center gap-2">
+                        All your commitments
+                        <!-- ⚠ A DOT, NOT A COUNT. The Calendar only loads the
+                             month on screen, so a number here would claim to
+                             know a total it cannot see. A dot says "something
+                             wants an answer" and claims nothing more. -->
+                        <span x-show="myCommitments.some(c => c.state === 'pending')"
+                              class="w-[7px] h-[7px] rounded-full bg-warning shrink-0"
+                              title="Something still wants an answer"></span>
+                    </span>
                     <span class="material-symbols-outlined text-[18px]">chevron_right</span>
                 </a>
             </section>
@@ -818,7 +827,12 @@
                        class="mt-md pt-3 border-t border-outline-variant flex items-center justify-between
                               text-[11px] font-label-md tracking-[.12em] uppercase text-secondary
                               cal-motion cal-focus rounded hover:text-primary">
-                        All your commitments
+                        <span class="flex items-center gap-2">
+                            All your commitments
+                            <span x-show="myCommitments.some(c => c.state === 'pending')"
+                                  class="w-[7px] h-[7px] rounded-full bg-warning shrink-0"
+                                  title="Something still wants an answer"></span>
+                        </span>
                         <span class="material-symbols-outlined text-[18px]">chevron_right</span>
                     </a>
                 </section>

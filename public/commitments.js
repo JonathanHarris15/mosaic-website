@@ -82,7 +82,7 @@
             today: todayStr(),
 
             rows: [],
-            roleNames: {},
+            roleDefinitions: [],
 
             // ── Boot ─────────────────────────────────────────────────────────
 
@@ -129,7 +129,7 @@
                     const from = this.today;
                     const to = addMonths(this.today, 12);
 
-                    await this.loadRoleNames();
+                    await this.loadRoleDefinitions();
                     const [occurrences, services] = await Promise.all([
                         window.EventsStore.loadCalendar(db, {
                             from: from, to: to,
@@ -152,25 +152,29 @@
                 }
             },
 
-            // A place must read "Kids Team", not `kids`. RolesCore.roleBySlug is
-            // the one thing that turns a slug into a name, which is also why the
-            // server never accepts one from the caller.
-            async loadRoleNames() {
-                const names = {};
-                (window.RolesCore.allRoles ? window.RolesCore.allRoles() : [])
-                    .forEach(r => { if (r && r.slug) names[r.slug] = r.name; });
+            // A place must read "Setup & Teardown", not `setup_teardown`.
+            //
+            // ⚠ THE COLLECTION IS `roles`. RolesCore.roleBySlug is the one thing
+            // that turns a slug into a name, and it needs the STORED Role
+            // Definitions handed to it — on its own it knows only the liturgical
+            // ones, so every Servant Role falls through to its raw slug.
+            async loadRoleDefinitions() {
                 try {
-                    const snap = await db.collection('role_definitions').get();
-                    snap.docs.forEach(d => {
-                        const r = d.data();
-                        if (r && r.slug) names[r.slug] = r.name;
-                    });
+                    const snap = await db.collection('roles').get();
+                    this.roleDefinitions = snap.docs.map(d =>
+                        Object.assign({ id: d.id }, d.data()));
                 } catch (e) {
                     // Names are decoration. A failure here must not empty the
                     // page — the slug is a poor label, but it is a true one.
-                    console.warn('Role names unavailable:', e);
+                    console.warn('Role definitions unavailable:', e);
+                    this.roleDefinitions = [];
                 }
-                this.roleNames = names;
+            },
+
+            roleNameFor(slug) {
+                const def = window.RolesCore &&
+                    window.RolesCore.roleBySlug(slug, this.roleDefinitions);
+                return (def && def.name) || slug || 'A role';
             },
 
             async loadServices(from, to) {
@@ -190,7 +194,7 @@
 
                 return Object.assign({}, r, {
                     key: [r.occurrenceId || r.date, r.roleSlug, r.slotId || 'x'].join('__'),
-                    roleName: r.label || this.roleNames[r.roleSlug] || r.roleSlug,
+                    roleName: r.label || this.roleNameFor(r.roleSlug),
                     mon: MONTHS[dt.getMonth()].slice(0, 3).toUpperCase(),
                     dayNum: dt.getDate(),
                     weekday: DAYS[dt.getDay()],
