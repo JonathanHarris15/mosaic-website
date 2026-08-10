@@ -16,8 +16,30 @@
 (function () {
     'use strict';
 
-    function mount(count) {
-        if (!count) return;
+    // ⚠ TWO KINDS, AND THE LINE HAS TO BE TRUE OF BOTH (MS-212). Something
+    // waiting on an answer and something that ENDED while you were not looking
+    // are both reasons to open the page, and the second is the one that gets
+    // dropped: an offer killed by somebody else's settlement disappears with no
+    // explanation, and the member concludes the app ate it. So it counts — and
+    // the sentence says which it is, because "waiting on your answer" about a
+    // conversation that is already over would send somebody looking for a
+    // button that is not there.
+    function sentence(waiting, ended) {
+        if (!ended) {
+            return waiting === 1
+                ? 'A swap is waiting on your answer'
+                : waiting + ' swaps are waiting on your answer';
+        }
+        if (!waiting) {
+            return ended === 1
+                ? 'A swap you were in has ended'
+                : ended + ' swaps you were in have ended';
+        }
+        return (waiting + ended) + ' swaps need a look';
+    }
+
+    function mount(waiting, ended) {
+        if (!waiting && !ended) return;
         const main = document.querySelector('main');
         if (!main) return;
 
@@ -27,11 +49,7 @@
             'bg-surface-container-lowest px-4 py-3 text-on-surface hover:border-secondary';
         line.innerHTML =
             '<span class="material-symbols-outlined text-[19px] text-warning">swap_horiz</span>' +
-            '<span class="text-[14.5px]">' +
-            (count === 1
-                ? 'A swap is waiting on your answer'
-                : count + ' swaps are waiting on your answer') +
-            '</span>' +
+            '<span class="text-[14.5px]">' + sentence(waiting, ended) + '</span>' +
             '<span class="ml-auto material-symbols-outlined text-[18px] ' +
             'text-on-surface-variant">chevron_right</span>';
 
@@ -46,9 +64,10 @@
         const mine = await window.TradesStore.loadMine(window.db, {
             personId: personId, today: today,
         });
-        return window.TradesView.needingYou(mine.all, {
+        const rows = window.TradesView.rowsFor(mine.all, {
             personId: personId, today: today,
         });
+        return { waiting: rows.yours.length, ended: rows.ended.length };
     }
 
     function todayStr() {
@@ -66,7 +85,8 @@
                 const data = await getUserData(user.uid);
                 const personId = (data && data.personId) || null;
                 if (!personId) return;
-                mount(await count(personId, todayStr()));
+                const seen = await count(personId, todayStr());
+                mount(seen.waiting, seen.ended);
             } catch (e) {
                 // Silent on purpose. See the note at the top.
                 console.warn('Swap count unavailable:', e);

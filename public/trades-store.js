@@ -87,21 +87,28 @@
             db.collection(TRADES).where('counterpartyId', '==', personId).get(),
         ]);
 
-        const live = snap => Core.liveOnes(
-            snap.docs.map(d => Object.assign({ id: d.id }, d.data())),
-            opts.today);
+        const rows = snap =>
+            snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+
+        // ⚠ THE ENDED ONES COME BACK TOO (MS-212). A Trade that died — because
+        // somebody else settled first, or an editor filled the place — is still
+        // the only record of what happened, and the person it happened to has
+        // not been told yet. Filtering to live here is what made those offers
+        // vanish silently off the page.
+        const mine = rows(asHolder).concat(rows(asCounterparty));
+        const live = Core.liveOnes(mine, opts.today).sort(byDate);
+        const ended = Core.noticesFor(mine, personId, opts.today).sort(byDate);
 
         // Outbound is what you are waiting on somebody else for; inbound is what
         // somebody is waiting on you for. That is the split the screen wants —
         // NOT who opened it, which is a fact about the past and tells a reader
         // nothing about what to do next.
-        const mine = live(asHolder).concat(live(asCounterparty));
-        const sorted = mine.sort(byDate);
-
         return {
-            all: sorted,
-            outbound: sorted.filter(t => Core.waitingOn(t) !== personId),
-            inbound: sorted.filter(t => Core.waitingOn(t) === personId),
+            all: live.concat(ended),
+            live: live,
+            ended: ended,
+            outbound: live.filter(t => Core.waitingOn(t) !== personId),
+            inbound: live.filter(t => Core.waitingOn(t) === personId),
         };
     }
 

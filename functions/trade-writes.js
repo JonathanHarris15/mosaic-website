@@ -320,6 +320,11 @@ async function invite(db, spec) {
       chosen: null,
       openedAt: s.now || null,
       settledAt: null,
+      closedBy: null,
+      closedBecause: null,
+      // Who has read this once it ends. Per person, because one party
+      // dismissing a notice must not dismiss the other party's.
+      seenBy: [],
     });
 
     return {ok: true, tradeId: doc.id, state: plan.to};
@@ -386,7 +391,16 @@ function step(db, spec, action) {
     });
     if (!plan.ok) return refusalFor(plan.reason);
 
-    tx.update(ref, {state: plan.to, closedAt: s.now || null});
+    // ⚠ WHO ENDED IT IS RECORDED, and it is not bookkeeping (MS-212). It is
+    // what stops the app telling somebody their own news back: the person who
+    // tapped Refuse gets no notice about a refusal, and the person on the other
+    // end does.
+    tx.update(ref, {
+      state: plan.to,
+      closedAt: s.now || null,
+      closedBy: s.actorId || null,
+      closedBecause: null,
+    });
     return {ok: true, tradeId: trade.id, state: plan.to};
   }, "Somebody was changing that at the same moment. Try again.");
 }
@@ -475,7 +489,7 @@ async function offer(db, spec) {
     if (plan.settles) {
       return settle(tx, db, {
         trade: trade, chosen: null, today: s.today, now: s.now,
-        verdicts: s.verdicts,
+        actorId: s.actorId, verdicts: s.verdicts,
       });
     }
 
@@ -500,6 +514,9 @@ async function offer(db, spec) {
       chosen: null,
       openedAt: s.now || null,
       settledAt: null,
+      closedBy: null,
+      closedBecause: null,
+      seenBy: [],
     });
     return {ok: true, tradeId: doc.id, state: plan.to};
   }, "Somebody was changing that at the same moment. Try again.");
@@ -527,6 +544,7 @@ async function accept(db, spec) {
 
   return runOrLose(db, (tx) => settle(tx, db, {
     trade: trade, chosen: plan.chosen, today: s.today, now: s.now,
+    actorId: s.actorId,
   }), "Somebody has already sorted that one out.");
 }
 
@@ -557,8 +575,14 @@ async function settle(tx, db, s) {
     read[tradeCore.assignmentKey(chosen)] = back;
   }
 
+  // ⚠ BOTH PARTIES, NOT JUST THE HOLDER. Sarah is giving up her Coffee here,
+  // and she may well have offered that same Coffee to Ray in a conversation Bob
+  // is not in — `partyIds` on that one is [Ray, Sarah] and contains no Bob at
+  // all. Asking only about the holder left it live, pointing at a Saturday that
+  // had just changed hands, and Ray found out by having his acceptance refused.
   const siblings = await tx.get(db.collection(TRADES)
-      .where("partyIds", "array-contains", trade.holderId));
+      .where("partyIds", "array-contains-any",
+          [trade.holderId, trade.counterpartyId]));
   const nearby = siblings.docs.map((d) => Object.assign({id: d.id}, d.data()));
 
   const verdict = tradeCore.arbitrate({
@@ -616,15 +640,24 @@ async function settle(tx, db, s) {
     state: tradeCore.STATES.SETTLED,
     chosen: chosen,
     settledAt: s.now || null,
+    closedAt: s.now || null,
+    closedBy: s.actorId || null,
+    closedBecause: null,
   });
 
   // Settling cleans up LOUDLY. An offer that simply stops being answered
   // teaches somebody not to make the next one.
+  //
+  // ⚠ `closedBy` IS THE SETTLER, WHO IS USUALLY IN NEITHER OF THESE. That is
+  // the point: everybody in a Trade that died here learns why, and the one
+  // person who already knows — because they are the one who did it — does not
+  // get told about their own act.
   verdict.dying.forEach((other) => {
     tx.update(db.collection(TRADES).doc(other.id), {
       state: tradeCore.STATES.WITHDRAWN,
       closedAt: s.now || null,
-      closedBecause: "settled",
+      closedBy: s.actorId || null,
+      closedBecause: tradeCore.CAUSES.SETTLED,
     });
   });
 
@@ -749,9 +782,114 @@ async function setReach(db, spec) {
   }, "Somebody was changing that at the same moment. Try again.");
 }
 
+// ── Cleanup from outside the conversation (MS-212) ──────────────────────────
+
+/**
+ * Why a live Trade about this place can no longer happen — or null if it still
+ * can. Three quite different things, and a reader deserves to be told which,
+ * because each leaves them with a different thought about what to do next.
+ * @param {?Object} held the Assignment as it now stands, or null if it has gone
+ * @param {Object} trade the live Trade about it
+ * @return {?string} one of tradeCore.CAUSES, or null to leave it alone
+ */
+function causeFor(held, trade) {
+  if (!held) return tradeCore.CAUSES.GONE;
+  if (held.personId !== trade.holderId) return tradeCore.CAUSES.FILLED;
+  if (held.state !== STATES.DECLINED) return tradeCore.CAUSES.KEPT;
+  return null;
+}
+
+/**
+ * End every live Trade about an Assignment that has stopped looking for cover.
+ *
+ * ⚠ THIS IS THE EDITOR'S BACKSTOP, AND THE EDITOR DOES NOTHING SPECIAL. Filling
+ * a place already overwrites the roster row; the Trades simply have to notice.
+ * Which is why this hangs off the roster write rather than off a button —
+ * auto-assign, the roster grid, a drag on the calendar and a straight edit are
+ * four doors to the same act, and a cleanup wired to one of them is a cleanup
+ * that quietly does not run for the other three.
+ *
+ * ⚠ `closedBy` IS NULL, on purpose. Nobody in the conversation ended this, so
+ * everybody in it hears about it — including whoever was holding the place.
+ *
+ * @param {Object} db the Firestore handle
+ * @param {Object} spec which Assignment, and the church's today
+ * @return {Promise<Object>} what was closed, and why
+ */
+function sweepAssignment(db, spec) {
+  const s = spec || {};
+  const ref = {
+    occurrenceId: s.occurrenceId,
+    roleSlug: s.roleSlug,
+    slotId: s.slotId || null,
+  };
+
+  return runOrLose(db, async (tx) => {
+    const held = await readAssignment(tx, db, ref);
+    // The date is still the only clock: `liveOn` drops anything already past,
+    // so a Saturday that has gone needs no cleanup and no scheduled job.
+    const nearby = await liveOn(tx, db, ref, s.today);
+
+    const closed = [];
+    nearby.forEach((trade) => {
+      const because = causeFor(held, trade);
+      if (!because) return;
+      tx.update(db.collection(TRADES).doc(trade.id), {
+        state: tradeCore.STATES.WITHDRAWN,
+        closedAt: s.now || null,
+        closedBy: null,
+        closedBecause: because,
+      });
+      closed.push({id: trade.id, because: because});
+    });
+
+    return {ok: true, closed: closed};
+  }, "Somebody was changing that at the same moment. Try again.");
+}
+
+/**
+ * Mark an ended Trade as read by one of its two parties.
+ *
+ * ⚠ PER PERSON, NOT PER TRADE. Both parties are usually being told the same
+ * news, and one of them dismissing it must not dismiss the other's.
+ *
+ * ⚠ AND ONLY ONCE IT HAS ENDED. Clearing a live one would let somebody silence
+ * a notice before the thing it is about has happened — they would then never be
+ * told, which is precisely the failure this whole sub-task exists to close.
+ *
+ * @param {Object} db the Firestore handle
+ * @param {Object} spec which Trade, and who has read it
+ * @return {Promise<Object>} the outcome
+ */
+function markSeen(db, spec) {
+  const s = spec || {};
+  return runOrLose(db, async (tx) => {
+    const ref = db.collection(TRADES).doc(s.tradeId);
+    const snap = await tx.get(ref);
+    if (!snap.exists) return refuse("not-found", "That one has gone.");
+    const trade = Object.assign({id: snap.id}, snap.data());
+
+    if (trade.holderId !== s.actorId && trade.counterpartyId !== s.actorId) {
+      return refusalFor(tradeCore.REASONS.NOT_YOURS);
+    }
+    if (!tradeCore.isDead(trade, s.today)) {
+      return refuse("failed-precondition",
+          "That one is still going — answer it rather than clearing it.");
+    }
+
+    const seen = (trade.seenBy || []).slice();
+    if (seen.indexOf(s.actorId) === -1) seen.push(s.actorId);
+    tx.update(ref, {seenBy: seen});
+
+    return {ok: true, tradeId: trade.id};
+  }, "Somebody was changing that at the same moment. Try again.");
+}
+
 module.exports = {
   TRADES,
   setReach,
+  sweepAssignment,
+  markSeen,
   invite,
   withdraw,
   refuse: refuseTrade,
