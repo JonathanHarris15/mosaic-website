@@ -567,6 +567,18 @@
                                                   x-text="ev.mine ? 'You · ' + ev.mine.label + ' · ' + ev.mine.stateLabel : ''"></span>
                                         </div>
 
+                                        <!-- Out for cover is the system working,
+                                             so it does not use the red. It says
+                                             what is happening and gets out of
+                                             the way (MS-207). -->
+                                        <div x-show="ev.outForCover"
+                                             class="mt-2 flex items-center gap-1.5 rounded-md border border-outline-variant px-2.5 py-2">
+                                            <span class="material-symbols-outlined text-[17px] text-on-surface-variant">volunteer_activism</span>
+                                            <span class="text-[11px] font-label-md tracking-[.08em] uppercase text-on-surface-variant">
+                                                Out for cover
+                                            </span>
+                                        </div>
+
                                         <div x-show="ev.needsAttention"
                                              class="mt-2 flex items-center gap-1.5 rounded-md bg-error-container px-2.5 py-2">
                                             <span class="material-symbols-outlined text-[17px] text-error">error</span>
@@ -791,6 +803,11 @@
                                                  text-on-warning-container px-2 py-1 text-[11.5px] font-label-md whitespace-nowrap">
                                         <span class="material-symbols-outlined text-[14px]">warning</span>
                                         <span x-text="placesToFillLabel(ev)"></span>
+                                    </span>
+                                    <span x-show="ev.outForCover"
+                                          class="inline-flex items-center gap-1 rounded-md border border-outline-variant
+                                                 text-on-surface-variant px-2 py-1 text-[11.5px] font-label-md whitespace-nowrap">
+                                        <span class="material-symbols-outlined text-[14px]">volunteer_activism</span> Out for cover
                                     </span>
                                     <span x-show="ev.needsAttention"
                                           class="inline-flex items-center gap-1 rounded-md bg-error-container border border-error

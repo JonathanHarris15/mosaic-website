@@ -366,7 +366,13 @@
                 events: events,
                 // One glyph in the corner, driven from the same switch as every
                 // other surface, so they cannot disagree about what needs sorting.
-                needsAttention: events.some(o => Core.needsAttention(o)),
+                //
+                // ⚠ `needsEditor`, NOT `needsAttention` (MS-207). A day whose
+                // only trouble is out for cover has already been put in front of
+                // the church and asks nothing of the editor today. Flagging it
+                // teaches them the glyph usually means nothing.
+                needsAttention: events.some(o => Core.needsEditor(o)),
+                outForCover: events.some(o => Core.outForCover(o)),
             });
         }
         return cells;

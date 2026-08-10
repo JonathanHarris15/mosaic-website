@@ -254,7 +254,12 @@
                         isPast: o.date < this.today,
                         isSunday: o.seriesId === Core.SUNDAY_SERVICE_ID,
                         mine: this.myRoleOn(o),
-                        needsAttention: Core.needsAttention(o),
+                        // Two flags, not one (MS-207). `needsAttention` still
+                        // means "a place here is declined"; the split says
+                        // whether that is the editor's to fill today or is
+                        // already in front of the church.
+                        needsAttention: Core.needsEditor(o),
+                        outForCover: Core.outForCover(o),
                     }));
 
                     if (!this.people.length) await this.loadPeople();

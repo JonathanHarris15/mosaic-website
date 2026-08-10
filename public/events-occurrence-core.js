@@ -737,6 +737,21 @@
         return needsAttention(occurrence) && canBeCovered(occurrence);
     }
 
+    // Is this one the editor's to fill TODAY? (MS-20, MS-207)
+    //
+    // ⚠ THIS IS THE ONE THE RED GLYPH READS, not `needsAttention`. Red means
+    // somebody has to do something. A place that is out for cover has already
+    // been put in front of the whole church and may well fill itself, so
+    // flagging it red teaches the editor that red is usually nothing — and then
+    // the one that really is stuck reads the same as the four that are not.
+    //
+    // The Event's rung decides it, and every declined place on one Event shares
+    // that rung, so this is honestly an Event-level answer rather than a
+    // per-place one.
+    function needsEditor(occurrence) {
+        return needsAttention(occurrence) && !canBeCovered(occurrence);
+    }
+
     // How many people were never heard from. Zero renders nothing — the past-event
     // prompt is scaffolding and must not nag when there is nothing to ask.
     function unconfirmedCount(occurrence) {
@@ -952,6 +967,7 @@
         needsAttention,
         canBeCovered,
         outForCover,
+        needsEditor,
         unconfirmedCount,
         // conversion
         conversion,

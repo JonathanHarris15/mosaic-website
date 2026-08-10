@@ -608,6 +608,17 @@
 
             get needsAttention() { return Core.needsAttention({ assignments: this.assignments }); },
 
+            // The same declined places, split by whether they are the editor's
+            // to fill today or already in front of the whole church (MS-207).
+            // The Event's rung decides it, so this needs the occurrence itself
+            // and not just its Assignments.
+            get withAssignments() {
+                return Object.assign({}, this.occurrence || {},
+                    { assignments: this.assignments });
+            },
+            get outForCover() { return Core.outForCover(this.withAssignments); },
+            get needsEditor() { return Core.needsEditor(this.withAssignments); },
+
             get declined() {
                 return this.assignments.filter(a => (a.state || Core.STATES.PENDING) === Core.STATES.DECLINED);
             },
