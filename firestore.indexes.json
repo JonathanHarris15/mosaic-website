@@ -1,6 +1,21 @@
 {
   "indexes": [
     {
+      "//": "The cover list (MS-20). It always reads the same way: an `in` over the rungs this viewer may see, then a range on date. The rung filter is not an optimisation and cannot be dropped — it is what makes the read legal at all, so this index is a hard requirement of the page rather than a tuning choice. The sort is done client-side, because an `in` filter plus a range plus an orderBy is more than Firestore will combine.",
+      "collectionGroup": "cover",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "involvement",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
