@@ -301,8 +301,10 @@
                                 <div class="flex-grow">
                                     <div class="flex items-center gap-2 mb-1">
                                         <h3 class="font-headline-md text-lg text-primary" x-text="person.name"></h3>
+                                        <!-- An editor reads the stage here; a member reads only
+                                             Member / Non-member (ShepherdingCore holds the rule). -->
                                         <span class="text-[9px] px-2 py-0.5 rounded-full font-label-md uppercase tracking-widest"
-                                              :class="person.membership && person.membership.inactive ? 'bg-surface-container-high text-on-surface-variant' : 'bg-primary-fixed text-primary'"
+                                              :class="canEdit && person.membership && person.membership.inactive ? 'bg-surface-container-high text-on-surface-variant' : 'bg-primary-fixed text-primary'"
                                               x-text="membershipStageLabel(person)"></span>
                                         <!-- Connected to a login. In Edit Mode an editor can
                                              break it, for when the wrong record got connected
@@ -365,6 +367,36 @@
                                         </div>
                                     </div>
                                     <!-- Cache Bust: 2024-05-15 18:42 -->
+
+                                    <!-- Membership Track (ADR-0012) — the same stage slider the
+                                         person modal carries, inline on the card so an editor can
+                                         walk somebody along the Track without opening anything.
+                                         Edit Mode only: a member never sees the Track at all, and
+                                         the chip beside the name is their Member / Non-member read. -->
+                                    <div x-show="editMode" class="mt-4 border-t border-surface-variant/30 pt-3">
+                                        <p class="font-label-md text-[9px] uppercase tracking-widest text-on-surface-variant mb-2">Membership Track</p>
+                                        <div class="p-2 bg-surface-container-lowest border border-outline-variant/20 rounded-lg flex flex-col gap-1.5"
+                                             :class="person.membership && person.membership.inactive ? 'opacity-50' : ''">
+                                            <input type="range" min="0" :max="membershipStages.length - 1" step="1"
+                                                   :value="membershipIndex(person)"
+                                                   :disabled="person.membership && person.membership.inactive"
+                                                   @change="setMembershipStageByIndex($event.target.value, person)"
+                                                   class="w-full accent-primary cursor-pointer disabled:cursor-not-allowed">
+                                            <div class="flex justify-between text-[8px] text-on-surface-variant leading-tight">
+                                                <template x-for="(stage, i) in membershipStages" :key="stage">
+                                                    <span class="flex-1 text-center px-0.5"
+                                                          :class="membershipIndex(person) === i && !(person.membership && person.membership.inactive) ? 'text-primary font-semibold' : ''"
+                                                          x-text="ShepherdingCore.MEMBERSHIP_STAGE_LABEL[stage]"></span>
+                                                </template>
+                                            </div>
+                                        </div>
+                                        <button @click="toggleMembershipInactive(person)"
+                                                class="mt-2 inline-flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-label-md px-2.5 py-1 rounded-lg border transition-colors"
+                                                :class="person.membership && person.membership.inactive ? 'bg-primary text-on-primary border-primary' : 'text-on-surface-variant border-outline-variant/50 hover:border-primary hover:text-primary'">
+                                            <span class="material-symbols-outlined text-[13px]" x-text="person.membership && person.membership.inactive ? 'toggle_on' : 'toggle_off'"></span>
+                                            <span x-text="person.membership && person.membership.inactive ? 'Inactive — click to reactivate' : 'Mark inactive'"></span>
+                                        </button>
+                                    </div>
 
                                     <!-- Tag Management — only in Edit Mode; members see contact details instead -->
                                     <div x-show="editMode" class="mt-4 border-t border-surface-variant/30 pt-3">
@@ -679,7 +711,7 @@
                                         <template x-if="selectedFamily && (selectedSpouseRole === 'husband' ? selectedFamily.wifeId : selectedFamily.husbandId)">
                                             <div class="flex items-center gap-2">
                                                 <span class="text-sm text-on-surface" x-text="personName(selectedSpouseRole === 'husband' ? selectedFamily.wifeId : selectedFamily.husbandId)"></span>
-                                                <button @click="saveFamily({ [selectedSpouseRole === 'husband' ? 'wifeId' : 'husbandId']: null })" class="text-error/60 hover:text-error text-[11px]">remove</button>
+                                                <button @click="removeSpouse(selectedSpouseRole === 'husband' ? selectedFamily.wifeId : selectedFamily.husbandId)" class="text-error/60 hover:text-error text-[11px]">remove</button>
                                             </div>
                                         </template>
                                         <template x-if="!selectedFamily || !(selectedSpouseRole === 'husband' ? selectedFamily.wifeId : selectedFamily.husbandId)">
