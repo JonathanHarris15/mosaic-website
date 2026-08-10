@@ -39,6 +39,7 @@ const MODULES = [
     'roles-core.js',
     'cover-core.js',
     'away-core.js',
+    'trade-core.js',
 ];
 
 const BANNER = [

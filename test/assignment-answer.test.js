@@ -152,7 +152,14 @@ test('a participant-rung Event’s place never reaches the cover list', () => {
         state: 'declined',
     });
     assert.equal(result.ok, true, 'the decline itself still stands');
-    assert.equal(result.cover.action, 'none');
+    // `delete`, not `none` (MS-213). Nothing was ever written for a
+    // participant-rung Event, so this deletes nothing — but an editor CAN
+    // restamp a series to `participant` after a place was already listed, and
+    // then the entry is real and stale. Deleting unconditionally costs nothing
+    // and closes that case; a `none` here would leave the church being asked to
+    // cover an Event it can no longer see.
+    assert.equal(result.cover.action, 'delete');
+    assert.equal(result.cover.entry, undefined, 'nothing was written');
 });
 
 test('a Sunday’s place is stamped public, whatever the document holds', () => {
@@ -173,7 +180,9 @@ test('an occurrence with no visibility puts nothing on the list — fails closed
         occurrence: Object.assign({}, OCCURRENCE, { visibility: null }),
         state: 'declined',
     });
-    assert.equal(result.cover.action, 'none');
+    // Same reasoning: it is never SET, and clearing is unconditional.
+    assert.equal(result.cover.action, 'delete');
+    assert.equal(result.cover.entry, undefined);
 });
 
 // ── The two sides must not drift ─────────────────────────────────────────────
@@ -214,4 +223,69 @@ test('the server agrees with the client about which places belong on the list', 
             'disagreed about ' + rung
         );
     });
+});
+
+// ── Quiet or open (MS-190, MS-213) ──────────────────────────────────────────
+//
+// In MS-20 declining always advertised the place to the whole church. That was
+// right when the open list was the ONLY way a place could find somebody — a
+// quiet decline would have been a decline into nowhere. Now that an invitation
+// can still reach the three people Bob has in mind, the choice is real.
+//
+// ⚠ QUIET IS A PROPERTY OF THE ASSIGNMENT, NOT OF THE ANSWER. "I cannot do
+// this" and "and I would rather the church were not told" are separate things,
+// and the second outlives the first — it still holds after Bob has asked three
+// people and been refused by all of them, which is exactly the moment he wants
+// to change it.
+
+test('declining quietly keeps the place off the cover list', () => {
+    const result = plan({ state: 'declined', quiet: true });
+
+    assert.equal(result.ok, true, 'the decline itself is unaffected');
+    assert.equal(result.cover.action, 'delete');
+    assert.equal(result.cover.entry, undefined,
+        'a quiet place was advertised to the church anyway');
+    assert.equal(result.assignment.quiet, true);
+});
+
+test('declining openly still lists it, exactly as before', () => {
+    const result = plan({ state: 'declined', quiet: false });
+
+    assert.equal(result.cover.action, 'set');
+    assert.ok(result.cover.entry);
+    assert.equal(result.assignment.quiet, false);
+});
+
+test('declining without saying is open — the same behaviour MS-20 shipped',
+    () => {
+        const result = plan({ state: 'declined' });
+
+        assert.equal(result.cover.action, 'set');
+        assert.equal(result.assignment.quiet, false);
+    });
+
+test('an answer that says nothing about it leaves it as it was', () => {
+    // ⚠ Confirming must not quietly re-advertise. Somebody who declined
+    // quietly, changed their mind, and changed it back would otherwise find
+    // their Event on the church's list because of the round trip.
+    const quietRow = Object.assign({}, ROSTER[0], { quiet: true });
+    const result = plan({
+        roster: [quietRow, ROSTER[1]], state: 'declined', quiet: undefined,
+    });
+
+    assert.equal(result.assignment.quiet, true);
+    assert.equal(result.cover.action, 'delete');
+});
+
+test('the rung still wins over the person’s choice', () => {
+    // Both are absolute and neither overrides the other. Asking to be open on
+    // an Event that can reach nobody does not make it reach anybody.
+    const result = plan({
+        occurrence: Object.assign({}, OCCURRENCE, { visibility: 'participant' }),
+        state: 'declined',
+        quiet: false,
+    });
+
+    assert.equal(result.cover.action, 'delete');
+    assert.equal(result.cover.entry, undefined);
 });

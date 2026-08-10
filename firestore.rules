@@ -269,6 +269,25 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Trades (MS-190). A Trade names two people and what each is giving up.
+    //
+    // ⚠ READ BY THE TWO PARTIES AND NOBODY ELSE — not an editor, not an elder.
+    // That is deliberately a DIFFERENT rule from the cover list above, which is
+    // stamped with a rung and readable by anybody at it. The cover list is an
+    // advertisement; a Trade is a conversation, and there is no rank at which
+    // reading somebody else's becomes anybody's business.
+    //
+    // ⚠ NO CLIENT WRITES AT ALL. Every transition goes through a callable, so
+    // the state machine cannot be walked round with a browser console. An
+    // editor's clause here would be the same hole with a nicer name: they have
+    // direct assignment already, which ends every Trade on the slot anyway.
+    match /trades/{tradeId} {
+      allow read: if isMember()
+                  && (resource.data.holderId == myPersonId()
+                      || resource.data.counterpartyId == myPersonId());
+      allow create, update, delete: if false;
+    }
+
     match /services/{dateId} {
       allow read: if true;
       allow create, update, delete: if isEditor();

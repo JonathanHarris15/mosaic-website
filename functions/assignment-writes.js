@@ -217,6 +217,10 @@ async function answer(db, spec) {
       roleSlug: s.roleSlug,
       slotId: s.slotId || null,
       state: s.state,
+      // Whether this one goes on the open list, or stays between the decliner
+      // and the people they ask (MS-213). Absent means "leave it as it was" —
+      // confirming must not quietly re-advertise something.
+      quiet: s.quiet,
       today: s.today,
       now: s.now || null,
     });
