@@ -280,7 +280,10 @@
             // needs nobody, so a viewer who is not an editor — who never sees
             // the count — never pays for the read.
             async loadRoleDefinitions() {
-                if (!this.isEditor) { this.roleDefinitions = []; return; }
+                // ⚠ EVERYONE, not just editors. A member never sees the
+                // staffing tools these were loaded for, but they do see their
+                // own card — and without the definitions it reads them their
+                // Role's SLUG. `roles` is member-readable.
                 try {
                     const snap = await db.collection('roles').get();
                     this.roleDefinitions = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
@@ -514,7 +517,8 @@
             // be able to hide from you.
             get myCommitments() {
                 return View.myCommitments(
-                    this.occurrences.filter(o => onInMonth(o, this.month)), this.personId);
+                    this.occurrences.filter(o => onInMonth(o, this.month)),
+                    this.personId, this.roleDefinitions);
             },
             get mySentence() { return View.myCommitmentsSentence(this.myCommitments); },
 

@@ -649,19 +649,29 @@
     // than the owner's "Unconfirmed" the page uses. That is a visible change to
     // a shipped surface and it belongs with the rest of the Calendar's wording
     // in MS-207, not smuggled in here.
-    function myCommitments(occurrences, personId) {
+    function myCommitments(occurrences, personId, roleDefinitions) {
         return Commitments.commitmentsFor({
             personId: personId,
             occurrences: occurrences,
-        }).map(c => ({
-            date: c.date,
-            occurrenceId: c.occurrenceId,
-            eventName: c.eventName,
-            roleLabel: c.label || c.roleSlug,
-            state: c.state,
-            stateLabel: Core.stateLabel({ state: c.state }),
-            tone: c.tone,
-        }));
+        }).map(c => {
+            // A place reads "Setup & Teardown", never `setup_teardown`.
+            // roleBySlug needs the STORED definitions handed to it — on its own
+            // it knows only the liturgical Roles.
+            const def = Roles.roleBySlug(c.roleSlug, roleDefinitions || []);
+            return {
+                date: c.date,
+                occurrenceId: c.occurrenceId,
+                eventName: c.eventName,
+                roleLabel: c.label || (def && def.name) || c.roleSlug,
+                state: c.state,
+                // The OWNER's wording. This is the card that answers "what am I
+                // down for" — "Pending" is the organiser's word for their own
+                // wait, and it was the last place the card and the Commitments
+                // page still disagreed.
+                stateLabel: Core.stateLabel({ state: c.state }, { asOwner: true }),
+                tone: c.tone,
+            };
+        });
     }
 
     // The EB Garamond sentence at the head of the block: what you are down for
@@ -670,20 +680,29 @@
     // It does not name the month. The heading above it does, and a sentence
     // that repeated it read as though the two were answering different
     // questions.
+    // ⚠ IT DOES NOT NAME THEM ANY MORE, past one.
+    //
+    // It used to read "2 things — Set-up and Set-up." Naming every place meant
+    // the same Role on two dates printed its name twice, which reads as a bug
+    // even when it is true — and the rows saying exactly that sit directly
+    // underneath, so the sentence was spending its words repeating the list it
+    // introduces. It counts instead, and the list does the naming.
     function myCommitmentsSentence(commitments) {
         const list = commitments || [];
         if (!list.length) return 'Nothing on for you.';
 
-        const names = list.map(c => c.roleLabel);
-        const head = list.length === 1
-            ? 'One thing — ' + names[0] + '.'
-            : plural(list.length, 'thing') + ' — ' + listSentence(names) + '.';
-
         const waiting = list.filter(c => c.state === Core.STATES.PENDING).length;
-        if (!waiting) return head;
-        return head + ' ' + (waiting === 1
-            ? '1 is still waiting on your yes.'
-            : waiting + ' are still waiting on your yes.');
+
+        // One is worth naming: there is no repetition to trip over, and a
+        // sentence about a single thing that will not say which is coy.
+        if (list.length === 1) {
+            return list[0].roleLabel + (waiting ? ', still waiting on your yes.' : ', answered.');
+        }
+
+        const head = plural(list.length, 'thing');
+        if (!waiting) return head + ', all answered.';
+        if (waiting === list.length) return head + ', all still waiting on your yes.';
+        return head + '. ' + waiting + ' still waiting on your yes.';
     }
 
     // ── Places still to fill ─────────────────────────────────────────────────
