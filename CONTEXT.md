@@ -560,7 +560,7 @@ Somebody else taking on an [[Assignment]] whose holder has **Declined** it. The 
 - **Quiet or open, and the decliner chooses.** An open one joins the **cover list**, soonest first, readable by anyone the Event's [[Event visibility]] already admits. A quiet one is reachable only through a [[Trade]] its holder sends. A quiet one can be opened later — that is the escalation when nobody answers.
 - **A `participant`-rung Event never reaches the list.** The list exists to reach people who are *not* in the Event, and at that rung there is nobody it could reach without leaking the very thing the rung protects.
 - **Eligibility refuses here, unlike everywhere else** (ADR-0030). The list shows every open Assignment, including ones you may not take, with the reason and the button off — hiding them would make the list lie about how much the church needs. Your own [[Away]] is the exception: overruling it is you changing your mind, not the app disbelieving you.
-- An editor filling the Assignment ends it, and every live [[Trade]] on it with it.
+- An editor filling the Assignment ends it, and every live [[Trade]] on it with it — and both people in each one are told why. The editor does nothing special: the cleanup hangs off the roster write, so it runs whichever door they filled the place through.
 _Avoid_: the pool, pick-up list, open shifts, cover request
 
 ### Trade
@@ -570,7 +570,8 @@ An offer against an [[Assignment]] looking for [[Cover]], naming **one or more**
 - **Refusing is a button, never silence**, at both ends. The decliner may also withdraw an invitation — which is what makes inviting somebody with no [[Linked User]] workable, since they cannot answer in the app until MS-189 can text them.
 - **Nothing is reserved while an offer sits.** One transaction settles it and re-reads every Assignment involved; if one has moved it fails and says so. Settling kills every other live Trade touching either Assignment and tells everyone named — silence is what makes people stop using it.
 - **An Assignment arrives with no history**: Confirmed, since its new holder chose it, and the previous decline evaporates (ADR-0018 §5). Two people who are each stuck may therefore swap two declined Assignments and both walk away fine.
-- **It dies with the date.** No expiry, no reminder, no chasing — the date is the only clock.
+- **An ended Trade is a notice, not a deletion.** It stays on the [[Commitment]]s page in the past tense, saying what happened and why — settled elsewhere, filled by an editor, kept after all, or the place taken off the Event — until the person it happened *to* has cleared it. Whoever caused the ending is never told their own news back; where nothing in the conversation caused it, both parties hear. An offer that silently stops existing is how somebody concludes the app loses what you put into it.
+- **It dies with the date.** No expiry, no reminder, no chasing — the date is the only clock. That sweeps the notices up too: one about a Saturday that has gone has stopped mattering, so nothing has to expire them.
 - Distinct from a [[Swap]], which is an editor's move on an unsaved [[Auto-assign]] draft and writes nothing.
 _Avoid_: swap, exchange, shift trade
 

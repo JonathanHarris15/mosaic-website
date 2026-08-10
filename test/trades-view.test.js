@@ -190,14 +190,23 @@ test('one whose date has passed is in no list at all', () => {
     assert.deepEqual(rows.all, []);
 });
 
-test('the notification is just how many need you', () => {
+// ⚠ AN ENDED ONE COUNTS TOO (MS-212). This test used to assert 1 here, on the
+// reading that a notification is for things wanting an answer. That was half of
+// MS-215's criterion — "a waiting invitation OR AN ENDED OFFER" — and the half
+// it dropped is the one that matters more: somebody who is never told their
+// offer died concludes the app ate it.
+test('the notification counts what needs you and what ended without you', () => {
     const pile = [
         trade({ id: 'a', holderId: SARAH, counterpartyId: BOB }),
         trade({ id: 'b' }),
         trade({ id: 'c', state: Core.STATES.SETTLED }),
     ];
 
-    assert.equal(View.needingYou(pile, { personId: BOB, today: TODAY }), 1);
+    assert.equal(View.needingYou(pile, { personId: BOB, today: TODAY }), 2);
+
+    // And what Bob himself ended does not count — that is his own news.
+    const own = [trade({ id: 'c', state: Core.STATES.SETTLED, closedBy: BOB })];
+    assert.equal(View.needingYou(own, { personId: BOB, today: TODAY }), 0);
 });
 
 // ── Who may be asked ────────────────────────────────────────────────────────

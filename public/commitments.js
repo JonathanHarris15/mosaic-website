@@ -362,13 +362,40 @@
             get waitingOnThem() { return this.swapRows.theirs; },
             get hasSwaps() { return this.swapRows.all.length > 0; },
 
+            // What ended while I was not looking (MS-212). Not a thing to
+            // answer — a thing to be told, and then to clear.
+            get noticeRows() { return this.swapRows.ended; },
+
             // Every conversation going on about one of my places, so a declined
             // row can say who has been asked without a second query.
+            //
+            // ⚠ THE LIVE ONES ONLY. An ended Trade is news, and news belongs in
+            // the notices block; as a chip on the row it would read as somebody
+            // still being asked.
             swapsOn(row) {
-                return this.swapRows.all.filter(t =>
+                return this.swapRows.live.filter(t =>
                     t.assignment &&
                     t.assignment.occurrenceId === row.occurrenceId &&
                     t.assignment.roleSlug === row.roleSlug);
+            },
+
+            // ⚠ CLEARING IS A WRITE, AND IT IS PER PERSON. Both people in a
+            // dead Trade are usually being told the same thing, and one of them
+            // dismissing it must not dismiss the other's — so it goes through a
+            // callable rather than being forgotten in local state.
+            async clearNotice(swap) {
+                if (this.busy) return;
+                this.busy = swap.id;
+                try {
+                    const call = firebase.functions()
+                        .httpsCallable('clearTradeNotice');
+                    await call({ tradeId: swap.id });
+                    this.trades = this.trades.filter(t => t.id !== swap.id);
+                } catch (e) {
+                    this.say(friendlyError(e));
+                } finally {
+                    this.busy = null;
+                }
             },
 
             invitesLeft(row) {

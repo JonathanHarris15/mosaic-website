@@ -363,6 +363,51 @@
             </div>
         </template>
 
+        <!-- ── What ended without you (MS-212) ─────────────────────────── -->
+        <!--
+             ⚠ THIS BLOCK IS THE WHOLE POINT OF THE CLEANUP. Sarah offers Bob
+             two of her Saturdays; somebody else takes his place first, so her
+             offer is killed in the same transaction — correctly. Without this
+             it simply VANISHES off her page, and what she learns is that the
+             app loses what you put into it. She goes back to texting, and so
+             does everybody she tells.
+
+             It asks nothing, so it sits BELOW the things that need an answer —
+             but above what she is merely waiting on, because it changes what
+             she believes is true.
+
+             Clearing it is a WRITE, not a local dismissal: the other person is
+             usually being told the same thing and has their own to clear.
+        -->
+        <template x-if="noticeRows.length">
+            <div class="mt-6">
+                <div class="text-[11px] uppercase tracking-[.14em] text-on-surface-variant">What changed</div>
+                <div class="mt-2 flex flex-col gap-2">
+                    <template x-for="swap in noticeRows" :key="swap.key">
+                        <div class="flex flex-col md:flex-row md:items-center gap-2 md:gap-4
+                                    rounded-lg border border-outline-variant border-dashed
+                                    bg-surface-container-low/40 px-[18px] py-3.5">
+                            <div class="flex-grow min-w-0">
+                                <div class="text-[14.5px] text-on-surface" x-text="swap.headline"></div>
+                                <p class="font-serif text-[14.5px] leading-[1.45] text-on-surface-variant mt-[2px]"
+                                   x-text="swap.detail"></p>
+                                <div class="text-[12px] text-on-surface-variant mt-[3px]">
+                                    <span x-text="swap.eventName"></span> ·
+                                    <span x-text="longDateOf(swap.date)"></span>
+                                </div>
+                            </div>
+                            <button type="button" :disabled="busy"
+                                    @click="clearNotice(swap)"
+                                    class="press shrink-0 min-h-[40px] px-4 rounded-lg border border-outline-variant
+                                           text-on-surface-variant text-[11px] uppercase tracking-[.12em]">
+                                Got it
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+
         <!-- ── Waiting on them ─────────────────────────────────────────── -->
         <!-- Quiet and dense. Nothing here asks anything of the reader; it is
              here so they know it is still going, and can take it back. -->

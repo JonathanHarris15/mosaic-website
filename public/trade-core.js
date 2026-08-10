@@ -58,6 +58,22 @@
         OFFER: 'offer',
     });
 
+    // Why a Trade ended when NOBODY IN IT ended it (MS-212). A refusal and a
+    // withdrawal need no cause — the state already says what happened and who
+    // did it. These three are the endings that arrive from outside the
+    // conversation, and each wants a different sentence, because each leaves the
+    // reader with a different thought about what to do next.
+    const CAUSES = Object.freeze({
+        // Another Trade on the same place settled first.
+        SETTLED: 'settled',
+        // An editor put somebody else in. Nothing you could have done faster.
+        FILLED: 'filled',
+        // The holder is doing it after all, so there is nothing to cover.
+        KEPT: 'kept',
+        // The place is no longer on the Event at all.
+        GONE: 'gone',
+    });
+
     const ACTIONS = Object.freeze({
         INVITE: 'invite',
         OFFER: 'offer',
@@ -140,6 +156,33 @@
         if (trade.state === STATES.OFFERED) return trade.holderId || null;
         return null;
     }
+
+    // ── Being told it ended ──────────────────────────────────────────────────
+    //
+    // ⚠ AN ENDED TRADE IS NOT DELETED AND NOT HIDDEN. It becomes a notice: the
+    // same document, read in the past tense, saying what happened and why. An
+    // offer that simply stops appearing teaches somebody that the app loses what
+    // you put into it, and that lesson costs far more than the row.
+    //
+    // ⚠ AND THE PERSON WHO CAUSED IT IS NOT TOLD. `closedBy` carries whoever
+    // acted; telling them their own news back is noise, and noise is what makes
+    // people stop reading. Where nothing in the conversation caused it — an
+    // editor filling the place — `closedBy` is null and BOTH parties hear.
+    //
+    // ⚠ THE DATE STILL SWEEPS UP. A notice about a Saturday that has gone has
+    // stopped mattering, so nothing has to expire one. Same clock, no job.
+    function needsTelling(trade, personId, today) {
+        if (!trade || !personId) return false;
+        if (ENDED.indexOf(trade.state) === -1) return false;
+        if (datePassed(trade.assignment, today)) return false;
+        if (trade.holderId !== personId &&
+            trade.counterpartyId !== personId) return false;
+        if (trade.closedBy === personId) return false;
+        return (trade.seenBy || []).indexOf(personId) === -1;
+    }
+
+    const noticesFor = (trades, personId, today) =>
+        (trades || []).filter(t => needsTelling(t, personId, today));
 
     // How many of the holder's three are spoken for. Counts INVITATIONS only —
     // an offer that turned up uninvited is somebody volunteering, and capping
@@ -418,7 +461,10 @@
         ORIGINS,
         ACTIONS,
         REASONS,
+        CAUSES,
         MAX_INVITATIONS,
+        needsTelling,
+        noticesFor,
         assignmentKey,
         sameAssignment,
         isDead,

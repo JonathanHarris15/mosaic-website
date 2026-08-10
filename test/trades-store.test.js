@@ -220,17 +220,37 @@ test('anything whose date has passed is absent from both', async () => {
         'the date is the only clock, and nothing sweeps up after it');
 });
 
-test('one that has ended is absent too', async () => {
+// ⚠ THIS TEST USED TO ASSERT THE OPPOSITE, and the opposite was the bug
+// (MS-212). An ended Trade is the only record of what happened to it, and
+// dropping it here is what made a killed offer disappear off somebody's page
+// with no explanation at all. It comes back — separately, as a notice — until
+// the person it happened to has seen it.
+test('one that has ended comes back as a notice, not as a live row', async () => {
     const db = fakeDb({
         done: trade({ state: Core.STATES.SETTLED }),
-        no: trade({ state: Core.STATES.REFUSED }),
+        no: trade({ state: Core.STATES.REFUSED, closedBy: BOB }),
         live: trade(),
     }, BOB);
 
     const result = await Store.loadMine(db, { personId: BOB, today: TODAY });
 
-    assert.deepEqual(result.all.map(t => t.id), ['live']);
+    assert.deepEqual(result.live.map(t => t.id), ['live']);
+    assert.deepEqual(result.outbound.map(t => t.id), ['live']);
+    assert.deepEqual(result.ended.map(t => t.id), ['done'],
+        'Bob refused `no` himself — he does not need telling about it');
+    assert.deepEqual(result.all.map(t => t.id).sort(), ['done', 'live']);
 });
+
+test('an ended one is in neither direction — there is no move left to make',
+    async () => {
+        const db = fakeDb({ done: trade({ state: Core.STATES.SETTLED }) }, BOB);
+
+        const result = await Store.loadMine(db, { personId: BOB, today: TODAY });
+
+        assert.deepEqual(result.outbound, []);
+        assert.deepEqual(result.inbound, []);
+        assert.equal(result.ended.length, 1);
+    });
 
 test('they come back soonest first', async () => {
     const db = fakeDb({

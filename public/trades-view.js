@@ -126,14 +126,37 @@
                     (holder ? 'yours' : 'theirs') + '.',
             };
         }
-        return {
-            headline: trade.closedBecause === 'settled'
-                ? 'Sorted another way'
-                : 'Taken back',
-            detail: trade.closedBecause === 'settled'
-                ? place + ' found somebody else while this was open.'
-                : 'Nothing changed.',
-        };
+        // Withdrawn. Either the person who opened it took their words back, or
+        // it was killed from outside the conversation — and those want quite
+        // different sentences, because they leave the reader with different
+        // thoughts about what to do next (MS-212).
+        if (trade.closedBecause === Core.CAUSES.SETTLED) {
+            return {
+                headline: 'Sorted another way',
+                detail: place + ' found somebody else while this was open.',
+            };
+        }
+        if (trade.closedBecause === Core.CAUSES.FILLED) {
+            return {
+                headline: 'Somebody else was put in',
+                detail: 'An editor filled ' + place + '. Nothing you could ' +
+                    'have done faster.',
+            };
+        }
+        if (trade.closedBecause === Core.CAUSES.GONE) {
+            return {
+                headline: 'That place has gone',
+                detail: place + ' is no longer on the Event.',
+            };
+        }
+        if (trade.closedBecause === Core.CAUSES.KEPT) {
+            return {
+                headline: holder ? 'You kept it' : them + ' kept it',
+                detail: (holder ? 'You are' : 'They are') + ' doing ' + place +
+                    ' after all, so there is nothing to cover.',
+            };
+        }
+        return { headline: 'Taken back', detail: 'Nothing changed.' };
     }
 
     // One Trade as a row. `today` decides whether it is still live at all.
@@ -164,24 +187,40 @@
         };
     }
 
-    // Everything a person has going, as rows, split by whose move it is.
+    // Everything a person has going, as rows, split by whose move it is — plus
+    // the ones that have ENDED and which this reader has not yet been told about
+    // (MS-212).
+    //
+    // ⚠ THE ENDED ONES ARE A SEPARATE LIST, NOT A THIRD SORT ORDER. They want
+    // nothing from the reader except to be read, and mixing a thing you must
+    // answer with a thing you must merely notice is how both get ignored.
     function rowsFor(trades, options) {
         const opts = options || {};
-        const live = Core.liveOnes(trades || [], opts.today);
-        const rows = live.map(t => rowFor(t, opts));
+        const all = trades || [];
+        const rows = Core.liveOnes(all, opts.today).map(t => rowFor(t, opts));
+        const ended = Core.noticesFor(all, opts.personId, opts.today)
+            .map(t => rowFor(t, opts));
+
         return {
-            all: rows,
+            all: rows.concat(ended),
+            live: rows,
             // Waiting on you first, always. This is a page somebody opens
             // because something needs them, and burying that under what they
             // are waiting for would make them hunt for it.
             yours: rows.filter(r => r.waitingOnYou),
             theirs: rows.filter(r => r.waitingOnThem),
+            ended: ended,
         };
     }
 
-    // How many things need this person today — the whole notification (MS-215).
+    // How many things this person has not seen — the whole notification
+    // (MS-215). Both halves count: something waiting on an answer, and something
+    // that ended while they were not looking. The second is the one the first
+    // cut missed, and it is the one that matters more — a person who is never
+    // told their offer died concludes the app ate it.
     function needingYou(trades, options) {
-        return rowsFor(trades, options).yours.length;
+        const rows = rowsFor(trades, options);
+        return rows.yours.length + rows.ended.length;
     }
 
     // ── Who can be asked ─────────────────────────────────────────────────────

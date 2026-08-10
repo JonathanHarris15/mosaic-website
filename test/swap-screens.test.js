@@ -215,3 +215,36 @@ test('the open-list control is a switch that shows its own state', () => {
     // "nobody can help", when the people you ask still can.
     assert.match(card, /row\.quiet \? 'Closed invite' : 'On the open list'/);
 });
+
+// ── What ended without you (MS-212) ─────────────────────────────────────────
+
+test('an ended Trade has somewhere on the page to appear', () => {
+    // ⚠ THE BUG THIS PINS. The past-tense wording existed and was tested, and
+    // the page built its rows from the LIVE ones only — so a killed offer had
+    // no row anywhere and simply vanished off somebody's screen. The block and
+    // the list it reads from must both exist.
+    assert.match(page, /x-for="swap in noticeRows"/,
+        'the notices block is gone, and killed offers vanish silently again');
+    assert.match(script, /get noticeRows\(\)/);
+});
+
+test('clearing a notice is a write, not a local dismissal', () => {
+    // Both people in a dead Trade are usually being told the same thing and
+    // each has their own to clear. A local `x-show` toggle would forget on
+    // reload and would clear nobody's but the tapper's, on this device only.
+    assert.match(page, /clearNotice\(swap\)/);
+    assert.match(script, /httpsCallable\('clearTradeNotice'\)/);
+});
+
+test('a notice is not mixed in with the things that need answering', () => {
+    // It asks nothing. Putting it among the rows carrying Answer and No is how
+    // both get skimmed past.
+    assert.doesNotMatch(page, /x-for="swap in needsYou"[\s\S]{0,400}clearNotice/,
+        'a notice landed inside the block that wants an answer');
+});
+
+test('an ended conversation is not a chip on the place it was about', () => {
+    // "Sorted another way" beside Ask somebody reads as somebody still being
+    // asked. The chips come off the live list.
+    assert.match(script, /swapsOn\(row\) \{\s*return this\.swapRows\.live/);
+});

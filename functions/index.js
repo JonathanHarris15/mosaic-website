@@ -966,6 +966,83 @@ exports.setCoverReach = onCall(
 );
 
 /**
+ * Clear a notice about a Trade that ended (MS-212).
+ *
+ * The Trade IS the notice — it carries both parties, the place, the date and
+ * why it ended — so this marks it read rather than deleting anything. Per
+ * person: both parties are usually being told the same news, and one of them
+ * dismissing it must not dismiss the other's.
+ */
+exports.clearTradeNotice = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const {tradeId} = request.data || {};
+      if (!tradeId) {
+        throw new HttpsError("invalid-argument", "Missing which one.");
+      }
+
+      await tradeMove(request, (db, base) =>
+        tw.markSeen(db, Object.assign({tradeId}, base)));
+
+      return {success: true};
+    },
+);
+
+/**
+ * An editor filling a place ends every Trade about it — and tells both people
+ * (MS-212).
+ *
+ * ⚠ THIS HANGS OFF THE ROSTER WRITE, NOT OFF A BUTTON, and that is the whole
+ * design. Auto-assign, the roster grid, a drag on the calendar and a straight
+ * edit are four doors to the same act; a cleanup wired to one of them is a
+ * cleanup that quietly does not run for the other three. The editor does
+ * nothing special — the Trades simply notice.
+ *
+ * ⚠ AND IT IS DELIBERATELY BLUNT. It re-reads the place and asks whether each
+ * live Trade about it can still happen, rather than trying to work out what the
+ * editor meant. A settlement's own roster writes land here too and find nothing
+ * to do, because the settlement already ended the same set inside its
+ * transaction.
+ */
+exports.endTradesOnFilledPlace = onDocumentWritten(
+    {
+      document: "event_occurrences/{occurrenceId}/roster/{assignmentId}",
+      region: "us-central1",
+    },
+    async (event) => {
+      const snap = event.data || {};
+      const before = snap.before && snap.before.exists ?
+        snap.before.data() : null;
+      const after = snap.after && snap.after.exists ? snap.after.data() : null;
+      const row = after || before;
+      if (!row || !row.roleSlug) return;
+
+      // Nothing about WHO holds the place, or WHETHER it is still looking for
+      // cover, has changed — a `quiet` toggle, say, which fires on every
+      // reach change and must not end anybody's conversation.
+      if (before && after &&
+          before.personId === after.personId &&
+          (before.state || null) === (after.state || null)) return;
+
+      const db = admin.firestore();
+      const result = await tw.sweepAssignment(db, {
+        occurrenceId: event.params.occurrenceId,
+        roleSlug: row.roleSlug,
+        slotId: row.slotId || null,
+        today: ac.churchToday(new Date()),
+        now: admin.firestore.Timestamp.now(),
+      });
+
+      const closed = (result && result.closed) || [];
+      if (closed.length) {
+        log(`endTradesOnFilledPlace: ${event.params.occurrenceId}/` +
+            `${row.roleSlug} ended ${closed.length} — ` +
+            closed.map((c) => c.because).join(", "));
+      }
+    },
+);
+
+/**
  * Member-status synchronisation between user accounts and directory people.
  *
  * A user account (`users/{uid}`) can be linked to a directory person
