@@ -162,3 +162,22 @@ test('a name is read from the one field a Person actually has', () => {
     assert.doesNotMatch(script, /p\.firstName/,
         'a Person has no firstName');
 });
+
+test('the picker shows a face, framed the way the rest of the app frames one', () => {
+    // A directory of names you half-know is chosen from by face. It also gives
+    // each row something of its own — with most of the congregation carrying no
+    // account, that warning is on nearly every line, and a column of identical
+    // grey text is unreadable.
+    assert.match(page, /person\.photoUrl/);
+    assert.match(page, /photoStyle\(person\)/);
+    assert.match(page, /initialsOf\(person\)/,
+        'somebody with no photo needs something in the circle');
+    assert.match(page, /person-photo-core\.js/,
+        'the module that frames a face is not loaded');
+});
+
+test('the directory loads before the page is drawn, not on first tap', () => {
+    // ⚠ Every swap row NAMES somebody. Loading people lazily when the picker
+    // opened left every headline reading "Somebody asked you".
+    assert.match(script, /if \(this\.trades\.length\) await this\.loadPeople\(\)/);
+});

@@ -29,6 +29,7 @@
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
     <script src="commitments-core.js"></script>
+    <script src="person-photo-core.js"></script>
     <script src="trade-core.js"></script>
     <script src="trades-store.js"></script>
     <script src="trades-view.js"></script>
@@ -266,7 +267,22 @@
                     <template x-for="swap in needsYou" :key="swap.key">
                         <div class="rounded-lg border-l-4 border-l-warning border border-outline-variant
                                     bg-surface-container-lowest p-[18px]">
-                            <div class="text-[15px] text-on-surface" x-text="swap.headline"></div>
+                            <div class="flex items-center gap-3">
+                                <!-- The person asking, not an avatar for its own
+                                     sake: this row is one half of a conversation
+                                     and knowing whose is most of the answer. -->
+                                <span class="shrink-0 w-9 h-9 rounded-full overflow-hidden
+                                             bg-surface-container flex items-center justify-center">
+                                    <img x-show="personById(swap.otherId) && personById(swap.otherId).photoUrl"
+                                         :src="personById(swap.otherId) && personById(swap.otherId).photoUrl"
+                                         alt="" loading="lazy" class="w-full h-full"
+                                         :style="photoStyle(personById(swap.otherId))" />
+                                    <span x-show="!(personById(swap.otherId) && personById(swap.otherId).photoUrl)"
+                                          class="font-headline-lg text-[13px] text-on-surface-variant"
+                                          x-text="initialsOf(personById(swap.otherId))"></span>
+                                </span>
+                                <div class="text-[15px] text-on-surface" x-text="swap.headline"></div>
+                            </div>
                             <p class="mt-1 font-serif text-[15.5px] leading-[1.45] text-on-surface-variant"
                                x-text="swap.detail"></p>
                             <div class="mt-1 text-[12px] text-on-surface-variant">
@@ -368,14 +384,43 @@
                 <template x-for="person in askable" :key="person.id">
                     <button type="button" :disabled="busy || invitesLeft(asking) <= 0"
                             @click="ask(person)"
-                            class="w-full text-left px-5 py-3 border-b border-outline-variant
-                                   last:border-b-0 disabled:opacity-50 hover:bg-surface-container-low">
-                        <div class="text-[15px] text-on-surface" x-text="nameOf(person.id)"></div>
-                        <div x-show="unreachable(person)"
-                             class="mt-[2px] text-[11.5px] text-on-surface-variant">
-                            No account yet — they cannot answer in the app, so you would need
-                            to catch them yourself.
-                        </div>
+                            class="w-full text-left px-5 py-3 flex items-center gap-3.5
+                                   border-b border-outline-variant last:border-b-0
+                                   disabled:opacity-50 hover:bg-surface-container-low">
+
+                        <!-- ⚠ A FACE, NOT A DECORATION. This is a directory of
+                             names you half-know, and a face is how somebody
+                             actually decides who to ask. It also gives each row
+                             something of its own: most of the congregation has
+                             no account yet, so that warning is on nearly every
+                             line, and a column of identical grey text is
+                             unreadable.
+
+                             The crop is the Person's own framing, so a face sits
+                             here exactly as it does everywhere else in the app. -->
+                        <span class="shrink-0 w-10 h-10 rounded-full overflow-hidden
+                                     bg-surface-container flex items-center justify-center">
+                            <img x-show="person.photoUrl" :src="person.photoUrl" alt=""
+                                 loading="lazy" class="w-full h-full"
+                                 :style="photoStyle(person)" />
+                            <span x-show="!person.photoUrl"
+                                  class="font-headline-lg text-[14px] text-on-surface-variant"
+                                  x-text="initialsOf(person)"></span>
+                        </span>
+
+                        <span class="min-w-0 flex-grow">
+                            <span class="block text-[15px] text-on-surface"
+                                  x-text="nameOf(person.id)"></span>
+                            <!-- Shortened to a chip now the face carries the
+                                 recognising. The full sentence was the whole
+                                 row, fifteen times over. -->
+                            <span x-show="unreachable(person)"
+                                  class="inline-flex items-center mt-[3px] px-[7px] py-[2px] rounded
+                                         bg-surface-container text-[10.5px] uppercase tracking-[.1em]
+                                         text-on-surface-variant">
+                                No account
+                            </span>
+                        </span>
                     </button>
                 </template>
                 <p x-show="!askable.length" class="px-5 py-8 text-center text-[13px] text-on-surface-variant">

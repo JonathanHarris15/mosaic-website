@@ -178,6 +178,11 @@
                     }).map(r => this.decorate(r));
 
                     await this.loadTrades();
+                    // ⚠ NOT LAZILY. Every swap row names somebody — "Bob asked
+                    // you" — so the directory is needed to draw the page, not
+                    // just to open the picker. Loading it on first tap left
+                    // every headline reading "Somebody asked you".
+                    if (this.trades.length) await this.loadPeople();
                 } catch (e) {
                     console.error('Commitments load failed:', e);
                     this.error = friendlyError(e);
@@ -315,9 +320,35 @@
             // lastName pair on a Person — reaching for one returns undefined
             // for everybody and the whole picker reads "Somebody", which is
             // exactly what it did.
+            personById(personId) {
+                return this.people.find(x => x.id === personId) || null;
+            },
+
             nameOf(personId) {
                 const p = this.people.find(x => x.id === personId);
                 return (p && p.name) || 'Somebody';
+            },
+
+            // ── Faces ────────────────────────────────────────────────────────
+            //
+            // A directory this size is mostly names you half-know. A face is
+            // how somebody actually decides who to ask, and it does a second
+            // job here: with most of the congregation carrying no account yet,
+            // "no account" is on nearly every row, and a wall of identical grey
+            // text is unreadable. A photo gives each row something of its own to
+            // be recognised by.
+            //
+            // The crop is the Person's own framing (the Directory Photo), so a
+            // face is centred here exactly as it is everywhere else.
+            photoStyle(person) {
+                const Photo = window.PersonPhotoCore;
+                return Photo ? Photo.frameStyle(person && person.photoCrop) : '';
+            },
+
+            initialsOf(person) {
+                const Photo = window.PersonPhotoCore;
+                const name = (person && person.name) || '';
+                return Photo ? Photo.initialsOf(name) : '?';
             },
 
             get swapRows() {
@@ -395,6 +426,11 @@
                         counterpartyId: person.id,
                     });
                     await this.loadTrades();
+                    // ⚠ NOT LAZILY. Every swap row names somebody — "Bob asked
+                    // you" — so the directory is needed to draw the page, not
+                    // just to open the picker. Loading it on first tap left
+                    // every headline reading "Somebody asked you".
+                    if (this.trades.length) await this.loadPeople();
                     this.say('Asked ' + this.nameOf(person.id) + '.');
                     if (this.invitesLeft(this.asking) <= 0) this.asking = null;
                 } catch (e) {
@@ -506,6 +542,11 @@
                     const call = firebase.functions().httpsCallable(name);
                     await call({ tradeId: swap.id });
                     await this.loadTrades();
+                    // ⚠ NOT LAZILY. Every swap row names somebody — "Bob asked
+                    // you" — so the directory is needed to draw the page, not
+                    // just to open the picker. Loading it on first tap left
+                    // every headline reading "Somebody asked you".
+                    if (this.trades.length) await this.loadPeople();
                     this.say(said);
                 } catch (e) {
                     this.say(friendlyError(e));
