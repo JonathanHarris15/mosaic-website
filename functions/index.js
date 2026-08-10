@@ -17,13 +17,16 @@ const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
 const dr = require("./directory-request");
 const lu = require("./linked-user");
-const aa = require("./assignment-answer");
-const at = require("./assignment-take");
-// Copied from public/ by scripts/sync-shared-to-functions.js — see the
-// predeploy hook in firebase.json. functions/ cannot require across into
-// public/, and ADR-0030 needs this rule set on the SERVER.
-const coverCore = require("./shared/cover-core.js");
-const awayCore = require("./shared/away-core.js");
+// The Firestore half of answering and taking. It takes a `db` rather than
+// reaching for one, which is what lets test/emulator/ drive the transactions
+// against real Firestore semantics (MS-217). The decisions inside it stay in
+// assignment-answer.js and assignment-take.js, which are pure.
+//
+// It reaches on into functions/shared — copied from public/ by
+// scripts/sync-shared-to-functions.js, see the predeploy hook in firebase.json.
+// functions/ cannot require across into public/, and ADR-0030 needs the
+// eligibility rules on the SERVER.
+const aw = require("./assignment-writes");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -698,8 +701,6 @@ exports.takeAssignment = onCall(
       const userSnap = await db.collection("users")
           .doc(request.auth.uid).get();
       const user = userSnap.exists ? userSnap.data() : {};
-      const personId = user.personId || null;
-      const rank = user.permissionLevel || user.role || null;
 
       const {occurrenceId, roleSlug, slotId} = request.data || {};
       if (!occurrenceId || !roleSlug) {
@@ -707,195 +708,26 @@ exports.takeAssignment = onCall(
             "invalid-argument", "Missing the place being taken.");
       }
 
-      const occurrenceRef = db.collection("event_occurrences")
-          .doc(occurrenceId);
-      const rosterCol = occurrenceRef.collection("roster");
-      const today = ac.churchToday(new Date());
-
-      // Read outside the transaction: the Person, the Role, and everything the
-      // eligibility rules need. None of it is what the race is about — the race
-      // is over who holds the slot, and that is re-read inside.
-      //
-      // The date has to come off the DOCUMENT, not off the id. A series'
-      // occurrence id ends in its date, but a one-off Event's is an auto-id
-      // (ADR-0018 §3) — deriving the date from the id would judge Away against
-      // ten characters of random string on every one-off.
-      const dateSnap = await occurrenceRef.get();
-      if (!dateSnap.exists) {
-        throw new HttpsError("not-found", "That Event has gone.");
-      }
-      const context = await takeContext(
-          db, personId, roleSlug, dateSnap.data().date);
-
-      const result = await db.runTransaction(async (tx) => {
-        const occSnap = await tx.get(occurrenceRef);
-        if (!occSnap.exists) {
-          return {
-            ok: false, code: "not-found",
-            message: "That Event has gone.",
-          };
-        }
-        const occurrence = Object.assign({id: occSnap.id}, occSnap.data());
-
-        const rosterSnap = await tx.get(rosterCol);
-        const roster = rosterSnap.docs.map((d) => d.data());
-
-        const slot = (context.roleDef && (context.roleDef.slots || [])
-            .find((sl) => sl.id === (slotId || null))) || null;
-
-        const verdict = coverCore.verdictFor({
-          rank: rank,
-          person: context.person,
-          occurrence: occurrence,
-          roleDef: context.roleDef,
-          slot: slot,
-          context: {
-            people: context.person ? [context.person] : [],
-            relationships: context.relationships,
-            groups: context.groups,
-            awayPersonIds: context.awayPersonIds,
-            assigned: roster.filter((a) => a.roleSlug === roleSlug)
-                .map((a) => ({slotId: a.slotId, personId: a.personId})),
-            assignedElsewhere: roster.filter((a) => a.roleSlug !== roleSlug)
-                .map((a) => ({
-                  personId: a.personId,
-                  roleSlug: a.roleSlug,
-                  allowsAnotherRole: false,
-                })),
-          },
-        });
-
-        const plan = at.planTake({
-          occurrence: occurrence,
-          roster: roster,
-          personId: personId,
-          roleSlug: roleSlug,
-          slotId: slotId || null,
-          verdict: verdict,
-          today: today,
-          now: admin.firestore.Timestamp.now(),
-        });
-        if (!plan.ok) return plan;
-
-        // Delete then create — the id carries the person, so these are two
-        // different documents.
-        tx.delete(rosterCol.doc(plan.removeRosterId));
-        tx.set(rosterCol.doc(plan.rosterId), plan.assignment);
-        tx.update(occurrenceRef, {
-          participantIds: plan.derived.participantIds,
-          needsAttention: plan.derived.needsAttention,
-          outForCover: plan.derived.outForCover,
-        });
-        tx.delete(db.collection("cover").doc(plan.cover.id));
-
-        return plan;
+      const result = await aw.take(db, {
+        personId: user.personId || null,
+        rank: user.permissionLevel || user.role || null,
+        occurrenceId: occurrenceId,
+        roleSlug: roleSlug,
+        slotId: slotId || null,
+        today: ac.churchToday(new Date()),
+        now: admin.firestore.Timestamp.now(),
       });
 
       if (!result.ok) {
         throw new HttpsError(result.code, result.message);
       }
 
-      log(`takeAssignment: ${personId} took ${roleSlug} on ${occurrenceId}` +
+      log(`takeAssignment: ${user.personId} took ${roleSlug} on ` +
+          `${occurrenceId}` +
           (result.warning ? ` (warned: ${result.warning})` : ""));
       return {success: true, warning: result.warning || null};
     },
 );
-
-/**
- * Everything the eligibility rules need about one Person and one Role, read
- * before the transaction opens. None of it is contended: the race is over who
- * holds the slot, and that is re-read inside.
- *
- * ⚠ EVERY INPUT HERE IS PART OF THE WALL. A rule whose data is missing does not
- * fail loudly — `candidatesFor` simply finds nothing to object to and waves the
- * person through. An empty `groups` list silently disables every group
- * restriction; an empty `awayPersonIds` silently forgets that somebody said
- * they would not be there. So each one is either genuinely loaded or the Role
- * genuinely has no rule that reads it, and `loaded` records which, so the
- * caller can refuse rather than guess.
- *
- * @param {Object} db the Firestore handle
- * @param {string} personId the caller's Person id, or null
- * @param {string} roleSlug the Role they want a place in
- * @param {string} date the occurrence's own date, which Away is judged on
- * @return {Promise<Object>} the person, the Role definition, and the rules
- */
-async function takeContext(db, personId, roleSlug, date) {
-  const empty = {
-    person: null, roleDef: null,
-    relationships: [], groups: [], awayPersonIds: [],
-  };
-  if (!personId) return empty;
-
-  const personSnap = await db.collection("people").doc(personId).get();
-  if (!personSnap.exists) return empty;
-  const person = Object.assign({id: personSnap.id}, personSnap.data());
-
-  // ⚠ THE COLLECTION IS `roles`. Named wrongly, this query returns nothing,
-  // roleDef is null, and every Role rule silently stops being checked — the
-  // eligibility wall would permit anything while looking like it worked.
-  const roleSnap = await db.collection("roles")
-      .where("slug", "==", roleSlug).limit(1).get();
-  const roleDef = roleSnap.empty ? null :
-    Object.assign({id: roleSnap.docs[0].id}, roleSnap.docs[0].data());
-
-  const restrictions = (roleDef && roleDef.restrictions) || [];
-  const kinds = restrictions.map((r) => r && r.kind);
-  const wantsEdges = kinds.indexOf("notTogether") !== -1;
-  const wantsGroups = kinds.indexOf("sameGroup") !== -1 ||
-    kinds.indexOf("notSameGroup") !== -1;
-
-  // Away is judged on the occurrence's own date — being away on the 16th says
-  // nothing about the 23rd. Their own Away does not refuse them (ADR-0030 §3),
-  // but cover-core still has to SEE it to warn them about it.
-  const awaySnap = await db.collection("people").doc(personId)
-      .collection("away").get();
-  const stretches = awaySnap.docs.map((d) => d.data());
-  const awayPersonIds = awayCore.isAwayOn(stretches, date) ? [personId] : [];
-
-  // Firestore cannot express "fromId == me OR toId == me" in one query, so an
-  // edge is looked for from both ends and merged.
-  const relationships = [];
-  if (wantsEdges) {
-    const [out, back] = await Promise.all([
-      db.collection("relationships").where("fromId", "==", personId).get(),
-      db.collection("relationships").where("toId", "==", personId).get(),
-    ]);
-    const seen = new Set();
-    [].concat(out.docs, back.docs).forEach((d) => {
-      if (seen.has(d.id)) return;
-      seen.add(d.id);
-      relationships.push(Object.assign({id: d.id}, d.data()));
-    });
-  }
-
-  // A Group's leader is deliberately NOT inside memberIds (ADR-0014 §5), so
-  // leading one has to be asked for separately or a leader would read as
-  // belonging to no group at all.
-  const groups = [];
-  if (wantsGroups) {
-    const [asMember, asLeader] = await Promise.all([
-      db.collection("relationship_groups")
-          .where("memberIds", "array-contains", personId).get(),
-      db.collection("relationship_groups")
-          .where("leaderId", "==", personId).get(),
-    ]);
-    const seen = new Set();
-    [].concat(asMember.docs, asLeader.docs).forEach((d) => {
-      if (seen.has(d.id)) return;
-      seen.add(d.id);
-      groups.push(Object.assign({id: d.id}, d.data()));
-    });
-  }
-
-  return {
-    person: person,
-    roleDef: roleDef,
-    relationships: relationships,
-    groups: groups,
-    awayPersonIds: awayPersonIds,
-  };
-}
 
 /**
  * A member confirms or declines their own Assignment (MS-20).
@@ -938,62 +770,14 @@ exports.answerAssignment = onCall(
             "invalid-argument", "Missing the place being answered.");
       }
 
-      const occurrenceRef = db.collection("event_occurrences")
-          .doc(occurrenceId);
-      const rosterCol = occurrenceRef.collection("roster");
-      const today = ac.churchToday(new Date());
-
-      const result = await db.runTransaction(async (tx) => {
-        const occSnap = await tx.get(occurrenceRef);
-        if (!occSnap.exists) {
-          return {
-            ok: false, code: "not-found",
-            message: "That Event has gone.",
-          };
-        }
-        const occurrence = Object.assign({id: occSnap.id}, occSnap.data());
-
-        // The roster is a subcollection, not a field — Firestore cannot hide a
-        // field from a reader, so that is where the Assignments live. Read
-        // INSIDE the transaction, so a concurrent editor reassignment loses the
-        // race rather than being silently overwritten by it.
-        const rosterSnap = await tx.get(rosterCol);
-        const roster = rosterSnap.docs.map((d) => d.data());
-
-        // `roleName` is deliberately not passed. RolesCore.roleBySlug is the
-        // one way a slug becomes a human name and it lives in the browser;
-        // letting a caller send one up would put arbitrary text on other
-        // people's screens. A one-off Role carries its own label on the
-        // Assignment, and that is what gets used.
-        const plan = aa.planAnswer({
-          occurrence: occurrence,
-          roster: roster,
-          personId: personId,
-          roleSlug: roleSlug,
-          slotId: slotId || null,
-          state: state,
-          today: today,
-          now: admin.firestore.Timestamp.now(),
-        });
-        if (!plan.ok) return plan;
-
-        tx.set(rosterCol.doc(plan.rosterId), plan.assignment, {merge: true});
-        tx.update(occurrenceRef, {
-          participantIds: plan.derived.participantIds,
-          needsAttention: plan.derived.needsAttention,
-          outForCover: plan.derived.outForCover,
-        });
-
-        const coverRef = db.collection("cover").doc(plan.cover.id);
-        if (plan.cover.action === "set") {
-          tx.set(coverRef, plan.cover.entry);
-        } else if (plan.cover.action === "delete") {
-          // Unconditional. An entry that should not be there is worth deleting
-          // twice, and deleting one that was never written costs nothing.
-          tx.delete(coverRef);
-        }
-
-        return plan;
+      const result = await aw.answer(db, {
+        personId: personId,
+        occurrenceId: occurrenceId,
+        roleSlug: roleSlug,
+        slotId: slotId || null,
+        state: state,
+        today: ac.churchToday(new Date()),
+        now: admin.firestore.Timestamp.now(),
       });
 
       if (!result.ok) {

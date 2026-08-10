@@ -19,6 +19,7 @@
   },
   "scripts": {
     "test": "node --test",
+    "test:emulator": "node scripts/test-emulator.mjs",
     "build:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/mosaic.css --minify",
     "watch:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/mosaic.css --watch",
     "vendor": "node scripts/vendor-assets.mjs && node scripts/vendor-fonts.mjs",
