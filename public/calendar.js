@@ -254,7 +254,12 @@
                         isPast: o.date < this.today,
                         isSunday: o.seriesId === Core.SUNDAY_SERVICE_ID,
                         mine: this.myRoleOn(o),
-                        needsAttention: Core.needsAttention(o),
+                        // Two flags, not one (MS-207). `needsAttention` still
+                        // means "a place here is declined"; the split says
+                        // whether that is the editor's to fill today or is
+                        // already in front of the church.
+                        needsAttention: Core.needsEditor(o),
+                        outForCover: Core.outForCover(o),
                     }));
 
                     if (!this.people.length) await this.loadPeople();
@@ -280,7 +285,10 @@
             // needs nobody, so a viewer who is not an editor — who never sees
             // the count — never pays for the read.
             async loadRoleDefinitions() {
-                if (!this.isEditor) { this.roleDefinitions = []; return; }
+                // ⚠ EVERYONE, not just editors. A member never sees the
+                // staffing tools these were loaded for, but they do see their
+                // own card — and without the definitions it reads them their
+                // Role's SLUG. `roles` is member-readable.
                 try {
                     const snap = await db.collection('roles').get();
                     this.roleDefinitions = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
@@ -514,9 +522,66 @@
             // be able to hide from you.
             get myCommitments() {
                 return View.myCommitments(
-                    this.occurrences.filter(o => onInMonth(o, this.month)), this.personId);
+                    this.occurrences.filter(o => onInMonth(o, this.month)),
+                    this.personId, this.roleDefinitions);
             },
             get mySentence() { return View.myCommitmentsSentence(this.myCommitments); },
+
+            // ── Answering from the card ──────────────────────────────────────
+            //
+            // The same callable the Commitments page uses. It is here because
+            // the commonest answer is a yes to something you were expecting,
+            // and making somebody open a second screen to give it is the
+            // switchboard problem in miniature.
+            //
+            // ⚠ THE TWO CONTROLS ARE IDENTICAL AND MUST STAY THAT WAY. At rail
+            // width they are a tick and a cross rather than the page's full
+            // pair, but they are the same size, the same border and the same
+            // weight as each other. The moment yes is the prettier of the two
+            // the card starts collecting agreements people cannot keep.
+            answering: null,
+
+            async answerCommitment(commitment, state) {
+                if (this.answering) return;
+                const id = commitment.occurrenceId + '__' + commitment.roleSlug;
+                const before = commitment.state;
+                this.answering = id;
+                this.applyAnswer(commitment, state);
+                try {
+                    const call = firebase.functions().httpsCallable('answerAssignment');
+                    await call({
+                        occurrenceId: commitment.occurrenceId,
+                        roleSlug: commitment.roleSlug,
+                        slotId: commitment.slotId || null,
+                        state: state,
+                    });
+                } catch (e) {
+                    // The server decides. A card that keeps showing a yes it
+                    // could not save is worse than one that flickers.
+                    console.error('answerAssignment failed:', e);
+                    this.applyAnswer(commitment, before);
+                    this.error = (e && e.message) || 'That could not be saved.';
+                } finally {
+                    this.answering = null;
+                }
+            },
+
+            // The card reads off `occurrences`, so the answer is written back
+            // there rather than into the derived list — which is rebuilt from it.
+            applyAnswer(commitment, state) {
+                this.occurrences = this.occurrences.map(o => {
+                    if (o.id !== commitment.occurrenceId) return o;
+                    return Object.assign({}, o, {
+                        assignments: (o.assignments || []).map(a => (
+                            a.personId === this.personId &&
+                            a.roleSlug === commitment.roleSlug &&
+                            (a.slotId || null) === (commitment.slotId || null)
+                                ? Object.assign({}, a, { state: state })
+                                : a
+                        )),
+                    });
+                });
+            },
 
             // "You in August", and it means it. This block used to be an
             // Upcoming card at the top of the page reading its own window of

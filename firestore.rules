@@ -238,6 +238,37 @@ service cloud.firestore {
         || (request.auth != null && resource.data.personId == myPersonId());
     }
 
+    // The cover list (MS-20, ADR-0030): every Assignment currently needing
+    // somebody, so a member can pick one up without an editor brokering it.
+    //
+    // ⚠ A SEPARATE COLLECTION, NOT A QUERY OVER DECLINED ROSTER ROWS. The
+    // roster subcollection above exists precisely so a member cannot read
+    // anybody else's Assignment, and its collection-group rule is clamped to
+    // your own personId. Building the list from those rows would mean opening
+    // every roster row to every member — removing that gate rather than bending
+    // it. So a small document is written beside the decline instead, carrying
+    // only what a row needs to render and be taken.
+    //
+    // Each entry is STAMPED with its occurrence's visibility at write time, so
+    // this rule answers by rank with no get() per document — the same reason
+    // occurrences carry their own stamp (ADR-0018 §5, following MS-130).
+    //
+    // No `participant` clause, deliberately. An Event at that rung never reaches
+    // this list: the list exists to reach people who are NOT in the Event, and
+    // there is nobody it could reach there without disclosing what the rung is
+    // for. An entry stamped `participant` would be a bug, and rankCanSee refuses
+    // it for a member anyway.
+    //
+    // NOBODY WRITES THIS FROM A BROWSER. Entries are created and removed only by
+    // the callable that handles the decline or the hand-over, inside the same
+    // transaction as the roster change, so the list cannot drift from the
+    // rosters it describes. The Admin SDK bypasses these rules; every client is
+    // refused, editors included.
+    match /cover/{coverId} {
+      allow read: if rankCanSee(stampedVisibility());
+      allow create, update, delete: if false;
+    }
+
     match /services/{dateId} {
       allow read: if true;
       allow create, update, delete: if isEditor();

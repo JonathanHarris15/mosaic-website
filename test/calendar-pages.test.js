@@ -2251,16 +2251,25 @@ test('only an editor is shown the places still to fill', () => {
     assert.strictEqual(editor.placesToFillLabel(date), '1 place to fill');
 });
 
-test('a member never pays for the reads the count needs', async () => {
+// This used to assert the opposite, on the grounds that the definitions were
+// "read for somebody never shown them". That stopped being true in MS-20: a
+// member IS shown them, on their own card, and without them it reads them
+// their Role's SLUG. The read is the price of the card saying "Setup &
+// Teardown" instead of `setup_teardown`.
+test('a member reads the Role definitions too — their own card names Roles', async () => {
     const asked = [];
     const page = loadComponent('calendar.js', 'calendarPage', {
-        db: { collection: name => { asked.push(name); return { get: async () => ({ docs: [] }) }; } },
+        db: {
+            collection: name => {
+                asked.push(name);
+                return { get: async () => ({ docs: [] }) };
+            },
+        },
     });
     page.rank = 'member';
 
     await page.loadRoleDefinitions();
-    assert.strictEqual(asked.length, 0, 'the Role definitions were read for somebody never shown them');
-    assert.strictEqual(page.roleDefinitions.length, 0);
+    assert.deepStrictEqual(asked, ['roles']);
 });
 
 test('an unfilled chip goes amber, and a decline still outranks it', () => {

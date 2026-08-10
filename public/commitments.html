@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Your Commitments — Mosaic</title>
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0,0" />
+
+    <style>
+        [x-cloak] { display: none !important; }
+        .press { transition: all 180ms cubic-bezier(0.2, 0, 0, 1); }
+        .press:active { transform: scale(0.98); }
+    </style>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-functions-compat.js"></script>
+
+    <script src="local-cache.js"></script>
+    <script src="auth.js"></script>
+    <script src="date-utils.js"></script>
+    <script src="roles-core.js"></script>
+    <script src="events-core.js"></script>
+    <script src="events-occurrence-core.js"></script>
+    <script src="events-store.js"></script>
+    <script src="commitments-core.js"></script>
+    <script src="commitments.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+</head>
+
+<body class="bg-background text-on-surface font-body-md antialiased"
+      x-data="commitmentsPage()" x-cloak>
+
+<main class="max-w-[760px] mx-auto px-md pb-16">
+
+    <a href="calendar.html"
+       class="inline-flex items-center gap-1 mt-md text-on-surface-variant text-[11px] uppercase tracking-[.1em] hover:text-secondary">
+        <span class="material-symbols-outlined text-[18px]">arrow_back</span> Calendar
+    </a>
+
+    <!-- ── The head ──────────────────────────────────────────────────────── -->
+    <div class="mt-3 pb-[18px] border-b border-outline-variant">
+        <h1 class="font-headline-lg text-[30px] tracking-[.02em] text-primary m-0">Your Commitments</h1>
+        <!-- The sentence counts what still wants YOU. It is the whole reason
+             the unanswered are hoisted below rather than left in date order. -->
+        <p x-show="headline"
+           class="mt-2 font-serif text-[18px] leading-[1.45] text-on-surface"
+           x-text="headline"></p>
+    </div>
+
+    <!-- ── Not signed in ─────────────────────────────────────────────────── -->
+    <template x-if="!loading && !personId">
+        <div class="py-16 text-center">
+            <span class="material-symbols-outlined text-[42px] text-sand">account_circle</span>
+            <p class="mt-4 font-serif text-[17px] text-on-surface-variant max-w-[34ch] mx-auto">
+                Sign in and link your directory record to see what you are down for.
+            </p>
+        </div>
+    </template>
+
+    <div x-show="loading" class="py-16 text-center text-on-surface-variant text-[13px]">Loading…</div>
+
+    <div x-show="error" x-text="error"
+         class="mt-md rounded-lg border border-error bg-error-container text-on-error-container px-md py-3 text-[14px]"></div>
+
+    <!-- ── Nothing on ────────────────────────────────────────────────────── -->
+    <!-- Designed, not a blank list. Empty here is a fact about you, not a
+         failure, so it points somewhere useful rather than apologising. -->
+    <template x-if="isEmpty && personId">
+        <div class="py-[72px] px-2 text-center">
+            <span class="material-symbols-outlined text-[42px] text-sand">event_available</span>
+            <div class="font-headline-lg text-[20px] tracking-[.02em] text-primary mt-4">Nothing On Your List</div>
+            <p class="mt-2.5 mx-auto max-w-[34ch] font-serif text-[17px] leading-[1.5] text-on-surface-variant">
+                You are not down for anything on the dates ahead.
+            </p>
+            <a href="cover.html"
+               class="inline-flex items-center gap-1.5 mt-[22px] text-[11px] uppercase tracking-[.14em] text-secondary">
+                See what needs covering <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+            </a>
+        </div>
+    </template>
+
+    <!-- ── Wanting an answer ─────────────────────────────────────────────── -->
+    <!--
+         ⚠ HOISTED OUT OF DATE ORDER, on purpose. These are the only rows on the
+         page that need anything from the person reading it, so they come first
+         whatever their date. Everything settled drops below.
+    -->
+    <section x-show="hasUnanswered" class="mt-7">
+        <div class="flex flex-col gap-3">
+            <template x-for="row in unanswered" :key="row.key">
+                <article class="bg-surface-container-lowest border border-outline-variant border-l-[3px] rounded-lg px-[18px] py-4"
+                         style="border-left-color: var(--gold);">
+
+                    <div class="flex items-center gap-3.5">
+                        <div class="w-[46px] shrink-0 text-center">
+                            <div class="text-[9.5px] uppercase tracking-[.12em] text-on-surface-variant" x-text="row.mon"></div>
+                            <div class="font-headline-lg text-[24px] text-primary leading-[1.1]" x-text="row.dayNum"></div>
+                        </div>
+                        <div class="min-w-0 flex-grow">
+                            <div class="text-[17px] font-semibold text-on-surface leading-[1.3]" x-text="row.roleName"></div>
+                            <div class="mt-[3px] text-[13px] text-on-surface-variant">
+                                <span x-text="row.eventName"></span> ·
+                                <span x-text="row.weekday"></span> <span x-text="row.longDate"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!--
+                         ⚠ THE TWO BUTTONS ARE IDENTICAL AND MUST STAY THAT WAY.
+                         Same border, same size, same weight, equal width, and
+                         neither one filled. Making Confirm the prettier of the
+                         two would collect agreements people cannot keep — and a
+                         yes somebody cannot keep costs the rota more than a no
+                         given in August.
+                    -->
+                    <div class="mt-4 flex gap-2.5">
+                        <button type="button" class="press flex-1 min-h-[44px] flex items-center justify-center gap-[7px]
+                                       border border-primary rounded-lg bg-surface-container-lowest text-primary
+                                       text-[11.5px] uppercase tracking-[.12em] disabled:opacity-50"
+                                :disabled="busy === row.key" @click="confirm(row)">
+                            <span class="material-symbols-outlined text-[18px]">check</span> Confirm
+                        </button>
+                        <button type="button" class="press flex-1 min-h-[44px] flex items-center justify-center gap-[7px]
+                                       border border-primary rounded-lg bg-surface-container-lowest text-primary
+                                       text-[11.5px] uppercase tracking-[.12em] disabled:opacity-50"
+                                :disabled="busy === row.key" @click="decline(row)">
+                            <span class="material-symbols-outlined text-[18px]">close</span> Decline
+                        </button>
+                    </div>
+                </article>
+            </template>
+        </div>
+    </section>
+
+    <!-- ── Settled ───────────────────────────────────────────────────────── -->
+    <!-- Quieter, denser, one container. These are answered; they are here to be
+         glanced at, not worked through. -->
+    <section x-show="hasSettled" class="mt-[34px]">
+        <div class="h-px bg-outline-variant mb-3.5"></div>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
+            <template x-for="row in settled" :key="row.key">
+                <div class="flex items-center gap-3.5 px-md py-3.5 border-b border-outline-variant last:border-b-0"
+                     :class="row.isLiturgical ? 'bg-surface-container-low' : ''">
+
+                    <div class="w-[46px] shrink-0 text-center">
+                        <div class="text-[9px] uppercase tracking-[.12em] text-on-surface-variant" x-text="row.mon"></div>
+                        <div class="font-headline-lg text-[18px] text-on-surface" x-text="row.dayNum"></div>
+                    </div>
+
+                    <div class="min-w-0 flex-grow">
+                        <!--
+                             ⚠ A LITURGICAL ROLE READS AS SETTLED THROUGH TYPE
+                             ALONE — serif italic, no controls, a quieter ground.
+                             It was decided this page carries NO copy explaining
+                             why; being on the printed booklet IS the commitment
+                             (ADR-0019), and a sentence saying so would make the
+                             one row nobody can act on the loudest on the page.
+                        -->
+                        <div class="text-on-surface leading-[1.3]"
+                             :class="row.isLiturgical
+                                ? 'font-serif italic text-[18px]'
+                                : 'text-[15.5px]'"
+                             x-text="row.roleName"></div>
+                        <div class="mt-0.5 text-[12.5px] text-on-surface-variant" x-text="row.eventName"></div>
+                    </div>
+
+                    <div class="shrink-0 flex items-center gap-3">
+                        <span class="inline-flex items-center px-[9px] py-1 rounded-md text-[10.5px] uppercase tracking-[.1em]"
+                              :class="row.chipClass" x-text="row.chipLabel"></span>
+                        <button x-show="!row.isLiturgical" type="button" @click="change(row)"
+                                class="press text-[10.5px] uppercase tracking-[.1em] text-secondary">Change</button>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Declining is not the end of it: the place stays yours until
+             somebody takes it (ADR-0018 §5), and saying so is what stops a
+             decline reading as "handled". -->
+        <p x-show="settled.some(r => r.isDeclined)"
+           class="mt-3 text-[12.5px] leading-[1.55] text-on-surface-variant">
+            A place you declined stays yours until somebody else takes it — you will keep
+            seeing the Event until then.
+        </p>
+    </section>
+
+</main>
+
+<div x-show="toast" x-transition x-cloak x-text="toast"
+     class="fixed left-1/2 -translate-x-1/2 bottom-7 z-50 bg-primary text-on-primary
+            px-5 py-3 rounded-lg text-[13px] shadow-lg"></div>
+
+</body>
+</html>

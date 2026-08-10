@@ -1245,8 +1245,13 @@
          Calendar are the same code, not two that have to agree. -->
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
-    <script src="calendar-view.js"></script>
+    <!-- calendar-view.js reads this for "what you are down for" (MS-20).
+         Without it the rail card throws and renders blank. -->
+    <script src="commitments-core.js"></script>
+    <!-- roles-core BEFORE calendar-view: the browser branch of its require
+         resolves at load time, so loading it after leaves Roles undefined. -->
     <script src="roles-core.js"></script>
+    <script src="calendar-view.js"></script>
     <script src="fairness-core.js"></script>
     <script src="calendar-event.js"></script>
 

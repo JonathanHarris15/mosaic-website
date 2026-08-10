@@ -1,3 +1,11 @@
+// ⚠ GENERATED FILE — DO NOT EDIT.
+//
+// Copied from public/events-occurrence-core.js by scripts/sync-shared-to-functions.js, because
+// functions/ deploys as its own bundle and cannot require across into
+// public/. Edit the original; run the script; commit both.
+//
+// test/functions-shared-sync.test.js fails if this copy is stale.
+
 // Events Occurrence Core — the pure model for Event occurrences, Assignments,
 // and Event visibility (ADR-0018, MS-99).
 //

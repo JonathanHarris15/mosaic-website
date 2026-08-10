@@ -25,6 +25,10 @@
   },
   "functions": [
     {
+      "//": "predeploy copies the pure domain modules the server shares with the browser into functions/shared. functions/ deploys as its own bundle and cannot require across into public/, and MS-20 needs RolesCore server-side to refuse an ineligible member (ADR-0030). One authored copy lives in public/; test/functions-shared-sync.test.js fails if the copy here is stale, so this hook is a safety net rather than the only thing keeping them in step.",
+      "predeploy": [
+        "node scripts/sync-shared-to-functions.js"
+      ],
       "source": "functions",
       "codebase": "default",
       "disallowLegacyRuntimeConfig": true,

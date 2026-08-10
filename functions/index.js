@@ -17,6 +17,16 @@ const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
 const dr = require("./directory-request");
 const lu = require("./linked-user");
+// The Firestore half of answering and taking. It takes a `db` rather than
+// reaching for one, which is what lets test/emulator/ drive the transactions
+// against real Firestore semantics (MS-217). The decisions inside it stay in
+// assignment-answer.js and assignment-take.js, which are pure.
+//
+// It reaches on into functions/shared — copied from public/ by
+// scripts/sync-shared-to-functions.js, see the predeploy hook in firebase.json.
+// functions/ cannot require across into public/, and ADR-0030 needs the
+// eligibility rules on the SERVER.
+const aw = require("./assignment-writes");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -657,6 +667,133 @@ exports.unlinkDirectoryPerson = onCall({cors: true, region: "us-central1"}, asyn
   log(`Unlinked person ${personId} from account ${plan.uid} by ${callerUid}`);
   return {success: true};
 });
+
+/**
+ * A member takes an Assignment off the cover list (MS-20, ADR-0030).
+ *
+ * ⚠ ELIGIBILITY IS DECIDED HERE, ON THE SERVER. ADR-0021 made the Role's rules
+ * advisory — they warn an editor and never refuse, because the editor authored
+ * them and overruling yourself is your own business. A member is not that
+ * person and nobody reviews what they pick, so for them the same rules are a
+ * wall. A wall enforced only by the screen is not a wall.
+ *
+ * `cover-core` is the module that answers it, and it is the SAME FILE the
+ * browser runs, copied into functions/shared by the predeploy hook. Restating
+ * it here by hand would put the one divergence nobody would notice in the one
+ * place it would matter most.
+ *
+ * ⚠ THE PLACE CHANGES HANDS AS A DELETE PLUS A CREATE. A roster row's id
+ * carries the personId, so the old row is a different document from the new
+ * one and would otherwise simply remain.
+ *
+ * Nothing is reserved while somebody reads the cover list. Two people can press
+ * Take in the same second; the transaction re-reads and `planTake` decides, so
+ * the loser is told plainly rather than overwriting whoever got there first.
+ */
+exports.takeAssignment = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Sign in to take a place.");
+      }
+
+      const db = admin.firestore();
+      const userSnap = await db.collection("users")
+          .doc(request.auth.uid).get();
+      const user = userSnap.exists ? userSnap.data() : {};
+
+      const {occurrenceId, roleSlug, slotId} = request.data || {};
+      if (!occurrenceId || !roleSlug) {
+        throw new HttpsError(
+            "invalid-argument", "Missing the place being taken.");
+      }
+
+      const result = await aw.take(db, {
+        personId: user.personId || null,
+        rank: user.permissionLevel || user.role || null,
+        occurrenceId: occurrenceId,
+        roleSlug: roleSlug,
+        slotId: slotId || null,
+        today: ac.churchToday(new Date()),
+        now: admin.firestore.Timestamp.now(),
+      });
+
+      if (!result.ok) {
+        throw new HttpsError(result.code, result.message);
+      }
+
+      log(`takeAssignment: ${user.personId} took ${roleSlug} on ` +
+          `${occurrenceId}` +
+          (result.warning ? ` (warned: ${result.warning})` : ""));
+      return {success: true, warning: result.warning || null};
+    },
+);
+
+/**
+ * A member confirms or declines their own Assignment (MS-20).
+ *
+ * ⚠ WHY THIS EXISTS AT ALL. A member cannot make this change from the browser.
+ * It touches two documents at once — their row in the occurrence's `roster`
+ * subcollection, and the occurrence's own derived fields — and that occurrence
+ * is
+ * editor-only to write for good reason: opening it to members would let one
+ * restamp `visibility` or `participantIds`, which is what the whole five-rung
+ * ladder rests on. So the caller's own `personId` is checked against the
+ * Assignment they claim, and the writes go out under the Admin SDK.
+ *
+ * ⚠ THE THREE WRITES ARE ONE TRANSACTION. The roster row, the occurrence's
+ * derived fields, and the cover entry move together or not at all. Split up,
+ * the derived fields drift from the roster they describe — which is the failure
+ * events-store.js already warns about, and it drifts the very list the security
+ * rules read.
+ *
+ * Every decision is in `assignment-answer.js`, which is pure and tested without
+ * an emulator. This reads, asks, and writes.
+ */
+exports.answerAssignment = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated", "Sign in to answer for yourself.");
+      }
+
+      const db = admin.firestore();
+      const userSnap = await db.collection("users")
+          .doc(request.auth.uid).get();
+      const personId = userSnap.exists ?
+        (userSnap.data().personId || null) : null;
+
+      const {occurrenceId, roleSlug, slotId, state} = request.data || {};
+      if (!occurrenceId || !roleSlug) {
+        throw new HttpsError(
+            "invalid-argument", "Missing the place being answered.");
+      }
+
+      const result = await aw.answer(db, {
+        personId: personId,
+        occurrenceId: occurrenceId,
+        roleSlug: roleSlug,
+        slotId: slotId || null,
+        state: state,
+        today: ac.churchToday(new Date()),
+        now: admin.firestore.Timestamp.now(),
+      });
+
+      if (!result.ok) {
+        throw new HttpsError(result.code, result.message);
+      }
+
+      log(`answerAssignment: ${personId} set ${roleSlug} on ` +
+          `${occurrenceId} to ${result.assignment.state} ` +
+          `(cover: ${result.cover.action})`);
+      return {
+        success: true,
+        state: result.assignment.state,
+        onCoverList: result.cover.action === "set",
+      };
+    },
+);
 
 /**
  * Member-status synchronisation between user accounts and directory people.

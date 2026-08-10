@@ -596,6 +596,10 @@
     <!-- Guide engine + store: lets navigateToGuide compute v2 completeness from
          the frozen snapshot (ADR-0008) instead of a hardcoded field list. -->
     <script src="guide-engine.js"></script>
+    <!-- guide-store.js reads guide-seed at load time, and guide-seed reads
+         guide-components. Same order service-builder.html already uses. -->
+    <script src="guide-components.js"></script>
+    <script src="guide-seed.js"></script>
     <script src="guide-store.js"></script>
     <script src="events-core.js"></script>
     <!-- The week-shift tool moves Event occurrences and their rosters too

@@ -135,6 +135,10 @@
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
     <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <!-- Answering a Commitment from the rail card goes through a callable:
+         it writes the roster row and the occurrence's derived fields together,
+         and the occurrence is editor-only to write. -->
+    <script src="vendor/firebase/firebase-functions-compat.js"></script>
     <!-- On-device cache for the phone app (no-op on the web). Must load before
          auth.js, which builds the Firestore handle persistence attaches to. -->
     <script src="local-cache.js"></script>
@@ -144,6 +148,9 @@
     <script src="events-core.js"></script>
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
+    <!-- calendar-view.js reads this for "what you are down for" (MS-20).
+         Without it the rail card throws and renders blank. -->
+    <script src="commitments-core.js"></script>
     <script src="calendar-view.js"></script>
     <script src="calendar.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
@@ -433,12 +440,69 @@
                                      x-text="c.roleLabel"></div>
                                 <div class="text-[12px] text-primary-fixed-dim truncate" x-text="c.eventName"></div>
                             </div>
-                            <span x-show="c.state === 'pending'"
+                            <!-- ⚠ A TICK AND A CROSS, IDENTICAL TO EACH OTHER.
+                                 The rail has no room for the page's full
+                                 Confirm/Decline pair, but the property that
+                                 pair exists to protect is that neither is
+                                 easier than the other — so these share a size,
+                                 a border and a weight, and neither is filled. -->
+                            <div x-show="c.state === 'pending'" class="shrink-0 flex items-center gap-1.5">
+                                <button type="button" title="Confirm"
+                                        :disabled="answering"
+                                        @click="answerCommitment(c, 'confirmed')"
+                                        class="w-8 h-8 flex items-center justify-center rounded-lg border
+                                               border-primary-fixed-dim text-primary-fixed-dim
+                                               cal-motion cal-press cal-focus hover:text-on-primary
+                                               disabled:opacity-40">
+                                    <span class="material-symbols-outlined text-[18px]">check</span>
+                                </button>
+                                <button type="button" title="Decline"
+                                        :disabled="answering"
+                                        @click="answerCommitment(c, 'declined')"
+                                        class="w-8 h-8 flex items-center justify-center rounded-lg border
+                                               border-primary-fixed-dim text-primary-fixed-dim
+                                               cal-motion cal-press cal-focus hover:text-on-primary
+                                               disabled:opacity-40">
+                                    <span class="material-symbols-outlined text-[18px]">close</span>
+                                </button>
+                            </div>
+                            <span x-show="c.state !== 'pending'"
                                   class="shrink-0 text-[10px] font-label-md tracking-[.1em] uppercase text-primary-fixed-dim
-                                         border border-primary-fixed-dim rounded px-1.5 py-0.5">Not answered</span>
+                                         border border-primary-fixed-dim rounded px-1.5 py-0.5"
+                                  x-text="c.stateLabel"></span>
                         </div>
                     </template>
                 </div>
+
+                <!-- The way through to answering (MS-20).
+                     ⚠ SHOWN EVEN WHEN THIS MONTH IS EMPTY. The card answers for
+                     the month on screen; the page answers for every date ahead.
+                     Somebody with nothing on in August may still be down for
+                     three things in September, so hiding the way through on an
+                     empty month would hide the very list they came to find. -->
+                <a href="commitments.html"
+                   class="mt-4 pt-3 border-t border-primary-fixed-dim/30 flex items-center justify-between
+                          text-[11px] font-label-md tracking-[.12em] uppercase text-primary-fixed-dim
+                          cal-motion cal-focus rounded hover:text-on-primary">
+                    <span class="flex items-center gap-2">
+                        All your commitments
+                        <!-- ⚠ A DOT, NOT A COUNT. The Calendar only loads the
+                             month on screen, so a number here would claim to
+                             know a total it cannot see. A dot says "something
+                             wants an answer" and claims nothing more. -->
+                        <span x-show="myCommitments.some(c => c.state === 'pending')"
+                              class="w-[7px] h-[7px] rounded-full bg-warning shrink-0"
+                              title="Something still wants an answer"></span>
+                    </span>
+                    <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                </a>
+                <a href="cover.html"
+                   class="mt-2 flex items-center justify-between text-[11px] font-label-md
+                          tracking-[.12em] uppercase text-primary-fixed-dim
+                          cal-motion cal-focus rounded hover:text-on-primary">
+                    Something needing somebody
+                    <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                </a>
             </section>
 
             <!-- One body for both views, so the card is written once. Month is
@@ -501,6 +565,18 @@
                                                   }"></span>
                                             <span class="text-[10.5px] font-label-md tracking-[.1em] uppercase text-primary"
                                                   x-text="ev.mine ? 'You · ' + ev.mine.label + ' · ' + ev.mine.stateLabel : ''"></span>
+                                        </div>
+
+                                        <!-- Out for cover is the system working,
+                                             so it does not use the red. It says
+                                             what is happening and gets out of
+                                             the way (MS-207). -->
+                                        <div x-show="ev.outForCover"
+                                             class="mt-2 flex items-center gap-1.5 rounded-md border border-outline-variant px-2.5 py-2">
+                                            <span class="material-symbols-outlined text-[17px] text-on-surface-variant">volunteer_activism</span>
+                                            <span class="text-[11px] font-label-md tracking-[.08em] uppercase text-on-surface-variant">
+                                                Out for cover
+                                            </span>
                                         </div>
 
                                         <div x-show="ev.needsAttention"
@@ -728,6 +804,11 @@
                                         <span class="material-symbols-outlined text-[14px]">warning</span>
                                         <span x-text="placesToFillLabel(ev)"></span>
                                     </span>
+                                    <span x-show="ev.outForCover"
+                                          class="inline-flex items-center gap-1 rounded-md border border-outline-variant
+                                                 text-on-surface-variant px-2 py-1 text-[11.5px] font-label-md whitespace-nowrap">
+                                        <span class="material-symbols-outlined text-[14px]">volunteer_activism</span> Out for cover
+                                    </span>
                                     <span x-show="ev.needsAttention"
                                           class="inline-flex items-center gap-1 rounded-md bg-error-container border border-error
                                                  text-on-error-container px-2 py-1 text-[11.5px] font-label-md whitespace-nowrap">
@@ -776,7 +857,25 @@
                                     <div class="text-[13.5px] font-label-md font-semibold truncate" x-text="c.roleLabel"></div>
                                     <div class="text-[12px] text-on-surface-variant truncate" x-text="c.eventName"></div>
                                 </div>
-                                <div class="shrink-0 flex items-center gap-1.5 pt-0.5">
+                                <div x-show="c.state === 'pending'" class="shrink-0 flex items-center gap-1.5">
+                                    <button type="button" title="Confirm"
+                                            :disabled="answering"
+                                            @click="answerCommitment(c, 'confirmed')"
+                                            class="w-8 h-8 flex items-center justify-center rounded-lg border border-primary
+                                                   text-primary cal-motion cal-press cal-focus
+                                                   hover:bg-surface-container disabled:opacity-40">
+                                        <span class="material-symbols-outlined text-[18px]">check</span>
+                                    </button>
+                                    <button type="button" title="Decline"
+                                            :disabled="answering"
+                                            @click="answerCommitment(c, 'declined')"
+                                            class="w-8 h-8 flex items-center justify-center rounded-lg border border-primary
+                                                   text-primary cal-motion cal-press cal-focus
+                                                   hover:bg-surface-container disabled:opacity-40">
+                                        <span class="material-symbols-outlined text-[18px]">close</span>
+                                    </button>
+                                </div>
+                                <div x-show="c.state !== 'pending'" class="shrink-0 flex items-center gap-1.5 pt-0.5">
                                 <!-- Pending is a hollow ring: the resting
                                          state, and quiet on purpose. -->
                                     <span class="w-[7px] h-[7px] rounded-full"
@@ -796,6 +895,29 @@
                             </div>
                         </template>
                     </div>
+
+                    <!-- Same way through as the phone card, and shown on an
+                         empty month for the same reason: this card is bound to
+                         the month on screen, the page is not. -->
+                    <a href="commitments.html"
+                       class="mt-md pt-3 border-t border-outline-variant flex items-center justify-between
+                              text-[11px] font-label-md tracking-[.12em] uppercase text-secondary
+                              cal-motion cal-focus rounded hover:text-primary">
+                        <span class="flex items-center gap-2">
+                            All your commitments
+                            <span x-show="myCommitments.some(c => c.state === 'pending')"
+                                  class="w-[7px] h-[7px] rounded-full bg-warning shrink-0"
+                                  title="Something still wants an answer"></span>
+                        </span>
+                        <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                    </a>
+                    <a href="cover.html"
+                       class="mt-2 flex items-center justify-between text-[11px] font-label-md
+                              tracking-[.12em] uppercase text-secondary
+                              cal-motion cal-focus rounded hover:text-primary">
+                        Something needing somebody
+                        <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                    </a>
                 </section>
 
                 <section x-show="needsSorting.length"

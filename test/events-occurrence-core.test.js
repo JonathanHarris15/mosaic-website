@@ -696,3 +696,61 @@ test('a moved date says where it went, in words', () => {
     assert.strictEqual(Core.movedNote({ cancelled: true }), 'Not happening');
     assert.strictEqual(Core.movedNote({}), '');
 });
+
+// ── Out for cover, or going nowhere? (MS-20) ─────────────────────────────────
+//
+// `needsAttention` says somebody declined. It cannot say whether that place is
+// out looking for a taker or stuck — and an editor wants opposite things from
+// those two: leave the first alone, fill the second today.
+
+const declinedOn = (visibility, extra) => Object.assign({
+    id: 'midweek_2026-08-14',
+    seriesId: 'midweek',
+    date: '2026-08-14',
+    visibility: visibility,
+    assignments: [
+        { roleSlug: 'kids', slotId: 's1', personId: 'carl', state: Core.STATES.DECLINED },
+    ],
+}, extra || {});
+
+test('a declined place on an ordinary Event is out for cover', () => {
+    const o = declinedOn('member');
+    assert.strictEqual(Core.needsAttention(o), true);
+    assert.strictEqual(Core.outForCover(o), true);
+});
+
+test('a declined place on a participant-rung Event is going nowhere', () => {
+    const o = declinedOn('participant');
+    assert.strictEqual(Core.needsAttention(o), true,
+        'it still needs an editor');
+    assert.strictEqual(Core.outForCover(o), false,
+        'but there is nobody the list could reach, so it is theirs to fill');
+});
+
+test('nothing declined is not out for cover, whatever the rung', () => {
+    Core.VISIBILITY_ORDER.forEach(rung => {
+        const o = declinedOn(rung, {
+            assignments: [
+                { roleSlug: 'kids', slotId: 's1', personId: 'carl', state: Core.STATES.CONFIRMED },
+            ],
+        });
+        assert.strictEqual(Core.outForCover(o), false, rung);
+    });
+});
+
+test('a Sunday is public, so its declined places are always coverable', () => {
+    const o = declinedOn(undefined, { seriesId: Core.SUNDAY_SERVICE_ID });
+    assert.strictEqual(Core.canBeCovered(o), true);
+    assert.strictEqual(Core.outForCover(o), true);
+});
+
+test('an unstamped occurrence is coverable by nobody — fails closed', () => {
+    assert.strictEqual(Core.canBeCovered({ visibility: null }), false);
+    assert.strictEqual(Core.canBeCovered({}), false);
+    assert.strictEqual(Core.canBeCovered(null), false);
+    assert.strictEqual(Core.outForCover(declinedOn(null)), false);
+});
+
+test('an unrecognised rung is coverable by nobody either', () => {
+    assert.strictEqual(Core.canBeCovered({ visibility: 'staff' }), false);
+});

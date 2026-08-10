@@ -23,6 +23,12 @@
     const Roles = (typeof require !== 'undefined')
         ? require('./roles-core.js')
         : global.RolesCore;
+    // What a Person is down for, assembled in ONE place (MS-20). The card below
+    // and the Commitments page must never be two lists that can disagree about
+    // the same Sunday.
+    const Commitments = (typeof require !== 'undefined')
+        ? require('./commitments-core.js')
+        : global.CommitmentsCore;
 
     // ── Small shared formatting ──────────────────────────────────────────────
 
@@ -360,7 +366,13 @@
                 events: events,
                 // One glyph in the corner, driven from the same switch as every
                 // other surface, so they cannot disagree about what needs sorting.
-                needsAttention: events.some(o => Core.needsAttention(o)),
+                //
+                // ⚠ `needsEditor`, NOT `needsAttention` (MS-207). A day whose
+                // only trouble is out for cover has already been put in front of
+                // the church and asks nothing of the editor today. Flagging it
+                // teaches them the glyph usually means nothing.
+                needsAttention: events.some(o => Core.needsEditor(o)),
+                outForCover: events.some(o => Core.outForCover(o)),
             });
         }
         return cells;
@@ -628,25 +640,48 @@
     // the current month runs from today while a month ahead runs whole, with no
     // arithmetic anywhere to get that wrong.
 
-    function myCommitments(occurrences, personId) {
-        if (!personId) return [];
-        const mine = [];
-        (occurrences || []).forEach(o => {
-            if (o && o.isPast) return;
-            ((o && o.assignments) || []).forEach(a => {
-                if (a.personId !== personId) return;
-                mine.push({
-                    date: o.date,
-                    occurrenceId: o.id,
-                    eventName: o.name || o.seriesName || 'Event',
-                    roleLabel: a.label || a.roleSlug,
-                    state: a.state || Core.STATES.PENDING,
-                    stateLabel: Core.stateLabel(a),
-                    tone: Core.stateTone(a),
-                });
-            });
+    // ⚠ THE LIST COMES FROM `commitments-core`, NOT FROM HERE (MS-20). This card
+    // and the Commitments page answer the same question — "what am I down for" —
+    // and two passes over the same rows would eventually disagree about one
+    // Sunday. This maps that model's rows into the shape this card and its
+    // sentence already read; it does not decide anything about them.
+    //
+    // No `services` are passed: the card has only ever shown Assignments, and a
+    // liturgical Role belongs to the page (which can say it is unanswerable) not
+    // to a one-line summary. No `today` either — the card drops what the grid
+    // already marked past, exactly as it did before.
+    //
+    // The state's wording is deliberately left as the editor's "Pending" rather
+    // than the owner's "Unconfirmed" the page uses. That is a visible change to
+    // a shipped surface and it belongs with the rest of the Calendar's wording
+    // in MS-207, not smuggled in here.
+    function myCommitments(occurrences, personId, roleDefinitions) {
+        return Commitments.commitmentsFor({
+            personId: personId,
+            occurrences: occurrences,
+        }).map(c => {
+            // A place reads "Setup & Teardown", never `setup_teardown`.
+            // roleBySlug needs the STORED definitions handed to it — on its own
+            // it knows only the liturgical Roles.
+            const def = Roles.roleBySlug(c.roleSlug, roleDefinitions || []);
+            return {
+                date: c.date,
+                occurrenceId: c.occurrenceId,
+                // Carried so the card can ANSWER, not just report. The callable
+                // needs the slot, not the label.
+                roleSlug: c.roleSlug,
+                slotId: c.slotId || null,
+                eventName: c.eventName,
+                roleLabel: c.label || (def && def.name) || c.roleSlug,
+                state: c.state,
+                // The OWNER's wording. This is the card that answers "what am I
+                // down for" — "Pending" is the organiser's word for their own
+                // wait, and it was the last place the card and the Commitments
+                // page still disagreed.
+                stateLabel: Core.stateLabel({ state: c.state }, { asOwner: true }),
+                tone: c.tone,
+            };
         });
-        return mine.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     }
 
     // The EB Garamond sentence at the head of the block: what you are down for
@@ -655,20 +690,29 @@
     // It does not name the month. The heading above it does, and a sentence
     // that repeated it read as though the two were answering different
     // questions.
+    // ⚠ IT DOES NOT NAME THEM ANY MORE, past one.
+    //
+    // It used to read "2 things — Set-up and Set-up." Naming every place meant
+    // the same Role on two dates printed its name twice, which reads as a bug
+    // even when it is true — and the rows saying exactly that sit directly
+    // underneath, so the sentence was spending its words repeating the list it
+    // introduces. It counts instead, and the list does the naming.
     function myCommitmentsSentence(commitments) {
         const list = commitments || [];
         if (!list.length) return 'Nothing on for you.';
 
-        const names = list.map(c => c.roleLabel);
-        const head = list.length === 1
-            ? 'One thing — ' + names[0] + '.'
-            : plural(list.length, 'thing') + ' — ' + listSentence(names) + '.';
-
         const waiting = list.filter(c => c.state === Core.STATES.PENDING).length;
-        if (!waiting) return head;
-        return head + ' ' + (waiting === 1
-            ? '1 is still waiting on your yes.'
-            : waiting + ' are still waiting on your yes.');
+
+        // One is worth naming: there is no repetition to trip over, and a
+        // sentence about a single thing that will not say which is coy.
+        if (list.length === 1) {
+            return list[0].roleLabel + (waiting ? ', still waiting on your yes.' : ', answered.');
+        }
+
+        const head = plural(list.length, 'thing');
+        if (!waiting) return head + ', all answered.';
+        if (waiting === list.length) return head + ', all still waiting on your yes.';
+        return head + '. ' + waiting + ' still waiting on your yes.';
     }
 
     // ── Places still to fill ─────────────────────────────────────────────────

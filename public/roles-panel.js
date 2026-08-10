@@ -34,7 +34,7 @@
             <!-- Declined escalates across four surfaces so a glance finds it:
                  the slot row, the role card's border, this banner, and the
                  calendar chip. All from one switch. -->
-            <div x-show="isEditor && needsAttention"
+            <div x-show="isEditor && needsEditor"
                  class="mt-md bg-error-container border border-error border-l-4 rounded-lg p-md flex items-start gap-sm">
                 <span class="material-symbols-outlined text-[22px] text-error shrink-0">error</span>
                 <div class="flex-grow min-w-0">
@@ -54,6 +54,35 @@
                         class="shrink-0 bg-error text-on-error px-md py-2 rounded-lg font-label-md
                                text-xs uppercase tracking-wider cal-motion cal-press cal-focus">
                     Find someone
+                </button>
+            </div>
+
+            <!-- ── Out for cover ──────────────────────────────────────────── -->
+            <!-- The same declined places, on an Event whose rung lets them go
+                 looking (MS-20, MS-207). Deliberately NOT red: the church has
+                 been asked and this may well fill itself. The editor keeps the
+                 same button, because the backstop is still theirs — it is just
+                 no longer urgent. -->
+            <div x-show="isEditor && outForCover"
+                 class="mt-md bg-surface-container-low border border-outline-variant border-l-4 rounded-lg p-md flex items-start gap-sm">
+                <span class="material-symbols-outlined text-[22px] text-on-surface-variant shrink-0">volunteer_activism</span>
+                <div class="flex-grow min-w-0">
+                    <p class="font-label-md text-[15px] font-semibold text-on-surface">
+                        <span x-text="declined.length === 1 ? 'One place is out for cover' : declined.length + ' places are out for cover'"></span>
+                    </p>
+                    <template x-for="a in declined" :key="a.personId + (a.slotId || a.oneOffId)">
+                        <p class="text-[13px] text-on-surface-variant mt-1">
+                            <span x-text="personName(a.personId)"></span> said no to
+                            <span x-text="a.label || roleName(a.roleSlug)"></span>.
+                            Anybody who can see this Event can take it.
+                        </p>
+                    </template>
+                </div>
+                <button @click="openPicker(declined[0].roleSlug, declined[0].slotId)"
+                        x-show="declined.length && declined[0].slotId"
+                        class="shrink-0 border border-outline-variant text-on-surface-variant px-md py-2 rounded-lg
+                               font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus">
+                    Fill it yourself
                 </button>
             </div>
 `;

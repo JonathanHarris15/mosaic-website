@@ -504,13 +504,49 @@ test('the summary sentence counts what is still waiting on your yes', () => {
     const mine = View.myCommitments(OCCURRENCES, 'me');
     assert.strictEqual(
         View.myCommitmentsSentence(mine),
-        '2 things — Kids Ministry and Prayer. 1 is still waiting on your yes.'
+        '2 things. 1 still waiting on your yes.'
+    );
+});
+
+// It used to name every place, which meant the same Role on two dates printed
+// its name twice — "2 things — Set-up and Set-up." That reads as a bug even
+// when it is true, and the rows saying exactly that sit right underneath.
+test('past one it counts rather than naming, so a repeat cannot read as a bug', () => {
+    const twice = [
+        { roleLabel: 'Set-up', state: 'pending' },
+        { roleLabel: 'Set-up', state: 'pending' },
+    ];
+    const sentence = View.myCommitmentsSentence(twice);
+    assert.strictEqual(sentence, '2 things, all still waiting on your yes.');
+    assert.doesNotMatch(sentence, /Set-up.*Set-up/);
+});
+
+test('one IS named — there is no repetition to trip over', () => {
+    assert.strictEqual(
+        View.myCommitmentsSentence([{ roleLabel: 'Setup', state: 'pending' }]),
+        'Setup, still waiting on your yes.'
     );
 });
 
 test('with nothing outstanding the sentence does not invent a nag', () => {
     const confirmed = [{ roleLabel: 'Setup', state: 'confirmed' }];
-    assert.strictEqual(View.myCommitmentsSentence(confirmed), 'One thing — Setup.');
+    assert.strictEqual(View.myCommitmentsSentence(confirmed), 'Setup, answered.');
+    assert.strictEqual(
+        View.myCommitmentsSentence([
+            { roleLabel: 'Setup', state: 'confirmed' },
+            { roleLabel: 'Kids', state: 'confirmed' },
+        ]),
+        '2 things, all answered.'
+    );
+});
+
+// The card and the Commitments page were the last two surfaces still
+// disagreeing about one word. "Pending" is the organiser's word for their own
+// wait; this card answers "what am I down for", so it uses the owner's.
+test('the card reads Unconfirmed to the person it is about', () => {
+    const mine = View.myCommitments(OCCURRENCES, 'me');
+    const waiting = mine.find(c => c.state === 'pending');
+    assert.strictEqual(waiting.stateLabel, 'Unconfirmed');
 });
 
 test('the empty sentence does not repeat the month in the heading', () => {

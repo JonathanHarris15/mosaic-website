@@ -1,6 +1,20 @@
 {
   "indexes": [
     {
+      "collectionGroup": "cover",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "involvement",
       "queryScope": "COLLECTION_GROUP",
       "fields": [

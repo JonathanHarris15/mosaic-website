@@ -1346,7 +1346,10 @@
     <script src="away-store.js"></script>
 <script src="fairness-core.js"></script>
 <script src="auto-assign-core.js"></script>
-<script src="calendar-view.js"></script>
+<!-- calendar-view.js reads this for "what you are down for" (MS-20).
+         Without it the rail card throws and renders blank. -->
+    <script src="commitments-core.js"></script>
+    <script src="calendar-view.js"></script>
 <script src="auto-assign-grid-core.js"></script>
 <script src="auto-assign-edit-core.js"></script>
 <script src="auto-assign-panel-core.js"></script>
