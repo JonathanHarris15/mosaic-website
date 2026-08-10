@@ -243,7 +243,21 @@
                                                  shadow-sm transition-all duration-150"
                                           :class="row.quiet ? 'left-[3px]' : 'left-[19px]'"></span>
                                 </button>
-                                <span class="text-[12px] text-on-surface-variant">On the open list</span>
+                                <!-- The label names the STATE, and both states
+                                     get a name. "On the open list" with the
+                                     switch off would leave the reader working
+                                     out that off means the opposite of the only
+                                     words on screen — and the opposite of "on
+                                     the open list" is not obvious: it could mean
+                                     nobody can help, when in fact the people you
+                                     ask still can.
+
+                                     That is a different thing from a BUTTON
+                                     whose label changes on press. This one
+                                     changes because the state changed, which is
+                                     what it is there to report. -->
+                                <span class="text-[12px] text-on-surface-variant"
+                                      x-text="row.quiet ? 'Closed invite' : 'On the open list'"></span>
                             </label>
                         </div>
                     </div>

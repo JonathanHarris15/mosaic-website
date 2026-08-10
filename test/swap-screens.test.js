@@ -210,6 +210,8 @@ test('the open-list control is a switch that shows its own state', () => {
     assert.doesNotMatch(card, /Put it on the open list/,
         'the act-shaped labels are back on the card');
     assert.doesNotMatch(card, /Take it off the open list/);
-    // Labelled by what it turns on, not by the act.
-    assert.match(card, />On the open list</);
+    // Both states are named. "On the open list" alone would leave the reader
+    // to work out what off means, and the opposite is not obvious — it reads as
+    // "nobody can help", when the people you ask still can.
+    assert.match(card, /row\.quiet \? 'Closed invite' : 'On the open list'/);
 });
