@@ -439,6 +439,20 @@
                         </div>
                     </template>
                 </div>
+
+                <!-- The way through to answering (MS-20).
+                     ⚠ SHOWN EVEN WHEN THIS MONTH IS EMPTY. The card answers for
+                     the month on screen; the page answers for every date ahead.
+                     Somebody with nothing on in August may still be down for
+                     three things in September, so hiding the way through on an
+                     empty month would hide the very list they came to find. -->
+                <a href="commitments.html"
+                   class="mt-4 pt-3 border-t border-primary-fixed-dim/30 flex items-center justify-between
+                          text-[11px] font-label-md tracking-[.12em] uppercase text-primary-fixed-dim
+                          cal-motion cal-focus rounded hover:text-on-primary">
+                    All your commitments
+                    <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                </a>
             </section>
 
             <!-- One body for both views, so the card is written once. Month is
@@ -796,6 +810,17 @@
                             </div>
                         </template>
                     </div>
+
+                    <!-- Same way through as the phone card, and shown on an
+                         empty month for the same reason: this card is bound to
+                         the month on screen, the page is not. -->
+                    <a href="commitments.html"
+                       class="mt-md pt-3 border-t border-outline-variant flex items-center justify-between
+                              text-[11px] font-label-md tracking-[.12em] uppercase text-secondary
+                              cal-motion cal-focus rounded hover:text-primary">
+                        All your commitments
+                        <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                    </a>
                 </section>
 
                 <section x-show="needsSorting.length"
