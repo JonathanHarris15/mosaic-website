@@ -29,6 +29,9 @@
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
     <script src="commitments-core.js"></script>
+    <script src="trade-core.js"></script>
+    <script src="trades-store.js"></script>
+    <script src="trades-view.js"></script>
     <script src="commitments.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
@@ -178,6 +181,55 @@
                     </div>
                 </div>
             </template>
+
+            <!-- ── A place you declined, and what is being done about it ──── -->
+            <!--
+                 ⚠ THE CONVERSATION LIVES ON THE COMMITMENT, not in a section of
+                 its own. "Who have I asked about the 14th" is a question about
+                 the 14th, and answering it two screens away from the 14th is how
+                 a member's page turns into a control panel.
+
+                 It appears only on the declined ones — which is why it is worth
+                 the room: it is never more than one or two rows.
+            -->
+            <template x-for="row in settled.filter(r => r.isDeclined)" :key="'ask-' + row.key">
+                <div class="px-[18px] py-3.5 border-t border-outline-variant bg-surface-container-low/40">
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                        <span class="text-[12.5px] text-on-surface-variant">
+                            <span x-text="row.roleName"></span>, <span x-text="row.longDate"></span>
+                        </span>
+
+                        <template x-for="swap in swapsOn(row)" :key="swap.key">
+                            <span class="text-[11.5px] px-2 py-[3px] rounded-md border border-outline-variant
+                                         text-on-surface-variant" x-text="swap.headline"></span>
+                        </template>
+
+                        <span class="flex-grow"></span>
+
+                        <button type="button" :disabled="busy || invitesLeft(row) <= 0"
+                                @click="openAsk(row)"
+                                class="press min-h-[38px] px-3.5 rounded-lg border border-outline-variant
+                                       text-on-surface text-[11px] uppercase tracking-[.12em] disabled:opacity-40">
+                            Ask somebody
+                        </button>
+
+                        <!-- The escalation, and the retreat. Reads as what it
+                             does to the reach of the place, not as a setting. -->
+                        <button x-show="row.quiet && coverable[row.occurrenceId] !== false"
+                                type="button" :disabled="busy" @click="setReach(row, false)"
+                                class="press min-h-[38px] px-3.5 rounded-lg border border-outline-variant
+                                       text-on-surface-variant text-[11px] uppercase tracking-[.12em]">
+                            Put it on the open list
+                        </button>
+                        <button x-show="!row.quiet && coverable[row.occurrenceId] !== false"
+                                type="button" :disabled="busy" @click="setReach(row, true)"
+                                class="press min-h-[38px] px-3.5 rounded-lg border border-outline-variant
+                                       text-on-surface-variant text-[11px] uppercase tracking-[.12em]">
+                            Take it off the open list
+                        </button>
+                    </div>
+                </div>
+            </template>
         </div>
 
         <!-- Declining is not the end of it: the place stays yours until
@@ -190,7 +242,294 @@
         </p>
     </section>
 
+
+    <!-- ══ Swaps (MS-190, MS-216) ═════════════════════════════════════════ -->
+    <!--
+         ⚠ WHOSE MOVE IT IS, NOT WHO STARTED IT. Who opened a conversation is a
+         fact about the past and tells a reader nothing about what to do now. An
+         invitation somebody sent me and an offer somebody made me both need an
+         answer today, so they sit together — even though I began neither.
+
+         And it sits BELOW the commitments, not above them. This is still a page
+         about what you are down for; the negotiating is what you do when one of
+         them does not work.
+    -->
+    <section x-show="hasSwaps" class="mt-10">
+        <h2 class="font-headline-lg text-[20px] tracking-[.02em] text-primary">Swaps</h2>
+
+        <!-- ── Waiting on you ──────────────────────────────────────────── -->
+        <template x-if="needsYou.length">
+            <div class="mt-3">
+                <div class="text-[11px] uppercase tracking-[.14em] text-warning">Waiting on you</div>
+                <div class="mt-2 flex flex-col gap-2.5">
+                    <template x-for="swap in needsYou" :key="swap.key">
+                        <div class="rounded-lg border-l-4 border-l-warning border border-outline-variant
+                                    bg-surface-container-lowest p-[18px]">
+                            <div class="text-[15px] text-on-surface" x-text="swap.headline"></div>
+                            <p class="mt-1 font-serif text-[15.5px] leading-[1.45] text-on-surface-variant"
+                               x-text="swap.detail"></p>
+                            <div class="mt-1 text-[12px] text-on-surface-variant">
+                                <span x-text="swap.eventName"></span> ·
+                                <span x-text="roleNameFor(swap.roleName)"></span> ·
+                                <span x-text="longDateOf(swap.date)"></span>
+                            </div>
+
+                            <div class="mt-3.5 flex flex-wrap gap-2">
+                                <!-- Replying and refusing are the same weight,
+                                     for the same reason Confirm and Decline are:
+                                     a screen that makes yes prettier than no
+                                     collects agreements people cannot keep. -->
+                                <button x-show="swap.can.offer" type="button"
+                                        @click="openReply(swap)"
+                                        class="press min-h-[44px] px-[18px] rounded-lg border border-outline-variant
+                                               text-on-surface text-[11.5px] uppercase tracking-[.12em]">
+                                    Answer
+                                </button>
+                                <button x-show="swap.can.accept" type="button"
+                                        @click="openChoose(swap)"
+                                        class="press min-h-[44px] px-[18px] rounded-lg border border-outline-variant
+                                               text-on-surface text-[11.5px] uppercase tracking-[.12em]">
+                                    See what they offered
+                                </button>
+                                <button x-show="swap.can.refuse" type="button"
+                                        :disabled="busy" @click="refuseSwap(swap)"
+                                        class="press min-h-[44px] px-[18px] rounded-lg border border-outline-variant
+                                               text-on-surface text-[11.5px] uppercase tracking-[.12em]">
+                                    No
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+        <!-- ── Waiting on them ─────────────────────────────────────────── -->
+        <!-- Quiet and dense. Nothing here asks anything of the reader; it is
+             here so they know it is still going, and can take it back. -->
+        <template x-if="waitingOnThem.length">
+            <div class="mt-6">
+                <div class="text-[11px] uppercase tracking-[.14em] text-on-surface-variant">Waiting on them</div>
+                <div class="mt-2 bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
+                    <template x-for="swap in waitingOnThem" :key="swap.key">
+                        <div class="flex flex-col md:flex-row md:items-center gap-2 md:gap-4
+                                    px-[18px] py-3.5 border-b border-outline-variant last:border-b-0">
+                            <div class="flex-grow min-w-0">
+                                <div class="text-[14.5px] text-on-surface" x-text="swap.headline"></div>
+                                <div class="text-[12px] text-on-surface-variant mt-[2px]">
+                                    <span x-text="roleNameFor(swap.roleName)"></span> ·
+                                    <span x-text="longDateOf(swap.date)"></span>
+                                </div>
+                            </div>
+                            <button x-show="swap.can.withdraw" type="button"
+                                    :disabled="busy" @click="withdrawSwap(swap)"
+                                    class="press shrink-0 min-h-[40px] px-4 rounded-lg border border-outline-variant
+                                           text-on-surface-variant text-[11px] uppercase tracking-[.12em]">
+                                Take it back
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+    </section>
+
 </main>
+
+
+<!-- ══ Who shall I ask? (MS-214) ══════════════════════════════════════════ -->
+<!--
+     ⚠ IT OFFERS EVERYBODY, INCLUDING PEOPLE WITH NO ACCOUNT — with a warning.
+     They cannot answer in the app today, but MS-189 will text exactly those
+     people, and a picker that hid them would have to be unpicked. Withdraw is
+     what makes an unanswerable ask harmless: ask them, chase them yourself,
+     take it back.
+
+     ⚠ SOMEBODY A TAG HIDES IS ABSENT, NOT GREYED (ADR-0021 §1). A disabled row
+     saying why they cannot help still prints the name the tag exists to hide.
+-->
+<template x-if="asking">
+    <div class="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-6 bg-primary/40">
+        <div class="w-full max-w-[460px] max-h-[86vh] flex flex-col bg-surface-container-lowest
+                    border border-outline-variant rounded-t-2xl md:rounded-2xl">
+            <div class="p-5 border-b border-outline-variant">
+                <div class="font-headline-lg text-[18px] tracking-[.02em] text-primary">Who could take it?</div>
+                <p class="mt-1.5 text-[13px] text-on-surface-variant">
+                    <span x-text="asking.roleName"></span>, <span x-text="asking.longDate"></span>.
+                    You can ask <span x-text="invitesLeft(asking)"></span> more.
+                </p>
+                <input type="search" x-model="search" placeholder="Search by name"
+                       class="mt-3 w-full min-h-[44px] px-3 rounded-lg border border-outline-variant
+                              bg-surface text-[15px] text-on-surface" />
+            </div>
+
+            <div class="flex-grow overflow-y-auto">
+                <template x-for="person in askable" :key="person.id">
+                    <button type="button" :disabled="busy || invitesLeft(asking) <= 0"
+                            @click="ask(person)"
+                            class="w-full text-left px-5 py-3 border-b border-outline-variant
+                                   last:border-b-0 disabled:opacity-50 hover:bg-surface-container-low">
+                        <div class="text-[15px] text-on-surface" x-text="nameOf(person.id)"></div>
+                        <div x-show="unreachable(person)"
+                             class="mt-[2px] text-[11.5px] text-on-surface-variant">
+                            No account yet — they cannot answer in the app, so you would need
+                            to catch them yourself.
+                        </div>
+                    </button>
+                </template>
+                <p x-show="!askable.length" class="px-5 py-8 text-center text-[13px] text-on-surface-variant">
+                    Nobody left to ask here.
+                </p>
+            </div>
+
+            <div class="p-4 border-t border-outline-variant">
+                <button type="button" @click="asking = null"
+                        class="press w-full min-h-[44px] rounded-lg border border-outline-variant
+                               text-on-surface-variant text-[11.5px] uppercase tracking-[.12em]">Done</button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- ══ What shall I put up? ═══════════════════════════════════════════════ -->
+<!--
+     ⚠ "JUST TAKE IT" IS ITS OWN BUTTON, not an empty selection. It settles there
+     and then — no waiting, no acceptance — and hiding an instant, irreversible
+     act behind "submit with nothing ticked" is a trap. So it says what it does.
+-->
+<template x-if="replying">
+    <div class="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-6 bg-primary/40">
+        <div class="w-full max-w-[460px] max-h-[86vh] flex flex-col bg-surface-container-lowest
+                    border border-outline-variant rounded-t-2xl md:rounded-2xl">
+            <div class="p-5 border-b border-outline-variant">
+                <div class="font-headline-lg text-[18px] tracking-[.02em] text-primary"
+                     x-text="replying.headline"></div>
+                <p class="mt-1.5 font-serif text-[15.5px] leading-[1.45] text-on-surface">
+                    Pick any of your own dates you would hand over — or just take theirs.
+                </p>
+            </div>
+
+            <div class="flex-grow overflow-y-auto">
+                <template x-for="row in offerable" :key="row.key">
+                    <button type="button" @click="togglePick(row)"
+                            class="w-full text-left px-5 py-3 flex items-center gap-3
+                                   border-b border-outline-variant last:border-b-0">
+                        <span class="material-symbols-outlined text-[20px]"
+                              :class="picked.includes(row.key) ? 'text-secondary' : 'text-outline'"
+                              x-text="picked.includes(row.key) ? 'check_box' : 'check_box_outline_blank'"></span>
+                        <span class="min-w-0">
+                            <span class="block text-[15px] text-on-surface" x-text="row.roleName"></span>
+                            <span class="block text-[12px] text-on-surface-variant"
+                                  x-text="row.eventName + ' · ' + row.longDate"></span>
+                        </span>
+                    </button>
+                </template>
+                <p x-show="!offerable.length" class="px-5 py-8 text-center text-[13px] text-on-surface-variant">
+                    You have nothing else on to offer — but you can still just take it.
+                </p>
+            </div>
+
+            <div class="p-4 border-t border-outline-variant flex flex-col gap-2">
+                <button type="button" :disabled="busy || !picked.length"
+                        @click="sendOffer(replying, false)"
+                        class="press w-full min-h-[44px] rounded-lg border border-outline-variant
+                               text-on-surface text-[11.5px] uppercase tracking-[.12em] disabled:opacity-40">
+                    Offer <span x-text="picked.length ? picked.length : ''"></span>
+                </button>
+                <button type="button" :disabled="busy" @click="sendOffer(replying, true)"
+                        class="press w-full min-h-[44px] rounded-lg border border-outline-variant
+                               text-on-surface text-[11.5px] uppercase tracking-[.12em]">
+                    Just take it
+                </button>
+                <button type="button" @click="replying = null"
+                        class="min-h-[40px] text-on-surface-variant text-[11px] uppercase tracking-[.12em]">
+                    Not now
+                </button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- ══ Which of theirs? ═══════════════════════════════════════════════════ -->
+<template x-if="choosing">
+    <div class="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-6 bg-primary/40">
+        <div class="w-full max-w-[460px] bg-surface-container-lowest border border-outline-variant
+                    rounded-t-2xl md:rounded-2xl">
+            <div class="p-5 border-b border-outline-variant">
+                <div class="font-headline-lg text-[18px] tracking-[.02em] text-primary"
+                     x-text="choosing.headline"></div>
+                <p class="mt-1.5 font-serif text-[15.5px] leading-[1.45] text-on-surface">
+                    Take one of theirs and they take your <span x-text="choosing.roleName"></span>.
+                    Both are confirmed straight away.
+                </p>
+            </div>
+            <div>
+                <template x-for="put in choosing.offered" :key="put.occurrenceId + put.roleSlug">
+                    <button type="button" :disabled="busy" @click="take(choosing, put)"
+                            class="w-full text-left px-5 py-4 border-b border-outline-variant
+                                   last:border-b-0 disabled:opacity-50 hover:bg-surface-container-low">
+                        <!-- ⚠ THE ROLE'S NAME, NOT ITS SLUG. An offered place
+                             carries only ids; rendering one raw puts
+                             `setup_teardown` on a member's screen, which this
+                             project has already shipped once. -->
+                        <div class="text-[15px] text-on-surface"
+                             x-text="roleNameFor(put.roleSlug)"></div>
+                        <div class="text-[12px] text-on-surface-variant"
+                             x-text="longDateOf(put.date)"></div>
+                    </button>
+                </template>
+            </div>
+            <div class="p-4 border-t border-outline-variant">
+                <button type="button" @click="choosing = null"
+                        class="press w-full min-h-[44px] rounded-lg border border-outline-variant
+                               text-on-surface-variant text-[11.5px] uppercase tracking-[.12em]">Not now</button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- ══ Who should know? (MS-213) ══════════════════════════════════════════ -->
+<!--
+     ⚠ ASKED AT THE MOMENT OF DECLINING, because that is the only moment anybody
+     is thinking about it. Asked later it is a setting nobody visits.
+
+     Neither option is styled as the recommendation. Which one is right depends
+     entirely on the Event, and the app does not know.
+-->
+<template x-if="declining">
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-primary/40">
+        <div class="w-full max-w-[430px] bg-surface-container-lowest border border-outline-variant
+                    rounded-2xl p-6">
+            <div class="font-headline-lg text-[18px] tracking-[.02em] text-primary">Who should know?</div>
+            <p class="mt-2.5 font-serif text-[16px] leading-[1.5] text-on-surface">
+                You are giving up <span x-text="declining.roleName"></span> on
+                <span x-text="declining.longDate"></span>.
+            </p>
+            <div class="mt-[22px] flex flex-col gap-2.5">
+                <button type="button" @click="declineWith(declining, false)"
+                        class="press w-full text-left min-h-[44px] px-4 py-3 rounded-lg
+                               border border-outline-variant">
+                    <span class="block text-[14.5px] text-on-surface">Put it on the open list</span>
+                    <span class="block text-[12px] text-on-surface-variant mt-[2px]">
+                        Anybody who could help will see it.
+                    </span>
+                </button>
+                <button type="button" @click="declineWith(declining, true)"
+                        class="press w-full text-left min-h-[44px] px-4 py-3 rounded-lg
+                               border border-outline-variant">
+                    <span class="block text-[14.5px] text-on-surface">Only the people I ask</span>
+                    <span class="block text-[12px] text-on-surface-variant mt-[2px]">
+                        It stays off the open list. You can put it on later.
+                    </span>
+                </button>
+                <button type="button" @click="declining = null"
+                        class="min-h-[40px] text-on-surface-variant text-[11px] uppercase tracking-[.12em]">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+</template>
 
 <div x-show="toast" x-transition x-cloak x-text="toast"
      class="fixed left-1/2 -translate-x-1/2 bottom-7 z-50 bg-primary text-on-primary

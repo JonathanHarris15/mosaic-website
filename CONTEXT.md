@@ -564,14 +564,22 @@ Somebody else taking on an [[Assignment]] whose holder has **Declined** it. The 
 _Avoid_: the pool, pick-up list, open shifts, cover request
 
 ### Trade
-An offer against an [[Assignment]] looking for [[Cover]], naming **zero or more** of the offerer's own Assignments in return — zero meaning *"I will simply take it"*.
+An offer against an [[Assignment]] looking for [[Cover]], naming **one or more** of the offerer's own Assignments in return.
 - **Two doors, one record.** The decliner invites up to **three** people at a time; anybody else may offer off the cover list uninvited, and inbound offers are **not** capped. Either way the holder accepts one of the Assignments offered, or refuses the lot.
+- **Asking nothing in return is not a Trade — it is a take.** Taking needs no answer, and [[Cover]] already settles one in a single tap, so an uninvited offer must name something. The exception is a **reply to an invitation**: somebody who was asked and says "I will just take it" settles it there and then, because the holder already asked and the answer *is* the agreement. That reply still has to exist, since a **Quiet** Assignment is on no cover list and the invitation is the only way its existence reaches anybody.
 - **Refusing is a button, never silence**, at both ends. The decliner may also withdraw an invitation — which is what makes inviting somebody with no [[Linked User]] workable, since they cannot answer in the app until MS-189 can text them.
 - **Nothing is reserved while an offer sits.** One transaction settles it and re-reads every Assignment involved; if one has moved it fails and says so. Settling kills every other live Trade touching either Assignment and tells everyone named — silence is what makes people stop using it.
 - **An Assignment arrives with no history**: Confirmed, since its new holder chose it, and the previous decline evaporates (ADR-0018 §5). Two people who are each stuck may therefore swap two declined Assignments and both walk away fine.
 - **It dies with the date.** No expiry, no reminder, no chasing — the date is the only clock.
 - Distinct from a [[Swap]], which is an editor's move on an unsaved [[Auto-assign]] draft and writes nothing.
 _Avoid_: swap, exchange, shift trade
+
+### Quiet
+A [[Cover]] that never reaches the open cover list: only the people its holder invites to a [[Trade]] can see it. The opposite is **open**, which is where every declined Assignment went before Trades existed.
+- **Chosen at the moment of declining**, which is the only moment anybody is thinking about it, and a property of the [[Assignment]] rather than of the answer — so confirming and declining again does not quietly re-advertise it.
+- **It can be pushed open later**, and that escalation is what makes quiet safe to offer: without a way out, choosing quiet would be choosing a dead end. Going back the other way is refused while somebody has an uninvited offer live against it, since they answered an advertisement in good faith.
+- **The rung still wins.** An Event at the `participant` rung can reach nobody who is not already in it, so it is quiet whatever anybody chooses, and no choice is offered there.
+_Avoid_: private, hidden, secret
 
 ### Warning
 A note that the roster on an [[Event occurrence]] breaks one of the Role's own rules, shown wherever that roster is shown — the [[Roles tab]] and [[Auto-assign]] alike. **The editor is the final word**: a rule about the roster advises and never refuses *them*, because a tool that will not record the rota the church is actually running is a tool the rota leaves (ADR-0021).
