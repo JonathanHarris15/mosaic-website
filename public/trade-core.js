@@ -76,7 +76,16 @@
         NOTHING_OFFERED: 'nothingOffered',
         NOT_OFFERED: 'notOffered',
         UNKNOWN_ACTION: 'unknownAction',
+        // Arbitration only — what the transaction found when it looked again.
+        COVERED_MOVED: 'coveredMoved',
+        COVERED_TAKEN: 'coveredTaken',
+        OFFERED_MOVED: 'offeredMoved',
     });
+
+    // The Assignment state that means "this one is looking for somebody".
+    // Restated rather than imported: events-occurrence-core owns the states, and
+    // this module is pure of everything, including that.
+    const DECLINED = 'declined';
 
     // Three at a time. Not so few that Bob is waiting on one person, not so
     // many that declining a Saturday texts the whole church.
@@ -292,6 +301,107 @@
         return refuse(REASONS.UNKNOWN_ACTION);
     }
 
+    // ── Arbitration ──────────────────────────────────────────────────────────
+    //
+    // ⚠ THE SETTLEMENT IS THE ONLY ARBITER. Nothing was reserved while the offer
+    // sat there, so between Sarah offering and Bob accepting an editor may have
+    // refilled the place, Bob may have changed his mind, or Sarah may have
+    // handed the same Saturday to somebody else. One transaction re-reads all of
+    // it and asks this.
+    //
+    // ⚠ AND THIS IS A PURE FUNCTION OF WHAT IT WAS SHOWN. That is the whole
+    // reason it is here rather than inline in the callable: two people accepting
+    // in the same second is the hardest case in the Feature, and as a function
+    // of a snapshot it is a table of unit tests rather than an orchestrated race.
+    //
+    //   trade    — the Trade being settled
+    //   chosen   — the offered Assignment being taken, or null for a take
+    //   read     — what the transaction found: assignmentKey → {personId, state},
+    //              or null where the Assignment is no longer on the Event
+    //   siblings — every other Trade that might touch either Assignment
+    //   today    — YYYY-MM-DD in the church's timezone
+    //
+    // Returns { ok, reason, moves, dying, telling }.
+    function arbitrate(spec) {
+        const s = spec || {};
+        const trade = s.trade || {};
+        const read = s.read || {};
+        const nothing = { moves: [], dying: [], telling: [] };
+        const no = reason => Object.assign({ ok: false, reason: reason }, nothing);
+
+        if (ENDED.indexOf(trade.state) !== -1) return no(REASONS.OVER);
+        if (datePassed(trade.assignment, s.today)) {
+            return no(REASONS.DATE_PASSED);
+        }
+
+        // The Assignment being covered must still be the holder's, and must
+        // still be going spare. Those are two different failures and a reader
+        // deserves to be told which — "Bob took it back" and "an editor filled
+        // it" want different things from you next.
+        const covered = read[assignmentKey(trade.assignment)];
+        if (!covered || covered.personId !== trade.holderId) {
+            return no(REASONS.COVERED_MOVED);
+        }
+        if (covered.state !== DECLINED) return no(REASONS.COVERED_TAKEN);
+
+        const moves = [{
+            assignment: trade.assignment,
+            from: trade.holderId,
+            to: trade.counterpartyId,
+        }];
+
+        // A take — somebody invited who asked nothing back. Only one Assignment
+        // travels, so there is no second side to check.
+        if (s.chosen) {
+            const offered = (trade.offered || [])
+                .find(a => sameAssignment(a, s.chosen));
+            if (!offered) return no(REASONS.NOT_OFFERED);
+            if (datePassed(offered, s.today)) return no(REASONS.DATE_PASSED);
+
+            const back = read[assignmentKey(offered)];
+            if (!back || back.personId !== trade.counterpartyId) {
+                return no(REASONS.OFFERED_MOVED);
+            }
+
+            moves.push({
+                assignment: offered,
+                from: trade.counterpartyId,
+                to: trade.holderId,
+            });
+        }
+
+        // Everything else still live that names either Assignment — on its own
+        // account or in what it has put up — ends here. Settling cleans up
+        // LOUDLY: an offer that simply stops being answered teaches somebody not
+        // to make the next one.
+        const touched = moves.map(m => assignmentKey(m.assignment));
+        const dying = (s.siblings || []).filter(other =>
+            other && other.id !== trade.id &&
+            isLive(other, s.today) &&
+            namesOneOf(other, touched));
+
+        // The two settling get the settlement itself; a death notice on top
+        // would be telling them their own news back.
+        const parties = [trade.holderId, trade.counterpartyId];
+        const telling = [];
+        dying.forEach(other => {
+            [other.holderId, other.counterpartyId].forEach(personId => {
+                if (!personId) return;
+                if (parties.indexOf(personId) !== -1) return;
+                if (telling.indexOf(personId) === -1) telling.push(personId);
+            });
+        });
+
+        return { ok: true, reason: null, moves, dying, telling };
+    }
+
+    function namesOneOf(trade, keys) {
+        const mine = [trade.assignment]
+            .concat(trade.offered || [])
+            .map(assignmentKey);
+        return mine.some(k => keys.indexOf(k) !== -1);
+    }
+
     const settledTo = (from, to) => ({
         ok: true, from: from, to: to, settles: false,
         offered: [], chosen: null,
@@ -310,6 +420,7 @@
         liveOnes,
         waitingOn,
         liveInvitationCount,
+        arbitrate,
         planTransition,
     };
 
