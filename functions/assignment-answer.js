@@ -163,8 +163,22 @@ function planAnswer(spec) {
         "permission-denied", "That place is not yours to answer for.");
   }
 
+  // ⚠ QUIET IS A PROPERTY OF THE ASSIGNMENT, NOT OF THE ANSWER (MS-213).
+  // "I cannot do this" and "and I would rather the whole church were not told"
+  // are separate things, and the second one outlives the first: it still holds
+  // after the decliner has invited three people and been refused by all of
+  // them, which is exactly when they want to change it.
+  //
+  // Confirming carries it forward untouched rather than clearing it. Somebody
+  // who declines quietly, changes their mind, and changes it back should not
+  // find their Event advertised to the church because of the round trip.
+  const quiet = (s.quiet === undefined || s.quiet === null) ?
+    (held.quiet === true) :
+    (s.quiet === true);
+
   const assignment = Object.assign({}, held, {
     state: s.state,
+    quiet: quiet,
     stateSetBy: s.personId,
     stateSetAt: s.now || null,
   });
@@ -174,7 +188,11 @@ function planAnswer(spec) {
   const after = roster.map((a) => (a === held ? assignment : a));
 
   const declined = s.state === STATES.DECLINED;
-  const listable = belongsOnList(s.occurrence);
+  // Two quite different reasons a place stays off the list, and both are
+  // absolute. The RUNG is the church's (a participant-rung Event can reach
+  // nobody who is not already in it); QUIET is the person's. Neither overrides
+  // the other, so it is an `and`.
+  const listable = belongsOnList(s.occurrence) && !quiet;
   const id = coverId(s.occurrence.id, s.roleSlug, s.slotId);
   let cover = {action: "none", id: id};
   if (declined && listable) {
@@ -183,9 +201,12 @@ function planAnswer(spec) {
       id: cover.id,
       entry: coverEntry(s.occurrence, assignment, s.roleName),
     };
-  } else if (!declined) {
-    // Confirming — or changing your mind back — takes the place off the list.
-    // Unconditional: an entry that should not be there is worth deleting twice.
+  } else {
+    // Confirming takes the place off the list — and so does declining QUIETLY,
+    // which is the path somebody takes when they open one and then change their
+    // mind about advertising it. Unconditional: an entry that should not be
+    // there is worth deleting twice, and deleting one that was never written
+    // costs nothing.
     cover = {action: "delete", id: cover.id};
   }
 

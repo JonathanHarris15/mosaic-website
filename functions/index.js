@@ -768,7 +768,8 @@ exports.answerAssignment = onCall(
       const personId = userSnap.exists ?
         (userSnap.data().personId || null) : null;
 
-      const {occurrenceId, roleSlug, slotId, state} = request.data || {};
+      const {occurrenceId, roleSlug, slotId, state, quiet} =
+        request.data || {};
       if (!occurrenceId || !roleSlug) {
         throw new HttpsError(
             "invalid-argument", "Missing the place being answered.");
@@ -780,6 +781,7 @@ exports.answerAssignment = onCall(
         roleSlug: roleSlug,
         slotId: slotId || null,
         state: state,
+        quiet: quiet,
         today: ac.churchToday(new Date()),
         now: admin.firestore.Timestamp.now(),
       });
@@ -938,6 +940,28 @@ exports.acceptTrade = onCall(
         state: result.state,
         telling: result.telling || [],
       };
+    },
+);
+
+/**
+ * Push a quiet Assignment onto the open cover list, or take an open one back
+ * off it (MS-213). The escalation when nobody you asked could help.
+ */
+exports.setCoverReach = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      const {occurrenceId, roleSlug, slotId, quiet} = request.data || {};
+      if (!occurrenceId || !roleSlug) {
+        throw new HttpsError("invalid-argument", "Missing which place.");
+      }
+
+      const result = await tradeMove(request, (db, base) => tw.setReach(
+          db, Object.assign({
+            assignment: {occurrenceId, roleSlug, slotId: slotId || null},
+            quiet: quiet === true,
+          }, base)));
+
+      return {success: true, quiet: result.quiet};
     },
 );
 

@@ -100,8 +100,13 @@ function seatWord(seat) {
  *   spouse — seat them together (their marriage). Find-or-create.
  *   child  — append `otherId` to the children of the Family personId is married
  *            into. Find-or-create that Family.
- *   parent — seat `otherId` as a parent in personId's family of origin.
- *            Find-or-create that Family.
+ *   parent — seat `otherId` as a parent in personId's family of origin; when
+ *            there is none, put the child in the parent's OWN household (their
+ *            marriage) rather than minting a second one for the same couple.
+ *
+ * Find-or-create always asks "whose household is this already?" first. A Person
+ * is a spouse in at most one Family, so no plan may ever seat somebody in a
+ * second — that invariant is what stops one couple being recorded many times.
  *
  * @param {?Array<Object>} families All families, as they stand now.
  * @param {?string} personId The Person the relation belongs to.
@@ -146,6 +151,16 @@ function planAddFamilyRelation(families, personId, kind, otherId, personById) {
     if (theirs && spouseOf(theirs, otherId)) {
       return refuse(["that Person already has a spouse"]);
     }
+    // Both already head a household of their own (each with children, say).
+    // Seating one into the other's would leave them a spouse in two, so this
+    // refuses rather than quietly recording the couple twice; joining two
+    // households is a restructure, not a link.
+    if (mine && theirs && mine.id !== theirs.id) {
+      return refuse([
+        "both People already head a Family of their own — those two " +
+        "households have to be joined in the directory first",
+      ]);
+    }
 
     if (mine) {
       return {
@@ -171,6 +186,9 @@ function planAddFamilyRelation(families, personId, kind, otherId, personById) {
     }
     const mine = familyOfSpouse(families, personId);
     if (mine) {
+      if (spouseOf(mine, personId) === otherId) {
+        return refuse(["that Person is this Person’s spouse, not their child"]);
+      }
       const kids = (mine.childIds || []).slice();
       if (kids.indexOf(otherId) !== -1) {
         return refuse(["that Person is already a child of this Family"]);
@@ -203,14 +221,41 @@ function planAddFamilyRelation(families, personId, kind, otherId, personById) {
     ]);
   }
 
+  // A parent's household is their marriage, if they have one. Everything below
+  // hangs on that: a child joins the Family their parent is already seated in
+  // rather than getting one of their own. Without this, naming both parents of
+  // each child in turn minted a fresh Family per child — the same couple
+  // recorded many times over, and as many spouse links between them.
+  const theirs = familyOfSpouse(families, otherId);
   const origin = familyOfChild(families, personId);
   if (origin) {
+    if (origin[otherSeat] === otherId) {
+      return refuse([
+        `that Person is already this Person's ${seatWord(otherSeat)}`,
+      ]);
+    }
     if (origin[otherSeat]) {
       return refuse([`this Person already has a ${seatWord(otherSeat)}`]);
+    }
+    // Seating them here would leave them a spouse in two households, and a
+    // Person is a spouse in at most one.
+    if (theirs && theirs.id !== origin.id) {
+      return refuse([
+        "that Person is already seated in another Family — record the " +
+        "parents' marriage first, then add the child to it",
+      ]);
     }
     return {
       valid: true, errors: [], collection: "families",
       action: "update", familyId: origin.id, changes: {[otherSeat]: otherId},
+    };
+  }
+  if (theirs) {
+    const kids = (theirs.childIds || []).slice();
+    kids.push(personId);
+    return {
+      valid: true, errors: [], collection: "families",
+      action: "update", familyId: theirs.id, changes: {childIds: kids},
     };
   }
   return {

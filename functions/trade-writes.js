@@ -671,8 +671,87 @@ function participantIdsOf(roster) {
   return seen;
 }
 
+/**
+ * Push a quiet Assignment onto the open cover list, or pull an open one back
+ * off it (MS-213).
+ *
+ * ⚠ THIS IS THE ESCALATION, and it is the reason quiet is safe to offer at all.
+ * Somebody who declines quietly, asks the three people they know, and is
+ * refused by all three has somewhere to go. Without it, choosing quiet would be
+ * choosing a dead end.
+ *
+ * Going the other way — open back to quiet — is refused while somebody has an
+ * uninvited offer live against it. They answered an advertisement in good
+ * faith; withdrawing the advertisement out from under them would leave their
+ * offer pointing at something they can no longer see.
+ *
+ * @param {Object} db the Firestore handle
+ * @param {Object} spec which Assignment, and which way
+ * @return {Promise<Object>} the outcome
+ */
+async function setReach(db, spec) {
+  const s = spec || {};
+  const said = await describeAssignment(db, s.assignment);
+  if (!said) return refuse("not-found", "That Event has gone.");
+  const ref = said.assignment;
+
+  return runOrLose(db, async (tx) => {
+    const held = await readAssignment(tx, db, ref);
+    if (!held || held.personId !== s.actorId) {
+      return refusalFor(tradeCore.REASONS.NOT_YOURS);
+    }
+    if (held.state !== STATES.DECLINED) {
+      return refuse("failed-precondition",
+          "Only a place you have declined can go looking for somebody.");
+    }
+
+    // The rung is the church's rule and the member does not get a vote on it.
+    // A participant-rung Event can reach nobody who is not already in it, so
+    // "open" there would advertise to an empty room.
+    if (!s.quiet && !occurrences.canBeCovered(held.occurrence)) {
+      return refuse("failed-precondition",
+          "This one cannot go on the open list — only people you ask " +
+          "directly can see it.");
+    }
+
+    if (s.quiet) {
+      const nearby = await liveOn(tx, db, ref, s.today);
+      const answered = nearby.some((t) =>
+        t.origin === tradeCore.ORIGINS.OFFER);
+      if (answered) {
+        return refuse("failed-precondition",
+            "Somebody has already offered to swap for this one. " +
+            "Answer them first.");
+      }
+    }
+
+    const rosterCol = db.collection(OCCURRENCES)
+        .doc(ref.occurrenceId).collection("roster");
+    tx.update(rosterCol.doc(rosterIdFor(held.row)), {quiet: s.quiet === true});
+
+    const coverRef = db.collection(COVER).doc(coverId(ref));
+    if (s.quiet) {
+      tx.delete(coverRef);
+    } else {
+      tx.set(coverRef, {
+        occurrenceId: ref.occurrenceId,
+        seriesId: held.occurrence.seriesId || null,
+        date: ref.date,
+        eventName: said.eventName,
+        roleSlug: ref.roleSlug,
+        slotId: ref.slotId,
+        roleName: said.roleName,
+        visibility: occurrences.visibilityOf(held.occurrence),
+      });
+    }
+
+    return {ok: true, quiet: s.quiet === true};
+  }, "Somebody was changing that at the same moment. Try again.");
+}
+
 module.exports = {
   TRADES,
+  setReach,
   invite,
   withdraw,
   refuse: refuseTrade,

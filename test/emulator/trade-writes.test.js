@@ -235,6 +235,122 @@ suite('the five ways a Trade moves', () => {
         assert.deepEqual(await tradesNow(), []);
     });
 
+// ── Quiet or open (MS-213) ───────────────────────────────────────────────
+    //
+    // ⚠ THE ESCALATION IS WHAT MAKES QUIET SAFE TO OFFER. Somebody who declines
+    // quietly, asks the three people they know, and is refused by all three has
+    // somewhere to go. Without a way out, choosing quiet would be choosing a
+    // dead end, and nobody should be able to pick that by accident.
+
+    test('a quiet place is on nobody’s cover list, and can still be asked about',
+        async () => {
+            await writes.setReach(db, {
+                actorId: BOB, assignment: KIDS, quiet: true,
+                today: TODAY, now: H.now(),
+            });
+
+            assert.equal(await H.coverOf(db, coverIdOf(KIDS)), null);
+
+            // And the invitation still reaches Sarah, which is the whole point
+            // — a quiet place is not a hidden one, it is an unadvertised one.
+            const asked = await invite(SARAH);
+            assert.equal(asked.ok, true);
+        });
+
+    test('a quiet one can be pushed open later, and appears from that moment',
+        async () => {
+            await writes.setReach(db, {
+                actorId: BOB, assignment: KIDS, quiet: true,
+                today: TODAY, now: H.now(),
+            });
+            assert.equal(await H.coverOf(db, coverIdOf(KIDS)), null);
+
+            const result = await writes.setReach(db, {
+                actorId: BOB, assignment: KIDS, quiet: false,
+                today: TODAY, now: H.now(),
+            });
+
+            assert.equal(result.ok, true);
+            const entry = await H.coverOf(db, coverIdOf(KIDS));
+            assert.ok(entry, 'nobody I asked could help, and I have nowhere to go');
+            assert.equal(entry.visibility, 'member',
+                'unstamped, the rule makes it readable by nobody');
+            assert.equal(entry.roleName, 'Kids Ministry');
+        });
+
+    test('only its holder can change who can see it', async () => {
+        const result = await writes.setReach(db, {
+            actorId: SARAH, assignment: KIDS, quiet: true,
+            today: TODAY, now: H.now(),
+        });
+
+        assert.equal(result.ok, false);
+        assert.ok(await H.coverOf(db, coverIdOf(KIDS)), 'it went quiet anyway');
+    });
+
+    test('an open one cannot go quiet under somebody who has already offered',
+        async () => {
+            // Sarah answered an advertisement in good faith. Withdrawing it out
+            // from under her would leave her offer pointing at something she can
+            // no longer see.
+            await writes.offer(db, {
+                actorId: SARAH, assignment: KIDS, holderId: BOB,
+                offered: [COFFEE], today: TODAY, now: H.now(),
+            });
+
+            const result = await writes.setReach(db, {
+                actorId: BOB, assignment: KIDS, quiet: true,
+                today: TODAY, now: H.now(),
+            });
+
+            assert.equal(result.ok, false);
+            assert.ok(await H.coverOf(db, coverIdOf(KIDS)));
+        });
+
+    test('an invitation of his own does not stop him going quiet', async () => {
+        // He asked THEM. Nobody has answered an advertisement, so there is
+        // nothing to pull out from under anybody.
+        await invite(SARAH);
+
+        const result = await writes.setReach(db, {
+            actorId: BOB, assignment: KIDS, quiet: true,
+            today: TODAY, now: H.now(),
+        });
+
+        assert.equal(result.ok, true);
+        assert.equal(await H.coverOf(db, coverIdOf(KIDS)), null);
+    });
+
+    test('a participant-rung place cannot be pushed open at all', async () => {
+        // The rung is the church's rule and the member gets no vote on it.
+        // "Open" here would advertise to an empty room.
+        await H.seedOccurrence(db, {
+            id: 'occ-inner', date: '2026-03-21', visibility: 'participant',
+            name: 'Small Group',
+            roster: [assignment('kids', 's1', BOB, 'declined')],
+        });
+
+        const result = await writes.setReach(db, {
+            actorId: BOB, quiet: false,
+            assignment: { occurrenceId: 'occ-inner', roleSlug: 'kids', slotId: 's1' },
+            today: TODAY, now: H.now(),
+        });
+
+        assert.equal(result.ok, false);
+        assert.equal(
+            await H.coverOf(db, 'occ-inner__kids__s1'), null);
+    });
+
+    test('a place you have not declined has nothing to open', async () => {
+        const result = await writes.setReach(db, {
+            actorId: SARAH, assignment: COFFEE, quiet: false,
+            today: TODAY, now: H.now(),
+        });
+
+        assert.equal(result.ok, false);
+        assert.equal(await H.coverOf(db, coverIdOf(COFFEE)), null);
+    });
+
     // ── Settling ─────────────────────────────────────────────────────────────
 
     test('accepting moves both Assignments, both Confirmed, in one write',
