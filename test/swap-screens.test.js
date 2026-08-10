@@ -148,7 +148,7 @@ test('the ask controls sit inside the row they belong to', () => {
 
     assert.match(block, /openAsk\(row\)/,
         'the ask controls have drifted back out of the row');
-    assert.match(block, /setReach\(row, false\)/);
+    assert.match(block, /setReach\(row, !row\.quiet\)/);
     assert.doesNotMatch(page, /x-for="row in settled\.filter/,
         'a second pass over the settled rows is how they came adrift');
 });
@@ -180,4 +180,36 @@ test('the directory loads before the page is drawn, not on first tap', () => {
     // ⚠ Every swap row NAMES somebody. Loading people lazily when the picker
     // opened left every headline reading "Somebody asked you".
     assert.match(script, /if \(this\.trades\.length\) await this\.loadPeople\(\)/);
+});
+
+test('each Commitment is its own card', () => {
+    // ⚠ They were rows in one block, and the controls under a declined one read
+    // as belonging to the LIST rather than to the date above them. A card draws
+    // the boundary the eye needs.
+    const from = page.indexOf('x-for="row in settled"');
+    const block = page.slice(from, page.indexOf('Swaps (MS-190', from));
+
+    assert.match(block, /rounded-lg overflow-hidden/,
+        'the settled rows are no longer cards');
+    assert.doesNotMatch(block, /border-b border-outline-variant last:border-b-0/,
+        'a shared bottom rule means they are one block again');
+});
+
+test('the open-list control is a switch that shows its own state', () => {
+    // ⚠ NOT TWO BUTTONS THAT SWAP PLACES. This is a standing state, and a
+    // button whose label changes on press makes you read it twice to find out
+    // what you just did.
+    assert.match(page, /role="switch"/);
+    assert.match(page, /:aria-checked="\(!row\.quiet\)\.toString\(\)"/);
+    // Scoped to the card. The DECLINE dialog legitimately says "Put it on the
+    // open list" — there it is a choice being made in the moment, and an
+    // act-shaped label is the right one. Here it is a standing state.
+    const from = page.indexOf('x-for="row in settled"');
+    const card = page.slice(from, page.indexOf('Swaps (MS-190', from));
+
+    assert.doesNotMatch(card, /Put it on the open list/,
+        'the act-shaped labels are back on the card');
+    assert.doesNotMatch(card, /Take it off the open list/);
+    // Labelled by what it turns on, not by the act.
+    assert.match(card, />On the open list</);
 });

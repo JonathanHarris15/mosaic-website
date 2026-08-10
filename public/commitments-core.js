@@ -51,6 +51,11 @@
             stateLabel: spec.stateLabel || null,
             tone: spec.tone || null,
             answerable: spec.answerable === true,
+            // Whether a declined place is kept off the open cover list
+            // (MS-213). Carried through because the screen offers the toggle,
+            // and without it every declined row would draw as "on the list"
+            // whatever the truth was.
+            quiet: spec.quiet === true,
         };
     }
 
@@ -87,6 +92,7 @@
                     stateLabel: Core.stateLabel(a, { asOwner: true }),
                     tone: Core.stateTone(a),
                     answerable: true,
+                    quiet: a.quiet === true,
                 }));
             });
         });

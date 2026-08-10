@@ -14,6 +14,15 @@
         [x-cloak] { display: none !important; }
         .press { transition: all 180ms cubic-bezier(0.2, 0, 0, 1); }
         .press:active { transform: scale(0.98); }
+
+        /* The switch is a real control and has to show it has focus. The same
+           steel-teal ring the rest of the app uses. */
+        .cal-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(93,148,169,.18); }
+
+        /* Asked for less movement, given none. */
+        @media (prefers-reduced-motion: reduce) {
+            .press, .cal-focus, [class*="transition-"] { transition: none !important; }
+        }
     </style>
 
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -147,9 +156,14 @@
          glanced at, not worked through. -->
     <section x-show="hasSettled" class="mt-[34px]">
         <div class="h-px bg-outline-variant mb-3.5"></div>
-        <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
+        <!-- ⚠ ONE CARD PER COMMITMENT. These used to be rows in a single block,
+             and the controls under a declined one read as belonging to the list
+             rather than to the date above them. A card draws the boundary the
+             eye needs: everything inside it is about that Event and nothing
+             else. -->
+        <div class="flex flex-col gap-2.5">
             <template x-for="row in settled" :key="row.key">
-                <div class="border-b border-outline-variant last:border-b-0">
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden">
                     <div class="flex items-center gap-3.5 px-md py-3.5"
                          :class="row.isLiturgical ? 'bg-surface-container-low' : ''">
 
@@ -205,18 +219,32 @@
 
                             <!-- The escalation, and the retreat. Reads as what it
                                  does to the reach of the place, not as a setting. -->
-                            <button x-show="row.quiet && coverable[row.occurrenceId] !== false"
-                                    type="button" :disabled="busy" @click="setReach(row, false)"
-                                    class="press min-h-[38px] px-3.5 rounded-lg border border-outline-variant
-                                           text-on-surface-variant text-[11px] uppercase tracking-[.12em]">
-                                Put it on the open list
-                            </button>
-                            <button x-show="!row.quiet && coverable[row.occurrenceId] !== false"
-                                    type="button" :disabled="busy" @click="setReach(row, true)"
-                                    class="press min-h-[38px] px-3.5 rounded-lg border border-outline-variant
-                                           text-on-surface-variant text-[11px] uppercase tracking-[.12em]">
-                                Take it off the open list
-                            </button>
+                            <!-- ⚠ A SWITCH, NOT TWO BUTTONS THAT SWAP PLACES.
+                                 This is a standing state — "can the church see
+                                 this one" — and a button whose label changes on
+                                 press makes you read it twice to find out what
+                                 you just did. A switch shows the state and the
+                                 control in one thing.
+
+                                 It is labelled by what it turns on, not by the
+                                 act: "On the open list", never "Put it on the
+                                 open list". -->
+                            <label x-show="coverable[row.occurrenceId] !== false"
+                                   class="flex items-center gap-2.5 cursor-pointer select-none"
+                                   :class="busy ? 'opacity-50 pointer-events-none' : ''">
+                                <button type="button" role="switch"
+                                        :aria-checked="(!row.quiet).toString()"
+                                        :disabled="busy"
+                                        @click="setReach(row, !row.quiet)"
+                                        class="cal-focus relative shrink-0 w-[38px] h-[22px] rounded-full
+                                               transition-colors duration-150"
+                                        :class="row.quiet ? 'bg-outline-variant' : 'bg-secondary'">
+                                    <span class="absolute top-[3px] w-4 h-4 rounded-full bg-surface
+                                                 shadow-sm transition-all duration-150"
+                                          :class="row.quiet ? 'left-[3px]' : 'left-[19px]'"></span>
+                                </button>
+                                <span class="text-[12px] text-on-surface-variant">On the open list</span>
+                            </label>
                         </div>
                     </div>
                 </div>

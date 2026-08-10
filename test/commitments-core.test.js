@@ -221,3 +221,24 @@ test('no personId means no answer — never everybody’s Commitments', () => {
         })],
     }), []);
 });
+
+test('a declined Commitment carries whether it is off the open list', () => {
+    // ⚠ Without it the screen's toggle draws as "on the list" whatever the
+    // truth is — a control that lies about its own state, which is worse than
+    // no control at all.
+    const rows = Commitments.commitmentsFor({
+        personId: 'carl',
+        occurrences: [{
+            id: 'occ-1', date: '2026-08-14', name: 'Midweek',
+            assignments: [{
+                personId: 'carl', roleSlug: 'kids', slotId: 's1',
+                state: 'declined', quiet: true,
+            }],
+        }],
+        services: [],
+        today: '2026-08-01',
+    });
+
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].quiet, true);
+});
