@@ -131,3 +131,24 @@ test('the dashboard loads what the notification reaches for', () => {
         .forEach(f => assert.match(dash, new RegExp(f.replace('.', '\\.')),
             'a missing script renders nothing, not an error'));
 });
+
+test('the ask controls sit inside the row they belong to', () => {
+    // ⚠ THEY WERE ALL PILING UP AT THE FOOT OF THE LIST. Appended after the
+    // settled loop rather than inside it, every declined place's controls
+    // rendered together at the bottom — so they had to name the date they were
+    // about, and even then you had to match them up by eye.
+    //
+    // Inside the loop they need no label at all: the row directly above says
+    // which place this is.
+    // Sliced to the end of the settled SECTION, not to the first </template> —
+    // the swap chips are a nested loop and closing on theirs would cut the
+    // block in half and make this pass for the wrong reason.
+    const from = page.indexOf('x-for="row in settled"');
+    const block = page.slice(from, page.indexOf('Swaps (MS-190', from));
+
+    assert.match(block, /openAsk\(row\)/,
+        'the ask controls have drifted back out of the row');
+    assert.match(block, /setReach\(row, false\)/);
+    assert.doesNotMatch(page, /x-for="row in settled\.filter/,
+        'a second pass over the settled rows is how they came adrift');
+});
