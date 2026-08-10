@@ -16,6 +16,15 @@ const path = require('node:path');
 // next emulator, and anybody restoring from this repo all get a page that has
 // never worked. So it lives in firestore.indexes.json, and this holds the file
 // against the query it exists for.
+//
+// The WHY of the index lives here rather than in the JSON, because that file is
+// schema-validated on deploy and carries no comment keys — see
+// test/firestore-roles-config.test.js, which enforces exactly that.
+//
+// What the shape is for: the page reads with an `in` over the rungs this viewer
+// may see, then a range on date. The rung filter is not an optimisation and
+// cannot be dropped — it is what makes the read legal at all — so this index is
+// a hard requirement of the page rather than a tuning choice.
 
 const ROOT = path.join(__dirname, '..');
 
