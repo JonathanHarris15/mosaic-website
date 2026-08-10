@@ -522,6 +522,62 @@
             },
             get mySentence() { return View.myCommitmentsSentence(this.myCommitments); },
 
+            // ── Answering from the card ──────────────────────────────────────
+            //
+            // The same callable the Commitments page uses. It is here because
+            // the commonest answer is a yes to something you were expecting,
+            // and making somebody open a second screen to give it is the
+            // switchboard problem in miniature.
+            //
+            // ⚠ THE TWO CONTROLS ARE IDENTICAL AND MUST STAY THAT WAY. At rail
+            // width they are a tick and a cross rather than the page's full
+            // pair, but they are the same size, the same border and the same
+            // weight as each other. The moment yes is the prettier of the two
+            // the card starts collecting agreements people cannot keep.
+            answering: null,
+
+            async answerCommitment(commitment, state) {
+                if (this.answering) return;
+                const id = commitment.occurrenceId + '__' + commitment.roleSlug;
+                const before = commitment.state;
+                this.answering = id;
+                this.applyAnswer(commitment, state);
+                try {
+                    const call = firebase.functions().httpsCallable('answerAssignment');
+                    await call({
+                        occurrenceId: commitment.occurrenceId,
+                        roleSlug: commitment.roleSlug,
+                        slotId: commitment.slotId || null,
+                        state: state,
+                    });
+                } catch (e) {
+                    // The server decides. A card that keeps showing a yes it
+                    // could not save is worse than one that flickers.
+                    console.error('answerAssignment failed:', e);
+                    this.applyAnswer(commitment, before);
+                    this.error = (e && e.message) || 'That could not be saved.';
+                } finally {
+                    this.answering = null;
+                }
+            },
+
+            // The card reads off `occurrences`, so the answer is written back
+            // there rather than into the derived list — which is rebuilt from it.
+            applyAnswer(commitment, state) {
+                this.occurrences = this.occurrences.map(o => {
+                    if (o.id !== commitment.occurrenceId) return o;
+                    return Object.assign({}, o, {
+                        assignments: (o.assignments || []).map(a => (
+                            a.personId === this.personId &&
+                            a.roleSlug === commitment.roleSlug &&
+                            (a.slotId || null) === (commitment.slotId || null)
+                                ? Object.assign({}, a, { state: state })
+                                : a
+                        )),
+                    });
+                });
+            },
+
             // "You in August", and it means it. This block used to be an
             // Upcoming card at the top of the page reading its own window of
             // days — today through a fortnight, whatever the grid was showing —

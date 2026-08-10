@@ -661,6 +661,10 @@
             return {
                 date: c.date,
                 occurrenceId: c.occurrenceId,
+                // Carried so the card can ANSWER, not just report. The callable
+                // needs the slot, not the label.
+                roleSlug: c.roleSlug,
+                slotId: c.slotId || null,
                 eventName: c.eventName,
                 roleLabel: c.label || (def && def.name) || c.roleSlug,
                 state: c.state,
