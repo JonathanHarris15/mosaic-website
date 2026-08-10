@@ -152,3 +152,13 @@ test('the ask controls sit inside the row they belong to', () => {
     assert.doesNotMatch(page, /x-for="row in settled\.filter/,
         'a second pass over the settled rows is how they came adrift');
 });
+
+test('a name is read from the one field a Person actually has', () => {
+    // ⚠ EVERY NAME IN THE PICKER READ "Somebody". A Person carries a single
+    // `name`; reaching for a firstName/lastName pair returns undefined for
+    // everybody, and the fallback then hides it — so the screen looked like it
+    // was working and named nobody.
+    assert.match(script, /\(p && p\.name\) \|\| 'Somebody'/);
+    assert.doesNotMatch(script, /p\.firstName/,
+        'a Person has no firstName');
+});

@@ -124,7 +124,10 @@ function rosterIdFor(a) {
  */
 function seedPerson(db, id, fields) {
     return db.collection('people').doc(id).set(
-        Object.assign({ firstName: id, lastName: 'Test' }, fields || {}));
+        // ⚠ ONE `name` FIELD. A Person has no firstName/lastName pair, and a
+        // fixture that invented one let a screen read every name as "Somebody"
+        // with every test still green.
+        Object.assign({ name: id }, fields || {}));
 }
 
 /**

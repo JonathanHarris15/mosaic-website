@@ -203,14 +203,15 @@ test('the notification is just how many need you', () => {
 // ── Who may be asked ────────────────────────────────────────────────────────
 
 const PEOPLE = [
-    { id: 'p1', firstName: 'Ann' },
+    // One `name` field — a Person has no firstName/lastName pair.
+    { id: 'p1', name: 'Ann' },
     // ⚠ Inactive lives under `membership`, not on the Person. Getting that
     // wrong here would have made this test pass against code that filtered
     // nobody at all.
-    { id: 'p2', firstName: 'Ben', membership: { inactive: true } },
-    { id: 'p3', firstName: 'Cara', tags: ['tag-hidden'] },
-    { id: 'p4', firstName: 'Dave', shepherdingHidden: true },
-    { id: BOB, firstName: 'Bob' },
+    { id: 'p2', name: 'Ben', membership: { inactive: true } },
+    { id: 'p3', name: 'Cara', tags: ['tag-hidden'] },
+    { id: 'p4', name: 'Dave', shepherdingHidden: true },
+    { id: BOB, name: 'Bob' },
 ];
 
 test('somebody Inactive is absent, not offered and refused', () => {

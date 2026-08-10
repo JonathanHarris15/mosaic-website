@@ -311,11 +311,13 @@
                 }
             },
 
+            // ⚠ A PERSON'S NAME IS ONE FIELD, `name`. There is no firstName /
+            // lastName pair on a Person — reaching for one returns undefined
+            // for everybody and the whole picker reads "Somebody", which is
+            // exactly what it did.
             nameOf(personId) {
                 const p = this.people.find(x => x.id === personId);
-                if (!p) return 'Somebody';
-                return [p.firstName, p.lastName].filter(Boolean).join(' ') ||
-                    'Somebody';
+                return (p && p.name) || 'Somebody';
             },
 
             get swapRows() {
