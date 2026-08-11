@@ -215,9 +215,14 @@ function typography() {
 
 function splice(file, name, body) {
   const path = join(repo, file);
-  // Normalise to LF. An editor that saves CRLF would otherwise leave
-  // --check reporting "stale" forever against an LF-generated block.
-  const src = readFileSync(path, "utf8").replace(/\r\n/g, "\n");
+  // Normalise to LF and drop any byte-order mark. An editor that saves CRLF
+  // would otherwise leave --check reporting "stale" forever against an
+  // LF-generated block, and a BOM rides along into the design system as three
+  // bytes nothing on this side wrote — PowerShell's Set-Content -Encoding utf8
+  // adds one, which is how it got in.
+  const raw = readFileSync(path, "utf8");
+  const hadBom = raw.charCodeAt(0) === 0xFEFF;
+  const src = (hadBom ? raw.slice(1) : raw).replace(/\r\n/g, "\n");
   const open = `/* @generated:start ${name} */`;
   const close = "/* @generated:end */";
 
@@ -228,9 +233,11 @@ function splice(file, name, body) {
   }
 
   // Compared against the normalised source: the question is whether the
-  // token content is current, not whether the bytes match.
+  // token content is current, not whether the bytes match. A BOM is the one
+  // byte-level thing worth rewriting for — it is not content, and it travels
+  // to the design system.
   const next = `${src.slice(0, i + open.length)}\n${body}\n${src.slice(j)}`;
-  if (next === src) return false;
+  if (next === src && !hadBom) return false;
   if (!check) writeFileSync(path, next);
   return true;
 }
