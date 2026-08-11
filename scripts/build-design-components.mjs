@@ -24,10 +24,13 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { COMPONENTS, EXTRA_ROOT } from "../build/design-components.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const check = process.argv.includes("--check");
+const require_ = createRequire(import.meta.url);
+const colors = require_(resolve(dirname(fileURLToPath(import.meta.url)), "..", "tailwind.config.js")).theme.extend.colors;
 const changed = [];
 
 function put(rel, next) {
@@ -45,6 +48,10 @@ function put(rel, next) {
   changed.push(rel);
   return true;
 }
+
+/** The first sentence of a summary, without a doubled full stop when the
+ *  summary was only one sentence to begin with. */
+const firstSentence = (s) => s.split(". ")[0].replace(/\.$/, "");
 
 const GROUPS = ["Core", "Forms", "Display", "Feedback", "Layout"];
 const byGroup = (g) => COMPONENTS.filter((c) => c.group === g);
@@ -73,7 +80,7 @@ function stylesheet() {
     if (!list.length) continue;
     parts.push("", `/* ── ${g} ${"─".repeat(Math.max(0, 56 - g.length))} */`);
     for (const c of list) {
-      parts.push("", `/* ${c.name} — ${c.summary.split(". ")[0]}. */`, c.css.trim());
+      parts.push("", `/* ${c.name} — ${firstSentence(c.summary)}. */`, c.css.trim());
     }
   }
   return parts.join("\n") + "\n";
@@ -270,6 +277,118 @@ ${EXTRA_ROOT}
 }
 
 ${css.slice(css.indexOf("/* ── Core"))}`);
+
+/* ---- 5. The design system's own preview cards ---------------
+   The Design System pane builds its index from each file's first-line
+   @dsCard marker. These were hand-authored, and the colour ones printed
+   their hex as literal text beside a swatch that read the token — so
+   moving a token left the card showing the new colour next to the old
+   number. Generated now, from the same place the colour comes from. */
+
+function card({ group, name, subtitle, width = 700, height = 200, body }) {
+  return `<!-- @dsCard group="${group}" viewport="${width}x${height}" name="${name}" subtitle="${subtitle}" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="${"../".repeat(1)}styles.css"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"/>
+<style>
+  body { margin:0; padding:18px; background:var(--background); font-family:var(--font-sans); color:var(--on-surface); }
+  .r { display:flex; flex-wrap:wrap; gap:14px; align-items:center; }
+  .sw { display:flex; flex-direction:column; width:150px; border-radius:var(--radius); overflow:hidden; border:1px solid var(--outline-variant); }
+  .sw .t { padding:16px 12px; font-size:12px; font-weight:600; }
+  .sw .b { padding:7px 12px; font-size:10.5px; background:var(--surface-container-lowest); color:var(--on-surface-variant); display:flex; justify-content:space-between; gap:6px; }
+  .sw .b code { font-family:ui-monospace,monospace; }
+</style></head><body>
+${body}
+</body></html>
+`;
+}
+
+/** A swatch whose printed value is written by the generator from the same
+ *  token the swatch paints with, so the two cannot disagree. */
+function swatch(token, value, onToken) {
+  return `  <div class="sw"><div class="t" style="background:var(--${token});color:var(--${onToken})">${token}</div>` +
+    `<div class="b"><code>--${token}</code><code>${value}</code></div></div>`;
+}
+
+const COLOUR_CARDS = [
+  { name: "Brand", subtitle: "The seal's own colours",
+    tokens: ["navy", "navy-900", "navy-800", "ocean", "steel", "sand", "gold"] },
+  { name: "Primary", subtitle: "Primary, secondary, tertiary and their containers",
+    tokens: ["primary", "secondary", "tertiary", "primary-container", "secondary-container", "tertiary-container"] },
+  { name: "Surfaces", subtitle: "Cream through parchment to white",
+    tokens: ["background", "surface", "surface-container-low", "surface-container", "surface-container-high", "surface-container-highest", "surface-variant"] },
+  { name: "Status", subtitle: "Error, success, warning — each with its container",
+    tokens: ["error", "error-container", "success", "success-container", "warning", "warning-container"] },
+  { name: "Event colours", subtitle: "The eight an editor can paint an Event",
+    tokens: ["event-steel", "event-ocean", "event-navy", "event-green", "event-gold", "event-amber", "event-plum", "event-rose"] },
+  { name: "Highlighter", subtitle: "Note Module pens — outside the brand on purpose",
+    tokens: ["highlight-yellow", "highlight-green", "highlight-blue", "highlight-red", "highlight-orange", "highlight-purple"] },
+];
+
+/** Readable ink for a swatch. Its own on- token if the palette has one,
+ *  otherwise decided by how dark the colour actually is — a card that
+ *  prints navy on dark red is a card nobody can read. */
+function inkFor(token) {
+  if (colors[`on-${token}`]) return `on-${token}`;
+  if (/-container$/.test(token) && colors[`on-${token}`]) return `on-${token}`;
+  const hex = colors[token];
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  // Rec. 601 luma: good enough to answer "is this dark".
+  return 0.299 * r + 0.587 * g + 0.114 * b < 150 ? "on-primary" : "on-surface";
+}
+
+for (const c of COLOUR_CARDS) {
+  const rows = c.tokens
+    .filter((t) => colors[t])
+    .map((t) => swatch(t, colors[t], inkFor(t)))
+    .join("\n");
+  const height = 120 + Math.ceil(c.tokens.length / 4) * 90;
+  put(
+    `build/design-system/guidelines/colors-${c.name.toLowerCase().replace(/\s+/g, "-")}.card.html`,
+    card({ group: "Colors", name: c.name, subtitle: c.subtitle, width: 700, height, body: `<div class="r">\n${rows}\n</div>` })
+  );
+}
+
+for (const c of COMPONENTS) {
+  const demo = c.examples.map((e) => `  <div>${e}</div>`).join("\n");
+  put(
+    `build/design-system/components/${c.name}.card.html`,
+    card({
+      group: c.group,
+      name: c.name,
+      subtitle: firstSentence(c.summary).slice(0, 120),
+      width: 700,
+      height: 100 + c.examples.length * 70,
+      body: `<div class="r">\n${demo}\n</div>`,
+    })
+  );
+}
+
+/* ---- 6. The readme's component index ------------------------
+   The prose around it is hand-written and worth keeping; this list is
+   not. It went stale last time because it was typed. */
+
+const indexPath = join(repo, "build", "design-system", "readme.md");
+try {
+  const rawReadme = readFileSync(indexPath, "utf8");
+  const readme = (rawReadme.charCodeAt(0) === 0xFEFF ? rawReadme.slice(1) : rawReadme).replace(/\r\n/g, "\n");
+  const o = "<!-- @generated:start component-index -->";
+  const c = "<!-- @generated:end -->";
+  const a = readme.indexOf(o), b = readme.indexOf(c, a);
+  if (a !== -1 && b !== -1) {
+    const index = GROUPS.map((g) => {
+      const list = byGroup(g);
+      if (!list.length) return "";
+      return `**${g}**\n` + list.map((x) =>
+        `- **${x.name}** \`.${x.cls}\` — ${firstSentence(x.summary)}.`).join("\n");
+    }).filter(Boolean).join("\n\n");
+    const next = `${readme.slice(0, a + o.length)}\n\n${index}\n\n${readme.slice(b)}`;
+    if (next !== readme) {
+      if (!check) writeFileSync(indexPath, next);
+      changed.push("build/design-system/readme.md");
+    }
+  }
+} catch { /* the readme is optional; the components are not */ }
 
 /* ---- Report -------------------------------------------------- */
 

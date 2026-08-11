@@ -36,8 +36,8 @@
       "public/assets/**",
       "public/**/*.min.js",
       "public/mosaic.css",
-      "public/mosaic-theme.js",
       "public/mobile/tokens.css",
+      "public/mosaic-theme.js",
       "public/guide-seed.js",
       "public/relations-graph-core.js",
       "public/404.html"
@@ -45,10 +45,10 @@
     "why": {
       "public/mosaic.css": "compiled Tailwind output",
       "public/mosaic-theme.js": "the legacy runtime token source — superseded by tailwind.config.js, and a second palette definition is its own problem, not a drift finding",
-      "public/mobile/tokens.css": "the mobile shell's own token file",
       "public/guide-seed.js": "printed Service Guide templates — a different medium with its own palette",
       "public/relations-graph-core.js": "the Relations Viewer group palette, documented in CONTEXT.md as deliberately raw",
-      "public/404.html": "Firebase's stock error page"
+      "public/404.html": "Firebase's stock error page",
+      "public/mobile/tokens.css": "generated output — the phone stylesheet, written by npm run build:components from the same source as mosaic.css. A token file holds hex by definition; it was a hand-maintained copy until the component library was unified, and that is what made it worth watching before."
     },
     "$allow": "Colours that must stay literal. Every entry needs a reason — this list is the difference between accounted for and stopped counting. Anything raw and not matched here fails --strict.",
     "allow": [
@@ -78,7 +78,13 @@
     "$comment2": "check finds, fix mends. fix is mechanical and reversible; it stops where judgement starts and lists what it left."
   },
   "components": {
+    "source": "build/design-components.mjs",
+    "build": "npm run build:components",
+    "check": "npm run build:components -- --check",
+    "parity": "npm run check:design-components",
     "gallery": "public/components-demo.html",
-    "$comment": "Today this shows only the verse picker. Growing it into every primitive as the app really draws them is what makes Pass 3 possible."
+    "stylesheetDesktop": "build/tailwind-input.css (spliced) -> public/mosaic.css",
+    "stylesheetMobile": "public/mobile/tokens.css",
+    "designSystemStaging": "build/design-system"
   }
 }
