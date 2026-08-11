@@ -53,6 +53,20 @@
         notInRequiredGroup: 'This Role is staffed from one group.',
     };
 
+    // A year ahead — the same reach the Commitments page uses, because somebody
+    // down for Christmas in August should be able to offer it.
+    function addYear(date) {
+        const p = String(date).split('-').map(Number);
+        return (p[0] + 1) + '-' + String(p[1]).padStart(2, '0') + '-' +
+            String(p[2]).padStart(2, '0');
+    }
+
+    // One Assignment, as a string. Ticking a box needs an identity and a
+    // commitment row carries no id of its own — it IS the three fields.
+    function keyOf(row) {
+        return [row.occurrenceId, row.roleSlug, row.slotId || ''].join('|');
+    }
+
     function todayStr() {
         const d = new Date();
         return d.getFullYear() + '-' +
@@ -101,9 +115,27 @@
             person: null,
             today: todayStr(),
 
+            busyOffering: false,
+
             rows: [],
             roleDefinitions: [],
             awayStretches: [],
+
+            // ── Offering instead of taking (MS-190) ──────────────────────────
+            //
+            // The other door out of this list. "Anybody else may offer off the
+            // cover list uninvited" is the model's own sentence, and until now
+            // the list only knew how to hand a place over outright — so the one
+            // thing a member could not do from here was the thing Trades exist
+            // for: I will take yours if you take one of mine.
+            //
+            // ⚠ An uninvited offer MUST name something. Asking nothing in
+            // return is a take, and Take is right there, faster, and involves
+            // nobody else — so the button stays off until something is picked
+            // rather than quietly settling.
+            offering: null,
+            mine: [],
+            picked: [],
 
             async init() {
                 this.rank = await this.resolveRank();
@@ -146,6 +178,7 @@
                         Store.loadCoverList(db, { rank: this.rank, from: this.today }),
                         this.loadRoleDefinitions(),
                         this.loadMe(),
+                        this.loadMine(),
                     ]);
                     this.rows = entries.map(e => this.decorate(e));
                 } catch (e) {
@@ -223,6 +256,12 @@
                 return Object.assign({}, entry, {
                     key: entry.id,
                     roleName: (def && def.name) || entry.roleName || entry.roleSlug,
+                    // What the job is (MS-222). ⚠ THE LIST WHERE IT MATTERS
+                    // MOST: everywhere else somebody is reading about a place
+                    // they already hold, and here they are deciding whether to
+                    // take one. "What is it?" is the question, and the answer
+                    // used to be a name and a date.
+                    description: window.RolesCore.descriptionOf(def),
                     dayNum: String(dt.getDate()).padStart(2, '0'),
                     mon: MONTHS[dt.getMonth()].slice(0, 3).toUpperCase(),
                     weekday: DAYS[dt.getDay()],
@@ -279,6 +318,109 @@
                     this.say(friendlyError(e));
                 } finally {
                     this.taking = null;
+                }
+            },
+
+            // What I could put up: my own places ahead, built by the same
+            // module the Commitments page builds its list from, so the two can
+            // never come to different conclusions about what I am down for.
+            //
+            // Liturgical places are left out — they are set in the order of
+            // service and are not mine to hand over — and so are ones I have
+            // already declined, which are looking for cover themselves.
+            async loadMine() {
+                if (!this.personId) return;
+                try {
+                    const from = this.today;
+                    const to = addYear(this.today);
+                    const occurrences = await window.EventsStore.loadCalendar(db, {
+                        from: from, to: to, rank: this.rank, personId: this.personId,
+                    });
+                    // ⚠ `services: []` on purpose, so no liturgical place is
+                    // in the list. Those are set in the order of service and
+                    // are not anybody's to hand over.
+                    //
+                    // A declined place of my own is left out too: it is looking
+                    // for cover itself, and offering it would be handing
+                    // somebody a problem rather than a place.
+                    this.mine = window.CommitmentsCore.commitmentsFor({
+                        personId: this.personId,
+                        occurrences: occurrences,
+                        services: [],
+                        today: this.today,
+                    })
+                        .filter(r => r.state !== 'declined')
+                        .map(r => {
+                            const dt = partsOf(r.date);
+                            const def = window.RolesCore.roleBySlug(
+                                r.roleSlug, this.roleDefinitions);
+                            return Object.assign({}, r, {
+                                key: keyOf(r),
+                                roleName: (def && def.name) || r.label || r.roleSlug,
+                                description: window.RolesCore.descriptionOf(def),
+                                longDate: DAYS[dt.getDay()] + ' ' + dt.getDate() + ' ' +
+                                    MONTHS[dt.getMonth()],
+                            });
+                        });
+                } catch (e) {
+                    console.error('Could not read your own dates:', e);
+                    this.mine = [];
+                }
+            },
+
+            // Everything of mine except the place being offered against — you
+            // cannot put up the very thing you are asking for.
+            get offerable() {
+                if (!this.offering) return [];
+                return this.mine.filter(r => !(
+                    r.occurrenceId === this.offering.occurrenceId &&
+                    r.roleSlug === this.offering.roleSlug
+                ));
+            },
+
+            openOffer(row) {
+                this.offering = row;
+                this.picked = [];
+            },
+
+            togglePick(row) {
+                const key = row.key;
+                this.picked = this.picked.includes(key)
+                    ? this.picked.filter(k => k !== key)
+                    : this.picked.concat([key]);
+            },
+
+            async sendOffer() {
+                if (!this.offering || this.busyOffering || !this.picked.length) return;
+                this.busyOffering = true;
+                const row = this.offering;
+                try {
+                    const offered = this.offerable
+                        .filter(r => this.picked.includes(r.key))
+                        .map(r => ({
+                            occurrenceId: r.occurrenceId,
+                            roleSlug: r.roleSlug,
+                            slotId: r.slotId || null,
+                        }));
+
+                    const call = firebase.functions().httpsCallable('offerTrade');
+                    await call({
+                        occurrenceId: row.occurrenceId,
+                        roleSlug: row.roleSlug,
+                        slotId: row.slotId || null,
+                        offered: offered,
+                    });
+                    this.offering = null;
+                    this.picked = [];
+                    // ⚠ THE ROW STAYS. Nothing is reserved while an offer sits
+                    // — the place still needs somebody, and somebody else may
+                    // still take it outright. Removing it would tell the reader
+                    // it was settled when it is not.
+                    this.say('Offered. They will say yes or no — you will see it on your Commitments.');
+                } catch (e) {
+                    this.say(friendlyError(e));
+                } finally {
+                    this.busyOffering = false;
                 }
             },
 

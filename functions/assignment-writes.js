@@ -30,6 +30,8 @@ const coverCore = require("./shared/cover-core.js");
 const awayCore = require("./shared/away-core.js");
 
 const OCCURRENCES = "event_occurrences";
+// Where Event series live — the home of the Cross-Role Rules (MS-221).
+const SERIES = "events";
 const COVER = "cover";
 
 /**
@@ -94,10 +96,78 @@ function runOrLose(db, body, message) {
  * @param {string} date the occurrence's own date, which Away is judged on
  * @return {Promise<Object>} the person, the Role definition, and the rules
  */
-async function takeContext(db, personId, roleSlug, date) {
+/**
+ * Clear the cover entry for a place that is no longer looking for one.
+ *
+ * ⚠ THE COVER LIST IS DERIVED FROM THE ROSTER, AND HAD NO WAY TO KNOW WHEN THE
+ * ROSTER CHANGED BY A DOOR IT DID NOT OWN.
+ *
+ * The entry is a denormalised document, written alongside a decline so the list
+ * can render without opening the occurrence (cover-store.js). Every path that
+ * SETTLES a place deleted it by hand: taking one, settling a Trade, going
+ * quiet. Nothing deleted it when an editor simply removed the roster row — and
+ * "empty the ticked dates" removes hundreds at once. The place was gone, the
+ * decline was gone, and the advertisement was still up: people offering to
+ * cover Sundays that no longer had a rota.
+ *
+ * So it hangs off the roster write, like the Trade sweep beside it, and so runs
+ * whichever door the roster changed through.
+ *
+ * Deleting only. Writing one needs the occurrence's rung and the Role's name,
+ * and the decline path has both — this knows when an advertisement has stopped
+ * being true, which is a different and much smaller question.
+ *
+ * @param {Object} db the Firestore handle
+ * @param {Object} spec the place, and what is on it now
+ * @param {string} spec.occurrenceId the occurrence
+ * @param {string} spec.roleSlug the Role
+ * @param {?string} spec.slotId its slot
+ * @param {?Object} spec.row the roster row as it now stands, or null if gone
+ * @return {Promise<boolean>} whether an entry was cleared
+ */
+async function sweepCover(db, spec) {
+  const s = spec || {};
+  const row = s.row || null;
+
+  // Still declined and still on the roster: the advertisement is still true.
+  // Whether it is OPEN or quiet is setReach's business, and it manages the
+  // entry itself — so a quiet one having no document here is correct, not a
+  // gap to fill.
+  if (row && (row.state || null) === aa.STATES.DECLINED) return false;
+
+  const ref = db.collection(COVER)
+      .doc(aa.coverId(s.occurrenceId, s.roleSlug, s.slotId));
+  const snap = await ref.get();
+  if (!snap.exists) return false;
+
+  await ref.delete();
+  return true;
+}
+
+/**
+ * The Cross-Role Rules stored on an Event series (MS-221).
+ *
+ * A rule about a PAIR of Roles belongs to neither of them, so it lives on the
+ * Event that runs both. A one-off Event has no series and therefore no rules,
+ * which is right: the rule is a standing arrangement, not a decision about one
+ * date.
+ *
+ * @param {Object} db the Firestore handle
+ * @param {?string} seriesId the series the occurrence belongs to
+ * @return {Promise<Array<Object>>} its cross-Role rules, or none
+ */
+async function seriesRules(db, seriesId) {
+  if (!seriesId) return [];
+  const snap = await db.collection(SERIES).doc(seriesId).get();
+  if (!snap.exists) return [];
+  const rules = snap.data().crossRoleRules;
+  return Array.isArray(rules) ? rules : [];
+}
+
+async function takeContext(db, personId, roleSlug, date, seriesId) {
   const empty = {
     person: null, roleDef: null,
-    relationships: [], groups: [], awayPersonIds: [],
+    relationships: [], groups: [], awayPersonIds: [], crossRoleRules: [],
   };
   if (!personId) return empty;
 
@@ -113,11 +183,21 @@ async function takeContext(db, personId, roleSlug, date) {
   const roleDef = roleSnap.empty ? null :
     Object.assign({id: roleSnap.docs[0].id}, roleSnap.docs[0].data());
 
+  // ⚠ The Event's rules about a PAIR of Roles (MS-221). They live on the
+  // SERIES, not on either Role, so a Role whose own definition has no group
+  // rule can still be constrained by one — which is exactly why `wantsGroups`
+  // below has to ask about these too. Miss that and the groups list arrives
+  // empty, `sharedGroups` finds nothing, and the rule silently permits
+  // everything a member asks for while the editor's picker refuses it.
+  const crossRoleRules = (await seriesRules(db, seriesId))
+      .filter((r) => ((r && r.roleSlugs) || []).indexOf(roleSlug) !== -1);
+
   const restrictions = (roleDef && roleDef.restrictions) || [];
   const kinds = restrictions.map((r) => r && r.kind);
   const wantsEdges = kinds.indexOf("notTogether") !== -1;
   const wantsGroups = kinds.indexOf("sameGroup") !== -1 ||
-    kinds.indexOf("notSameGroup") !== -1;
+    kinds.indexOf("notSameGroup") !== -1 ||
+    crossRoleRules.length > 0;
 
   // Away is judged on the occurrence's own date — being away on the 16th says
   // nothing about the 23rd. Their own Away does not refuse them (ADR-0030 §3),
@@ -168,6 +248,7 @@ async function takeContext(db, personId, roleSlug, date) {
     relationships: relationships,
     groups: groups,
     awayPersonIds: awayPersonIds,
+    crossRoleRules: crossRoleRules,
   };
 }
 
@@ -288,7 +369,8 @@ async function take(db, spec) {
     return {ok: false, code: "not-found", message: "That Event has gone."};
   }
   const context = await takeContext(
-      db, s.personId, s.roleSlug, dateSnap.data().date);
+      db, s.personId, s.roleSlug, dateSnap.data().date,
+      dateSnap.data().seriesId);
 
   return runOrLose(db, async (tx) => {
     const occSnap = await tx.get(occurrenceRef);
@@ -322,6 +404,7 @@ async function take(db, spec) {
               roleSlug: a.roleSlug,
               allowsAnotherRole: false,
             })),
+        crossRoleRules: context.crossRoleRules,
       },
     });
 
@@ -356,6 +439,7 @@ module.exports = {
   OCCURRENCES,
   COVER,
   takeContext,
+  sweepCover,
   answer,
   take,
 };

@@ -260,7 +260,7 @@ test('a different series on the same date solves differently', () => {
 
 // ── The pool widens rather than failing ──────────────────────────────────────
 
-test('a pool too tight to be legal widens until a valid roster exists', () => {
+test('a Role only one person may fill reaches them however loaded they are', () => {
     // Only `z` carries the tag, and `z` is the most loaded person there is, so
     // a pool cut to the least-loaded few would never reach them.
     const gated = role('kids', [either(1)], {
@@ -273,7 +273,16 @@ test('a pool too tight to be legal widens until a valid roster exists', () => {
     const result = solveWith({ roles: [gated], people: people, history: history });
 
     assert.deepEqual(seatedIds(result), ['z']);
-    assert.equal(result.widened > 0, true, 'and it should say that it had to reach');
+
+    // ⚠ THIS USED TO ASSERT `widened > 0` — that the pool started too tight and
+    // had to grow to reach `z`. It no longer does, and the change is the fix
+    // for the same-person-two-weeks-running bug: a Role's own people are in the
+    // pool from the start (see `reachFor`) rather than being stumbled upon by
+    // widening. Widening found ONE of them and stopped, which is why a Role with
+    // a small allowlist went to the same person every week.
+    //
+    // The outcome this test exists for is unchanged, and it is the line above.
+    assert.equal(result.widened, 0, 'the pool should not have had to reach');
 });
 
 test('widening is reported so tight restrictions become visible', () => {
@@ -376,4 +385,90 @@ test('across ten stepped weeks nobody is worked far harder than anyone else', ()
         Math.max.apply(null, values) - Math.min.apply(null, values) <= 1,
         'uneven: ' + JSON.stringify(counts)
     );
+});
+
+// ── Cross-Role Rules reach the solve (MS-221) ────────────────────────────────
+//
+// ⚠ A draft gets no easier a ride than a hand-made rota. If the solve did not
+// see these rules it would cheerfully seat the very roster the warnings pass
+// then complains about — a screen arguing with itself, every week.
+
+const CROSS_MARRIAGE = 'marriage';
+// Exclusive, like a real pair of jobs on one morning — which also means the
+// two places go to two different people, so the couple is what tempts the
+// solve rather than one person holding both.
+const HELPER = role('kids_helper', [either(1)]);
+const LEADER = role('kids_leader', [either(1)]);
+
+// Everyone in the pool is married to somebody else in it, so the rule has to
+// bite: two of the four are refused whichever way the solve fills the pair.
+const COUPLES = [
+    { id: 'c1', typeId: CROSS_MARRIAGE, name: 'A & B', leaderId: null, memberIds: ['a', 'b'] },
+    { id: 'c2', typeId: CROSS_MARRIAGE, name: 'C & D', leaderId: null, memberIds: ['c', 'd'] },
+];
+
+const noMarriedPair = {
+    kind: Roles.RESTRICTIONS.NOT_SAME_GROUP,
+    typeId: CROSS_MARRIAGE,
+    roleSlugs: ['kids_leader', 'kids_helper'],
+};
+
+test('the solve never drafts a married couple into a paired Role', () => {
+    // ⚠ THE FIXTURE IS THE TEST. A and B have never served, so fairness wants
+    // them in both places more than it wants anybody else — without the rule
+    // that is exactly what it does, which is what makes this measure the rule
+    // rather than the solve's happening to pick somebody else.
+    const people = [person('a'), person('b'), person('c')];
+    const history = [
+        serve('c', 'kids_leader', '2026-07-26'),
+        serve('c', 'kids_helper', '2026-07-19'),
+    ];
+
+    const free = solveWith({
+        roles: [LEADER, HELPER], people: people, history: history, groups: COUPLES,
+    });
+    const seatedIn = (r, slug) => r.filled.filter(s => s.roleSlug === slug)[0].personId;
+    assert.deepStrictEqual(
+        [seatedIn(free, 'kids_leader'), seatedIn(free, 'kids_helper')].sort(),
+        ['a', 'b'],
+        'the fixture no longer tempts the solve into the couple, so it proves nothing'
+    );
+
+    const bound = solveWith({
+        roles: [LEADER, HELPER], people: people, history: history, groups: COUPLES,
+        crossRoleRules: [noMarriedPair],
+    });
+    const pair = [seatedIn(bound, 'kids_leader'), seatedIn(bound, 'kids_helper')];
+    assert.ok(pair.every(Boolean), 'a place went unfilled rather than differently filled');
+    assert.ok(pair.indexOf('c') !== -1, 'the solve seated the married couple anyway');
+});
+
+test('what the solve drafts, the warnings pass agrees with', () => {
+    // The pairing that keeps the two honest. A roster the solve produced must
+    // never come back with a warning about the rule the solve was given.
+    const result = solveWith({
+        roles: [LEADER, HELPER],
+        people: [person('a'), person('b'), person('c'), person('d')],
+        groups: COUPLES,
+        crossRoleRules: [noMarriedPair],
+    });
+
+    const warnings = Roles.warningsFor(result.filled, {
+        roles: [LEADER, HELPER],
+        people: [person('a'), person('b'), person('c'), person('d')],
+        groups: COUPLES,
+        crossRoleRules: [noMarriedPair],
+    });
+
+    assert.deepStrictEqual(warnings, [], 'the solve drafted a roster it then warns about');
+});
+
+test('with no rule given, the solve is free to seat a couple', () => {
+    // Proves the test above is measuring the rule and not some other refusal.
+    const result = solveWith({
+        roles: [LEADER, HELPER],
+        people: [person('a'), person('b')],
+        groups: COUPLES,
+    });
+    assert.equal(result.filled.filter(s => s.personId).length, 2);
 });

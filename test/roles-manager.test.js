@@ -102,6 +102,7 @@ require('../public/roles-manager.js');
 
 const KIDS_CLEARED = 'tag_kids';
 const SABBATICAL = 'tag_sabbatical';
+const DISCIPLINE = 'tag_discipline';
 
 const TAGS = {
     [KIDS_CLEARED]: { name: 'Kids Cleared' },
@@ -134,10 +135,13 @@ const coffeeDefinition = () => ({
 
 // Mount the page against a seeded store and run its loads, as init() does once
 // the permission gate has passed.
-async function mountPage(seed = {}, { deny = [], confirmAnswer = true } = {}) {
+async function mountPage(seed = {}, { deny = [], confirmAnswer = true, rank = 'editor' } = {}) {
     global.db = fakeDb({ people_tags: TAGS, ...seed }, { deny });
     global.confirm = () => confirmAnswer;
     const page = window.RolesManager();
+    // init() settles the permission level before it loads anything, because the
+    // loads read it — hidden tags are filtered by who is asking.
+    page.currentPermissionLevel = rank;
     await page.loadEverything();
     return page;
 }
@@ -384,6 +388,145 @@ test('Tags are offered from the church\'s own Tags, not typed free-hand', async 
     page2.startEdit(page2.roleDefinitions.find(d => d.id === 'r1'));
     page2.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, 'a_tag_that_does_not_exist');
     assert.equal(page2.draft.restrictions.length, 0, 'an unknown tag id is not accepted');
+});
+
+// ── Tags an elder keeps private ──────────────────────────────────────────────
+//
+// `hiddenFromOthers` is an elder saying the TAG is theirs. The name is the
+// private thing, so offering it in a rule picker has already leaked it.
+
+test('a tag an elder has hidden is never offered to an editor building a rule', async () => {
+    const page = await mountPage({
+        roles: { r1: kidsDefinition() },
+        people_tags: { ...TAGS, [DISCIPLINE]: { name: 'Under Discipline', hiddenFromOthers: true } },
+    }, { rank: 'editor' });
+
+    assert.deepStrictEqual(page.shepherdingTags.map(t => t.id).sort(), [KIDS_CLEARED, SABBATICAL].sort());
+    assert.deepStrictEqual(page.ruleValueOptions.map(o => o.id).sort(), [KIDS_CLEARED, SABBATICAL].sort());
+    assert.ok(
+        !JSON.stringify(page.ruleValueOptions).includes('Under Discipline'),
+        'the hidden tag\'s name must not reach the picker'
+    );
+
+    // And not by hand either: the id can be typed, the rule cannot be built.
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, DISCIPLINE);
+    assert.equal(page.draft.restrictions.length, 0);
+});
+
+test('an elder still sees their own hidden tags — they are hidden from everyone else FOR elders', async () => {
+    for (const rank of ['elder', 'super_admin']) {
+        const page = await mountPage({
+            people_tags: { ...TAGS, [DISCIPLINE]: { name: 'Under Discipline', hiddenFromOthers: true } },
+        }, { rank });
+        assert.ok(page.shepherdingTags.some(t => t.id === DISCIPLINE), rank + ' should see the hidden tag');
+        assert.deepStrictEqual(page.hiddenTagIds, [], 'nothing is held back from ' + rank);
+    }
+});
+
+test('a rule already built on a hidden tag says it is private, not that it is broken', async () => {
+    const withRule = kidsDefinition();
+    withRule.restrictions = [{ kind: 'requireTag', tagId: DISCIPLINE }];
+    const page = await mountPage({
+        roles: { r1: withRule },
+        people_tags: { ...TAGS, [DISCIPLINE]: { name: 'Under Discipline', hiddenFromOthers: true } },
+    }, { rank: 'editor' });
+
+    const sentence = page.ruleSentence({ kind: 'requireTag', tagId: DISCIPLINE });
+    assert.doesNotMatch(sentence, /Under Discipline/, 'the name is the thing being hidden');
+    assert.doesNotMatch(sentence, /no longer exists/, 'a hidden tag is not a deleted one');
+    assert.match(sentence, /private/i);
+    // A tag that really is gone still reads as gone.
+    assert.match(page.ruleSentence({ kind: 'requireTag', tagId: 'tag_deleted' }), /no longer exists/);
+});
+
+// ── The write list, and the field that fell off it ───────────────────────────
+
+test('what is typed into the description is what comes back on reopening', async () => {
+    // The behaviour the source checks below are proxies for. Saved through the
+    // real page, read back through a fresh mount, opened again for editing.
+    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.draft.description = '  Arrive by 9:15 and put the urns on.  ';
+    await page.saveDraft();
+
+    assert.equal(stored('roles').r1.description, 'Arrive by 9:15 and put the urns on.',
+        'the description never reached Firestore');
+
+    const reopened = await mountPage({ roles: stored('roles'), people: PEOPLE });
+    const def = reopened.roleDefinitions.find(d => d.id === 'r1');
+    assert.equal(Roles.descriptionOf(def), 'Arrive by 9:15 and put the urns on.',
+        'a saved description does not read back');
+
+    reopened.startEdit(def);
+    assert.equal(reopened.draft.description, 'Arrive by 9:15 and put the urns on.',
+        'the editor reopens with an empty box');
+});
+
+test('clearing a description clears it, rather than leaving the old words', async () => {
+    const withOne = coffeeDefinition();
+    withOne.description = 'The old words.';
+    const page = await mountPage({ roles: { r1: withOne }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.draft.description = '';
+    await page.saveDraft();
+
+    assert.equal(stored('roles').r1.description, '');
+    assert.equal(Roles.descriptionOf(stored('roles').r1), null);
+});
+
+test('saving a Role does not drop the rest of it either', async () => {
+    // The write is WHOLE, so this is the shape of every version of this bug.
+    const page = await mountPage({ roles: { r1: kidsDefinition() }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.draft.description = 'Two adults in the room at all times.';
+    page.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, KIDS_CLEARED);
+    await page.saveDraft();
+
+    const saved = stored('roles').r1;
+    assert.equal(saved.description, 'Two adults in the room at all times.');
+    assert.equal(saved.slots.length, 3, 'the slots went');
+    assert.deepStrictEqual(saved.restrictions, [{ kind: 'requireTag', tagId: KIDS_CLEARED }]);
+    assert.equal(saved.slug, 'kids_ministry', 'the slug moved, orphaning its serve history');
+});
+
+
+test('a description survives a save and comes back when the Role is reopened', () => {
+    // ⚠ THE BUG THIS EXISTS FOR. `description` was added to the model, to the
+    // form, and to five screens — and not to the object saveDraft writes. So it
+    // was typed, validated, and dropped: the Role reopened blank every time and
+    // nothing anywhere reported a problem.
+    //
+    // A synchronous check of the write list itself, because the failure was not
+    // in any behaviour a mounted page performs — it was a missing line.
+    const source = require('node:fs').readFileSync(
+        require('node:path').join(__dirname, '..', 'public', 'roles-manager.js'), 'utf8');
+    const written = source.match(/const definition = \{([\s\S]*?)\n {8}\};/);
+    assert.ok(written, 'saveDraft no longer builds the document it writes');
+    assert.match(written[1], /description:/, 'a saved Role would lose its description');
+});
+
+test('EVERY field a new Role has is written when one is saved', () => {
+    // The general form of the same mistake. The document is written WHOLE, so a
+    // field missing from that object is not merely unsaved — it is deleted from
+    // the stored Role on the next save. `newDefinition` is the list of what a
+    // Role has; this walks it so the next field added cannot go missing quietly.
+    const source = require('node:fs').readFileSync(
+        require('node:path').join(__dirname, '..', 'public', 'roles-manager.js'), 'utf8');
+    const written = source.match(/const definition = \{([\s\S]*?)\n {8}\};/)[1];
+
+    Object.keys(Roles.newDefinition('Anything')).forEach(field => {
+        assert.match(written, new RegExp('\\b' + field + ':'),
+            '`' + field + '` is part of a Role but saveDraft does not write it — ' +
+            'saving would silently drop it');
+    });
+});
+
+test('a description is stored trimmed, so what is read back is what is shown', () => {
+    const source = require('node:fs').readFileSync(
+        require('node:path').join(__dirname, '..', 'public', 'roles-manager.js'), 'utf8');
+    assert.match(source, /description: String\(this\.draft\.description \|\| ''\)\.trim\(\)/,
+        'the stored value is not normalised, so a whitespace-only one reads as present');
 });
 
 test('a rule can be removed', async () => {
@@ -1247,28 +1390,137 @@ test('the same person cannot be added to an allowlist twice', async () => {
 });
 
 test('an allowlist reads as names, never as ids', async () => {
+    // The names live in the chips, which are the editable list; the sentence
+    // above them says what KIND of rule it is and does not repeat all eleven.
     const page = await mountPage({ people: PEOPLE });
-    const sentence = page.ruleSentence({ kind: 'allowlist', personIds: ['p1', 'p2'] });
+    const rule = { kind: 'allowlist', personIds: ['p1', 'p2'] };
 
-    assert.match(sentence, /Ada Lovelace/);
-    assert.match(sentence, /Grace Hopper/);
-    assert.doesNotMatch(sentence, /p1|p2/);
+    assert.deepStrictEqual(page.allowlistNames(rule), ['Ada Lovelace', 'Grace Hopper']);
+    assert.doesNotMatch(page.allowlistNames(rule).join(' '), /p1|p2/);
+    assert.match(page.ruleSentence(rule), /only these people/i);
+    assert.doesNotMatch(page.ruleSentence(rule), /p1|p2|personIds/);
 });
 
 test('a person who has left is SAID to be missing, not quietly dropped', async () => {
     // A shorter allowlist than the editor believes they have is how a Role
     // silently stops being fillable.
     const page = await mountPage({ people: PEOPLE });
-    const sentence = page.ruleSentence({ kind: 'allowlist', personIds: ['p1', 'gone'] });
+    const names = page.allowlistNames({ kind: 'allowlist', personIds: ['p1', 'gone'] });
 
-    assert.match(sentence, /Ada Lovelace/);
-    assert.match(sentence, /no longer in the directory/);
+    assert.deepStrictEqual(names, ['Ada Lovelace', 'Someone no longer in the directory']);
 });
 
 test('an empty stored allowlist says so rather than reading as no rule', async () => {
     const page = await mountPage({ people: PEOPLE });
     assert.match(page.ruleSentence({ kind: 'allowlist', personIds: [] }), /nobody could ever fill/i);
     assert.equal(page.isRuleAvailable({ kind: 'allowlist', personIds: [] }), false);
+});
+
+// ── Editing an allowlist that already exists ─────────────────────────────────
+//
+// An allowlist is the one rule made of MANY things, and the only way to change
+// it used to be to throw it away and name everybody again. Six months later,
+// with one person joining the coffee rota, that is a list retyped from memory —
+// and a name forgotten in the retyping is a Role that quietly stops offering
+// somebody. So the list already on the Role is edited where it sits.
+
+const withAllowlist = (...ids) => {
+    const def = coffeeDefinition();
+    def.restrictions = [{ kind: 'allowlist', personIds: ids }];
+    return def;
+};
+
+const openWithAllowlist = async (...ids) => {
+    const page = await mountPage({ roles: { r1: withAllowlist(...ids) }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    return page;
+};
+
+const listOf = page => page.draft.restrictions.find(r => r.kind === 'allowlist').personIds;
+
+test('somebody can be added to a list that is already on the Role', async () => {
+    const page = await openWithAllowlist('p1');
+    page.addToAllowlistRule(0, 'p3');
+
+    assert.deepStrictEqual(listOf(page), ['p1', 'p3']);
+    await page.saveDraft();
+    assert.deepStrictEqual(stored('roles').r1.restrictions, [
+        { kind: 'allowlist', personIds: ['p1', 'p3'] },
+    ]);
+});
+
+test('somebody can be taken off a list that is already on the Role', async () => {
+    const page = await openWithAllowlist('p1', 'p2', 'p3');
+    page.removeFromAllowlistRule(0, 'p2');
+
+    assert.deepStrictEqual(listOf(page), ['p1', 'p3']);
+    await page.saveDraft();
+    assert.deepStrictEqual(stored('roles').r1.restrictions, [
+        { kind: 'allowlist', personIds: ['p1', 'p3'] },
+    ]);
+});
+
+test('editing the list leaves the Role\'s other rules alone', async () => {
+    const def = withAllowlist('p1');
+    def.restrictions.unshift({ kind: 'requireTag', tagId: KIDS_CLEARED });
+    const page = await mountPage({ roles: { r1: def }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+
+    page.addToAllowlistRule(1, 'p2');
+    assert.deepStrictEqual(page.draft.restrictions, [
+        { kind: 'requireTag', tagId: KIDS_CLEARED },
+        { kind: 'allowlist', personIds: ['p1', 'p2'] },
+    ]);
+});
+
+test('the picker for a list offers only people not already on it', async () => {
+    const page = await openWithAllowlist('p1');
+    const offered = page.allowlistOptionsFor(page.draft.restrictions[0]).map(p => p.id);
+
+    assert.deepStrictEqual(offered.sort(), ['p2', 'p3']);
+});
+
+test('the same person cannot be added to an existing list twice', async () => {
+    const page = await openWithAllowlist('p1');
+    page.addToAllowlistRule(0, 'p1');
+    assert.deepStrictEqual(listOf(page), ['p1']);
+});
+
+test('the list reads as names, and a person who has left can be cleared off it', async () => {
+    // Before this, a name that had left the directory was a dead entry an
+    // editor could see and not remove without rebuilding the whole list.
+    const page = await openWithAllowlist('p1', 'gone');
+    assert.deepStrictEqual(
+        page.allowlistNames(page.draft.restrictions[0]),
+        ['Ada Lovelace', 'Someone no longer in the directory']
+    );
+
+    page.removeFromAllowlistRule(0, 'gone');
+    assert.deepStrictEqual(listOf(page), ['p1']);
+});
+
+test('taking the last person off is refused, and says which control means that', async () => {
+    // An empty allowlist is a Role nobody can ever fill. Removing the RULE is
+    // how you say "anyone" — and that control is right there, so the refusal
+    // points at it instead of leaving a Role that cannot be saved.
+    const page = await openWithAllowlist('p1');
+    page.removeFromAllowlistRule(0, 'p1');
+
+    assert.deepStrictEqual(listOf(page), ['p1'], 'the list was emptied');
+    assert.equal(page.toast.type, 'error');
+    assert.match(page.toast.message, /remove the rule/i);
+});
+
+test('editing anything other than an allowlist does nothing', async () => {
+    // The index comes from the rendered list; a stale one must not turn a tag
+    // rule into a list of people.
+    const page = await mountPage({ roles: { r1: kidsDefinition() }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, KIDS_CLEARED);
+
+    page.addToAllowlistRule(0, 'p1');
+    page.removeFromAllowlistRule(0, 'p1');
+    assert.deepStrictEqual(page.draft.restrictions, [{ kind: 'requireTag', tagId: KIDS_CLEARED }]);
 });
 
 // ── Liturgical intensity ─────────────────────────────────────────────────────

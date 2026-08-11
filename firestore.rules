@@ -490,8 +490,27 @@ service cloud.firestore {
       allow read, write: if isElder();
     }
 
+    // The Pastoral Record. Elder-only to read, and elder-only to change or
+    // erase — with ONE hole, deliberately shaped.
+    //
+    // Moving somebody along the Membership Track is an editor's job (ADR-0012),
+    // and ADR-0005 says the move and the Membership Change that records it land
+    // in one batch or not at all. So refusing an editor the record refused them
+    // the move: the whole batch bounced, and the slider came back with an error
+    // and nothing changed.
+    //
+    // Appending that one entry is all the hole is. An editor still cannot READ
+    // the Pastoral Record — the Track is theirs to walk, the pastoral history
+    // around it is not — and cannot edit or delete an entry once written. The
+    // entry must also be signed with their own uid: a record that could be
+    // filed under somebody else's name is not a record.
     match /people/{personId}/shepherding_activity/{activityId} {
-      allow read, write: if isElder();
+      allow read: if isElder();
+      allow update, delete: if isElder();
+      allow create: if isElder()
+        || (isEditor()
+            && request.resource.data.kind == 'membership_change'
+            && request.resource.data.authorUid == request.auth.uid);
     }
 
     // Collection group query for shepherding_notes (used by People list page)

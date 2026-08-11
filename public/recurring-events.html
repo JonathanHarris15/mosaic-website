@@ -473,6 +473,97 @@
                         </a>
                     </div>
 
+                    <!-- ── Rules across two Roles (MS-221) ────────────────────
+                         A Role's own rules live in the Roles Manager, because
+                         they are facts about that Role wherever it runs. "The
+                         Kids Leader and the Kids Helper must not be married to
+                         each other" is not: it is a fact about THIS event, the
+                         only thing that knows the two run together. So it is
+                         written here, under the Roles it is about. -->
+                    <div x-show="hasRoles" class="mt-md bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[18px] text-secondary">hub</span>
+                            <h3 class="font-label-md text-xs uppercase tracking-wider text-on-surface-variant">
+                                Rules across two roles
+                            </h3>
+                        </div>
+                        <p class="text-[13px] text-on-surface-variant mt-1 max-w-[62ch]">
+                            For things no single role can say — a leader and their helper who must not
+                            be from one household, or a team drawn from one house group.
+                        </p>
+
+                        <ul x-show="pairRules.length" class="flex flex-col gap-2 mt-3">
+                            <template x-for="(rule, index) in pairRules" :key="index">
+                                <li class="group flex items-center gap-2 px-2 py-2 rounded-lg border bg-surface"
+                                    :class="pairRuleAvailable(rule) ? 'border-outline-variant' : 'border-error'">
+                                    <span class="material-symbols-outlined text-[18px] flex-shrink-0"
+                                          :class="pairRuleAvailable(rule) ? 'text-secondary' : 'text-error'"
+                                          x-text="rule.kind === 'sameGroup' ? 'groups' : 'group_remove'"></span>
+                                    <span class="flex-grow font-serif text-[15px] leading-snug"
+                                          :class="pairRuleAvailable(rule) ? 'text-on-surface' : 'text-error'"
+                                          x-text="pairRuleSentence(rule)"></span>
+                                    <button @click="removePairRule(index)" title="Remove this rule"
+                                            :disabled="savingPairRule"
+                                            class="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error disabled:opacity-40">
+                                        <span class="material-symbols-outlined text-[18px]">close</span>
+                                    </button>
+                                </li>
+                            </template>
+                        </ul>
+
+                        <div class="mt-3 bg-surface-container-low border border-outline-variant rounded-lg p-sm flex flex-col gap-2">
+                            <div class="flex flex-col lg:flex-row lg:items-center gap-2">
+                                <select x-model="newPairRoleA"
+                                        class="w-full lg:flex-1 lg:min-w-0 border border-outline-variant rounded-lg pl-sm pr-8 py-sm text-[14px] bg-surface re-focus">
+                                    <option value="">Pick a role…</option>
+                                    <template x-for="option in pairRoleOptions" :key="option.slug">
+                                        <option :value="option.slug" x-text="option.name"></option>
+                                    </template>
+                                </select>
+                                <span class="text-[13px] text-on-surface-variant self-center">and</span>
+                                <select x-model="newPairRoleB"
+                                        class="w-full lg:flex-1 lg:min-w-0 border border-outline-variant rounded-lg pl-sm pr-8 py-sm text-[14px] bg-surface re-focus">
+                                    <option value="">Pick a role…</option>
+                                    <template x-for="option in pairRoleOptions" :key="option.slug">
+                                        <option :value="option.slug" x-text="option.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div class="flex flex-col lg:flex-row lg:items-center gap-2">
+                                <!-- The same two sentence openers the Roles Manager
+                                     uses for the one-Role version, on purpose. -->
+                                <select x-model="newPairKind"
+                                        class="w-full lg:w-[17.5rem] lg:flex-shrink-0 border border-outline-variant rounded-lg pl-sm pr-8 py-sm text-[14px] bg-surface re-focus">
+                                    <option value="notSameGroup">cannot be from the same</option>
+                                    <option value="sameGroup">must be from the same</option>
+                                </select>
+                                <select x-model="newPairTypeId"
+                                        class="w-full lg:flex-grow lg:min-w-0 border border-outline-variant rounded-lg pl-sm pr-8 py-sm text-[14px] bg-surface re-focus">
+                                    <option value="">Choose a relationship…</option>
+                                    <template x-for="option in pairTypeOptions" :key="option.id">
+                                        <option :value="option.id" x-text="option.name"></option>
+                                    </template>
+                                </select>
+                                <button @click="addPairRule()"
+                                        :disabled="savingPairRule"
+                                        class="lg:flex-shrink-0 px-md py-sm text-xs font-label-md uppercase tracking-wider text-secondary border border-secondary rounded-lg hover:bg-secondary hover:text-on-secondary re-motion re-press re-focus disabled:opacity-40">
+                                    Add rule
+                                </button>
+                            </div>
+
+                            <template x-for="problem in pairRuleErrors" :key="problem">
+                                <p class="text-[13px] text-error" x-text="problem"></p>
+                            </template>
+
+                            <!-- An empty picker and a failed read look identical
+                                 from the outside and mean opposite things. -->
+                            <p x-show="groupTypesDenied" class="text-[13px] text-error">
+                                The relationship types could not be read, so only Family and Marriage
+                                are on offer. Ask an elder or admin to check.
+                            </p>
+                        </div>
+                    </div>
+
                     <!-- ── The grid ───────────────────────────────────────── -->
                     <div x-show="hasRoles && grid" class="mt-md">
                         <div class="border border-outline-variant rounded-lg overflow-hidden bg-surface-container-lowest">

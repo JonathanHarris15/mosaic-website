@@ -898,9 +898,12 @@ exports.refuseTrade = onCall(
 exports.offerTrade = onCall(
     {cors: true, region: "us-central1"},
     async (request) => {
-      const {tradeId, occurrenceId, roleSlug, slotId, holderId, offered} =
+      const {tradeId, occurrenceId, roleSlug, slotId, offered} =
         request.data || {};
-      if (!tradeId && (!occurrenceId || !roleSlug || !holderId)) {
+      // ⚠ NO `holderId`. Who holds the place is read off the roster inside
+      // `tw.offer` — the caller may not name them, and the cover list an
+      // uninvited offer starts from deliberately does not disclose them.
+      if (!tradeId && (!occurrenceId || !roleSlug)) {
         throw new HttpsError("invalid-argument", "Missing what you are after.");
       }
 
@@ -909,7 +912,6 @@ exports.offerTrade = onCall(
             tradeId: tradeId || null,
             assignment: tradeId ?
               null : {occurrenceId, roleSlug, slotId: slotId || null},
-            holderId: holderId || null,
             offered: Array.isArray(offered) ? offered : [],
           }, base)));
 
@@ -1025,6 +1027,23 @@ exports.endTradesOnFilledPlace = onDocumentWritten(
           (before.state || null) === (after.state || null)) return;
 
       const db = admin.firestore();
+
+      // ⚠ TWO SWEEPS, AND THE SECOND IS NEW. A Trade is a conversation about
+      // the place and ends when the place does; the COVER ENTRY is the
+      // advertisement for it, and nothing was taking that down when an editor
+      // simply removed the roster row. Emptying a run of dates left the list
+      // asking for cover on Sundays that no longer had a rota.
+      //
+      // Both hang off the roster write for the same reason: the editor does
+      // nothing special, so the cleanup has to run whichever door they changed
+      // the roster through.
+      await aw.sweepCover(db, {
+        occurrenceId: event.params.occurrenceId,
+        roleSlug: row.roleSlug,
+        slotId: row.slotId || null,
+        row: after,
+      });
+
       const result = await tw.sweepAssignment(db, {
         occurrenceId: event.params.occurrenceId,
         roleSlug: row.roleSlug,

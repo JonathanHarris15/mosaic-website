@@ -18,6 +18,11 @@
 // and the error looks exactly like "this church has no relationship types".
 // That is also why a failure here says so out loud instead of rendering empty.
 //
+// Tags cross the same boundary, by a different road. /people_tags IS readable
+// by everyone, so nothing stops the query — the filter is ours to apply, and
+// loadShepherdingTags applies it once for the whole page. A tag an elder has
+// marked hidden is never offered as a rule and never named in one.
+//
 // Loaded as a classic <script> and registered with Alpine; the factory is
 // exposed on window so the page's decisions can be tested without a browser.
 
@@ -34,7 +39,11 @@ window.RolesManager = () => ({
     // reported rather than left to throw on every render.
     conflictingDefinitions: [],
 
+    // Only the tags this account may see. The ids of the rest are held apart in
+    // hiddenTagIds — an existing rule can say it is unavailable without the name
+    // that was the point of hiding it.
     shepherdingTags: [],
+    hiddenTagIds: [],
     sharedRelationshipTypes: [],
     relationshipTypesDenied: false,
 
@@ -191,13 +200,32 @@ window.RolesManager = () => ({
         }
     },
 
+    // ⚠ Hidden tags are filtered HERE, once, and nowhere else. `shepherdingTags`
+    // is what the picker offers, what addTagRule checks against, and what
+    // ruleSentence names a rule from — so a tag an elder has marked hidden is
+    // out of all three by being out of this list. `hiddenTagIds` keeps the ids
+    // (never the names) so a rule already built on one can say it is
+    // unavailable rather than pretend the tag was deleted.
+    //
+    // The filter is in memory, not in the query: /people_tags is readable by
+    // everyone, because the tag list is how the Peoples page draws its filters.
+    // Hiding is what the app does with them, not what Firestore refuses.
     async loadShepherdingTags() {
         try {
             const snap = await db.collection('people_tags').orderBy('name', 'asc').get();
-            this.shepherdingTags = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name || doc.id }));
+            const all = snap.docs.map(doc => ({
+                id: doc.id,
+                name: doc.data().name || doc.id,
+                hiddenFromOthers: doc.data().hiddenFromOthers === true,
+            }));
+            this.shepherdingTags = RolesCore.visibleTags(all, this.currentPermissionLevel)
+                .map(tag => ({ id: tag.id, name: tag.name }));
+            const visible = this.shepherdingTags.map(tag => tag.id);
+            this.hiddenTagIds = all.map(tag => tag.id).filter(id => visible.indexOf(id) === -1);
         } catch (e) {
             console.error('Error loading Shepherding Tags:', e);
             this.shepherdingTags = [];
+            this.hiddenTagIds = [];
         }
     },
 
@@ -526,6 +554,14 @@ window.RolesManager = () => ({
         return options;
     },
 
+    // The cap the model enforces, so the box and the refusal agree (MS-222).
+    get descriptionLimit() { return RolesCore.MAX_DESCRIPTION; },
+
+    get descriptionLeft() {
+        const written = ((this.draft && this.draft.description) || '').trim().length;
+        return RolesCore.MAX_DESCRIPTION - written;
+    },
+
     get composingAllowlist() {
         return this.newRuleKind === RolesCore.RESTRICTIONS.ALLOWLIST;
     },
@@ -619,6 +655,84 @@ window.RolesManager = () => ({
         });
         this.newAllowlist = [];
         this.newAllowlistPick = '';
+    },
+
+    // ── Editing the list that is already on the Role ─────────────────────────
+    //
+    // An allowlist is the one rule made of MANY things, so it is the one rule
+    // that can be half-wrong later. Every other rule names a single tag or type
+    // — if it is wrong you remove it and add the right one. A list of eleven
+    // people with one person missing is not a rule to replace, it is a rule to
+    // amend, and rebuilding it from memory is how the twelfth name gets left
+    // off and somebody quietly stops being offered the Role.
+    //
+    // So the list is edited where it sits, in the rules list, rather than in
+    // the composer above it. The composer still writes a NEW list (and still
+    // replaces any existing one, which is the "start over" route).
+
+    // The names on a rule's list, in order, for the chips. A person who has
+    // left the directory is SAID rather than dropped — same reasoning as
+    // ruleSentence, and now they can be cleared off.
+    allowlistNames(rule) {
+        return ((rule && rule.personIds) || [])
+            .map(id => this.personName(id) || 'Someone no longer in the directory');
+    },
+
+    // Everyone not already on THIS list. Per-rule, not the composer's picker:
+    // the two lists are being built at once when a Role already has one.
+    allowlistOptionsFor(rule) {
+        const on = (rule && rule.personIds) || [];
+        return this.people.filter(person => on.indexOf(person.id) === -1);
+    },
+
+    // The rule at `index`, but only if it really is an allowlist. The index
+    // comes from the rendered list, and a stale one must not turn a tag rule
+    // into a list of people.
+    allowlistRuleAt(index) {
+        const rule = this.draftRestrictions[index];
+        return (rule && rule.kind === RolesCore.RESTRICTIONS.ALLOWLIST) ? rule : null;
+    },
+
+    // Replace the rule at `index` with one holding `personIds`. Immutable, like
+    // every other edit here, so cancel stays free.
+    replaceAllowlistAt(index, personIds) {
+        this.draft = Object.assign({}, this.draft, {
+            restrictions: this.draftRestrictions.map((rule, i) => (
+                i === index ? Object.assign({}, rule, { personIds: personIds }) : rule
+            )),
+        });
+    },
+
+    addToAllowlistRule(index, personId) {
+        if (!this.draft || !personId) return;
+        const rule = this.allowlistRuleAt(index);
+        if (!rule) return;
+        const on = rule.personIds || [];
+        if (on.indexOf(personId) !== -1) return;
+        this.replaceAllowlistAt(index, on.concat([personId]));
+    },
+
+    removeFromAllowlistRule(index, personId) {
+        if (!this.draft) return;
+        const rule = this.allowlistRuleAt(index);
+        if (!rule) return;
+        const left = (rule.personIds || []).filter(id => id !== personId);
+        // An empty list is a Role nobody can ever fill. "Anyone" is said by
+        // removing the RULE, and that control is on the same row — so point at
+        // it rather than leaving behind a Role that cannot be saved.
+        if (!left.length) {
+            this.showToast('A list needs at least one person — remove the rule to let anyone fill this Role', 'error');
+            return;
+        }
+        this.replaceAllowlistAt(index, left);
+    },
+
+    // The picker is a <select> that fires on change; it has to fall back to its
+    // placeholder or the same person cannot be re-picked after being removed.
+    pickIntoAllowlistRule(index, event) {
+        const id = event && event.target && event.target.value;
+        this.addToAllowlistRule(index, id);
+        if (event && event.target) event.target.value = '';
     },
 
     get composingRelationshipRule() {
@@ -792,32 +906,35 @@ window.RolesManager = () => ({
     // Type has been unshared says only that it is unavailable.
     ruleSentence(rule) {
         const kind = rule && rule.kind;
-        if (kind === RolesCore.RESTRICTIONS.REQUIRE_TAG) {
+        if (kind === RolesCore.RESTRICTIONS.REQUIRE_TAG || kind === RolesCore.RESTRICTIONS.EXCLUDE_TAG) {
+            // A hidden tag is not a missing one, and must not be reported as
+            // one: "no longer exists" reads as a dead rule to clear out, and
+            // the editor would be deleting a rule an elder still means.
+            if (this.hiddenTagIds.indexOf(rule.tagId) !== -1) {
+                return 'This rule uses a tag an elder keeps private. It still applies — ask an elder if it needs changing.';
+            }
             const name = this.tagName(rule.tagId);
-            return name
-                ? `Must be tagged "${name}"`
-                : 'Must carry a tag that no longer exists — remove this rule';
-        }
-        if (kind === RolesCore.RESTRICTIONS.EXCLUDE_TAG) {
-            const name = this.tagName(rule.tagId);
+            if (kind === RolesCore.RESTRICTIONS.REQUIRE_TAG) {
+                return name
+                    ? `Must be tagged "${name}"`
+                    : 'Must carry a tag that no longer exists — remove this rule';
+            }
             return name
                 ? `Cannot be tagged "${name}"`
                 : 'Excludes a tag that no longer exists — remove this rule';
         }
-        // Names, never ids. An id that no longer resolves is SAID so — a person
-        // who left leaves a dead entry that silently shrinks the list, and a
-        // shorter allowlist than the editor thinks they have is how a Role
-        // quietly stops being fillable.
+        // The one rule whose sentence does NOT carry its own contents: the list
+        // is rendered under it as chips, each removable, so naming everybody
+        // here as well would print the same eleven names twice. The chips are
+        // where "names, never ids" now lives (allowlistNames), including saying
+        // a person who has left rather than dropping them — a shorter list than
+        // the editor believes they have is how a Role stops being fillable.
         if (kind === RolesCore.RESTRICTIONS.ALLOWLIST) {
             const ids = rule.personIds || [];
             if (!ids.length) return 'This list is empty, so nobody could ever fill this Role — remove it or add someone';
-            const names = ids.map(id => this.personName(id));
-            const missing = names.filter(name => !name).length;
-            const known = names.filter(Boolean);
-            const said = known.length ? `Only ${known.join(', ')} can fill this Role` : 'Only people who are no longer in the directory';
-            return missing
-                ? `${said} — and ${missing} ${missing === 1 ? 'person is' : 'people are'} no longer in the directory`
-                : said;
+            return ids.length === 1
+                ? 'Only this person can fill this Role'
+                : 'Only these people can fill this Role';
         }
 
         const type = this.relationshipTypeById(rule.typeId);
@@ -896,6 +1013,13 @@ window.RolesManager = () => ({
             // number every read path expects.
             intensity: RolesCore.intensityOf({ intensity: Number(this.draft.intensity) }),
             allowsAnotherRole: this.draft.allowsAnotherRole === true,
+            // ⚠ EVERY FIELD A ROLE HAS MUST BE LISTED HERE. This object is
+            // written WHOLE, so a field left out of it is not merely unsaved —
+            // it is deleted from the stored Role on the next save. A new field
+            // that is added to the form and the model but not to this list
+            // reads back blank for ever, with nothing anywhere reporting a
+            // problem. `newDefinition` is the list; the paired test walks it.
+            description: String(this.draft.description || '').trim(),
         };
 
         try {

@@ -31,6 +31,8 @@
     <script src="events-core.js"></script>
     <script src="events-occurrence-core.js"></script>
     <script src="away-core.js"></script>
+    <script src="commitments-core.js"></script>
+    <script src="events-store.js"></script>
     <script src="cover-core.js"></script>
     <script src="cover-store.js"></script>
     <script src="cover.js"></script>
@@ -111,18 +113,47 @@
                         <div class="mt-[3px] text-[12.5px] text-on-surface-variant">
                             <span x-text="row.eventName"></span> · <span x-text="row.weekday"></span>
                         </div>
+                        <!-- What the job is (MS-222). ⚠ THIS LIST MOST OF ALL:
+                             everywhere else somebody is reading about a place
+                             they already hold, and here they are deciding
+                             whether to take one they have never done. "What is
+                             it?" is the question, and the answer used to be a
+                             name and a date.
+
+                             Shown on the rows you CANNOT take as well, level
+                             with the rest — the reason a place is refused you is
+                             already stated once, and hiding what it is on top of
+                             that would make the row less of an answer, not more. -->
+                        <p x-show="row.description"
+                           class="mt-2 font-serif text-[13.5px] leading-[1.45] text-on-surface-variant"
+                           x-text="row.description"></p>
                     </div>
                 </div>
 
-                <div class="shrink-0 md:w-[230px] md:flex md:justify-end pl-[76px] md:pl-0">
-                    <button x-show="row.permitted" type="button"
-                            :disabled="taking"
-                            @click="take(row)"
-                            class="press w-full md:w-auto min-h-[44px] px-[22px] rounded-lg
-                                   bg-primary text-on-primary text-[11.5px] uppercase tracking-[.12em]
-                                   disabled:opacity-50">
-                        Take it
-                    </button>
+                <div class="shrink-0 md:w-[230px] md:flex md:justify-end md:items-center pl-[76px] md:pl-0">
+                    <!-- Two doors, and the quieter one is second. Taking it
+                         needs nobody's answer; offering asks somebody to give
+                         something up, so it reads as the considered choice
+                         rather than the obvious one. -->
+                    <div x-show="row.permitted" class="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                        <button type="button"
+                                :disabled="taking"
+                                @click="take(row)"
+                                class="press w-full md:w-auto min-h-[44px] px-[22px] rounded-lg
+                                       bg-primary text-on-primary text-[11.5px] uppercase tracking-[.12em]
+                                       disabled:opacity-50">
+                            Take it
+                        </button>
+                        <button type="button"
+                                x-show="mine.length"
+                                :disabled="taking"
+                                @click="openOffer(row)"
+                                class="press w-full md:w-auto min-h-[44px] px-[18px] rounded-lg
+                                       border border-outline-variant text-on-surface
+                                       text-[11.5px] uppercase tracking-[.12em] disabled:opacity-50">
+                            Offer a swap
+                        </button>
+                    </div>
                     <!-- Stated once, in the same ink as the rest of the row. -->
                     <div x-show="!row.permitted"
                          class="text-[12.5px] leading-[1.45] text-on-surface-variant md:text-right"
@@ -153,6 +184,73 @@
                 <button type="button" @click="commit(confirming)"
                         class="press flex-1 min-h-[44px] rounded-lg bg-primary text-on-primary
                                text-[11.5px] uppercase tracking-[.12em]">Take it anyway</button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- ── Offering one of your own instead of just taking theirs ────────────── -->
+<!-- The other door out of this list. "Anybody else may offer off the cover list
+     uninvited" is the model's own sentence, and the list could only ever hand a
+     place over outright — so the one thing you could not do from here was the
+     thing Trades exist for.
+
+     ⚠ An uninvited offer MUST name something. Asking nothing in return is a
+     take, and Take is right there, faster, and involves nobody else — so the
+     button stays off until something is ticked rather than quietly settling. -->
+<template x-if="offering">
+    <div class="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-6 bg-primary/40">
+        <div class="w-full max-w-[460px] max-h-[86vh] flex flex-col bg-surface-container-lowest
+                    border border-outline-variant rounded-t-2xl md:rounded-2xl">
+            <div class="p-5 border-b border-outline-variant">
+                <div class="font-headline-lg text-[18px] tracking-[.02em] text-primary">
+                    Offer a swap
+                </div>
+                <p class="mt-1.5 font-serif text-[15.5px] leading-[1.45] text-on-surface">
+                    You would take <span x-text="offering.roleName"></span> on
+                    <span x-text="offering.weekday + ' ' + offering.dayNum + ' ' + offering.mon"></span>.
+                    Pick what you would hand over in return — they choose one of them, or say no.
+                </p>
+            </div>
+
+            <div class="flex-grow overflow-y-auto">
+                <template x-for="row in offerable" :key="row.key">
+                    <button type="button" @click="togglePick(row)"
+                            class="w-full text-left px-5 py-3 flex items-center gap-3
+                                   border-b border-outline-variant last:border-b-0">
+                        <span class="material-symbols-outlined text-[20px]"
+                              :class="picked.includes(row.key) ? 'text-secondary' : 'text-outline'"
+                              x-text="picked.includes(row.key) ? 'check_box' : 'check_box_outline_blank'"></span>
+                        <span class="min-w-0">
+                            <span class="block text-[15px] text-on-surface" x-text="row.roleName"></span>
+                            <span class="block text-[12px] text-on-surface-variant"
+                                  x-text="row.eventName + ' · ' + row.longDate"></span>
+                            <!-- What you would be handing over (MS-222). The
+                                 same question from the other side: you are
+                                 giving this away, and what it involves is how
+                                 you decide which one you can spare. -->
+                            <span x-show="row.description"
+                                  class="block mt-1 font-serif text-[12.5px] leading-[1.4] text-on-surface-variant"
+                                  x-text="row.description"></span>
+                        </span>
+                    </button>
+                </template>
+                <p x-show="!offerable.length" class="px-5 py-8 text-center text-[13px] text-on-surface-variant">
+                    You have nothing else on to offer — but you can still take this one outright.
+                </p>
+            </div>
+
+            <div class="p-4 border-t border-outline-variant flex flex-col gap-2">
+                <button type="button" :disabled="busyOffering || !picked.length"
+                        @click="sendOffer()"
+                        class="press w-full min-h-[44px] rounded-lg bg-primary text-on-primary
+                               text-[11.5px] uppercase tracking-[.12em] disabled:opacity-40">
+                    Send the offer <span x-text="picked.length ? '(' + picked.length + ')' : ''"></span>
+                </button>
+                <button type="button" @click="offering = null; picked = []"
+                        class="min-h-[40px] text-on-surface-variant text-[11px] uppercase tracking-[.12em]">
+                    Not now
+                </button>
             </div>
         </div>
     </div>

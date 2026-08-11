@@ -212,8 +212,9 @@
                         <input type="range" min="0" :max="membershipStages.length - 1" step="1"
                                :value="membershipIndex"
                                :disabled="membershipInactive"
+                               :style="`--track-index: ${membershipIndex}; --track-stops: ${membershipStages.length}`"
                                @change="setMembershipStageByIndex($event.target.value)"
-                               class="w-full accent-primary cursor-pointer disabled:cursor-not-allowed">
+                               class="track-slider text-primary">
                         <div class="flex justify-between text-[9px] text-on-surface-variant leading-tight">
                             <template x-for="(stage, i) in membershipStages" :key="stage">
                                 <span class="flex-1 text-center px-0.5"

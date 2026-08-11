@@ -376,6 +376,30 @@
                                 </span>
                             </label>
 
+                            <!-- ── What the job actually is (MS-222) ─────────────────────
+                                 A name is a label, and a label is not an answer to "what
+                                 am I meant to do?". This is that answer, in the editor's
+                                 own words, and it is read by whoever is down for the Role
+                                 on their Commitments page.
+
+                                 One field of plain prose on purpose. The moment it has
+                                 structure it wants a screen of its own, and the thing
+                                 worth having is the sentence the Role's organiser would
+                                 say if you asked them in the corridor. -->
+                            <label class="flex flex-col gap-base max-w-[560px] pt-sm border-t border-outline-variant">
+                                <span class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">What it involves</span>
+                                <textarea x-model="draft.description" rows="3"
+                                          :maxlength="descriptionLimit"
+                                          placeholder="Arrive by 9:15, put the urns on, and set out the mugs on the side table."
+                                          class="border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary"></textarea>
+                                <span class="font-body-md text-[13px]"
+                                      :class="descriptionLeft < 0 ? 'text-error' : 'text-on-surface-variant'">
+                                    Anyone down for this Role reads it beside the date.
+                                    <span x-show="draft.description"
+                                          x-text="'· ' + descriptionLeft + ' left'"></span>
+                                </span>
+                            </label>
+
                             <!-- ── How often, and whether it uses up the morning ──────────
                                  Two separate questions that are easy to conflate: intensity
                                  says the job TIRES you, exclusivity says it OCCUPIES you.
@@ -474,18 +498,47 @@
 
                                 <ul x-show="draftRestrictions.length" class="flex flex-col gap-base">
                                     <template x-for="(rule, index) in draftRestrictions" :key="index">
-                                        <li class="group flex items-center gap-sm px-sm py-sm rounded-lg border bg-surface"
+                                        <li class="group flex flex-col gap-sm px-sm py-sm rounded-lg border bg-surface"
                                             :class="isRuleAvailable(rule) ? 'border-outline-variant' : 'border-error'">
-                                            <span class="material-symbols-outlined text-[19px] flex-shrink-0"
-                                                  :class="isRuleAvailable(rule) ? 'text-secondary' : 'text-error'"
-                                                  x-text="ruleIcon(rule)"></span>
-                                            <span class="flex-grow font-serif text-[16px] leading-snug"
-                                                  :class="isRuleAvailable(rule) ? 'text-on-surface' : 'text-error'"
-                                                  x-text="ruleSentence(rule)"></span>
-                                            <button @click="removeRule(index)" title="Remove this rule"
-                                                    class="w-9 h-9 lg:w-8 lg:h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error transition-opacity transition-colors opacity-100 lg:opacity-0 lg:group-hover:opacity-100">
-                                                <span class="material-symbols-outlined text-[19px]">close</span>
-                                            </button>
+                                            <div class="flex items-center gap-sm">
+                                                <span class="material-symbols-outlined text-[19px] flex-shrink-0"
+                                                      :class="isRuleAvailable(rule) ? 'text-secondary' : 'text-error'"
+                                                      x-text="ruleIcon(rule)"></span>
+                                                <span class="flex-grow font-serif text-[16px] leading-snug"
+                                                      :class="isRuleAvailable(rule) ? 'text-on-surface' : 'text-error'"
+                                                      x-text="ruleSentence(rule)"></span>
+                                                <button @click="removeRule(index)" title="Remove this rule"
+                                                        class="w-9 h-9 lg:w-8 lg:h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error transition-opacity transition-colors opacity-100 lg:opacity-0 lg:group-hover:opacity-100">
+                                                    <span class="material-symbols-outlined text-[19px]">close</span>
+                                                </button>
+                                            </div>
+
+                                            <!-- A list is the one rule made of many things, so it is
+                                                 the one that can be half-wrong later. It is amended
+                                                 where it sits: rebuilding eleven names to add a
+                                                 twelfth is how one of the eleven gets left off. -->
+                                            <div x-show="rule.kind === 'allowlist'"
+                                                 class="flex flex-col gap-sm pl-[27px]">
+                                                <div class="flex flex-wrap gap-xs">
+                                                    <template x-for="(personId, i) in (rule.personIds || [])" :key="personId">
+                                                        <span class="inline-flex items-center gap-xs font-serif text-[15px] text-on-surface bg-surface-container-low border border-outline-variant rounded-sm pl-base pr-[5px] py-[4px]">
+                                                            <span x-text="allowlistNames(rule)[i]"></span>
+                                                            <button @click="removeFromAllowlistRule(index, personId)"
+                                                                    :title="`Take ${allowlistNames(rule)[i]} off this list`"
+                                                                    class="w-5 h-5 flex items-center justify-center rounded text-on-surface-variant hover:text-error">
+                                                                <span class="material-symbols-outlined text-[15px]">close</span>
+                                                            </button>
+                                                        </span>
+                                                    </template>
+                                                </div>
+                                                <select @change="pickIntoAllowlistRule(index, $event)"
+                                                        class="w-full lg:w-[17.5rem] border border-outline-variant rounded-lg pl-sm pr-8 py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary">
+                                                    <option value="">Add someone to this list…</option>
+                                                    <template x-for="option in allowlistOptionsFor(rule)" :key="option.id">
+                                                        <option :value="option.id" x-text="option.name"></option>
+                                                    </template>
+                                                </select>
+                                            </div>
                                         </li>
                                     </template>
                                 </ul>

@@ -121,6 +121,14 @@
                                 <span x-text="row.eventName"></span> ·
                                 <span x-text="row.weekday"></span> <span x-text="row.longDate"></span>
                             </div>
+                            <!-- ⚠ THIS ROW MOST OF ALL (MS-222). These are the
+                                 places waiting on an answer, so this is the one
+                                 screen where somebody is deciding whether they
+                                 can do the thing — and "what is it?" is the
+                                 question they are deciding with. -->
+                            <p x-show="row.description"
+                               class="mt-2 font-serif text-[14px] leading-[1.45] text-on-surface-variant"
+                               x-text="row.description"></p>
                         </div>
                     </div>
 
@@ -194,6 +202,21 @@
                                         : 'text-[15.5px]'"
                                      x-text="row.roleName"></div>
                                 <div class="mt-0.5 text-[12.5px] text-on-surface-variant" x-text="row.eventName"></div>
+                                <!-- What the job is (MS-222). Under the Event
+                                     rather than beside it: it is prose, and prose
+                                     put in a column beside a date turns into a
+                                     stripe of text nobody reads.
+
+                                     Shown plainly, not behind a "more" — the
+                                     whole reason it exists is that somebody
+                                     down for a Role should not have to ask what
+                                     it involves, and a description you have to
+                                     open is one you find out about after you
+                                     needed it. The cap on its length is what
+                                     keeps that affordable. -->
+                                <p x-show="row.description"
+                                   class="mt-1.5 font-serif text-[14px] leading-[1.45] text-on-surface-variant"
+                                   x-text="row.description"></p>
                             </div>
 
                             <div class="shrink-0 flex items-center gap-3">
@@ -353,6 +376,13 @@
                                 <span x-text="roleNameFor(swap.roleName)"></span> ·
                                 <span x-text="longDateOf(swap.date)"></span>
                             </div>
+                            <!-- What you are being asked to take on (MS-222).
+                                 Somebody has asked you personally, and this may
+                                 be a Role you have never done — which is why
+                                 they asked. -->
+                            <p x-show="descriptionFor(swap.roleName)"
+                               class="mt-1.5 font-serif text-[13.5px] leading-[1.45] text-on-surface-variant"
+                               x-text="descriptionFor(swap.roleName)"></p>
 
                             <div class="mt-3.5 flex flex-wrap gap-2">
                                 <!-- Replying and refusing are the same weight,
@@ -575,6 +605,11 @@
                             <span class="block text-[15px] text-on-surface" x-text="row.roleName"></span>
                             <span class="block text-[12px] text-on-surface-variant"
                                   x-text="row.eventName + ' · ' + row.longDate"></span>
+                            <!-- What you would be handing over (MS-222): how you
+                                 decide which one you can spare. -->
+                            <span x-show="row.description"
+                                  class="block mt-1 font-serif text-[12.5px] leading-[1.4] text-on-surface-variant"
+                                  x-text="row.description"></span>
                         </span>
                     </button>
                 </template>
@@ -630,6 +665,13 @@
                              x-text="roleNameFor(put.roleSlug)"></div>
                         <div class="text-[12px] text-on-surface-variant"
                              x-text="longDateOf(put.date)"></div>
+                        <!-- What you would be taking on (MS-222). You are about
+                             to accept one of these, and a name and a date is not
+                             enough to choose between two jobs you have never
+                             done. -->
+                        <div x-show="descriptionFor(put.roleSlug)"
+                             class="mt-1 font-serif text-[12.5px] leading-[1.4] text-on-surface-variant"
+                             x-text="descriptionFor(put.roleSlug)"></div>
                     </button>
                 </template>
             </div>

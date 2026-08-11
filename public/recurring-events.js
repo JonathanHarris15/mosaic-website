@@ -43,6 +43,9 @@
     'use strict';
 
     const Core = window.EventsOccurrenceCore;
+    // The SERIES model, which is a different module from the occurrence one
+    // above. Cross-Role Rules belong to a series (MS-221).
+    const Series = window.EventsCore;
     const Store = window.EventsStore;
     const View = window.CalendarView;
     const Roles = window.RolesCore;
@@ -89,6 +92,19 @@
             selected: [],
             gridLoading: false,
             clearing: false,
+
+            // ── Cross-Role Rules (MS-221) ────────────────────────────────────
+            //
+            // Rules about a PAIR of Roles — "the Kids Leader and the Kids Helper
+            // must not be married to each other". They belong to neither Role,
+            // so they belong to the Event that runs both, which is this page.
+            sharedGroupTypes: [],
+            groupTypesDenied: false,
+            newPairKind: 'notSameGroup',
+            newPairTypeId: '',
+            newPairRoleA: '',
+            newPairRoleB: '',
+            savingPairRule: false,
 
             // ── Loading ──────────────────────────────────────────────────────
 
@@ -176,6 +192,30 @@
                 ]);
                 this.people = people.docs.map(d => Object.assign({ id: d.id }, d.data()));
                 this.roleDefinitions = roles.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                await this.loadGroupTypes();
+            },
+
+            // The Group Types a Cross-Role Rule can be written against (MS-221).
+            //
+            // ⚠ The query MUST carry `where('sharedWithEditors', '==', true)` —
+            // the same trap the Roles Manager documents at the top of its file.
+            // Firestore evaluates read rules per returned document and fails the
+            // WHOLE query if one would fail, so an unconstrained query does not
+            // return fewer rows, it errors, and the error looks exactly like
+            // "this church has no relationship types".
+            async loadGroupTypes() {
+                try {
+                    const snap = await db.collection('relationship_types')
+                        .where('sharedWithEditors', '==', true)
+                        .get();
+                    this.sharedGroupTypes = snap.docs
+                        .map(d => Object.assign({ id: d.id }, d.data()))
+                        .filter(t => t.kind === 'group' && t.sharedWithEditors === true);
+                } catch (e) {
+                    console.error('Could not read the relationship types:', e);
+                    this.sharedGroupTypes = [];
+                    this.groupTypesDenied = true;
+                }
             },
 
             // ── Who is looking ───────────────────────────────────────────────
@@ -365,6 +405,129 @@
             // table with date headings reads as a failed load rather than as a
             // thing nobody has set up yet.
             get hasRoles() { return this.gridRoles.length > 0; },
+
+            // ── Cross-Role Rules (MS-221) ────────────────────────────────────
+            //
+            // A Role's own rules are written in the Roles Manager, because they
+            // are facts about that Role wherever it runs. A rule about a PAIR of
+            // Roles is not — it is a fact about this Event, the only thing that
+            // knows the two run together — so it is written here.
+
+            get pairRules() {
+                return Series.crossRoleRulesOf(this.chosen);
+            },
+
+            // Family and Marriage come from the Membership Directory and need no
+            // elder to share them; anything else an elder has shared joins them.
+            get pairTypeOptions() {
+                return Roles.DIRECTORY_GROUP_TYPES.concat(this.sharedGroupTypes);
+            },
+
+            // Both pickers offer every Role on this Event. Liturgical ones are
+            // included on purpose: "the preacher and the service leader must not
+            // be married" is the same rule, and the roster judge sees liturgy.
+            get pairRoleOptions() {
+                return ((this.chosen && this.chosen.roleSlugs) || []).map(slug => ({
+                    slug: slug,
+                    name: this.roleName(slug),
+                }));
+            },
+
+            roleName(slug) {
+                const def = this.roleDefinitions.find(d => d.slug === slug);
+                if (def && def.name) return def.name;
+                const liturgical = Roles.LITURGICAL_ROLES.find(r => r.slug === slug);
+                return (liturgical && liturgical.name) || slug;
+            },
+
+            typeName(typeId) {
+                const type = this.pairTypeOptions.find(t => t.id === typeId);
+                return (type && type.name) || null;
+            },
+
+            // A rule the editor can check by reading it, in the same words the
+            // Roles Manager uses for the one-Role version.
+            pairRuleSentence(rule) {
+                const type = this.typeName(rule && rule.typeId);
+                const pair = ((rule && rule.roleSlugs) || []).map(slug => this.roleName(slug));
+                if (!type) {
+                    return 'This rule is unavailable — an elder is no longer sharing the relationship '
+                        + 'type it uses with editors. Remove it, or ask an elder to share that type again.';
+                }
+                return rule.kind === Roles.RESTRICTIONS.SAME_GROUP
+                    ? `${pair[0]} and ${pair[1]} must be from the same "${type}"`
+                    : `${pair[0]} and ${pair[1]} cannot be from the same "${type}"`;
+            },
+
+            pairRuleAvailable(rule) {
+                return Roles.validateCrossRoleRule(
+                    rule, this.sharedGroupTypes, null
+                ).valid;
+            },
+
+            get pairRuleErrors() {
+                if (!this.newPairTypeId || !this.newPairRoleA || !this.newPairRoleB) return [];
+                return Roles.validateCrossRoleRule({
+                    kind: this.newPairKind,
+                    typeId: this.newPairTypeId,
+                    roleSlugs: [this.newPairRoleA, this.newPairRoleB],
+                }, this.sharedGroupTypes, (this.chosen && this.chosen.roleSlugs) || []).errors;
+            },
+
+            async addPairRule() {
+                if (!this.chosen || this.savingPairRule) return;
+                const rule = {
+                    kind: this.newPairKind,
+                    typeId: this.newPairTypeId,
+                    roleSlugs: [this.newPairRoleA, this.newPairRoleB],
+                };
+                const check = Roles.validateCrossRoleRule(
+                    rule, this.sharedGroupTypes, (this.chosen && this.chosen.roleSlugs) || []
+                );
+                if (!check.valid) {
+                    this.error = check.errors[0];
+                    return;
+                }
+                // The same pair, the same type, the same polarity, twice, is one
+                // rule written twice — it would refuse the same person twice.
+                const already = this.pairRules.some(r => (
+                    r.kind === rule.kind && r.typeId === rule.typeId &&
+                    r.roleSlugs.slice().sort().join() === rule.roleSlugs.slice().sort().join()
+                ));
+                if (already) {
+                    this.error = 'That rule is already on this event.';
+                    return;
+                }
+                await this.savePairRules(Series.addCrossRoleRule(this.chosen, rule));
+                this.newPairTypeId = '';
+                this.newPairRoleA = '';
+                this.newPairRoleB = '';
+            },
+
+            async removePairRule(index) {
+                if (!this.chosen || this.savingPairRule) return;
+                await this.savePairRules(Series.removeCrossRoleRule(this.chosen, index));
+            },
+
+            // One writer for both, so the list on screen and the list in
+            // Firestore can never be two different lists.
+            async savePairRules(nextSeries) {
+                this.savingPairRule = true;
+                this.error = '';
+                try {
+                    const saved = await Store.setSeriesCrossRoleRules(
+                        db, this.seriesId, Series.crossRoleRulesOf(nextSeries)
+                    );
+                    this.series = this.series.map(s => (
+                        s.id === this.seriesId ? Object.assign({}, s, { crossRoleRules: saved }) : s
+                    ));
+                } catch (e) {
+                    console.error('Could not save the cross-Role rule:', e);
+                    this.error = 'That rule could not be saved — nothing was changed.';
+                } finally {
+                    this.savingPairRule = false;
+                }
+            },
 
             // ── Ticking columns ──────────────────────────────────────────────
 
