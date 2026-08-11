@@ -377,6 +377,21 @@
     // FROM everyone else for, so they still see them.
     const SEES_HIDDEN = Object.freeze(['elder', 'super_admin']);
 
+    function seesHidden(rank) {
+        return SEES_HIDDEN.indexOf(rank) !== -1;
+    }
+
+    // The tags themselves can be hidden, separately from the people they carry.
+    // `hiddenFromOthers` is an elder saying the TAG is theirs — its name is the
+    // private thing, so a picker that offers "Under Church Discipline" as a
+    // serving rule has already told the editor it exists, whoever ends up
+    // tagged. Same bypass as above: elders and super admins are who it is kept
+    // from everyone else FOR.
+    function visibleTags(tags, rank) {
+        if (seesHidden(rank)) return (tags || []).slice();
+        return (tags || []).filter(tag => !(tag && tag.hiddenFromOthers));
+    }
+
     function assignablePeople(people, options) {
         const opts = options || {};
         const hiding = opts.hidingTags || [];
@@ -880,6 +895,8 @@
         MAX_ROLES_PER_PERSON,
         isRequirement,
         assignablePeople,
+        seesHidden,
+        visibleTags,
         // fairness fields (MS-17, ADR-0020)
         intensityOf,
         allowsAnotherRole,

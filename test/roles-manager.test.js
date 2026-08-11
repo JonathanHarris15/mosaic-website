@@ -102,6 +102,7 @@ require('../public/roles-manager.js');
 
 const KIDS_CLEARED = 'tag_kids';
 const SABBATICAL = 'tag_sabbatical';
+const DISCIPLINE = 'tag_discipline';
 
 const TAGS = {
     [KIDS_CLEARED]: { name: 'Kids Cleared' },
@@ -134,10 +135,13 @@ const coffeeDefinition = () => ({
 
 // Mount the page against a seeded store and run its loads, as init() does once
 // the permission gate has passed.
-async function mountPage(seed = {}, { deny = [], confirmAnswer = true } = {}) {
+async function mountPage(seed = {}, { deny = [], confirmAnswer = true, rank = 'editor' } = {}) {
     global.db = fakeDb({ people_tags: TAGS, ...seed }, { deny });
     global.confirm = () => confirmAnswer;
     const page = window.RolesManager();
+    // init() settles the permission level before it loads anything, because the
+    // loads read it — hidden tags are filtered by who is asking.
+    page.currentPermissionLevel = rank;
     await page.loadEverything();
     return page;
 }
@@ -384,6 +388,56 @@ test('Tags are offered from the church\'s own Tags, not typed free-hand', async 
     page2.startEdit(page2.roleDefinitions.find(d => d.id === 'r1'));
     page2.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, 'a_tag_that_does_not_exist');
     assert.equal(page2.draft.restrictions.length, 0, 'an unknown tag id is not accepted');
+});
+
+// ── Tags an elder keeps private ──────────────────────────────────────────────
+//
+// `hiddenFromOthers` is an elder saying the TAG is theirs. The name is the
+// private thing, so offering it in a rule picker has already leaked it.
+
+test('a tag an elder has hidden is never offered to an editor building a rule', async () => {
+    const page = await mountPage({
+        roles: { r1: kidsDefinition() },
+        people_tags: { ...TAGS, [DISCIPLINE]: { name: 'Under Discipline', hiddenFromOthers: true } },
+    }, { rank: 'editor' });
+
+    assert.deepStrictEqual(page.shepherdingTags.map(t => t.id).sort(), [KIDS_CLEARED, SABBATICAL].sort());
+    assert.deepStrictEqual(page.ruleValueOptions.map(o => o.id).sort(), [KIDS_CLEARED, SABBATICAL].sort());
+    assert.ok(
+        !JSON.stringify(page.ruleValueOptions).includes('Under Discipline'),
+        'the hidden tag\'s name must not reach the picker'
+    );
+
+    // And not by hand either: the id can be typed, the rule cannot be built.
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, DISCIPLINE);
+    assert.equal(page.draft.restrictions.length, 0);
+});
+
+test('an elder still sees their own hidden tags — they are hidden from everyone else FOR elders', async () => {
+    for (const rank of ['elder', 'super_admin']) {
+        const page = await mountPage({
+            people_tags: { ...TAGS, [DISCIPLINE]: { name: 'Under Discipline', hiddenFromOthers: true } },
+        }, { rank });
+        assert.ok(page.shepherdingTags.some(t => t.id === DISCIPLINE), rank + ' should see the hidden tag');
+        assert.deepStrictEqual(page.hiddenTagIds, [], 'nothing is held back from ' + rank);
+    }
+});
+
+test('a rule already built on a hidden tag says it is private, not that it is broken', async () => {
+    const withRule = kidsDefinition();
+    withRule.restrictions = [{ kind: 'requireTag', tagId: DISCIPLINE }];
+    const page = await mountPage({
+        roles: { r1: withRule },
+        people_tags: { ...TAGS, [DISCIPLINE]: { name: 'Under Discipline', hiddenFromOthers: true } },
+    }, { rank: 'editor' });
+
+    const sentence = page.ruleSentence({ kind: 'requireTag', tagId: DISCIPLINE });
+    assert.doesNotMatch(sentence, /Under Discipline/, 'the name is the thing being hidden');
+    assert.doesNotMatch(sentence, /no longer exists/, 'a hidden tag is not a deleted one');
+    assert.match(sentence, /private/i);
+    // A tag that really is gone still reads as gone.
+    assert.match(page.ruleSentence({ kind: 'requireTag', tagId: 'tag_deleted' }), /no longer exists/);
 });
 
 test('a rule can be removed', async () => {

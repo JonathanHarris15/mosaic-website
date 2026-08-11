@@ -18,6 +18,11 @@
 // and the error looks exactly like "this church has no relationship types".
 // That is also why a failure here says so out loud instead of rendering empty.
 //
+// Tags cross the same boundary, by a different road. /people_tags IS readable
+// by everyone, so nothing stops the query — the filter is ours to apply, and
+// loadShepherdingTags applies it once for the whole page. A tag an elder has
+// marked hidden is never offered as a rule and never named in one.
+//
 // Loaded as a classic <script> and registered with Alpine; the factory is
 // exposed on window so the page's decisions can be tested without a browser.
 
@@ -34,7 +39,11 @@ window.RolesManager = () => ({
     // reported rather than left to throw on every render.
     conflictingDefinitions: [],
 
+    // Only the tags this account may see. The ids of the rest are held apart in
+    // hiddenTagIds — an existing rule can say it is unavailable without the name
+    // that was the point of hiding it.
     shepherdingTags: [],
+    hiddenTagIds: [],
     sharedRelationshipTypes: [],
     relationshipTypesDenied: false,
 
@@ -191,13 +200,32 @@ window.RolesManager = () => ({
         }
     },
 
+    // ⚠ Hidden tags are filtered HERE, once, and nowhere else. `shepherdingTags`
+    // is what the picker offers, what addTagRule checks against, and what
+    // ruleSentence names a rule from — so a tag an elder has marked hidden is
+    // out of all three by being out of this list. `hiddenTagIds` keeps the ids
+    // (never the names) so a rule already built on one can say it is
+    // unavailable rather than pretend the tag was deleted.
+    //
+    // The filter is in memory, not in the query: /people_tags is readable by
+    // everyone, because the tag list is how the Peoples page draws its filters.
+    // Hiding is what the app does with them, not what Firestore refuses.
     async loadShepherdingTags() {
         try {
             const snap = await db.collection('people_tags').orderBy('name', 'asc').get();
-            this.shepherdingTags = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name || doc.id }));
+            const all = snap.docs.map(doc => ({
+                id: doc.id,
+                name: doc.data().name || doc.id,
+                hiddenFromOthers: doc.data().hiddenFromOthers === true,
+            }));
+            this.shepherdingTags = RolesCore.visibleTags(all, this.currentPermissionLevel)
+                .map(tag => ({ id: tag.id, name: tag.name }));
+            const visible = this.shepherdingTags.map(tag => tag.id);
+            this.hiddenTagIds = all.map(tag => tag.id).filter(id => visible.indexOf(id) === -1);
         } catch (e) {
             console.error('Error loading Shepherding Tags:', e);
             this.shepherdingTags = [];
+            this.hiddenTagIds = [];
         }
     },
 
@@ -792,14 +820,19 @@ window.RolesManager = () => ({
     // Type has been unshared says only that it is unavailable.
     ruleSentence(rule) {
         const kind = rule && rule.kind;
-        if (kind === RolesCore.RESTRICTIONS.REQUIRE_TAG) {
+        if (kind === RolesCore.RESTRICTIONS.REQUIRE_TAG || kind === RolesCore.RESTRICTIONS.EXCLUDE_TAG) {
+            // A hidden tag is not a missing one, and must not be reported as
+            // one: "no longer exists" reads as a dead rule to clear out, and
+            // the editor would be deleting a rule an elder still means.
+            if (this.hiddenTagIds.indexOf(rule.tagId) !== -1) {
+                return 'This rule uses a tag an elder keeps private. It still applies — ask an elder if it needs changing.';
+            }
             const name = this.tagName(rule.tagId);
-            return name
-                ? `Must be tagged "${name}"`
-                : 'Must carry a tag that no longer exists — remove this rule';
-        }
-        if (kind === RolesCore.RESTRICTIONS.EXCLUDE_TAG) {
-            const name = this.tagName(rule.tagId);
+            if (kind === RolesCore.RESTRICTIONS.REQUIRE_TAG) {
+                return name
+                    ? `Must be tagged "${name}"`
+                    : 'Must carry a tag that no longer exists — remove this rule';
+            }
             return name
                 ? `Cannot be tagged "${name}"`
                 : 'Excludes a tag that no longer exists — remove this rule';

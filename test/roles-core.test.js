@@ -227,6 +227,24 @@ test('an elder sees the hidden Person, because the tag hides them from everyone 
     });
 });
 
+test('a tag marked hidden is not shown to anyone below an elder', () => {
+    // Two separate flags: `hidePeople` hides who carries the tag, and
+    // `hiddenFromOthers` hides the tag itself. This is the second one.
+    const tags = [
+        { id: 't1', name: 'Kids Cleared' },
+        { id: 't2', name: 'Under Discipline', hiddenFromOthers: true },
+    ];
+    ['editor', 'admin', 'member', undefined].forEach(rank => {
+        assert.deepStrictEqual(Roles.visibleTags(tags, rank).map(t => t.id), ['t1'],
+            String(rank) + ' was shown a hidden tag');
+    });
+    ['elder', 'super_admin'].forEach(rank => {
+        assert.deepStrictEqual(Roles.visibleTags(tags, rank).map(t => t.id), ['t1', 't2'],
+            rank + ' lost sight of a hidden tag');
+    });
+    assert.deepStrictEqual(Roles.visibleTags(null, 'editor'), []);
+});
+
 test('an elder still does not get somebody who has left', () => {
     // Hiding is about who may look. Inactive is about whether they are here at
     // all, and no rank changes that.
