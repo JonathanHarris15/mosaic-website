@@ -445,7 +445,7 @@
           </div>
         </${Fragment}>` : null}
 
-        ${toastS[0] ? html`<div style=${{ position: "absolute", bottom: "calc(28px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", zIndex: 70, padding: "11px 18px", borderRadius: "var(--radius)", boxShadow: "var(--shadow-lg)", background: toastS[0].type === "error" ? "var(--error)" : "var(--primary)", color: "#fff", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", maxWidth: "90%" }}>${toastS[0].message}</div>` : null}
+        ${toastS[0] ? html`<div style=${{ position: "absolute", bottom: "calc(28px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", zIndex: 70, padding: "11px 18px", borderRadius: "var(--radius)", boxShadow: "var(--shadow-lg)", background: toastS[0].type === "error" ? "var(--error)" : "var(--primary)", color: toastS[0].type === "error" ? "var(--on-error)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", maxWidth: "90%" }}>${toastS[0].message}</div>` : null}
       </${Screen}>`;
   }
 

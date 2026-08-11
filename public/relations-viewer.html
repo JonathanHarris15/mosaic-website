@@ -5,35 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Relations Viewer | Mosaic</title>
 
+    <!-- This page draws with CSS custom properties rather than Tailwind
+         classes, which is why it used to define the whole palette itself.
+         mosaic.css carries the custom properties now (see build/design-tokens),
+         so the copy is gone. It was not merely redundant: it pinned the fonts
+         to the pre-brand Noto Serif / Work Sans, and half its entries had been
+         left as --sand: var(--sand), a self-reference, which is invalid and
+         leaves the token unset. -->
+    <link rel="stylesheet" href="mosaic.css" />
     <link rel="stylesheet" href="fonts.css" />
 
     <style>
-        /* Design tokens (Mosaic seal palette) — this page uses CSS custom
-           properties directly, so the tokens are defined here rather than
-           relying on the Tailwind-class-based mosaic.css. */
-        :root {
-            --font-display: 'Noto Serif', Georgia, serif;
-            --font-serif:   'Noto Serif', Georgia, serif;
-            --font-sans:    'Work Sans', system-ui, -apple-system, sans-serif;
-
-            --navy: #182F57; --navy-900: #0E1C36; --navy-800: #14264A;
-            --ocean: #3E6181; --steel: #5D94A9; --sand: var(--sand);
-            --gold: var(--gold); --cream: #F2EAE2; --parchment: #FBF7F0;
-
-            --primary: #182F57; --on-primary: #F2EAE2;
-
-            --background: var(--background); --on-background: #0E1C36;
-            --surface: #FBF7F0;
-            --surface-container-lowest: #ffffff;
-            --surface-container-low: var(--surface-container-low);
-            --surface-container: var(--surface-container);
-            --surface-container-high: var(--surface-container-high);
-            --surface-variant: #E8DDCD;
-            --on-surface: #0E1C36; --on-surface-variant: var(--on-surface-variant);
-
-            --outline: var(--outline); --outline-variant: var(--outline-variant);
-            --error: var(--error); --success: var(--success); --warning: var(--warning);
-        }
         html, body { margin: 0; height: 100%; background: var(--background); }
         * { box-sizing: border-box; }
 

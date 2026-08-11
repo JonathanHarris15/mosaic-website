@@ -83,7 +83,7 @@
 
 .verse-picker-btn-active {
     background-color: var(--primary) !important; /* primary */
-    color: #ffffff !important;
+    color: var(--on-primary) !important;
     border-color: var(--primary) !important;
 }
 

@@ -70,7 +70,7 @@
         <img src=${props.photoUrl} alt="" style=${Object.assign({ width: "100%", height: "100%" }, window.PersonPhotoCore.frameStyleObject(props.photoCrop))} />
       </span>`;
     }
-    return html`<span style=${Object.assign({}, base, { background: props.tone === "ocean" ? "var(--secondary)" : "var(--primary)", color: "#fff", fontFamily: "var(--font-sans)", fontSize: 10.5, fontWeight: 700 })}>${initials(props.name)}</span>`;
+    return html`<span style=${Object.assign({}, base, { background: props.tone === "ocean" ? "var(--secondary)" : "var(--primary)", color: props.tone === "ocean" ? "var(--on-secondary)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 10.5, fontWeight: 700 })}>${initials(props.name)}</span>`;
   }
 
   var BLANK_FORM = { name: "", kind: "pairwise", priority: false, holderLabel: "", counterpartLabel: "", leaderLabel: "", memberLabel: "", label: "" };

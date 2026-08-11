@@ -198,7 +198,7 @@
           "border-radius:10px;text-decoration:none;font-family:var(--font-sans, sans-serif);font-size:15px;" +
           "font-weight:" + (here ? "600" : "500") + ";" +
           "background:" + (here ? "var(--primary-fixed)" : "transparent") + ";" +
-          "color:" + (here ? "var(--primary)" : "var(--on-surface, #0E1C36)") + ";";
+          "color:" + (here ? "var(--primary)" : "var(--on-surface, var(--on-surface))") + ";";
         a.appendChild(symbol(d.symbol, 20));
         a.appendChild(document.createTextNode(d.label));
         list.appendChild(a);

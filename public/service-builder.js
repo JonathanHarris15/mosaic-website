@@ -1290,11 +1290,11 @@ function serviceForm() {
         // Dot colour by element status (canonical/literal hymns, set references,
         // baptism, or empty) — kept within the brand palette.
         _dotColor(status) {
-            return status === 'canonical' ? '#2e7d52'
-                : status === 'literal' ? '#b8862e'
-                : status === 'set' ? '#436082'
-                : status === 'baptism' ? '#182F57'
-                : '#cdd0d8';
+            return status === 'canonical' ? 'var(--success)'
+                : status === 'literal' ? 'var(--warning)'
+                : status === 'set' ? 'var(--secondary)'
+                : status === 'baptism' ? 'var(--primary)'
+                : 'var(--outline-variant)';
         },
 
         _stripHtml(html) {

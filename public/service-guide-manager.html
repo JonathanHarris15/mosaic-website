@@ -136,7 +136,7 @@
             <div class="fixed inset-0 z-50 flex flex-col bg-editor-shell text-gray-200">
 
                 <!-- toolbar -->
-                <div class="h-11 flex items-center justify-between px-3 bg-[#15171f] border-b border-black/50 shrink-0">
+                <div class="h-11 flex items-center justify-between px-3 bg-editor-chrome border-b border-black/50 shrink-0">
                     <div class="flex items-center gap-2 min-w-0">
                         <button class="px-2 py-1 rounded hover:bg-white/10 flex items-center gap-1 text-sm text-gray-400" @click="closePage()">
                             <span class="material-symbols-outlined text-[18px]">arrow_back</span> Library
@@ -170,7 +170,7 @@
                             <div class="flex items-center gap-3 px-3 py-2 text-xs flex-wrap">
                                 <label class="flex items-center gap-1.5 text-gray-400">
                                     <span class="material-symbols-outlined text-[15px]">palette</span>
-                                    <select x-model="editingPage.stylePresetId" @change="refreshPagePreview()" class="bg-[#1d2029] border border-black/40 rounded px-2 py-1 text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-secondary/60">
+                                    <select x-model="editingPage.stylePresetId" @change="refreshPagePreview()" class="bg-editor-surface border border-black/40 rounded px-2 py-1 text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-secondary/60">
                                         <option value="">(no preset)</option>
                                         <template x-for="sp in stylePresets" :key="sp.id"><option :value="sp.id" x-text="sp.name"></option></template>
                                     </select>
@@ -235,7 +235,7 @@
                     <div @mousedown="startResize($event, 'main')" class="shrink-0 w-1.5 cursor-col-resize bg-black/50 hover:bg-secondary/70 transition-colors"></div>
 
                     <!-- RIGHT: live preview -->
-                    <div class="flex flex-col min-h-0 min-w-0 bg-[#202430] flex-1">
+                    <div class="flex flex-col min-h-0 min-w-0 bg-editor-surface flex-1">
                         <div class="h-9 flex items-center justify-between px-3 bg-editor-chrome border-b border-black/40 shrink-0 text-xs text-gray-400">
                             <div class="flex items-center gap-1.5">
                                 <span class="material-symbols-outlined text-[15px]">visibility</span> Live preview

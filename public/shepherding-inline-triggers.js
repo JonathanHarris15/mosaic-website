@@ -34,7 +34,7 @@ function _buildStatusMatrixPopup({ anchorCoords, currentStatus, onSelect }) {
             const active = currentStatus?.urgency === urg && currentStatus?.importance === imp;
             const cell = document.createElement('button');
             cell.type = 'button';
-            cell.style.cssText = `width:44px;height:44px;border-radius:6px;border:2px solid ${active ? '#182F57' : '#c5c6d0'};background:${active ? '#182F57' : 'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;`;
+            cell.style.cssText = `width:44px;height:44px;border-radius:6px;border:2px solid ${active ? 'var(--primary)' : 'var(--outline-variant)'};background:${active ? 'var(--primary)' : 'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;`;
             if (active) {
                 const dot = document.createElement('span');
                 dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:var(--surface-container-lowest);display:block;';
@@ -85,7 +85,7 @@ function _createActionChipNode(onChipDeleted) {
                 prevImportance: { default: null },
                 activityId:     { default: null },   // status: the logged record this chip created
                 label:          { default: '' },
-                chipColor:      { default: '#d8e2ff' },
+                chipColor:      { default: '#D8E2FF' },   // --chip-tag-added, stored literal
             };
         },
 
@@ -251,7 +251,7 @@ function createInlineTriggersExtension(config) {
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 const sel = i === selIdx;
-                btn.style.cssText = `display:block;width:100%;text-align:left;padding:6px 16px;cursor:pointer;border:none;background:${sel ? '#d8e2ff' : 'transparent'};color:${sel ? '#001a42' : '#1c1c18'};font-size:14px;font-family:inherit;`;
+                btn.style.cssText = `display:block;width:100%;text-align:left;padding:6px 16px;cursor:pointer;border:none;background:${sel ? 'var(--primary-fixed)' : 'transparent'};color:${sel ? 'var(--primary)' : 'var(--on-surface)'};font-size:14px;font-family:inherit;`;
                 btn.textContent = item.isCreate ? `Create tag "#${item.name}"` : `#${item.name}`;
                 btn.addEventListener('mousedown', ev => { ev.preventDefault(); selectItem(item); });
                 el.appendChild(btn);
@@ -273,7 +273,10 @@ function createInlineTriggersExtension(config) {
                 tagId,
                 tagName,
                 label:     action === 'added' ? `#${tagName}` : `−#${tagName}`,
-                chipColor: action === 'added' ? '#d8e2ff' : '#e5e2dc',
+                // Stored into the Note Body, so a literal — see --chip-tag-added
+                // and --chip-tag-removed. The removed chip was still on its
+                // pre-brand value until the palette was consolidated.
+                chipColor: action === 'added' ? '#D8E2FF' : '#EEE4D8',
             });
             view.dispatch(view.state.tr.insert(Math.max(0, pos), node).setStoredMarks([]));
         } catch (e) { console.error('Insert tag chip:', e); }
@@ -295,7 +298,7 @@ function createInlineTriggersExtension(config) {
                 prevImportance:prevImportance || null,
                 activityId:    activityId || null,
                 label,
-                chipColor: '#fef9c3',
+                chipColor: '#FEF9C3',   // --chip-status, stored literal
             });
             const pos = view.state.selection.from;
             view.dispatch(view.state.tr.insert(Math.max(0, pos), node).setStoredMarks([]));

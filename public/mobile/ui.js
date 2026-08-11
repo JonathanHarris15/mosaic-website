@@ -37,7 +37,7 @@
       <button onClick=${props.onClick} aria-label=${props.label}
         style=${{ position: "relative", width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-surface)", cursor: "pointer", borderRadius: 10 }}>
         ${Ic(props.icon, 22)}
-        ${props.badge ? html`<span style=${{ position: "absolute", top: 8, right: 8, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 8, background: "var(--error)", color: "#fff", fontSize: 10, fontWeight: 700, fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", justifyContent: "center", border: "1.5px solid var(--surface-container-lowest)" }}>${props.badge}</span>` : null}
+        ${props.badge ? html`<span style=${{ position: "absolute", top: 8, right: 8, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 8, background: "var(--error)", color: "var(--on-error)", fontSize: 10, fontWeight: 700, fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", justifyContent: "center", border: "1.5px solid var(--surface-container-lowest)" }}>${props.badge}</span>` : null}
       </button>`;
   }
 

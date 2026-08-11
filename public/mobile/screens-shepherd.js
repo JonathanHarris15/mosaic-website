@@ -94,7 +94,7 @@
 
   function Toast(props) {
     if (!props.toast) return null;
-    return html`<div style=${{ position: "absolute", bottom: "calc(28px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", zIndex: 70, padding: "11px 18px", borderRadius: "var(--radius)", boxShadow: "var(--shadow-lg)", background: props.toast.type === "error" ? "var(--error)" : "var(--primary)", color: "#fff", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", maxWidth: "90%" }}>${props.toast.message}</div>`;
+    return html`<div style=${{ position: "absolute", bottom: "calc(28px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", zIndex: 70, padding: "11px 18px", borderRadius: "var(--radius)", boxShadow: "var(--shadow-lg)", background: props.toast.type === "error" ? "var(--error)" : "var(--primary)", color: props.toast.type === "error" ? "var(--on-error)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", maxWidth: "90%" }}>${props.toast.message}</div>`;
   }
 
   // ── View filter logic (mirrors shepherding-dashboard.js) ─────
@@ -1069,7 +1069,7 @@
       person.contact && person.contact.phone && { icon: "phone", text: person.contact.phone },
       person.contact && person.contact.address && { icon: "map-pin", text: person.contact.address },
       person.birthday && { icon: "cake", text: fmtLongDate(person.birthday), tone: "var(--secondary)" },
-      person.baptismDate && { icon: "droplet", text: "Baptized " + fmtLongDate(person.baptismDate), tone: "#2A6FA8" },
+      person.baptismDate && { icon: "droplet", text: "Baptized " + fmtLongDate(person.baptismDate), tone: "var(--secondary)" },
     ].filter(Boolean);
 
     return html`

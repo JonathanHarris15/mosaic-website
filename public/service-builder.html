@@ -56,7 +56,7 @@
         /* Quill overrides */
         .ql-toolbar.ql-snow { border-radius: 0.5rem 0.5rem 0 0; border-color: var(--warning-container); background: var(--surface-container-low); }
         .ql-container.ql-snow { border-radius: 0 0 0.5rem 0.5rem; border-color: var(--warning-container); font-family: 'Work Sans', sans-serif; font-size: 0.85rem; background: var(--surface); }
-        .ql-editor { min-height: 70px; padding: 0.625rem 0.75rem; color: #5b4d2e; line-height: 1.55; }
+        .ql-editor { min-height: 70px; padding: 0.625rem 0.75rem; color: var(--note-ink); line-height: 1.55; }
         .ql-editor.ql-blank::before { color: var(--gold); font-style: normal; font-size: 0.84rem; }
 
         /* Custom Scrollbar */
@@ -72,7 +72,7 @@
         .movement-header { font-family: 'Work Sans', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; color: var(--secondary); padding: 15px 20px 6px; background: var(--surface); }
         .station-chevron { transition: transform .2s ease; }
         .note-card { transition: border-color .15s ease; }
-        .note-card:hover { border-color: #d8b878 !important; }
+        .note-card:hover { border-color: var(--note-border) !important; }
         .theme-input { background: transparent; border: none; border-bottom: 1px dashed var(--sand); border-radius: 3px; padding: 1px 3px; width: 100%; transition: background .15s ease; }
         .theme-input:hover { background: var(--surface-container); }
         .theme-input:focus { outline: none; background: var(--surface-container-lowest); border-bottom-color: transparent; box-shadow: 0 0 0 2px rgba(67,96,130,.45); }
@@ -318,7 +318,7 @@
                 </div>
 
                 <div class="w-full md:w-auto md:shrink-0 text-left md:text-right mt-4 md:mt-0 min-w-0">
-                    <div class="font-label-md text-[10px] font-semibold tracking-[.1em] uppercase text-[#8a93a6]">Progress</div>
+                    <div class="font-label-md text-[10px] font-semibold tracking-[.1em] uppercase text-outline">Progress</div>
                     <div class="font-headline-md text-xl md:text-2xl font-semibold text-secondary mt-1" x-text="filledLabel" x-show="!service.isIrregular"></div>
                     <div class="font-headline-md text-xl md:text-2xl font-semibold text-secondary mt-1" x-show="service.isIrregular">Custom order</div>
 
@@ -534,7 +534,7 @@
                                                         <template x-if="item.type === 'hymn'">
                                                             <div>
                                                                 <div class="flex items-center justify-between mb-2">
-                                                                    <span class="font-label-md text-[10px] font-semibold tracking-[.1em] uppercase text-[#8a93a6]">Hymn Library</span>
+                                                                    <span class="font-label-md text-[10px] font-semibold tracking-[.1em] uppercase text-outline">Hymn Library</span>
                                                                     <button x-show="canEdit" @click="removeHymn(item.key)" class="text-[10px] font-label-md uppercase tracking-wider text-secondary/50 hover:text-red-600 transition-colors flex items-center gap-1">
                                                                         <span class="material-symbols-outlined text-[14px]">remove_circle_outline</span>Remove
                                                                     </button>
@@ -586,7 +586,7 @@
                                                         <!-- VERSE / TEXT REFERENCE -->
                                                         <template x-if="item.type === 'verse'">
                                                             <div>
-                                                                <div class="font-label-md text-[10px] font-semibold tracking-[.1em] uppercase text-[#8a93a6] mb-2">Scripture Reference</div>
+                                                                <div class="font-label-md text-[10px] font-semibold tracking-[.1em] uppercase text-outline mb-2">Scripture Reference</div>
                                                                 <div x-data="versePicker(service.liturgy[item.key])" x-modelable="value" x-model="service.liturgy[item.key]" class="relative">
                                                                     <div class="flex items-center bg-white rounded-lg border border-outline-variant px-3 py-2">
                                                                         <input type="text" :aria-label="item.label" x-model="query" @input="value = query; $dispatch('input', value)" @focus="open = true" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" placeholder="e.g. Psalm 100" :disabled="!canEdit">
@@ -927,7 +927,7 @@
                         <div class="bg-surface-container-low border-b border-warning-container px-4 py-3.5 flex items-center justify-between">
                             <div class="flex items-center gap-2">
                                 <span class="material-symbols-outlined text-[19px] text-amber-600">sticky_note_2</span>
-                                <span class="font-label-md text-[13px] font-bold tracking-[.04em] text-[#7a5e1f]">Service Notes</span>
+                                <span class="font-label-md text-[13px] font-bold tracking-[.04em] text-note-heading">Service Notes</span>
                             </div>
                             <span class="font-label-md text-[11px] font-semibold text-amber-600" x-text="noteCount"></span>
                         </div>
@@ -938,12 +938,12 @@
                                         <span class="inline-block w-[7px] h-[7px] rounded-full" :style="'background:' + n.dotColor"></span>
                                         <span class="font-label-md text-[10px] font-bold tracking-[.07em] uppercase text-amber-700" x-text="n.label + (n.value ? ' · ' + n.value : '')"></span>
                                     </div>
-                                    <div class="font-body-md text-[13.5px] text-[#5b4d2e] leading-relaxed line-clamp-4" x-html="n.html"></div>
+                                    <div class="font-body-md text-[13.5px] text-note-ink leading-relaxed line-clamp-4" x-html="n.html"></div>
                                 </div>
                             </template>
                             <template x-if="noteCount === 0">
                                 <div class="px-2 py-4 text-center">
-                                    <span class="material-symbols-outlined text-[26px] text-[#d8c9a6]">sticky_note_2</span>
+                                    <span class="material-symbols-outlined text-[26px] text-note-icon">sticky_note_2</span>
                                     <div class="font-body-md text-[12.5px] text-gold leading-relaxed mt-2">No service notes yet. Open any element in the order and add a note — it will appear here for the leader.</div>
                                 </div>
                             </template>

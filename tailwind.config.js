@@ -116,6 +116,27 @@ module.exports = {
         "highlight-orange": "#FED7AA",
         "highlight-purple": "#F0ABFC",
 
+        /* ---- Inline trigger chips (Note Module) ----
+           A chip dropped into a Note Body when an Elder tags someone or
+           changes their Shepherding Status from inside the editor. The colour
+           is written into the Note Body as a literal and rendered back
+           wherever that note is read, so the code cannot call these by name —
+           but they are a set, and the set belongs here so a designer can see
+           it. Two of them repeat a value the brand already supplies; the
+           third had no name at all. */
+        "chip-tag-added":   "#D8E2FF",
+        "chip-tag-removed": "#EEE4D8",
+        "chip-status":      "#FEF9C3",
+
+        /* ---- Service Notes card (Order of Service editor) ----
+           A gold-brown card that deliberately reads as a margin note rather
+           than as part of the liturgy. Near the warning family but not it:
+           a note is not a caution, and colouring it amber would say so. */
+        "note-ink":     "#5B4D2E",
+        "note-heading": "#7A5E1F",
+        "note-border":  "#D8B878",
+        "note-icon":    "#D8C9A6",
+
         /* ---- Printed-guide preview ----
            The Service Guide pages sit a white page on a neutral grey, not on
            parchment. That is deliberate and worth keeping: a warm surround

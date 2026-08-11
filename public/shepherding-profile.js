@@ -162,7 +162,7 @@ function createMentionSuggestion() {
                         const myI = si++;
                         const el = document.createElement('button');
                         el.type = 'button';
-                        el.style.cssText = `display:block;width:100%;text-align:left;padding:6px 16px;cursor:pointer;border:none;background:${myI === selIdx ? '#d8e2ff' : 'transparent'};color:${myI === selIdx ? '#001a42' : '#1c1c18'};font-size:14px;font-family:inherit;`;
+                        el.style.cssText = `display:block;width:100%;text-align:left;padding:6px 16px;cursor:pointer;border:none;background:${myI === selIdx ? 'var(--primary-fixed)' : 'transparent'};color:${myI === selIdx ? 'var(--primary)' : 'var(--on-surface)'};font-size:14px;font-family:inherit;`;
                         el.textContent = entry.label;
                         el.addEventListener('mousedown', e => { e.preventDefault(); command(entry); });
                         popup.appendChild(el);
@@ -1261,8 +1261,9 @@ document.addEventListener('alpine:init', () => {
             const URGENCY    = ShepherdingCore.URGENCY_LEVELS;
             const IMPORTANCE = ShepherdingCore.IMPORTANCE_LEVELS;
             // Three bands over the 0-4 score: pressing, worth a look, settled.
-            // These were the pre-brand Material values (#ba1a1a, #436082,
-            // #75777f and their tints) until the palette moved without them.
+            // These were pre-brand Material values until the palette moved
+            // without them, which is why the grid drew a different red from
+            // every other warning in the app.
             const ACTIVE_COLOR  = { 0: 'var(--error)', 1: 'var(--error)', 2: 'var(--secondary)', 3: 'var(--secondary)', 4: 'var(--outline)' };
             const PASSIVE_COLOR = { 0: 'var(--error-container)', 1: 'var(--error-container)', 2: 'var(--primary-fixed)', 3: 'var(--primary-fixed)', 4: 'var(--surface-container)' };
             let html = '<div style="display:grid;grid-template-columns:repeat(3,20px);gap:2px;">';

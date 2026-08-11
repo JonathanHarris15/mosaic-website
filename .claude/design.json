@@ -45,7 +45,32 @@
       "public/guide-seed.js": "printed Service Guide templates — a different medium with its own palette",
       "public/relations-graph-core.js": "the Relations Viewer group palette, documented in CONTEXT.md as deliberately raw",
       "public/404.html": "Firebase's stock error page"
-    }
+    },
+
+    "$allow": "Colours that must stay literal. Every entry needs a reason — this list is the difference between accounted for and stopped counting. Anything raw and not matched here fails --strict.",
+    "allow": [
+      {
+        "match": "setHighlight\\(|editorCmd\\('setHighlight'|\\[\"#fef08a\"",
+        "why": "the highlighter's pen colours. TipTap writes the value into the Note Body and renders it back wherever that note is read — including surfaces this stylesheet does not reach. The palette is declared as --highlight-* so a designer can see it; the code stores the number."
+      },
+      {
+        "match": "chipColor",
+        "why": "an inline trigger chip's colour, stored into the Note Body like a highlight. Declared as --chip-tag-added, --chip-tag-removed and --chip-status."
+      },
+      {
+        "file": "public/tiptap-render.js",
+        "why": "the fallback highlight for a note written before a colour was stored. Same reason as the pens."
+      },
+      {
+        "file": "public/auth.js",
+        "why": "the 'this page didn't finish loading' bar. If the page failed, mosaic.css may have failed with it — and a var() that resolves to nothing does not fall back, it removes the property. These literals are what make the error visible at all."
+      },
+      {
+        "file": "public/mobile.html",
+        "match": "theme-color",
+        "why": "<meta name=theme-color>. The browser chrome reads it before any stylesheet, and var() is not honoured in a meta tag."
+      }
+    ]
   },
 
   "components": {

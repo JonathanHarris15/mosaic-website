@@ -318,7 +318,7 @@
         UL.forEach(function (urg) {
           var isActive = panelCurrentStatus && panelCurrentStatus.urgency === urg && panelCurrentStatus.importance === imp;
           var cell = document.createElement("button"); cell.type = "button";
-          cell.style.cssText = "width:44px;height:44px;border-radius:6px;border:2px solid " + (isActive ? "var(--primary)" : "var(--outline-variant, #dad0c0)") + ";background:" + (isActive ? "var(--primary)" : "transparent") + ";cursor:pointer;display:flex;align-items:center;justify-content:center;";
+          cell.style.cssText = "width:44px;height:44px;border-radius:6px;border:2px solid " + (isActive ? "var(--primary)" : "var(--outline-variant, var(--outline-variant))") + ";background:" + (isActive ? "var(--primary)" : "transparent") + ";cursor:pointer;display:flex;align-items:center;justify-content:center;";
           if (isActive) { var dot = document.createElement("span"); dot.style.cssText = "width:8px;height:8px;border-radius:50%;background:var(--surface-container-lowest);display:block;"; cell.appendChild(dot); }
           cell.addEventListener("mousedown", function (e2) { e2.preventDefault(); e2.stopPropagation(); handlePanelStatusSet(urg, imp); });
           row.appendChild(cell);
@@ -766,7 +766,7 @@
           </div>
         </${Fragment}>` : null}
 
-        ${toastS[0] ? html`<div style=${{ position: "absolute", bottom: "calc(28px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", zIndex: 70, padding: "11px 18px", borderRadius: "var(--radius)", boxShadow: "var(--shadow-lg)", background: toastS[0].type === "error" ? "var(--error)" : "var(--primary)", color: "#fff", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", maxWidth: "90%" }}>${toastS[0].message}</div>` : null}
+        ${toastS[0] ? html`<div style=${{ position: "absolute", bottom: "calc(28px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", zIndex: 70, padding: "11px 18px", borderRadius: "var(--radius)", boxShadow: "var(--shadow-lg)", background: toastS[0].type === "error" ? "var(--error)" : "var(--primary)", color: toastS[0].type === "error" ? "var(--on-error)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", maxWidth: "90%" }}>${toastS[0].message}</div>` : null}
       </${Screen}>`;
   }
 

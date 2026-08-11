@@ -60,7 +60,7 @@
         panel.id = 'shep-key-legend';
         panel.setAttribute('aria-label', 'Note editor key commands');
         panel.style.cssText = 'position:fixed;z-index:40;right:10px;top:50%;transform:translateY(-50%);' +
-            'width:' + PANEL_W + 'px;max-height:calc(100vh - 20px);overflow-y:auto;background:#fffdf7;' +
+            'width:' + PANEL_W + 'px;max-height:calc(100vh - 20px);overflow-y:auto;background:var(--surface);' +
             'border:1px solid var(--outline-variant);border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.12);' +
             'padding:12px 14px;font-family:"Work Sans",sans-serif;display:none;';
 
@@ -123,7 +123,7 @@
         tab.title = 'Quick keys';
         tab.style.cssText = 'position:fixed;z-index:40;right:0;top:50%;transform:translateY(-50%);' +
             'display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;' +
-            'background:var(--primary);color:#fff;border:none;border-radius:10px 0 0 10px;' +
+            'background:var(--primary);color:var(--on-primary);border:none;border-radius:10px 0 0 10px;' +
             'box-shadow:0 4px 16px rgba(0,0,0,.14);padding:11px 6px;font-family:"Work Sans",sans-serif;';
 
         const icon = document.createElement('span');

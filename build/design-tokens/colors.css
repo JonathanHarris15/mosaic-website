@@ -101,6 +101,17 @@
   --highlight-orange:          #FED7AA;
   --highlight-purple:          #F0ABFC;
 
+  /* ---- Inline trigger chips — written into a Note Body, so stored as literals ---- */
+  --chip-tag-added:            #D8E2FF;
+  --chip-tag-removed:          #EEE4D8;
+  --chip-status:               #FEF9C3;
+
+  /* ---- Service Notes card — a margin note, not a caution ---- */
+  --note-ink:                  #5B4D2E;
+  --note-heading:              #7A5E1F;
+  --note-border:               #D8B878;
+  --note-icon:                 #D8C9A6;
+
   /* ---- Printed-guide preview — neutral, so the print is judged honestly ---- */
   --preview-canvas:            #F0F2F5;
   --preview-scroll:            #CBD5E1;

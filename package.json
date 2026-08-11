@@ -19,6 +19,7 @@
   },
   "scripts": {
     "test": "node --test",
+    "check:design": "npm run build:tokens -- --check && npm run check:design-drift -- --strict",
     "test:emulator": "node scripts/test-emulator.mjs",
     "build:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/mosaic.css --minify",
     "build:tokens": "node scripts/build-design-tokens.mjs",

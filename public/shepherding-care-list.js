@@ -125,7 +125,7 @@ function createDocMentionSuggestion() {
                         const myI = si++;
                         const el = document.createElement('button');
                         el.type = 'button';
-                        el.style.cssText = `display:block;width:100%;text-align:left;padding:6px 16px;cursor:pointer;border:none;background:${myI === selIdx ? '#d8e2ff' : 'transparent'};color:${myI === selIdx ? '#001a42' : '#1c1c18'};font-size:14px;font-family:inherit;`;
+                        el.style.cssText = `display:block;width:100%;text-align:left;padding:6px 16px;cursor:pointer;border:none;background:${myI === selIdx ? 'var(--primary-fixed)' : 'transparent'};color:${myI === selIdx ? 'var(--primary)' : 'var(--on-surface)'};font-size:14px;font-family:inherit;`;
                         el.textContent = entry.label;
                         el.addEventListener('mousedown', e => { e.preventDefault(); command(entry); });
                         popup.appendChild(el);
