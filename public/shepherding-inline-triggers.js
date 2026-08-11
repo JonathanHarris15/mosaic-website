@@ -10,14 +10,14 @@ function _buildStatusMatrixPopup({ anchorCoords, currentStatus, onSelect }) {
     const ILbl = ShepherdingCore.IMPORTANCE_LABEL_TINY;
 
     const popup = document.createElement('div');
-    popup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px;font-family:"Work Sans",sans-serif;font-size:12px;';
+    popup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px;font-family:"Work Sans",sans-serif;font-size:12px;';
 
     const hdrRow = document.createElement('div');
     hdrRow.style.cssText = 'display:grid;grid-template-columns:44px 44px 44px 44px;gap:3px;margin-bottom:3px;';
     hdrRow.appendChild(document.createElement('div'));
     UL.forEach(u => {
         const h = document.createElement('div');
-        h.style.cssText = 'text-align:center;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#75777f;';
+        h.style.cssText = 'text-align:center;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--on-surface-variant);';
         h.textContent = ULbl[u];
         hdrRow.appendChild(h);
     });
@@ -27,7 +27,7 @@ function _buildStatusMatrixPopup({ anchorCoords, currentStatus, onSelect }) {
         const row = document.createElement('div');
         row.style.cssText = 'display:grid;grid-template-columns:44px 44px 44px 44px;gap:3px;margin-bottom:3px;';
         const lbl = document.createElement('div');
-        lbl.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;padding-right:4px;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#75777f;line-height:1.2;text-align:right;';
+        lbl.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;padding-right:4px;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--on-surface-variant);line-height:1.2;text-align:right;';
         lbl.textContent = ILbl[imp];
         row.appendChild(lbl);
         UL.forEach(urg => {
@@ -48,7 +48,7 @@ function _buildStatusMatrixPopup({ anchorCoords, currentStatus, onSelect }) {
 
     const clr = document.createElement('button');
     clr.type = 'button';
-    clr.style.cssText = 'width:100%;margin-top:6px;padding:4px 8px;font-size:11px;font-family:inherit;color:#75777f;background:transparent;border:none;cursor:pointer;text-align:center;';
+    clr.style.cssText = 'width:100%;margin-top:6px;padding:4px 8px;font-size:11px;font-family:inherit;color:var(--on-surface-variant);background:transparent;border:none;cursor:pointer;text-align:center;';
     clr.textContent = currentStatus ? 'Clear status' : '(No status set)';
     if (currentStatus) clr.addEventListener('mousedown', e => { e.preventDefault(); popup.remove(); onSelect(null, null); });
     else clr.style.opacity = '0.5';
@@ -232,18 +232,18 @@ function createInlineTriggersExtension(config) {
         if (!coords) return;
 
         const el = document.createElement('div');
-        el.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:200px;max-height:280px;overflow-y:auto;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
+        el.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:200px;max-height:280px;overflow-y:auto;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
         el.style.left = `${Math.min(coords.left, window.innerWidth - 220)}px`;
         el.style.top  = `${coords.bottom + 4}px`;
 
         const hdr = document.createElement('div');
-        hdr.style.cssText = 'padding:4px 16px 2px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#75777f;';
+        hdr.style.cssText = 'padding:4px 16px 2px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-surface-variant);';
         hdr.textContent = phase === 'tag-add' ? 'Add tag' : 'Remove tag';
         el.appendChild(hdr);
 
         if (!items.length) {
             const msg = document.createElement('div');
-            msg.style.cssText = 'padding:8px 16px;color:#75777f;font-style:italic;';
+            msg.style.cssText = 'padding:8px 16px;color:var(--on-surface-variant);font-style:italic;';
             msg.textContent = phase === 'tag-remove' ? 'No tags applied' : 'Type to search or create';
             el.appendChild(msg);
         } else {

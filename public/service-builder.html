@@ -54,27 +54,27 @@
  .input-container { margin-left: auto; max-width: 28rem; } }
 
         /* Quill overrides */
-        .ql-toolbar.ql-snow { border-radius: 0.5rem 0.5rem 0 0; border-color: #ecdfc0; background: #fbf6ea; }
-        .ql-container.ql-snow { border-radius: 0 0 0.5rem 0.5rem; border-color: #ecdfc0; font-family: 'Work Sans', sans-serif; font-size: 0.85rem; background: #fdfaf2; }
+        .ql-toolbar.ql-snow { border-radius: 0.5rem 0.5rem 0 0; border-color: var(--warning-container); background: var(--surface-container-low); }
+        .ql-container.ql-snow { border-radius: 0 0 0.5rem 0.5rem; border-color: var(--warning-container); font-family: 'Work Sans', sans-serif; font-size: 0.85rem; background: var(--surface); }
         .ql-editor { min-height: 70px; padding: 0.625rem 0.75rem; color: #5b4d2e; line-height: 1.55; }
-        .ql-editor.ql-blank::before { color: #b3a37c; font-style: normal; font-size: 0.84rem; }
+        .ql-editor.ql-blank::before { color: var(--gold); font-style: normal; font-size: 0.84rem; }
 
         /* Custom Scrollbar */
         .custom-scrollbar::-webkit-scrollbar { width: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #c5c6d0; border-radius: 20px; border: 2px solid transparent; background-clip: content-box; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #436082; border-radius: 20px; border: 2px solid transparent; background-clip: content-box; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--outline-variant); border-radius: 20px; border: 2px solid transparent; background-clip: content-box; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--secondary); border-radius: 20px; border: 2px solid transparent; background-clip: content-box; }
     </style>
     <!-- Order of Service Builder — redesign interaction styles -->
     <style>
         .station-row { transition: background .15s ease; }
-        .station-row:hover { background: #faf7f1; }
-        .movement-header { font-family: 'Work Sans', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; color: #436082; padding: 15px 20px 6px; background: #faf7f1; }
+        .station-row:hover { background: var(--surface); }
+        .movement-header { font-family: 'Work Sans', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; color: var(--secondary); padding: 15px 20px 6px; background: var(--surface); }
         .station-chevron { transition: transform .2s ease; }
         .note-card { transition: border-color .15s ease; }
         .note-card:hover { border-color: #d8b878 !important; }
-        .theme-input { background: transparent; border: none; border-bottom: 1px dashed #cdbfa6; border-radius: 3px; padding: 1px 3px; width: 100%; transition: background .15s ease; }
-        .theme-input:hover { background: #f3efe6; }
+        .theme-input { background: transparent; border: none; border-bottom: 1px dashed var(--sand); border-radius: 3px; padding: 1px 3px; width: 100%; transition: background .15s ease; }
+        .theme-input:hover { background: var(--surface-container); }
         .theme-input:focus { outline: none; background: var(--surface-container-lowest); border-bottom-color: transparent; box-shadow: 0 0 0 2px rgba(67,96,130,.45); }
     </style>
     <!-- Mobile shell polish: applied only when opened as service-builder.html?shell=mobile -->
@@ -243,7 +243,7 @@
                     <div class="mt-2.5 max-w-md" data-field-key="theme">
                         <input type="text" id="service-theme" name="theme" x-model="service.theme"
                             placeholder="Add a service theme…"
-                            class="theme-input font-body-md text-base font-medium text-[#28324a]" :disabled="!canEdit">
+                            class="theme-input font-body-md text-base font-medium text-graph-ink" :disabled="!canEdit">
                     </div>
                     <!-- Key Verse chip with verse picker -->
                     <div class="mt-3 inline-flex items-center gap-2 bg-surface-container-low border border-outline-variant rounded-full pl-3 pr-2 py-1" data-field-key="keyVerse">
@@ -252,7 +252,7 @@
                         <div x-data="versePicker(service.keyVerse)" x-modelable="value" x-model="service.keyVerse" class="relative">
                             <div class="flex items-center gap-1">
                                 <input type="text" id="key-verse-search" name="key-verse" x-model="query" @input="value = query; $dispatch('input', value)" @focus="open = true"
-                                    class="bg-transparent border-none p-0 focus:ring-0 text-[12px] font-semibold text-[#28324a] w-28 placeholder:font-normal placeholder:text-secondary/60" placeholder="e.g. John 3:16" :disabled="!canEdit">
+                                    class="bg-transparent border-none p-0 focus:ring-0 text-[12px] font-semibold text-graph-ink w-28 placeholder:font-normal placeholder:text-secondary/60" placeholder="e.g. John 3:16" :disabled="!canEdit">
                                 <button @click="toggle()" class="text-secondary hover:text-primary transition-colors cursor-pointer flex items-center" :disabled="!canEdit">
                                     <span class="material-symbols-outlined text-[16px]">expand_more</span>
                                 </button>
@@ -349,7 +349,7 @@
             </div>
 
             <!-- Roles: who is leading this service (pickers preserved) -->
-            <div class="flex flex-wrap gap-x-12 gap-y-5 mt-5 pt-5 border-t border-[#ece7df]">
+            <div class="flex flex-wrap gap-x-12 gap-y-5 mt-5 pt-5 border-t border-cream">
                 <!-- Service Leader -->
                 <div class="min-w-[210px]" data-field-key="serviceLeader">
                     <div class="field-label mb-1.5">Service Leader</div>
@@ -503,7 +503,7 @@
                                     <div :data-field-key="item.key">
                                         <!-- Removed-hymn bar -->
                                         <template x-if="item.removed">
-                                            <div class="flex items-center gap-2 px-5 py-2.5 border-t border-[#f0ece4] bg-surface-container-low/40">
+                                            <div class="flex items-center gap-2 px-5 py-2.5 border-t border-cream bg-surface-container-low/40">
                                                 <span class="material-symbols-outlined text-[18px] text-secondary/40">music_off</span>
                                                 <span class="flex-1 text-xs text-secondary/70 italic" x-text="item.label + ' removed from the order of service'"></span>
                                                 <button x-show="canEdit" @click="restoreHymn(item.key)" class="inline-flex items-center gap-1 text-xs font-label-md text-primary hover:text-primary/80 bg-primary-fixed/60 hover:bg-primary-fixed rounded-full px-2.5 py-1 transition-all cursor-pointer">
@@ -515,15 +515,15 @@
                                         <!-- Station row -->
                                         <template x-if="!item.removed">
                                             <div>
-                                                <div class="station-row flex items-center gap-3 px-5 py-3 border-t border-[#f0ece4] cursor-pointer"
-                                                     :style="openKey === item.key ? 'background:#f6f3ed' : ''"
+                                                <div class="station-row flex items-center gap-3 px-5 py-3 border-t border-cream cursor-pointer"
+                                                     :style="openKey === item.key ? 'background:var(--background)' : ''"
                                                      @click="toggleRow(item.key)">
                                                     <span class="flex-none w-[124px] font-label-md text-[10.5px] font-semibold tracking-[.07em] uppercase text-secondary" x-text="item.label"></span>
                                                     <span class="flex-none inline-block w-[7px] h-[7px] rounded-full" :style="'background:' + item.dotColor"></span>
                                                     <span class="flex-1 min-w-0 font-body-md text-[14.5px] text-primary truncate" x-show="item.value" x-text="item.value"></span>
-                                                    <span class="flex-1 min-w-0 font-body-md text-[13.5px] italic text-[#9aa0b4]" x-show="!item.value" x-text="item.emptyLabel"></span>
+                                                    <span class="flex-1 min-w-0 font-body-md text-[13.5px] italic text-on-primary-container" x-show="!item.value" x-text="item.emptyLabel"></span>
                                                     <span class="material-symbols-outlined text-[16px] text-amber-600" x-show="item.hasNote" title="Has a service note">sticky_note_2</span>
-                                                    <span class="material-symbols-outlined station-chevron text-[18px] text-[#b6b0a4]" :style="openKey === item.key ? 'transform:rotate(90deg)' : ''">chevron_right</span>
+                                                    <span class="material-symbols-outlined station-chevron text-[18px] text-sand" :style="openKey === item.key ? 'transform:rotate(90deg)' : ''">chevron_right</span>
                                                 </div>
 
                                                 <!-- Expanded editor (only the open row renders) -->
@@ -654,7 +654,7 @@
 
                                                                 <!-- Call to Worship → Prayer Leader (Praise) -->
                                                                 <template x-if="item.key === 'callToWorship'">
-                                                                    <div class="mt-3 pt-3 border-t border-dashed border-[#d8d0c2]">
+                                                                    <div class="mt-3 pt-3 border-t border-dashed border-outline-variant">
                                                                         <div x-show="showPrayerPraise || service.prayerPraise.id">
                                                                             <div class="field-label !text-[10px] mb-1.5">Prayer Leader (Praise)</div>
                                                                             <div x-data="personPicker(service.prayerPraise, $data)" @click.away="open = false" class="relative max-w-md">
@@ -687,7 +687,7 @@
 
                                                                 <!-- Call to Confession → Prayer Leader (Confession) -->
                                                                 <template x-if="item.key === 'callToConfession'">
-                                                                    <div class="mt-3 pt-3 border-t border-dashed border-[#d8d0c2]">
+                                                                    <div class="mt-3 pt-3 border-t border-dashed border-outline-variant">
                                                                         <div x-show="showPrayerConfession || service.prayerConfession.id">
                                                                             <div class="field-label !text-[10px] mb-1.5">Prayer Leader (Confession)</div>
                                                                             <div x-data="personPicker(service.prayerConfession, $data)" @click.away="open = false" class="relative max-w-md">
@@ -720,7 +720,7 @@
 
                                                                 <!-- Pastoral Prayer → Pastoral / Congregational prayer -->
                                                                 <template x-if="item.key === 'scriptureReading'">
-                                                                    <div class="mt-3 pt-3 border-t border-dashed border-[#d8d0c2]">
+                                                                    <div class="mt-3 pt-3 border-t border-dashed border-outline-variant">
                                                                         <div class="grid grid-cols-1 gap-3 p-3 bg-white rounded-xl border border-outline-variant/50">
                                                                             <div class="flex items-center justify-between gap-4">
                                                                                 <label class="field-label !text-[10px]" for="prayer-type-select">Prayer Type</label>
@@ -874,7 +874,7 @@
                                                         </template>
 
                                                         <!-- Service Note (rich text, authored on the element) -->
-                                                        <div class="mt-4 pt-4 border-t border-dashed border-[#d8d0c2]">
+                                                        <div class="mt-4 pt-4 border-t border-dashed border-outline-variant">
                                                             <div class="flex items-center justify-between mb-2">
                                                                 <div class="flex items-center gap-1.5">
                                                                     <span class="material-symbols-outlined text-[15px] text-amber-600">sticky_note_2</span>
@@ -888,7 +888,7 @@
                                                                 <div><div id="note-quill-inline"></div></div>
                                                             </template>
                                                             <template x-if="!canEdit">
-                                                                <div class="text-sm text-amber-900 leading-relaxed bg-[#fdfaf2] border border-[#ecdfc0] rounded-lg px-3 py-2"
+                                                                <div class="text-sm text-amber-900 leading-relaxed bg-surface border border-warning-container rounded-lg px-3 py-2"
                                                                      x-html="(service.notes && service.notes[item.key]) || '<span class=\'italic text-amber-400\'>No note for this element.</span>'"></div>
                                                             </template>
                                                         </div>
@@ -924,7 +924,7 @@
                 <!-- RIGHT — Service Notes (fed from the order entries) -->
                 <aside class="w-full lg:flex-none lg:w-[340px] lg:sticky lg:top-[88px] self-start">
                     <div class="bg-white border border-outline-variant rounded-2xl overflow-hidden">
-                        <div class="bg-[#fbf6ea] border-b border-[#ecdfc0] px-4 py-3.5 flex items-center justify-between">
+                        <div class="bg-surface-container-low border-b border-warning-container px-4 py-3.5 flex items-center justify-between">
                             <div class="flex items-center gap-2">
                                 <span class="material-symbols-outlined text-[19px] text-amber-600">sticky_note_2</span>
                                 <span class="font-label-md text-[13px] font-bold tracking-[.04em] text-[#7a5e1f]">Service Notes</span>
@@ -933,7 +933,7 @@
                         </div>
                         <div class="p-4">
                             <template x-for="n in notesList" :key="n.key">
-                                <div class="note-card bg-[#fdfaf2] border border-[#ecdfc0] rounded-xl px-4 py-3 mb-3 last:mb-0 cursor-pointer" @click="openRow(n.key)">
+                                <div class="note-card bg-surface border border-warning-container rounded-xl px-4 py-3 mb-3 last:mb-0 cursor-pointer" @click="openRow(n.key)">
                                     <div class="flex items-center gap-2 mb-1.5">
                                         <span class="inline-block w-[7px] h-[7px] rounded-full" :style="'background:' + n.dotColor"></span>
                                         <span class="font-label-md text-[10px] font-bold tracking-[.07em] uppercase text-amber-700" x-text="n.label + (n.value ? ' · ' + n.value : '')"></span>
@@ -944,7 +944,7 @@
                             <template x-if="noteCount === 0">
                                 <div class="px-2 py-4 text-center">
                                     <span class="material-symbols-outlined text-[26px] text-[#d8c9a6]">sticky_note_2</span>
-                                    <div class="font-body-md text-[12.5px] text-[#a89a78] leading-relaxed mt-2">No service notes yet. Open any element in the order and add a note — it will appear here for the leader.</div>
+                                    <div class="font-body-md text-[12.5px] text-gold leading-relaxed mt-2">No service notes yet. Open any element in the order and add a note — it will appear here for the leader.</div>
                                 </div>
                             </template>
                         </div>

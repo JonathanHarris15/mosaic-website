@@ -116,6 +116,27 @@ module.exports = {
         "highlight-orange": "#FED7AA",
         "highlight-purple": "#F0ABFC",
 
+        /* ---- Printed-guide preview ----
+           The Service Guide pages sit a white page on a neutral grey, not on
+           parchment. That is deliberate and worth keeping: a warm surround
+           tints how the print reads, and these three screens exist to judge
+           the print. Outside the brand on purpose, like the highlighter. */
+        "preview-canvas":       "#F0F2F5",
+        "preview-scroll":       "#CBD5E1",
+        "preview-scroll-hover": "#94A3B8",
+
+        /* ---- Code editor (Service Guide Manager) ----
+           A Page Template is authored as HTML and CSS in a CodeMirror pane
+           dressed as material-darker. A dark editor in a light app is the
+           normal shape of that tool, not a stray dark mode — but it was six
+           undeclared values, so the design system could not see it. */
+        "editor-shell":        "#0F1117",
+        "editor-chrome":       "#13151C",
+        "editor-gutter":       "#181B24",
+        "editor-surface":      "#1B1E27",
+        "editor-scroll":       "#3A3F4B",
+        "editor-scroll-hover": "#4B515F",
+
         /* ---- Relations Viewer ----
            Two more line colours to finish the cycled edge palette. The other
            four entries already read --gold, --success, --secondary and

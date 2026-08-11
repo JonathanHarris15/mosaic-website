@@ -21,7 +21,7 @@
     right: 32px;
     padding: 16px 24px;
     background-color: var(--primary); /* primary */
-    color: #fcf9f3; /* background/cream */
+    color: var(--surface); /* background/cream */
     border-radius: 8px;
     box-shadow: 0 8px 24px rgba(0, 26, 67, 0.15);
     z-index: 9999;
@@ -36,12 +36,12 @@
 }
 
 .toast.success {
-    border-left: 4px solid #67a1b5; /* tertiary-container/accent */
+    border-left: 4px solid var(--tertiary); /* tertiary-container/accent */
 }
 
 .toast.error {
     background-color: var(--error);
-    border-left: 4px solid #ffdad6;
+    border-left: 4px solid var(--error-container);
 }
 
 @keyframes slideIn {

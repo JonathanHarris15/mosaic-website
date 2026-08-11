@@ -29,7 +29,7 @@
 .verse-picker-header {
     background-color: var(--surface-container-low);
     padding: 8px 16px;
-    border-bottom: 1px solid #c5c6d0;
+    border-bottom: 1px solid var(--outline-variant);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -96,7 +96,7 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--secondary);
-    border: 1px solid #c5c6d0;
+    border: 1px solid var(--outline-variant);
     border-radius: 8px;
     padding: 6px 0;
     transition: all 0.2s;

@@ -40,13 +40,13 @@
         }
 
         ::-webkit-scrollbar-thumb {
-            background: #e5e2dc;
+            background: var(--surface-container-high);
             /* surface-variant */
             border-radius: 4px;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: #c5c6d0;
+            background: var(--outline-variant);
             /* outline-variant */
         }
 
@@ -100,7 +100,7 @@
         /* Ensure dark mode also uses a consistent background */
         .dark .sticky-column, .dark .sticky-header th, .dark .sticky-col-left {
             background-color: var(--surface-container-lowest) !important;
-            color: #1c1c18 !important; /* Keep text dark for contrast on white bg */
+            color: var(--on-surface) !important; /* Keep text dark for contrast on white bg */
         }
         
         [x-cloak] { display: none !important; }
