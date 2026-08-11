@@ -21,7 +21,8 @@
     "handAuthored": [
       "fonts.css",
       "base.css"
-    ]
+    ],
+    "compare": "node scripts/compare-design-tokens.mjs <file> < remote"
   },
   "drift": {
     "check": "npm run check:design-drift",

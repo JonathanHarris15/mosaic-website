@@ -29,6 +29,7 @@
     "vendor:tiptap": "cd build/tiptap && npm install --no-audit --no-fund && npm run build",
     "sync": "npm run build:css && cap sync",
     "mobile:build": "node scripts/mobile-build.mjs",
-    "fix:design-drift": "node scripts/fix-design-drift.mjs"
+    "fix:design-drift": "node scripts/fix-design-drift.mjs",
+    "compare:design-tokens": "node scripts/compare-design-tokens.mjs"
   }
 }
