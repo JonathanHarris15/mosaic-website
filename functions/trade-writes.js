@@ -243,6 +243,29 @@ async function verdictFor(db, personId, ref, roster) {
  * @param {Object} ref what the caller named: occurrenceId, roleSlug, slotId
  * @return {Promise<?Object>} the reference, the Event's name and the Role's
  */
+/**
+ * Who currently holds an Assignment, read from the roster.
+ *
+ * Outside a transaction on purpose: this is the prologue, and every move below
+ * re-reads the roster inside its own transaction before writing. What this
+ * answers is "whose place is this to trade", which the caller must not be
+ * trusted for and which the cover list does not disclose.
+ *
+ * @param {Object} db the Firestore handle
+ * @param {Object} ref the Assignment being offered against
+ * @return {Promise<?string>} the holder's Person id, or null
+ */
+async function currentHolderOf(db, ref) {
+  const r = ref || {};
+  if (!r.occurrenceId || !r.roleSlug) return null;
+  const rosterSnap = await db.collection(OCCURRENCES).doc(r.occurrenceId)
+      .collection("roster").get();
+  const held = rosterSnap.docs.map((d) => d.data()).find((a) =>
+    a && a.roleSlug === r.roleSlug &&
+    (a.slotId || null) === (r.slotId || null));
+  return (held && held.personId) || null;
+}
+
 async function describeAssignment(db, ref) {
   const r = ref || {};
   if (!r.occurrenceId || !r.roleSlug) return null;
@@ -435,7 +458,21 @@ async function offer(db, spec) {
     trade = Object.assign({id: snap.id}, snap.data());
   }
 
-  const holderId = trade ? trade.holderId : s.holderId;
+  // ⚠ WHO HOLDS THE PLACE IS READ, NEVER TAKEN FROM THE CALLER.
+  //
+  // A reply reads it off the Trade. An uninvited offer used to trust a
+  // `holderId` the client sent — which was both a way to file an offer against
+  // somebody who has nothing to do with the place, and the reason this door
+  // did not exist at all: the cover list DELIBERATELY does not name who
+  // declined (see cover-store.js), so the one screen an uninvited offer starts
+  // from has no holder to send. Reading it here is what lets the list stay
+  // quiet about the decliner and still be offered against.
+  let holderId = trade ? trade.holderId : null;
+  if (!trade) {
+    const onIt = await currentHolderOf(db, s.assignment);
+    if (!onIt) return refuse("not-found", "Nobody is on that place now.");
+    holderId = onIt;
+  }
 
   // ⚠ EVERY REFERENCE IS RE-RESOLVED FROM FIRESTORE. A reply reuses the one
   // already on the Trade; an uninvited offer names an Assignment the caller

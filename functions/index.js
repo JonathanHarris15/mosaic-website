@@ -898,9 +898,12 @@ exports.refuseTrade = onCall(
 exports.offerTrade = onCall(
     {cors: true, region: "us-central1"},
     async (request) => {
-      const {tradeId, occurrenceId, roleSlug, slotId, holderId, offered} =
+      const {tradeId, occurrenceId, roleSlug, slotId, offered} =
         request.data || {};
-      if (!tradeId && (!occurrenceId || !roleSlug || !holderId)) {
+      // ⚠ NO `holderId`. Who holds the place is read off the roster inside
+      // `tw.offer` — the caller may not name them, and the cover list an
+      // uninvited offer starts from deliberately does not disclose them.
+      if (!tradeId && (!occurrenceId || !roleSlug)) {
         throw new HttpsError("invalid-argument", "Missing what you are after.");
       }
 
@@ -909,7 +912,6 @@ exports.offerTrade = onCall(
             tradeId: tradeId || null,
             assignment: tradeId ?
               null : {occurrenceId, roleSlug, slotId: slotId || null},
-            holderId: holderId || null,
             offered: Array.isArray(offered) ? offered : [],
           }, base)));
 
