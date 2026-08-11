@@ -10,7 +10,7 @@ function _buildStatusMatrixPopup({ anchorCoords, currentStatus, onSelect }) {
     const ILbl = ShepherdingCore.IMPORTANCE_LABEL_TINY;
 
     const popup = document.createElement('div');
-    popup.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px;font-family:"Work Sans",sans-serif;font-size:12px;';
+    popup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px;font-family:"Work Sans",sans-serif;font-size:12px;';
 
     const hdrRow = document.createElement('div');
     hdrRow.style.cssText = 'display:grid;grid-template-columns:44px 44px 44px 44px;gap:3px;margin-bottom:3px;';
@@ -37,7 +37,7 @@ function _buildStatusMatrixPopup({ anchorCoords, currentStatus, onSelect }) {
             cell.style.cssText = `width:44px;height:44px;border-radius:6px;border:2px solid ${active ? '#182F57' : '#c5c6d0'};background:${active ? '#182F57' : 'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;`;
             if (active) {
                 const dot = document.createElement('span');
-                dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#fff;display:block;';
+                dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:var(--surface-container-lowest);display:block;';
                 cell.appendChild(dot);
             }
             cell.addEventListener('mousedown', e => { e.preventDefault(); popup.remove(); onSelect(urg, imp); });
@@ -232,7 +232,7 @@ function createInlineTriggersExtension(config) {
         if (!coords) return;
 
         const el = document.createElement('div');
-        el.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:200px;max-height:280px;overflow-y:auto;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
+        el.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:200px;max-height:280px;overflow-y:auto;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
         el.style.left = `${Math.min(coords.left, window.innerWidth - 220)}px`;
         el.style.top  = `${coords.bottom + 4}px`;
 

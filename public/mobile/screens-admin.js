@@ -35,7 +35,7 @@
 
   function Switch(props) {
     return html`<button onClick=${props.onClick} role="switch" aria-checked=${props.on} style=${{ position: "relative", width: 46, height: 27, flexShrink: 0, border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-full)", cursor: "pointer", background: props.on ? "var(--primary)" : "var(--surface-container)", transition: "background 0.2s" }}>
-      <span style=${{ position: "absolute", top: 2, left: props.on ? 21 : 2, width: 21, height: 21, borderRadius: "50%", background: "#fff", boxShadow: "var(--shadow-xs)", transition: "left 0.2s" }} />
+      <span style=${{ position: "absolute", top: 2, left: props.on ? 21 : 2, width: 21, height: 21, borderRadius: "50%", background: "var(--surface-container-lowest)", boxShadow: "var(--shadow-xs)", transition: "left 0.2s" }} />
     </button>`;
   }
 

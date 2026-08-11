@@ -21,18 +21,18 @@
         .ProseMirror ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.5em; }
         .ProseMirror ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 0.5em; }
         .ProseMirror li p { margin: 0; }
-        .mention-chip { display:inline; background:#d8e2ff; color:#001a42; border-radius:3px; padding:0 4px; font-weight:500; text-decoration:none; cursor:pointer; }
-        a.mention-chip:hover { background:#b2c6f8; }
+        .mention-chip { display:inline; background:var(--primary-fixed); color:#001a42; border-radius:3px; padding:0 4px; font-weight:500; text-decoration:none; cursor:pointer; }
+        a.mention-chip:hover { background:var(--primary-fixed-dim); }
         .ProseMirror table { border-collapse:collapse; width:100%; margin-bottom:0.5em; table-layout:fixed; }
         .ProseMirror th, .ProseMirror td { border:1px solid #c5c6d0; padding:4px 8px; min-width:50px; position:relative; vertical-align:top; }
         .ProseMirror th { background:#f0eee8; font-weight:600; }
-        .selectedCell { background:#d8e2ff !important; }
+        .selectedCell { background:var(--primary-fixed) !important; }
         .note-table { border-collapse:collapse; width:100%; margin-bottom:0.5em; }
         .note-table th, .note-table td { border:1px solid #c5c6d0; padding:4px 8px; text-align:left; vertical-align:top; }
         .note-table th { background:#f0eee8; font-weight:600; }
-        .person-panel { border:1px solid #b2c6f8; border-radius:8px; margin:8px 0; overflow:hidden; display:block; background:#f0f4ff; }
-        .person-panel-header { background:#dce6ff; border-bottom:1px solid #b2c6f8; padding:6px 12px; display:flex; align-items:center; gap:8px; }
-        .person-panel-name { font-family:'Work Sans',sans-serif; font-size:13px; font-weight:600; color:#182F57; background:transparent; border:none; cursor:pointer; padding:2px 6px; border-radius:4px; white-space:nowrap; }
+        .person-panel { border:1px solid var(--primary-fixed-dim); border-radius:8px; margin:8px 0; overflow:hidden; display:block; background:#f0f4ff; }
+        .person-panel-header { background:#dce6ff; border-bottom:1px solid var(--primary-fixed-dim); padding:6px 12px; display:flex; align-items:center; gap:8px; }
+        .person-panel-name { font-family:'Work Sans',sans-serif; font-size:13px; font-weight:600; color:var(--primary); background:transparent; border:none; cursor:pointer; padding:2px 6px; border-radius:4px; white-space:nowrap; }
         .person-panel-name:hover { background:#dcdad4; }
         .person-panel-type { font-family:'Work Sans',sans-serif; font-size:12px; color:#44474e; background:transparent; border:1px solid #c5c6d0; border-radius:4px; padding:2px 4px; cursor:pointer; }
         .person-panel-status { font-family:'Work Sans',sans-serif; font-size:12px; color:#75777f; background:transparent; border:1px solid #c5c6d0; border-radius:4px; padding:2px 6px; cursor:pointer; white-space:nowrap; }
@@ -43,7 +43,7 @@
         .person-panel-delete:hover { color:#ba1a1a; }
         .person-panel-body { background:#f0f4ff; min-height:80px; }
         .person-panel-body .ProseMirror { min-height:80px; padding:12px; box-sizing:border-box; }
-        .ProseMirror-selectednode[data-action-chip] { outline: 2px solid #182F57; outline-offset: 1px; border-radius: 3px; }
+        .ProseMirror-selectednode[data-action-chip] { outline: 2px solid var(--primary); outline-offset: 1px; border-radius: 3px; }
     </style>
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>

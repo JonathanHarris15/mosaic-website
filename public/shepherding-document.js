@@ -123,7 +123,7 @@ function createDocMentionSuggestion() {
             function redraw(items, rect, selIdx, command) {
                 if (!popup) {
                     popup = document.createElement('div');
-                    popup.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:220px;max-height:280px;overflow-y:auto;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
+                    popup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:220px;max-height:280px;overflow-y:auto;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
                     document.body.appendChild(popup);
                 }
                 if (rect) {
@@ -237,7 +237,7 @@ function createInlinePickerPlugin() {
 
         if (!popup) {
             popup = document.createElement('div');
-            popup.style.cssText = 'position:fixed;z-index:9999;background:#fff;color:#1c1c18;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.14);min-width:260px;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
+            popup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);color:#1c1c18;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.14);min-width:260px;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
             document.body.appendChild(popup);
         }
 
@@ -554,7 +554,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
         if (statusMatrixPopup) { destroyStatusPopup(); return; }
 
         statusMatrixPopup = document.createElement('div');
-        statusMatrixPopup.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px;font-family:"Work Sans",sans-serif;font-size:12px;';
+        statusMatrixPopup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px;font-family:"Work Sans",sans-serif;font-size:12px;';
 
         const headerRow = document.createElement('div');
         headerRow.style.cssText = 'display:grid;grid-template-columns:44px 44px 44px 44px;gap:3px;margin-bottom:3px;';
@@ -581,7 +581,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
                 cell.style.cssText = `width:44px;height:44px;border-radius:6px;border:2px solid ${isActive ? '#182F57' : '#c5c6d0'};background:${isActive ? '#182F57' : 'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;`;
                 if (isActive) {
                     const dot = document.createElement('span');
-                    dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#fff;display:block;';
+                    dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:var(--surface-container-lowest);display:block;';
                     cell.appendChild(dot);
                 }
                 cell.addEventListener('mousedown', e2 => { e2.preventDefault(); e2.stopPropagation(); handlePanelStatusSet(urg, imp); });

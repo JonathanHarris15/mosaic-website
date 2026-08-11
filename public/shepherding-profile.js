@@ -128,7 +128,7 @@ function createMentionSuggestion() {
             function redraw(items, rect, selIdx, command) {
                 if (!popup) {
                     popup = document.createElement('div');
-                    popup.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:220px;max-height:280px;overflow-y:auto;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
+                    popup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:220px;max-height:280px;overflow-y:auto;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
                     document.body.appendChild(popup);
                 }
 
@@ -1269,7 +1269,7 @@ document.addEventListener('alpine:init', () => {
                     const score  = ShepherdingCore.statusScore(urg, imp);
                     const bg     = active ? (ACTIVE_COLOR[score] || '#75777f') : (PASSIVE_COLOR[score] || '#f0eee8');
                     html += `<div style="width:20px;height:20px;border-radius:3px;background:${bg};border:${active ? 'none' : '1px solid #c5c6d0'};display:flex;align-items:center;justify-content:center;">`;
-                    if (active) html += '<span style="width:5px;height:5px;border-radius:50%;background:#fff;display:block;"></span>';
+                    if (active) html += '<span style="width:5px;height:5px;border-radius:50%;background:var(--surface-container-lowest);display:block;"></span>';
                     html += '</div>';
                 });
             });

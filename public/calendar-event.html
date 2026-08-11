@@ -85,8 +85,8 @@
              disabled, which reads as a missing feature unless this says so. -->
         <div x-show="signedOut"
              class="mb-md bg-surface-container-low border border-outline-variant border-l-[3px] rounded-lg
-                    px-md py-3 flex items-start gap-sm" style="border-left-color:#B89B6A;">
-            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">person_off</span>
+                    px-md py-3 flex items-start gap-sm" style="border-left-color:var(--gold);">
+            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:var(--gold);">person_off</span>
             <div class="flex-grow min-w-0">
                 <p class="text-[14px] text-on-surface">You are not signed in.</p>
                 <p class="text-[12.5px] text-on-surface-variant mt-0.5">
@@ -640,8 +640,8 @@
             <button x-show="unconfirmedPrompt" @click="openTidyUp()"
                     class="mt-md w-full text-left bg-surface-container-low border border-outline-variant border-l-[3px]
                            rounded-lg px-md py-3 flex items-center gap-sm cal-motion cal-focus hover:bg-surface-container"
-                    style="border-left-color: #B89B6A;">
-                <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">contact_support</span>
+                    style="border-left-color: var(--gold);">
+                <span class="material-symbols-outlined text-[20px] shrink-0" style="color:var(--gold);">contact_support</span>
                 <div class="flex-grow min-w-0">
                     <p class="text-[14px] text-on-surface" x-text="unconfirmedPrompt"></p>
                     <p class="text-[12.5px] text-on-surface-variant mt-0.5">
@@ -687,7 +687,7 @@
                     <!-- ── Sunday: settled, not disabled ──────────────────── -->
                     <section x-show="isSunday" class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
                         <div class="flex items-start gap-sm">
-                            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">public</span>
+                            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:var(--gold);">public</span>
                             <p class="text-[14px] text-on-surface">
                                 <strong class="font-label-md">Sunday is public.</strong>
                                 Everyone can see it, signed in or not — that is how Sundays work.
@@ -959,14 +959,14 @@
                         <h3 class="font-display text-[17px] text-primary">When it happens</h3>
                         <p class="font-headline-lg text-[17px] text-on-surface mt-2"
                            x-text="series ? recurrenceSentence(series.recurrence) : ''"></p>
-                        <p x-show="occurrence.cancelled" class="text-[12.5px] mt-1" style="color:#B89B6A;">
+                        <p x-show="occurrence.cancelled" class="text-[12.5px] mt-1" style="color:var(--gold);">
                             This one is cancelled. The rest of the series is untouched.
                         </p>
                         <!-- Where this instance went, or came from. Somebody looking at
                              the first Sunday needs to know the gathering is on the
                              fifteenth, not simply that it is not here. -->
                         <p x-show="occurrence.movedTo || occurrence.movedFrom"
-                           class="text-[12.5px] mt-1 flex items-center gap-1" style="color:#B89B6A;">
+                           class="text-[12.5px] mt-1 flex items-center gap-1" style="color:var(--gold);">
                             <span class="material-symbols-outlined text-[15px]">event_repeat</span>
                             <span x-text="movedNote"></span>
                         </p>
@@ -1030,9 +1030,9 @@
     <div x-show="pattern.open" @keydown.escape.window="pattern.open = false"
          class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
         <div class="bg-surface-container-lowest rounded-lg w-full max-w-[720px] mt-[5vh] border"
-             style="border-color:#B89B6A;">
+             style="border-color:var(--gold);">
             <div class="px-md py-md flex items-start gap-sm">
-                <span class="material-symbols-outlined text-[26px] shrink-0" style="color:#B89B6A;">help</span>
+                <span class="material-symbols-outlined text-[26px] shrink-0" style="color:var(--gold);">help</span>
                 <div class="min-w-0">
                     <h3 class="font-display text-[21px] text-primary">Change the pattern</h3>
                     <p class="font-headline-lg text-[17px] text-on-surface mt-2" x-text="patternSentence"></p>

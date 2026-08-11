@@ -17,24 +17,24 @@
 
   // Membership-stage pips (colours are design-chosen; labels mirror ShepherdingCore).
   var STAGE = {
-    visitor:            { label: 'Visitor',            color: '#C2B79D' },
-    regular_attender:   { label: 'Regular Attender',   color: '#5D94A9' },
-    prospective_member: { label: 'Prospective Member', color: '#3E6181' },
-    member:             { label: 'Member',             color: '#182F57' },
-    moving_membership:  { label: 'Moving Membership',  color: '#B89B6A' },
-    previous_member:    { label: 'Previous Member',    color: '#8A93A6' },
+    visitor:            { label: 'Visitor',            color: 'var(--sand)' },
+    regular_attender:   { label: 'Regular Attender',   color: 'var(--tertiary)' },
+    prospective_member: { label: 'Prospective Member', color: 'var(--secondary)' },
+    member:             { label: 'Member',             color: 'var(--primary)' },
+    moving_membership:  { label: 'Moving Membership',  color: 'var(--gold)' },
+    previous_member:    { label: 'Previous Member',    color: 'var(--outline)' },
   };
   var STAGE_ORDER = ['visitor', 'regular_attender', 'prospective_member', 'member', 'moving_membership', 'previous_member'];
-  var STAGE_FALLBACK = { label: '—', color: '#8A93A6' };
+  var STAGE_FALLBACK = { label: '—', color: 'var(--outline)' };
 
   // Colour/dash palette cycled across the elder-defined custom Relationship Types.
   var CUSTOM_PALETTE = [
-    { color: '#B89B6A', css: 'dashed', dash: [8, 6],   rest: 150 },
+    { color: 'var(--gold)', css: 'dashed', dash: [8, 6],   rest: 150 },
     { color: '#A26B5B', css: 'dotted', dash: [1.5, 6], rest: 160 },
-    { color: '#4B8A6B', css: 'dashed', dash: [6, 5],   rest: 152 },
+    { color: 'var(--success)', css: 'dashed', dash: [6, 5],   rest: 152 },
     { color: '#7E5A8C', css: 'dotted', dash: [1.5, 6], rest: 158 },
-    { color: '#3E6181', css: 'dashed', dash: [9, 6],   rest: 150 },
-    { color: '#B8862E', css: 'dotted', dash: [1.5, 7], rest: 162 },
+    { color: 'var(--secondary)', css: 'dashed', dash: [9, 6],   rest: 150 },
+    { color: 'var(--warning)', css: 'dotted', dash: [1.5, 7], rest: 162 },
   ];
 
   function esc(s) {
@@ -144,8 +144,8 @@
       // priority holder, and the viewer draws an arrowhead at `b`. Family and Elder
       // Assignment are structural and never directional (MS-105).
       var EDGE = {
-        family: { label: 'Family',           color: '#182F57', dash: [], w: 2.2, rest: 86,  css: 'solid', custom: false, prio: false },
-        elder:  { label: 'Elder Assignment', color: '#5D94A9', dash: [], w: 1.9, rest: 128, css: 'solid', custom: false, prio: false },
+        family: { label: 'Family',           color: 'var(--primary)', dash: [], w: 2.2, rest: 86,  css: 'solid', custom: false, prio: false },
+        elder:  { label: 'Elder Assignment', color: 'var(--tertiary)', dash: [], w: 1.9, rest: 128, css: 'solid', custom: false, prio: false },
       };
 
       // A Group-kind type has NO edges — it governs bubbles. So it gets its own
@@ -874,13 +874,13 @@
   RelationsViewer.prototype.switchStyles = function (on) {
     return {
       bg: 'flex:0 0 auto;width:38px;height:22px;border-radius:11px;position:relative;transition:background .18s;background:' + (on ? 'var(--navy)' : 'var(--outline-variant)'),
-      knob: 'position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(14,28,54,.2);transition:transform .18s;transform:translateX(' + (on ? 16 : 0) + 'px)',
+      knob: 'position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--surface-container-lowest);box-shadow:0 1px 2px rgba(14,28,54,.2);transition:transform .18s;transform:translateX(' + (on ? 16 : 0) + 'px)',
     };
   };
   RelationsViewer.prototype.avatarStyle = function (n, size) {
     var s = size || 38, bg, col, ring = '';
     if (n.inactive) { bg = '#EFE9DF'; col = '#9A9384'; ring = 'border:1.5px dashed #B9B0A0;'; }
-    else if (n.elder) { bg = '#182F57'; col = '#F2EAE2'; ring = 'border:2px solid #B89B6A;'; }
+    else if (n.elder) { bg = '#182F57'; col = '#F2EAE2'; ring = 'border:2px solid var(--gold);'; }
     else { bg = '#FFFFFF'; col = '#182F57'; ring = 'border:1.5px solid rgba(24,47,87,.32);'; }
     return 'flex:0 0 auto;width:' + s + 'px;height:' + s + 'px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-sans);font-weight:600;font-size:' + (s * 0.36) + 'px;background:' + bg + ';color:' + col + ';' + ring;
   };
@@ -1070,7 +1070,7 @@
   RelationsViewer.prototype.renderLegend = function () {
     this.refs.legend.innerHTML = STAGE_ORDER.map(function (k) {
       var s = STAGE[k];
-      return '<div style="display:flex;align-items:center;gap:10px"><span style="width:13px;height:13px;border-radius:50%;flex:0 0 auto;background:' + s.color + ';border:2px solid #FBF7F0;box-shadow:0 0 0 1px ' + s.color + '"></span><span style="font-size:12.5px;color:var(--on-surface);font-weight:500">' + s.label + '</span></div>';
+      return '<div style="display:flex;align-items:center;gap:10px"><span style="width:13px;height:13px;border-radius:50%;flex:0 0 auto;background:' + s.color + ';border:2px solid var(--surface);box-shadow:0 0 0 1px ' + s.color + '"></span><span style="font-size:12.5px;color:var(--on-surface);font-weight:500">' + s.label + '</span></div>';
     }).join('');
   };
   RelationsViewer.prototype.updateCounts = function () {

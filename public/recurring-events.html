@@ -49,11 +49,11 @@
         .re-grid th, .re-grid td { border-bottom: 1px solid var(--re-rule, #E4DACE); }
         .re-grid .re-stick {
             position: sticky; left: 0; z-index: 2;
-            background: #FBF7F0;
+            background: var(--surface);
             border-right: 1px solid var(--re-rule, #E4DACE);
         }
         .re-grid thead .re-stick { z-index: 3; }
-        .re-grid thead th { position: sticky; top: 0; z-index: 1; background: #FBF7F0; }
+        .re-grid thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
 
         /* A ticked column is tinted the whole way down, so the selection reads
            as "these dates" rather than as a row of checkboxes at the top. */
@@ -102,8 +102,8 @@
              leaves the first person nowhere to go. -->
         <div x-show="signedOut"
              class="mb-md bg-surface-container-low border border-outline-variant border-l-[3px] rounded-lg
-                    px-md py-3 flex items-start gap-sm" style="border-left-color:#B89B6A;">
-            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">person_off</span>
+                    px-md py-3 flex items-start gap-sm" style="border-left-color:var(--gold);">
+            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:var(--gold);">person_off</span>
             <div class="flex-grow min-w-0">
                 <p class="text-[14px] text-on-surface">You are not signed in.</p>
                 <p class="text-[12.5px] text-on-surface-variant mt-0.5">
@@ -402,8 +402,8 @@
                          ticked, so it never sits there as an instruction. -->
                     <div x-show="range"
                          class="mt-sm bg-surface-container-low border border-outline-variant border-l-[3px] rounded-lg
-                                px-md py-3 flex items-start gap-sm" style="border-left-color:#5D94A9;">
-                        <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#5D94A9;">auto_awesome_motion</span>
+                                px-md py-3 flex items-start gap-sm" style="border-left-color:var(--tertiary);">
+                        <span class="material-symbols-outlined text-[20px] shrink-0" style="color:var(--tertiary);">auto_awesome_motion</span>
                         <div class="flex-grow min-w-0">
                             <p class="text-[14px] text-on-surface">
                                 <span x-text="range ? range.count : 0"></span>

@@ -300,7 +300,7 @@
   // switch appeared dead: two flips cancelled out.)
   function CalSwitch(props) {
     return html`<span role="switch" aria-checked=${props.on} style=${{ position: "relative", display: "inline-block", width: 44, height: 26, flexShrink: 0, border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-full)", background: props.on ? "var(--primary)" : "var(--surface-container)", transition: "background 0.2s" }}>
-      <span style=${{ position: "absolute", top: 2, left: props.on ? 20 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", boxShadow: "var(--shadow-xs)", transition: "left 0.2s" }} />
+      <span style=${{ position: "absolute", top: 2, left: props.on ? 20 : 2, width: 20, height: 20, borderRadius: "50%", background: "var(--surface-container-lowest)", boxShadow: "var(--shadow-xs)", transition: "left 0.2s" }} />
     </span>`;
   }
 

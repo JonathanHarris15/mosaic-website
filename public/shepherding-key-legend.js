@@ -43,7 +43,7 @@
         const k = document.createElement('kbd');
         k.textContent = text;
         k.style.cssText = 'display:inline-block;min-width:18px;text-align:center;font-family:"Work Sans",sans-serif;' +
-            'font-size:12px;font-weight:600;line-height:1.4;color:#182F57;background:#d8e2ff;border:1px solid #b2c6f8;' +
+            'font-size:12px;font-weight:600;line-height:1.4;color:var(--primary);background:var(--primary-fixed);border:1px solid var(--primary-fixed-dim);' +
             'border-radius:4px;padding:1px 5px;';
         return k;
     }
@@ -123,7 +123,7 @@
         tab.title = 'Quick keys';
         tab.style.cssText = 'position:fixed;z-index:40;right:0;top:50%;transform:translateY(-50%);' +
             'display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;' +
-            'background:#182F57;color:#fff;border:none;border-radius:10px 0 0 10px;' +
+            'background:var(--primary);color:#fff;border:none;border-radius:10px 0 0 10px;' +
             'box-shadow:0 4px 16px rgba(0,0,0,.14);padding:11px 6px;font-family:"Work Sans",sans-serif;';
 
         const icon = document.createElement('span');

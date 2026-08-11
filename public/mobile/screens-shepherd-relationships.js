@@ -288,7 +288,7 @@
               ${t.priority ? html`<div>
                 <div style=${Object.assign({}, OVER, { marginBottom: 6 })}>${labelFor(t, "leader")}</div>
                 ${g.leaderId
-                  ? html`<div style=${{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 8px", border: "1px solid var(--warning, #B8862E)", borderRadius: "var(--radius)" }}>
+                  ? html`<div style=${{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 8px", border: "1px solid var(--warning)", borderRadius: "var(--radius)" }}>
                       <${Avatar} name=${personName(g.leaderId)} />
                       <span style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600 }}>${personName(g.leaderId)}</span>
                       <button onClick=${function () { writeGroup(GC.clearLeader(g)); }} style=${iconBtn} aria-label="Stand down">${Ic("x", 15)}</button>

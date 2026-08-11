@@ -105,20 +105,20 @@
     var panel = document.createElement("nav");
     panel.setAttribute("aria-label", "Menu");
     panel.style.cssText = "position:absolute;top:0;bottom:0;left:0;width:296px;max-width:86vw;" +
-      "background:var(--surface, #FBF7F0);border-right:1px solid var(--outline-variant, #DAD0C0);" +
+      "background:var(--surface);border-right:1px solid var(--outline-variant);" +
       "box-shadow:0 18px 48px rgba(14,28,54,.14);display:flex;flex-direction:column;" +
       "transform:translateX(-100%);transition:transform 300ms cubic-bezier(0.22, 1, 0.36, 1);";
 
     // The same navy head the app's drawer wears, including its safe-area pad.
     var head = document.createElement("div");
-    head.style.cssText = "background:#182F57;color:#F2EAE2;" +
+    head.style.cssText = "background:var(--primary);color:var(--on-primary);" +
       "padding:calc(env(safe-area-inset-top, 20px) + 10px) 20px 20px;";
 
     var closeBtn = document.createElement("button");
     closeBtn.type = "button";
     closeBtn.setAttribute("aria-label", "Collapse menu");
     closeBtn.style.cssText = "width:44px;height:44px;margin-left:-14px;display:flex;align-items:center;" +
-      "justify-content:center;border:none;background:transparent;color:#F2EAE2;cursor:pointer;border-radius:10px;";
+      "justify-content:center;border:none;background:transparent;color:var(--on-primary);cursor:pointer;border-radius:10px;";
     closeBtn.innerHTML = MENU;
     closeBtn.addEventListener("click", closeDrawer);
     head.appendChild(closeBtn);
@@ -134,7 +134,7 @@
 
     var avatar = document.createElement("span");
     avatar.setAttribute("data-drawer-part", "avatar");
-    avatar.style.cssText = "width:36px;height:36px;border-radius:9999px;background:#D8E2FF;color:#182F57;" +
+    avatar.style.cssText = "width:36px;height:36px;border-radius:9999px;background:var(--primary-fixed);color:var(--primary);" +
       "display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;" +
       "font-family:var(--font-sans, sans-serif);font-weight:700;font-size:14px;";
 
@@ -146,13 +146,13 @@
       "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
     var role = document.createElement("div");
     role.setAttribute("data-drawer-part", "roleLabel");
-    role.style.cssText = "font-family:var(--font-sans, sans-serif);font-size:11px;color:#B2C6F8;";
+    role.style.cssText = "font-family:var(--font-sans, sans-serif);font-size:11px;color:var(--primary-fixed-dim);";
 
     names.style.flex = "1";
     names.appendChild(who);
     names.appendChild(role);
     var whoChevron = symbol("chevron_right", 18);
-    whoChevron.style.cssText += "color:#B2C6F8;";
+    whoChevron.style.cssText += "color:var(--primary-fixed-dim);";
     whoRow.appendChild(avatar);
     whoRow.appendChild(names);
     whoRow.appendChild(whoChevron);
@@ -197,8 +197,8 @@
         a.style.cssText = "display:flex;align-items:center;gap:14px;padding:12px 14px;margin-bottom:2px;" +
           "border-radius:10px;text-decoration:none;font-family:var(--font-sans, sans-serif);font-size:15px;" +
           "font-weight:" + (here ? "600" : "500") + ";" +
-          "background:" + (here ? "var(--primary-fixed, #D8E2FF)" : "transparent") + ";" +
-          "color:" + (here ? "#182F57" : "var(--on-surface, #0E1C36)") + ";";
+          "background:" + (here ? "var(--primary-fixed)" : "transparent") + ";" +
+          "color:" + (here ? "var(--primary)" : "var(--on-surface, #0E1C36)") + ";";
         a.appendChild(symbol(d.symbol, 20));
         a.appendChild(document.createTextNode(d.label));
         list.appendChild(a);
@@ -261,7 +261,7 @@
     header.id = "mobile-shell-header";
     header.style.cssText = "position:sticky;top:0;left:0;right:0;z-index:1000;flex-shrink:0;" +
       "padding-top:calc(env(safe-area-inset-top, 20px) + 4px);" +
-      "background:var(--surface-container-lowest, #ffffff);border-bottom:1px solid var(--outline-variant, rgba(0,0,0,0.12));";
+      "background:var(--surface-container-lowest);border-bottom:1px solid var(--outline-variant, rgba(0,0,0,0.12));";
 
     var row = document.createElement("div");
     row.style.cssText = "display:flex;align-items:center;gap:6px;height:46px;padding:0 8px 0 6px;";

@@ -7,7 +7,7 @@
     width: 320px;
     max-width: calc(100vw - 24px); /* never overflow the viewport on mobile / narrow cells */
     max-height: min(80vh, 460px);
-    background-color: #ffffff;
+    background-color: var(--surface-container-lowest);
     border: 1px solid var(--outline-variant);
     border-radius: 12px;
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
@@ -67,8 +67,8 @@
 }
 
 .verse-picker-btn:hover {
-    background-color: #d8e2ff; /* primary-fixed */
-    color: #182F57; /* primary */
+    background-color: var(--primary-fixed); /* primary-fixed */
+    color: var(--primary); /* primary */
 }
 
 .verse-picker-btn-book {
@@ -82,9 +82,9 @@
 }
 
 .verse-picker-btn-active {
-    background-color: #182F57 !important; /* primary */
+    background-color: var(--primary) !important; /* primary */
     color: #ffffff !important;
-    border-color: #182F57 !important;
+    border-color: var(--primary) !important;
 }
 
 .verse-picker-range-btn {
@@ -101,12 +101,12 @@
     padding: 6px 0;
     transition: all 0.2s;
     cursor: pointer;
-    background: #ffffff;
+    background: var(--surface-container-lowest);
 }
 
 .verse-picker-range-btn:hover {
-    color: #182F57;
-    border-color: #182F57;
+    color: var(--primary);
+    border-color: var(--primary);
     background-color: rgba(216, 226, 255, 0.2);
 }
 
@@ -121,7 +121,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #182F57;
+    color: var(--primary);
     background-color: rgba(216, 226, 255, 0.3);
     border: 1px solid rgba(216, 226, 255, 0.5);
     border-radius: 8px;

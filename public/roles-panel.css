@@ -53,4 +53,4 @@ html.shell-mobile .cal-role-everydate { display: none; }
    border of its own — that held until a job had seven people on it and ran
    straight into the next one. Each job now gets an edge; the weight difference
    lives in the dash, not in the absence. */
-.cal-oneoff-strip { border: 1px dashed #C2B79D; }
+.cal-oneoff-strip { border: 1px dashed var(--sand); }
