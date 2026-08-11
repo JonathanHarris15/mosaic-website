@@ -153,7 +153,19 @@
                     const from = this.today;
                     const to = addMonths(this.today, 12);
 
-                    await this.loadRoleDefinitions();
+                    // ⚠ STARTED, NOT AWAITED. Neither of these depends on
+                    // anything below, and both used to wait their turn: the Role
+                    // names went first and the swaps went last, which cost two
+                    // round trips end to end for two reads that could have been
+                    // travelling the whole time. Measured on a phone connection
+                    // that was around 470ms of a two-second page.
+                    //
+                    // Their awaits are further down, at the first line that
+                    // actually needs the answer — so a failure still surfaces in
+                    // exactly the place it did before.
+                    const roleNames = this.loadRoleDefinitions();
+                    const swaps = this.loadTrades();
+
                     const [occurrences, services] = await Promise.all([
                         window.EventsStore.loadCalendar(db, {
                             from: from, to: to,
@@ -170,6 +182,10 @@
                         this.coverable[o.id] = Core.canBeCovered(o);
                     });
 
+                    // `decorate` turns a slug into a Role name, so the names have
+                    // to be here before the rows are built — but by now they
+                    // almost always are.
+                    await roleNames;
                     this.rows = Commitments.commitmentsFor({
                         personId: this.personId,
                         occurrences: occurrences,
@@ -177,7 +193,7 @@
                         today: this.today,
                     }).map(r => this.decorate(r));
 
-                    await this.loadTrades();
+                    await swaps;
                     // ⚠ NOT LAZILY. Every swap row names somebody — "Bob asked
                     // you" — so the directory is needed to draw the page, not
                     // just to open the picker. Loading it on first tap left

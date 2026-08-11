@@ -17,19 +17,43 @@ let isInitialAuthCheck = true;
 // Cache of directory people, used to display and pick person links in the admin panel.
 let peopleCache = [];
 
-async function loadPeopleCache() {
-    try {
-        const snap = await db.collection('people').orderBy('name').get();
-        peopleCache = snap.docs.map(doc => ({
-            id: doc.id,
-            name: doc.data().name || '(Unnamed)',
-            email: doc.data().contact?.email || '',
-            userId: doc.data().userId || null
-        }));
-    } catch (error) {
-        console.error('Error loading people for linking:', error);
-        peopleCache = [];
-    }
+// ⚠ THE WHOLE DIRECTORY, AND FOUR PLACES ASK FOR IT. The link panel, the admin
+// user list, the name-fix picker and the household picker each awaited their own
+// copy, so an admin's profile page read all 89 Person records twice on the way
+// in — the same bytes, over the same connection, a fifth of a second apart.
+// Held here as the ONE read in flight, so the second caller joins the first
+// instead of starting another.
+let peopleCacheLoad = null;
+
+function loadPeopleCache() {
+    if (peopleCacheLoad) return peopleCacheLoad;
+    peopleCacheLoad = db.collection('people').orderBy('name').get()
+        .then(snap => {
+            peopleCache = snap.docs.map(doc => ({
+                id: doc.id,
+                name: doc.data().name || '(Unnamed)',
+                email: doc.data().contact?.email || '',
+                userId: doc.data().userId || null
+            }));
+        })
+        .catch(error => {
+            console.error('Error loading people for linking:', error);
+            peopleCache = [];
+            // Dropped so a later caller can try again rather than inheriting
+            // this failure for the rest of the visit.
+            peopleCacheLoad = null;
+        });
+    return peopleCacheLoad;
+}
+
+// ⚠ CALL THIS AFTER ANY WRITE TO A PERSON THIS CACHE HOLDS A FIELD OF.
+// It holds `userId`, and linking an account writes exactly that — so without
+// this the admin list redrawn straight after a link still shows the person as
+// unclaimed, and the next click tries to link them a second time. The cache is
+// for a read repeated inside one visit, not for one that outlives a write.
+function forgetPeopleCache() {
+    peopleCacheLoad = null;
+    peopleCache = [];
 }
 
 async function initProfile() {
@@ -101,6 +125,17 @@ async function initMyInfo(personId) {
     if (!panel || !form) return;
     let sexWasUnset = true;
     try {
+        // ⚠ FOUR READS, AND ONLY ONE OF THEM FEEDS ANOTHER. This page used to
+        // fetch your Person, then the directory, then your outstanding requests,
+        // then the households — one at a time, each waiting on the last, four
+        // round trips deep. Nothing in that order was necessary: only the
+        // rendering at the bottom needs more than one of them at once.
+        //
+        // So they all leave together and are collected where they are used.
+        const directory = loadPeopleCache();
+        const myRequests = loadMyRequests(currentUserUid);
+        const households = loadFamilies();
+
         const snap = await db.collection('people').doc(personId).get();
         if (!snap.exists) return;
         const p = snap.data() || {};
@@ -123,10 +158,11 @@ async function initMyInfo(personId) {
         // list to turn ids into names (ADR-0027). The photo, unlike the name,
         // goes straight in (ADR-0029).
         initMyPhoto(personId, p);
-        await loadPeopleCache();
-        const requests = await loadMyRequests(currentUserUid);
+        await directory;
+        const requests = await myRequests;
         renderMyName(p, requests.find(
             r => r.kind === DRC.KIND.NAME_FIX && r.status !== DRC.STATUS.APPROVED));
+        await households;
         await initFamilyPanel(personId, requests);
     } catch (e) {
         console.error('Error loading my info:', e);
@@ -154,6 +190,8 @@ async function initMyInfo(personId) {
         updates.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
         try {
             await db.collection('people').doc(personId).update(updates);
+            // Your email is one of the fields the directory cache holds.
+            forgetPeopleCache();
             status.textContent = 'Saved.';
             status.className = 'text-[11px] font-body-md text-green-600';
             if (sexWasUnset && updates.sex) {
@@ -718,18 +756,28 @@ async function submitNameFix(person) {
 // and the member finds that out from the approver rather than from a silent
 // no-op.
 
+// The households, held the same way the directory is — so the panel can start
+// this read before it knows anything it needs it for.
+let familiesLoad = null;
+
+function loadFamilies() {
+    if (familiesLoad) return familiesLoad;
+    familiesLoad = db.collection('families').get()
+        .then(snap => { drFamilies = snap.docs.map(d => Object.assign({ id: d.id }, d.data())); })
+        .catch(e => {
+            console.error('Error loading families:', e);
+            drFamilies = [];
+            familiesLoad = null;
+        });
+    return familiesLoad;
+}
+
 async function initFamilyPanel(personId, requests) {
     const panel = document.getElementById('my-family-panel');
     if (!panel) return;
     panel.classList.remove('hidden');
 
-    try {
-        const snap = await db.collection('families').get();
-        drFamilies = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
-    } catch (e) {
-        console.error('Error loading families:', e);
-        drFamilies = [];
-    }
+    await loadFamilies();
 
     renderFamily(personId, requests.filter(r => r.kind === DRC.KIND.FAMILY));
 
@@ -1218,6 +1266,9 @@ async function setUserPersonLink(uid, personId) {
     }
 
     await batch.commit();
+    // The link just moved, and `userId` is one of the four fields the directory
+    // cache keeps. Whoever redraws next must read it again.
+    forgetPeopleCache();
 }
 
 async function deleteUser(uid, email) {

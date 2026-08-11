@@ -231,6 +231,15 @@
                 if (!quiet) this.loading = true;
                 this.error = '';
                 try {
+                    // ⚠ STARTED HERE, AWAITED AT THE BOTTOM. The directory is
+                    // what turns an id into "Bethany Croft" on a date that needs
+                    // sorting, so the grid does need it — but it does not depend
+                    // on a single thing the calendar read returns, and it used to
+                    // wait for all of it anyway. That was a whole round trip
+                    // (185–300ms on a phone) added to the end of every visit for
+                    // a read that could have gone first.
+                    const directory = this.people.length ? null : this.loadPeople();
+
                     // The whole rail, not just the month on screen. See the
                     // note on `railAnchor`.
                     const range = this.railRange;
@@ -262,7 +271,7 @@
                         outForCover: Core.outForCover(o),
                     }));
 
-                    if (!this.people.length) await this.loadPeople();
+                    if (directory) await directory;
                 } catch (e) {
                     console.error('Calendar load failed:', e);
                     this.error = describeLoadFailure(e);

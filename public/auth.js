@@ -52,6 +52,8 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
  * Logs the user out and redirects to the landing page.
  */
 function logout() {
+    forgetUserDoc();
+    if (window.MosaicLocalCache) window.MosaicLocalCache.clearIdentity();
     auth.signOut().then(() => {
         // In the mobile shell, return to the shell's login rather than the
         // desktop app (which would bounce the user out of the WebView).
@@ -167,8 +169,58 @@ document.addEventListener('DOMContentLoaded', () => {
  */
 const RETRYABLE = ['unavailable', 'deadline-exceeded', 'internal', 'resource-exhausted', 'aborted', 'cancelled'];
 
-async function getUserData(uid) {
-    if (!uid) return null;
+// ── Who you are, remembered ──────────────────────────────────────────────────
+//
+// ⚠ THIS READ WAS ON THE CRITICAL PATH OF EVERY PAGE IN THE APP, AND IT DID NOT
+// NEED TO BE. Measured on a phone connection: 200–380ms, every navigation, 27
+// pages, before any of them could start the query they actually opened for.
+// Because it is what tells a page its rank, nothing else could begin — the
+// Calendar sat idle for a third of a second on each visit to re-learn something
+// that changes about once a year.
+//
+// So it is answered from what this browser already knows and refreshed behind
+// the page. The mobile app has done this since local-cache.js; this is the same
+// idea moved to the one place all 27 pages already go through, which is why it
+// reaches them without editing 27 control flows.
+//
+// WHAT YOU TRADE FOR IT. For one page load after somebody's Permission Level is
+// changed, their browser still believes the old one. It cannot ACT on it —
+// every rule is enforced in Firestore, so a stale rank shows the wrong menu,
+// never the wrong data. And the refresh below notices within the same visit:
+// when the answer has moved, the memory is dropped and the page is loaded again
+// so nobody is left looking at a screen built on a rank they no longer hold.
+const IDENTITY_KEY = 'mosaicUserDoc';
+
+function rememberedUserDoc(uid) {
+    try {
+        const raw = window.localStorage.getItem(IDENTITY_KEY);
+        if (!raw) return null;
+        const saved = JSON.parse(raw);
+        return saved && saved.uid === uid ? saved.data : null;
+    } catch (e) { return null; }
+}
+
+function rememberUserDoc(uid, data) {
+    try {
+        window.localStorage.setItem(IDENTITY_KEY, JSON.stringify({ uid: uid, data: data }));
+    } catch (e) { /* private browsing, a full disk — the read still works */ }
+}
+
+// Signing out must forget you, or the next person to sign in on this device
+// starts their first page with the last person's rank.
+function forgetUserDoc() {
+    try { window.localStorage.removeItem(IDENTITY_KEY); } catch (e) {}
+}
+
+// Only the two fields any page branches on. A change to a display name is not
+// worth interrupting somebody for; a change to their rank or their Person is.
+function identityMoved(before, after) {
+    const rank = d => (d && (d.permissionLevel || d.role)) || null;
+    const person = d => (d && d.personId) || null;
+    return rank(before) !== rank(after) || person(before) !== person(after);
+}
+
+async function fetchUserData(uid) {
     let lastError = null;
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
@@ -181,6 +233,39 @@ async function getUserData(uid) {
         }
     }
     throw lastError;
+}
+
+// One refresh per page load, however many times the page asks who you are.
+let refreshing = null;
+
+async function getUserData(uid) {
+    if (!uid) return null;
+
+    const known = rememberedUserDoc(uid);
+    if (!known) {
+        const fresh = await fetchUserData(uid);
+        rememberUserDoc(uid, fresh);
+        return fresh;
+    }
+
+    if (!refreshing) {
+        refreshing = fetchUserData(uid).then(fresh => {
+            rememberUserDoc(uid, fresh);
+            // ⚠ RELOAD RATHER THAN PATCH. The page has already drawn itself
+            // around the old answer — menus, panels, the query it ran. There is
+            // no way to correct that from here without knowing every page, and
+            // guessing would leave somebody on a half-corrected screen, which is
+            // worse than the second they lose to a reload.
+            if (identityMoved(known, fresh)) window.location.reload();
+            return fresh;
+        }).catch(() => {
+            // A failed refresh must not fail the page: the caller already has a
+            // usable answer, and being offline is the common case here.
+            return known;
+        });
+    }
+
+    return known;
 }
 
 // ── The boot guard ───────────────────────────────────────────────────────────
