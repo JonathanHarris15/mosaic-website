@@ -554,6 +554,14 @@ window.RolesManager = () => ({
         return options;
     },
 
+    // The cap the model enforces, so the box and the refusal agree (MS-222).
+    get descriptionLimit() { return RolesCore.MAX_DESCRIPTION; },
+
+    get descriptionLeft() {
+        const written = ((this.draft && this.draft.description) || '').trim().length;
+        return RolesCore.MAX_DESCRIPTION - written;
+    },
+
     get composingAllowlist() {
         return this.newRuleKind === RolesCore.RESTRICTIONS.ALLOWLIST;
     },

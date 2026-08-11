@@ -210,6 +210,14 @@
                 }
             },
 
+            // The Role's description, or null when there is nothing to say.
+            // Absent and empty read the same, so no row has to tell them apart.
+            descriptionFor(slug) {
+                const def = window.RolesCore &&
+                    window.RolesCore.roleBySlug(slug, this.roleDefinitions);
+                return window.RolesCore.descriptionOf(def);
+            },
+
             roleNameFor(slug) {
                 const def = window.RolesCore &&
                     window.RolesCore.roleBySlug(slug, this.roleDefinitions);
@@ -243,6 +251,11 @@
                 return Object.assign({}, r, {
                     key: [r.occurrenceId || r.date, r.roleSlug, r.slotId || 'x'].join('__'),
                     roleName: r.label || this.roleNameFor(r.roleSlug),
+                    // What the job actually is (MS-222), in the editor's own
+                    // words. A one-off Role has no definition and so has none —
+                    // its label is all there is, which is the whole point of a
+                    // one-off (ADR-0018 §4).
+                    description: this.descriptionFor(r.roleSlug),
                     mon: MONTHS[dt.getMonth()].slice(0, 3).toUpperCase(),
                     dayNum: dt.getDate(),
                     weekday: DAYS[dt.getDay()],

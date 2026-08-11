@@ -175,7 +175,19 @@ _Avoid_: Ministry role, volunteer role (use Servant Role), duty
 The editable specification of a **Servant Role**, authored in the **Roles Manager**: a name, an ordered set of **slots** (each requiring **male**, **female**, or **either** — three people needed means three slots), and optional **restriction rules** that read existing Shepherding Tags and Relationships (e.g. "no married couple in this Role", "exclude anyone tagged X"). Liturgical Roles are the locked, code-defined counterpart and have no editable Role Definition.
 
 Every restriction here is a rule the Role makes about **itself**, and holds wherever that Role runs. A rule about *two* Roles is a [[Cross-Role Rule]] and lives somewhere else.
+
+It also carries a **Role Description** — see below.
 _Avoid_: Role template, role config
+
+**Role Description**:
+What the job actually is, in the editor's own words: *"Arrive by 9:15, put the urns on, and set out the mugs on the side table."* Written on the [[Role Definition]] in the [[Roles Manager]], and read by whoever is down for the Role, on their [[Commitment]]s page beside the date. A Role's **name is a label**, and a label is not an answer to "what am I meant to do?".
+
+- **One field of plain prose**, never a checklist or a set of steps. The moment it has structure it wants a screen of its own; what is worth having is the sentence the Role's organiser would say if you asked them in the corridor.
+- **Capped, and the cap is in the model** rather than in the text box — `/roles` is editor-writable by hand, and a wall of text would run down every Commitments row that shows it.
+- **Shown plainly, not behind a "more".** The whole reason it exists is that somebody down for a Role should not have to ask what it involves, and a description you have to open is one you find out about after you needed it. The cap is what keeps that affordable.
+- **Absent and empty are the same thing** — there is nothing to show — so no surface has to tell them apart.
+- A [[One-off Role]] has no definition and so has none; its label is all there is. **Liturgical Roles have none either**, and that is not a gap: they are code-defined with no editable definition at all (ADR-0016), and giving one a description would mean giving it a stored definition.
+_Avoid_: instructions, notes, job description, role info
 
 **Cross-Role Rule**:
 A serving rule about a **pair** of Roles rather than one — "the Children's Ministry Leader and the Children's Ministry Helper cannot be from the same Marriage". Neither Role can state it, because neither is the thing being constrained: **the pair is**. So it belongs to the [[Event]] that runs both, which is also the only thing that knows they run together, and it is authored on [[Recurring Events]] rather than in the [[Roles Manager]].

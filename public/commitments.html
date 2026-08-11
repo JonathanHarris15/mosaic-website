@@ -194,6 +194,21 @@
                                         : 'text-[15.5px]'"
                                      x-text="row.roleName"></div>
                                 <div class="mt-0.5 text-[12.5px] text-on-surface-variant" x-text="row.eventName"></div>
+                                <!-- What the job is (MS-222). Under the Event
+                                     rather than beside it: it is prose, and prose
+                                     put in a column beside a date turns into a
+                                     stripe of text nobody reads.
+
+                                     Shown plainly, not behind a "more" — the
+                                     whole reason it exists is that somebody
+                                     down for a Role should not have to ask what
+                                     it involves, and a description you have to
+                                     open is one you find out about after you
+                                     needed it. The cap on its length is what
+                                     keeps that affordable. -->
+                                <p x-show="row.description"
+                                   class="mt-1.5 font-serif text-[14px] leading-[1.45] text-on-surface-variant"
+                                   x-text="row.description"></p>
                             </div>
 
                             <div class="shrink-0 flex items-center gap-3">

@@ -184,7 +184,30 @@
             // editor rather than implied.
             intensity: DEFAULT_INTENSITY,
             allowsAnotherRole: false,
+            description: '',
         };
+    }
+
+    // ── What the job actually is (MS-222) ────────────────────────────────────
+    //
+    // A Role's name is a label — "Setup", "Kids Helper" — and a label is not an
+    // answer to "what am I meant to do?". The description is that answer, in
+    // the editor's own words, written once on the Role and read wherever
+    // somebody is looking at a place they hold.
+    //
+    // Deliberately ONE field of plain prose, not a checklist or a set of
+    // instructions with their own model. The moment it has structure it needs a
+    // screen of its own, and the thing worth having is the sentence a Role's
+    // organiser would say if you asked them in the corridor.
+    //
+    // Absent and empty read the same — there is nothing to show — so no surface
+    // has to tell the two apart.
+    const MAX_DESCRIPTION = 600;
+
+    function descriptionOf(role) {
+        const text = role && typeof role.description === 'string'
+            ? role.description.trim() : '';
+        return text || null;
     }
 
     // Every mutator returns a new definition; none touches its input, so a UI can
@@ -1011,6 +1034,18 @@
             errors.push('Intensity must be a number of weeks, and cannot be negative.');
         }
 
+        // A description is optional, and there is nothing to get wrong about
+        // prose — except its length. The cap is here rather than left to the
+        // textarea, because a Role is editable through /roles by hand and a
+        // wall of text would run down every Commitments row that shows it.
+        if (def && typeof def.description === 'string' &&
+            def.description.trim().length > MAX_DESCRIPTION) {
+            errors.push(
+                'A description is at most ' + MAX_DESCRIPTION + ' characters — ' +
+                'it is what the job is, not the notes for it.'
+            );
+        }
+
         // The allowlist is the one restriction that needs no Relationship Type,
         // so it can be judged here without the list of shared Types — and asking
         // validateRestriction keeps one wording for one rule.
@@ -1078,6 +1113,9 @@
         inGroup,
         groupsFor,
         sharedGroups,
+        // what the job is (MS-222)
+        MAX_DESCRIPTION,
+        descriptionOf,
         // reading
         slotOrder,
         slotCount,
