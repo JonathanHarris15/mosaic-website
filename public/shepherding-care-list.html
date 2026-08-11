@@ -43,7 +43,7 @@
 
     <!-- Header -->
     <header class="w-full max-w-6xl mx-auto px-4 md:px- margin pt-2 md:pt-md flex items-center justify-between">
-        <a href="shepherding-documents.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
+        <a href="shepherding-documents.html" class="m-back">
             <span class="material-symbols-outlined text-[20px]">arrow_back</span>
             <span class="font-label-md text-label-md">Documents</span>
         </a>
@@ -73,8 +73,8 @@
     </header>
 
     <!-- Loading -->
-    <div x-show="loading" class="flex-grow flex items-center justify-center">
-        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    <div x-show="loading" class="m-loading">
+        <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
     <!-- Main -->
@@ -124,7 +124,7 @@
                 <option value="24px">24</option>
             </select>
 
-            <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+            <div class="m-divider m-divider--vertical"></div>
 
             <button type="button" @mousedown.prevent="editorCmd('toggleBold')"
                 :class="editorUpdated >= 0 && isActive('bold') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
@@ -136,7 +136,7 @@
                 :class="editorUpdated >= 0 && isActive('underline') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
                 class="w-8 h-8 rounded flex items-center justify-center underline text-sm transition-colors" title="Underline">U</button>
 
-            <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+            <div class="m-divider m-divider--vertical"></div>
 
             <button type="button" @mousedown.prevent="editorCmd('toggleBulletList')"
                 :class="editorUpdated >= 0 && isActive('bulletList') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
@@ -149,7 +149,7 @@
                 <span class="material-symbols-outlined text-[16px]">format_list_numbered</span>
             </button>
 
-            <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+            <div class="m-divider m-divider--vertical"></div>
 
             <!-- Highlight -->
             <div class="relative" x-data="{ open: false }">

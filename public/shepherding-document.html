@@ -62,7 +62,7 @@
 
     <!-- Header -->
     <header class="w-full px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a :href="backHref" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
+        <a :href="backHref" class="m-back">
             <span class="material-symbols-outlined text-[20px]">arrow_back</span>
             <span class="font-label-md text-label-md" x-text="backLabel">Documents</span>
         </a>
@@ -92,8 +92,8 @@
     </header>
 
     <!-- Loading -->
-    <div x-show="loading" class="flex-grow flex items-center justify-center">
-        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    <div x-show="loading" class="m-loading">
+        <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
     <!-- Main -->
@@ -146,7 +146,7 @@
                     <option value="32px">Heading</option>
                 </select>
 
-                <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+                <div class="m-divider m-divider--vertical"></div>
 
                 <button type="button" @mousedown.prevent="editorCmd('toggleBold')"
                     :class="editorUpdated >= 0 && isActive('bold') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
@@ -158,7 +158,7 @@
                     :class="editorUpdated >= 0 && isActive('underline') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
                     class="w-8 h-8 rounded flex items-center justify-center underline text-sm transition-colors" title="Underline">U</button>
 
-                <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+                <div class="m-divider m-divider--vertical"></div>
 
                 <button type="button" @mousedown.prevent="editorCmd('toggleBulletList')"
                     :class="editorUpdated >= 0 && isActive('bulletList') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
@@ -171,7 +171,7 @@
                     <span class="material-symbols-outlined text-[16px]">format_list_numbered</span>
                 </button>
 
-                <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+                <div class="m-divider m-divider--vertical"></div>
 
                 <!-- Highlight -->
                 <div class="relative" x-data="{ open: false }">
@@ -208,7 +208,7 @@
                     </button>
                 </div>
 
-                <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+                <div class="m-divider m-divider--vertical"></div>
 
                 <!-- Person Panel -->
                 <button type="button" @mousedown.prevent="insertPersonPanel()"
@@ -224,12 +224,12 @@
                  style="display:none"
                  class="flex items-center flex-wrap gap-xs px-md py-xs border-b border-outline-variant bg-secondary-container/30">
                 <span class="font-label-md text-label-md text-on-surface-variant text-xs mr-xs">Table:</span>
-                <button type="button" @mousedown.prevent="editorCmd('addColumnBefore')" class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors">+ Col ←</button>
-                <button type="button" @mousedown.prevent="editorCmd('addColumnAfter')"  class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors">+ Col →</button>
+                <button type="button" @mousedown.prevent="editorCmd('addColumnBefore')" class="m-btn m-btn--quiet m-btn--sm">+ Col ←</button>
+                <button type="button" @mousedown.prevent="editorCmd('addColumnAfter')"  class="m-btn m-btn--quiet m-btn--sm">+ Col →</button>
                 <button type="button" @mousedown.prevent="editorCmd('deleteColumn')"    class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-error/10 hover:text-error rounded transition-colors">− Col</button>
                 <div class="w-px h-4 bg-outline-variant mx-xs"></div>
-                <button type="button" @mousedown.prevent="editorCmd('addRowBefore')"   class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors">+ Row ↑</button>
-                <button type="button" @mousedown.prevent="editorCmd('addRowAfter')"    class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors">+ Row ↓</button>
+                <button type="button" @mousedown.prevent="editorCmd('addRowBefore')"   class="m-btn m-btn--quiet m-btn--sm">+ Row ↑</button>
+                <button type="button" @mousedown.prevent="editorCmd('addRowAfter')"    class="m-btn m-btn--quiet m-btn--sm">+ Row ↓</button>
                 <button type="button" @mousedown.prevent="editorCmd('deleteRow')"      class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-error/10 hover:text-error rounded transition-colors">− Row</button>
                 <div class="w-px h-4 bg-outline-variant mx-xs"></div>
                 <button type="button" @mousedown.prevent="editorCmd('deleteTable')"    class="px-2 py-1 text-xs font-label-md text-error hover:bg-error/10 rounded transition-colors">Delete table</button>
@@ -310,12 +310,12 @@
 
                 <div class="flex items-center justify-between gap-sm border-t border-outline-variant pt-md">
                     <button @click="pickerStep = 'person'"
-                        class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">
+                        class="m-btn m-btn--quiet m-btn--sm">
                         ← Back
                     </button>
                     <button @click="confirmPersonPicker()"
                         :disabled="pickerNoteMode === 'existing' && !pickerSelectedNoteId"
-                        class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                        class="m-btn m-btn--primary m-btn--sm">
                         Insert panel
                     </button>
                 </div>
@@ -344,7 +344,7 @@
                     <span class="block font-body-md text-xs font-normal opacity-80 mt-xs">Permanently removes the note from their Shepherding Profile too.</span>
                 </button>
                 <button @click="showPanelDeleteDialog = false"
-                    class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">
+                    class="m-btn m-btn--quiet m-btn--sm">
                     Cancel
                 </button>
             </div>

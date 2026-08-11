@@ -118,20 +118,20 @@
                     <div class="flex items-center gap-4">
                         <div class="flex flex-col min-w-0">
                             <span id="user-email" class="font-headline-md text-headline-md text-primary truncate max-w-[200px]">Loading...</span>
-                            <span id="user-role-badge" class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Loading Permission Level...</span>
+                            <span id="user-role-badge" class="m-label">Loading Permission Level...</span>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-1 gap-sm pt-sm border-t border-surface-container">
                         <div class="flex flex-col gap-1">
-                            <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Permission Level</span>
+                            <span class="m-label">Permission Level</span>
                             <div id="user-role-display" class="px-3 py-1 bg-secondary-container/30 text-on-secondary-container rounded-sm w-fit font-label-md text-xs uppercase tracking-[0.1em]">Loading...</div>
                         </div>
                     </div>
 
                     <!-- New Password Change Section -->
                     <div class="pt-sm border-t border-surface-container flex flex-col gap-3">
-                        <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Security</span>
+                        <span class="m-label">Security</span>
                         <form id="change-password-form" class="flex flex-col gap-2">
                             <input type="password" id="old-password" placeholder="Current Password" required class="w-full py-2 px-3 bg-surface border border-outline-variant/30 rounded focus:ring-1 focus:ring-primary outline-none transition-all text-sm" />
                             <input type="password" id="new-password" placeholder="New Password" required class="w-full py-2 px-3 bg-surface border border-outline-variant/30 rounded focus:ring-1 focus:ring-primary outline-none transition-all text-sm" />
@@ -202,7 +202,7 @@
 
                             <!-- Claim an existing Person -->
                             <div id="lr-match" class="flex flex-col gap-2">
-                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Find yourself in the directory</label>
+                                <label class="m-label">Find yourself in the directory</label>
                                 <input id="lr-search" type="text" placeholder="Type your name" autocomplete="off" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
                                 <div id="lr-results" class="max-h-56 overflow-y-auto rounded-lg border border-outline-variant/30 divide-y divide-surface-container empty:hidden"></div>
                                 <div id="lr-chosen" class="hidden items-center gap-2 text-sm font-body-md text-on-surface bg-primary/5 rounded-lg px-3 py-2"></div>
@@ -211,27 +211,27 @@
                             <!-- Propose a new Person -->
                             <div id="lr-new" class="hidden grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div class="flex flex-col gap-1 md:col-span-2">
-                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Full name</label>
+                                    <label class="m-label">Full name</label>
                                     <input id="lr-name" type="text" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
                                 </div>
                                 <div class="flex flex-col gap-1">
-                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email</label>
+                                    <label class="m-label">Email</label>
                                     <input id="lr-email" type="email" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
                                 </div>
                                 <div class="flex flex-col gap-1">
-                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Phone</label>
+                                    <label class="m-label">Phone</label>
                                     <input id="lr-phone" type="tel" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
                                 </div>
                                 <div class="flex flex-col gap-1 md:col-span-2">
-                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Address</label>
+                                    <label class="m-label">Address</label>
                                     <input id="lr-address" type="text" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
                                 </div>
                                 <div class="flex flex-col gap-1">
-                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Birthday</label>
+                                    <label class="m-label">Birthday</label>
                                     <input id="lr-birthday" type="date" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
                                 </div>
                                 <div class="flex flex-col gap-1">
-                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Sex</label>
+                                    <label class="m-label">Sex</label>
                                     <select id="lr-sex" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none">
                                         <option value="">Prefer not to say</option>
                                         <option value="male">Male</option>
@@ -241,7 +241,7 @@
                             </div>
 
                             <div class="flex flex-col gap-1">
-                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Anything that helps us place you (optional)</label>
+                                <label class="m-label">Anything that helps us place you (optional)</label>
                                 <textarea id="lr-note" rows="2" placeholder="e.g. I started coming in March, I sit with the Harris family" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none"></textarea>
                             </div>
 
@@ -276,7 +276,7 @@
                                 <span id="my-photo-placeholder" class="material-symbols-outlined text-outline-variant text-[44px]">person</span>
                             </button>
                             <div class="flex flex-col gap-2 min-w-0">
-                                <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Directory photo</span>
+                                <span class="m-label">Directory photo</span>
                                 <div class="flex flex-wrap items-center gap-2">
                                     <input type="file" id="my-photo-input" accept="image/jpeg,image/png,image/webp" class="hidden" />
                                     <button type="button" id="my-photo-choose" class="px-4 py-2 bg-surface-container-high text-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-outline-variant/20 transition-all">Upload a photo</button>
@@ -293,14 +293,14 @@
                              your own name misspelt is worse, so there is a way to ask
                              (ADR-0027). -->
                         <div class="px-md pt-md flex flex-col gap-2">
-                            <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Name</span>
+                            <span class="m-label">Name</span>
                             <div class="flex flex-wrap items-center gap-3">
                                 <span id="my-name-value" class="font-headline-md text-sm text-on-surface">…</span>
                                 <button type="button" id="my-name-ask" class="hidden text-[9px] font-label-md uppercase tracking-widest text-primary hover:underline">Spelt wrong?</button>
                             </div>
 
                             <div id="my-name-form" class="hidden flex flex-col gap-2 bg-surface-container-low/40 border border-outline-variant/30 rounded-lg p-3">
-                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">The correct spelling</label>
+                                <label class="m-label">The correct spelling</label>
                                 <input id="my-name-input" type="text" class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
                                 <div class="flex items-center gap-2">
                                     <button type="button" id="my-name-send" class="px-4 py-2 bg-primary text-on-primary font-label-md text-[10px] uppercase tracking-widest rounded-lg hover:bg-primary-container transition-all">Ask the church</button>
@@ -318,23 +318,23 @@
 
                         <form id="my-info-form" class="p-md grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div class="flex flex-col gap-1">
-                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email</label>
+                                <label class="m-label">Email</label>
                                 <input id="my-email" type="email" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
                             </div>
                             <div class="flex flex-col gap-1">
-                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Phone</label>
+                                <label class="m-label">Phone</label>
                                 <input id="my-phone" type="tel" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
                             </div>
                             <div class="flex flex-col gap-1 md:col-span-2">
-                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Address</label>
+                                <label class="m-label">Address</label>
                                 <input id="my-address" type="text" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
                             </div>
                             <div class="flex flex-col gap-1">
-                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Birthday</label>
+                                <label class="m-label">Birthday</label>
                                 <input id="my-birthday" type="date" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
                             </div>
                             <div class="flex flex-col gap-1">
-                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Sex</label>
+                                <label class="m-label">Sex</label>
                                 <select id="my-sex" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
                                     <option value="">Select…</option>
                                     <option value="male">Male</option>
@@ -368,14 +368,14 @@
 
                         <div class="p-md flex flex-col gap-4">
                             <div class="flex flex-col gap-1">
-                                <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">As we have it</span>
+                                <span class="m-label">As we have it</span>
                                 <div id="fam-current" class="rounded-lg border border-outline-variant/30 overflow-hidden"></div>
                             </div>
 
                             <div id="fam-pending" class="rounded-lg border border-primary/20 bg-primary/5 overflow-hidden empty:hidden"></div>
 
                             <div class="flex flex-col gap-2 pt-2 border-t border-surface-container">
-                                <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Add someone</span>
+                                <span class="m-label">Add someone</span>
                                 <div class="flex flex-col sm:flex-row gap-2">
                                     <select id="fam-relation" class="sm:w-40 text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none">
                                         <option value="spouse">My spouse</option>
@@ -409,15 +409,15 @@
                             </h3>
                             <form id="create-user-form" class="grid grid-cols-1 md:grid-cols-12 gap-md items-end">
                                 <div class="md:col-span-4 flex flex-col gap-xs">
-                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email Address</label>
+                                    <label class="m-label">Email Address</label>
                                     <input type="email" id="new-user-email" required class="w-full py-2.5 px-4 bg-surface border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary outline-none transition-all font-body-md" placeholder="name@mosaic.church" />
                                 </div>
                                 <div class="md:col-span-3 flex flex-col gap-xs">
-                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Temp Password</label>
+                                    <label class="m-label">Temp Password</label>
                                     <input type="password" id="new-user-password" required class="w-full py-2.5 px-4 bg-surface border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary outline-none transition-all font-body-md" />
                                 </div>
                                 <div class="md:col-span-2 flex flex-col gap-xs relative">
-                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Permission Level</label>
+                                    <label class="m-label">Permission Level</label>
                                     <div class="relative">
                                         <select id="new-user-role" class="w-full py-2.5 pl-4 pr-10 bg-surface border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary outline-none appearance-none cursor-pointer font-body-md text-sm">
                                             <option value="viewer">Viewer</option>

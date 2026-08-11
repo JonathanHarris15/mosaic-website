@@ -215,7 +215,7 @@
                 <div class="space-y-5" x-show="selectedFields.length > 0">
                     <template x-for="field in selectedFields" :key="field.key">
                         <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">
+                            <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">
                                 <span x-text="field.label"></span>
                                 <span x-show="field.required" class="text-error">*</span>
                             </label>

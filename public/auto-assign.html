@@ -328,8 +328,8 @@
         <div id="auth-container" class="flex items-center ml-auto"><div class="h-10"></div></div>
     </header>
 
-    <div x-show="loading" class="flex-grow flex items-center justify-center">
-        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    <div x-show="loading" class="m-loading">
+        <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
     <!-- Signed out, or signed in without the rank. Two different sentences:
@@ -895,7 +895,7 @@
                 <template x-if="!selected">
                     <div class="flex flex-col min-h-0 h-full">
                         <div class="shrink-0 px-4 pt-4 pb-3 flex flex-col gap-2 border-b border-outline-variant">
-                            <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                            <span class="m-label">
                                 Directory
                             </span>
                             <input type="search" x-model="search" placeholder="Search the church"
@@ -975,7 +975,7 @@
                                  control: these Roles launch cold. -->
                             <div class="flex flex-col gap-2">
                                 <div class="flex items-baseline justify-between">
-                                    <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                                    <span class="m-label">
                                         This season
                                     </span>
                                     <span class="text-[11.5px] text-on-surface tabular-nums"
@@ -1048,7 +1048,7 @@
                             <!-- Everything they hold across the range, so the
                                  editor need not scan every column for the rest. -->
                             <div class="flex flex-col gap-1.5">
-                                <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                                <span class="m-label">
                                     Across this range
                                 </span>
                                 <template x-for="a in placement.across" :key="a.date + a.roleSlug + a.slotId">
@@ -1072,7 +1072,7 @@
                                  the load gate and tells the solve nothing about
                                  any Role. Two claims, deliberately apart. -->
                             <div class="flex flex-col gap-2 border-t border-outline-variant pt-3">
-                                <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                                <span class="m-label">
                                     Carrying more than we know
                                 </span>
                                 <div class="flex items-center gap-2">
@@ -1103,7 +1103,7 @@
                                  other says "give me somebody". Either one picked
                                  on the editor's behalf is wrong half the time. -->
                             <div class="flex flex-col gap-2 border-t border-outline-variant pt-3">
-                                <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                                <span class="m-label">
                                     Not available
                                 </span>
 
@@ -1158,7 +1158,7 @@
                                  to change it, not to read how it was reached. -->
                             <div x-show="placement.atPlace"
                                  class="flex flex-col gap-2 border-t border-outline-variant pt-3">
-                                <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                                <span class="m-label">
                                     Somebody else instead
                                 </span>
                                 <input type="search" x-model="replaceSearch" placeholder="Search the church"
@@ -1255,7 +1255,7 @@
                      out of one draft, and labelling them the same thing would
                      put a claim in their mouth they never made. -->
                 <div x-show="outNames.length" class="flex items-center gap-2 shrink-0 ml-auto">
-                    <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                    <span class="m-label">
                         Left out
                     </span>
                     <template x-for="a in outNames" :key="a.personId">

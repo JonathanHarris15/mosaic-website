@@ -124,10 +124,10 @@
                 
                 <!-- Column headers (desktop only) -->
                 <div class="hidden md:grid md:grid-cols-[2.2fr_1.5fr_1.5fr_2.2fr_72px_72px] md:gap-4 px-md py-2 border-b border-surface-variant/30 bg-surface-container-low/30">
-                    <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Hymn</span>
-                    <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Lyrics</span>
-                    <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Music</span>
-                    <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Tags</span>
+                    <span class="m-label">Hymn</span>
+                    <span class="m-label">Lyrics</span>
+                    <span class="m-label">Music</span>
+                    <span class="m-label">Tags</span>
                     <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant text-center">Versions</span>
                     <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant text-right">Actions</span>
                 </div>
@@ -278,7 +278,7 @@
                                         <template x-for="(page, pIndex) in version.pages" :key="page.id">
                                             <div class="bg-surface-container-lowest border border-outline-variant/30 rounded-lg p-md flex flex-col gap-md shadow-sm relative group">
                                                 <div class="flex justify-between items-center">
-                                                    <span class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant" x-text="'Sheet Page ' + (pIndex + 1)"></span>
+                                                    <span class="m-label" x-text="'Sheet Page ' + (pIndex + 1)"></span>
                                                     <button type="button" class="text-error/40 hover:text-error transition-colors" @click="removePage(vIndex, pIndex)">
                                                         <span class="material-symbols-outlined text-sm">close</span>
                                                     </button>

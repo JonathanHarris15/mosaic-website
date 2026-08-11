@@ -30,6 +30,7 @@
     "sync": "npm run build:css && cap sync",
     "mobile:build": "node scripts/mobile-build.mjs",
     "fix:design-drift": "node scripts/fix-design-drift.mjs",
-    "compare:design-tokens": "node scripts/compare-design-tokens.mjs"
+    "compare:design-tokens": "node scripts/compare-design-tokens.mjs",
+    "build:components": "node scripts/build-design-components.mjs"
   }
 }

@@ -223,7 +223,7 @@
 
                         <!-- Redirect a "please add me" onto the record that already exists -->
                         <div x-show="overrideFor && overrideFor.id === req.id" x-cloak class="flex flex-col gap-2 bg-surface-container-lowest border border-outline-variant/40 rounded-lg p-3">
-                            <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Connect them to an existing record instead</label>
+                            <label class="m-label">Connect them to an existing record instead</label>
                             <input type="text" x-model="overrideSearch" placeholder="Search the directory…"
                                    class="w-full text-sm rounded-lg border border-outline-variant/50 bg-surface-container-lowest py-2 px-3 focus:ring-1 focus:ring-primary outline-none" />
                             <div class="max-h-44 overflow-y-auto divide-y divide-surface-container">
@@ -490,7 +490,7 @@
             <div class="p-6">
                 <form @submit.prevent="addPerson" class="space-y-4">
                     <div class="flex flex-col gap-xs">
-                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Full Name</label>
+                        <label class="m-label">Full Name</label>
                         <input type="text" 
                                x-model="newPerson.name" 
                                placeholder="Enter full name" 
@@ -498,21 +498,21 @@
                                required>
                     </div>
                     <div class="flex flex-col gap-xs">
-                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email</label>
+                        <label class="m-label">Email</label>
                         <input type="email" 
                                x-model="newPerson.email" 
                                placeholder="Email address" 
                                class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary transition-all outline-none font-body-md text-sm">
                     </div>
                     <div class="flex flex-col gap-xs">
-                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Phone</label>
+                        <label class="m-label">Phone</label>
                         <input type="tel" 
                                x-model="newPerson.phone" 
                                placeholder="Phone number" 
                                class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary transition-all outline-none font-body-md text-sm">
                     </div>
                     <div class="flex flex-col gap-xs">
-                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Address</label>
+                        <label class="m-label">Address</label>
                         <input type="text" 
                                x-model="newPerson.address" 
                                placeholder="Street address, City, Zip" 
@@ -520,14 +520,14 @@
                     </div>
 
                     <div class="flex flex-col gap-xs">
-                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Birthday</label>
+                        <label class="m-label">Birthday</label>
                         <input type="date" 
                                x-model="newPerson.birthday" 
                                class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary transition-all outline-none font-body-md text-sm">
                     </div>
 
                     <div class="flex flex-col gap-xs">
-                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Sex</label>
+                        <label class="m-label">Sex</label>
                         <div class="relative">
                             <select x-model="newPerson.sex" 
                                     class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary transition-all outline-none font-body-md text-sm appearance-none">
@@ -612,7 +612,7 @@
                     <header class="p-6 border-b border-surface-variant/30 flex justify-between items-center bg-surface-container-low/50 rounded-t-2xl">
                         <div>
                             <h2 class="font-headline-md text-2xl text-primary" x-text="selectedPerson.name"></h2>
-                            <p class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Profile & Involvement History</p>
+                            <p class="m-label">Profile & Involvement History</p>
                             <template x-if="selectedPerson.baptismDate">
                                 <span class="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider">
                                     <span class="material-symbols-outlined text-[14px]">water_drop</span>
@@ -634,27 +634,27 @@
                             
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div class="flex flex-col gap-xs">
-                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Full Name</label>
+                                    <label class="m-label">Full Name</label>
                                     <input type="text" x-model="selectedPerson.name" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
                                 </div>
                                 <div class="flex flex-col gap-xs">
-                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email</label>
+                                    <label class="m-label">Email</label>
                                     <input type="email" x-model="selectedPerson.contact.email" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
                                 </div>
                                 <div class="flex flex-col gap-xs">
-                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Phone</label>
+                                    <label class="m-label">Phone</label>
                                     <input type="tel" x-model="selectedPerson.contact.phone" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
                                 </div>
                                 <div class="flex flex-col gap-xs">
-                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Address</label>
+                                    <label class="m-label">Address</label>
                                     <input type="text" x-model="selectedPerson.contact.address" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
                                 </div>
                                 <div class="flex flex-col gap-xs">
-                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Birthday</label>
+                                    <label class="m-label">Birthday</label>
                                     <input type="date" x-model="selectedPerson.birthday" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3">
                                 </div>
                                 <div class="flex flex-col gap-xs">
-                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Sex</label>
+                                    <label class="m-label">Sex</label>
                                     <div class="relative">
                                         <select x-model="selectedPerson.sex" class="w-full text-sm rounded-lg border-outline-variant/50 bg-surface-container-lowest py-2 px-3 appearance-none">
                                             <option value="">Select Sex...</option>
@@ -669,7 +669,7 @@
                             <!-- Membership Track (ADR-0012): stage slider + Inactive toggle, editors only -->
                             <div x-show="canEdit" class="flex flex-col gap-2 pt-2">
                                 <div class="flex items-center justify-between">
-                                    <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Membership Track</label>
+                                    <label class="m-label">Membership Track</label>
                                     <span class="text-[11px] font-medium px-2 py-0.5 rounded-full"
                                           :class="selectedPerson.membership && selectedPerson.membership.inactive ? 'bg-surface-container-high text-on-surface-variant' : 'bg-primary-fixed text-primary'"
                                           x-text="membershipStageLabel(selectedPerson)"></span>
@@ -700,7 +700,7 @@
 
                             <!-- Family (ADR-0012, MS-88): editors build the household -->
                             <div x-show="canEdit" class="flex flex-col gap-2 pt-2">
-                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Family</label>
+                                <label class="m-label">Family</label>
                                 <template x-if="!selectedSpouseRole">
                                     <p class="text-[11px] text-on-surface-variant italic">Set this person’s sex above to build their family.</p>
                                 </template>
@@ -758,7 +758,7 @@
 
                             <!-- Tags Management in Modal -->
                             <div class="flex flex-col gap-xs pt-2">
-                                <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Tags</label>
+                                <label class="m-label">Tags</label>
                                 <div class="flex flex-wrap gap-1.5 p-3 bg-surface-container-lowest border border-outline-variant/20 rounded-lg min-h-[44px]">
                                     <template x-for="tag in (selectedPerson.tags || [])" :key="tag">
                                         <span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border"

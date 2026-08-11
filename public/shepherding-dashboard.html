@@ -45,7 +45,7 @@
 
     <!-- Header -->
     <header class="w-full max-w-container mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a :href="window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/home' : 'index.html'" href="index.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
+        <a :href="window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/home' : 'index.html'" href="index.html" class="m-back">
             <span class="material-symbols-outlined text-[20px]">arrow_back</span>
             <span class="font-label-md text-label-md">Home</span>
         </a>
@@ -55,8 +55,8 @@
     </header>
 
     <!-- Loading state -->
-    <div x-show="loading" class="flex-grow flex items-center justify-center">
-        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    <div x-show="loading" class="m-loading">
+        <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
     <!-- Main content -->
@@ -269,10 +269,10 @@
             </div>
             <div class="flex justify-end gap-sm mt-xs">
                 <button @click="showReminderModal = false"
-                    class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">Cancel</button>
+                    class="m-btn m-btn--quiet m-btn--sm">Cancel</button>
                 <button @click="addReminder()"
                     :disabled="!newReminder.title.trim() || !newReminder.dueDatetime"
-                    class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    class="m-btn m-btn--primary m-btn--sm">
                     Add Reminder
                 </button>
             </div>
@@ -394,10 +394,10 @@
             <!-- Modal footer -->
             <div class="px-lg py-md border-t border-outline-variant flex justify-end gap-sm flex-shrink-0">
                 <button @click="showViewModal = false; editingViewId = null; newView = blankView()"
-                    class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">Cancel</button>
+                    class="m-btn m-btn--quiet m-btn--sm">Cancel</button>
                 <button @click="editingViewId ? updateView() : addView()"
                     :disabled="!newView.title.trim()"
-                    class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    class="m-btn m-btn--primary m-btn--sm">
                     <span x-text="editingViewId ? 'Save Changes' : 'Create View'"></span>
                 </button>
             </div>

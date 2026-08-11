@@ -1,12 +1,30 @@
 /* ============================================================
-   ui.js — reusable mobile primitives, ported from the Mosaic Mobile
-   design (app shell + design-system components). Exposed on M.ui.
+   ui.js — the phone's components. Exposed on M.ui.
+
+   ⚠ THE STYLING LIVES IN mobile/tokens.css, WHICH IS GENERATED.
+   Every component below renders the shared `m-*` classes defined in
+   build/design-components.mjs — the same classes the desktop pages use
+   and the same ones the design system on claude.ai documents. There is
+   one definition of a Button; this file decides its markup and its
+   behaviour, not its look.
+
+   Inline styles remain only where the value is genuinely per-instance
+   (an avatar's pixel size) or shell-specific (safe-area insets, the
+   scroll container). Anything a designer would recognise as a component
+   is a class, or the two ends drift again.
    ============================================================ */
 (function () {
   "use strict";
   var html = M.html, Ic = M.Ic, Icon = M.Icon;
 
+  /** Join class names, dropping the falsey ones. */
+  function cx() {
+    return Array.prototype.filter.call(arguments, Boolean).join(" ");
+  }
+
   // ── Layout ────────────────────────────────────────────────
+  // Shell furniture: the safe-area maths and the scroll container are
+  // the phone's own problem and have no desktop counterpart.
   function Screen(props) {
     return html`<div style=${Object.assign({ display: "flex", flexDirection: "column", height: "100%", background: "var(--background)" }, props.style || {})}>${props.children}</div>`;
   }
@@ -22,8 +40,7 @@
            phone opens, and carries the same two numbers. -->
       <header style=${{ flexShrink: 0, paddingTop: "calc(env(safe-area-inset-top, 20px) + 4px)", background: "var(--surface-container-lowest)", borderBottom: "1px solid var(--outline-variant)" }}>
         <div style=${{ display: "flex", alignItems: "center", gap: 6, height: 46, padding: "0 8px 0 6px" }}>
-          <button onClick=${onLeft} aria-label=${props.onBack ? "Back" : "Menu"}
-            style=${{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-surface)", cursor: "pointer", borderRadius: 10 }}>
+          <button class="m-icon-btn m-icon-btn--lg" onClick=${onLeft} aria-label=${props.onBack ? "Back" : "Menu"}>
             ${Ic(props.onBack ? "chevron-left" : "menu", 24)}
           </button>
           <h1 style=${{ flex: 1, margin: 0, minWidth: 0, fontFamily: serif ? "var(--font-display)" : "var(--font-serif)", fontSize: serif ? 17 : 20, fontWeight: 600, letterSpacing: serif ? "0.06em" : "0.01em", color: "var(--on-surface)", textTransform: serif ? "uppercase" : "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>${props.title}</h1>
@@ -34,10 +51,10 @@
 
   function BarAction(props) {
     return html`
-      <button onClick=${props.onClick} aria-label=${props.label}
-        style=${{ position: "relative", width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--on-surface)", cursor: "pointer", borderRadius: 10 }}>
+      <button class="m-icon-btn m-icon-btn--lg" onClick=${props.onClick} aria-label=${props.label}
+        style=${{ position: "relative" }}>
         ${Ic(props.icon, 22)}
-        ${props.badge ? html`<span style=${{ position: "absolute", top: 8, right: 8, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 8, background: "var(--error)", color: "var(--on-error)", fontSize: 10, fontWeight: 700, fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", justifyContent: "center", border: "1.5px solid var(--surface-container-lowest)" }}>${props.badge}</span>` : null}
+        ${props.badge ? html`<span class="m-count" >${props.badge}</span>` : null}
       </button>`;
   }
 
@@ -47,85 +64,70 @@
 
   // ── Typography ────────────────────────────────────────────
   function Overline(props) {
-    return html`<div style=${Object.assign({ fontFamily: "var(--font-sans)", fontSize: 11.5, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--on-surface-variant)" }, props.style || {})}>${props.children}</div>`;
+    return html`<div class="m-label" style=${props.style || null}>${props.children}</div>`;
   }
 
   function SerifHead(props) {
-    return html`<h2 style=${Object.assign({ margin: 0, fontFamily: "var(--font-serif)", fontSize: props.size || 22, fontWeight: 600, lineHeight: 1.2, color: "var(--on-surface)" }, props.style || {})}>${props.children}</h2>`;
+    // A caller may still ask for a specific size; the class carries the default.
+    return html`<h2 class="m-serif-head" style=${Object.assign({}, props.size ? { fontSize: props.size } : null, props.style || {})}>${props.children}</h2>`;
   }
 
   // ── Lists ─────────────────────────────────────────────────
   function Row(props) {
     var showChevron = props.trailing === undefined || props.trailing === "chevron";
     return html`
-      <button onClick=${props.onClick}
-        style=${{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", border: "none", background: "transparent", cursor: props.onClick ? "pointer" : "default", textAlign: "left", borderBottom: props.isLast ? "none" : "1px solid var(--outline-variant)", fontFamily: "var(--font-sans)" }}>
+      <button class=${cx("m-row", props.onClick && "m-row--interactive", props.titleSerif && "m-row--serif", props.isLast && "m-row--last")}
+        onClick=${props.onClick} style=${props.onClick ? null : { cursor: "default" }}>
         ${props.leading}
-        <div style=${{ flex: 1, minWidth: 0 }}>
-          <div style=${{ fontFamily: props.titleSerif ? "var(--font-serif)" : "var(--font-sans)", fontSize: props.titleSerif ? 17 : 15.5, fontWeight: props.titleSerif ? 600 : 500, color: "var(--on-surface)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>${props.title}</div>
-          ${props.subtitle ? html`<div style=${{ fontSize: 13, color: "var(--on-surface-variant)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>${props.subtitle}</div>` : null}
+        <div class="m-row__main">
+          <div class="m-row__title">${props.title}</div>
+          ${props.subtitle ? html`<div class="m-row__sub">${props.subtitle}</div>` : null}
         </div>
-        ${props.meta ? html`<span style=${{ fontSize: 13, color: "var(--on-surface-variant)", flexShrink: 0 }}>${props.meta}</span>` : null}
-        ${showChevron && props.onClick ? html`<span style=${{ color: "var(--outline)", display: "flex" }}>${Ic("chevron-right", 18)}</span>` : (!showChevron ? props.trailing : null)}
+        ${props.meta ? html`<span class="m-row__meta">${props.meta}</span>` : null}
+        ${showChevron && props.onClick ? html`<span class="m-row__chevron">${Ic("chevron-right", 18)}</span>` : (!showChevron ? props.trailing : null)}
       </button>`;
   }
 
   function CardList(props) {
-    return html`<div style=${Object.assign({ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", overflow: "hidden" }, props.style || {})}>${props.children}</div>`;
+    return html`<div class="m-card-list" style=${Object.assign({ padding: 0 }, props.style || {})}>${props.children}</div>`;
   }
 
   function Medallion(props) {
+    // Size is per-instance, so it stays inline; the rest is the class.
     var size = props.size || 40;
-    return html`<span style=${{ width: size, height: size, borderRadius: "var(--radius-full)", background: props.tone === "tint" ? "var(--primary-fixed)" : "var(--surface-container)", color: "var(--primary)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>${Ic(props.icon, Math.round(size * 0.5))}</span>`;
+    return html`<span class=${cx("m-medallion", props.tone === "tint" && "m-medallion--tint")}
+      style=${{ width: size, height: size, marginBottom: 0 }}>${Ic(props.icon, Math.round(size * 0.5))}</span>`;
   }
 
   function SearchBar(props) {
     return html`
-      <label style=${{ display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 14px", background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-full)", color: "var(--on-surface-variant)" }}>
+      <label class="m-search">
         ${Ic("search", 18)}
-        <input value=${props.value} onInput=${props.onChange} placeholder=${props.placeholder || "Search"}
-          style=${{ flex: 1, border: "none", outline: "none", background: "transparent", fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--on-surface)" }} />
+        <input value=${props.value} onInput=${props.onChange} placeholder=${props.placeholder || "Search"} />
       </label>`;
   }
 
   function FAB(props) {
+    // Position is the shell's; the button itself is the shared component.
     return html`
-      <button onClick=${props.onClick} aria-label=${props.label}
-        style=${{ position: "absolute", right: 18, bottom: "calc(30px + env(safe-area-inset-bottom, 0px))", zIndex: 30, width: 56, height: 56, borderRadius: "var(--radius-xl)", border: "none", background: "var(--primary)", color: "var(--on-primary)", boxShadow: "var(--shadow-md)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <button class="m-icon-btn m-icon-btn--fab" onClick=${props.onClick} aria-label=${props.label}
+        style=${{ position: "absolute", right: 18, bottom: "calc(30px + env(safe-area-inset-bottom, 0px))", zIndex: 30 }}>
         ${Ic(props.icon || "plus", 26)}
       </button>`;
   }
 
-  // ── Design-system components (Button / Badge / Avatar / Input) ──
+  // ── Design-system components ──────────────────────────────
   function Button(props) {
-    var size = props.size || "md";
-    var pad = size === "lg" ? "0 20px" : size === "sm" ? "0 14px" : "0 16px";
-    var height = size === "lg" ? 52 : size === "sm" ? 38 : 46;
-    var fontSize = size === "lg" ? 16 : size === "sm" ? 13.5 : 15;
-    var variant = props.variant || "primary";
-    var palette = variant === "primary"
-      ? { background: "var(--primary)", color: "var(--on-primary)", border: "1px solid var(--primary)" }
-      : variant === "secondary"
-      ? { background: "var(--surface-container-high)", color: "var(--on-surface)", border: "1px solid var(--outline-variant)" }
-      : { background: "transparent", color: "var(--primary)", border: "1px solid transparent" };
     return html`
-      <button onClick=${props.onClick} disabled=${props.disabled}
-        style=${Object.assign({ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, height: height, padding: pad, borderRadius: "var(--radius)", fontFamily: "var(--font-sans)", fontSize: fontSize, fontWeight: 600, cursor: "pointer" }, palette, props.style || {})}>
+      <button class=${cx("m-btn", "m-btn--" + (props.variant || "primary"), props.size && props.size !== "md" && "m-btn--" + props.size)}
+        onClick=${props.onClick} disabled=${props.disabled} style=${props.style || null}>
         ${props.icon}<span>${props.children}</span>
       </button>`;
   }
 
   function Badge(props) {
-    var tone = props.tone || "primary";
-    var map = {
-      primary: { bg: "var(--primary-fixed)", fg: "var(--primary)" },
-      secondary: { bg: "var(--secondary-container)", fg: "var(--on-secondary-container)" },
-      tertiary: { bg: "var(--tertiary-container)", fg: "var(--on-tertiary-container)" },
-      neutral: { bg: "var(--surface-container-high)", fg: "var(--on-surface-variant)" },
-    };
-    var c = map[tone] || map.primary;
     return html`
-      <span style=${{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: "var(--radius-full)", background: c.bg, color: c.fg, fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 600 }}>
+      <span class=${cx("m-badge", "m-badge--" + (props.tone || "primary"))} style=${props.style || null}>
         ${props.icon}${props.children}
       </span>`;
   }
@@ -144,25 +146,26 @@
   // profile page arrives here already looking right.
   function Avatar(props) {
     var size = props.size || 40;
-    var base = { width: size, height: size, borderRadius: "var(--radius-full)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" };
+    // Size is per-instance and drives the initials' size, so both stay inline.
+    var sizing = { width: size, height: size, fontSize: Math.round(size * 0.4) };
     if (props.photoUrl) {
       return html`
-        <span style=${Object.assign({}, base, { background: "var(--surface-container-high)" })}>
+        <span class="m-avatar" style=${Object.assign({}, sizing, { background: "var(--surface-container-high)" })}>
           <img src=${props.photoUrl} alt=${props.name || ""}
                style=${Object.assign({ width: "100%", height: "100%" }, window.PersonPhotoCore.frameStyleObject(props.photoCrop))} />
         </span>`;
     }
-    return html`
-      <span style=${Object.assign({}, base, { background: "var(--primary-fixed)", color: "var(--primary)", fontFamily: "var(--font-sans)", fontWeight: 700, fontSize: Math.round(size * 0.4) })}>${initials(props.name)}</span>`;
+    return html`<span class="m-avatar" style=${sizing}>${initials(props.name)}</span>`;
   }
 
   function Input(props) {
     return html`
-      <label style=${{ display: "block" }}>
-        ${props.label ? html`<span style=${{ display: "block", fontFamily: "var(--font-sans)", fontSize: 11.5, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--on-surface-variant)", marginBottom: 6 }}>${props.label}</span>` : null}
-        <input type=${props.type || "text"} placeholder=${props.placeholder} value=${props.value} defaultValue=${props.defaultValue} onInput=${props.onInput}
-          onKeyDown=${props.onKeyDown} aria-invalid=${props.invalid ? "true" : null}
-          style=${{ width: "100%", height: 48, padding: "0 14px", borderRadius: "var(--radius)", border: props.invalid ? "1.5px solid var(--error)" : "1px solid var(--outline-variant)", background: props.invalid ? "var(--error-container)" : "var(--surface-container-lowest)", fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--on-surface)", outline: "none" }} />
+      <label class="m-field">
+        ${props.label ? html`<span class="m-label" style=${{ display: "block", marginBottom: 6 }}>${props.label}</span>` : null}
+        <input class=${cx("m-input", props.invalid && "m-input--invalid")}
+          type=${props.type || "text"} placeholder=${props.placeholder} value=${props.value}
+          defaultValue=${props.defaultValue} onInput=${props.onInput}
+          onKeyDown=${props.onKeyDown} aria-invalid=${props.invalid ? "true" : null} />
       </label>`;
   }
 

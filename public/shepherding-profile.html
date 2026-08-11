@@ -113,8 +113,8 @@
     </header>
 
     <!-- Loading state -->
-    <div x-show="loading" class="flex-grow flex items-center justify-center">
-        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    <div x-show="loading" class="m-loading">
+        <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
     <!-- Main content -->
@@ -657,7 +657,7 @@
                             <option value="32px">Heading</option>
                         </select>
 
-                        <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+                        <div class="m-divider m-divider--vertical"></div>
 
                         <!-- Bold -->
                         <button type="button" @mousedown.prevent="editorCmd('toggleBold')"
@@ -675,7 +675,7 @@
                             class="w-8 h-8 rounded flex items-center justify-center underline text-sm transition-colors"
                             title="Underline (Ctrl+U)">U</button>
 
-                        <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+                        <div class="m-divider m-divider--vertical"></div>
 
                         <!-- Bullet list -->
                         <button type="button" @mousedown.prevent="editorCmd('toggleBulletList')"
@@ -692,7 +692,7 @@
                             <span class="material-symbols-outlined text-[16px]">format_list_numbered</span>
                         </button>
 
-                        <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+                        <div class="m-divider m-divider--vertical"></div>
 
                         <!-- Highlight -->
                         <div class="relative" x-data="{ open: false }">
@@ -748,20 +748,20 @@
                          class="flex items-center flex-wrap gap-xs px-md py-xs border-b border-outline-variant bg-secondary-container/30">
                         <span class="font-label-md text-label-md text-on-surface-variant text-xs mr-xs">Table:</span>
                         <button type="button" @mousedown.prevent="editorCmd('addColumnBefore')"
-                            class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors"
+                            class="m-btn m-btn--quiet m-btn--sm"
                             title="Add column before">+ Col ←</button>
                         <button type="button" @mousedown.prevent="editorCmd('addColumnAfter')"
-                            class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors"
+                            class="m-btn m-btn--quiet m-btn--sm"
                             title="Add column after">+ Col →</button>
                         <button type="button" @mousedown.prevent="editorCmd('deleteColumn')"
                             class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-error/10 hover:text-error rounded transition-colors"
                             title="Delete column">− Col</button>
                         <div class="w-px h-4 bg-outline-variant mx-xs"></div>
                         <button type="button" @mousedown.prevent="editorCmd('addRowBefore')"
-                            class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors"
+                            class="m-btn m-btn--quiet m-btn--sm"
                             title="Add row above">+ Row ↑</button>
                         <button type="button" @mousedown.prevent="editorCmd('addRowAfter')"
-                            class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors"
+                            class="m-btn m-btn--quiet m-btn--sm"
                             title="Add row below">+ Row ↓</button>
                         <button type="button" @mousedown.prevent="editorCmd('deleteRow')"
                             class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-error/10 hover:text-error rounded transition-colors"
@@ -781,7 +781,7 @@
                     <!-- Actions -->
                     <div class="flex justify-end gap-sm px-lg py-md border-t border-outline-variant">
                         <button @click="closeEditor()"
-                            class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">
+                            class="m-btn m-btn--quiet m-btn--sm">
                             Cancel
                         </button>
                         <button @click="saveNote()"
@@ -1145,7 +1145,7 @@
                                 <p x-show="getFolderOptions(null, 0, movingItem?.type === 'folder' ? movingItem?.id : null).length === 0" class="font-body-md text-on-surface-variant italic text-sm px-sm">No other folders.</p>
                             </div>
                             <div class="flex justify-end gap-sm">
-                                <button @click="showMoveModal = false" class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">Cancel</button>
+                                <button @click="showMoveModal = false" class="m-btn m-btn--quiet m-btn--sm">Cancel</button>
                                 <button @click="confirmMove()" class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors">Move</button>
                             </div>
                         </div>
@@ -1171,7 +1171,7 @@
                                 </template>
                             </div>
                             <div class="flex justify-end gap-sm">
-                                <button @click="showLibraryModal = false" class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">Cancel</button>
+                                <button @click="showLibraryModal = false" class="m-btn m-btn--quiet m-btn--sm">Cancel</button>
                                 <button @click="confirmAddToLibrary()" class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors">Add</button>
                             </div>
                         </div>
@@ -1191,7 +1191,7 @@
                                 <p class="font-body-md text-on-surface">Permanently delete "<strong x-text="getDocTitle(deletingItem?.id)"></strong>"? This removes it from this profile and the Library. This cannot be undone.</p>
                             </template>
                             <div class="flex justify-end gap-sm">
-                                <button @click="showDeleteConfirm = false" class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">Cancel</button>
+                                <button @click="showDeleteConfirm = false" class="m-btn m-btn--quiet m-btn--sm">Cancel</button>
                                 <button @click="executeDelete()" class="px-md py-xs font-label-md text-label-md bg-error text-on-error rounded-lg hover:bg-error/90 transition-colors">Delete</button>
                             </div>
                         </div>
@@ -1244,27 +1244,27 @@
                     </header>
                     <div class="p-6 overflow-y-auto custom-scrollbar space-y-4">
                         <div class="flex flex-col gap-xs">
-                            <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Full Name</label>
+                            <label class="m-label">Full Name</label>
                             <input type="text" x-model="selectedPerson.name" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
                         </div>
                         <div class="flex flex-col gap-xs">
-                            <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email</label>
+                            <label class="m-label">Email</label>
                             <input type="email" x-model="selectedPerson.contact.email" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
                         </div>
                         <div class="flex flex-col gap-xs">
-                            <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Phone</label>
+                            <label class="m-label">Phone</label>
                             <input type="tel" x-model="selectedPerson.contact.phone" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
                         </div>
                         <div class="flex flex-col gap-xs">
-                            <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Address</label>
+                            <label class="m-label">Address</label>
                             <textarea x-model="selectedPerson.contact.address" rows="2" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm"></textarea>
                         </div>
                         <div class="flex flex-col gap-xs">
-                            <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Birthday</label>
+                            <label class="m-label">Birthday</label>
                             <input type="date" x-model="selectedPerson.birthday" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
                         </div>
                         <div class="flex flex-col gap-xs">
-                            <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Sex</label>
+                            <label class="m-label">Sex</label>
                             <select x-model="selectedPerson.sex" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
                                 <option value="">Unknown</option>
                                 <option value="male">Male</option>
@@ -1304,7 +1304,7 @@
                             All shepherding notes will also be deleted. <span class="font-semibold text-error">This cannot be undone.</span>
                         </p>
                         <div class="flex flex-col gap-xs">
-                            <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Confirm with your password</label>
+                            <label class="m-label">Confirm with your password</label>
                             <input type="password" x-model="deletePassword"
                                    placeholder="Your password"
                                    @keydown.enter="confirmDeletePerson()"
