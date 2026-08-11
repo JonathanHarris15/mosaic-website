@@ -486,6 +486,19 @@
             case R.NOT_IN_REQUIRED_GROUP:
                 return 'Not in the ' + (ctx.groupName || 'required') + ' group';
 
+            // The two cross-Role reasons (MS-220). They name the OTHER Role,
+            // because that is the whole difference: every reason above is about
+            // this Role, and an editor reading "in the same household as Dave"
+            // would look down this Role's list and not find him.
+            case R.PAIRED_ROLE_CONFLICT:
+                return 'In the same ' + (candidate.groupName || 'group') + ' as ' +
+                    nameOf(ctx.people, candidate.conflictsWith) + ', who is on ' +
+                    (ctx.pairedRoleName || 'another Role here');
+
+            case R.NOT_IN_PAIRED_GROUP:
+                return 'Not in the same ' + (ctx.groupName || 'group') + ' as ' +
+                    (ctx.pairedRoleName || 'the Role this one is paired with');
+
             // Only a roster written earlier can carry these: nobody can be
             // OFFERED a Role or a place that has stopped existing, but a rota
             // made last month can certainly still name one.

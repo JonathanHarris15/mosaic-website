@@ -644,6 +644,14 @@
                     .filter(slug => Roles.LITURGICAL_SLUGS.indexOf(slug) === -1);
             },
 
+            // Rules about a PAIR of Roles (MS-220), written on the recurring
+            // events page and stored on the series. A ONE-OFF Event has no
+            // series and therefore no cross-Role rules — which is right: the
+            // rule is a standing arrangement, not a decision about one date.
+            get crossRoleRules() {
+                return Events.crossRoleRulesOf(this.series);
+            },
+
             // Both lists, the Event's first. Adding "Sound desk" to the Sunday
             // Service has to mean every Sunday HAS a sound desk to fill —
             // otherwise the series screen is a list that does nothing.
@@ -1515,6 +1523,11 @@
                     groups: this.groups,
                     assigned: seated,
                     assignedElsewhere: elsewhere,
+                    // Rules about a PAIR of Roles, which belong to the Event
+                    // rather than to either Role (MS-220). `elsewhere` above is
+                    // already everyone in the other Roles, so this is the only
+                    // ingredient the rule needs that the picker did not have.
+                    crossRoleRules: this.crossRoleRules,
                     // Who said they would not be here on THIS date (MS-188).
                     // Shown, with their own words, and still placeable — the
                     // editor keeps the final say. It is the solve that treats
@@ -1567,6 +1580,10 @@
                                     otherRoles: otherRoles,
                                     groupName: this.groupNameFor(c.personId),
                                     awayNote: this.awayNoteFor(c.personId),
+                                    // The other half of a cross-Role pair
+                                    // (MS-220), so the sentence can name it.
+                                    pairedRoleName: c.pairedRoleSlug
+                                        ? this.roleName(c.pairedRoleSlug) : '',
                                 }),
                         });
                     })
@@ -1611,6 +1628,7 @@
                     relationships: this.relationships,
                     groups: this.groups,
                     liturgicalHolders: this.liturgicalBlocks,
+                    crossRoleRules: this.crossRoleRules,
                 });
             },
 
@@ -1626,6 +1644,8 @@
                         requirement: (this.slotAt(roleSlug, slotId) || {}).requirement,
                         otherRoles: found.heldRoleSlug ? [this.roleName(found.heldRoleSlug)] : [],
                         groupName: this.groupNameFor(found.personId),
+                        pairedRoleName: found.pairedRoleSlug
+                            ? this.roleName(found.pairedRoleSlug) : '',
                     }),
                 };
             },

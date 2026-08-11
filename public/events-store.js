@@ -1029,8 +1029,56 @@
             );
         }
 
-        await db.collection(SERIES).doc(seriesId).set({ roleSlugs: roleSlugs }, { merge: true });
+        // ⚠ A Cross-Role Rule naming a Role this Event no longer runs can never
+        // fire, and one left lying about is worse than absent: add the Role back
+        // a year later and a rule nobody remembers writing starts refusing
+        // people. So the two are written together rather than leaving the
+        // second to a later save that might not come.
+        const kept = Events.crossRoleRulesOf(stored).filter(rule => (
+            ((rule && rule.roleSlugs) || []).every(slug => (roleSlugs || []).indexOf(slug) !== -1)
+        ));
+
+        await db.collection(SERIES).doc(seriesId).set(
+            { roleSlugs: roleSlugs, crossRoleRules: kept }, { merge: true }
+        );
         return roleSlugs;
+    }
+
+    // The Cross-Role Rules of a series (MS-220): "the Kids Leader and the Kids
+    // Helper must not be married to each other". Written whole rather than
+    // appended to, because the page holds the list and has already checked each
+    // rule against the Relationship Types it can see.
+    //
+    // The one check repeated here is the PAIR, because it is the one this layer
+    // can make on its own: a rule may only name Roles the Event actually runs.
+    // The page is a convenience; this is the boundary.
+    async function setSeriesCrossRoleRules(db, seriesId, rules) {
+        const stored = await loadSeries(db, seriesId);
+        if (!stored) throw new Error('No such event series: ' + seriesId);
+
+        const slugs = stored.roleSlugs || [];
+        const list = (rules || []).map(rule => ({
+            kind: rule.kind,
+            typeId: rule.typeId,
+            roleSlugs: ((rule && rule.roleSlugs) || []).slice(),
+        }));
+
+        list.forEach(rule => {
+            const pair = rule.roleSlugs;
+            if (pair.length !== 2 || pair[0] === pair[1]) {
+                throw new Error('A cross-Role rule names two different Roles.');
+            }
+            const missing = pair.filter(slug => slugs.indexOf(slug) === -1);
+            if (missing.length) {
+                throw new Error(
+                    'These Roles are not on "' + (stored.name || seriesId) + '", so a rule ' +
+                    'about them could never apply: ' + missing.join(', ')
+                );
+            }
+        });
+
+        await db.collection(SERIES).doc(seriesId).set({ crossRoleRules: list }, { merge: true });
+        return list;
     }
 
     // The time it starts. Written onto the RECURRENCE RULE rather than beside it,
@@ -1488,6 +1536,7 @@
         loadLiturgicalHolders,
         ensureSundayService,
         setSeriesRoles,
+        setSeriesCrossRoleRules,
         setSeriesTime,
         saveSeriesDetails,
         saveOccurrenceDetails,

@@ -289,6 +289,12 @@
         NOT_ON_ALLOWLIST: 'notOnAllowlist',             // this Role is kept to a named few
         RELATIONSHIP_CONFLICT: 'relationshipConflict',
         SAME_GROUP_CONFLICT: 'sameGroupConflict',       // already someone here from their group
+        // The two cross-Role reasons (MS-220). Named apart from the two above
+        // because the conflict is with somebody in a DIFFERENT Role, and a
+        // message that does not say which Role sends the editor hunting across
+        // a rota for the person they have never been told about.
+        PAIRED_ROLE_CONFLICT: 'pairedRoleConflict',     // shares a group with whoever holds the paired Role
+        NOT_IN_PAIRED_GROUP: 'notInPairedGroup',        // must share one with them, and does not
         NOT_IN_REQUIRED_GROUP: 'notInRequiredGroup',    // not in the group this Role is drawn from
         // Only a whole-roster answer can produce these two: nobody can be
         // offered a Role or a place that has since stopped existing, but a
@@ -494,6 +500,102 @@
             : null;
     }
 
+    // ── Cross-Role rules (MS-220) ────────────────────────────────────────────
+    //
+    // Every rule above is a rule a Role makes about ITSELF: "no two people from
+    // one household on Kids". Some rules are not about one Role at all. The
+    // Children's Ministry Leader and the Children's Ministry Helper are two
+    // Roles, and a married couple must not hold one each — neither Role can
+    // state that, because neither is the thing being constrained. The PAIR is.
+    //
+    // So a Cross-Role Rule belongs to the Event that runs both Roles, not to
+    // either Role: it is stored on the series (`crossRoleRules`) and authored on
+    // the recurring events page, where the Roles of an Event are already chosen.
+    //
+    //   { kind, typeId, roleSlugs: [a, b] }
+    //
+    // `kind` is the same NOT_SAME_GROUP / SAME_GROUP vocabulary a Role already
+    // uses, and `typeId` the same Relationship Group Type — Family, Marriage, a
+    // house group. Deliberately the same words: an editor who has written "no
+    // two people from the same" once should not have to learn a second phrasing
+    // to say it across two Roles.
+    //
+    // ⚠ It is evaluated HERE, inside the one function that decides whether a
+    // person may fill a slot, rather than beside each surface that asks. The
+    // picker, the roster judge, auto-assign, Cover and Trade all reach this
+    // function, and a rule any one of them did not know would be a rule you
+    // could walk round — the picker refusing what Cover then hands out.
+    //
+    //   holders — everyone in a DIFFERENT Role at this Event, as
+    //             [{ personId, roleSlug }]. The same list `busy` is built from,
+    //             unnarrowed: this asks about OTHER PEOPLE, not this candidate.
+    function crossRoleIneligibility(def, candidate, context, holders) {
+        const rules = (context && context.crossRoleRules) || [];
+        if (!rules.length || !holders || !holders.length) return null;
+
+        const slug = slugOf(def);
+        if (!slug) return null;
+
+        for (const rule of rules) {
+            const pair = (rule && rule.roleSlugs) || [];
+            // A pair is two DIFFERENT Roles. One naming the same Role twice is
+            // the Role's own NOT_SAME_GROUP rule written in the wrong place, and
+            // honouring it here would judge a Role against itself twice over.
+            if (pair.length !== 2 || pair[0] === pair[1]) continue;
+            if (pair.indexOf(slug) === -1) continue;
+
+            const otherSlug = pair[0] === slug ? pair[1] : pair[0];
+            const opposite = holders.filter(
+                h => h && h.roleSlug === otherSlug && h.personId && h.personId !== candidate.id
+            );
+            // Nobody in the paired Role yet, so there is nothing to be judged
+            // against — the same way the first person into a SAME_GROUP Role is
+            // unconstrained. The rule bites when the second seat is taken.
+            if (!opposite.length) continue;
+
+            if (rule.kind === RESTRICTIONS.NOT_SAME_GROUP) {
+                for (const holder of opposite) {
+                    const shared = sharedGroups(
+                        context.groups, rule.typeId, candidate.id, holder.personId
+                    );
+                    if (shared.length) {
+                        return {
+                            reason: REASONS.PAIRED_ROLE_CONFLICT,
+                            typeId: rule.typeId,
+                            groupId: shared[0].id,
+                            groupName: shared[0].name,
+                            conflictsWith: holder.personId,
+                            pairedRoleSlug: otherSlug,
+                        };
+                    }
+                }
+            }
+
+            if (rule.kind === RESTRICTIONS.SAME_GROUP) {
+                const own = groupsFor(context.groups, rule.typeId, candidate.id);
+                // No group is ever committed to, for the same reason the
+                // within-Role version doesn't: one group must satisfy EVERY
+                // holder of the paired Role, but which one is not decided here.
+                const works = own.some(
+                    group => opposite.every(h => inGroup(group, h.personId))
+                );
+                if (!works) {
+                    return {
+                        reason: REASONS.NOT_IN_PAIRED_GROUP,
+                        typeId: rule.typeId,
+                        conflictsWith: opposite[0].personId,
+                        pairedRoleSlug: otherSlug,
+                    };
+                }
+            }
+
+            // An unknown kind is skipped, not treated as a blanket refusal —
+            // the same forgiveness the within-Role loop gives a typo.
+        }
+
+        return null;
+    }
+
     // Judge one Person against one slot. Returns `null` when they may fill it,
     // or the reason they may not. Ordered most-fundamental first, so the user is
     // told the real cause — being Inactive explains everything else about them.
@@ -594,7 +696,10 @@
             // blanket exclusion — a typo in the config must not empty the list.
         }
 
-        return null;
+        // Last, because it is the only rule this Role did not write. Its own
+        // rules explain themselves; "your wife is leading" needs the editor to
+        // already know why the other reasons did not apply.
+        return crossRoleIneligibility(def, candidate, context, (context && context.assignedElsewhere) || []);
     }
 
     // Judge every candidate for one slot of one Role on one Event.
@@ -719,17 +824,26 @@
             const seated = seats.filter(s => (
                 s !== seat && s.roleSlug === seat.roleSlug && s.slotId !== seat.slotId
             ));
-            const busy = {};
-            busy[seat.personId] = seats
-                .filter(s => s !== seat && s.personId === seat.personId && s.roleSlug !== seat.roleSlug)
+            // Everyone holding a DIFFERENT Role here, this seat's own occupant
+            // aside. `busy` narrows this to the one person, for the exclusivity
+            // rule; a Cross-Role Rule asks about the OTHER people, so it needs
+            // the list unnarrowed (MS-220). Liturgy is in it for the same reason
+            // it is in `busy`: a Role paired with Preacher must see the preacher.
+            const elsewhere = seats
+                .filter(s => s !== seat && s.roleSlug !== seat.roleSlug)
                 .map(s => ({
                     personId: s.personId,
                     roleSlug: s.roleSlug,
                     allowsAnotherRole: allowsAnotherRole(defBySlug[s.roleSlug]),
                 }))
-                .concat(liturgical.filter(h => h.personId === seat.personId));
+                .concat(liturgical);
 
-            const blocked = ineligibilityFor(def, slot, candidate, ctx, seated, busy);
+            const busy = {};
+            busy[seat.personId] = elsewhere
+                .filter(h => h.personId === seat.personId);
+
+            const seatContext = Object.assign({}, ctx, { assignedElsewhere: elsewhere });
+            const blocked = ineligibilityFor(def, slot, candidate, seatContext, seated, busy);
             if (!blocked) return;
 
             warnings.push(Object.assign({
@@ -820,6 +934,46 @@
         }
 
         return { valid: errors.length === 0, errors: errors };
+    }
+
+    // A Cross-Role Rule, checked before it is stored (MS-220). Same Type rules
+    // as a group restriction — it IS one, said about two Roles instead of one —
+    // so the check above does that half, and this one adds the pair.
+    //
+    // `availableSlugs`, when given, is the Roles the Event actually runs. A rule
+    // naming a Role that is not on this Event can never fire, and an editor who
+    // wrote one would be watching for a refusal that never comes.
+    function validateCrossRoleRule(rule, availableTypes, availableSlugs) {
+        const errors = [];
+        const kind = rule && rule.kind;
+
+        if (GROUP_RULES.indexOf(kind) === -1) {
+            return {
+                valid: false,
+                errors: ['A cross-Role rule is either "must be in the same" or "no two people from the same".'],
+            };
+        }
+
+        const pair = (rule && rule.roleSlugs) || [];
+        if (pair.length !== 2 || !pair[0] || !pair[1]) {
+            errors.push('A cross-Role rule needs two Roles.');
+        } else if (pair[0] === pair[1]) {
+            // Not a pedantic check. This one is already sayable — it is the
+            // Role's own rule — and letting it be written here too would mean
+            // two places to look for why somebody was refused.
+            errors.push('Those are the same Role. A rule about one Role belongs on the Role itself.');
+        } else if (availableSlugs) {
+            pair.forEach(slug => {
+                if (availableSlugs.indexOf(slug) === -1) {
+                    errors.push('"' + slug + '" is not one of this event\'s Roles, so the rule could never apply.');
+                }
+            });
+        }
+
+        const all = errors.concat(validateRestriction(
+            { kind: kind, typeId: rule && rule.typeId }, availableTypes
+        ).errors);
+        return { valid: all.length === 0, errors: all };
     }
 
     // The Role's restrictions that can no longer run — typically because a Type
@@ -937,6 +1091,7 @@
         // validation
         validateDefinition,
         validateRestriction,
+        validateCrossRoleRule,
         unavailableRestrictions,
     };
 

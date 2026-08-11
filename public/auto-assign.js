@@ -334,6 +334,13 @@
                 return this.series.filter(s => s.id === this.seriesId)[0] || null;
             },
 
+            // The Event's rules about a PAIR of Roles (MS-220). A draft gets no
+            // easier a ride than a hand-made rota: the solve obeys them, and the
+            // warnings pass checks the finished lineup against them.
+            get crossRoleRules() {
+                return Events.crossRoleRulesOf(this.chosen);
+            },
+
             get rule() {
                 const s = this.chosen;
                 if (!s) return null;
@@ -734,6 +741,7 @@
                     seriesId: this.seriesId,
                     solve: Fairness.solve,
                     candidatesFor: Roles.candidatesFor,
+                    crossRoleRules: this.crossRoleRules,
                     intensityOf: record => this.intensityForRecord(record),
                     nudges: this.nudges,
                     outOn: date => this.outOn(date),
@@ -801,6 +809,7 @@
                         relationships: this.relationships,
                         groups: this.groups,
                         liturgicalHolders: this.liturgical[day.date] || [],
+                        crossRoleRules: this.crossRoleRules,
                     });
 
                     history = history.concat(
@@ -869,6 +878,11 @@
                         otherRoles: other.concat(
                             detail.heldRoleSlug ? [this.roleName(detail.heldRoleSlug)] : []
                         ),
+                        // The OTHER half of a cross-Role pair (MS-220). Without
+                        // it the sentence says "who is on another Role here",
+                        // which is the hunt this whole list exists to avoid.
+                        pairedRoleName: detail.pairedRoleSlug
+                            ? this.roleName(detail.pairedRoleSlug) : '',
                     }
                 );
             },
@@ -1481,6 +1495,7 @@
                     assignedElsewhere: elsewhere,
                     relationships: this.relationships,
                     groups: this.groups,
+                    crossRoleRules: this.crossRoleRules,
                 });
 
                 return Panel.replacements({

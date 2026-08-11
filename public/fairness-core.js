@@ -379,6 +379,10 @@
                 groups: o.groups,
                 assigned: seats,
                 assignedElsewhere: o.assignedElsewhere,
+                // The Event's rules about a PAIR of Roles (MS-220). The SECOND
+                // thread tying the Roles together — exclusivity was the first —
+                // and it reads the same `assignedElsewhere` that one does.
+                crossRoleRules: o.crossRoleRules,
                 // Who said they would not be here on this date (MS-188). Passed
                 // through rather than filtered out of `people` up front, so an
                 // unfilled place can still name the reason — "everybody left is
@@ -536,11 +540,19 @@
                     tieBreak: memoTieBreak,
                     held: held,
                     awayPersonIds: o.awayPersonIds,
-                    // Exclusivity is the one thread tying the Roles together, so
-                    // it is the only cross-Role state the per-Role search sees.
-                    // Each seat carries its own Role's flag, stamped when it was
-                    // taken — nothing has to look a Role back up by slug.
+                    // Exclusivity was the one thread tying the Roles together;
+                    // MS-220's Cross-Role Rules are the second, and both read
+                    // this same list. Each seat carries its own Role's flag,
+                    // stamped when it was taken — nothing has to look a Role
+                    // back up by slug.
+                    //
+                    // ⚠ Roles are solved in order, so a Cross-Role Rule bites
+                    // the LATER Role of the pair: the first is seated with
+                    // nobody to conflict with yet. That is the same answer a
+                    // person filling the rota by hand would reach, and the
+                    // roster judge checks the finished lineup either way round.
                     assignedElsewhere: seated,
+                    crossRoleRules: o.crossRoleRules,
                 });
 
                 // `attempt.seats` gives back the held ones too, since the search

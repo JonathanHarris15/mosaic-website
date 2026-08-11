@@ -189,7 +189,8 @@ async function verdictFor(db, personId, ref, roster) {
   }
   const occurrence = Object.assign({id: occSnap.id}, occSnap.data());
   const rank = await rankOf(db, personId);
-  const context = await aw.takeContext(db, personId, ref.roleSlug, ref.date);
+  const context = await aw.takeContext(
+      db, personId, ref.roleSlug, ref.date, occurrence.seriesId);
   const slot = (context.roleDef && (context.roleDef.slots || [])
       .find((sl) => sl.id === (ref.slotId || null))) || null;
 
@@ -218,6 +219,10 @@ async function verdictFor(db, personId, ref, roster) {
             roleSlug: a.roleSlug,
             allowsAnotherRole: false,
           })),
+      // The Event's rules about a PAIR of Roles (MS-220). Settling a Trade
+      // must be refused by the same rule that refuses the editor's picker, or
+      // the rule is a front door with the back door left open.
+      crossRoleRules: context.crossRoleRules,
     },
   });
 }

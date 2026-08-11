@@ -334,3 +334,65 @@ test('a one-off Role still warns on your own Away', () => {
     assert.equal(verdict.permitted, true);
     assert.equal(verdict.warning, Roles.REASONS.AWAY);
 });
+
+// ── Cross-Role Rules reach the member-facing door too (MS-220) ───────────────
+//
+// ⚠ THE POINT OF PUTTING THE RULE IN `ineligibilityFor` RATHER THAN IN THE
+// PICKER. An editor's picker refusing what Cover then hands out is a rule with
+// the back door left open: the member takes the place nobody could have given
+// them, and the rota is wrong in a way the screen that made it never sees.
+
+const PAIR_MARRIAGE = 'marriage';
+const carlAndAlice = {
+    id: 'm1', typeId: PAIR_MARRIAGE, name: 'Carl & Alice',
+    leaderId: null, memberIds: ['carl', 'alice'],
+};
+
+const marriedPairRule = {
+    kind: Roles.RESTRICTIONS.NOT_SAME_GROUP,
+    typeId: PAIR_MARRIAGE,
+    roleSlugs: ['kids_ministry', 'kids_helper'],
+};
+
+const askAcross = (over) => ask(Object.assign({
+    roleDef: Object.assign(kidsMinistry(), { slug: 'kids_ministry' }),
+    context: {
+        people: EVERYONE,
+        groups: [carlAndAlice],
+        assigned: [],
+        assignedElsewhere: [{ personId: 'alice', roleSlug: 'kids_helper', allowsAnotherRole: true }],
+        awayPersonIds: [],
+        crossRoleRules: [marriedPairRule],
+    },
+}, over || {}));
+
+test('a member may not take a place their spouse\'s Role is paired against', () => {
+    const verdict = askAcross();
+    assert.equal(verdict.permitted, false);
+    assert.equal(verdict.reason, Roles.REASONS.PAIRED_ROLE_CONFLICT);
+    assert.equal(verdict.detail.conflictsWith, 'alice');
+    assert.equal(verdict.detail.pairedRoleSlug, 'kids_helper');
+});
+
+test('with nobody in the paired Role, the same member may take it', () => {
+    const verdict = askAcross({
+        context: {
+            people: EVERYONE,
+            groups: [carlAndAlice],
+            assigned: [],
+            assignedElsewhere: [],
+            awayPersonIds: [],
+            crossRoleRules: [marriedPairRule],
+        },
+    });
+    assert.equal(verdict.permitted, true);
+});
+
+test('an editor taking it on their behalf is warned, not refused', () => {
+    // ADR-0021/ADR-0030: a rule about the roster advises an editor and refuses
+    // a member, because nobody reviews what a member picks. A cross-Role rule
+    // is a rule about the roster like any other.
+    const verdict = askAcross({ asEditor: true });
+    assert.equal(verdict.permitted, true);
+    assert.equal(verdict.warning, Roles.REASONS.PAIRED_ROLE_CONFLICT);
+});

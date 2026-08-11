@@ -88,7 +88,48 @@
                 ((series && series.name) || '?') + '": it is a locked Role of this Event.'
             );
         }
-        return withRoles(series, rolesOf(series).filter(slug => slug !== roleSlug));
+        // The rules naming it go with it — see withoutRulesNaming.
+        return withoutRulesNaming(
+            withRoles(series, rolesOf(series).filter(slug => slug !== roleSlug)),
+            roleSlug
+        );
+    }
+
+    // ── Cross-Role Rules on a series (MS-220) ────────────────────────────────
+    //
+    // "The Children's Ministry Leader and Helper must not be married to each
+    // other" is a rule about a PAIR of Roles, so it belongs to neither of them.
+    // It lives on the Event that runs both — which is also the only place that
+    // knows they run together at all — and RolesCore judges it.
+    //
+    // Each is { kind, typeId, roleSlugs: [a, b] }; RolesCore.validateCrossRoleRule
+    // says whether one is well-formed, and this module only arranges them.
+    const crossRoleRulesOf = series => (
+        series && Array.isArray(series.crossRoleRules) ? series.crossRoleRules : []
+    );
+
+    function withCrossRoleRules(series, rules) {
+        return Object.assign({}, series, { crossRoleRules: rules });
+    }
+
+    function addCrossRoleRule(series, rule) {
+        return withCrossRoleRules(series, crossRoleRulesOf(series).concat([rule]));
+    }
+
+    function removeCrossRoleRule(series, index) {
+        return withCrossRoleRules(
+            series, crossRoleRulesOf(series).filter((_, i) => i !== index)
+        );
+    }
+
+    // ⚠ Dropping a Role from an Event drops the rules that named it. A rule
+    // about a Role that is no longer here can never fire, and one left lying
+    // about is worse than absent: put the Role back a year later and a rule
+    // nobody remembers writing starts refusing people.
+    function withoutRulesNaming(series, roleSlug) {
+        return withCrossRoleRules(series, crossRoleRulesOf(series).filter(
+            rule => ((rule && rule.roleSlugs) || []).indexOf(roleSlug) === -1
+        ));
     }
 
     function assertSeriesDeletable(series) {
@@ -311,6 +352,12 @@
         addRole,
         removeRole,
         assertSeriesDeletable,
+        // cross-Role rules on a series (MS-220)
+        crossRoleRulesOf,
+        withCrossRoleRules,
+        addCrossRoleRule,
+        removeCrossRoleRule,
+        withoutRulesNaming,
         // occurrences
         occurrenceRef,
         // involvement's series
