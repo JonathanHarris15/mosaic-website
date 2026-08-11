@@ -22,3 +22,93 @@
     font-size: 16px !important;
   }
 }
+
+/* ── The Membership Track slider (ADR-0012) ──────────────────────────────────
+   Six stages, and each label has to sit under the stop it names. They didn't,
+   and couldn't: the labels are six equal columns, so their centres fall at
+   1/12, 3/12, 5/12 … of the row, while a range thumb's centre travels from
+   half a thumb in to half a thumb from the far end — 0, 1/5, 2/5 … Two
+   different scales that happen to agree near the middle, which is why Member
+   looked fine and Visitor and Previous Member were visibly off.
+
+   The labels are right; the slider was measuring the wrong thing. So the input
+   is inset by half a column, less half a thumb, and narrowed to match: its
+   thumb now stops exactly under each label's centre, and nothing about the
+   label row changes.
+
+   That means owning the thumb's SIZE. A native one is 16px in one browser and
+   21px in another, and an inset cannot be computed from a number the page does
+   not know. Hence appearance:none and the rail drawn by hand — including its
+   fill, which stops at the thumb's centre rather than at a bare percentage of
+   the width, or it would run ahead of the thumb at one end and lag it at the
+   other. */
+.track-slider {
+  --track-stops: 6;
+  --track-thumb: 16px;
+  --track-rail: 4px;
+  --track-index: 0;
+  --track-inset: calc(100% / (2 * var(--track-stops)) - var(--track-thumb) / 2);
+  --track-fill: calc(
+    var(--track-thumb) / 2 +
+    (var(--track-index) / (var(--track-stops) - 1)) * (100% - var(--track-thumb))
+  );
+
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  box-sizing: border-box;
+  width: calc(100% - 2 * var(--track-inset));
+  /* Taller than the thumb on purpose: the thumb is the mark, this is the
+     target, and a 16px-tall target is a miss on a phone. */
+  height: 20px;
+  margin: 0 var(--track-inset);
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.track-slider:disabled { cursor: not-allowed; }
+.track-slider:focus { outline: none; }
+.track-slider:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+  border-radius: 9999px;
+}
+
+.track-slider::-webkit-slider-runnable-track {
+  height: var(--track-rail);
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    currentColor 0 var(--track-fill),
+    #DAD0C0 var(--track-fill) 100%
+  );
+}
+
+.track-slider::-moz-range-track {
+  height: var(--track-rail);
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    currentColor 0 var(--track-fill),
+    #DAD0C0 var(--track-fill) 100%
+  );
+}
+
+.track-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--track-thumb);
+  height: var(--track-thumb);
+  margin-top: calc((var(--track-rail) - var(--track-thumb)) / 2);
+  border-radius: 9999px;
+  background: currentColor;
+}
+
+.track-slider::-moz-range-thumb {
+  width: var(--track-thumb);
+  height: var(--track-thumb);
+  border: none;
+  border-radius: 9999px;
+  background: currentColor;
+}

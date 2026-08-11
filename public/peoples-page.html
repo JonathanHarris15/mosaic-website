@@ -377,11 +377,14 @@
                                         <p class="font-label-md text-[9px] uppercase tracking-widest text-on-surface-variant mb-2">Membership Track</p>
                                         <div class="p-2 bg-surface-container-lowest border border-outline-variant/20 rounded-lg flex flex-col gap-1.5"
                                              :class="person.membership && person.membership.inactive ? 'opacity-50' : ''">
+                                            <!-- --track-index/--track-stops are what put the thumb under
+                                                 the right label; see .track-slider in the stylesheet. -->
                                             <input type="range" min="0" :max="membershipStages.length - 1" step="1"
                                                    :value="membershipIndex(person)"
                                                    :disabled="person.membership && person.membership.inactive"
+                                                   :style="`--track-index: ${membershipIndex(person)}; --track-stops: ${membershipStages.length}`"
                                                    @change="setMembershipStageByIndex($event.target.value, person)"
-                                                   class="w-full accent-primary cursor-pointer disabled:cursor-not-allowed">
+                                                   class="track-slider text-primary">
                                             <div class="flex justify-between text-[8px] text-on-surface-variant leading-tight">
                                                 <template x-for="(stage, i) in membershipStages" :key="stage">
                                                     <span class="flex-1 text-center px-0.5"
@@ -680,8 +683,9 @@
                                     <input type="range" min="0" :max="membershipStages.length - 1" step="1"
                                            :value="membershipIndex(selectedPerson)"
                                            :disabled="selectedPerson.membership && selectedPerson.membership.inactive"
+                                           :style="`--track-index: ${membershipIndex(selectedPerson)}; --track-stops: ${membershipStages.length}`"
                                            @change="setMembershipStageByIndex($event.target.value)"
-                                           class="w-full accent-primary cursor-pointer disabled:cursor-not-allowed">
+                                           class="track-slider text-primary">
                                     <div class="flex justify-between text-[9px] text-on-surface-variant leading-tight">
                                         <template x-for="(stage, i) in membershipStages" :key="stage">
                                             <span class="flex-1 text-center px-0.5"
