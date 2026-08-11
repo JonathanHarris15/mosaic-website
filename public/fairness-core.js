@@ -297,6 +297,68 @@
         return (roles || []).reduce((n, role) => n + slotsOf(role).length, 0);
     }
 
+    // ── Who each Role can actually reach ─────────────────────────────────────
+    //
+    // The people the pool must hold for a Role to have a real choice: the
+    // least-loaded (slots + POOL_SLACK) who could fill it at all, however far
+    // down the church-wide load ranking they sit. See the note at the call site
+    // for why the pool cannot be left to find them by widening.
+    //
+    // ⚠ ASKED OF `candidatesFor`, AGAINST AN EMPTY ROSTER. That answers exactly
+    // the rules that depend on the person ALONE — an allowlist, a required tag,
+    // an excluded tag, the slot's sex, Away, having left the church. The rules
+    // that judge combinations (notTogether, sameGroup, and the cross-Role pair)
+    // stay silent with nobody seated, which is what this wants: **this decides
+    // who is in the room, and the search decides who sits down.** Answering the
+    // combination rules here would be the solver forming its own opinion about
+    // eligibility, which it is not allowed to do (see the injection above).
+    //
+    // A Role's slots can ask for different sexes, so the question is asked once
+    // per distinct requirement and the answers pooled — judging everyone against
+    // the first slot alone would keep men out of a Role whose second slot is
+    // open to either.
+    function reachFor(roles, ranked, byId, o, candidatesFor) {
+        const people = ranked.map(c => byId[c.personId]).filter(Boolean);
+
+        return (roles || []).map((role, index) => {
+            const slots = slotsOf(role);
+            const seen = {};
+            const reach = [];
+
+            const asked = {};
+            if (people.length) {
+                slots.forEach(slot => {
+                    if (asked[slot.requirement]) return;
+                    asked[slot.requirement] = true;
+
+                    candidatesFor(role, slot, {
+                        people: people,
+                        relationships: o.relationships,
+                        groups: o.groups,
+                        assigned: [],
+                        assignedElsewhere: [],
+                        crossRoleRules: o.crossRoleRules,
+                        awayPersonIds: o.awayPersonIds,
+                    }).forEach(verdict => {
+                        if (!verdict.eligible || seen[verdict.personId]) return;
+                        seen[verdict.personId] = true;
+                        reach.push(verdict.personId);
+                    });
+                });
+            }
+
+            return {
+                role: role,
+                index: index,
+                // In load order, because `people` was.
+                reach: reach,
+                // How much room this Role has to be choosy. Zero means every
+                // person who can do it is needed; a wide-open Role has plenty.
+                slack: reach.length - slots.length,
+            };
+        });
+    }
+
     // Seat one Role's slots, filling as many as possible and, among rosters that
     // fill the same number, taking the one with the best total recency.
     //
@@ -498,6 +560,52 @@
             ranked.candidates.length
         );
 
+        // ⚠ EVERY ROLE NEEDS A CHOICE IN THE POOL, NOT MERELY A BODY.
+        //
+        // The ranking above is by load across the whole church, and the search
+        // runs inside the least-loaded slice of it. For a Role most people may
+        // do that is right: the slice holds plenty of eligible people and
+        // recency picks between them.
+        //
+        // For a Role only a few may do, it silently changed the answer. The
+        // slice widens past everybody unusable until it swallows the FIRST
+        // person who may do it — and then stops, because one is enough to fill
+        // the place. The rest of that Role's people were never in the room, so
+        // recency was never asked, and whoever was lightest overall served
+        // every single week. That is the reported "same person two weeks
+        // running", worst on a Role with a small allowlist, and it is a bug in
+        // the pool rather than in fairness: the numbers were right and nobody
+        // was ever shown them.
+        //
+        // So each Role is guaranteed its own people, in load order, however far
+        // down the ranking they sit.
+        const reach = reachFor(roles, ranked.candidates, byId, o, candidatesFor);
+
+        const guaranteed = [];
+        const guaranteedSeen = {};
+        reach.forEach(entry => {
+            entry.reach.slice(0, slotsOf(entry.role).length + POOL_SLACK).forEach(personId => {
+                if (guaranteedSeen[personId]) return;
+                guaranteedSeen[personId] = true;
+                guaranteed.push(personId);
+            });
+        });
+
+        // ⚠ THE SCARCEST ROLE PICKS FIRST — the second half of the same bug.
+        //
+        // Roles are solved one after another and each takes its people out of
+        // circulation, so whoever goes first gets first pick. In the editor's
+        // own order that meant Coffee — which anybody can do — spending one of
+        // the three people who may run Creche, and Creche then taking whoever
+        // was left. It costs Coffee nothing to pick somebody else and costs
+        // Creche its whole choice, which is the same person on it every week
+        // for the second time.
+        //
+        // So the Role with the least room to be choosy goes first. Ties keep the
+        // editor's order, and the roster is put back in that order before it is
+        // returned — this decides who picks first, not how anything reads.
+        const solveOrder = reach.slice().sort((a, b) => a.slack - b.slack || a.index - b.index);
+
         // Places an editor has already filled by hand. The solve fills what is
         // left around them and never moves one. Stamped with their own Role's
         // exclusivity here rather than trusted from the caller, so a held seat
@@ -518,9 +626,19 @@
         // dropped, because a hole discovered on a Sunday morning is the failure
         // this whole feature exists to prevent.
         for (let size = start; size <= ranked.candidates.length; size++) {
-            const people = ranked.candidates.slice(0, size)
-                .map(c => byId[c.personId])
-                .filter(Boolean);
+            const taken = {};
+            const chosen = [];
+            ranked.candidates.slice(0, size).forEach(c => {
+                if (taken[c.personId]) return;
+                taken[c.personId] = true;
+                chosen.push(c.personId);
+            });
+            guaranteed.forEach(personId => {
+                if (taken[personId]) return;
+                taken[personId] = true;
+                chosen.push(personId);
+            });
+            const people = chosen.map(id => byId[id]).filter(Boolean);
 
             // Starts holding every hand-made seat, in every Role, so exclusivity
             // reads the same whatever order the Roles are solved in — a held
@@ -529,7 +647,8 @@
             const seated = preset.slice();
             const gaps = [];
 
-            roles.forEach(role => {
+            solveOrder.forEach(entry => {
+                const role = entry.role;
                 const held = preset.filter(seat => seat.roleSlug === role.slug);
                 const attempt = solveRole(role, {
                     people: people,
@@ -575,8 +694,15 @@
                 }));
             });
 
-            filled = seated;
-            unfilled = gaps;
+            // Back into the editor's own Role order. Solving order is an
+            // internal choice about who picks first; a caller reading the
+            // roster must not be able to tell it happened.
+            const rank = {};
+            roles.forEach((role, i) => { rank[role.slug] = i; });
+            const byRole = (a, b) => (rank[a.roleSlug] || 0) - (rank[b.roleSlug] || 0);
+
+            filled = seated.slice().sort(byRole);
+            unfilled = gaps.slice().sort(byRole);
             used = size;
             if (!gaps.length) break;
         }

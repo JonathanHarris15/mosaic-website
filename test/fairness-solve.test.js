@@ -260,7 +260,7 @@ test('a different series on the same date solves differently', () => {
 
 // ── The pool widens rather than failing ──────────────────────────────────────
 
-test('a pool too tight to be legal widens until a valid roster exists', () => {
+test('a Role only one person may fill reaches them however loaded they are', () => {
     // Only `z` carries the tag, and `z` is the most loaded person there is, so
     // a pool cut to the least-loaded few would never reach them.
     const gated = role('kids', [either(1)], {
@@ -273,7 +273,16 @@ test('a pool too tight to be legal widens until a valid roster exists', () => {
     const result = solveWith({ roles: [gated], people: people, history: history });
 
     assert.deepEqual(seatedIds(result), ['z']);
-    assert.equal(result.widened > 0, true, 'and it should say that it had to reach');
+
+    // ⚠ THIS USED TO ASSERT `widened > 0` — that the pool started too tight and
+    // had to grow to reach `z`. It no longer does, and the change is the fix
+    // for the same-person-two-weeks-running bug: a Role's own people are in the
+    // pool from the start (see `reachFor`) rather than being stumbled upon by
+    // widening. Widening found ONE of them and stopped, which is why a Role with
+    // a small allowlist went to the same person every week.
+    //
+    // The outcome this test exists for is unchanged, and it is the line above.
+    assert.equal(result.widened, 0, 'the pool should not have had to reach');
 });
 
 test('widening is reported so tight restrictions become visible', () => {
