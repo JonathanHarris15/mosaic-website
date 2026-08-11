@@ -124,3 +124,91 @@ test('a liturgical Role has none either, and that is not a gap to fill', () => {
         assert.equal(Roles.descriptionOf(Roles.roleBySlug(slug, [])), null);
     });
 });
+
+// ── Every path where somebody meets a Role ───────────────────────────────────
+//
+// A description is only worth writing if it turns up where the question is
+// asked. There are five such moments, and they are not all "reading about a
+// place you already hold" — three of them are somebody DECIDING.
+
+const COMMITMENTS_HTML = read('public', 'commitments.html');
+const COMMITMENTS_JS = read('public', 'commitments.js');
+const COVER_HTML = read('public', 'cover.html');
+const COVER_JS = read('public', 'cover.js');
+
+test('the places waiting on your answer show it', () => {
+    // ⚠ THE ONE THAT MATTERS MOST on this page. These rows are hoisted out of
+    // date order because they need something from the reader — so this is where
+    // somebody is deciding whether they can do the thing, and "what is it?" is
+    // what they are deciding with.
+    const card = COMMITMENTS_HTML.match(
+        /x-show="hasUnanswered"[\s\S]*?<\/section>/);
+    assert.ok(card, 'the unanswered section is gone');
+    assert.match(card[0], /x-text="row\.description"/,
+        'a place waiting on your answer does not say what it is');
+});
+
+test('the places you have already settled show it too', () => {
+    assert.match(COMMITMENTS_JS, /description: this\.descriptionFor\(r\.roleSlug\)/,
+        'commitment rows carry no description');
+});
+
+test('the cover list shows it — the list where it matters most', () => {
+    // Everywhere else somebody is reading about a place they already hold.
+    // Here they are deciding whether to take one they have never done.
+    assert.match(COVER_JS, /description: window\.RolesCore\.descriptionOf\(def\)/,
+        'a cover row carries no description');
+    assert.match(COVER_HTML, /x-text="row\.description"/, 'nothing renders it on the list');
+});
+
+test('somebody who asked you personally still tells you what the job is', () => {
+    // An invitation is the one door a QUIET place has, so this may well be a
+    // Role the reader has never done — which is often why they were asked.
+    assert.match(COMMITMENTS_HTML, /x-text="descriptionFor\(swap\.roleName\)"/,
+        'an inbound trade names a Role and never says what it is');
+});
+
+test('choosing which of theirs to take shows what each one is', () => {
+    assert.match(COMMITMENTS_HTML, /x-text="descriptionFor\(put\.roleSlug\)"/,
+        'you pick between jobs you have never done, by name and date alone');
+});
+
+test('choosing which of yours to hand over shows what each one is', () => {
+    // The same question from the other side: what it involves is how you decide
+    // which one you can spare. Both pickers — the cover list's and the
+    // Commitments reply — draw from rows that carry it.
+    assert.match(COVER_JS, /description: window\.RolesCore\.descriptionOf\(def\),/,
+        'the cover page picker rows carry no description');
+    const sheets = COVER_HTML.match(/x-show="row\.description"/g) || [];
+    assert.ok(sheets.length >= 2,
+        'the cover page shows it on the list but not in the swap picker');
+});
+
+test('every surface asks the model, and none of them decide for themselves', () => {
+    // One definition of "is there a description" — otherwise one screen shows a
+    // blank line for a whitespace-only value and another does not.
+    [COMMITMENTS_JS, COVER_JS].forEach(js => {
+        assert.match(js, /RolesCore\.descriptionOf/);
+    });
+    assert.doesNotMatch(COMMITMENTS_HTML, /row\.description\.trim/,
+        'a template is doing the model\'s job');
+    assert.doesNotMatch(COVER_HTML, /row\.description\.trim/,
+        'a template is doing the model\'s job');
+});
+
+test('nothing written means nothing rendered, on every one of them', () => {
+    // A Role with no description must not leave an empty line anywhere. Every
+    // place that prints one is guarded by a show on the same expression.
+    const printers = [
+        [COMMITMENTS_HTML, /x-text="row\.description"/g, /x-show="row\.description"/g],
+        [COMMITMENTS_HTML, /x-text="descriptionFor\(swap\.roleName\)"/g, /x-show="descriptionFor\(swap\.roleName\)"/g],
+        [COMMITMENTS_HTML, /x-text="descriptionFor\(put\.roleSlug\)"/g, /x-show="descriptionFor\(put\.roleSlug\)"/g],
+        [COVER_HTML, /x-text="row\.description"/g, /x-show="row\.description"/g],
+    ];
+    printers.forEach(([html, prints, guards], i) => {
+        const printed = (html.match(prints) || []).length;
+        const guarded = (html.match(guards) || []).length;
+        assert.equal(printed, guarded,
+            'printer ' + i + ' renders a description with no guard, so an empty one leaves a blank line');
+    });
+});

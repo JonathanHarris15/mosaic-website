@@ -180,11 +180,12 @@ It also carries a **Role Description** — see below.
 _Avoid_: Role template, role config
 
 **Role Description**:
-What the job actually is, in the editor's own words: *"Arrive by 9:15, put the urns on, and set out the mugs on the side table."* Written on the [[Role Definition]] in the [[Roles Manager]], and read by whoever is down for the Role, on their [[Commitment]]s page beside the date. A Role's **name is a label**, and a label is not an answer to "what am I meant to do?".
+What the job actually is, in the editor's own words: *"Arrive by 9:15, put the urns on, and set out the mugs on the side table."* Written on the [[Role Definition]] in the [[Roles Manager]], and read at **every moment somebody meets that Role** — beside the date on their [[Commitment]]s page, on the row waiting for their answer, on the [[Cover]] list, when somebody asks them personally through a [[Trade]], and in both directions of a Trade's picker. A Role's **name is a label**, and a label is not an answer to "what am I meant to do?".
 
 - **One field of plain prose**, never a checklist or a set of steps. The moment it has structure it wants a screen of its own; what is worth having is the sentence the Role's organiser would say if you asked them in the corridor.
 - **Capped, and the cap is in the model** rather than in the text box — `/roles` is editor-writable by hand, and a wall of text would run down every Commitments row that shows it.
 - **Shown plainly, not behind a "more".** The whole reason it exists is that somebody down for a Role should not have to ask what it involves, and a description you have to open is one you find out about after you needed it. The cap is what keeps that affordable.
+- **It earns most where somebody is DECIDING, not reading.** Three of the places it appears are a choice — a place waiting on your answer, a [[Cover]] place you have never done, and picking which Assignment to take or hand over in a [[Trade]]. On the [[Cover]] list it shows on the rows you *cannot* take as well, level with the rest: the reason is already stated once, and hiding what the job is on top of that makes the row less of an answer, not more.
 - **Absent and empty are the same thing** — there is nothing to show — so no surface has to tell them apart.
 - A [[One-off Role]] has no definition and so has none; its label is all there is. **Liturgical Roles have none either**, and that is not a gap: they are code-defined with no editable definition at all (ADR-0016), and giving one a description would mean giving it a stored definition.
 _Avoid_: instructions, notes, job description, role info

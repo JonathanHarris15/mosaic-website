@@ -256,6 +256,12 @@
                 return Object.assign({}, entry, {
                     key: entry.id,
                     roleName: (def && def.name) || entry.roleName || entry.roleSlug,
+                    // What the job is (MS-222). ⚠ THE LIST WHERE IT MATTERS
+                    // MOST: everywhere else somebody is reading about a place
+                    // they already hold, and here they are deciding whether to
+                    // take one. "What is it?" is the question, and the answer
+                    // used to be a name and a date.
+                    description: window.RolesCore.descriptionOf(def),
                     dayNum: String(dt.getDate()).padStart(2, '0'),
                     mon: MONTHS[dt.getMonth()].slice(0, 3).toUpperCase(),
                     weekday: DAYS[dt.getDay()],
@@ -351,6 +357,7 @@
                             return Object.assign({}, r, {
                                 key: keyOf(r),
                                 roleName: (def && def.name) || r.label || r.roleSlug,
+                                description: window.RolesCore.descriptionOf(def),
                                 longDate: DAYS[dt.getDay()] + ' ' + dt.getDate() + ' ' +
                                     MONTHS[dt.getMonth()],
                             });

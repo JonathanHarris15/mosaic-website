@@ -113,6 +113,20 @@
                         <div class="mt-[3px] text-[12.5px] text-on-surface-variant">
                             <span x-text="row.eventName"></span> · <span x-text="row.weekday"></span>
                         </div>
+                        <!-- What the job is (MS-222). ⚠ THIS LIST MOST OF ALL:
+                             everywhere else somebody is reading about a place
+                             they already hold, and here they are deciding
+                             whether to take one they have never done. "What is
+                             it?" is the question, and the answer used to be a
+                             name and a date.
+
+                             Shown on the rows you CANNOT take as well, level
+                             with the rest — the reason a place is refused you is
+                             already stated once, and hiding what it is on top of
+                             that would make the row less of an answer, not more. -->
+                        <p x-show="row.description"
+                           class="mt-2 font-serif text-[13.5px] leading-[1.45] text-on-surface-variant"
+                           x-text="row.description"></p>
                     </div>
                 </div>
 
@@ -211,6 +225,13 @@
                             <span class="block text-[15px] text-on-surface" x-text="row.roleName"></span>
                             <span class="block text-[12px] text-on-surface-variant"
                                   x-text="row.eventName + ' · ' + row.longDate"></span>
+                            <!-- What you would be handing over (MS-222). The
+                                 same question from the other side: you are
+                                 giving this away, and what it involves is how
+                                 you decide which one you can spare. -->
+                            <span x-show="row.description"
+                                  class="block mt-1 font-serif text-[12.5px] leading-[1.4] text-on-surface-variant"
+                                  x-text="row.description"></span>
                         </span>
                     </button>
                 </template>
