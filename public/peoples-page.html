@@ -354,17 +354,13 @@
                                                 </span>
                                             </div>
                                         </template>
-                                        <div class="flex items-center flex-wrap gap-x-3 gap-y-1 pt-1.5">
-                                            <!-- Last Prayed For & Involvements Row -->
-                                            <div class="flex items-center gap-2">
-                                                <div class="flex items-center gap-1.5 text-secondary text-[10px] font-bold">
-                                                    <span class="material-symbols-outlined text-[14px]">volunteer_activism</span>
-                                                    <span x-text="PastoralPrayerCore.lastPrayedLabel(person.lastPastoralPrayerDate)"></span>
-                                                </div>
-                                                <span class="bg-secondary-container text-on-secondary-container text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-tighter border border-secondary/10" 
-                                                      x-text="`${person.totalInvolvements || 0} Involvements`"></span>
-                                            </div>
-                                        </div>
+                                        <!-- Last Prayed For and the Involvements count were here. The
+                                             directory card answers "who is this and how do I reach
+                                             them"; neither of those does. Both are still kept on the
+                                             Person and still read elsewhere — the Pastoral Prayer
+                                             list off lastPastoralPrayerDate, the Involvements sort
+                                             above off totalInvolvements — so this is the card, not
+                                             the field. -->
                                     </div>
                                     <!-- Cache Bust: 2024-05-15 18:42 -->
 
