@@ -289,7 +289,7 @@
         NOT_ON_ALLOWLIST: 'notOnAllowlist',             // this Role is kept to a named few
         RELATIONSHIP_CONFLICT: 'relationshipConflict',
         SAME_GROUP_CONFLICT: 'sameGroupConflict',       // already someone here from their group
-        // The two cross-Role reasons (MS-220). Named apart from the two above
+        // The two cross-Role reasons (MS-221). Named apart from the two above
         // because the conflict is with somebody in a DIFFERENT Role, and a
         // message that does not say which Role sends the editor hunting across
         // a rota for the person they have never been told about.
@@ -500,7 +500,7 @@
             : null;
     }
 
-    // ── Cross-Role rules (MS-220) ────────────────────────────────────────────
+    // ── Cross-Role rules (MS-221) ────────────────────────────────────────────
     //
     // Every rule above is a rule a Role makes about ITSELF: "no two people from
     // one household on Kids". Some rules are not about one Role at all. The
@@ -827,7 +827,7 @@
             // Everyone holding a DIFFERENT Role here, this seat's own occupant
             // aside. `busy` narrows this to the one person, for the exclusivity
             // rule; a Cross-Role Rule asks about the OTHER people, so it needs
-            // the list unnarrowed (MS-220). Liturgy is in it for the same reason
+            // the list unnarrowed (MS-221). Liturgy is in it for the same reason
             // it is in `busy`: a Role paired with Preacher must see the preacher.
             const elsewhere = seats
                 .filter(s => s !== seat && s.roleSlug !== seat.roleSlug)
@@ -936,7 +936,7 @@
         return { valid: errors.length === 0, errors: errors };
     }
 
-    // A Cross-Role Rule, checked before it is stored (MS-220). Same Type rules
+    // A Cross-Role Rule, checked before it is stored (MS-221). Same Type rules
     // as a group restriction — it IS one, said about two Roles instead of one —
     // so the check above does that half, and this one adds the pair.
     //

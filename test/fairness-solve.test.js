@@ -378,7 +378,7 @@ test('across ten stepped weeks nobody is worked far harder than anyone else', ()
     );
 });
 
-// ── Cross-Role Rules reach the solve (MS-220) ────────────────────────────────
+// ── Cross-Role Rules reach the solve (MS-221) ────────────────────────────────
 //
 // ⚠ A draft gets no easier a ride than a hand-made rota. If the solve did not
 // see these rules it would cheerfully seat the very roster the warnings pass

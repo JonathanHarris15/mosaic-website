@@ -644,7 +644,7 @@
                     .filter(slug => Roles.LITURGICAL_SLUGS.indexOf(slug) === -1);
             },
 
-            // Rules about a PAIR of Roles (MS-220), written on the recurring
+            // Rules about a PAIR of Roles (MS-221), written on the recurring
             // events page and stored on the series. A ONE-OFF Event has no
             // series and therefore no cross-Role rules — which is right: the
             // rule is a standing arrangement, not a decision about one date.
@@ -1524,7 +1524,7 @@
                     assigned: seated,
                     assignedElsewhere: elsewhere,
                     // Rules about a PAIR of Roles, which belong to the Event
-                    // rather than to either Role (MS-220). `elsewhere` above is
+                    // rather than to either Role (MS-221). `elsewhere` above is
                     // already everyone in the other Roles, so this is the only
                     // ingredient the rule needs that the picker did not have.
                     crossRoleRules: this.crossRoleRules,
@@ -1581,7 +1581,7 @@
                                     groupName: this.groupNameFor(c.personId),
                                     awayNote: this.awayNoteFor(c.personId),
                                     // The other half of a cross-Role pair
-                                    // (MS-220), so the sentence can name it.
+                                    // (MS-221), so the sentence can name it.
                                     pairedRoleName: c.pairedRoleSlug
                                         ? this.roleName(c.pairedRoleSlug) : '',
                                 }),

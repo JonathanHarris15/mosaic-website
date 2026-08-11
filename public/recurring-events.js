@@ -44,7 +44,7 @@
 
     const Core = window.EventsOccurrenceCore;
     // The SERIES model, which is a different module from the occurrence one
-    // above. Cross-Role Rules belong to a series (MS-220).
+    // above. Cross-Role Rules belong to a series (MS-221).
     const Series = window.EventsCore;
     const Store = window.EventsStore;
     const View = window.CalendarView;
@@ -93,7 +93,7 @@
             gridLoading: false,
             clearing: false,
 
-            // ── Cross-Role Rules (MS-220) ────────────────────────────────────
+            // ── Cross-Role Rules (MS-221) ────────────────────────────────────
             //
             // Rules about a PAIR of Roles — "the Kids Leader and the Kids Helper
             // must not be married to each other". They belong to neither Role,
@@ -195,7 +195,7 @@
                 await this.loadGroupTypes();
             },
 
-            // The Group Types a Cross-Role Rule can be written against (MS-220).
+            // The Group Types a Cross-Role Rule can be written against (MS-221).
             //
             // ⚠ The query MUST carry `where('sharedWithEditors', '==', true)` —
             // the same trap the Roles Manager documents at the top of its file.
@@ -406,7 +406,7 @@
             // thing nobody has set up yet.
             get hasRoles() { return this.gridRoles.length > 0; },
 
-            // ── Cross-Role Rules (MS-220) ────────────────────────────────────
+            // ── Cross-Role Rules (MS-221) ────────────────────────────────────
             //
             // A Role's own rules are written in the Roles Manager, because they
             // are facts about that Role wherever it runs. A rule about a PAIR of

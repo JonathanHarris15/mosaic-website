@@ -3,7 +3,7 @@ const assert = require('node:assert');
 
 const Roles = require('../public/roles-core.js');
 
-// Cross-Role Rules (MS-220).
+// Cross-Role Rules (MS-221).
 //
 // Every restriction before this one is a rule a Role makes about ITSELF. The
 // Children's Ministry Leader and the Children's Ministry Helper are two Roles,

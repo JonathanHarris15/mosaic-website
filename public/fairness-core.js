@@ -379,7 +379,7 @@
                 groups: o.groups,
                 assigned: seats,
                 assignedElsewhere: o.assignedElsewhere,
-                // The Event's rules about a PAIR of Roles (MS-220). The SECOND
+                // The Event's rules about a PAIR of Roles (MS-221). The SECOND
                 // thread tying the Roles together — exclusivity was the first —
                 // and it reads the same `assignedElsewhere` that one does.
                 crossRoleRules: o.crossRoleRules,
@@ -541,7 +541,7 @@
                     held: held,
                     awayPersonIds: o.awayPersonIds,
                     // Exclusivity was the one thread tying the Roles together;
-                    // MS-220's Cross-Role Rules are the second, and both read
+                    // MS-221's Cross-Role Rules are the second, and both read
                     // this same list. Each seat carries its own Role's flag,
                     // stamped when it was taken — nothing has to look a Role
                     // back up by slug.

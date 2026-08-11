@@ -95,7 +95,7 @@
         );
     }
 
-    // ── Cross-Role Rules on a series (MS-220) ────────────────────────────────
+    // ── Cross-Role Rules on a series (MS-221) ────────────────────────────────
     //
     // "The Children's Ministry Leader and Helper must not be married to each
     // other" is a rule about a PAIR of Roles, so it belongs to neither of them.
@@ -352,7 +352,7 @@
         addRole,
         removeRole,
         assertSeriesDeletable,
-        // cross-Role rules on a series (MS-220)
+        // cross-Role rules on a series (MS-221)
         crossRoleRulesOf,
         withCrossRoleRules,
         addCrossRoleRule,

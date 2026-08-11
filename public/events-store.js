@@ -1044,7 +1044,7 @@
         return roleSlugs;
     }
 
-    // The Cross-Role Rules of a series (MS-220): "the Kids Leader and the Kids
+    // The Cross-Role Rules of a series (MS-221): "the Kids Leader and the Kids
     // Helper must not be married to each other". Written whole rather than
     // appended to, because the page holds the list and has already checked each
     // rule against the Relationship Types it can see.

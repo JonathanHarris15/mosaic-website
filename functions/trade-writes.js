@@ -219,7 +219,7 @@ async function verdictFor(db, personId, ref, roster) {
             roleSlug: a.roleSlug,
             allowsAnotherRole: false,
           })),
-      // The Event's rules about a PAIR of Roles (MS-220). Settling a Trade
+      // The Event's rules about a PAIR of Roles (MS-221). Settling a Trade
       // must be refused by the same rule that refuses the editor's picker, or
       // the rule is a front door with the back door left open.
       crossRoleRules: context.crossRoleRules,

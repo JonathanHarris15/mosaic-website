@@ -486,7 +486,7 @@
             case R.NOT_IN_REQUIRED_GROUP:
                 return 'Not in the ' + (ctx.groupName || 'required') + ' group';
 
-            // The two cross-Role reasons (MS-220). They name the OTHER Role,
+            // The two cross-Role reasons (MS-221). They name the OTHER Role,
             // because that is the whole difference: every reason above is about
             // this Role, and an editor reading "in the same household as Dave"
             // would look down this Role's list and not find him.

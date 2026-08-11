@@ -335,7 +335,7 @@ test('a one-off Role still warns on your own Away', () => {
     assert.equal(verdict.warning, Roles.REASONS.AWAY);
 });
 
-// ── Cross-Role Rules reach the member-facing door too (MS-220) ───────────────
+// ── Cross-Role Rules reach the member-facing door too (MS-221) ───────────────
 //
 // ⚠ THE POINT OF PUTTING THE RULE IN `ineligibilityFor` RATHER THAN IN THE
 // PICKER. An editor's picker refusing what Cover then hands out is a rule with

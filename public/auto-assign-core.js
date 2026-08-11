@@ -187,7 +187,7 @@
                 : [],
             relationships: o.relationships,
             groups: o.groups,
-            // The Event's rules about a PAIR of Roles (MS-220), carried through
+            // The Event's rules about a PAIR of Roles (MS-221), carried through
             // to the solve so a drafted roster obeys what the picker enforces.
             crossRoleRules: o.crossRoleRules,
         });

@@ -334,7 +334,7 @@
                 return this.series.filter(s => s.id === this.seriesId)[0] || null;
             },
 
-            // The Event's rules about a PAIR of Roles (MS-220). A draft gets no
+            // The Event's rules about a PAIR of Roles (MS-221). A draft gets no
             // easier a ride than a hand-made rota: the solve obeys them, and the
             // warnings pass checks the finished lineup against them.
             get crossRoleRules() {
@@ -878,7 +878,7 @@
                         otherRoles: other.concat(
                             detail.heldRoleSlug ? [this.roleName(detail.heldRoleSlug)] : []
                         ),
-                        // The OTHER half of a cross-Role pair (MS-220). Without
+                        // The OTHER half of a cross-Role pair (MS-221). Without
                         // it the sentence says "who is on another Role here",
                         // which is the hunt this whole list exists to avoid.
                         pairedRoleName: detail.pairedRoleSlug

@@ -30,7 +30,7 @@ const coverCore = require("./shared/cover-core.js");
 const awayCore = require("./shared/away-core.js");
 
 const OCCURRENCES = "event_occurrences";
-// Where Event series live — the home of the Cross-Role Rules (MS-220).
+// Where Event series live — the home of the Cross-Role Rules (MS-221).
 const SERIES = "events";
 const COVER = "cover";
 
@@ -97,7 +97,7 @@ function runOrLose(db, body, message) {
  * @return {Promise<Object>} the person, the Role definition, and the rules
  */
 /**
- * The Cross-Role Rules stored on an Event series (MS-220).
+ * The Cross-Role Rules stored on an Event series (MS-221).
  *
  * A rule about a PAIR of Roles belongs to neither of them, so it lives on the
  * Event that runs both. A one-off Event has no series and therefore no rules,
@@ -135,7 +135,7 @@ async function takeContext(db, personId, roleSlug, date, seriesId) {
   const roleDef = roleSnap.empty ? null :
     Object.assign({id: roleSnap.docs[0].id}, roleSnap.docs[0].data());
 
-  // ⚠ The Event's rules about a PAIR of Roles (MS-220). They live on the
+  // ⚠ The Event's rules about a PAIR of Roles (MS-221). They live on the
   // SERIES, not on either Role, so a Role whose own definition has no group
   // rule can still be constrained by one — which is exactly why `wantsGroups`
   // below has to ask about these too. Miss that and the groups list arrives
