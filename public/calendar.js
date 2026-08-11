@@ -699,10 +699,10 @@
                     const kind = this.chipKind(ev);
                     // Same order as the chip, so the strip and the card can
                     // never disagree about what a day looks like.
-                    if (kind === 'off') return '#DAD0C0';                 // outline-variant
+                    if (kind === 'off') return 'var(--outline-variant)';
                     if (kind === 'declined') return View.ATTENTION_COLOUR;
                     if (kind === 'unfilled') return View.WARNING_COLOUR;
-                    if (kind === 'mine') return '#182F57';                // primary
+                    if (kind === 'mine') return 'var(--primary)';
                     return View.colourOf(ev).bar;
                 });
             },

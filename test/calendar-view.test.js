@@ -686,7 +686,7 @@ test('the palette is a closed set, each entry usable on its own', () => {
     assert.strictEqual(new Set(slugs).size, slugs.length, 'two colours share a slug');
 
     View.EVENT_COLOURS.forEach(c => {
-        assert.match(c.bar, /^#[0-9A-Fa-f]{6}$/, c.slug + ' has no usable bar colour');
+        assert.ok(resolve(c.bar), c.slug + ' has no usable bar colour');
         assert.ok(c.name && c.name.length, c.slug + ' has no name a person could say');
     });
 });
@@ -694,8 +694,11 @@ test('the palette is a closed set, each entry usable on its own', () => {
 test('nothing in the palette is the red that means "needs sorting"', () => {
     // Red is spoken for. A chip in the error red says one thing on this
     // calendar, and a chosen colour must never be able to say it by accident.
+    // Compared by resolved value, not by token name: two different names for
+    // the same hex would still look identical on the chip.
+    const red = resolve(View.ATTENTION_COLOUR).toUpperCase();
     View.EVENT_COLOURS.forEach(c => {
-        assert.notStrictEqual(c.bar.toUpperCase(), '#A8463E', c.slug + ' is the error red');
+        assert.notStrictEqual(resolve(c.bar).toUpperCase(), red, c.slug + ' is the error red');
     });
 });
 
@@ -703,15 +706,15 @@ test('an Event with no colour chosen looks exactly as it did before', () => {
     // The whole existing calendar has no colour stored on anything, so the
     // fallback IS the current appearance. If this changes, every event in the
     // church silently restyles.
-    assert.strictEqual(View.colourOf({}).bar, '#5D94A9');
-    assert.strictEqual(View.colourOf(null).bar, '#5D94A9');
+    assert.strictEqual(View.colourOf({}).bar, 'var(--event-steel)');
+    assert.strictEqual(View.colourOf(null).bar, 'var(--event-steel)');
 });
 
 test('a stored colour nobody recognises falls back rather than blanking the chip', () => {
     // An old slug, a typo, a hand-edited document. A chip with no left edge
     // reads as a rendering bug, not as "unknown colour".
-    assert.strictEqual(View.colourOf({ colour: 'chartreuse' }).bar, '#5D94A9');
-    assert.strictEqual(View.colourOf({ colour: 42 }).bar, '#5D94A9');
+    assert.strictEqual(View.colourOf({ colour: 'chartreuse' }).bar, 'var(--event-steel)');
+    assert.strictEqual(View.colourOf({ colour: 42 }).bar, 'var(--event-steel)');
 });
 
 test('a recurring Event takes its colour from the series, a one-off from itself', () => {
@@ -745,17 +748,23 @@ test('a Sunday keeps the colour it already draws in', () => {
         View.colourOf({ seriesId: Core.SUNDAY_SERVICE_ID, seriesColour: 'plum' }).slug, 'plum');
 });
 
+// These colours used to be hexes copied out of the theme, and these tests
+// existed to catch the copies drifting. They are var(--token) now, so the
+// drift cannot happen — what is worth checking instead is that every token
+// they name actually exists. A var() pointing at nothing does not fall back;
+// it removes the property, and the chip draws with no colour at all.
+const theme = require('../tailwind.config.js').theme.extend.colors;
+const tokenOf = (v) => (String(v).match(/^var\(--([a-z0-9-]+)\)$/) || [])[1];
+const resolve = (v) => theme[tokenOf(v)];
+
 test('the red a chip uses for "needs sorting" is the theme\'s error red', () => {
-    // Restated in calendar-view.js so a chip can use it inline. If it drifts
-    // from the token, the loudest thing on the calendar stops matching the same
-    // warning everywhere else it appears.
-    const theme = require('../tailwind.config.js').theme.extend.colors;
-    assert.strictEqual(View.ATTENTION_COLOUR.toUpperCase(), theme.error.toUpperCase());
+    assert.strictEqual(tokenOf(View.ATTENTION_COLOUR), 'error');
+    assert.ok(resolve(View.ATTENTION_COLOUR), '--error is not in the theme');
 });
 
 test('the amber a chip uses for "places to fill" is the theme\'s warning', () => {
-    const theme = require('../tailwind.config.js').theme.extend.colors;
-    assert.strictEqual(View.WARNING_COLOUR.toUpperCase(), theme.warning.toUpperCase());
+    assert.strictEqual(tokenOf(View.WARNING_COLOUR), 'warning');
+    assert.ok(resolve(View.WARNING_COLOUR), '--warning is not in the theme');
 
     // The pair the chip background needs. Without them the class is simply not
     // generated and the chip draws with no background at all.
@@ -763,12 +772,19 @@ test('the amber a chip uses for "places to fill" is the theme\'s warning', () =>
     assert.ok(theme['on-warning-container'], 'no text colour for the warning chip');
 });
 
+test('every event colour names a token that exists', () => {
+    for (const c of View.EVENT_COLOURS) {
+        assert.ok(resolve(c.bar), `${c.slug}: no token behind ${c.bar}`);
+        assert.ok(resolve(c.tint), `${c.slug}: no token behind ${c.tint}`);
+    }
+});
+
 test('a chosen colour and the warning amber cannot be mistaken for each other', () => {
     // They are the same amber. A chosen colour only ever draws the BAR down the
     // side of a chip; the warning only ever tints the BACKGROUND. So a tinted
     // chip always means the app is saying something.
     const amber = View.EVENT_COLOURS.find(c => c.slug === 'amber');
-    assert.strictEqual(amber.bar.toUpperCase(), View.WARNING_COLOUR.toUpperCase());
+    assert.strictEqual(resolve(amber.bar).toUpperCase(), resolve(View.WARNING_COLOUR).toUpperCase());
     assert.ok(View.EVENT_COLOURS.every(c => c.tint !== c.bar), 'a bar and a background look alike');
 });
 
