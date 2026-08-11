@@ -474,18 +474,47 @@
 
                                 <ul x-show="draftRestrictions.length" class="flex flex-col gap-base">
                                     <template x-for="(rule, index) in draftRestrictions" :key="index">
-                                        <li class="group flex items-center gap-sm px-sm py-sm rounded-lg border bg-surface"
+                                        <li class="group flex flex-col gap-sm px-sm py-sm rounded-lg border bg-surface"
                                             :class="isRuleAvailable(rule) ? 'border-outline-variant' : 'border-error'">
-                                            <span class="material-symbols-outlined text-[19px] flex-shrink-0"
-                                                  :class="isRuleAvailable(rule) ? 'text-secondary' : 'text-error'"
-                                                  x-text="ruleIcon(rule)"></span>
-                                            <span class="flex-grow font-serif text-[16px] leading-snug"
-                                                  :class="isRuleAvailable(rule) ? 'text-on-surface' : 'text-error'"
-                                                  x-text="ruleSentence(rule)"></span>
-                                            <button @click="removeRule(index)" title="Remove this rule"
-                                                    class="w-9 h-9 lg:w-8 lg:h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error transition-opacity transition-colors opacity-100 lg:opacity-0 lg:group-hover:opacity-100">
-                                                <span class="material-symbols-outlined text-[19px]">close</span>
-                                            </button>
+                                            <div class="flex items-center gap-sm">
+                                                <span class="material-symbols-outlined text-[19px] flex-shrink-0"
+                                                      :class="isRuleAvailable(rule) ? 'text-secondary' : 'text-error'"
+                                                      x-text="ruleIcon(rule)"></span>
+                                                <span class="flex-grow font-serif text-[16px] leading-snug"
+                                                      :class="isRuleAvailable(rule) ? 'text-on-surface' : 'text-error'"
+                                                      x-text="ruleSentence(rule)"></span>
+                                                <button @click="removeRule(index)" title="Remove this rule"
+                                                        class="w-9 h-9 lg:w-8 lg:h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error transition-opacity transition-colors opacity-100 lg:opacity-0 lg:group-hover:opacity-100">
+                                                    <span class="material-symbols-outlined text-[19px]">close</span>
+                                                </button>
+                                            </div>
+
+                                            <!-- A list is the one rule made of many things, so it is
+                                                 the one that can be half-wrong later. It is amended
+                                                 where it sits: rebuilding eleven names to add a
+                                                 twelfth is how one of the eleven gets left off. -->
+                                            <div x-show="rule.kind === 'allowlist'"
+                                                 class="flex flex-col gap-sm pl-[27px]">
+                                                <div class="flex flex-wrap gap-xs">
+                                                    <template x-for="(personId, i) in (rule.personIds || [])" :key="personId">
+                                                        <span class="inline-flex items-center gap-xs font-serif text-[15px] text-on-surface bg-surface-container-low border border-outline-variant rounded-sm pl-base pr-[5px] py-[4px]">
+                                                            <span x-text="allowlistNames(rule)[i]"></span>
+                                                            <button @click="removeFromAllowlistRule(index, personId)"
+                                                                    :title="`Take ${allowlistNames(rule)[i]} off this list`"
+                                                                    class="w-5 h-5 flex items-center justify-center rounded text-on-surface-variant hover:text-error">
+                                                                <span class="material-symbols-outlined text-[15px]">close</span>
+                                                            </button>
+                                                        </span>
+                                                    </template>
+                                                </div>
+                                                <select @change="pickIntoAllowlistRule(index, $event)"
+                                                        class="w-full lg:w-[17.5rem] border border-outline-variant rounded-lg pl-sm pr-8 py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary">
+                                                    <option value="">Add someone to this list…</option>
+                                                    <template x-for="option in allowlistOptionsFor(rule)" :key="option.id">
+                                                        <option :value="option.id" x-text="option.name"></option>
+                                                    </template>
+                                                </select>
+                                            </div>
                                         </li>
                                     </template>
                                 </ul>

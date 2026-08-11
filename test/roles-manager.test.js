@@ -1301,28 +1301,137 @@ test('the same person cannot be added to an allowlist twice', async () => {
 });
 
 test('an allowlist reads as names, never as ids', async () => {
+    // The names live in the chips, which are the editable list; the sentence
+    // above them says what KIND of rule it is and does not repeat all eleven.
     const page = await mountPage({ people: PEOPLE });
-    const sentence = page.ruleSentence({ kind: 'allowlist', personIds: ['p1', 'p2'] });
+    const rule = { kind: 'allowlist', personIds: ['p1', 'p2'] };
 
-    assert.match(sentence, /Ada Lovelace/);
-    assert.match(sentence, /Grace Hopper/);
-    assert.doesNotMatch(sentence, /p1|p2/);
+    assert.deepStrictEqual(page.allowlistNames(rule), ['Ada Lovelace', 'Grace Hopper']);
+    assert.doesNotMatch(page.allowlistNames(rule).join(' '), /p1|p2/);
+    assert.match(page.ruleSentence(rule), /only these people/i);
+    assert.doesNotMatch(page.ruleSentence(rule), /p1|p2|personIds/);
 });
 
 test('a person who has left is SAID to be missing, not quietly dropped', async () => {
     // A shorter allowlist than the editor believes they have is how a Role
     // silently stops being fillable.
     const page = await mountPage({ people: PEOPLE });
-    const sentence = page.ruleSentence({ kind: 'allowlist', personIds: ['p1', 'gone'] });
+    const names = page.allowlistNames({ kind: 'allowlist', personIds: ['p1', 'gone'] });
 
-    assert.match(sentence, /Ada Lovelace/);
-    assert.match(sentence, /no longer in the directory/);
+    assert.deepStrictEqual(names, ['Ada Lovelace', 'Someone no longer in the directory']);
 });
 
 test('an empty stored allowlist says so rather than reading as no rule', async () => {
     const page = await mountPage({ people: PEOPLE });
     assert.match(page.ruleSentence({ kind: 'allowlist', personIds: [] }), /nobody could ever fill/i);
     assert.equal(page.isRuleAvailable({ kind: 'allowlist', personIds: [] }), false);
+});
+
+// ── Editing an allowlist that already exists ─────────────────────────────────
+//
+// An allowlist is the one rule made of MANY things, and the only way to change
+// it used to be to throw it away and name everybody again. Six months later,
+// with one person joining the coffee rota, that is a list retyped from memory —
+// and a name forgotten in the retyping is a Role that quietly stops offering
+// somebody. So the list already on the Role is edited where it sits.
+
+const withAllowlist = (...ids) => {
+    const def = coffeeDefinition();
+    def.restrictions = [{ kind: 'allowlist', personIds: ids }];
+    return def;
+};
+
+const openWithAllowlist = async (...ids) => {
+    const page = await mountPage({ roles: { r1: withAllowlist(...ids) }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    return page;
+};
+
+const listOf = page => page.draft.restrictions.find(r => r.kind === 'allowlist').personIds;
+
+test('somebody can be added to a list that is already on the Role', async () => {
+    const page = await openWithAllowlist('p1');
+    page.addToAllowlistRule(0, 'p3');
+
+    assert.deepStrictEqual(listOf(page), ['p1', 'p3']);
+    await page.saveDraft();
+    assert.deepStrictEqual(stored('roles').r1.restrictions, [
+        { kind: 'allowlist', personIds: ['p1', 'p3'] },
+    ]);
+});
+
+test('somebody can be taken off a list that is already on the Role', async () => {
+    const page = await openWithAllowlist('p1', 'p2', 'p3');
+    page.removeFromAllowlistRule(0, 'p2');
+
+    assert.deepStrictEqual(listOf(page), ['p1', 'p3']);
+    await page.saveDraft();
+    assert.deepStrictEqual(stored('roles').r1.restrictions, [
+        { kind: 'allowlist', personIds: ['p1', 'p3'] },
+    ]);
+});
+
+test('editing the list leaves the Role\'s other rules alone', async () => {
+    const def = withAllowlist('p1');
+    def.restrictions.unshift({ kind: 'requireTag', tagId: KIDS_CLEARED });
+    const page = await mountPage({ roles: { r1: def }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+
+    page.addToAllowlistRule(1, 'p2');
+    assert.deepStrictEqual(page.draft.restrictions, [
+        { kind: 'requireTag', tagId: KIDS_CLEARED },
+        { kind: 'allowlist', personIds: ['p1', 'p2'] },
+    ]);
+});
+
+test('the picker for a list offers only people not already on it', async () => {
+    const page = await openWithAllowlist('p1');
+    const offered = page.allowlistOptionsFor(page.draft.restrictions[0]).map(p => p.id);
+
+    assert.deepStrictEqual(offered.sort(), ['p2', 'p3']);
+});
+
+test('the same person cannot be added to an existing list twice', async () => {
+    const page = await openWithAllowlist('p1');
+    page.addToAllowlistRule(0, 'p1');
+    assert.deepStrictEqual(listOf(page), ['p1']);
+});
+
+test('the list reads as names, and a person who has left can be cleared off it', async () => {
+    // Before this, a name that had left the directory was a dead entry an
+    // editor could see and not remove without rebuilding the whole list.
+    const page = await openWithAllowlist('p1', 'gone');
+    assert.deepStrictEqual(
+        page.allowlistNames(page.draft.restrictions[0]),
+        ['Ada Lovelace', 'Someone no longer in the directory']
+    );
+
+    page.removeFromAllowlistRule(0, 'gone');
+    assert.deepStrictEqual(listOf(page), ['p1']);
+});
+
+test('taking the last person off is refused, and says which control means that', async () => {
+    // An empty allowlist is a Role nobody can ever fill. Removing the RULE is
+    // how you say "anyone" — and that control is right there, so the refusal
+    // points at it instead of leaving a Role that cannot be saved.
+    const page = await openWithAllowlist('p1');
+    page.removeFromAllowlistRule(0, 'p1');
+
+    assert.deepStrictEqual(listOf(page), ['p1'], 'the list was emptied');
+    assert.equal(page.toast.type, 'error');
+    assert.match(page.toast.message, /remove the rule/i);
+});
+
+test('editing anything other than an allowlist does nothing', async () => {
+    // The index comes from the rendered list; a stale one must not turn a tag
+    // rule into a list of people.
+    const page = await mountPage({ roles: { r1: kidsDefinition() }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, KIDS_CLEARED);
+
+    page.addToAllowlistRule(0, 'p1');
+    page.removeFromAllowlistRule(0, 'p1');
+    assert.deepStrictEqual(page.draft.restrictions, [{ kind: 'requireTag', tagId: KIDS_CLEARED }]);
 });
 
 // ── Liturgical intensity ─────────────────────────────────────────────────────

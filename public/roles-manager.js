@@ -649,6 +649,84 @@ window.RolesManager = () => ({
         this.newAllowlistPick = '';
     },
 
+    // ── Editing the list that is already on the Role ─────────────────────────
+    //
+    // An allowlist is the one rule made of MANY things, so it is the one rule
+    // that can be half-wrong later. Every other rule names a single tag or type
+    // — if it is wrong you remove it and add the right one. A list of eleven
+    // people with one person missing is not a rule to replace, it is a rule to
+    // amend, and rebuilding it from memory is how the twelfth name gets left
+    // off and somebody quietly stops being offered the Role.
+    //
+    // So the list is edited where it sits, in the rules list, rather than in
+    // the composer above it. The composer still writes a NEW list (and still
+    // replaces any existing one, which is the "start over" route).
+
+    // The names on a rule's list, in order, for the chips. A person who has
+    // left the directory is SAID rather than dropped — same reasoning as
+    // ruleSentence, and now they can be cleared off.
+    allowlistNames(rule) {
+        return ((rule && rule.personIds) || [])
+            .map(id => this.personName(id) || 'Someone no longer in the directory');
+    },
+
+    // Everyone not already on THIS list. Per-rule, not the composer's picker:
+    // the two lists are being built at once when a Role already has one.
+    allowlistOptionsFor(rule) {
+        const on = (rule && rule.personIds) || [];
+        return this.people.filter(person => on.indexOf(person.id) === -1);
+    },
+
+    // The rule at `index`, but only if it really is an allowlist. The index
+    // comes from the rendered list, and a stale one must not turn a tag rule
+    // into a list of people.
+    allowlistRuleAt(index) {
+        const rule = this.draftRestrictions[index];
+        return (rule && rule.kind === RolesCore.RESTRICTIONS.ALLOWLIST) ? rule : null;
+    },
+
+    // Replace the rule at `index` with one holding `personIds`. Immutable, like
+    // every other edit here, so cancel stays free.
+    replaceAllowlistAt(index, personIds) {
+        this.draft = Object.assign({}, this.draft, {
+            restrictions: this.draftRestrictions.map((rule, i) => (
+                i === index ? Object.assign({}, rule, { personIds: personIds }) : rule
+            )),
+        });
+    },
+
+    addToAllowlistRule(index, personId) {
+        if (!this.draft || !personId) return;
+        const rule = this.allowlistRuleAt(index);
+        if (!rule) return;
+        const on = rule.personIds || [];
+        if (on.indexOf(personId) !== -1) return;
+        this.replaceAllowlistAt(index, on.concat([personId]));
+    },
+
+    removeFromAllowlistRule(index, personId) {
+        if (!this.draft) return;
+        const rule = this.allowlistRuleAt(index);
+        if (!rule) return;
+        const left = (rule.personIds || []).filter(id => id !== personId);
+        // An empty list is a Role nobody can ever fill. "Anyone" is said by
+        // removing the RULE, and that control is on the same row — so point at
+        // it rather than leaving behind a Role that cannot be saved.
+        if (!left.length) {
+            this.showToast('A list needs at least one person — remove the rule to let anyone fill this Role', 'error');
+            return;
+        }
+        this.replaceAllowlistAt(index, left);
+    },
+
+    // The picker is a <select> that fires on change; it has to fall back to its
+    // placeholder or the same person cannot be re-picked after being removed.
+    pickIntoAllowlistRule(index, event) {
+        const id = event && event.target && event.target.value;
+        this.addToAllowlistRule(index, id);
+        if (event && event.target) event.target.value = '';
+    },
+
     get composingRelationshipRule() {
         return this.newRuleKind === RolesCore.RESTRICTIONS.NOT_TOGETHER;
     },
@@ -837,20 +915,18 @@ window.RolesManager = () => ({
                 ? `Cannot be tagged "${name}"`
                 : 'Excludes a tag that no longer exists — remove this rule';
         }
-        // Names, never ids. An id that no longer resolves is SAID so — a person
-        // who left leaves a dead entry that silently shrinks the list, and a
-        // shorter allowlist than the editor thinks they have is how a Role
-        // quietly stops being fillable.
+        // The one rule whose sentence does NOT carry its own contents: the list
+        // is rendered under it as chips, each removable, so naming everybody
+        // here as well would print the same eleven names twice. The chips are
+        // where "names, never ids" now lives (allowlistNames), including saying
+        // a person who has left rather than dropping them — a shorter list than
+        // the editor believes they have is how a Role stops being fillable.
         if (kind === RolesCore.RESTRICTIONS.ALLOWLIST) {
             const ids = rule.personIds || [];
             if (!ids.length) return 'This list is empty, so nobody could ever fill this Role — remove it or add someone';
-            const names = ids.map(id => this.personName(id));
-            const missing = names.filter(name => !name).length;
-            const known = names.filter(Boolean);
-            const said = known.length ? `Only ${known.join(', ')} can fill this Role` : 'Only people who are no longer in the directory';
-            return missing
-                ? `${said} — and ${missing} ${missing === 1 ? 'person is' : 'people are'} no longer in the directory`
-                : said;
+            return ids.length === 1
+                ? 'Only this person can fill this Role'
+                : 'Only these people can fill this Role';
         }
 
         const type = this.relationshipTypeById(rule.typeId);
