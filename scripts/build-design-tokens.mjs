@@ -191,7 +191,7 @@ function typography() {
 /* ---- Splice ------------------------------------------------ */
 
 function splice(file, name, body) {
-  const path = join(tokensDir, file);
+  const path = join(repo, file);
   // Normalise to LF. An editor that saves CRLF would otherwise leave
   // --check reporting "stale" forever against an LF-generated block.
   const src = readFileSync(path, "utf8").replace(/\r\n/g, "\n");
@@ -213,17 +213,21 @@ function splice(file, name, body) {
 }
 
 const work = [
-  ["colors.css", "colors", colors()],
-  ["spacing.css", "spacing", spacing()],
-  ["typography.css", "typography", typography()],
+  // For the design system on claude.ai — three files, matching its layout.
+  ["build/design-tokens/colors.css", "colors", colors()],
+  ["build/design-tokens/spacing.css", "spacing", spacing()],
+  ["build/design-tokens/typography.css", "typography", typography()],
+
+  // For the app — the same theme, in one :root block, compiled into
+  // mosaic.css so a scrollbar or a canvas has something to call.
+  ["build/tailwind-input.css", "app-tokens", [colors(), spacing(), typography()].join("\n\n")],
 ];
 
 let stale = 0;
 for (const [file, name, body] of work) {
   const changed = splice(file, name, body);
   if (changed) stale += 1;
-  const where = relative(repo, join(tokensDir, file)).replace(/\\/g, "/");
-  console.log(`${changed ? (check ? "stale  " : "written") : "current"}  ${where}`);
+  console.log(`${changed ? (check ? "stale  " : "written") : "current"}  ${file}`);
 }
 
 if (check && stale) {

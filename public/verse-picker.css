@@ -8,7 +8,7 @@
     max-width: calc(100vw - 24px); /* never overflow the viewport on mobile / narrow cells */
     max-height: min(80vh, 460px);
     background-color: #ffffff;
-    border: 1px solid #c5c6d0; /* outline-variant */
+    border: 1px solid var(--outline-variant);
     border-radius: 12px;
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
     overflow: hidden;
@@ -27,7 +27,7 @@
 }
 
 .verse-picker-header {
-    background-color: #f6f3ed; /* surface-container-low */
+    background-color: var(--surface-container-low);
     padding: 8px 16px;
     border-bottom: 1px solid #c5c6d0;
     display: flex;
@@ -46,7 +46,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #436082; /* secondary */
+    color: var(--secondary);
 }
 
 .verse-picker-grid {
@@ -95,7 +95,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #436082; /* secondary */
+    color: var(--secondary);
     border: 1px solid #c5c6d0;
     border-radius: 8px;
     padding: 6px 0;
