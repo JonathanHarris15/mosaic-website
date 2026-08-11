@@ -1260,15 +1260,18 @@ document.addEventListener('alpine:init', () => {
             if (!status) return '';
             const URGENCY    = ShepherdingCore.URGENCY_LEVELS;
             const IMPORTANCE = ShepherdingCore.IMPORTANCE_LEVELS;
-            const ACTIVE_COLOR  = { 0: '#ba1a1a', 1: '#ba1a1a', 2: '#436082', 3: '#436082', 4: '#75777f' };
-            const PASSIVE_COLOR = { 0: '#ffdad6', 1: '#ffdad6', 2: '#d1e4ff', 3: '#d1e4ff', 4: '#f0eee8' };
+            // Three bands over the 0-4 score: pressing, worth a look, settled.
+            // These were the pre-brand Material values (#ba1a1a, #436082,
+            // #75777f and their tints) until the palette moved without them.
+            const ACTIVE_COLOR  = { 0: 'var(--error)', 1: 'var(--error)', 2: 'var(--secondary)', 3: 'var(--secondary)', 4: 'var(--outline)' };
+            const PASSIVE_COLOR = { 0: 'var(--error-container)', 1: 'var(--error-container)', 2: 'var(--primary-fixed)', 3: 'var(--primary-fixed)', 4: 'var(--surface-container)' };
             let html = '<div style="display:grid;grid-template-columns:repeat(3,20px);gap:2px;">';
             IMPORTANCE.forEach(imp => {
                 URGENCY.forEach(urg => {
                     const active = status.urgency === urg && status.importance === imp;
                     const score  = ShepherdingCore.statusScore(urg, imp);
-                    const bg     = active ? (ACTIVE_COLOR[score] || '#75777f') : (PASSIVE_COLOR[score] || '#f0eee8');
-                    html += `<div style="width:20px;height:20px;border-radius:3px;background:${bg};border:${active ? 'none' : '1px solid #c5c6d0'};display:flex;align-items:center;justify-content:center;">`;
+                    const bg     = active ? (ACTIVE_COLOR[score] || 'var(--outline)') : (PASSIVE_COLOR[score] || 'var(--surface-container)');
+                    html += `<div style="width:20px;height:20px;border-radius:3px;background:${bg};border:${active ? 'none' : '1px solid var(--outline-variant)'};display:flex;align-items:center;justify-content:center;">`;
                     if (active) html += '<span style="width:5px;height:5px;border-radius:50%;background:var(--surface-container-lowest);display:block;"></span>';
                     html += '</div>';
                 });

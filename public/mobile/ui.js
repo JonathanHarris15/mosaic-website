@@ -169,8 +169,8 @@
   function statusTone(s) {
     if (!s) return null;
     if (s.urgency === "urgent") return { label: "Urgent", color: "var(--error)", bg: "var(--error-container)", fg: "var(--on-error-container)" };
-    if (s.urgency === "somewhat_urgent") return { label: "Somewhat urgent", color: "var(--warning)", bg: "#F5E9D2", fg: "#5C4410" };
-    return { label: "Not urgent", color: "var(--success)", bg: "#DCEBE2", fg: "#22503A" };
+    if (s.urgency === "somewhat_urgent") return { label: "Somewhat urgent", color: "var(--warning)", bg: "var(--warning-container)", fg: "var(--on-warning-container)" };
+    return { label: "Not urgent", color: "var(--success)", bg: "var(--success-container)", fg: "var(--on-success-container)" };
   }
 
   M.ui = {

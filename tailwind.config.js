@@ -76,7 +76,14 @@ module.exports = {
         "on-error":          "#ffffff",
         "error-container":   "#F3D9D4",
         "on-error-container":"#5C231C",
-        "success":           "#4B8A6B",
+        /* error and warning each carry a container and an on-container;
+           success carried neither, so anything needing a calm green panel
+           invented one — mobile's statusTone had #DCEBE2 / #22503A sitting
+           inline next to a perfectly good var(--success). Adopting those
+           values rather than choosing new ones: they are already on screen. */
+        "success":             "#4B8A6B",
+        "success-container":   "#DCEBE2",
+        "on-success-container":"#22503A",
         "warning":             "#B8862E",
         "warning-container":   "#F0E2C6",
         "on-warning-container":"#5A4212",

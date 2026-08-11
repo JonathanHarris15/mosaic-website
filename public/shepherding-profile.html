@@ -26,7 +26,7 @@
         .note-body ul { list-style-type: disc; padding-left: 1.4em; margin-bottom: 0.4em; }
         .note-body ol { list-style-type: decimal; padding-left: 1.4em; margin-bottom: 0.4em; }
         .note-body li p { margin: 0; }
-        .mention-chip { display:inline; background:var(--primary-fixed); color:#001a42; border-radius:3px; padding:0 4px; font-weight:500; text-decoration:none; cursor:pointer; }
+        .mention-chip { display:inline; background:var(--primary-fixed); color:var(--primary); border-radius:3px; padding:0 4px; font-weight:500; text-decoration:none; cursor:pointer; }
         a.mention-chip:hover { background:var(--primary-fixed-dim); }
         .ProseMirror .mention-chip { cursor:default; }
         .ProseMirror table { border-collapse:collapse; width:100%; margin-bottom:0.5em; table-layout:fixed; }
@@ -705,17 +705,17 @@
                             <div x-show="open" style="display:none;min-width:116px"
                                  class="absolute top-full left-0 mt-1 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-md z-50 p-2 flex flex-wrap gap-1">
                                 <button type="button" @mousedown.prevent="setHighlight('#fef08a'); open = false"
-                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#fef08a" title="Yellow"></button>
+                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:var(--highlight-yellow)" title="Yellow"></button>
                                 <button type="button" @mousedown.prevent="setHighlight('#bbf7d0'); open = false"
-                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#bbf7d0" title="Green"></button>
+                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:var(--highlight-green)" title="Green"></button>
                                 <button type="button" @mousedown.prevent="setHighlight('#bfdbfe'); open = false"
-                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#bfdbfe" title="Blue"></button>
+                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:var(--highlight-blue)" title="Blue"></button>
                                 <button type="button" @mousedown.prevent="setHighlight('#fecaca'); open = false"
-                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#fecaca" title="Red"></button>
+                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:var(--highlight-red)" title="Red"></button>
                                 <button type="button" @mousedown.prevent="setHighlight('#fed7aa'); open = false"
-                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#fed7aa" title="Orange"></button>
+                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:var(--highlight-orange)" title="Orange"></button>
                                 <button type="button" @mousedown.prevent="setHighlight('#f0abfc'); open = false"
-                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#f0abfc" title="Purple"></button>
+                                    class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:var(--highlight-purple)" title="Purple"></button>
                                 <button type="button" @mousedown.prevent="setHighlight(null); open = false"
                                     class="w-6 h-6 rounded border border-outline-variant hover:bg-surface-container flex items-center justify-center text-on-surface-variant"
                                     title="Remove highlight">
