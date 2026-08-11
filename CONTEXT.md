@@ -173,7 +173,21 @@ _Avoid_: Ministry role, volunteer role (use Servant Role), duty
 
 **Role Definition**:
 The editable specification of a **Servant Role**, authored in the **Roles Manager**: a name, an ordered set of **slots** (each requiring **male**, **female**, or **either** — three people needed means three slots), and optional **restriction rules** that read existing Shepherding Tags and Relationships (e.g. "no married couple in this Role", "exclude anyone tagged X"). Liturgical Roles are the locked, code-defined counterpart and have no editable Role Definition.
+
+Every restriction here is a rule the Role makes about **itself**, and holds wherever that Role runs. A rule about *two* Roles is a [[Cross-Role Rule]] and lives somewhere else.
 _Avoid_: Role template, role config
+
+**Cross-Role Rule**:
+A serving rule about a **pair** of Roles rather than one — "the Children's Ministry Leader and the Children's Ministry Helper cannot be from the same Marriage". Neither Role can state it, because neither is the thing being constrained: **the pair is**. So it belongs to the [[Event]] that runs both, which is also the only thing that knows they run together, and it is authored on [[Recurring Events]] rather than in the [[Roles Manager]].
+
+Said in the **same words a Role's own group rule uses** — *must be from the same* / *cannot be from the same* — over the same Group Types (Family, Marriage, or any [[Shared Relationship Type]] of the group kind). An editor who has written one of these once should not have to learn a second phrasing to say it across two Roles.
+
+- **It bites the second seat.** Whoever is placed first has nobody to conflict with; the pair's other Role is what gets refused. That is the answer a person filling the rota by hand reaches, and the [[Warning]] pass checks the finished lineup either way round.
+- **It is a rule about the roster**, so it advises an editor and refuses a member, like every other (ADR-0021, ADR-0030).
+- **A rule naming one Role twice is refused** — that is the Role's own rule, and two places to look for why somebody was refused is one too many.
+- **Dropping a Role from an Event drops the rules naming it.** One left lying about is worse than absent: add the Role back a year later and a rule nobody remembers writing starts refusing people.
+- A [[One-off Role]] and a one-off Event have no series, and so have none of these.
+_Avoid_: Pair rule, role-to-role constraint, global rule (it belongs to one Event, not to the church)
 
 **Event**:
 A dated occurrence that carries **Roles** to be filled. A Sunday **Service** is one **locked, recurring** Event — always present, its liturgical Roles undeletable. Arbitrary Events (introduced with the Calendar, MS-99) can carry Servant Roles too. Fairness is scoped **per Event series**: a Person's serving history for a Role is counted within that recurring Event, not globally, so someone can be overdue for one Event's Role and fresh for another's at the same time.
@@ -716,7 +730,8 @@ The view over **every** [[Event occurrence]] the signed-in person is allowed to 
 The list of every [[Event series]] the signed-in person may see — the room the series live in, replacing the Calendar's old single "Sunday Service" button, which was the only door to the only series anybody had and did not survive the second one. Reached from the Calendar's header, at `recurring-events.html`.
 - **Two lanes over one list.** An **editor** gets the rota grid — the series' Roles against its next eight dates, with columns to tick — and the doors out of it: the [[Event series]] itself, one date, a new recurring Event, and [[Auto-assign]] with the ticked range in hand — twice over, since that last door opens either on a drafted rota or on a [[Blank draft]], and the pair is worded so the count sits on both (they open the same dates, so a count on one of them would read as the difference between them). **Everybody else signed in** gets the same list of events and nothing that writes: tap one and it opens to show when it next falls, which of those dates are off, and which of them they are on. A member used to be told "this one is for editors" — but *what runs every week, and until when?* is an ordinary question, and the [[Calendar]] answers it a month at a time, which is the wrong shape for a thing defined by its pattern. **What is privileged is changing the list, not reading it.**
 - Each lane sees only the events its own rank may see: the series read is constrained by [[Event visibility]] like every other, so a member's list simply does not contain the elders' meeting.
-- **Almost read-only, deliberately** — everything on the grid has a screen that owns it, and a fourth surface that half-edits a roster is how two of them start disagreeing about the same Sunday. The one write is **emptying the ticked dates**, which earns its place because it is the only change that reads across a run rather than down a single date.
+- **Almost read-only, deliberately** — everything on the grid has a screen that owns it, and a fourth surface that half-edits a roster is how two of them start disagreeing about the same Sunday. The one write over the *roster* is **emptying the ticked dates**, which earns its place because it is the only change that reads across a run rather than down a single date.
+- **[[Cross-Role Rule]]s are written here, under the grid.** Not an exception to the line above: a rule about a pair of Roles is a fact about the **Event**, not about either Role and not about any one date, so this is the screen that owns it rather than a fourth screen borrowing it. The [[Roles Manager]] cannot hold it — a Role Definition travels to every Event that runs it, and this rule is only true where both Roles run together.
 - **A series' page comes back here, not to the Calendar.** The Calendar draws dates, and a pattern is not a date, so it has no chip to arrive from — a series is only ever reached from this list, and sending it back to the Calendar ended the journey somewhere that could not show the thing just left. One **date** still belongs to the Calendar. Creating a recurring Event lands here too, opened on the one just made.
 
 #### Month strip

@@ -114,3 +114,18 @@ and failing that, the editor's problem.
   covering one date.
 - **[[One-off Role]]s have no eligibility rules at all** (ADR-0018 §4), so anybody
   may take one off the cover list. Nothing to check, and nothing to warn about.
+
+*Amended (MS-221).* **A Cross-Role Rule is refused to a member like any other, and
+it cost more to honour than it looks.** §1 is written about actors, so a new rule
+kind inherits it without argument. What does not come free is the *ingredients*:
+the server assembles the eligibility context itself, and it used to load a
+Person's Relationship Groups only when the **Role's own definition** asked for
+them. A Cross-Role Rule lives on the Event series, so a Role whose definition has
+no group rule can now be constrained by one — and with the groups list left empty
+the rule finds no shared group, concludes there is no clash, and **silently
+permits everything a member asks for**, while the editor's picker refuses the
+same person. A rule enforced at one door and not the other is worse than a rule
+at neither: the roster ends up wrong in a way the screen that built it never
+shows. Anything added to the eligibility model from outside a Role Definition has
+to ask the same question — *what does the server now have to load that it did
+not?*

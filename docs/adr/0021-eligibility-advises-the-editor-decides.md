@@ -21,6 +21,8 @@ Two categories, and the distinction is not about severity.
 
 **Shouldn't — advisory.** Everything the editor authored: the five restriction kinds, the allowlist, a slot's male/female requirement, Role exclusivity and the two-Role limit, and the liturgical clash. All of these now **warn**. None of them refuse.
 
+*Amended (MS-221).* **Cross-Role Rules** join that list — a rule an editor wrote about a *pair* of Roles ("the Kids Leader and the Kids Helper cannot be from the same Marriage"), stored on the Event series rather than on either Role. It is a rule the editor authored about the roster, so it advises like the rest, and nothing in the test below needed changing to decide that: *rules about the roster advise, rules about who may be seen do not.* Worth recording anyway, because the list above reads as exhaustive and was, for four years' worth of rules, a list of things a Role says about **itself**.
+
 The test is one sentence: *rules about the roster advise, rules about who may be seen do not.* An editor overriding a restriction is overruling themselves, which is their business. An editor being shown a hidden Person is the app leaking, which is not.
 
 ### 2. A warning is a property of the roster, not of the act
