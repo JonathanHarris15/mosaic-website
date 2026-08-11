@@ -97,6 +97,54 @@ function runOrLose(db, body, message) {
  * @return {Promise<Object>} the person, the Role definition, and the rules
  */
 /**
+ * Clear the cover entry for a place that is no longer looking for one.
+ *
+ * ⚠ THE COVER LIST IS DERIVED FROM THE ROSTER, AND HAD NO WAY TO KNOW WHEN THE
+ * ROSTER CHANGED BY A DOOR IT DID NOT OWN.
+ *
+ * The entry is a denormalised document, written alongside a decline so the list
+ * can render without opening the occurrence (cover-store.js). Every path that
+ * SETTLES a place deleted it by hand: taking one, settling a Trade, going
+ * quiet. Nothing deleted it when an editor simply removed the roster row — and
+ * "empty the ticked dates" removes hundreds at once. The place was gone, the
+ * decline was gone, and the advertisement was still up: people offering to
+ * cover Sundays that no longer had a rota.
+ *
+ * So it hangs off the roster write, like the Trade sweep beside it, and so runs
+ * whichever door the roster changed through.
+ *
+ * Deleting only. Writing one needs the occurrence's rung and the Role's name,
+ * and the decline path has both — this knows when an advertisement has stopped
+ * being true, which is a different and much smaller question.
+ *
+ * @param {Object} db the Firestore handle
+ * @param {Object} spec the place, and what is on it now
+ * @param {string} spec.occurrenceId the occurrence
+ * @param {string} spec.roleSlug the Role
+ * @param {?string} spec.slotId its slot
+ * @param {?Object} spec.row the roster row as it now stands, or null if gone
+ * @return {Promise<boolean>} whether an entry was cleared
+ */
+async function sweepCover(db, spec) {
+  const s = spec || {};
+  const row = s.row || null;
+
+  // Still declined and still on the roster: the advertisement is still true.
+  // Whether it is OPEN or quiet is setReach's business, and it manages the
+  // entry itself — so a quiet one having no document here is correct, not a
+  // gap to fill.
+  if (row && (row.state || null) === aa.STATES.DECLINED) return false;
+
+  const ref = db.collection(COVER)
+      .doc(aa.coverId(s.occurrenceId, s.roleSlug, s.slotId));
+  const snap = await ref.get();
+  if (!snap.exists) return false;
+
+  await ref.delete();
+  return true;
+}
+
+/**
  * The Cross-Role Rules stored on an Event series (MS-221).
  *
  * A rule about a PAIR of Roles belongs to neither of them, so it lives on the
@@ -391,6 +439,7 @@ module.exports = {
   OCCURRENCES,
   COVER,
   takeContext,
+  sweepCover,
   answer,
   take,
 };

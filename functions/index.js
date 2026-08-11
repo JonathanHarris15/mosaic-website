@@ -1027,6 +1027,23 @@ exports.endTradesOnFilledPlace = onDocumentWritten(
           (before.state || null) === (after.state || null)) return;
 
       const db = admin.firestore();
+
+      // ⚠ TWO SWEEPS, AND THE SECOND IS NEW. A Trade is a conversation about
+      // the place and ends when the place does; the COVER ENTRY is the
+      // advertisement for it, and nothing was taking that down when an editor
+      // simply removed the roster row. Emptying a run of dates left the list
+      // asking for cover on Sundays that no longer had a rota.
+      //
+      // Both hang off the roster write for the same reason: the editor does
+      // nothing special, so the cleanup has to run whichever door they changed
+      // the roster through.
+      await aw.sweepCover(db, {
+        occurrenceId: event.params.occurrenceId,
+        roleSlug: row.roleSlug,
+        slotId: row.slotId || null,
+        row: after,
+      });
+
       const result = await tw.sweepAssignment(db, {
         occurrenceId: event.params.occurrenceId,
         roleSlug: row.roleSlug,
