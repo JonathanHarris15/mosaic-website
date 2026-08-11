@@ -59,13 +59,38 @@ function logout() {
     });
 }
 
+// ── The header, and the race it kept losing ──────────────────────────────────
+//
+// ⚠ auth.js is loaded in <head>. #auth-container is in the <body>, further
+// down. Firebase resolves the stored session off IndexedDB, and how long that
+// takes has nothing to do with how long the rest of the HTML takes to parse —
+// so the first onAuthStateChanged sometimes lands while the container is still
+// an unparsed line of HTML. On a warm cache it often does.
+//
+// The old code found no container and returned. Nothing asked again: auth state
+// only changes at login and logout, so the header stayed empty for the whole
+// visit and the next page load looked fine. That is the header that "sometimes"
+// does not show up.
+//
+// So the answer is HELD, and applied again when the document is ready. Held,
+// not re-fetched: the state was correct, it just arrived at an empty room.
+let lastKnownUser = null;
+let authStateKnown = false;
+let waitingForTheHeader = false;
+
 /**
  * Updates the header with the appropriate login/user button.
  * Expects a <header> element or a specific container.
  */
 function updateAuthUI(user) {
     const authContainer = document.getElementById('auth-container');
-    if (!authContainer) return;
+    if (!authContainer) {
+        // Not a failure — the body may simply not be here yet. Marked so the
+        // catch-up below knows there is something owed.
+        waitingForTheHeader = true;
+        return;
+    }
+    waitingForTheHeader = false;
 
     if (user && !user.isAnonymous) {
         // User is signed in with a real account
@@ -91,13 +116,29 @@ function updateAuthUI(user) {
     }
 }
 
-// Listen for auth state changes
-auth.onAuthStateChanged((user) => {
+// Everything that happens when we learn who somebody is: the header, and then
+// the event other scripts hang their own auth-dependent UI off.
+function applyAuthState(user) {
     updateAuthUI(user);
-    
+
     // Dispatch a custom event so other scripts can react to auth changes
     const event = new CustomEvent('auth-changed', { detail: { user } });
     document.dispatchEvent(event);
+}
+
+// Listen for auth state changes
+auth.onAuthStateChanged((user) => {
+    lastKnownUser = user;
+    authStateKnown = true;
+    applyAuthState(user);
+});
+
+// The catch-up. Only when an answer arrived with nowhere to put it — a page
+// that won the race must not be told twice, and main.js re-reads the user's
+// permission level off this event.
+document.addEventListener('DOMContentLoaded', () => {
+    if (!authStateKnown || !waitingForTheHeader) return;
+    applyAuthState(lastKnownUser);
 });
 
 /**
