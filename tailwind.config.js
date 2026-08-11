@@ -80,6 +80,46 @@ module.exports = {
         "warning":             "#B8862E",
         "warning-container":   "#F0E2C6",
         "on-warning-container":"#5A4212",
+
+        /* ---- Event colours (Calendar) ----
+           Eight choices an editor gives an Event, each a bar and the soft
+           tint the swatch uses when chosen. Six of the bars are already
+           semantic tokens and are repeated here on purpose: the list is a
+           palette an editor picks from, and a palette with holes in it
+           where the brand happens to supply the colour is not a palette.
+           Lived in calendar-view.js as a literal table until MS design-sync. */
+        "event-steel":  "#5D94A9",  "event-steel-tint":  "#D7E7EC",
+        "event-ocean":  "#3E6181",  "event-ocean-tint":  "#CFE0F1",
+        "event-navy":   "#182F57",  "event-navy-tint":   "#D5DCE9",
+        "event-green":  "#4B8A6B",  "event-green-tint":  "#D6E7DE",
+        "event-gold":   "#B89B6A",  "event-gold-tint":   "#EFE6D5",
+        "event-amber":  "#B8862E",  "event-amber-tint":  "#F0E2C6",
+        "event-plum":   "#7A5578",  "event-plum-tint":   "#E7DAE6",
+        "event-rose":   "#B0697C",  "event-rose-tint":   "#F0DBE0",
+
+        /* ---- Highlighter (Note Module) ----
+           Pen colours for highlighting a Note Body. Deliberately outside the
+           brand — a highlight has to sit under navy ink and stay readable,
+           which the warm palette cannot do. Defined in three places before
+           this, and the phone was missing orange and purple. */
+        "highlight-yellow": "#FEF08A",
+        "highlight-green":  "#BBF7D0",
+        "highlight-blue":   "#BFDBFE",
+        "highlight-red":    "#FECACA",
+        "highlight-orange": "#FED7AA",
+        "highlight-purple": "#F0ABFC",
+
+        /* ---- Relationship Group bubbles (Relations Viewer) ----
+           Numbered, not named: the viewer cycles them by stable group order,
+           so graph-3 means "the third group", never "the violet one".
+           Muted and warm-harmonious, kept clear of the stage pips and the
+           edge palette by hue. ADR-0014. */
+        "graph-1": "#5E8C8A",
+        "graph-2": "#C0803A",
+        "graph-3": "#8E6FA6",
+        "graph-4": "#6F9E5C",
+        "graph-5": "#C26B6B",
+        "graph-6": "#4E7BA6",
       },
 
       borderRadius: {

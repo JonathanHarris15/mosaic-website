@@ -56,6 +56,16 @@ const COLOR_GROUPS = [
   ["Status (kept within the palette)",
     ["error", "on-error", "error-container", "on-error-container",
      "success", "warning", "warning-container", "on-warning-container"]],
+  ["Event colours — a bar and its tint, for the Calendar",
+    ["event-steel", "event-steel-tint", "event-ocean", "event-ocean-tint",
+     "event-navy", "event-navy-tint", "event-green", "event-green-tint",
+     "event-gold", "event-gold-tint", "event-amber", "event-amber-tint",
+     "event-plum", "event-plum-tint", "event-rose", "event-rose-tint"]],
+  ["Highlighter — Note Module pen colours, outside the brand on purpose",
+    ["highlight-yellow", "highlight-green", "highlight-blue",
+     "highlight-red", "highlight-orange", "highlight-purple"]],
+  ["Relationship Group bubbles — cycled by group order, so numbered",
+    ["graph-1", "graph-2", "graph-3", "graph-4", "graph-5", "graph-6"]],
 ];
 
 const SPACE_ORDER = ["xs", "base", "sm", "md", "lg", "xl", "gutter", "margin"];

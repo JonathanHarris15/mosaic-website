@@ -696,7 +696,7 @@
           <button onMouseDown=${function (e) { e.preventDefault(); cmd("toggleBlockquote"); }} style=${toolBtn(false)} title="Quote">${Ic("quote", 17)}</button>
           <button onMouseDown=${function (e) { e.preventDefault(); insertTable(); }} style=${toolBtn(false)} title="Table">${Ic("table", 17)}</button>
           <span style=${docDivider}></span>
-          ${["#fef08a", "#bbf7d0", "#bfdbfe", "#fecaca"].map(function (c) { return html`<button key=${c} onMouseDown=${function (e) { e.preventDefault(); setHi(c); }} title="Highlight" style=${{ width: 26, height: 26, flexShrink: 0, borderRadius: 6, border: "1px solid var(--outline-variant)", background: c, cursor: "pointer" }}></button>`; })}
+          ${["#fef08a", "#bbf7d0", "#bfdbfe", "#fecaca", "#fed7aa", "#f0abfc"].map(function (c) { return html`<button key=${c} onMouseDown=${function (e) { e.preventDefault(); setHi(c); }} title="Highlight" style=${{ width: 26, height: 26, flexShrink: 0, borderRadius: 6, border: "1px solid var(--outline-variant)", background: c, cursor: "pointer" }}></button>`; })}
           <button onMouseDown=${function (e) { e.preventDefault(); setHi(null); }} title="Clear highlight" style=${Object.assign({}, toolBtn(false), { width: 26, height: 26 })}>${Ic("ban", 15)}</button>
           <span style=${docDivider}></span>
           <button onMouseDown=${function (e) { e.preventDefault(); insertMention(); }} style=${toolBtn(false)} title="Mention">${Ic("at-sign", 17)}</button>
