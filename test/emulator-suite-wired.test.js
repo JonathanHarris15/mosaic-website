@@ -21,8 +21,15 @@ test('npm run test:emulator exists and points at the emulator suite', () => {
     const pkg = JSON.parse(read('package.json'));
     assert.ok(pkg.scripts['test:emulator'],
         'the only way to run these tests has gone');
-    assert.match(pkg.scripts['test:emulator'], /test-emulator/);
-    assert.ok(fs.existsSync(path.join(ROOT, 'scripts/test-emulator.mjs')));
+    // Named run-* rather than test-*: `node --test` claims any file called
+    // test-something and runs it as a test, and this is the runner, not a
+    // test. It used to be scripts/test-emulator.mjs, so `npm test` executed
+    // it, found no Java, and failed — on a machine where every real emulator
+    // test was skipping politely two lines further down.
+    assert.match(pkg.scripts['test:emulator'], /run-emulator-tests/);
+    assert.ok(fs.existsSync(path.join(ROOT, 'scripts/run-emulator-tests.mjs')));
+    assert.ok(!fs.existsSync(path.join(ROOT, 'scripts/test-emulator.mjs')),
+        'the old name is back, and `node --test` will run it as a test again');
 });
 
 test('the emulator suite still covers both callables’ writes', () => {

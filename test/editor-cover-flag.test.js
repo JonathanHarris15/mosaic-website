@@ -113,7 +113,13 @@ test('a day nobody can be asked about still carries the red glyph', () => {
 // moment somebody makes "out for cover" red for consistency, red stops meaning
 // anything and this ticket has quietly reversed.
 
-const read = f => fs.readFileSync(path.join(__dirname, '..', 'public', f), 'utf8');
+// Normalised to LF. These assertions slice the source between literal
+// markers — `</div>\n\`` and the like — and on a Windows checkout, where
+// core.autocrlf hands over CRLF, those markers are never found. indexOf
+// returns -1, the slice becomes the whole rest of the file, and a test about
+// one quiet banner ends up searching every line after it.
+const read = f => fs.readFileSync(path.join(__dirname, '..', 'public', f), 'utf8')
+    .replace(/\r\n/g, '\n');
 
 test('the Roles tab says both things, and only one of them in red', () => {
     const panel = read('roles-panel.js');

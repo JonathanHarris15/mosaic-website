@@ -15,8 +15,11 @@ const path = require('node:path');
 //
 // Follows firestore-event-visibility-rules.test.js.
 
+// Normalised to LF. The block patterns below close on `\n    \}`, and on a
+// Windows checkout core.autocrlf hands over CRLF, so none of them matched and
+// the shape they pin went unchecked.
 const rules = fs.readFileSync(
-    path.join(__dirname, '..', 'firestore.rules'), 'utf8');
+    path.join(__dirname, '..', 'firestore.rules'), 'utf8').replace(/\r\n/g, '\n');
 
 const blockFor = pattern => {
     const m = rules.match(pattern);
