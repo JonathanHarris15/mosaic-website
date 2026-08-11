@@ -44,7 +44,7 @@
       x-data="shepherdingDashboard" x-cloak>
 
     <!-- Header -->
-    <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
+    <header class="w-full max-w-container mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
         <a :href="window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/home' : 'index.html'" href="index.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
             <span class="material-symbols-outlined text-[20px]">arrow_back</span>
             <span class="font-label-md text-label-md">Home</span>
@@ -60,7 +60,7 @@
     </div>
 
     <!-- Main content -->
-    <main x-show="!loading" class="flex-grow max-w-7xl w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
+    <main x-show="!loading" class="flex-grow max-w-container w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
 
         <!-- Page Title -->
         <div>

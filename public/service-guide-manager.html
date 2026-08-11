@@ -88,7 +88,7 @@
         <span class="material-symbols-outlined animate-spin text-3xl mr-2">progress_activity</span> Loading…
     </div>
 
-    <main x-show="!loading" x-cloak class="max-w-7xl mx-auto p-6">
+    <main x-show="!loading" x-cloak class="max-w-container mx-auto p-6">
         <!-- tabs -->
         <div class="flex gap-2 mb-6">
             <button class="tab-btn" :class="tab === 'pages' ? 'tab-active' : 'tab-idle'" @click="tab='pages'">Page Library</button>

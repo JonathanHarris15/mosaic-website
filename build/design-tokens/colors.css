@@ -1,0 +1,76 @@
+﻿/* ============================================================
+   Mosaic Church â€” Color tokens
+   ------------------------------------------------------------
+   Sampled from the church seal. Warm cream/parchment surfaces,
+   deep-navy ink, ocean/steel-blue tile accents; sand & gold used
+   ONLY as thin hairlines/accents â€” never as fills. No dark mode.
+
+   The block below is GENERATED from tailwind.config.js by
+   `npm run build:tokens`. Do not hand-edit it â€” change the config
+   and re-run, or the app and this system stop agreeing.
+   ============================================================ */
+
+:root {
+/* @generated:start colors */
+  /* ---- Brand core (sampled from the seal) ---- */
+  --navy:                      #182F57;
+  --navy-900:                  #0E1C36;
+  --navy-800:                  #14264A;
+  --ocean:                     #3E6181;
+  --steel:                     #5D94A9;
+  --sand:                      #C2B79D;
+  --gold:                      #B89B6A;
+  --cream:                     #F2EAE2;
+  --parchment:                 #FBF7F0;
+
+  /* ---- Primary ---- */
+  --primary:                   #182F57;
+  --on-primary:                #F2EAE2;
+  --primary-container:         #14264A;
+  --on-primary-container:      #8FA6C8;
+  --primary-fixed:             #D8E2FF;
+  --primary-fixed-dim:         #B2C6F8;
+  --inverse-primary:           #B2C6F8;
+
+  /* ---- Secondary ---- */
+  --secondary:                 #3E6181;
+  --on-secondary:              #ffffff;
+  --secondary-container:       #CFE0F1;
+  --on-secondary-container:    #34506E;
+
+  /* ---- Tertiary ---- */
+  --tertiary:                  #5D94A9;
+  --on-tertiary:               #ffffff;
+  --tertiary-container:        #D7E7EC;
+  --on-tertiary-container:     #2D4F5B;
+
+  /* ---- Warm neutral surfaces (cream -> parchment -> white) ---- */
+  --background:                #F7F3ED;
+  --on-background:             #0E1C36;
+  --surface:                   #FBF7F0;
+  --surface-bright:            #FBF7F0;
+  --surface-dim:               #E3D9CC;
+  --surface-container-lowest:  #ffffff;
+  --surface-container-low:     #FAF5EE;
+  --surface-container:         #F4ECE2;
+  --surface-container-high:    #EEE4D8;
+  --surface-container-highest: #E8DDCD;
+  --surface-variant:           #E8DDCD;
+  --on-surface:                #0E1C36;
+  --on-surface-variant:        #5E6B82;
+
+  /* ---- Lines — warm sand hairlines do the work ---- */
+  --outline:                   #8A93A6;
+  --outline-variant:           #DAD0C0;
+
+  /* ---- Status (kept within the palette) ---- */
+  --error:                     #A8463E;
+  --on-error:                  #ffffff;
+  --error-container:           #F3D9D4;
+  --on-error-container:        #5C231C;
+  --success:                   #4B8A6B;
+  --warning:                   #B8862E;
+  --warning-container:         #F0E2C6;
+  --on-warning-container:      #5A4212;
+/* @generated:end */
+}

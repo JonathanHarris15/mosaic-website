@@ -119,6 +119,14 @@ module.exports = {
         "lg": "48px", "xl": "80px", "gutter": "24px", "margin": "32px",
       },
 
+      /* The page container. Was 16 scattered uses of Tailwind's own
+         max-w-7xl (1280px) — a default, not a decision — against the
+         design system's chosen 1200px. The design system wins because
+         it actually chose; now the value has one home. */
+      maxWidth: {
+        "container": "1200px",
+      },
+
       boxShadow: {
         "xs": "0 1px 2px rgba(14,28,54,.06)",
         "sm": "0 2px 6px rgba(14,28,54,.08)",

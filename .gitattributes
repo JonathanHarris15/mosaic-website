@@ -1,0 +1,5 @@
+# The design-token files are generated with LF and uploaded verbatim to the
+# Mosaic Website Design system. Pin them so a Windows checkout does not hand
+# the design system CRLF that nothing on this side wrote.
+build/design-tokens/*.css       text eol=lf
+scripts/build-design-tokens.mjs text eol=lf
