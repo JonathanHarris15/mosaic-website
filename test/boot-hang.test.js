@@ -45,11 +45,47 @@ test('failing to read who you are never quietly downgrades you', () => {
     // Every caller turns a null into 'viewer'. Swallowing the error would show
     // somebody a smaller church than they belong to and say nothing — worse
     // than the stuck spinner, because it looks like it worked.
-    const body = AUTH.match(/async function getUserData\(uid\)[\s\S]*?\n\}/)[0];
+    //
+    // The read itself is `fetchUserData`; `getUserData` is the answer a page
+    // waits on, which is now the remembered one when there is one.
+    const body = AUTH.match(/async function fetchUserData\(uid\)[\s\S]*?\n\}/)[0];
     assert.match(body, /throw lastError;/,
-        'getUserData swallows a failed read, which every caller reads as "viewer"');
-    assert.ok(!/return null;[\s\S]*throw lastError/.test(body.replace('if (!uid) return null;', '')),
+        'the read swallows a failure, which every caller reads as "viewer"');
+    assert.ok(!/return null;[\s\S]*throw lastError/.test(body),
         'a failed read returns null instead of throwing');
+});
+
+test('a page with nothing remembered still waits for a real answer', () => {
+    // The first visit on a device has no cache, so nothing is being traded away
+    // there: it must still be the live read, and it must still be able to throw.
+    const body = AUTH.match(/async function getUserData\(uid\)[\s\S]*?\n\}/)[0];
+    assert.match(body, /if \(!known\) \{\s*\n\s*const fresh = await fetchUserData\(uid\);/,
+        'a cache miss no longer waits for the real answer');
+});
+
+test('a remembered rank that has moved does not stay on screen', () => {
+    // The whole trade for skipping the round trip is that the answer can be one
+    // page load stale. That is only acceptable because the refresh notices.
+    const body = AUTH.match(/async function getUserData\(uid\)[\s\S]*?\n\}/)[0];
+    assert.match(body, /identityMoved\(known, fresh\)/,
+        'nothing compares the remembered identity with the refreshed one');
+    assert.match(body, /identityMoved\(known, fresh\)\) window\.location\.reload\(\)/,
+        'a moved rank is noticed and then left on screen anyway');
+    // A failed refresh must hand back what the caller already had. Returning
+    // null here would be the exact quiet downgrade the test above forbids.
+    assert.match(body, /\.catch\(\(\) => \{[\s\S]*?return known;/,
+        'a failed background refresh downgrades the answer to null');
+});
+
+test('signing out forgets who you were', () => {
+    // Otherwise the next person to sign in on a shared device starts their
+    // first page holding the last person's rank.
+    assert.match(AUTH, /function logout\(\) \{\s*\n\s*forgetUserDoc\(\);/,
+        'logging out leaves the remembered identity on the device');
+    assert.match(AUTH, /const known = rememberedUserDoc\(uid\)/,
+        'the remembered identity is not looked up by uid');
+    assert.match(AUTH, /saved\.uid === uid \? saved\.data : null/,
+        'a remembered identity is handed to whoever asks, not only to its owner');
 });
 
 test('a page whose boot throws says so instead of spinning forever', () => {
