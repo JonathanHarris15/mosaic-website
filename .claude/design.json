@@ -1,0 +1,55 @@
+{
+  "$comment": [
+    "Project-specific facts for the design-* skills, which live in ~/.claude/skills",
+    "and must not hard-code any one project. See CONTEXT.md for the domain language."
+  ],
+
+  "designSystem": {
+    "name": "Mosaic Website Design",
+    "projectId": "f2292e35-4adc-4d33-a42d-7ca9373364c9"
+  },
+
+  "tokens": {
+    "source": "tailwind.config.js",
+    "build": "npm run build:tokens",
+    "check": "npm run build:tokens -- --check",
+    "localDir": "build/design-tokens",
+    "remoteDir": "tokens",
+    "generated": ["colors.css", "spacing.css", "typography.css"],
+    "handAuthored": ["fonts.css", "base.css"]
+  },
+
+  "drift": {
+    "check": "npm run check:design-drift",
+    "scan": ["public/**/*.{html,js,css}"],
+
+    "$comment": "Files that legitimately hold raw colour. Each needs a reason — an unexplained entry here is how a real drift gets buried.",
+    "ignore": [
+      "public/vendor/**",
+      "public/fonts/**",
+      "public/assets/**",
+      "public/**/*.min.js",
+
+      "public/mosaic.css",
+      "public/mosaic-theme.js",
+      "public/mobile/tokens.css",
+
+      "public/guide-seed.js",
+      "public/relations-graph-core.js",
+      "public/404.html"
+    ],
+    "why": {
+      "public/mosaic.css": "compiled Tailwind output",
+      "public/mosaic-theme.js": "the legacy runtime token source — superseded by tailwind.config.js, and a second palette definition is its own problem, not a drift finding",
+      "public/mobile/tokens.css": "the mobile shell's own token file",
+      "public/guide-seed.js": "printed Service Guide templates — a different medium with its own palette",
+      "public/relations-graph-core.js": "the Relations Viewer group palette, documented in CONTEXT.md as deliberately raw",
+      "public/404.html": "Firebase's stock error page"
+    }
+  },
+
+  "components": {
+    "gallery": "public/components-demo.html",
+    "$comment": "Today this shows only the verse picker. Growing it into every primitive as the app really draws them is what makes Pass 3 possible."
+  }
+}
