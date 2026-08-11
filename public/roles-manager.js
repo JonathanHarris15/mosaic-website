@@ -1013,6 +1013,13 @@ window.RolesManager = () => ({
             // number every read path expects.
             intensity: RolesCore.intensityOf({ intensity: Number(this.draft.intensity) }),
             allowsAnotherRole: this.draft.allowsAnotherRole === true,
+            // ⚠ EVERY FIELD A ROLE HAS MUST BE LISTED HERE. This object is
+            // written WHOLE, so a field left out of it is not merely unsaved —
+            // it is deleted from the stored Role on the next save. A new field
+            // that is added to the form and the model but not to this list
+            // reads back blank for ever, with nothing anywhere reporting a
+            // problem. `newDefinition` is the list; the paired test walks it.
+            description: String(this.draft.description || '').trim(),
         };
 
         try {

@@ -440,6 +440,95 @@ test('a rule already built on a hidden tag says it is private, not that it is br
     assert.match(page.ruleSentence({ kind: 'requireTag', tagId: 'tag_deleted' }), /no longer exists/);
 });
 
+// ── The write list, and the field that fell off it ───────────────────────────
+
+test('what is typed into the description is what comes back on reopening', async () => {
+    // The behaviour the source checks below are proxies for. Saved through the
+    // real page, read back through a fresh mount, opened again for editing.
+    const page = await mountPage({ roles: { r1: coffeeDefinition() }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.draft.description = '  Arrive by 9:15 and put the urns on.  ';
+    await page.saveDraft();
+
+    assert.equal(stored('roles').r1.description, 'Arrive by 9:15 and put the urns on.',
+        'the description never reached Firestore');
+
+    const reopened = await mountPage({ roles: stored('roles'), people: PEOPLE });
+    const def = reopened.roleDefinitions.find(d => d.id === 'r1');
+    assert.equal(Roles.descriptionOf(def), 'Arrive by 9:15 and put the urns on.',
+        'a saved description does not read back');
+
+    reopened.startEdit(def);
+    assert.equal(reopened.draft.description, 'Arrive by 9:15 and put the urns on.',
+        'the editor reopens with an empty box');
+});
+
+test('clearing a description clears it, rather than leaving the old words', async () => {
+    const withOne = coffeeDefinition();
+    withOne.description = 'The old words.';
+    const page = await mountPage({ roles: { r1: withOne }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.draft.description = '';
+    await page.saveDraft();
+
+    assert.equal(stored('roles').r1.description, '');
+    assert.equal(Roles.descriptionOf(stored('roles').r1), null);
+});
+
+test('saving a Role does not drop the rest of it either', async () => {
+    // The write is WHOLE, so this is the shape of every version of this bug.
+    const page = await mountPage({ roles: { r1: kidsDefinition() }, people: PEOPLE });
+    page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
+    page.draft.description = 'Two adults in the room at all times.';
+    page.addTagRule(Roles.RESTRICTIONS.REQUIRE_TAG, KIDS_CLEARED);
+    await page.saveDraft();
+
+    const saved = stored('roles').r1;
+    assert.equal(saved.description, 'Two adults in the room at all times.');
+    assert.equal(saved.slots.length, 3, 'the slots went');
+    assert.deepStrictEqual(saved.restrictions, [{ kind: 'requireTag', tagId: KIDS_CLEARED }]);
+    assert.equal(saved.slug, 'kids_ministry', 'the slug moved, orphaning its serve history');
+});
+
+
+test('a description survives a save and comes back when the Role is reopened', () => {
+    // ⚠ THE BUG THIS EXISTS FOR. `description` was added to the model, to the
+    // form, and to five screens — and not to the object saveDraft writes. So it
+    // was typed, validated, and dropped: the Role reopened blank every time and
+    // nothing anywhere reported a problem.
+    //
+    // A synchronous check of the write list itself, because the failure was not
+    // in any behaviour a mounted page performs — it was a missing line.
+    const source = require('node:fs').readFileSync(
+        require('node:path').join(__dirname, '..', 'public', 'roles-manager.js'), 'utf8');
+    const written = source.match(/const definition = \{([\s\S]*?)\n {8}\};/);
+    assert.ok(written, 'saveDraft no longer builds the document it writes');
+    assert.match(written[1], /description:/, 'a saved Role would lose its description');
+});
+
+test('EVERY field a new Role has is written when one is saved', () => {
+    // The general form of the same mistake. The document is written WHOLE, so a
+    // field missing from that object is not merely unsaved — it is deleted from
+    // the stored Role on the next save. `newDefinition` is the list of what a
+    // Role has; this walks it so the next field added cannot go missing quietly.
+    const source = require('node:fs').readFileSync(
+        require('node:path').join(__dirname, '..', 'public', 'roles-manager.js'), 'utf8');
+    const written = source.match(/const definition = \{([\s\S]*?)\n {8}\};/)[1];
+
+    Object.keys(Roles.newDefinition('Anything')).forEach(field => {
+        assert.match(written, new RegExp('\\b' + field + ':'),
+            '`' + field + '` is part of a Role but saveDraft does not write it — ' +
+            'saving would silently drop it');
+    });
+});
+
+test('a description is stored trimmed, so what is read back is what is shown', () => {
+    const source = require('node:fs').readFileSync(
+        require('node:path').join(__dirname, '..', 'public', 'roles-manager.js'), 'utf8');
+    assert.match(source, /description: String\(this\.draft\.description \|\| ''\)\.trim\(\)/,
+        'the stored value is not normalised, so a whitespace-only one reads as present');
+});
+
 test('a rule can be removed', async () => {
     const page = await mountPage({ roles: { r1: kidsDefinition() } });
     page.startEdit(page.roleDefinitions.find(d => d.id === 'r1'));
