@@ -30,12 +30,32 @@
   // Colour/dash palette cycled across the elder-defined custom Relationship Types.
   var CUSTOM_PALETTE = [
     { color: 'var(--gold)', css: 'dashed', dash: [8, 6],   rest: 150 },
-    { color: '#A26B5B', css: 'dotted', dash: [1.5, 6], rest: 160 },
+    { color: 'var(--edge-terracotta)', css: 'dotted', dash: [1.5, 6], rest: 160 },
     { color: 'var(--success)', css: 'dashed', dash: [6, 5],   rest: 152 },
-    { color: '#7E5A8C', css: 'dotted', dash: [1.5, 6], rest: 158 },
+    { color: 'var(--edge-violet)', css: 'dotted', dash: [1.5, 6], rest: 158 },
     { color: 'var(--secondary)', css: 'dashed', dash: [9, 6],   rest: 150 },
     { color: 'var(--warning)', css: 'dotted', dash: [1.5, 7], rest: 162 },
   ];
+
+  // A canvas cannot be handed a var() — fillStyle wants a real colour, and an
+  // unparseable one is ignored, leaving whatever was set last. So the tokens
+  // are read out of the stylesheet once and kept.
+  //
+  // Only a non-empty answer is cached. Asked before the stylesheet has
+  // applied, getPropertyValue returns '' and caching that would freeze the
+  // whole graph on the fallback for the life of the page.
+  var TOKEN_CACHE = {};
+  function tok(name, fallback) {
+    if (TOKEN_CACHE[name]) return TOKEN_CACHE[name];
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    if (v) TOKEN_CACHE[name] = v;
+    return v || fallback;
+  }
+  // What a var() resolves to, for the places that hand a colour to the canvas.
+  function paint(value) {
+    var m = /^var\(\s*(--[\w-]+)\s*\)$/.exec(String(value || ''));
+    return m ? tok(m[1], 'transparent') : value;
+  }
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
@@ -355,9 +375,13 @@
     ctx.closePath();
   };
 
+  // Resolves a token first: hexA('var(--outline)') used to parse to NaN and
+  // return rgba(NaN,NaN,NaN,a), which a browser throws away — a group type
+  // with no groups yet drew its swatch with no fill at all.
   RelationsViewer.prototype.hexA = function (hex, a) {
-    var h = String(hex).replace('#', '');
+    var h = String(paint(hex)).replace('#', '');
     var n = parseInt(h, 16);
+    if (!isFinite(n)) return 'transparent';
     return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
   };
 
@@ -462,7 +486,7 @@
       if (!hull) return;
       var faded = focusGroupIds && !focusGroupIds[gr.id];
       ctx.globalAlpha = faded ? 0.04 : 0.16;
-      ctx.fillStyle = gr.colour;
+      ctx.fillStyle = paint(gr.colour);
       self.tracePath(hull); ctx.fill();
     });
     ctx.restore();
@@ -472,7 +496,7 @@
       if (!hull) return;
       var faded = focusGroupIds && !focusGroupIds[gr.id];
       ctx.globalAlpha = faded ? 0.12 : 0.7;
-      ctx.strokeStyle = gr.colour;
+      ctx.strokeStyle = paint(gr.colour);
       ctx.lineWidth = 1.6;
       ctx.setLineDash(gr.prio ? [] : [7, 5]);
       self.tracePath(hull); ctx.stroke();
@@ -490,12 +514,12 @@
           var rL = (L.elder ? 22 : 16) + 4;
           var sx = L.x + dx / d * rL, sy = L.y + dy / d * rL;
           ctx.globalAlpha = faded ? 0.14 : 0.92;
-          ctx.strokeStyle = gr.colour;
+          ctx.strokeStyle = paint(gr.colour);
           ctx.lineWidth = 2.4;
           ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(p.x, p.y); ctx.stroke();
           // The diamond anchors the line to the region, so it reads as "leads this
           // group" rather than "is connected to whoever happens to be nearest".
-          self.diamond(p.x, p.y, 4.4, gr.colour);
+          self.diamond(p.x, p.y, 4.4, paint(gr.colour));
         }
       }
     });
@@ -559,10 +583,10 @@
       ctx.lineWidth = 1;
       self.roundRect(bx, by, boxW, h, 7); ctx.stroke();
 
-      ctx.fillStyle = gr.colour;
+      ctx.fillStyle = paint(gr.colour);
       ctx.beginPath(); ctx.arc(bx + padX + dot / 2, sy, dot / 2, 0, Math.PI * 2); ctx.fill();
 
-      ctx.fillStyle = '#28324A';
+      ctx.fillStyle = tok('--graph-ink');
       ctx.fillText(gr.name, bx + padX + dot + gap, sy + 0.5);
     });
     ctx.globalAlpha = 1;
@@ -697,7 +721,7 @@
       ctx.globalAlpha = 0.92; ctx.fillStyle = 'rgba(251,247,240,0.85)';
       ctx.fillRect(sx - w / 2 - pad, sy - 1, w + pad * 2, 15);
       ctx.globalAlpha = 1;
-      ctx.fillStyle = n.inactive ? '#8A8372' : (emph ? '#0E1C36' : '#28324A');
+      ctx.fillStyle = n.inactive ? tok('--on-inactive') : (emph ? tok('--on-surface') : tok('--graph-ink'));
       ctx.fillText(n.name, sx, sy);
     });
     ctx.globalAlpha = 1;
@@ -721,22 +745,22 @@
     if (n.id === focusId) {
       var sel = n.id === this.selectedId;
       ctx.beginPath(); ctx.arc(n.x, n.y, r + 7, 0, Math.PI * 2);
-      ctx.strokeStyle = sel ? '#182F57' : '#5D94A9'; ctx.lineWidth = 3; ctx.stroke();
+      ctx.strokeStyle = sel ? tok('--primary') : tok('--tertiary'); ctx.lineWidth = 3; ctx.stroke();
       ctx.beginPath(); ctx.arc(n.x, n.y, r + 7, 0, Math.PI * 2);
       ctx.fillStyle = sel ? 'rgba(24,47,87,0.06)' : 'rgba(93,148,169,0.06)'; ctx.fill();
     }
     ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
     if (n.inactive) {
-      ctx.fillStyle = '#EFE9DF'; ctx.fill();
-      ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]); ctx.strokeStyle = '#B9B0A0'; ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = tok('--inactive-surface'); ctx.fill();
+      ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]); ctx.strokeStyle = tok('--inactive-outline'); ctx.stroke(); ctx.setLineDash([]);
     } else if (n.elder) {
-      ctx.fillStyle = '#182F57'; ctx.fill();
-      ctx.lineWidth = 2.5; ctx.strokeStyle = '#B89B6A'; ctx.stroke();
+      ctx.fillStyle = tok('--primary'); ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = tok('--gold'); ctx.stroke();
     } else {
-      ctx.fillStyle = '#FFFFFF'; ctx.fill();
+      ctx.fillStyle = tok('--surface-container-lowest'); ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(24,47,87,0.32)'; ctx.stroke();
     }
-    ctx.fillStyle = n.inactive ? '#9A9384' : (n.elder ? '#F2EAE2' : '#182F57');
+    ctx.fillStyle = n.inactive ? tok('--on-inactive') : (n.elder ? tok('--cream') : tok('--primary'));
     ctx.font = '600 ' + (n.elder ? 13 : 11) + "px 'Work Sans', sans-serif";
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(n.initials, n.x, n.y + 0.5);
@@ -744,7 +768,7 @@
     ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2);
     ctx.fillStyle = stageOf(n).color;
     ctx.globalAlpha = alpha * (n.inactive ? 0.6 : 1); ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = '#FBF7F0'; ctx.stroke();
+    ctx.lineWidth = 2; ctx.strokeStyle = tok('--surface'); ctx.stroke();
     ctx.globalAlpha = 1;
   };
 
@@ -879,9 +903,9 @@
   };
   RelationsViewer.prototype.avatarStyle = function (n, size) {
     var s = size || 38, bg, col, ring = '';
-    if (n.inactive) { bg = '#EFE9DF'; col = '#9A9384'; ring = 'border:1.5px dashed #B9B0A0;'; }
-    else if (n.elder) { bg = '#182F57'; col = '#F2EAE2'; ring = 'border:2px solid var(--gold);'; }
-    else { bg = '#FFFFFF'; col = '#182F57'; ring = 'border:1.5px solid rgba(24,47,87,.32);'; }
+    if (n.inactive) { bg = 'var(--inactive-surface)'; col = 'var(--on-inactive)'; ring = 'border:1.5px dashed var(--inactive-outline);'; }
+    else if (n.elder) { bg = 'var(--primary)'; col = 'var(--cream)'; ring = 'border:2px solid var(--gold);'; }
+    else { bg = 'var(--surface-container-lowest)'; col = 'var(--primary)'; ring = 'border:1.5px solid rgba(24,47,87,.32);'; }
     return 'flex:0 0 auto;width:' + s + 'px;height:' + s + 'px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-sans);font-weight:600;font-size:' + (s * 0.36) + 'px;background:' + bg + ';color:' + col + ';' + ring;
   };
   RelationsViewer.prototype.presetBtn = function (on) {
@@ -958,7 +982,7 @@
               '<div><span style="display:block;font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--outline-variant)">Membership Stage</span><div data-rv="legend" style="display:flex;flex-direction:column;gap:8px"></div>' +
                 '<div style="margin-top:14px;display:flex;flex-direction:column;gap:9px;padding-top:12px;border-top:1px solid var(--outline-variant)">' +
                   '<div style="display:flex;align-items:center;gap:10px"><span style="width:16px;height:16px;border-radius:50%;background:var(--navy);border:2px solid var(--gold);flex:0 0 auto"></span><span style="font-size:12.5px;color:var(--on-surface);font-weight:500">Elder</span></div>' +
-                  '<div style="display:flex;align-items:center;gap:10px"><span style="width:16px;height:16px;border-radius:50%;background:#EFE9DF;border:1.5px dashed #B9B0A0;flex:0 0 auto"></span><span style="font-size:12.5px;color:var(--on-surface);font-weight:500">Inactive</span></div>' +
+                  '<div style="display:flex;align-items:center;gap:10px"><span style="width:16px;height:16px;border-radius:50%;background:var(--inactive-surface);border:1.5px dashed var(--inactive-outline);flex:0 0 auto"></span><span style="font-size:12.5px;color:var(--on-surface);font-weight:500">Inactive</span></div>' +
                 '</div></div>' +
             '</div>' +
           '</aside>' +
@@ -1026,7 +1050,7 @@
     var def = this.EDGE[k], sw = this.switchStyles(!!this.toggles[k]);
     var typeId = k.slice(4);
     var mine = (this.groups || []).filter(function (g) { return g.typeId === typeId; });
-    var c1 = (mine[0] && mine[0].colour) || '#8A93A6';
+    var c1 = (mine[0] && mine[0].colour) || 'var(--outline)';
     var c2 = (mine[1] && mine[1].colour) || c1;
 
     var swatch =

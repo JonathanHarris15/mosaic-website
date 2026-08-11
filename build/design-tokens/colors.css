@@ -101,6 +101,14 @@
   --highlight-orange:          #FED7AA;
   --highlight-purple:          #F0ABFC;
 
+  /* ---- Relations Viewer — edge palette, node ink, and the inactive set ---- */
+  --edge-terracotta:           #A26B5B;
+  --edge-violet:               #7E5A8C;
+  --graph-ink:                 #28324A;
+  --inactive-surface:          #EFE9DF;
+  --inactive-outline:          #B9B0A0;
+  --on-inactive:               #9A9384;
+
   /* ---- Relationship Group bubbles — cycled by group order, so numbered ---- */
   --graph-1:                   #5E8C8A;
   --graph-2:                   #C0803A;

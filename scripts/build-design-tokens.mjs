@@ -65,6 +65,9 @@ const COLOR_GROUPS = [
   ["Highlighter — Note Module pen colours, outside the brand on purpose",
     ["highlight-yellow", "highlight-green", "highlight-blue",
      "highlight-red", "highlight-orange", "highlight-purple"]],
+  ["Relations Viewer — edge palette, node ink, and the inactive set",
+    ["edge-terracotta", "edge-violet", "graph-ink",
+     "inactive-surface", "inactive-outline", "on-inactive"]],
   ["Relationship Group bubbles — cycled by group order, so numbered",
     ["graph-1", "graph-2", "graph-3", "graph-4", "graph-5", "graph-6"]],
 ];

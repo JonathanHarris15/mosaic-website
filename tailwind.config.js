@@ -116,6 +116,26 @@ module.exports = {
         "highlight-orange": "#FED7AA",
         "highlight-purple": "#F0ABFC",
 
+        /* ---- Relations Viewer ----
+           Two more line colours to finish the cycled edge palette. The other
+           four entries already read --gold, --success, --secondary and
+           --warning; these two had no token and sat as hexes among them.
+           Named for what they are, because the palette is cycled across
+           elder-defined types and no entry means anything in particular. */
+        "edge-terracotta": "#A26B5B",
+        "edge-violet":     "#7E5A8C",
+
+        /* Node ink. A shade off --on-surface on purpose: the emphasised node
+           uses --on-surface, and the two have to be told apart. */
+        "graph-ink": "#28324A",
+
+        /* An inactive Person: dimmed fill, dashed ring, muted label. The
+           label was #9A9384 in the DOM legend and #8A8372 on the canvas —
+           one concept, two greys, depending which one you were looking at. */
+        "inactive-surface": "#EFE9DF",
+        "inactive-outline": "#B9B0A0",
+        "on-inactive":      "#9A9384",
+
         /* ---- Relationship Group bubbles (Relations Viewer) ----
            Numbered, not named: the viewer cycles them by stable group order,
            so graph-3 means "the third group", never "the violet one".
