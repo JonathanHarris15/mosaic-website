@@ -8,17 +8,33 @@
     ],
     "headers": [
       {
-        "//": "Firebase's default is an hour's cache on everything. Nothing here is content-hashed — calendar.js is always calendar.js — so for an hour after a deploy a browser can run the NEW page against the OLD script. Alpine swallows a binding to a member the old script never had, so the symptom is a screen that renders blank rather than an error: exactly the bug that hid this. no-cache still caches, it just revalidates first, so the cost is one 304 per file.",
+        "//": "Firebase's default is an hour's cache on everything. Nothing here is content-hashed — calendar.js is always calendar.js — so for an hour after a deploy a browser can run the NEW page against the OLD script. Alpine swallows a binding to a member the old script never had, so the symptom is a screen that renders blank rather than an error: exactly the bug that hid this. ⚠ THIS COSTS A FULL RE-DOWNLOAD PER FILE, NOT A 304 — see the vendor block below. It is still right for these files, which genuinely can go stale; the way out is giving them a name that changes when they do, and then they can be cached like everything else.",
         "source": "**/*.@(html|js|css)",
         "headers": [
-          { "key": "Cache-Control", "value": "no-cache" }
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "//": "⚠ no-cache DOES NOT COST ONE 304 PER FILE ON THIS HOST. That is what the block above assumed, and it is wrong: asked about a no-cache file the browser already holds, Firebase Hosting sends the whole body back rather than 'nothing changed'. Measured against the live site — firebase-firestore-compat.js answers a conditional request with 200 and 84KB, while a font on max-age answers the same question with 304 and nothing. So every page visit re-downloaded ~200KB the browser was already holding, which on a phone was most of the wait before the page could even ask for its data. Third-party code is exempted here because it has the property the block above is missing: it changes name when it changes. alpine-3.15.12.min.js carries its version, and the Firebase files only move when somebody vendors a new SDK. That is ~128KB of the ~200. ⚠ IT MUST STAY BELOW THE no-cache BLOCK. The LAST matching block wins, not the first — put this above it and vendor/ silently keeps no-cache. Verified against the hosting emulator, not assumed.",
+        "source": "vendor/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=604800"
+          }
         ]
       },
       {
         "//": "Fonts and images ARE stable — a woff2 that changes gets a new name.",
         "source": "**/*.@(woff|woff2|ttf|otf|png|jpg|jpeg|svg|webp|ico)",
         "headers": [
-          { "key": "Cache-Control", "value": "public, max-age=604800" }
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=604800"
+          }
         ]
       }
     ]
