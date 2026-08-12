@@ -4,9 +4,21 @@
 **Date:** 12 August 2026.
 **For:** Claude Design, against the **Mosaic Website Design** system (project `f2292e35-4adc-4d33-a42d-7ca9373364c9`).
 **Deliverable:** a UI kit at `ui_kits/recurring-events/`, following `ui_kits/headers/` — an `index.html` entry point, JSX screens, and a `README.md` naming the screens and the components used.
-**Read first — inside this design system project, which is all you can see:** `readme.md`, `styles.css`, `guidelines/`, `components/`. Tokens were verified current against the app on 12 August 2026 — nothing to re-check.
+**Read first, in the design system project:** `readme.md`, `styles.css`, `guidelines/`, `components/`. Tokens were verified current against the app on 12 August 2026 — nothing to re-check.
 
-**You cannot read the Mosaic codebase, and must not act as though you can.** Everything true of the product is written out in section 2 below. If you find yourself needing a field name, a value, a limit or a string that is not there, that is a hole in this brief — say so and mark what you used as a guess. Do not fill it with something plausible.
+**Then read the code.** Link the repo — `JonathanHarris15/mosaic-website`, branch `main` — or link the local copy, and read these before drawing anything:
+
+| File | What it settles |
+| --- | --- |
+| `public/recurring-events.html` · `public/recurring-events.js` | The first of the two screens being merged: the list, the rota grid, the cross-role rules, the drafting buttons. |
+| `public/calendar-event.html` · `public/calendar-event.js` | The second one. The part being merged is the `managingSeries` block — the event's own details, pattern, roles, colour and visibility. The rest of the file is a *date*, which is out of scope. |
+| `public/recurring-roster-core.js` | How the grid is built, what a ticked range means, and what emptying one would cost. |
+| `public/calendar-view.js` | The eight colours, the five visibility rungs and their sentences, and the code that turns a recurrence rule into English. |
+| `public/roles-core.js` | `LITURGICAL_ROLES` and `DIRECTORY_GROUP_TYPES`. |
+| `public/components-demo.html` | The component gallery — every `m-*` class, rendered. |
+| `CONTEXT.md` | The domain model. Read *Event series*, *Event occurrence*, *Event series management*, *Recurring Events*, *Cross-Role Rule*, *Auto-assign*, *Blank draft*. This is the ubiquitous language and the words on screen have to match it. |
+
+**Section 2 below is a digest of those files, not a replacement for them.** It is there so the load-bearing facts are in one place and so you can tell at a glance what is settled. **Where the digest and the code disagree, the code wins — and say so in your notes back**, because that disagreement is a bug in one of them and it matters which.
 
 ---
 
@@ -32,8 +44,9 @@ here is a professional scheduling tool and it must not read like one.
 
 ## 2. What is real — use these, do not invent
 
-These are the actual values from the product. **Use them exactly. If you need
-something not on this list, mark it as a suggestion.**
+These are the actual values from the product, pulled out of the files named above.
+**Use them exactly. If you need something not on this list, check the code for it
+first, and if it is not there either, mark what you used as a suggestion.**
 
 ### The two things being merged
 
@@ -341,7 +354,8 @@ absence), and whatever carries the **tabs**. A new primitive is a good outcome. 
 
 - The **export prompt** for the kit.
 - A short note on **anything you placeholdered or invented** — any string, value, state
-  or role name that is not on the list above. A design that flags its own guesses saves
-  the whole grilling session on the way back.
+  or role name that is neither in section 2 nor in the code. A design that flags its own
+  guesses saves the whole grilling session on the way back.
+- **Anywhere the code and section 2 disagreed**, and which you followed.
 - A line on any place where the tabbed shape forced something that the two separate
   screens did better. That is worth knowing before it is built, not after.
