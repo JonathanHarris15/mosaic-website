@@ -45,6 +45,16 @@
   --label-md-line:      1.2;   /* @kind other */
   --label-md-spacing:   0.14em;
   --label-md-weight:    600;
+
+  --label-sm-size:      11.5px;
+  --label-sm-line:      1.2;   /* @kind other */
+  --label-sm-spacing:   0.14em;
+  --label-sm-weight:    600;
+
+  --label-xs-size:      10.5px;
+  --label-xs-line:      1.2;   /* @kind other */
+  --label-xs-spacing:   0.14em;
+  --label-xs-weight:    600;
 /* @generated:end */
 
   /* ---- Semantic aliases ---- */

@@ -273,18 +273,18 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     notes: ["Uppercase, 0.14em tracking, --on-surface-variant. Never a heading: it labels a group, it does not open one."],
     examples: ['<span class="m-label">Filter by tags</span>', '<span class="m-label m-label--sm">Serving</span>'],
     css: `
-/* The size is the component's own, deliberately. --label-md-size is 13px,
-   the type scale's label role, and nothing in the app actually drew a
-   13px overline — the hand-written copies ranged 10px to 12px and the
-   phone settled on 11.5. Weight and tracking still come from the token. */
+/* Every size here is a token. The overline is --label-sm, one step below
+   the field-and-button label at --label-md; --label-xs is the tightest,
+   for a caption sitting directly on top of what it names. */
 .m-label {
   display: inline-block;
-  font-family: var(--font-sans); font-size: 11.5px;
-  font-weight: var(--label-md-weight); line-height: var(--label-md-line);
-  letter-spacing: var(--label-md-spacing); text-transform: uppercase;
+  font-family: var(--font-sans); font-size: var(--label-sm-size);
+  font-weight: var(--label-sm-weight); line-height: var(--label-sm-line);
+  letter-spacing: var(--label-sm-spacing); text-transform: uppercase;
   color: var(--on-surface-variant);
 }
-.m-label--sm { font-size: 10.5px; }
+.m-label--sm { font-size: var(--label-xs-size); }
+.m-label--lg { font-size: var(--label-md-size); }
 `,
   },
 

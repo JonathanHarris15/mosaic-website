@@ -220,7 +220,16 @@ module.exports = {
         "headline-md": ["24px", { lineHeight: "1.3", fontWeight: "600" }],
         "body-lg":     ["18px", { lineHeight: "1.6", fontWeight: "400" }],
         "body-md":     ["16px", { lineHeight: "1.5", fontWeight: "400" }],
-        "label-md":    ["13px", { lineHeight: "1.2", letterSpacing: "0.14em", fontWeight: "600" }],
+        /* Three sizes of tracked-caps label, because the app draws three.
+           `label-md` is the field and button label — 161 places render at
+           13px and read correctly. The overline above a group is a smaller
+           sibling, not that one drawn wrong: it existed at 10px, 10.5px,
+           11px and 12px in hand-written copies, and the phone had settled
+           on 11.5. Naming the two smaller sizes is what stops them being
+           magic numbers inside a component. */
+        "label-md":    ["13px",   { lineHeight: "1.2", letterSpacing: "0.14em", fontWeight: "600" }],
+        "label-sm":    ["11.5px", { lineHeight: "1.2", letterSpacing: "0.14em", fontWeight: "600" }],
+        "label-xs":    ["10.5px", { lineHeight: "1.2", letterSpacing: "0.14em", fontWeight: "600" }],
       },
 
       spacing: {
