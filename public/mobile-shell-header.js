@@ -248,9 +248,24 @@
     if (document.getElementById("mobile-shell-header")) return;
     var cfg = window.MOBILE_HEADER || {};
 
-    // Hide the page's own header(s).
+    // The page's own header goes, but its ACTIONS are adopted rather than
+    // hidden with it.
+    //
+    // ⚠ THIS IS LOAD-BEARING. Before MS-187 a page's buttons lived in <main>,
+    // so hiding the header could not lose them. Now they live in the header,
+    // and a wholesale hide would take Away, New event, Add New Hymn and the
+    // rest off the phone entirely — the page would still work and simply have
+    // no way to do anything, which is the worst shape a regression can take.
+    //
+    // Adopted, not copied: one node moves, so nothing can drift and no listener
+    // is rebound. .m-header--compact on this bar is what collapses them to
+    // 44px glyphs, which is the size the shell's own row already draws.
+    var adopted = null;
     try {
-      document.querySelectorAll(cfg.hideSelector || "body > header").forEach(function (el) { el.style.display = "none"; });
+      document.querySelectorAll(cfg.hideSelector || "body > header").forEach(function (el) {
+        if (!adopted) adopted = el.querySelector(".m-header__actions");
+        el.style.display = "none";
+      });
     } catch (e) {}
 
     // A hamburger is only honest where a drawer can actually open, so a page
@@ -259,6 +274,11 @@
 
     var header = document.createElement("header");
     header.id = "mobile-shell-header";
+    // The compact class is how the adopted actions get the phone's metrics —
+    // the rules are descendant selectors off .m-header--compact, so wearing the
+    // class is all this bar has to do. The inline style below still wins on
+    // background and border, which is why the two can share an element.
+    header.className = "m-header m-header--compact";
     header.style.cssText = "position:sticky;top:0;left:0;right:0;z-index:1000;flex-shrink:0;" +
       "padding-top:calc(env(safe-area-inset-top, 20px) + 4px);" +
       "background:var(--surface-container-lowest);border-bottom:1px solid var(--outline-variant, rgba(0,0,0,0.12));";
@@ -289,6 +309,7 @@
 
     row.appendChild(btn);
     row.appendChild(title);
+    if (adopted) row.appendChild(adopted);
     header.appendChild(row);
     document.body.insertBefore(header, document.body.firstChild);
 

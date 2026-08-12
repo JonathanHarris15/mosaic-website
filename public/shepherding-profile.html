@@ -56,59 +56,61 @@
       x-data="shepherdingProfile" x-cloak>
 
     <!-- Header -->
-    <header class="w-full max-w-[1600px] mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <!-- Breadcrumb nav -->
-        <nav class="flex items-center gap-1 font-label-md text-label-md text-on-surface-variant min-w-0">
+    <!-- This page can be reached from four places and which one you came from is
+         worth keeping, so the trail takes the back link's slot rather than being
+         flattened into one (MS-187). The trail no longer ends with the Person's
+         name: the title says it directly underneath, and twice in 30px is once
+         too many. -->
+    <header class="m-header m-header--tall" style="--m-header-max: 1600px">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <div class="m-header__titles">
+                    <nav class="m-header__crumbs">
 
-            <!-- Default: came from People list -->
-            <template x-if="!fromPage || fromPage === 'people'">
-                <a href="shepherding-people.html" class="flex items-center gap-1 hover:text-primary transition-colors flex-shrink-0">
-                    <span class="material-symbols-outlined text-[18px]">arrow_back</span>
-                    <span>People</span>
-                </a>
-            </template>
+                        <!-- Default: came from People list -->
+                        <template x-if="!fromPage || fromPage === 'people'">
+                            <a href="shepherding-people.html">
+                                <span class="material-symbols-outlined">chevron_left</span>People
+                            </a>
+                        </template>
 
-            <!-- Came from Dashboard -->
-            <template x-if="fromPage === 'dashboard'">
-                <div class="flex items-center gap-1 min-w-0">
-                    <a href="shepherding-dashboard.html" class="flex items-center gap-1 hover:text-primary transition-colors flex-shrink-0">
-                        <span class="material-symbols-outlined text-[18px]">arrow_back</span>
-                        <span>Dashboard</span>
-                    </a>
-                    <span class="material-symbols-outlined text-[14px] opacity-40 flex-shrink-0">chevron_right</span>
-                    <span class="text-on-surface truncate" x-text="person?.name || '…'"></span>
+                        <!-- Came from Dashboard -->
+                        <template x-if="fromPage === 'dashboard'">
+                            <a href="shepherding-dashboard.html">
+                                <span class="material-symbols-outlined">chevron_left</span>Shepherd Dashboard
+                            </a>
+                        </template>
+
+                        <!-- Came from an Elder Document -->
+                        <template x-if="fromPage === 'document'">
+                            <span class="flex items-center gap-1 min-w-0">
+                                <a href="shepherding-documents.html">
+                                    <span class="material-symbols-outlined">chevron_left</span>Documents
+                                </a>
+                                <span class="material-symbols-outlined">chevron_right</span>
+                                <a :href="'shepherding-document.html?id=' + fromId"
+                                   class="max-w-[200px]" x-text="fromTitle || 'Document'"></a>
+                            </span>
+                        </template>
+
+                        <!-- Came from a Care List -->
+                        <template x-if="fromPage === 'carelist'">
+                            <span class="flex items-center gap-1 min-w-0">
+                                <a href="shepherding-documents.html">
+                                    <span class="material-symbols-outlined">chevron_left</span>Documents
+                                </a>
+                                <span class="material-symbols-outlined">chevron_right</span>
+                                <a :href="'shepherding-care-list.html?id=' + fromId"
+                                   class="max-w-[200px]" x-text="fromTitle || 'Care List'"></a>
+                            </span>
+                        </template>
+
+                    </nav>
+                    <h1 class="m-header__title m-header__title--serif" x-text="person?.name || '…'"></h1>
                 </div>
-            </template>
-
-            <!-- Came from an Elder Document -->
-            <template x-if="fromPage === 'document'">
-                <div class="flex items-center gap-1 min-w-0">
-                    <a href="shepherding-documents.html" class="hover:text-primary transition-colors flex-shrink-0">Documents</a>
-                    <span class="material-symbols-outlined text-[14px] opacity-40 flex-shrink-0">chevron_right</span>
-                    <a :href="'shepherding-document.html?id=' + fromId"
-                       class="hover:text-primary transition-colors truncate max-w-[160px]"
-                       x-text="fromTitle || 'Document'"></a>
-                    <span class="material-symbols-outlined text-[14px] opacity-40 flex-shrink-0">chevron_right</span>
-                    <span class="text-on-surface truncate" x-text="person?.name || '…'"></span>
-                </div>
-            </template>
-
-            <!-- Came from a Care List -->
-            <template x-if="fromPage === 'carelist'">
-                <div class="flex items-center gap-1 min-w-0">
-                    <a href="shepherding-documents.html" class="hover:text-primary transition-colors flex-shrink-0">Documents</a>
-                    <span class="material-symbols-outlined text-[14px] opacity-40 flex-shrink-0">chevron_right</span>
-                    <a :href="'shepherding-care-list.html?id=' + fromId"
-                       class="hover:text-primary transition-colors truncate max-w-[160px]"
-                       x-text="fromTitle || 'Care List'"></a>
-                    <span class="material-symbols-outlined text-[14px] opacity-40 flex-shrink-0">chevron_right</span>
-                    <span class="text-on-surface truncate" x-text="person?.name || '…'"></span>
-                </div>
-            </template>
-
-        </nav>
-        <div id="auth-container" class="flex items-center">
-            <div class="h-10"></div>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
 
@@ -120,11 +122,11 @@
     <!-- Main content -->
     <main x-show="!loading && person" class="flex-grow max-w-[1600px] w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
 
-        <!-- Person Header -->
+        <!-- Person Header. The name is the page's title and lives in the bar; what
+             stays here is what the name alone does not tell you. -->
         <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-md">
             <div class="flex flex-col gap-xs flex-grow">
-                <h1 class="font-headline-lg text-headline-lg text-primary" x-text="person?.name"></h1>
-                <div class="flex items-center gap-2 mt-1">
+                <div class="flex items-center gap-2">
                     <span class="font-label-md text-label-md text-on-surface-variant capitalize"
                           x-text="person?.sex || 'Unknown'"></span>
                     <template x-if="person?.membership?.status">

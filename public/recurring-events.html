@@ -83,12 +83,30 @@
 <body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
       x-data="recurringEventsPage()" x-cloak>
 
-    <header class="w-full max-w-[1600px] mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a href="calendar.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary re-motion">
-            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
-            <span class="text-xs font-label-md uppercase tracking-wider">Calendar</span>
-        </a>
-        <div id="auth-container" class="flex items-center"><div class="h-10"></div></div>
+    <header class="m-header" style="--m-header-max: 1600px">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a href="calendar.html" class="m-back re-motion">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Calendar</span>
+                </a>
+                <div class="m-header__titles">
+                    <!-- Sentence case, unlike the twenty other page titles. Left
+                         as it is: it is a content fix with an owner, not a
+                         header decision (MS-187). -->
+                    <h1 class="m-header__title re-page-title">Recurring events</h1>
+                </div>
+            </div>
+            <div class="m-header__actions">
+                <a x-show="isEditor" :href="newEventHref"
+                   class="m-btn m-btn--primary m-btn--sm re-motion re-press re-focus">
+                    <span class="material-symbols-outlined">add</span>
+                    <span class="m-btn__label">New recurring event</span>
+                </a>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
+        </div>
     </header>
 
     <div x-show="loading" class="m-loading">
@@ -120,11 +138,8 @@
              Tap one to see when it next falls. -->
         <template x-if="browsing">
         <div class="max-w-[620px]">
-            <div class="re-title-block pb-md border-b border-outline-variant">
-                <h1 class="re-page-title font-display text-headline-lg tracking-[.02em] text-primary">
-                    Recurring events
-                </h1>
-                <p class="text-[13px] text-on-surface-variant mt-1 max-w-[52ch]">
+            <div class="re-title-block pb-md">
+                <p class="text-[13px] text-on-surface-variant max-w-[52ch]">
                     Everything that comes round again. Open one to see when it next falls.
                 </p>
             </div>
@@ -241,21 +256,13 @@
         <template x-if="isEditor">
         <div>
             <!-- ── Title ──────────────────────────────────────────────────── -->
-            <div class="re-title-block pb-md border-b border-outline-variant flex items-start justify-between gap-md flex-wrap">
+            <div class="re-title-block pb-md">
                 <div class="min-w-0">
-                    <h1 class="re-page-title font-display text-headline-lg tracking-[.02em] text-primary">
-                        Recurring events
-                    </h1>
-                    <p class="text-[13px] text-on-surface-variant mt-1 max-w-[62ch]">
+                    <p class="text-[13px] text-on-surface-variant max-w-[62ch]">
                         Everything that comes round again. Read the rota, tick the dates that need
                         redrawing, and change the event itself from here.
                     </p>
                 </div>
-                <a :href="newEventHref"
-                   class="shrink-0 flex items-center gap-1 bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs
-                          font-label-md text-xs uppercase tracking-wider re-motion re-press re-focus hover:bg-primary-container">
-                    <span class="material-symbols-outlined text-[18px]">add</span> New recurring event
-                </a>
             </div>
 
             <div x-show="error"

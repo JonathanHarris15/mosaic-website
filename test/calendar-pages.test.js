@@ -5439,36 +5439,44 @@ test('the rail is scrolled to, rather than having its months swapped', () => {
         'the slide is imposed on somebody who asked for less movement');
 });
 
-test('the phone\'s action row is allowed to wrap, however many actions it grows', () => {
-    // HOW THIS BROKE. The rule was written when there were two of these and it
-    // told them to share the width equally — `flex: 1 1 0`. A flex item will not
-    // shrink below its own label, so when Away made a third, it did not squeeze:
-    // it hung off the right edge of the phone, and "New event" was unreachable.
+test('the phone keeps the calendar\'s actions, however many it grows', () => {
+    // WHAT THIS DEFENDS, AND WHY IT CHANGED SHAPE (MS-187).
     //
-    // A count baked into a layout rule is a trap for whoever adds the next
-    // button, so the row now wraps and each action asks for half a line. Two sit
-    // side by side, a third drops to its own full-width row, and a member who
-    // only sees Away gets one button the width of the screen — with no number
-    // written down anywhere.
+    // It used to guard a wrapping rule. The actions lived in <main>, and a rule
+    // written when there were two told them to share one line equally — which a
+    // flex item cannot do below its own label, so the third hung off the right
+    // edge of the phone and "New event" was unreachable. The fix was a wrap with
+    // a half-line basis, and this test read that rule.
     //
-    // This can only read the rule, not lay it out. What it defends is the shape
-    // of the rule: that nothing here assumes how many actions there are.
+    // The actions are now in the header, and the phone shell HIDES the page's
+    // header wholesale to draw its own bar. That is a far worse version of the
+    // same bug: not one button off the edge, but every button gone, on a page
+    // that still looks like it works. So mobile-shell-header.js ADOPTS the
+    // action row into its bar instead of hiding it with the header.
+    //
+    // The intent is unchanged: nothing anywhere assumes how many actions there
+    // are. The new mechanism is count-agnostic by construction — a row of equal
+    // 44px glyphs — rather than by a wrap rule that had to be got right.
     const html = readPage('calendar.html');
-    const rule = html.slice(html.indexOf('html.shell-mobile .cal-title-actions'),
-        html.indexOf('}', html.indexOf('html.shell-mobile .cal-title-actions > a')) + 1);
 
-    assert.match(rule, /flex-wrap:\s*wrap/, 'the phone\'s actions cannot wrap, so a third one overflows');
-    assert.doesNotMatch(rule, /flex:\s*1 1 0/,
-        'the actions are told to share one line equally, which they cannot do below their own labels');
-    assert.match(rule, /flex:\s*1 1 calc\(50%/, 'no basis to wrap on');
-
-    // Every action in the row is an <a> — the rule selects on that, so a button
-    // added as a <button> would silently sit outside the layout it belongs to.
-    const row = html.slice(html.indexOf('cal-title-actions'), html.indexOf('<!-- Signed out'));
+    const row = html.slice(html.indexOf('m-header__actions'), html.indexOf('m-header__rule'));
     const controls = row.match(/<(a|button)\b/g) || [];
     assert.ok(controls.length >= 3, 'the row this test is about is not there any more');
-    assert.deepStrictEqual([...new Set(controls)], ['<a'],
-        'an action in this row is not an <a>, so the phone\'s layout rule does not reach it');
+    assert.ok(controls.every((_, i) => /class="[^"]*\bm-btn\b/.test(row.split(/<(?:a|button)\b/)[i + 1] || '')),
+        'an action carries no .m-btn, so the phone\'s icon-only rule does not reach it');
+
+    // The adoption itself. Without this the actions are hidden with the header.
+    const shell = readPage('mobile-shell-header.js');
+    assert.match(shell, /querySelector\(["']\.m-header__actions["']\)/,
+        'the shell no longer adopts the page\'s actions, so a phone loses every one of them');
+    assert.match(shell, /row\.appendChild\(adopted\)/,
+        'the actions are found but never put in the bar');
+    assert.match(shell, /m-header--compact/,
+        'the adopted actions have nothing collapsing them to glyphs, so their labels run off the bar');
+
+    // No number is written down anywhere in the path that carries them.
+    assert.doesNotMatch(shell, /adopted[\s\S]{0,200}\.(length|slice)\b/,
+        'the adoption counts the actions, which is the trap the old rule fell into');
 });
 
 test('the phone gets the calendar, not three lines about it first', () => {

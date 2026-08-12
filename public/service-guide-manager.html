@@ -72,15 +72,28 @@
 </head>
 <body class="bg-preview-canvas font-sans antialiased text-black min-h-screen" x-data="guideManager()" x-init="init()">
 
-    <header x-show="!editingPage" class="h-16 bg-primary text-white flex items-center justify-between px-6 sticky top-0 z-50 shadow-md">
-        <div class="flex items-center gap-4">
-            <a href="service-calendar.html" class="hover:opacity-80"><span class="material-symbols-outlined">arrow_back</span></a>
-            <h1 class="text-lg font-semibold">Service Guide Manager</h1>
-        </div>
-        <div class="flex items-center gap-2">
-            <button @click="resetSeed()" class="px-3 py-2 hover:bg-white/10 rounded-lg flex items-center gap-2 text-sm" title="Restore the shipped seeded templates">
-                <span class="material-symbols-outlined text-[18px]">restart_alt</span><span class="hidden md:inline">Reset seeded</span>
-            </button>
+    <!-- A Tool Bar (MS-187). The title names a place in the app rather than a
+         Service, so it keeps Cinzel where the other two guide screens do not. -->
+    <header x-show="!editingPage" class="m-header m-header--tool">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a href="service-calendar.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Services</span>
+                </a>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title">Service Guide Manager</h1>
+                </div>
+            </div>
+            <div class="m-header__actions">
+                <button @click="resetSeed()" class="m-btn m-btn--secondary m-btn--sm"
+                        title="Restore the shipped seeded templates">
+                    <span class="material-symbols-outlined">restart_alt</span>
+                    <span class="m-btn__label">Reset seeded</span>
+                </button>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
 
