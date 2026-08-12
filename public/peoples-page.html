@@ -34,23 +34,23 @@
     <!-- Architectural accent lines -->
     <div class="absolute right-0 top-0 h-96 w-1/3 bg-gradient-to-l from-surface-container-high to-transparent opacity-30 pointer-events-none"></div>
 
-    <header class="sticky top-0 flex-shrink-0 bg-background/80 backdrop-blur-md border-b border-surface-variant/30 z-50">
-        <div class="w-full max-w-[1600px] mx-auto px-margin py-md flex justify-between items-center gap-md">
-            <div class="flex-1 min-w-0">
-                <a href="index.html" class="flex-shrink-0 font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-2 uppercase tracking-widest text-[11px]">
-                    <span class="material-symbols-outlined text-sm">arrow_back</span>
-                    <span class="hidden md:inline">Back to Dashboard</span>
-                    <span class="md:hidden">Back</span>
+    <!-- Titled for the first time. "Member Directory" is what mobile's
+         destinations.js calls this page, so the two now agree. ⚠ CONTEXT.md
+         calls the concept the Membership Directory — one of those is wrong and
+         it is a naming question, not a header one (MS-187). -->
+    <header class="m-header m-header--sticky" style="--m-header-max: 1600px">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a href="index.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Home</span>
                 </a>
-            </div>
-            <div class="flex-1 flex justify-center items-center">
-                <div class="flex flex-col items-center gap-1">
-                    <img alt="Mosaic Church Logo" class="h-10 w-10 object-contain" src="assets/mosaic-logo.png"/>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title">Member Directory</h1>
                 </div>
             </div>
-            <div class="flex-1 flex justify-end" id="auth-container">
-                <div class="h-10"></div>
-            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
 

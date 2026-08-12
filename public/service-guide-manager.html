@@ -152,7 +152,7 @@
                 <div class="h-11 flex items-center justify-between px-3 bg-editor-chrome border-b border-black/50 shrink-0">
                     <div class="flex items-center gap-2 min-w-0">
                         <button class="px-2 py-1 rounded hover:bg-white/10 flex items-center gap-1 text-sm text-gray-400" @click="closePage()">
-                            <span class="material-symbols-outlined text-[18px]">arrow_back</span> Library
+                            <span class="material-symbols-outlined text-[18px]">chevron_left</span> Library
                         </button>
                         <span class="text-gray-600">/</span>
                         <span class="text-sm font-semibold text-gray-100 whitespace-nowrap hidden sm:inline">Service Page Editor</span>
@@ -318,7 +318,7 @@
             </div>
             <template x-if="editingPreset">
             <div class="max-w-2xl">
-                <button class="btn-ghost text-xs mb-4" @click="closePreset()"><span class="material-symbols-outlined text-[16px]">arrow_back</span> Back</button>
+                <button class="btn-ghost text-xs mb-4" @click="closePreset()"><span class="material-symbols-outlined text-[16px]">chevron_left</span> Back</button>
                 <div class="card space-y-3">
                     <div>
                         <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Name</label>
@@ -369,7 +369,7 @@
             <template x-if="editingTemplate">
             <div class="max-w-3xl">
                 <div class="flex justify-between items-center mb-4">
-                    <button class="btn-ghost text-xs" @click="closeTemplate()"><span class="material-symbols-outlined text-[16px]">arrow_back</span> Back</button>
+                    <button class="btn-ghost text-xs" @click="closeTemplate()"><span class="material-symbols-outlined text-[16px]">chevron_left</span> Back</button>
                     <button class="btn-primary text-sm" @click="saveTemplate()"><span class="material-symbols-outlined text-[18px]">save</span> Save</button>
                 </div>
                 <div class="card space-y-4">

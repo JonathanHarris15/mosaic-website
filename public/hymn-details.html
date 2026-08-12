@@ -36,19 +36,20 @@
 </head>
 <body class="bg-background text-on-background font-body-md min-h-screen flex flex-col">
     <!-- Top Navigation Area -->
-    <header class="w-full flex justify-between items-center px-6 py-4 max-w-full mx-auto border-b border-surface-variant/30">
-        <div class="flex-1">
-            <a href="hymn-directory.html" class="font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-1">
-                <span class="material-symbols-outlined text-sm">arrow_back</span>
-                Back to Directory
-            </a>
-        </div>
-        <div class="flex-1 flex justify-center items-center">
-            <div class="flex flex-col items-center gap-1">
-                <img alt="Mosaic Church Logo" class="h-12 w-12 object-contain" src="assets/mosaic-logo.png"/>
+    <!-- No __title: the hymn's own name is the head of the page below, where it
+         sits with its writers, its metre and its tune. The seal has left the
+         header. -->
+    <header class="m-header" style="--m-header-max: 56rem">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a href="hymn-directory.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Hymn Directory</span>
+                </a>
             </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
         </div>
-        <div class="flex-1 flex justify-end" id="auth-container"></div>
     </header>
 
     <main class="flex-1 max-w-4xl w-full mx-auto px-gutter py-lg flex flex-col" id="hymn-details-container">

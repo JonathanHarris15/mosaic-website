@@ -42,15 +42,26 @@
 <body class="bg-background text-on-surface font-body-md antialiased"
       x-data="coverPage()" x-cloak>
 
+<!-- No <header> here either before MS-187. -->
+<header class="m-header" style="--m-header-max: 860px">
+    <div class="m-header__inner">
+        <div class="m-header__lead">
+            <a href="calendar.html" class="m-back">
+                <span class="material-symbols-outlined">chevron_left</span>
+                <span class="m-back__label">Calendar</span>
+            </a>
+            <div class="m-header__titles">
+                <h1 class="m-header__title">Needing Somebody</h1>
+            </div>
+        </div>
+        <div class="m-header__rule"></div>
+        <div class="m-header__auth" id="auth-container"></div>
+    </div>
+</header>
+
 <main class="max-w-[860px] mx-auto px-md pb-16">
 
-    <a href="calendar.html"
-       class="inline-flex items-center gap-1 mt-md text-on-surface-variant text-[11px] uppercase tracking-[.1em] hover:text-secondary">
-        <span class="material-symbols-outlined text-[18px]">arrow_back</span> Calendar
-    </a>
-
-    <div class="mt-3 pb-[18px] border-b border-outline-variant">
-        <h1 class="font-headline-lg text-[30px] tracking-[.02em] text-primary m-0">Needing Somebody</h1>
+    <div class="mt-md pb-[18px] border-b border-outline-variant">
         <!-- Says how many you can take, not just how many there are. The gap
              between the two numbers is the honest picture, and stating it up
              front stops the refusals further down reading as a surprise. -->

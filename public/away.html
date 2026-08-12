@@ -28,7 +28,8 @@
                                  border-color 150ms cubic-bezier(0.2,0,0,1); }
 
         /* The shell draws its own header with the page title in it. */
-        html.shell-mobile .aw-page-title { display: none; }
+        /* The title is in the header now, and the shell hides that wholesale —
+           there is no second copy on the page to suppress. */
         html.shell-mobile .aw-title-block { display: none; }
 
         /* ── The phone's pinned tray ──────────────────────────────────────────
@@ -105,16 +106,29 @@
 
 <body class="bg-background text-on-surface font-body-md antialiased" x-data="awayPage()" x-cloak>
 
-<div class="max-w-container mx-auto px-margin">
+<!-- The header is a direct child of <body>, outside the column: the phone shell
+     finds it as `body > header`, and the bar's hairline has to reach the window
+     edge rather than stop at the column's. The title is "Away" when it is your
+     own diary and a Person's name when an editor is recording it for somebody
+     else — so the face follows, Cinzel for the app's word and EB Garamond for
+     the name. -->
+<header class="m-header">
+    <div class="m-header__inner">
+        <div class="m-header__lead">
+            <a :href="calendarHref" class="m-back aw-motion aw-focus">
+                <span class="material-symbols-outlined">chevron_left</span>
+                <span class="m-back__label">Calendar</span>
+            </a>
+            <div class="m-header__titles">
+                <h1 class="m-header__title" :class="!isMine && 'm-header__title--serif'" x-text="title"></h1>
+            </div>
+        </div>
+        <div class="m-header__rule"></div>
+        <div class="m-header__auth" id="auth-container"></div>
+    </div>
+</header>
 
-    <!-- ── Header ──────────────────────────────────────────────────────── -->
-    <header class="flex items-center justify-between pt-md aw-page-title">
-        <a :href="calendarHref"
-           class="flex items-center gap-1 text-on-surface-variant font-label-md text-xs uppercase tracking-wider hover:text-primary aw-motion aw-focus">
-            <span class="material-symbols-outlined text-[19px]">arrow_back</span>Calendar
-        </a>
-        <div id="auth-container" class="flex items-center"><div class="h-10"></div></div>
-    </header>
+<div class="max-w-container mx-auto px-margin">
 
     <!-- ── Title ─────────────────────────────────────────────────────────
          The whole block goes on a phone, not just the heading. The shell
@@ -124,8 +138,7 @@
          one thing the screen is for. -->
     <div class="aw-title-block flex items-end justify-between gap-8 pt-md pb-md border-b border-outline-variant">
         <div>
-            <h1 class="font-display-lg text-[32px] text-primary tracking-[.02em] aw-page-title" x-text="title"></h1>
-            <p class="mt-2 text-[14px] leading-[1.55] text-on-surface-variant max-w-[66ch]" x-text="intro"></p>
+            <p class="text-[14px] leading-[1.55] text-on-surface-variant max-w-[66ch]" x-text="intro"></p>
         </div>
         <span class="hidden md:flex items-center gap-2 shrink-0 font-label-md text-[11px] uppercase tracking-[.12em]
                      text-on-surface-variant bg-surface-container border border-outline-variant rounded-md px-3 py-2">

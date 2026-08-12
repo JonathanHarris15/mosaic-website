@@ -275,9 +275,9 @@
 
 <!-- ══════════════ What a phone gets ══════════════ -->
 <div class="aa-phone flex-grow min-h-0 overflow-auto flex flex-col px-6 py-10 max-w-[420px] mx-auto">
-    <a href="calendar.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary aa-motion">
-        <span class="material-symbols-outlined text-[20px]">arrow_back</span>
-        <span class="text-xs font-label-md uppercase tracking-wider">Calendar</span>
+    <a href="calendar.html" class="m-back aa-motion">
+        <span class="material-symbols-outlined">chevron_left</span>
+        <span class="m-back__label">Calendar</span>
     </a>
     <div class="flex-grow flex flex-col justify-center gap-5">
         <span class="material-symbols-outlined text-[34px] text-sand">desktop_windows</span>
@@ -304,28 +304,45 @@
          this one saying the same kind of thing, which cost 74px of grid on a
          screen where the grid is the whole point. The back arrow changes what
          it means instead: out of the draft, or out of the page. -->
-    <header class="shrink-0 w-full px-6 py-2.5 flex items-center gap-4
-                   bg-surface-container-lowest border-b border-outline-variant">
-        <a href="calendar.html" x-show="view === 'setup'"
-           class="flex items-center gap-1 text-on-surface-variant hover:text-primary aa-motion">
-            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
-            <span class="text-xs font-label-md uppercase tracking-wider">Calendar</span>
-        </a>
+    <!-- A Tool Bar: a wide grid of dates against Roles, worked at length. Two
+         states share the one bar — picking a range, and the draft room, which
+         names itself because an editor who asked for an empty grid and got a
+         header saying "Auto-assign" would reasonably wonder what it assigned. -->
+    <header class="m-header m-header--tool" :class="view === 'draft' && 'm-header--tall'">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <template x-if="view === 'setup'">
+                    <a href="calendar.html" class="m-back aa-motion">
+                        <span class="material-symbols-outlined">chevron_left</span>
+                        <span class="m-back__label">Calendar</span>
+                    </a>
+                </template>
 
-        <template x-if="view === 'draft'">
-            <div class="flex items-center gap-3 min-w-0 flex-grow">
-                <button @click="backToSetup()" type="button" aria-label="Back to setup"
-                        class="material-symbols-outlined text-[20px] text-secondary p-1.5 rounded-lg
-                               hover:bg-surface-container aa-motion aa-focus shrink-0">arrow_back</button>
-                <div class="flex flex-col gap-0.5 min-w-0">
-                    <span class="font-display text-[19px] text-primary tracking-[.02em] leading-none"
-                          x-text="draftTitle"></span>
-                    <span class="text-[12px] text-on-surface-variant truncate" x-text="draftSubtitle"></span>
-                </div>
+                <template x-if="view === 'draft'">
+                    <button @click="backToSetup()" type="button" aria-label="Back to setup"
+                            class="m-back aa-motion aa-focus">
+                        <span class="material-symbols-outlined">chevron_left</span>
+                        <span class="m-back__label">Setup</span>
+                    </button>
+                </template>
+
+                <template x-if="view === 'draft'">
+                    <div class="m-header__titles">
+                        <h1 class="m-header__title" x-text="draftTitle"></h1>
+                        <span class="m-header__sub" x-text="draftSubtitle"></span>
+                    </div>
+                </template>
+
+                <template x-if="view === 'setup'">
+                    <div class="m-header__titles">
+                        <h1 class="m-header__title">Auto-assign</h1>
+                    </div>
+                </template>
             </div>
-        </template>
 
-        <div id="auth-container" class="flex items-center ml-auto"><div class="h-10"></div></div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
+        </div>
     </header>
 
     <div x-show="loading" class="m-loading">
@@ -363,7 +380,6 @@
 
                 <div class="flex flex-col gap-2.5">
                     <div class="text-[13px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">Rosters</div>
-                    <h1 class="font-display text-display-lg text-primary tracking-[.02em] leading-[1.1]">Auto-assign</h1>
                     <p class="text-body-md leading-relaxed text-on-surface-variant max-w-[56ch] text-pretty">
                         Who serves in each role across a stretch of dates. Draft it and the work is
                         spread so the same few people don't carry everything, or start with an empty

@@ -40,24 +40,22 @@
       x-data="hymnLookup()"
       x-effect="document.body.style.overflow = showFilters ? 'hidden' : ''">
     <!-- Top Navigation Area -->
-    <header class="flex-shrink-0 bg-background/80 backdrop-blur-md border-b border-surface-variant/30 z-50">
-        <div class="w-full max-w-[1600px] mx-auto px-4 md:px-margin py-2 md:py-md flex justify-between items-center gap-md">
-            <div class="flex-none min-w-0">
-                <a href="index.html" class="inline-flex font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-1">
-                    <span class="material-symbols-outlined text-sm">arrow_back</span>
-                    <span class="hidden md:inline">Back to Dashboard</span>
+    <!-- The seal has left the header (MS-187). Centring it forced a three-column
+         grid that fought the title for space, and a header is wayfinding rather
+         than letterhead. Sticky, because the grid below is one long scroll. -->
+    <header class="m-header m-header--sticky" style="--m-header-max: 1600px">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a href="index.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Home</span>
                 </a>
-            </div>
-            <!-- Logo + Title centered together -->
-            <div class="flex-grow flex justify-center">
-                <div class="flex items-center gap-3">
-                    <img alt="Mosaic Church Logo" class="h-10 w-10 object-contain" src="assets/mosaic-logo.png"/>
-                    <h1 class="font-headline-md text-primary tracking-tight whitespace-nowrap">Hymn Directory</h1>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title">Hymn Directory</h1>
                 </div>
             </div>
-            <div class="flex-1 flex justify-end" id="auth-container">
-                <div class="h-10"></div>
-            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
 

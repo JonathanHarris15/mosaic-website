@@ -397,28 +397,30 @@
     <!-- Hidden File Input -->
     <input type="file" id="docx-file-input" accept=".docx" multiple class="hidden" />
 
-    <header class="sticky top-0 flex-shrink-0 bg-background/80 backdrop-blur-md border-b border-surface-variant/30 z-[60]">
-        <div class="w-full max-w-[1600px] mx-auto px-margin py-md flex justify-between items-center gap-md">
-            <div class="flex items-center gap-md min-w-0">
-                <a id="shell-home-link" href="index.html" class="flex-shrink-0 font-label-md text-label-md text-secondary hover:text-primary transition-colors flex items-center gap-1">
-                    <span class="material-symbols-outlined text-sm">arrow_back</span>
-                    <span class="hidden md:inline">Back to Dashboard</span>
+    <header class="m-header m-header--sticky" style="--m-header-max: 1600px">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a id="shell-home-link" href="index.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Home</span>
                 </a>
-                <div class="h-6 w-[1px] bg-surface-variant/50 hidden md:block flex-shrink-0"></div>
-                <h1 class="font-headline-md text-primary truncate">Services</h1>
-                
-                <!-- Moved Import Docx Button -->
-                <button id="import-docx-btn" class="hidden shrink-0 border border-outline text-secondary px-4 py-1.5 rounded-full font-label-md text-xs hover:bg-secondary hover:text-on-secondary transition-colors flex items-center gap-2 group/btn ml-2" title="Import from docx">
-                    <span class="material-symbols-outlined text-[18px]">upload_file</span>
-                    <span class="hidden md:inline">Import</span>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title">Services</h1>
+                </div>
+            </div>
+
+            <div class="m-header__actions">
+                <!-- Import Docx. Shown by script for the ranks that may use it. -->
+                <button id="import-docx-btn" class="hidden m-btn m-btn--secondary m-btn--sm" title="Import from docx">
+                    <span class="material-symbols-outlined">upload_file</span>
+                    <span class="m-btn__label">Import</span>
                 </button>
 
-                <!-- Inject Service Button — opens up a chosen Sunday and shifts later services down -->
-                <button id="inject-service-btn" onclick="window.openInjectModal()" class="hidden shrink-0 border border-outline text-secondary px-4 py-1.5 rounded-full font-label-md text-xs hover:bg-secondary hover:text-on-secondary transition-colors flex items-center gap-2 group/btn" title="Insert a service on a Sunday and shift later services down a week">
-                    <span class="material-symbols-outlined text-[18px]">playlist_add</span>
-                    <span class="hidden md:inline">Inject</span>
+                <!-- Inject Service — opens up a chosen Sunday and shifts later services down -->
+                <button id="inject-service-btn" onclick="window.openInjectModal()" class="hidden m-btn m-btn--secondary m-btn--sm" title="Insert a service on a Sunday and shift later services down a week">
+                    <span class="material-symbols-outlined">playlist_add</span>
+                    <span class="m-btn__label">Inject</span>
                 </button>
-            </div>
 
             <!-- Persistent Controls -->
             <div class="hidden lg:flex items-center gap-lg">
@@ -451,11 +453,11 @@
                     </button>
                 </div>
             </div>
-
-            <div id="auth-container" class="flex-shrink-0">
-                <!-- Auth UI will be injected here by auth.js -->
-                <div class="h-10"></div>
             </div>
+
+            <div class="m-header__rule"></div>
+            <!-- Auth UI is injected here by auth.js -->
+            <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
 
