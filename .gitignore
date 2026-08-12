@@ -24,9 +24,6 @@ build/mobile/
 # Node modules
 node_modules/
 
-# Sphinx
-docs/_build/
-docs/.venv/
 .venv/
 
 # Firebase

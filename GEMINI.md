@@ -9,7 +9,7 @@ A Firebase-based platform for managing liturgical resources, including a hymn di
 - **Database**: [Cloud Firestore](https://firebase.google.com/docs/firestore).
 - **Authentication**: [Firebase Auth](https://firebase.google.com/docs/auth).
 - **Storage**: [Firebase Storage](https://firebase.google.com/docs/storage) for hymn pages/images.
-- **Documentation**: [Sphinx](https://www.sphinx-doc.org/) documentation located in `docs/`.
+- **Documentation**: the domain model in `CONTEXT.md`, architecture decisions in `docs/adr/`, design briefs in `docs/design/`.
 
 ## Project Structure
 
@@ -23,7 +23,7 @@ A Firebase-based platform for managing liturgical resources, including a hymn di
 - `scripts/`: Utility and maintenance scripts.
   - `migrate.js`: Script for migrating hymn data from JSON to Firestore.
   - `check-duplicates.js` / `clean-duplicates.js`: Database maintenance utilities.
-- `docs/`: Sphinx documentation source files.
+- `docs/`: architecture decisions (`adr/`) and design briefs (`design/`).
 - `design/`: UI/UX design assets and specific `DESIGN.md` for the Sunday Service Logistics Hub.
 
 ## Building and Running
@@ -74,5 +74,5 @@ In the `functions/` directory:
   - `tags`: Collection where document IDs are the tag names.
   - `users`: Collection for storing user roles and supplementary data.
 - **Documentation**:
-  - Maintain Sphinx docs for any significant logic changes.
+  - Record hard-to-reverse decisions as a numbered ADR in `docs/adr/`, and keep `CONTEXT.md` current when the domain language changes.
   - Use JSDoc for function headers in JS files.

@@ -1,10 +1,11 @@
 /**
  * @fileoverview The Fall 2026 Master Plan, as data.
  *
- * Transcribed from `docs/Mosaic Fall 2026 Master Plan.xlsx` — 154 dated rows on
- * the Calendar tab, plus the detail the other six tabs carry (times, themes,
- * week numbering, reading lists). The reasoning behind every classification is
- * in `docs/plans/fall-2026-calendar-import.md`; this file is only the result.
+ * Transcribed from the church's Fall 2026 Master Plan spreadsheet — 154 dated
+ * rows on the Calendar tab, plus the detail the other six tabs carry (times,
+ * themes, week numbering, reading lists). The source sheet and the working notes
+ * behind each classification are no longer kept in the repo; this file is the
+ * result, and is now the record.
  *
  * Separate from the importer so the two can be read for different reasons: this
  * one to check the church's plan is right, `import-fall-2026.js` to check the
