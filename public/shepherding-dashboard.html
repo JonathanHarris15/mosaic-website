@@ -44,13 +44,20 @@
       x-data="shepherdingDashboard" x-cloak>
 
     <!-- Header -->
-    <header class="w-full max-w-container mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a :href="window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/home' : 'index.html'" href="index.html" class="m-back">
-            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
-            <span class="font-label-md text-label-md">Home</span>
-        </a>
-        <div id="auth-container" class="flex items-center">
-            <div class="h-10"></div>
+    <header class="m-header m-header--tall">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a :href="window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/home' : 'index.html'" href="index.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Home</span>
+                </a>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title">Shepherd Dashboard</h1>
+                    <span class="m-header__sub">Elder-only tools for member care.</span>
+                </div>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
 
@@ -61,12 +68,6 @@
 
     <!-- Main content -->
     <main x-show="!loading" class="flex-grow max-w-container w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
-
-        <!-- Page Title -->
-        <div>
-            <h1 class="font-headline-lg text-headline-lg text-primary">Shepherd Dashboard</h1>
-            <p class="font-body-md text-body-md text-on-surface-variant mt-xs">Elder-only tools for member care.</p>
-        </div>
 
         <!-- Navigation Buttons -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-md">

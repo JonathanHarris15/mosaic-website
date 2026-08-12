@@ -42,33 +42,38 @@
       data-key-legend="mention,addTag,removeTag,status">
 
     <!-- Header -->
-    <header class="w-full max-w-6xl mx-auto px-4 md:px- margin pt-2 md:pt-md flex items-center justify-between">
-        <a href="shepherding-documents.html" class="m-back">
-            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
-            <span class="font-label-md text-label-md">Documents</span>
-        </a>
-        <div class="flex items-center gap-md">
-            <!-- Save status -->
-            <div class="flex items-center gap-xs">
+    <!-- No __title: the Care List's own title is an editable field at the top of
+         the body, like an Elder Document's. -->
+    <header class="m-header" style="--m-header-max: 72rem">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a href="shepherding-documents.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Documents</span>
+                </a>
+            </div>
+            <div class="m-header__actions">
                 <template x-if="saveStatus === 'saving'">
-                    <span class="flex items-center gap-xs font-label-md text-label-md text-on-surface-variant">
+                    <span class="m-badge m-badge--neutral m-header__chip">
                         <span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
-                        Saving…
+                        <span class="m-btn__label">Saving…</span>
                     </span>
                 </template>
                 <template x-if="saveStatus === 'saved'">
-                    <span class="flex items-center gap-xs font-label-md text-label-md text-on-surface-variant">
+                    <span class="m-badge m-badge--success m-header__chip">
                         <span class="material-symbols-outlined text-[14px]">check_circle</span>
-                        Saved
+                        <span class="m-btn__label">Saved</span>
                     </span>
                 </template>
                 <template x-if="saveStatus === 'unsaved'">
-                    <span class="font-label-md text-label-md text-outline">Unsaved changes</span>
+                    <span class="m-badge m-badge--warning m-header__chip">
+                        <span class="m-chip-dot m-chip-dot--pulse"></span>
+                        <span class="m-btn__label">Unsaved changes</span>
+                    </span>
                 </template>
             </div>
-            <div id="auth-container" class="flex items-center">
-                <div class="h-10"></div>
-            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
 

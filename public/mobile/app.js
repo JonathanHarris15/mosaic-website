@@ -165,7 +165,7 @@
       { icon: "church", label: "Services", route: "calendar" },
       // Route "events", not "calendar" — see data.js. "calendar" is Services.
       { icon: "calendar-days", label: "Calendar", route: "events" },
-      { icon: "users", label: "Member Directory", route: "people" },
+      { icon: "users", label: "Membership Directory", route: "people" },
       { icon: "shield", label: "Shepherd", route: "shepherd", permissionLevels: ["elder", "super_admin"] },
       { icon: "settings-2", label: "Admin", route: "admin", permissionLevels: ["admin", "super_admin"] },
       // A drawer destination now as well as a tile here (destinations.js) —

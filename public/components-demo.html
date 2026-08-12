@@ -50,7 +50,7 @@
       <div class="g-navgroup"><span class="m-label">Forms</span><a href="#m-input">Input</a><a href="#m-select">Select</a><a href="#m-check">Checkbox</a><a href="#m-search">SearchBar</a></div>
       <div class="g-navgroup"><span class="m-label">Display</span><a href="#m-label">SectionLabel</a><a href="#m-serif-head">SerifHead</a><a href="#m-card">Card</a><a href="#m-nav-card">NavCard</a><a href="#m-medallion">Medallion</a><a href="#m-badge">Badge</a><a href="#m-avatar">Avatar</a><a href="#m-scripture">ScriptureBlock</a><a href="#m-divider">Divider</a></div>
       <div class="g-navgroup"><span class="m-label">Feedback</span><a href="#m-spinner">Spinner</a><a href="#m-toast">Toast</a><a href="#m-empty">EmptyState</a></div>
-      <div class="g-navgroup"><span class="m-label">Layout</span><a href="#m-page">PageShell</a><a href="#m-back">BackLink</a><a href="#m-row">Row</a><a href="#m-card-list">CardList</a></div>
+      <div class="g-navgroup"><span class="m-label">Layout</span><a href="#m-page">PageShell</a><a href="#m-header">PageHeader</a><a href="#m-back">BackLink</a><a href="#m-row">Row</a><a href="#m-card-list">CardList</a></div>
         </nav>
 
     <h2 class="g-group">Core</h2>
@@ -65,6 +65,7 @@
         <div class="g-item"><button class="m-btn m-btn--primary">Save the service</button></div>
         <div class="g-item"><button class="m-btn m-btn--secondary m-btn--sm">Cancel</button></div>
         <div class="g-item"><button class="m-btn m-btn--ghost">Show past dates</button></div>
+        <div class="g-item"><button class="m-btn m-btn--quiet m-btn--sm"><span class="material-symbols-outlined">print</span><span class="m-btn__label">Print PDF</span></button></div>
         </div>
       </section>
       <section class="g-card" id="m-icon-btn">
@@ -270,7 +271,20 @@
         <p class="g-summary">The body of a desktop page: warm background, navy ink, a column capped at --container-max.</p>
         
         <div class="g-demo">
-        <div class="g-item"><body class="m-page"><header class="m-page__bar">…</header><main class="m-page__body">…</main></body></div>
+        <div class="g-item"><body class="m-page"><header class="m-header">…</header><main class="m-page__body">…</main></body></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-header">
+        <header>
+          <h3>PageHeader</h3>
+          <code>.m-header</code>
+        </header>
+        <p class="g-summary">The strip across the top of every desktop page: the way back, the page's name, the page's actions, and the account. One component replacing the eight shapes thirty-four pages had arrived at.</p>
+        <div class="g-variants"><b>type</b> standing · tool</div><div class="g-variants"><b>title</b> display · serif</div>
+        <div class="g-demo">
+        <div class="g-item"><header class="m-header"><div class="m-header__inner"><div class="m-header__lead"><a class="m-back" href="index.html"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></a><div class="m-header__titles"><h1 class="m-header__title">Calendar</h1></div></div><div class="m-header__actions"></div><div class="m-header__rule"></div><div class="m-header__auth" id="auth-container"></div></div></header></div>
+        <div class="g-item"><header class="m-header m-header--tool m-header--sticky"><div class="m-header__inner"><div class="m-header__lead"><div class="m-header__titles"><h1 class="m-header__title m-header__title--serif">Service Guide Editor: Sunday, November 9, 2025</h1></div></div></div></header></div>
+        <div class="g-item"><span class="m-badge m-badge--warning m-header__chip"><span class="m-chip-dot m-chip-dot--pulse"></span><span class="m-btn__label">Unsaved</span></span></div>
         </div>
       </section>
       <section class="g-card" id="m-back">
@@ -278,10 +292,10 @@
           <h3>BackLink</h3>
           <code>.m-back</code>
         </header>
-        <p class="g-summary">The way out of a page, top left. Eight pages wrote the same arrow-and-label by hand.</p>
+        <p class="g-summary">The way out of a page, top left. Eight pages wrote the same chevron-and-label by hand.</p>
         
         <div class="g-demo">
-        <div class="g-item"><a class="m-back" href="index.html"><span class="material-symbols-outlined">arrow_back</span><span class="m-label">Home</span></a></div>
+        <div class="g-item"><a class="m-back" href="index.html"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></a></div>
         </div>
       </section>
       <section class="g-card" id="m-row">

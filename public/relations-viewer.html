@@ -42,7 +42,10 @@
         .rv-primary:hover { box-shadow: 0 8px 24px rgba(14,28,54,.14); }
         .rv-primary:active { transform: scale(0.98); }
         .rv-result:hover { background: var(--surface-container); }
-        #app { height: 100vh; }
+        /* The graph took the whole viewport when it was the whole page. It now
+           shares it with the bar, so it takes what the bar leaves. */
+        body { display: flex; flex-direction: column; min-height: 100vh; margin: 0; }
+        #app { flex: 1 1 auto; min-height: 0; }
     </style>
 
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -51,6 +54,24 @@
     <script src="auth.js"></script>
 </head>
 <body>
+    <!-- The one page in the app with nothing across the top at all. Nobody had
+         complained, because nobody could leave it (MS-187). The graph fills the
+         viewport, so the bar is a Tool Bar and #app takes the rest. -->
+    <header class="m-header m-header--tool">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a href="shepherding-dashboard.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Shepherd Dashboard</span>
+                </a>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title">Relations Viewer</h1>
+                </div>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
+        </div>
+    </header>
     <div id="app"></div>
     <script src="relations-graph-core.js"></script>
     <script src="relations-viewer.js"></script>

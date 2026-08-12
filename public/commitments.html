@@ -49,16 +49,28 @@
 <body class="bg-background text-on-surface font-body-md antialiased"
       x-data="commitmentsPage()" x-cloak>
 
+<!-- This page had no <header> at all — the way out and the title were loose
+     inside <main>. Both are chrome, so both are the bar's now (MS-187). -->
+<header class="m-header" style="--m-header-max: 760px">
+    <div class="m-header__inner">
+        <div class="m-header__lead">
+            <a href="calendar.html" class="m-back">
+                <span class="material-symbols-outlined">chevron_left</span>
+                <span class="m-back__label">Calendar</span>
+            </a>
+            <div class="m-header__titles">
+                <h1 class="m-header__title">Your Commitments</h1>
+            </div>
+        </div>
+        <div class="m-header__rule"></div>
+        <div class="m-header__auth" id="auth-container"></div>
+    </div>
+</header>
+
 <main class="max-w-[760px] mx-auto px-4 sm:px-md pb-16">
 
-    <a href="calendar.html"
-       class="inline-flex items-center gap-1 mt-md text-on-surface-variant text-[11px] uppercase tracking-[.1em] hover:text-secondary">
-        <span class="material-symbols-outlined text-[18px]">arrow_back</span> Calendar
-    </a>
-
     <!-- ── The head ──────────────────────────────────────────────────────── -->
-    <div class="mt-3 pb-[18px] border-b border-outline-variant">
-        <h1 class="font-headline-lg text-[26px] sm:text-[30px] tracking-[.02em] text-primary m-0">Your Commitments</h1>
+    <div class="mt-md pb-[18px] border-b border-outline-variant">
         <!-- The sentence counts what still wants YOU. It is the whole reason
              the unanswered are hoisted below rather than left in date order. -->
         <p x-show="headline"

@@ -42,34 +42,12 @@
         .cal-row:focus-within .cal-row-actions { opacity: 1; }
         html.shell-mobile .cal-row-actions { opacity: 1; }
 
-        /* The shell draws its own header with the page title in it, so the page's
-           own <h1> says "Calendar" a second time directly underneath. */
-        html.shell-mobile .cal-page-title { display: none; }
-
-        /* With the title hidden, its block's bottom rule floats alone under the
-           shell header — a divider dividing nothing from nothing. */
-        html.shell-mobile .cal-title-block { border-bottom: none; padding-bottom: 0; }
-
-        /* And with the title gone, these actions ARE the row. Right-aligned
-           against nothing they sit off-centre and short of every card below
-           them, so on a phone they share the full width and their edges line up
-           with the month panel and the day list.
-
-           ⚠ THEY WRAP, AND THE BASIS IS HALF A ROW. There were two of these
-           once and they were told to share the width equally — which a flex
-           item cannot do below the width of its own label, so the third one
-           (New event) simply hung off the right edge of the phone. Half-width
-           basis means two sit side by side, a third drops to its own full-width
-           line, and a member who only sees Away gets one button the width of
-           the screen. No count is written down anywhere, so the next button
-           added here lands somewhere sensible on its own. */
-        html.shell-mobile .cal-title-heading { display: none; }
-        html.shell-mobile .cal-title-actions { flex: 1 1 auto; flex-wrap: wrap; }
-        html.shell-mobile .cal-title-actions > a {
-            flex: 1 1 calc(50% - 0.5rem);
-            min-width: 0;
-            justify-content: center;
-        }
+        /* The title block and its three wrapping phone buttons are gone (MS-187).
+           The title is the header's now, and the header's actions are adopted
+           into the shell bar as glyphs by mobile-shell-header.js — so there is
+           no second copy of the title to hide, no rule dividing nothing from
+           nothing, and no row of half-width buttons to keep from falling off
+           the right edge. All three problems were the old layout's. */
 
         /* An event name TRUNCATES on a desktop row, where there is room for it to
            be unusual. On a phone the date block, the Sunday badge and the chevron
@@ -160,12 +138,55 @@
       x-data="calendarPage()" x-cloak>
 
     <!-- Header -->
-    <header class="w-full max-w-container mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a href="index.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary cal-motion">
-            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
-            <span class="text-xs font-label-md uppercase tracking-wider">Dashboard</span>
-        </a>
-        <div id="auth-container" class="flex items-center"><div class="h-10"></div></div>
+    <header class="m-header">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a href="index.html" class="m-back cal-motion">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Home</span>
+                </a>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title cal-page-title">Calendar</h1>
+                </div>
+            </div>
+            <div class="m-header__actions">
+                <!-- Away (MS-188). Anybody with a Person to their name, not just
+                     an editor: it is the one action on this page that is about
+                     the person looking rather than about the church's week. -->
+                <a x-show="personId" href="away.html"
+                   class="m-btn m-btn--secondary m-btn--sm cal-motion cal-press cal-focus">
+                    <span class="material-symbols-outlined">luggage</span>
+                    <span class="m-btn__label">Away</span>
+                </a>
+                <!-- Everything that comes round again, and the rota each one is
+                     carrying. This used to be a button marked "Sunday Service",
+                     which was the only door to the only series anybody had —
+                     and a button per Event does not survive the second one.
+
+                     Anybody signed in, not just an editor. "What runs every week,
+                     and until when?" is an ordinary question, and the Calendar
+                     answers it a month at a time — the wrong shape for a thing
+                     defined by its pattern. -->
+                <a x-show="rank" href="recurring-events.html"
+                   class="m-btn m-btn--secondary m-btn--sm cal-motion cal-press cal-focus">
+                    <span class="material-symbols-outlined">event_repeat</span>
+                    <span class="m-btn__label">Recurring events</span>
+                </a>
+                <!-- Auto-assign is NOT here. It drafts a run of dates for ONE
+                     series, and from the Calendar it could not know which — so
+                     it opened on whichever came first alphabetically and made
+                     the editor choose again from a dropdown. It lives on the
+                     Recurring Events page, where a series is already the thing
+                     you are looking at. -->
+                <a x-show="canCreate" href="calendar-event.html?new=1"
+                   class="m-btn m-btn--primary m-btn--sm cal-motion cal-press cal-focus">
+                    <span class="material-symbols-outlined">add</span>
+                    <span class="m-btn__label">New event</span>
+                </a>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
+        </div>
     </header>
 
     <div x-show="loading" class="m-loading">
@@ -173,53 +194,6 @@
     </div>
 
     <main x-show="!loading" class="flex-grow w-full max-w-container mx-auto px-4 md:px-margin pb-lg pt-md">
-
-        <!-- Title block -->
-        <div class="cal-title-block pb-md border-b border-outline-variant flex items-start justify-between gap-md">
-            <div class="cal-title-heading">
-                <h1 class="cal-page-title font-display text-headline-lg tracking-[.02em] text-primary">Calendar</h1>
-            </div>
-            <div class="cal-title-actions shrink-0 flex items-center gap-sm">
-                <!-- Everything that comes round again, and the rota each one is
-                     carrying. This used to be a button marked "Sunday Service",
-                     which was the only door to the only series anybody had —
-                     and a button per Event does not survive the second one.
-                     The Sunday Service is the first row in there.
-
-                     Still not the liturgy: that is built one Sunday at a time in
-                     the order of service, which is what keeps the printed
-                     booklet safe. -->
-                <!-- Away (MS-188). Anybody with a Person to their name, not just
-                     an editor: it is the one action on this page that is about
-                     the person looking rather than about the church's week. -->
-                <a x-show="personId" href="away.html"
-                   class="flex items-center gap-1 border border-outline-variant text-on-surface-variant px-md py-2 rounded-lg
-                          font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
-                    <span class="material-symbols-outlined text-[18px]">luggage</span> Away
-                </a>
-                <!-- Anybody signed in, not just an editor. "What runs every week,
-                     and until when?" is an ordinary question, and the Calendar
-                     answers it a month at a time — the wrong shape for a thing
-                     defined by its pattern. The page itself shows a member the
-                     list and none of the controls. -->
-                <a x-show="rank" href="recurring-events.html"
-                   class="flex items-center gap-1 border border-secondary text-secondary px-md py-2 rounded-lg
-                          font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-surface-container">
-                    <span class="material-symbols-outlined text-[18px]">event_repeat</span> Recurring events
-                </a>
-                <!-- Auto-assign is NOT here any more. It drafts a run of dates
-                     for ONE series, and from the Calendar it could not know
-                     which — so it opened on whichever came first alphabetically
-                     and made the editor choose again from a dropdown. It lives
-                     on the Recurring Events page now, where a series is already
-                     the thing you are looking at. -->
-                <a x-show="canCreate" href="calendar-event.html?new=1"
-                   class="flex items-center gap-1 bg-primary text-on-primary px-md py-2 rounded-lg shadow-xs
-                          font-label-md text-xs uppercase tracking-wider cal-motion cal-press cal-focus hover:bg-primary-container">
-                    <span class="material-symbols-outlined text-[18px]">add</span> New event
-                </a>
-            </div>
-        </div>
 
         <!-- Signed out. Says so, because the alternative is a calendar that
              looks like the church's and is missing everything you are part of. -->

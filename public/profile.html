@@ -56,9 +56,8 @@
          the page has no --token CSS vars so colours are the theme hexes.
          ============================================================ -->
     <style>
-        /* In the shell the top bar is just a back button; the "User Profile"
-           hero below is the title, so the desktop wordmark is hidden. */
-        html.shell-mobile #header-logo { display: none; }
+        /* The seal has left the header entirely (MS-187), so there is no longer a
+           wordmark here for the shell to hide. */
 
         html.shell-mobile #accent-lines { display: none; }
 
@@ -86,18 +85,20 @@
     <!-- Architectural accent lines -->
     <div id="accent-lines" class="absolute right-0 top-0 h-[600px] w-1/2 bg-gradient-to-l from-surface-container-high/40 to-transparent opacity-30 pointer-events-none"></div>
     
-    <header class="w-full max-w-full border-b border-surface-variant/30 px-6 py-4 flex justify-between items-center relative z-50 bg-surface sticky top-0">
-        <div class="flex-1">
-            <a id="shell-home-link" href="index.html" class="font-label-md text-label-md text-secondary hover:text-primary transition-all flex items-center gap-2 group">
-                <span class="material-symbols-outlined text-sm group-hover:-translate-x-1 transition-transform">arrow_back</span>
-                <span class="hidden md:inline">Back to Dashboard</span>
-                <span class="md:hidden">Back</span>
-            </a>
+    <header class="m-header m-header--sticky" style="--m-header-max: 72rem">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a id="shell-home-link" href="index.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Home</span>
+                </a>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title">User Profile</h1>
+                </div>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
         </div>
-        <div class="flex-1 flex justify-center">
-            <img id="header-logo" alt="Mosaic Church Logo" class="h-10 w-10 object-contain" src="assets/mosaic-logo.png" />
-        </div>
-        <div class="flex-1 flex justify-end" id="auth-container"></div>
     </header>
 
     <main class="flex-grow max-w-6xl w-full mx-auto px-gutter py-lg flex flex-col gap-lg relative z-10">
@@ -107,7 +108,6 @@
                 <span class="px-2 py-0.5 bg-primary/5 text-primary text-[10px] font-label-md uppercase tracking-[0.2em] rounded-sm">Account Identity</span>
                 <div class="h-px flex-grow bg-surface-variant/30"></div>
             </div>
-            <h1 class="font-display-lg text-display-lg text-primary tracking-tight">User Profile</h1>
             <p class="text-on-surface-variant font-body-md max-w-2xl">Manage your account settings and access administrative tools for the Mosaic Liturgy Portal.</p>
         </section>
 

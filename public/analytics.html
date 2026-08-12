@@ -44,16 +44,22 @@
 
 <body x-data="analyticsPage()" class="bg-background text-on-surface font-body antialiased h-screen overflow-hidden flex flex-col">
     <!-- Header -->
-    <header class="flex-none w-full bg-background/80 backdrop-blur-md border-b border-outline-variant z-[100]">
-        <div class="px-margin h-16 flex justify-between items-center">
-            <div class="flex items-center gap-6">
-                <a href="index.html" class="flex items-center gap-3 text-primary hover:opacity-70 transition-opacity group">
-                    <span class="material-symbols-outlined transition-transform group-hover:-translate-x-1">arrow_back</span>
+    <!-- The old h1 asked for `font-headline`, which is not a family in the
+         config — it had been falling back to the body face since it was
+         written. Two treatments now, and this is the one for a place. -->
+    <header class="m-header" style="--m-header-max: none">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a href="index.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Home</span>
                 </a>
-                <div class="h-6 w-px bg-outline-variant"></div>
-                <h1 class="font-headline text-xl md:text-2xl text-primary font-bold tracking-tight">Service Analytics</h1>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title">Service Analytics</h1>
+                </div>
             </div>
-            <div id="auth-container"></div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
 
@@ -102,7 +108,7 @@
                            class="inline-flex items-center gap-1 mt-6 border border-secondary text-secondary px-md py-2
                                   rounded-lg font-label-md text-xs uppercase tracking-wider hover:bg-surface-container
                                   transition-colors duration-200">
-                            <span class="material-symbols-outlined text-[18px]">arrow_back</span> Back to the dashboard
+                            <span class="material-symbols-outlined text-[18px]">chevron_left</span> Back to the dashboard
                         </a>
                     </div>
                 </div>

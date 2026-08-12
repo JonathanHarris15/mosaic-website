@@ -93,13 +93,20 @@
       x-data="shepherdingTags" x-cloak>
 
     <!-- Header -->
-    <header class="w-full max-w-container mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a :href="window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/shepherd' : 'shepherding-dashboard.html'" href="shepherding-dashboard.html" class="m-back">
-            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
-            <span class="font-label-md text-label-md">Shepherd Dashboard</span>
-        </a>
-        <div id="auth-container" class="flex items-center">
-            <div class="h-10"></div>
+    <header class="m-header"
+            :style="activeTab === 'relationships' ? '--m-header-max: 1080px' : '--m-header-max: 48rem'">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a :href="window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/shepherd' : 'shepherding-dashboard.html'" href="shepherding-dashboard.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Shepherd Dashboard</span>
+                </a>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title">Manage Tags and Relationships</h1>
+                </div>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
 
@@ -115,14 +122,12 @@
           :class="activeTab === 'relationships' ? 'max-w-[1080px]' : 'max-w-3xl'"
           class="flex-grow w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
 
-        <!-- Page Title -->
-        <div>
-            <h1 class="font-headline-lg text-headline-lg text-primary">Manage Tags and Relationships</h1>
-            <p class="font-body-md text-body-md text-on-surface-variant mt-xs"
-               x-text="activeTab === 'tags'
-                   ? 'Create, rename, merge, and delete shepherding tags. Hover a tag for its actions.'
-                   : 'Define Relationship Types and manage who holds them. Types and named groups can only be created here.'"></p>
-        </div>
+        <!-- The page's standfirst. Two sentences and instructional, so it is
+             content rather than the header's one-line __sub. -->
+        <p class="font-body-md text-body-md text-on-surface-variant"
+           x-text="activeTab === 'tags'
+               ? 'Create, rename, merge, and delete shepherding tags. Hover a tag for its actions.'
+               : 'Define Relationship Types and manage who holds them. Types and named groups can only be created here.'"></p>
 
         <!-- Tabs — a segmented control, not underlines: these are two peer surfaces,
              not a hierarchy. -->

@@ -231,6 +231,12 @@
 .m-btn:disabled, .m-btn[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
 .m-btn:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
 
+/* An optional slot for the button's word. A button that only ever shows its
+   word can still write the text straight in — this exists so the surfaces that
+   COLLAPSE a button to its glyph (the header's tool and compact modes) have
+   something to hide. A bare text node cannot be addressed by a selector. */
+.m-btn__label { display: inline; }
+
 .m-btn--sm { height: 38px; padding: 0 14px; font-size: 13.5px; }
 .m-btn--lg { height: 52px; padding: 0 20px; font-size: 16px; }
 
@@ -511,21 +517,159 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   font-family: var(--font-sans); font-size: var(--body-md-size); line-height: var(--body-md-line);
   -webkit-font-smoothing: antialiased;
 }
-.m-page__bar, .m-page__body {
+.m-page__body {
   width: 100%; max-width: var(--container-max); margin: 0 auto;
   padding-left: var(--space-md); padding-right: var(--space-md);
+  flex-grow: 1; display: flex; flex-direction: column; gap: var(--space-md);
+  padding-top: var(--space-md); padding-bottom: var(--space-lg);
 }
-.m-page__bar { display: flex; align-items: center; justify-content: space-between; padding-top: var(--space-base); }
-.m-page__body { flex-grow: 1; display: flex; flex-direction: column; gap: var(--space-md); padding-top: var(--space-md); padding-bottom: var(--space-lg); }
+
+/* PageHeader — The strip across the top of every desktop page: the way back, the page's name, the page's actions, and the account. */
+.m-header {
+  --m-header-max: var(--container-max);
+  --m-header-h: 64px;
+  --m-header-pad: var(--space-md);
+  --m-header-title: 28px;
+  --m-header-title-serif: 30px;
+  --m-header-title-track: .02em;
+  --m-header-title-transform: none;
+  position: relative; z-index: 40; flex: 0 0 auto; width: 100%;
+  background: var(--surface-container-lowest);
+  border-bottom: 1px solid var(--outline-variant);
+}
+.m-header__inner {
+  display: flex; align-items: center; gap: var(--space-md);
+  width: 100%; max-width: var(--m-header-max); margin: 0 auto;
+  min-height: var(--m-header-h); padding: 0 var(--m-header-pad);
+}
+.m-header__lead { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; flex: 1 1 auto; }
+.m-header__titles { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.m-header__title {
+  margin: 0; min-width: 0;
+  font-family: var(--font-display); font-size: var(--m-header-title); font-weight: 600;
+  line-height: 1.15; letter-spacing: var(--m-header-title-track);
+  text-transform: var(--m-header-title-transform); color: var(--primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* The title names a record the database holds — a Person, a dated Service —
+   rather than the app's own name for a place. */
+.m-header__title--serif {
+  font-family: var(--font-serif); font-size: var(--m-header-title-serif);
+  letter-spacing: .01em; text-transform: none; color: var(--on-surface);
+}
+.m-header__sub {
+  font-family: var(--font-sans); font-size: 13.5px; line-height: 1.35;
+  color: var(--on-surface-variant);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.m-header--tall { --m-header-h: 84px; }
+
+/* The trail, above the title, where a page can be reached from more than one
+   place and which one you came from is worth keeping. It REPLACES the back
+   link rather than joining it — two ways out of one page is one too many. */
+.m-header__crumbs {
+  display: flex; align-items: center; gap: 4px; min-width: 0;
+  font-family: var(--font-sans); font-size: var(--label-sm-size); font-weight: var(--label-sm-weight);
+  letter-spacing: var(--label-sm-spacing); text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+.m-header__crumbs a { color: inherit; text-decoration: none; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; transition: color var(--duration) var(--ease-standard); }
+.m-header__crumbs a:hover { color: var(--primary); }
+.m-header__crumbs .material-symbols-outlined { font-size: 16px; opacity: .5; flex: 0 0 auto; }
+
+.m-header__actions { display: flex; align-items: center; gap: var(--space-base); flex: 0 0 auto; }
+.m-header__rule { align-self: stretch; flex: 0 0 auto; width: 1px; margin: 14px 0; background: var(--outline-variant); }
+.m-header__auth { display: flex; align-items: center; gap: var(--space-xs); flex: 0 0 auto; min-height: 40px; }
+.m-header__logout { color: var(--error); }
+.m-header__logout:hover:not(:disabled) { background: var(--error-container); color: var(--on-error-container); }
+
+/* The page body scrolls under the bar. Translucent parchment and a blur, still
+   one hairline, still no shadow. */
+.m-header--sticky {
+  position: sticky; top: 0; z-index: 50;
+  background: color-mix(in srgb, var(--surface-container-lowest) 88%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+
+/* Full-bleed editors. One tonal step up from white says "working surface"
+   without leaving the parchment — this is what replaced the navy bar, which
+   was the only filled header in the app and needed a bespoke white button. */
+.m-header--tool {
+  --m-header-max: none; --m-header-h: 56px;
+  --m-header-title: 24px; --m-header-title-serif: 24px;
+  position: sticky; top: 0; z-index: 50;
+  background: var(--surface-container);
+}
+/* A tool bar's chrome is already learned and its title is the longest in the
+   app, so only the primary action keeps its word. The name gets the slack. */
+.m-header--tool .m-header__auth .m-btn__label,
+.m-header--tool .m-header__actions .m-btn:not(.m-btn--primary) .m-btn__label { display: none; }
+.m-header--tool .m-header__auth .m-btn,
+.m-header--tool .m-header__actions .m-btn:not(.m-btn--primary) { width: 38px; padding: 0; }
+
+/* A status chip in the bar: unsaved, over the page limit, refused. */
+.m-header__chip { align-self: center; flex: 0 0 auto; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.m-chip-dot { width: 6px; height: 6px; border-radius: var(--radius-full); background: currentColor; flex: 0 0 auto; }
+.m-chip-dot--pulse { animation: m-chip-pulse 2s var(--ease-standard) infinite; }
+@keyframes m-chip-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .m-chip-dot--pulse { animation: none; } }
+
+/* A header is chrome. It never prints. */
+@media print { .m-header { display: none; } }
+
+/* ---- Phone metrics: the phone TopBar's 46px row, from the same markup the
+   desktop renders. The class is how the gallery shows it at desktop width;
+   the media query is how production reaches it. ---- */
+.m-header--compact {
+  --m-header-h: 46px; --m-header-pad: var(--space-xs);
+  --m-header-title: 17px; --m-header-title-serif: 20px;
+  --m-header-title-track: .06em; --m-header-title-transform: uppercase;
+}
+.m-header--compact .m-header__inner { gap: var(--space-xs); }
+.m-header--compact .m-header__sub,
+.m-header--compact .m-header__crumbs,
+.m-header--compact .m-back__label,
+.m-header--compact .m-btn__label,
+.m-header--compact .m-header__rule { display: none; }
+.m-header--compact .m-back { min-width: 44px; justify-content: center; padding-right: 0; }
+.m-header--compact .m-header__actions { gap: 2px; }
+.m-header--compact .m-header__title--serif { letter-spacing: .01em; }
+.m-header--compact .m-header__actions .m-btn {
+  width: 44px; height: 44px; padding: 0;
+  background: transparent; border-color: transparent; color: var(--primary); box-shadow: none;
+}
+
+@media (max-width: 640px) {
+  .m-header {
+    --m-header-h: 46px; --m-header-pad: var(--space-xs);
+    --m-header-title: 17px; --m-header-title-serif: 20px;
+    --m-header-title-track: .06em; --m-header-title-transform: uppercase;
+  }
+  .m-header__inner { gap: var(--space-xs); }
+  .m-header__sub, .m-header__crumbs, .m-back__label, .m-btn__label, .m-header__rule { display: none; }
+  .m-back { min-width: 44px; justify-content: center; padding-right: 0; }
+  .m-header__actions { gap: 2px; }
+  .m-header__title--serif { letter-spacing: .01em; }
+  .m-header__actions .m-btn {
+    width: 44px; height: 44px; padding: 0;
+    background: transparent; border-color: transparent; color: var(--primary); box-shadow: none;
+  }
+}
 
 /* BackLink — The way out of a page, top left. */
 .m-back {
   display: inline-flex; align-items: center; gap: 4px; text-decoration: none;
+  flex: 0 0 auto; white-space: nowrap;
+  min-height: 44px; padding-right: var(--space-xs);
   color: var(--on-surface-variant);
   transition: color var(--duration) var(--ease-standard);
 }
 .m-back:hover { color: var(--primary); }
 .m-back .material-symbols-outlined { font-size: 20px; }
+.m-back__label {
+  font-family: var(--font-sans); font-size: var(--label-sm-size); font-weight: var(--label-sm-weight);
+  letter-spacing: var(--label-sm-spacing); text-transform: uppercase;
+}
 
 /* Row — One line of a list: an optional leading avatar or medallion, a title, an optional second line, something trailing. */
 .m-row {

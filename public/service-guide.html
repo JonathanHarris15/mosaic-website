@@ -133,30 +133,47 @@
 <body class="bg-preview-canvas font-sans antialiased text-black" x-data="guideEditor()" x-init="init()">
 
     <!-- Header / Top Bar -->
-    <header class="no-print h-16 bg-primary text-white flex items-center justify-between px-6 sticky top-0 z-50 shadow-md">
-        <div class="flex items-center gap-4">
-            <a href="service-calendar.html" class="hover:opacity-80">
-                <span class="material-symbols-outlined">arrow_back</span>
-            </a>
-            <h1 class="text-lg font-semibold" x-text="(permissionLevel === 'viewer' ? 'Service Guide: ' : 'Service Guide Editor: ') + formatDate(date)"></h1>
-        </div>
-        <div class="flex items-center gap-3">
-            <div x-show="typeof isOverflowing !== 'undefined' && isOverflowing" x-cloak class="flex items-center gap-2 px-3 py-1 bg-red-400/10 border border-red-400/30 rounded-full mr-1">
-                <span class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
-                <span class="text-[9px] font-bold uppercase tracking-widest text-red-400" x-text="visibleElements.length + ' Pages (Limit 16)'"></span>
+    <!-- A Tool Bar, not the navy bar it replaced (MS-187). "You are in a document
+         tool" is worth signalling, and it is now signalled the way the rest of
+         the system signals depth — one tonal step up from white, full bleed —
+         rather than by inverting to the only filled surface in the app. The
+         white-on-navy Print button went with it, and the no-print class: the
+         component never prints. The title names a Service, so it is set in EB
+         Garamond rather than Cinzel. -->
+    <header class="m-header m-header--tool">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a href="service-calendar.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Services</span>
+                </a>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title m-header__title--serif"
+                        x-text="(permissionLevel === 'viewer' ? 'Service Guide: ' : 'Service Guide Editor: ') + formatDate(date)"></h1>
+                </div>
             </div>
-            <div x-show="typeof hasChanges !== 'undefined' && hasChanges" x-cloak class="flex items-center gap-2 px-3 py-1 bg-yellow-400/10 border border-yellow-400/30 rounded-full mr-1">
-                <span class="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.8)]"></span>
-                <span class="text-[9px] font-bold uppercase tracking-widest text-yellow-400">Unsaved</span>
+            <div class="m-header__actions">
+                <span x-show="typeof isOverflowing !== 'undefined' && isOverflowing" x-cloak
+                      class="m-badge m-badge--error m-header__chip">
+                    <span class="m-chip-dot m-chip-dot--pulse"></span>
+                    <span class="m-btn__label" x-text="visibleElements.length + ' Pages (Limit 16)'"></span>
+                </span>
+                <span x-show="typeof hasChanges !== 'undefined' && hasChanges" x-cloak
+                      class="m-badge m-badge--warning m-header__chip">
+                    <span class="m-chip-dot m-chip-dot--pulse"></span>
+                    <span class="m-btn__label">Unsaved</span>
+                </span>
+                <button x-show="permissionLevel !== 'viewer'" @click="save()" class="m-btn m-btn--primary m-btn--sm">
+                    <span class="material-symbols-outlined">save</span>
+                    <span class="m-btn__label">Save</span>
+                </button>
+                <button @click="printGuide()" class="m-btn m-btn--secondary m-btn--sm">
+                    <span class="material-symbols-outlined">print</span>
+                    <span class="m-btn__label">Print PDF</span>
+                </button>
             </div>
-            <button x-show="permissionLevel !== 'viewer'" @click="save()" class="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-2 transition-colors">
-                <span class="material-symbols-outlined text-[20px]">save</span>
-                <span>Save</span>
-            </button>
-            <button @click="printGuide()" class="px-4 py-2 bg-white text-primary font-semibold rounded-lg flex items-center gap-2 hover:bg-surface transition-colors">
-                <span class="material-symbols-outlined text-[20px]">print</span>
-                <span>Print PDF</span>
-            </button>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
 

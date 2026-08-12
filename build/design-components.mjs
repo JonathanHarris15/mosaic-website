@@ -49,11 +49,13 @@ export const COMPONENTS = [
       "Shadow only on primary, and only --shadow-xs. Everything else is flat — depth here comes from tonal layers and warm hairlines.",
       "Disabled drops to 40% and takes not-allowed; it is never hidden, because a control that vanishes reads as a bug.",
       "46px tall, not 40. The phone shipped 46 and it is above the 44px touch floor; one height that works on both beats two that each work on one.",
+      "Wrap the word in `.m-btn__label` when the button sits somewhere that collapses to icons — a PageHeader's tool or compact mode. Elsewhere the text can go straight in.",
     ],
     examples: [
       '<button class="m-btn m-btn--primary">Save the service</button>',
       '<button class="m-btn m-btn--secondary m-btn--sm">Cancel</button>',
       '<button class="m-btn m-btn--ghost">Show past dates</button>',
+      '<button class="m-btn m-btn--quiet m-btn--sm"><span class="material-symbols-outlined">print</span><span class="m-btn__label">Print PDF</span></button>',
     ],
     css: `
 .m-btn {
@@ -68,6 +70,12 @@ export const COMPONENTS = [
 }
 .m-btn:disabled, .m-btn[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
 .m-btn:focus-visible { outline: 2px solid var(--tertiary); outline-offset: 2px; }
+
+/* An optional slot for the button's word. A button that only ever shows its
+   word can still write the text straight in — this exists so the surfaces that
+   COLLAPSE a button to its glyph (the header's tool and compact modes) have
+   something to hide. A bare text node cannot be addressed by a selector. */
+.m-btn__label { display: inline; }
 
 .m-btn--sm { height: 38px; padding: 0 14px; font-size: 13.5px; }
 .m-btn--lg { height: 52px; padding: 0 20px; font-size: 16px; }
@@ -549,8 +557,11 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     group: "Layout",
     summary: "The body of a desktop page: warm background, navy ink, a column capped at --container-max.",
     variants: {},
-    notes: ["The width is the token, not Tailwind's max-w-7xl. Ten pages reached for the framework default before this."],
-    examples: ['<body class="m-page"><header class="m-page__bar">…</header><main class="m-page__body">…</main></body>'],
+    notes: [
+      "The width is the token, not Tailwind's max-w-7xl. Ten pages reached for the framework default before this.",
+      "The bar is PageHeader's job now. `.m-page__bar` was removed in MS-187: its declarations sat INSIDE the capped column, so a bar built on it could never run its background or its hairline to the window edge — which is most of why the eight hand-rolled headers read as eight products. `.m-header` is a sibling of `.m-page__body`, not a child of the column.",
+    ],
+    examples: ['<body class="m-page"><header class="m-header">…</header><main class="m-page__body">…</main></body>'],
     css: `
 .m-page {
   min-height: 100vh; display: flex; flex-direction: column;
@@ -558,12 +569,167 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   font-family: var(--font-sans); font-size: var(--body-md-size); line-height: var(--body-md-line);
   -webkit-font-smoothing: antialiased;
 }
-.m-page__bar, .m-page__body {
+.m-page__body {
   width: 100%; max-width: var(--container-max); margin: 0 auto;
   padding-left: var(--space-md); padding-right: var(--space-md);
+  flex-grow: 1; display: flex; flex-direction: column; gap: var(--space-md);
+  padding-top: var(--space-md); padding-bottom: var(--space-lg);
 }
-.m-page__bar { display: flex; align-items: center; justify-content: space-between; padding-top: var(--space-base); }
-.m-page__body { flex-grow: 1; display: flex; flex-direction: column; gap: var(--space-md); padding-top: var(--space-md); padding-bottom: var(--space-lg); }
+`,
+  },
+
+  {
+    name: "PageHeader",
+    cls: "m-header",
+    group: "Layout",
+    summary:
+      "The strip across the top of every desktop page: the way back, the page's name, the page's actions, and the account. One component replacing the eight shapes thirty-four pages had arrived at.",
+    variants: { type: ["standing", "tool"], title: ["display", "serif"] },
+    notes: [
+      "WHICH TYPE, in four questions. 1) Does the page fill the viewport and scroll inside its own panes? Yes → --tool. No → the Standing Bar. 2) Is the body one long scroll passing under the top of the window? Yes → --sticky. 3) How wide is the page's column? Set --m-header-max (default --container-max; 1600px for the wide grids; none for full-bleed). 4) Is the title a place in the app or a record in the database? A place → Cinzel. A record → __title--serif.",
+      "The bar spans the WINDOW; only its contents align to the page's column. That is the whole reason the top of the screen can look identical on a 760px reading page and a 1600px table, and it is what .m-page__bar could not do.",
+      "A Person's name is not chrome. Cinzel is the app's own word for a place — Calendar, Roles Manager. A record the database holds — a Person, a dated Service Guide — is set in EB Garamond, because setting somebody's name in tracked caps makes a member of the church look like a menu item.",
+      "The account slot reserves 40px unconditionally. auth.js injects into #auth-container after Firebase resolves, and a bar that changes height when it lands is the layout shift this replaces.",
+      "Actions live here, not stacked under the title in main. Up to three. A fourth would go behind a more_vert menu — that rule is written down but deliberately NOT built, because no page has four today and speculative chrome rots (MS-187).",
+      "The header never prints. That is in the component, so no page needs its own no-print.",
+      "MOTION EXCEPTION: --pulse is an infinite animation, which the system's motion rule otherwise forbids. It is kept on purpose for the two chips that mean something is broken — 'Unsaved', and a booklet over its page limit — because the pulse is what makes anyone notice. Ruled on in MS-187. It yields to prefers-reduced-motion.",
+    ],
+    examples: [
+      '<header class="m-header"><div class="m-header__inner"><div class="m-header__lead"><a class="m-back" href="index.html"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></a><div class="m-header__titles"><h1 class="m-header__title">Calendar</h1></div></div><div class="m-header__actions"></div><div class="m-header__rule"></div><div class="m-header__auth" id="auth-container"></div></div></header>',
+      '<header class="m-header m-header--tool m-header--sticky"><div class="m-header__inner"><div class="m-header__lead"><div class="m-header__titles"><h1 class="m-header__title m-header__title--serif">Service Guide Editor: Sunday, November 9, 2025</h1></div></div></div></header>',
+      '<span class="m-badge m-badge--warning m-header__chip"><span class="m-chip-dot m-chip-dot--pulse"></span><span class="m-btn__label">Unsaved</span></span>',
+    ],
+    css: `
+.m-header {
+  --m-header-max: var(--container-max);
+  --m-header-h: 64px;
+  --m-header-pad: var(--space-md);
+  --m-header-title: 28px;
+  --m-header-title-serif: 30px;
+  --m-header-title-track: .02em;
+  --m-header-title-transform: none;
+  position: relative; z-index: 40; flex: 0 0 auto; width: 100%;
+  background: var(--surface-container-lowest);
+  border-bottom: 1px solid var(--outline-variant);
+}
+.m-header__inner {
+  display: flex; align-items: center; gap: var(--space-md);
+  width: 100%; max-width: var(--m-header-max); margin: 0 auto;
+  min-height: var(--m-header-h); padding: 0 var(--m-header-pad);
+}
+.m-header__lead { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; flex: 1 1 auto; }
+.m-header__titles { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.m-header__title {
+  margin: 0; min-width: 0;
+  font-family: var(--font-display); font-size: var(--m-header-title); font-weight: 600;
+  line-height: 1.15; letter-spacing: var(--m-header-title-track);
+  text-transform: var(--m-header-title-transform); color: var(--primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* The title names a record the database holds — a Person, a dated Service —
+   rather than the app's own name for a place. */
+.m-header__title--serif {
+  font-family: var(--font-serif); font-size: var(--m-header-title-serif);
+  letter-spacing: .01em; text-transform: none; color: var(--on-surface);
+}
+.m-header__sub {
+  font-family: var(--font-sans); font-size: 13.5px; line-height: 1.35;
+  color: var(--on-surface-variant);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.m-header--tall { --m-header-h: 84px; }
+
+/* The trail, above the title, where a page can be reached from more than one
+   place and which one you came from is worth keeping. It REPLACES the back
+   link rather than joining it — two ways out of one page is one too many. */
+.m-header__crumbs {
+  display: flex; align-items: center; gap: 4px; min-width: 0;
+  font-family: var(--font-sans); font-size: var(--label-sm-size); font-weight: var(--label-sm-weight);
+  letter-spacing: var(--label-sm-spacing); text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+.m-header__crumbs a { color: inherit; text-decoration: none; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; transition: color var(--duration) var(--ease-standard); }
+.m-header__crumbs a:hover { color: var(--primary); }
+.m-header__crumbs .material-symbols-outlined { font-size: 16px; opacity: .5; flex: 0 0 auto; }
+
+.m-header__actions { display: flex; align-items: center; gap: var(--space-base); flex: 0 0 auto; }
+.m-header__rule { align-self: stretch; flex: 0 0 auto; width: 1px; margin: 14px 0; background: var(--outline-variant); }
+.m-header__auth { display: flex; align-items: center; gap: var(--space-xs); flex: 0 0 auto; min-height: 40px; }
+.m-header__logout { color: var(--error); }
+.m-header__logout:hover:not(:disabled) { background: var(--error-container); color: var(--on-error-container); }
+
+/* The page body scrolls under the bar. Translucent parchment and a blur, still
+   one hairline, still no shadow. */
+.m-header--sticky {
+  position: sticky; top: 0; z-index: 50;
+  background: color-mix(in srgb, var(--surface-container-lowest) 88%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+
+/* Full-bleed editors. One tonal step up from white says "working surface"
+   without leaving the parchment — this is what replaced the navy bar, which
+   was the only filled header in the app and needed a bespoke white button. */
+.m-header--tool {
+  --m-header-max: none; --m-header-h: 56px;
+  --m-header-title: 24px; --m-header-title-serif: 24px;
+  position: sticky; top: 0; z-index: 50;
+  background: var(--surface-container);
+}
+/* A tool bar's chrome is already learned and its title is the longest in the
+   app, so only the primary action keeps its word. The name gets the slack. */
+.m-header--tool .m-header__auth .m-btn__label,
+.m-header--tool .m-header__actions .m-btn:not(.m-btn--primary) .m-btn__label { display: none; }
+.m-header--tool .m-header__auth .m-btn,
+.m-header--tool .m-header__actions .m-btn:not(.m-btn--primary) { width: 38px; padding: 0; }
+
+/* A status chip in the bar: unsaved, over the page limit, refused. */
+.m-header__chip { align-self: center; flex: 0 0 auto; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.m-chip-dot { width: 6px; height: 6px; border-radius: var(--radius-full); background: currentColor; flex: 0 0 auto; }
+.m-chip-dot--pulse { animation: m-chip-pulse 2s var(--ease-standard) infinite; }
+@keyframes m-chip-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .m-chip-dot--pulse { animation: none; } }
+
+/* A header is chrome. It never prints. */
+@media print { .m-header { display: none; } }
+
+/* ---- Phone metrics: the phone TopBar's 46px row, from the same markup the
+   desktop renders. The class is how the gallery shows it at desktop width;
+   the media query is how production reaches it. ---- */
+.m-header--compact {
+  --m-header-h: 46px; --m-header-pad: var(--space-xs);
+  --m-header-title: 17px; --m-header-title-serif: 20px;
+  --m-header-title-track: .06em; --m-header-title-transform: uppercase;
+}
+.m-header--compact .m-header__inner { gap: var(--space-xs); }
+.m-header--compact .m-header__sub,
+.m-header--compact .m-header__crumbs,
+.m-header--compact .m-back__label,
+.m-header--compact .m-btn__label,
+.m-header--compact .m-header__rule { display: none; }
+.m-header--compact .m-back { min-width: 44px; justify-content: center; padding-right: 0; }
+.m-header--compact .m-header__actions { gap: 2px; }
+.m-header--compact .m-header__title--serif { letter-spacing: .01em; }
+.m-header--compact .m-header__actions .m-btn {
+  width: 44px; height: 44px; padding: 0;
+  background: transparent; border-color: transparent; color: var(--primary); box-shadow: none;
+}
+
+@media (max-width: 640px) {
+  .m-header {
+    --m-header-h: 46px; --m-header-pad: var(--space-xs);
+    --m-header-title: 17px; --m-header-title-serif: 20px;
+    --m-header-title-track: .06em; --m-header-title-transform: uppercase;
+  }
+  .m-header__inner { gap: var(--space-xs); }
+  .m-header__sub, .m-header__crumbs, .m-back__label, .m-btn__label, .m-header__rule { display: none; }
+  .m-back { min-width: 44px; justify-content: center; padding-right: 0; }
+  .m-header__actions { gap: 2px; }
+  .m-header__title--serif { letter-spacing: .01em; }
+  .m-header__actions .m-btn {
+    width: 44px; height: 44px; padding: 0;
+    background: transparent; border-color: transparent; color: var(--primary); box-shadow: none;
+  }
+}
 `,
   },
 
@@ -571,19 +737,31 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     name: "BackLink",
     cls: "m-back",
     group: "Layout",
-    summary: "The way out of a page, top left. Eight pages wrote the same arrow-and-label by hand.",
+    summary: "The way out of a page, top left. Eight pages wrote the same chevron-and-label by hand.",
     variants: {},
+    notes: [
+      "The glyph is `chevron_left`, not `arrow_back`. The phone's TopBar always drew a chevron and twenty desktop pages drew an arrow; two glyphs for one idea is the bug, and the phone's was the older and more-used answer (MS-187).",
+      "The label names WHERE IT GOES — `Home`, `Calendar`, `People`. Never `Back` and never `Back to Dashboard`: the chevron already says back, so the word is wasted. This collapsed five spellings into one rule.",
+      "44px minimum, because it renders on a phone in six pages and was a bare text link with no touch target.",
+      "The label is a slot so the header's compact and tool modes can hide it and leave a square chevron. A bare text node cannot be addressed.",
+    ],
     examples: [
-      '<a class="m-back" href="index.html"><span class="material-symbols-outlined">arrow_back</span><span class="m-label">Home</span></a>',
+      '<a class="m-back" href="index.html"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></a>',
     ],
     css: `
 .m-back {
   display: inline-flex; align-items: center; gap: 4px; text-decoration: none;
+  flex: 0 0 auto; white-space: nowrap;
+  min-height: 44px; padding-right: var(--space-xs);
   color: var(--on-surface-variant);
   transition: color var(--duration) var(--ease-standard);
 }
 .m-back:hover { color: var(--primary); }
 .m-back .material-symbols-outlined { font-size: 20px; }
+.m-back__label {
+  font-family: var(--font-sans); font-size: var(--label-sm-size); font-weight: var(--label-sm-weight);
+  letter-spacing: var(--label-sm-spacing); text-transform: uppercase;
+}
 `,
   },
 

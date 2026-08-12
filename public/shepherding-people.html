@@ -113,13 +113,23 @@
     <!-- ═══════════════════════════════════════════ -->
     <!-- HEADER                                      -->
     <!-- ═══════════════════════════════════════════ -->
-    <header style="max-width:80rem; margin:0 auto; padding:8px 32px;" class="flex items-center justify-between">
-        <a href="shepherding-dashboard.html" class="m-back">
-            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
-            <span class="font-label-md text-label-md">Dashboard</span>
-        </a>
-        <div id="auth-container" class="flex items-center">
-            <div class="h-10"></div>
+    <!-- The one header that was written in inline styles rather than tokens. -->
+    <header class="m-header m-header--tall" style="--m-header-max: 80rem">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a href="shepherding-dashboard.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Shepherd Dashboard</span>
+                </a>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title">People</h1>
+                    <span class="m-header__sub">
+                        <span x-text="filteredPeople.length"></span> of <span x-text="people.length"></span> people shown
+                    </span>
+                </div>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
 
@@ -303,14 +313,9 @@
     </aside>
     </div>
 
-        <!-- Page Title & Actions -->
-        <div style="margin-bottom:32px;" class="people-actions flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div>
-                <h1 class="font-headline-lg text-headline-lg text-primary">People</h1>
-                <p class="font-body-md text-body-md text-on-surface-variant mt-1">
-                    <span x-text="filteredPeople.length"></span> of <span x-text="people.length"></span> people shown
-                </p>
-            </div>
+        <!-- The title and the count are the header's. What stays is the row of
+             things you can do to the list. -->
+        <div style="margin-bottom:32px;" class="people-actions flex flex-col lg:flex-row lg:items-center justify-end gap-6">
             <div class="flex flex-col sm:flex-row items-center gap-6">
                 <button @click="showAddPersonModal = true"
                     class="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-primary text-on-primary font-label-md text-label-md rounded-full hover:bg-primary/90 transition-all shadow-sm active:scale-95">
