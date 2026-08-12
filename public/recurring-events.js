@@ -4,11 +4,23 @@
 // The Calendar used to carry a single button marked "Sunday Service", which was
 // the only door to the one series anybody had. It is not the only series any
 // more, and a button per Event does not scale past two. So this is the room the
-// series live in: pick one, read its rota as a grid, and leave through whichever
-// door the thing you noticed calls for —
+// series live in: pick one, read its rota as a grid, and change the event
+// itself without going anywhere.
 //
-//   the EVENT itself      its pattern, time, place, and which Roles it carries
-//                         every date (calendar-event.html?series=…)
+// ONE SCREEN, NOT TWO (MS-229). The event's own record — its pattern, time,
+// place, colour, who may see it, and which Roles it carries every date — used
+// to be a second page at `calendar-event.html?series=…`, reached by a link that
+// left this one. So changing the Sunday's start time meant losing sight of the
+// Sunday's rota, and coming back meant finding the event in the list again.
+// They are four tabs of one pane now:
+//
+//   ROTA               the grid, and the dates you tick on it
+//   ROLES & RULES      which Roles it carries, and the rules across two of them
+//   THE EVENT          name, time, place, pattern, colour, the next few dates
+//   WHO CAN SEE IT     the five rungs, and whether the roster is shared
+//
+// Two doors still lead off it —
+//
 //   the DRAFT ROOM        redraw the dates you ticked (auto-assign.html)
 //   one DATE              who is on that one, and change a single person
 //
@@ -93,6 +105,39 @@
             gridLoading: false,
             clearing: false,
 
+            // ── The pane (MS-229) ────────────────────────────────────────────
+            //
+            // Everything about the chosen series used to be a second page at
+            // `calendar-event.html?series=…`, so changing a Sunday's start time
+            // meant losing sight of the Sunday's rota. It is four tabs of one
+            // pane now, and the tab survives changing series: an editor
+            // comparing who can see what across three events should not have to
+            // find that tab again for each of them.
+            tab: 'rota',
+
+            // The phone is TWO SCREENS, not two columns: at 390px a 320px panel
+            // beside anything is a panel and nothing else. So the list is a
+            // screen, the event you picked replaces it, and the shell's arrow
+            // comes back here before it leaves the page.
+            phonePane: false,
+
+            // Writes from the pane. The rota's own write (`clearing`) is
+            // separate on purpose — one of them empties a run of dates and the
+            // other saves a name, and a single flag would grey out both.
+            saving: false,
+
+            // Details are held in a draft rather than written per keystroke: a
+            // name is half-typed for most of the time somebody is typing it.
+            seriesDraft: { name: '', location: '', description: '' },
+
+            // Changing the pattern, and the confrontation it raises over dates
+            // that already have people on them.
+            pattern: { open: false, rule: null, stored: [], orphans: [], choices: {} },
+
+            // Taking a Role off the EVENT drops everybody in it on EVERY date,
+            // so it asks first — and only when there is somebody to lose.
+            pendingRemoval: null,
+
             // ── Cross-Role Rules (MS-221) ────────────────────────────────────
             //
             // Rules about a PAIR of Roles — "the Kids Leader and the Kids Helper
@@ -134,17 +179,26 @@
                 const asked = new URLSearchParams(window.location.search).get('series');
                 const named = this.series.some(s => s.id === asked) ? asked : '';
 
-                // The editor lane opens on something, because an empty right-hand
-                // column beside a list of events reads as a grid that failed to
-                // load. The browse lane opens on NOTHING unless it was sent to
-                // one: it is a list of closed rows, and every row springing open
-                // at once is not a list any more.
-                const opening = named || (this.isEditor
-                    ? (this.series[0] && this.series[0].id) || ''
-                    : '');
+                // BOTH lanes open on something now. The pane sits beside the
+                // list rather than under a row (MS-229), and an empty right-hand
+                // half beside five events teaches nobody anything — it reads as
+                // a panel that failed to load. There is no "nothing selected".
+                const opening = named || (this.series[0] && this.series[0].id) || '';
+
+                // Arriving at a named series means arriving AT it, so the phone
+                // opens on the pane. Arriving at the page means the list.
+                this.phonePane = !!named;
 
                 this.loading = false;
                 if (opening) await this.choose(opening);
+
+                // The shell's arrow has to mean "out of this event" before it
+                // means "out of this page" — only the page knows which of the
+                // two screens is showing.
+                document.addEventListener('mobile-header:back', () => {
+                    if (this.phonePane) { this.phonePane = false; return; }
+                    window.location.href = 'calendar.html';
+                });
             },
 
             resolveRank() {
@@ -256,23 +310,79 @@
                 this.seriesId = id;
                 this.selected = [];
                 this.anchor = Dates.todayStr();
+                // The draft belongs to the series it was taken from. Left
+                // alone, switching events would show one event's half-typed
+                // name over another event's record and offer to save it there.
+                this.startSeriesDraft();
                 this.recomputeDates();
                 await this.loadWindow();
+
+                // Opening the Sunday Service is also the moment it gets
+                // repaired if it has drifted, or created if it never existed.
+                // Safe to run every time: it writes only when something is
+                // actually wrong. It used to happen on the way into the second
+                // page, which no longer exists.
+                if (this.isEditor && id === Core.SUNDAY_SERVICE_ID) await this.reconcileSunday();
             },
 
-            // ── Opening one, in the browse lane ──────────────────────────────
-            //
-            // An accordion, not a selection: the row you tap opens under itself,
-            // and tapping it again shuts it. `choose` cannot do this on its own —
-            // it is the editor lane's "load the grid for this one", where landing
-            // on nothing selected would be a bug rather than a closed row.
-            async toggleSeries(id) {
+            // Never fatal. A church whose Sunday drifted still gets to read the
+            // rota, and a repair that cannot be written is an admin's problem
+            // rather than a reason to show nothing.
+            async reconcileSunday() {
+                try {
+                    const made = await Store.ensureSundayService(db, Roles.LITURGICAL_SLUGS);
+                    if (made && made.series) this.replaceSeries(made.series);
+                    this.startSeriesDraft();
+                } catch (e) {
+                    console.error('Could not reconcile the Sunday Service:', e);
+                }
+            },
+
+            // One writer for the list, so the row on the left and the pane on
+            // the right can never be two different readings of one event.
+            replaceSeries(next) {
+                if (!next || !next.id) return;
+                this.series = this.series.map(s => (
+                    s.id === next.id ? Object.assign({}, s, next) : s
+                ));
+            },
+
+            // A field of the chosen series, changed and written back through
+            // `replaceSeries` so nothing mutates a row in place.
+            patchSeries(fields) {
+                const s = this.chosen;
+                if (!s) return;
+                this.replaceSeries(Object.assign({ id: s.id }, fields));
+            },
+
+            // Picking one from the list. `choose` is the load; this is the
+            // gesture, and on a phone it is also a navigation — the pane is a
+            // screen there rather than a column, so picking a row means going
+            // into it.
+            async pickSeries(id) {
                 if (this.gridLoading) return;
-                if (this.seriesId === id) { this.seriesId = ''; return; }
+                this.phonePane = true;
                 await this.choose(id);
             },
 
-            isOpen(id) { return this.seriesId === id; },
+            // The four sides of one event. Held here rather than in the markup
+            // so the tab bar and the panels under it cannot come to disagree
+            // about how many there are.
+            get tabs() {
+                return [
+                    { id: 'rota', label: 'Rota' },
+                    { id: 'roles', label: 'Roles & rules' },
+                    { id: 'event', label: 'The event' },
+                    { id: 'who', label: 'Who can see it' },
+                ];
+            },
+
+            // The rung the pane's badge says, in the ladder's own words.
+            get visibilityRung() {
+                const level = this.seriesVisibility;
+                return this.visibilityLadder.find(r => r.level === level)
+                    || { level: level, label: 'Not set', icon: 'lock' };
+            },
 
             // When it next falls, and which of those dates are yours. `dates` is
             // already the window from today forward, so this is the next stretch
@@ -762,16 +872,11 @@
             },
 
             // ── The other doors ──────────────────────────────────────────────
-
-            // The Event itself — its pattern, time, place, and which Roles it
-            // carries every date. Built here rather than in the markup so the
-            // list row and the header above the grid cannot drift into naming
-            // the same door two different ways.
-            seriesHref(id) {
-                return id ? 'calendar-event.html?series=' + encodeURIComponent(id) : null;
-            },
-
-            get eventHref() { return this.seriesHref(this.seriesId); },
+            //
+            // ⚠ There is no longer a door to "the Event itself". Its pattern,
+            // time, place, colour, Roles and visibility are the pane's own
+            // tabs (MS-229), so `calendar-event.html?series=` is not a page any
+            // more and nothing here may link to it.
 
             dateHref(date) {
                 return 'calendar-event.html?id=' + encodeURIComponent(
@@ -806,6 +911,23 @@
                 return slugs.length + (slugs.length === 1 ? ' role' : ' roles');
             },
 
+            // The row's third line, composed in one place.
+            //
+            // ⚠ It cannot be `roleCountOf(s) + ' · next ' + nextDateOf(s)`.
+            // `nextDateOf` answers with a SENTENCE when the pattern has run
+            // out, so gluing "next " in front of it read "4 roles · next
+            // Nothing coming up" on exactly the series a reader most needs a
+            // straight answer about. The word "next" belongs to the branch
+            // that actually has one.
+            listLineOf(s) {
+                const roles = this.roleCountOf(s);
+                const next = this.nextDateOf(s);
+                if (!next) return roles;
+                return roles + (next === 'Nothing coming up'
+                    ? ' · nothing coming up'
+                    : ' · next ' + next);
+            },
+
             colourOf(s) {
                 return View.colourFor(s.colour);
             },
@@ -834,6 +956,403 @@
                 if (!dates.length) return 'No dates';
                 if (dates.length === 1) return this.longDate(dates[0]);
                 return this.shortDate(dates[0]) + ' – ' + this.shortDate(dates[dates.length - 1]);
+            },
+
+            // ═══ THE EVENT ITSELF (MS-229) ═══════════════════════════════════
+            //
+            // Everything below was `calendar-event.html?series=<id>` — a second
+            // page reached by a link that left this one. It is the same
+            // behaviour, moved rather than rebuilt, now reading `chosen` where
+            // it used to read a single loaded `series`.
+            //
+            // ⚠ `series` here is the LIST. The one being managed is `chosen`,
+            // and every write goes back through `patchSeries` rather than
+            // mutating a row, so the list on the left and the pane on the right
+            // cannot come apart.
+
+            // ── Details ──────────────────────────────────────────────────────
+
+            startSeriesDraft() {
+                const s = this.chosen || {};
+                this.seriesDraft = {
+                    name: s.name || '',
+                    location: s.location || '',
+                    description: s.description || '',
+                };
+            },
+
+            get seriesDetailsChanged() {
+                const s = this.chosen || {};
+                return ['name', 'location', 'description'].some(
+                    f => String(this.seriesDraft[f] || '') !== String(s[f] || '')
+                );
+            },
+
+            get seriesDetailsValid() { return !!String(this.seriesDraft.name || '').trim(); },
+
+            async saveSeriesDetails() {
+                if (!this.seriesDetailsValid || !this.seriesDetailsChanged || this.saving) return;
+                this.saving = true;
+                this.error = '';
+                try {
+                    const saved = await Store.saveSeriesDetails(db, this.seriesId, this.seriesDraft);
+                    this.patchSeries(saved);
+                    this.startSeriesDraft();
+                } catch (e) {
+                    console.error('Series details failed:', e);
+                    this.error = (e && e.message) || 'Those details could not be saved.';
+                } finally {
+                    this.saving = false;
+                }
+            },
+
+            // The time is on the recurrence rule — one home for one fact — and
+            // saves on change, unlike the typed fields beside it.
+            get seriesTime() {
+                const rule = this.chosen && this.chosen.recurrence;
+                return (rule && rule.time) || '';
+            },
+
+            async saveSeriesTime(time) {
+                if (this.saving) return;
+                this.saving = true;
+                this.error = '';
+                try {
+                    const rule = await Store.setSeriesTime(db, this.seriesId, time);
+                    this.patchSeries({ recurrence: rule });
+                    this.recomputeDates();
+                } catch (e) {
+                    console.error('Series time failed:', e);
+                    this.error = (e && e.message) || 'That time could not be saved.';
+                } finally {
+                    this.saving = false;
+                }
+            },
+
+            // ── The Roles it carries ─────────────────────────────────────────
+            //
+            // Liturgical ones are SHOWN and locked: an editor needs to see the
+            // whole shape of a Sunday, but those are filled in the order of
+            // service and print in the booklet, so this screen can never drop
+            // one. They are also never a row on the grid — a row for a Role
+            // nobody assigns here would sit empty and read as "nobody is
+            // preaching".
+
+            get seriesRoles() {
+                const slugs = (this.chosen && this.chosen.roleSlugs) || [];
+                const locked = (this.chosen && this.chosen.lockedRoleSlugs) || [];
+                return slugs.map(slug => {
+                    const def = this.roleDefinitions.find(d => d.slug === slug);
+                    const slots = (def && def.slots) || [];
+                    return {
+                        slug: slug,
+                        name: this.roleName(slug),
+                        slots: slots,
+                        // What an editor is deciding is how many people have to
+                        // be there on the day. "Places" is the model's word for
+                        // it, and the model is not who is reading this.
+                        needed: slots.length
+                            ? 'Needs ' + slots.length + (slots.length === 1 ? ' person' : ' people')
+                            : 'Nobody needed yet',
+                        locked: locked.indexOf(slug) !== -1
+                            || Roles.LITURGICAL_SLUGS.indexOf(slug) !== -1,
+                    };
+                });
+            },
+
+            get liturgicalRoles() { return this.seriesRoles.filter(r => r.locked); },
+            get servantRoles() { return this.seriesRoles.filter(r => !r.locked); },
+
+            get seriesRolesAvailable() {
+                const on = (this.chosen && this.chosen.roleSlugs) || [];
+                return this.roleDefinitions
+                    .filter(d => Roles.LITURGICAL_SLUGS.indexOf(d.slug) === -1)
+                    .filter(d => on.indexOf(d.slug) === -1);
+            },
+
+            // Which dates of this Event have people in a Role, and who.
+            //
+            // ⚠ Constrained to the viewer's OWN rungs. Asking for a rung they
+            // cannot read fails the whole query and looks exactly like "nobody
+            // is on it" — which would drop a Role silently.
+            async seriesRoleUsage(slug) {
+                const snap = await db.collection('event_occurrences')
+                    .where('visibility', 'in', Core.visibilityQueryFor(this.rank).rungs)
+                    .where('seriesId', '==', this.seriesId)
+                    .get();
+
+                const rows = await Promise.all(snap.docs.map(async d => {
+                    const roster = await d.ref.collection('roster').get().catch(() => ({ docs: [] }));
+                    const personIds = roster.docs
+                        .map(r => r.data())
+                        .filter(a => a.roleSlug === slug && !a.oneOffId)
+                        .map(a => a.personId);
+                    return { date: (d.data() || {}).date, personIds: personIds };
+                }));
+
+                return rows.filter(r => r.personIds.length);
+            },
+
+            async askRemoveSeriesRole(slug) {
+                if (this.saving) return;
+                const def = this.roleDefinitions.find(d => d.slug === slug);
+                const name = (def && def.name) || slug;
+
+                this.saving = true;
+                let usage = [];
+                try {
+                    usage = await this.seriesRoleUsage(slug);
+                } catch (e) {
+                    console.error('Could not check who is on that role:', e);
+                    // Could not check is not the same as nobody, so it still
+                    // asks — and says that the count is the part it could not
+                    // read.
+                    this.saving = false;
+                    this.pendingRemoval = {
+                        key: slug, name: name, count: 0,
+                        sentence: 'We could not check who is down for this on other dates. '
+                            + 'Anyone who is loses their place.',
+                    };
+                    return;
+                }
+                this.saving = false;
+
+                // An empty Role comes off on the click. There is nothing to be
+                // sure about.
+                if (!usage.length) return this.removeSeriesRole(slug);
+
+                const names = [];
+                usage.forEach(u => u.personIds.forEach(id => {
+                    const n = this.personName(id);
+                    if (names.indexOf(n) === -1) names.push(n);
+                }));
+
+                this.pendingRemoval = {
+                    key: slug,
+                    name: name,
+                    count: usage.length,
+                    sentence: View.listSentence(names)
+                        + (names.length === 1 ? ' loses their place' : ' lose their places')
+                        + ' across ' + usage.length + (usage.length === 1 ? ' date.' : ' dates.'),
+                };
+            },
+
+            cancelRemoval() { this.pendingRemoval = null; },
+
+            async confirmRemoval() {
+                const ask = this.pendingRemoval;
+                if (!ask) return;
+                this.pendingRemoval = null;
+                await this.removeSeriesRole(ask.key);
+            },
+
+            async setSeriesRoles(slugs) {
+                if (this.saving) return;
+                this.saving = true;
+                this.error = '';
+                try {
+                    await Store.setSeriesRoles(db, this.seriesId, slugs);
+                    this.patchSeries({ roleSlugs: slugs });
+                } catch (e) {
+                    console.error('Series roles failed:', e);
+                    this.error = (e && e.message) || 'That change could not be saved.';
+                } finally {
+                    this.saving = false;
+                }
+            },
+
+            addSeriesRole(slug) {
+                if (!slug || !this.chosen) return;
+                return this.setSeriesRoles(((this.chosen.roleSlugs) || []).concat([slug]));
+            },
+
+            // Dropping a Role from an Event drops the Cross-Role Rules naming
+            // it — `withoutRulesNaming` is the model's own words for why.
+            async removeSeriesRole(slug) {
+                if (!this.chosen) return;
+                const before = this.pairRules.length;
+                await this.setSeriesRoles(((this.chosen.roleSlugs) || []).filter(s => s !== slug));
+
+                const next = Series.withoutRulesNaming(this.chosen, slug);
+                if (Series.crossRoleRulesOf(next).length !== before) await this.savePairRules(next);
+            },
+
+            // ── Colour ───────────────────────────────────────────────────────
+            //
+            // On the SERIES, so one change moves every date. Decoration only —
+            // the red that means "needs sorting" is not in the palette and
+            // always overrides it.
+
+            get colours() { return View.EVENT_COLOURS; },
+
+            get colour() {
+                return View.colourOf({
+                    seriesId: this.seriesId,
+                    seriesColour: this.chosen && this.chosen.colour,
+                });
+            },
+
+            async setColour(slug) {
+                if (this.saving || !this.chosen || this.colour.slug === slug) return;
+                this.saving = true;
+                this.error = '';
+                try {
+                    await Store.setSeriesColour(db, this.seriesId, slug);
+                    this.patchSeries({ colour: slug });
+                } catch (e) {
+                    console.error('Colour change failed:', e);
+                    this.error = 'That colour could not be saved.';
+                } finally {
+                    this.saving = false;
+                }
+            },
+
+            // ── Who can see it ───────────────────────────────────────────────
+            //
+            // Restamped onto EVERY occurrence, past ones included: a security
+            // rule reads visibility off the document and cannot go and look at
+            // the series. Making something private has to reach its history.
+
+            get visibilityLadder() { return View.visibilityLadder(); },
+            rosterToggleApplies(level) { return View.rosterToggleApplies(level); },
+
+            get seriesVisibility() {
+                return (this.chosen && this.chosen.visibility) || 'member';
+            },
+
+            async setSeriesVisibility(level) {
+                if (this.saving || this.isSundaySeries) return;
+                this.saving = true;
+                this.error = '';
+                try {
+                    await Store.restampSeriesVisibility(
+                        db, this.seriesId, level, this.chosen.rosterShared === true,
+                        { rank: this.rank }
+                    );
+                    this.patchSeries({ visibility: level });
+                } catch (e) {
+                    console.error('Series visibility failed:', e);
+                    this.error = (e && e.message) || 'That could not be saved.';
+                } finally {
+                    this.saving = false;
+                }
+            },
+
+            async setSeriesRosterShared(shared) {
+                if (this.saving || this.isSundaySeries) return;
+                this.saving = true;
+                this.error = '';
+                try {
+                    await Store.restampSeriesVisibility(
+                        db, this.seriesId, this.seriesVisibility, shared === true,
+                        { rank: this.rank }
+                    );
+                    this.patchSeries({ rosterShared: shared === true });
+                } catch (e) {
+                    console.error('Roster sharing failed:', e);
+                    this.error = 'That could not be saved.';
+                } finally {
+                    this.saving = false;
+                }
+            },
+
+            // ── The next few dates ───────────────────────────────────────────
+            //
+            // A Role only ever gets somebody's name against it on a DATE, and a
+            // Sunday's liturgy is built in its order of service — so this hands
+            // over both, and they are two links because they are two jobs.
+
+            get seriesNextDates() {
+                const rule = this.rule;
+                if (!rule) return [];
+                return View.nextDates(rule, Dates.todayStr(), 4);
+            },
+
+            orderOfServiceHref(date) {
+                return 'service-builder.html?date=' + encodeURIComponent(date);
+            },
+
+            // ── Changing the pattern ─────────────────────────────────────────
+            //
+            // Dates that already have people on them and do not fit the new
+            // pattern are ORPHANS, and the editor says what happens to each.
+            // Never guessed: a pattern change that silently deleted a rota
+            // would be the most expensive undo in the app.
+
+            get patternEditable() { return this.isEditor && !this.isSundaySeries; },
+
+            async openPattern() {
+                if (!this.chosen) return;
+                const rule = Object.assign({}, this.chosen.recurrence || {});
+                // The viewer's OWN rungs, for the same reason as above.
+                const snap = await db.collection('event_occurrences')
+                    .where('visibility', 'in', Core.visibilityQueryFor(this.rank).rungs)
+                    .where('seriesId', '==', this.seriesId)
+                    .get();
+                const stored = await Promise.all(snap.docs.map(async d => {
+                    const roster = await d.ref.collection('roster').get();
+                    return Object.assign({ id: d.id }, d.data(), {
+                        assignments: roster.docs.map(r => r.data()),
+                    });
+                }));
+                this.pattern = { open: true, rule: rule, stored: stored, orphans: [], choices: {} };
+            },
+
+            recomputeOrphans() {
+                const stored = this.pattern.stored || [];
+                if (!stored.length) { this.pattern.orphans = []; return; }
+                const dates = stored.map(o => o.date).sort();
+                const orphans = Core.orphanedOccurrences(
+                    this.pattern.rule, stored, dates[0], dates[dates.length - 1]
+                );
+                this.pattern.orphans = orphans;
+                // Move is the default. Nothing else is pre-decided.
+                orphans.forEach(o => {
+                    if (!this.pattern.choices[o.date]) this.pattern.choices[o.date] = 'move';
+                });
+            },
+
+            get patternSentence() { return View.recurrenceSentence(this.pattern.rule || {}); },
+            get patternDates() { return View.nextDates(this.pattern.rule || {}, null, 6); },
+            get orphanSummary() { return View.orphanSummary(this.pattern.orphans, this.pattern.choices); },
+            orphanOutcome(o) { return View.orphanOutcome(o, this.pattern.choices[o.date]); },
+
+            setAllOrphans(choice) {
+                this.pattern.orphans.forEach(o => { this.pattern.choices[o.date] = choice; });
+            },
+
+            async applyPattern() {
+                if (this.saving) return;
+                this.saving = true;
+                this.error = '';
+                try {
+                    const rule = this.pattern.rule;
+                    const stored = this.pattern.stored || [];
+                    const dates = stored.map(o => o.date).sort();
+                    const free = Core.datesBetween(
+                        rule, dates[0] || rule.startDate, dates[dates.length - 1] || rule.startDate
+                    ).filter(d => !stored.some(o => o.date === d));
+
+                    await Store.applyOrphanChoices(
+                        db, this.seriesId, this.pattern.orphans, this.pattern.choices, free
+                    );
+                    await db.collection('events').doc(this.seriesId).update({ recurrence: rule });
+                    this.patchSeries({ recurrence: rule });
+                    this.pattern.open = false;
+
+                    // The dates on the rota came from the OLD rule. Re-derive
+                    // them before reading, or the grid draws a window of dates
+                    // this event no longer has.
+                    this.selected = [];
+                    this.anchor = Dates.todayStr();
+                    this.recomputeDates();
+                    await this.loadWindow();
+                } catch (e) {
+                    console.error('Pattern change failed:', e);
+                    this.error = 'The pattern could not be changed.';
+                } finally {
+                    this.saving = false;
+                }
             },
         };
     };

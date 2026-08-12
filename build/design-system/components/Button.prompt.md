@@ -7,7 +7,7 @@
 <button class="m-btn m-btn--quiet m-btn--sm"><span class="material-symbols-outlined">print</span><span class="m-btn__label">Print PDF</span></button>
 ```
 
-**variant:** `primary` · `secondary` · `ghost` · `quiet` · `danger`
+**variant:** `primary` · `secondary` · `ghost` · `quiet` · `danger` · `danger-outline`
 **size:** `sm` · `md` · `lg`
 
 Base class `.m-btn`, modifiers `.m-btn--<variant>`.
