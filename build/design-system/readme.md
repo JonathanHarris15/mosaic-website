@@ -120,6 +120,7 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 
 **Layout**
 - **PageShell** `.m-page` — The body of a desktop page: warm background, navy ink, a column capped at --container-max.
+- **PageHeader** `.m-header` — The strip across the top of every desktop page: the way back, the page's name, the page's actions, and the account.
 - **BackLink** `.m-back` — The way out of a page, top left.
 - **Row** `.m-row` — One line of a list: an optional leading avatar or medallion, a title, an optional second line, something trailing.
 - **CardList** `.m-card-list` — Rows gathered into one bordered surface, so a list reads as a single object rather than a stack of cards.

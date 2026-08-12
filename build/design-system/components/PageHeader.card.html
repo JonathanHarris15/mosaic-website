@@ -1,0 +1,18 @@
+<!-- @dsCard group="Layout" viewport="700x310" name="PageHeader" subtitle="The strip across the top of every desktop page: the way back, the page's name, the page's actions, and the account" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"/>
+<link rel="stylesheet" href="../styles.css"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"/>
+<style>
+  body { margin:0; padding:18px; background:var(--background); font-family:var(--font-sans); color:var(--on-surface); }
+  .r { display:flex; flex-wrap:wrap; gap:14px; align-items:center; }
+  .sw { display:flex; flex-direction:column; width:150px; border-radius:var(--radius); overflow:hidden; border:1px solid var(--outline-variant); }
+  .sw .t { padding:16px 12px; font-size:12px; font-weight:600; }
+  .sw .b { padding:7px 12px; font-size:10.5px; background:var(--surface-container-lowest); color:var(--on-surface-variant); display:flex; justify-content:space-between; gap:6px; }
+  .sw .b code { font-family:ui-monospace,monospace; }
+</style></head><body>
+<div class="r">
+  <div><header class="m-header"><div class="m-header__inner"><div class="m-header__lead"><a class="m-back" href="index.html"><span class="material-symbols-outlined">chevron_left</span><span class="m-back__label">Home</span></a><div class="m-header__titles"><h1 class="m-header__title">Calendar</h1></div></div><div class="m-header__actions"></div><div class="m-header__rule"></div><div class="m-header__auth" id="auth-container"></div></div></header></div>
+  <div><header class="m-header m-header--tool m-header--sticky"><div class="m-header__inner"><div class="m-header__lead"><div class="m-header__titles"><h1 class="m-header__title m-header__title--serif">Service Guide Editor: Sunday, November 9, 2025</h1></div></div></div></header></div>
+  <div><span class="m-badge m-badge--warning m-header__chip"><span class="m-chip-dot m-chip-dot--pulse"></span><span class="m-btn__label">Unsaved</span></span></div>
+</div>
+</body></html>

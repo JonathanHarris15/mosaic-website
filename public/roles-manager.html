@@ -93,13 +93,19 @@
       x-data="rolesManager" x-cloak>
 
     <!-- Header -->
-    <header class="w-full max-w-container mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a href="index.html" class="m-back">
-            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
-            <span class="text-xs font-label-md uppercase tracking-wider">Dashboard</span>
-        </a>
-        <div id="auth-container" class="flex items-center">
-            <div class="h-10"></div>
+    <header class="m-header">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a href="index.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Home</span>
+                </a>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title">Roles Manager</h1>
+                </div>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
 
@@ -110,10 +116,10 @@
 
     <main x-show="!loading" class="flex-grow w-full max-w-container mx-auto px-4 md:px-margin pb-lg pt-md">
 
-        <!-- Page title -->
-        <div class="rm-title-block pb-md border-b border-outline-variant">
-            <h1 class="font-display text-headline-lg tracking-[.02em] text-primary">Roles Manager</h1>
-            <p class="font-body-md text-body-md text-on-surface-variant mt-xs max-w-[64ch]">
+        <!-- The page's standfirst. The header names the page; this explains it,
+             and it is two sentences — content, not the header's one-line __sub. -->
+        <div class="rm-title-block pb-md">
+            <p class="font-body-md text-body-md text-on-surface-variant max-w-[64ch]">
                 Every serving Role in one place. Set how many people a Role needs, who each place is for,
                 and any rules about who can fill it.
             </p>

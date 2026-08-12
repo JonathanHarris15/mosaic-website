@@ -54,13 +54,20 @@
       x-data="adminDashboard" x-cloak>
 
     <!-- Header -->
-    <header class="w-full max-w-container mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a href="index.html" class="m-back">
-            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
-            <span class="font-label-md text-label-md">Home</span>
-        </a>
-        <div id="auth-container" class="flex items-center">
-            <div class="h-10"></div>
+    <header class="m-header m-header--tall" style="--m-header-max: 64rem">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a href="index.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Home</span>
+                </a>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title">Admin Dashboard</h1>
+                    <span class="m-header__sub">Admin-only system tools.</span>
+                </div>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
 
@@ -71,12 +78,6 @@
 
     <!-- Main content -->
     <main x-show="!loading" class="flex-grow max-w-5xl w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
-
-        <!-- Page Title -->
-        <div>
-            <h1 class="font-headline-lg text-headline-lg text-primary">Admin Dashboard</h1>
-            <p class="font-body-md text-body-md text-on-surface-variant mt-xs">Admin-only system tools.</p>
-        </div>
 
         <!-- Service Guide section -->
         <section class="flex flex-col gap-md">

@@ -35,13 +35,29 @@
       x-data="documentLibrary" x-cloak>
 
     <!-- Header -->
-    <header class="w-full max-w-container mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a href="shepherding-dashboard.html" class="m-back">
-            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
-            <span class="font-label-md text-label-md">Dashboard</span>
-        </a>
-        <div id="auth-container" class="flex items-center">
-            <div class="h-10"></div>
+    <header class="m-header">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a href="shepherding-dashboard.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Shepherd Dashboard</span>
+                </a>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title">Documents</h1>
+                </div>
+            </div>
+            <div class="m-header__actions">
+                <button @click="createFolder()" class="m-btn m-btn--secondary m-btn--sm">
+                    <span class="material-symbols-outlined">create_new_folder</span>
+                    <span class="m-btn__label">New Folder</span>
+                </button>
+                <button @click="openCreateModal()" class="m-btn m-btn--primary m-btn--sm">
+                    <span class="material-symbols-outlined">note_add</span>
+                    <span class="m-btn__label">New Document</span>
+                </button>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
         </div>
     </header>
 
@@ -52,23 +68,6 @@
 
     <!-- Main -->
     <main x-show="!loading" class="flex-grow max-w-container w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-md pt-md">
-
-        <!-- Title + Toolbar -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-sm">
-            <h1 class="font-headline-lg text-headline-lg text-primary">Documents</h1>
-            <div class="flex items-center gap-sm">
-                <button @click="createFolder()"
-                    class="flex items-center gap-1 px-md py-xs bg-surface-container border border-outline-variant text-on-surface font-label-md text-label-md rounded-lg hover:bg-surface-container-high transition-colors">
-                    <span class="material-symbols-outlined text-[18px]">create_new_folder</span>
-                    New Folder
-                </button>
-                <button @click="openCreateModal()"
-                    class="flex items-center gap-1 px-md py-xs bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary/90 transition-colors">
-                    <span class="material-symbols-outlined text-[18px]">note_add</span>
-                    New Document
-                </button>
-            </div>
-        </div>
 
         <!-- Breadcrumb -->
         <nav class="flex items-center gap-xs flex-wrap"

@@ -61,12 +61,22 @@
 <body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
       x-data="eventDetailPage()" x-cloak>
 
-    <header class="w-full max-w-container mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a :href="backHref" class="flex items-center gap-1 text-on-surface-variant hover:text-primary cal-motion">
-            <span class="material-symbols-outlined text-[20px]">arrow_back</span>
-            <span class="text-xs font-label-md uppercase tracking-wider" x-text="backLabel"></span>
-        </a>
-        <div id="auth-container" class="flex items-center"><div class="h-10"></div></div>
+    <!-- No __title on purpose. This page is one of three records — a new event,
+         an event, or a series — and each draws its own name at the head of a
+         content block that carries badges above it and the date, time and place
+         below. Hoisting that into the bar would either duplicate the name 60px
+         apart or strip the block it belongs to. -->
+    <header class="m-header">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a :href="backHref" class="m-back cal-motion">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label" x-text="backLabel"></span>
+                </a>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
+        </div>
     </header>
 
     <div x-show="loading" class="m-loading">
