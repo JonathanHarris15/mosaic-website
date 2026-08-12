@@ -1,6 +1,6 @@
-# Recurring Events, merged with the event's own screen — design brief
+# MS-229 — Recurring Events, merged with the event's own screen: design brief
 
-**Ticket:** none yet (file one before this is built).
+**Ticket:** [MS-229](https://methodllc.atlassian.net/browse/MS-229) — To Plan, no PRD yet.
 **Date:** 12 August 2026.
 **For:** Claude Design, against the **Mosaic Website Design** system (project `f2292e35-4adc-4d33-a42d-7ca9373364c9`).
 **Deliverable:** a UI kit at `ui_kits/recurring-events/`, following `ui_kits/headers/` — an `index.html` entry point, JSX screens, and a `README.md` naming the screens and the components used.
