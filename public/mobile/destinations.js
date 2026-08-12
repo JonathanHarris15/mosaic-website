@@ -31,7 +31,7 @@
         { key: 'hymn-directory', label: 'Hymn Directory', icon: 'book-open', symbol: 'menu_book', route: 'hymnDirectory' },
         { key: 'calendar', label: 'Services', icon: 'church', symbol: 'church', route: 'calendar' },
         { key: 'events', label: 'Calendar', icon: 'calendar-days', symbol: 'calendar_month', route: 'events' },
-        { key: 'directory', label: 'Member Directory', icon: 'users', symbol: 'group', route: 'people' },
+        { key: 'directory', label: 'Membership Directory', icon: 'users', symbol: 'group', route: 'people' },
         { key: 'shepherd', label: 'Shepherd Dashboard', icon: 'shield', symbol: 'shield', route: 'shepherd', permissionLevels: ['elder', 'super_admin'] },
         { key: 'admin', label: 'Admin Dashboard', icon: 'settings-2', symbol: 'settings', route: 'admin', permissionLevels: ['admin', 'super_admin'] },
         // On the web the Roles Manager is a dashboard CARD rather than

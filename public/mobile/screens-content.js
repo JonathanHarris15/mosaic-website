@@ -155,7 +155,7 @@
     });
     return html`
       <${Screen}>
-        <${TopBar} title="Member Directory" onMenu=${props.openMenu} />
+        <${TopBar} title="Membership Directory" onMenu=${props.openMenu} />
         <${Body} style=${{ paddingTop: 14 }}>
           <div style=${{ padding: "0 16px 12px" }}><${SearchBar} placeholder="Search people" value=${q} onChange=${function (e) { qS[1](e.target.value); }} /></div>
           <div style=${{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px 12px" }}>

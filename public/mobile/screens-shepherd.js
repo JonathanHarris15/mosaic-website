@@ -1214,7 +1214,7 @@
                   ${["spouse", "parent", "child"].map(function (k) { return html`<button key=${k} onClick=${function () { setQa({ familyKind: k }); }} style=${toggleBtn(qaForm.familyKind === k)}>${k}</button>`; })}
                 </div>
                 ${personPicker("Type their name…")}
-                <p style=${{ margin: 0, fontFamily: "var(--font-sans)", fontSize: 11.5, fontStyle: "italic", color: "var(--on-surface-variant)", lineHeight: 1.4 }}>This updates the family record itself, so it shows the same everywhere. Bigger restructuring still belongs in the Member Directory.</p>
+                <p style=${{ margin: 0, fontFamily: "var(--font-sans)", fontSize: 11.5, fontStyle: "italic", color: "var(--on-surface-variant)", lineHeight: 1.4 }}>This updates the family record itself, so it shows the same everywhere. Bigger restructuring still belongs in the Membership Directory.</p>
                 <button onClick=${qaAddFamily} disabled=${!qaForm.otherId} style=${Object.assign({}, applyBtn, { opacity: qaForm.otherId ? 1 : 0.45 })}>Add family relation</button>
               </div>` : null}
             </div>`;
