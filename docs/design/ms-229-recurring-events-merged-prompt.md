@@ -4,7 +4,9 @@
 **Date:** 12 August 2026.
 **For:** Claude Design, against the **Mosaic Website Design** system (project `f2292e35-4adc-4d33-a42d-7ca9373364c9`).
 **Deliverable:** a UI kit at `ui_kits/recurring-events/`, following `ui_kits/headers/` — an `index.html` entry point, JSX screens, and a `README.md` naming the screens and the components used.
-**Read first:** `readme.md`, `styles.css`, `guidelines/`, `components/`. Tokens were verified current against the app on 12 August 2026 — nothing to re-check.
+**Read first — inside this design system project, which is all you can see:** `readme.md`, `styles.css`, `guidelines/`, `components/`. Tokens were verified current against the app on 12 August 2026 — nothing to re-check.
+
+**You cannot read the Mosaic codebase, and must not act as though you can.** Everything true of the product is written out in section 2 below. If you find yourself needing a field name, a value, a limit or a string that is not there, that is a hole in this brief — say so and mark what you used as a guess. Do not fill it with something plausible.
 
 ---
 
