@@ -625,11 +625,10 @@ test('the Sunday variant offers no visibility control at all', () => {
 
 test('liturgical Roles are never offered on an Event', () => {
     // They stay wired to the Service exactly as they are today, which is what
-    // keeps the printed Sunday booklet safe. Offered on the EVENT screen now,
-    // since that is the only place Roles are chosen at all.
+    // keeps the printed Sunday booklet safe. Offered on the event's own tabs
+    // (MS-229), since that is the only place Roles are chosen at all.
     const Roles = require('../public/roles-core.js');
-    const page = loadComponent('calendar-event.js', 'eventDetailPage');
-    page.series = { id: 'x', roleSlugs: [] };
+    const page = seriesPage({ id: 'x', roleSlugs: [] });
     page.roleDefinitions = [
         { slug: 'kids', name: 'Kids Ministry', slots: [{ id: 's1', requirement: 'either' }] },
         { slug: 'preacher', name: 'Preacher', slots: [] },
@@ -730,9 +729,10 @@ test('every hover-revealed control sits in a row that can reveal it', () => {
 });
 
 test('the control that removes a recurring Role from an Event is reachable', () => {
-    // It lives on the EVENT screen now, not on one date — but it is still a
-    // control that once shipped invisible, so it stays pinned.
-    const html = readPage('calendar-event.html');
+    // It lives on the event's Roles tab now, not on one date and not on a
+    // second page — but it is still a control that once shipped invisible, so
+    // it stays pinned.
+    const html = readPage('recurring-events.html');
     assert.ok(/askRemoveSeriesRole\(/.test(html), 'nothing removes a recurring Role');
     assert.deepStrictEqual(orphanedRowActions(html).filter(l => /role/i.test(l)), []);
 });
@@ -805,12 +805,15 @@ test('an empty one-off job goes without a question too', async () => {
 });
 
 test('the remove buttons go through the question, never straight to the deletion', () => {
-    const html = readPage('calendar-event.html');
+    // Two pages since MS-229 — a Role comes off the EVENT beside its rota, a
+    // one-off job comes off one DATE — and the guard has to hold on both.
+    const series = readPage('recurring-events.html');
+    const date = readPage('calendar-event.html');
     // The unguarded ones still exist — they are what the confirmation calls —
     // but nothing in the markup may reach them directly.
-    assert.ok(!/@click="removeSeriesRole\(/.test(html), 'a click removes a Role without asking');
-    assert.ok(!/@click="removeOneOffRole\(/.test(html), 'a click deletes a one-off job without asking');
-    assert.ok(/askRemoveSeriesRole\(/.test(html) && /askRemoveOneOffRole\(/.test(html));
+    assert.ok(!/@click="removeSeriesRole\(/.test(series), 'a click removes a Role without asking');
+    assert.ok(!/@click="removeOneOffRole\(/.test(date), 'a click deletes a one-off job without asking');
+    assert.ok(/askRemoveSeriesRole\(/.test(series) && /askRemoveOneOffRole\(/.test(date));
 });
 
 // ── The colour an Event shows up as ───────────────────────────────────────────
@@ -906,19 +909,34 @@ function seriesDb(seed) {
     return db;
 }
 
+// The merged Recurring Events page, opened on one series (MS-229).
+//
+// ⚠ `series` here is the LIST and `chosen` is the one being managed — the
+// opposite way round from the screen this behaviour used to live on, where
+// `series` was the single loaded document. Every test that used to say
+// `page.series = {…}` says `seriesPage({…})` instead, so the difference is
+// stated once rather than got wrong in twenty places.
+function seriesPage(series, overrides) {
+    const page = loadComponent('recurring-events.js', 'recurringEventsPage', overrides);
+    page.rank = 'editor';
+    page.series = [series];
+    page.seriesId = series.id;
+    page.startSeriesDraft();
+    return page;
+}
+
 test('opening the Sunday Service creates it if it has never existed', async () => {
+    // The repair moved with the screen (MS-229): it used to happen on the way
+    // into a second page, and that page is gone. Picking the Sunday out of the
+    // list is now the moment it gets created if it never existed, or repaired
+    // if it drifted.
     const Roles = require('../public/roles-core.js');
     const db = seriesDb({});
-    const page = loadComponent('calendar-event.js', 'eventDetailPage', {
-        db: db,
-        location: { search: '?series=sunday_service', href: '' },
-    });
-    page.rank = 'editor';
+    const page = seriesPage({ id: 'sunday_service', roleSlugs: [] }, { db: db });
 
-    await page.loadSeriesMode('sunday_service');
+    await page.reconcileSunday();
 
-    assert.strictEqual(page.managingSeries, true);
-    assert.strictEqual(page.series.name, 'Sunday Service');
+    assert.strictEqual(page.chosen.name, 'Sunday Service');
     assert.deepStrictEqual(db.__writes.map(w => w.path), ['events/sunday_service']);
 
     // Every liturgical Role is shown, and every one of them is locked.
@@ -927,14 +945,27 @@ test('opening the Sunday Service creates it if it has never existed', async () =
     assert.ok(page.liturgicalRoles.every(r => r.locked));
 });
 
+test('a repair that cannot be written still leaves the rota readable', async () => {
+    // A church whose Sunday drifted still gets to read its rota. A failed
+    // repair is an admin's problem, not a reason to show nothing.
+    const page = seriesPage({ id: 'sunday_service', name: 'Sunday Service', roleSlugs: [] }, {
+        db: { collection: () => { throw new Error('denied'); } },
+    });
+
+    await page.reconcileSunday();
+
+    assert.strictEqual(page.error, '', 'a failed repair took the page down with it');
+    assert.strictEqual(page.chosen.name, 'Sunday Service');
+});
+
 test('a liturgical Role is never offered for removal, and refuses if asked', async () => {
     const Roles = require('../public/roles-core.js');
     const db = seriesDb({});
-    const page = loadComponent('calendar-event.js', 'eventDetailPage', {
-        db: db, location: { search: '?series=sunday_service', href: '' },
-    });
-    page.rank = 'editor';
-    await page.loadSeriesMode('sunday_service');
+    const page = seriesPage({ id: 'sunday_service', roleSlugs: [] }, { db: db });
+    // Set from here so the array is this realm's — the page's own `[]` is the
+    // sandbox's, and deepStrictEqual compares prototypes.
+    page.roleDefinitions = [];
+    await page.reconcileSunday();
 
     // Not in the removable list...
     assert.deepStrictEqual(page.servantRoles, []);
@@ -969,16 +1000,18 @@ test('the Calendar offers the events that repeat as a thing above all their date
 });
 
 test('the Recurring Events page keeps every door it promises', () => {
-    // The page is deliberately read-only, so it exists to be left through: to
-    // the Event itself, to one date, to a new recurring Event, and to the draft
-    // room with the ticked dates in hand. A door that leads nowhere strands the
+    // The rota is deliberately read-only, so the page exists to be left
+    // through: to one date, to a new recurring Event, and to the draft room
+    // with the ticked dates in hand. A door that leads nowhere strands the
     // editor on a screen that cannot change the thing they came to change.
+    //
+    // ⚠ There is no longer a door to "the Event itself" — it is a tab, not a
+    // page (MS-229), and a link out to one would be a link to a redirect.
     const page = loadComponent('recurring-events.js', 'recurringEventsPage');
     page.seriesId = 'sunday_service';
 
-    assert.strictEqual(page.seriesHref('sunday_service'),
-        'calendar-event.html?series=sunday_service', 'no door to the Event itself');
-    assert.strictEqual(page.eventHref, 'calendar-event.html?series=sunday_service');
+    assert.strictEqual(page.seriesHref, undefined, 'the Event is a tab, not a door');
+    assert.strictEqual(page.eventHref, undefined);
     assert.strictEqual(page.dateHref('2026-08-09'),
         'calendar-event.html?id=sunday_service_2026-08-09', 'no door into a single date');
 
@@ -1185,8 +1218,7 @@ test('a Sunday date shows its Roles section at all', () => {
 });
 
 test('the Sunday Service screen offers both jobs on a date, and keeps them apart', () => {
-    const page = loadComponent('calendar-event.js', 'eventDetailPage');
-    page.series = { id: 'sunday_service', name: 'Sunday Service' };
+    const page = seriesPage({ id: 'sunday_service', name: 'Sunday Service' });
 
     // Who's on → the Event page for that Sunday, where Servant Roles are filled.
     assert.strictEqual(page.dateHref('2026-08-02'),
@@ -1611,13 +1643,22 @@ test('skipping a date nobody has touched hands over the series, so the date is s
 // time, the place and who can see it — one place for "what this Event IS".
 
 test('editing a repeating Event goes to the Event, not to a pattern-only modal', () => {
+    // And since MS-229 "the Event" is its tabs beside its rota, not a second
+    // reading of this page under a different query.
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.occurrence = { id: 'x', seriesId: 'midweek', date: '2026-08-19' };
+    assert.strictEqual(page.eventHref, 'recurring-events.html?series=midweek');
+
     const html = readPage('calendar-event.html');
-    assert.ok(/'calendar-event\.html\?series=' \+ occurrence\.seriesId/.test(html),
+    assert.ok(/:href="eventHref"/.test(html),
         'one date of a repeating Event has no way through to the Event itself');
+    assert.doesNotMatch(html, /calendar-event\.html\?series=/,
+        'a link still points at the page that became a redirect');
 });
 
 test('the Event screen edits everything that is true of every date', () => {
-    const html = readPage('calendar-event.html');
+    // The event's own tabs, beside its rota (MS-229).
+    const html = readPage('recurring-events.html');
     ['seriesDraft.name', 'seriesDraft.location', 'seriesDraft.description',
      'saveSeriesTime(', 'openPattern()', 'setSeriesVisibility(', 'addSeriesRole(', 'setColour(']
         .forEach(binding => {
@@ -1627,9 +1668,9 @@ test('the Event screen edits everything that is true of every date', () => {
 });
 
 test('details are held in a draft, so a half-typed name is never saved', () => {
-    const page = loadComponent('calendar-event.js', 'eventDetailPage');
-    page.series = { id: 'midweek', name: 'Midweek', location: 'The hall', description: '' };
-    page.startSeriesDraft();
+    const page = seriesPage({
+        id: 'midweek', name: 'Midweek', location: 'The hall', description: '',
+    });
 
     assert.strictEqual(page.seriesDetailsChanged, false);
     page.seriesDraft.name = 'Midweek Gathering';
@@ -1642,9 +1683,7 @@ test('details are held in a draft, so a half-typed name is never saved', () => {
 });
 
 test('an Event cannot be saved with no name', () => {
-    const page = loadComponent('calendar-event.js', 'eventDetailPage');
-    page.series = { id: 'midweek', name: 'Midweek' };
-    page.startSeriesDraft();
+    const page = seriesPage({ id: 'midweek', name: 'Midweek' });
     page.seriesDraft.name = '   ';
     assert.strictEqual(page.seriesDetailsValid, false);
 });
@@ -1652,16 +1691,35 @@ test('an Event cannot be saved with no name', () => {
 test('the Sunday Service keeps its name and its pattern', () => {
     // Everything else in the app refers to both. Renaming it or moving it off
     // Sundays would break the Service Guide and every Involvement record.
-    const html = readPage('calendar-event.html');
-    assert.ok(/x-model="seriesDraft.name" :disabled="isSundaySeries"/.test(html),
+    const html = readPage('recurring-events.html');
+    assert.ok(/x-model="seriesDraft.name"[\s\S]{0,120}:disabled="isSundaySeries"/.test(html),
         'the Sunday Service can be renamed');
-    // The "Change pattern" button must sit inside a !isSundaySeries guard: take
-    // the text before it and check the nearest guard is that one.
-    const before = html.slice(0, html.indexOf('Change pattern'));
-    assert.ok(before.lastIndexOf('x-show="!isSundaySeries"') > before.lastIndexOf('</div>') - 400,
-        'the Sunday Service pattern can be changed');
-    assert.ok(/x-show="!isSundaySeries" class="mt-sm">\s*<button @click="openPattern\(\)"/.test(html),
+    // Changing the pattern is offered behind `patternEditable`, which is the
+    // one place the "not a Sunday" rule is written — a second spelling of it in
+    // the markup is a second place for it to drift.
+    assert.ok(/x-show="patternEditable"[\s\S]{0,200}openPattern\(\)/.test(html),
         'the Change pattern button is not guarded against the Sunday Service');
+
+    const page = seriesPage({ id: 'sunday_service', name: 'Sunday Service' });
+    assert.strictEqual(page.isSundaySeries, true);
+    assert.strictEqual(page.patternEditable, false, 'a Sunday offered a pattern change');
+
+    const midweek = seriesPage({ id: 'midweek', name: 'Midweek' });
+    assert.strictEqual(midweek.patternEditable, true);
+});
+
+test('a Sunday says it is settled rather than greying a control out', () => {
+    // Settled is not disabled. A greyed control implies a permission you might
+    // one day be given; these four are facts about what a Sunday IS.
+    const html = readPage('recurring-events.html');
+    const settled = html.match(/class="m-settled/g) || [];
+    assert.ok(settled.length >= 3,
+        'the Sunday\'s settled sentences are drawn as disabled controls instead');
+    // Whitespace-tolerant: these are prose in the markup and wrap where they wrap.
+    const flat = html.replace(/\s+/g, ' ');
+    assert.ok(flat.indexOf('A Sunday Service is always public — that is settled, not a setting.') !== -1);
+    assert.ok(flat.indexOf('Every Sunday, by definition. That one is settled.') !== -1);
+    assert.ok(flat.indexOf('The Sunday Service keeps its name — everything else in the app refers to it.') !== -1);
 });
 
 // ── A one-off Event was creatable and then frozen ─────────────────────────────
@@ -1789,7 +1847,7 @@ test('taking a Role off the Event asks first when people are on it', () => {
     // The guard moved with the control. Removing a Role from the EVENT drops
     // everybody in it on EVERY date, which is a bigger thing than the per-date
     // removal this used to guard, not a smaller one.
-    const html = readPage('calendar-event.html');
+    const html = readPage('recurring-events.html');
     assert.ok(/askRemoveSeriesRole\(/.test(html),
         'a Role comes off the whole Event with no question asked');
     assert.ok(!/@click="removeSeriesRole\(/.test(html),
@@ -1797,9 +1855,7 @@ test('taking a Role off the Event asks first when people are on it', () => {
 });
 
 test('the question names how many dates and how many people it costs', async () => {
-    const page = loadComponent('calendar-event.js', 'eventDetailPage');
-    page.rank = 'editor';
-    page.series = { id: 'midweek', name: 'Midweek', roleSlugs: ['sound_desk'], lockedRoleSlugs: [] };
+    const page = seriesPage({ id: 'midweek', name: 'Midweek', roleSlugs: ['sound_desk'], lockedRoleSlugs: [] });
     page.roleDefinitions = [SOUND];
     page.people = [{ id: 'p1', name: 'Dave Rowe' }, { id: 'p2', name: 'Sam Hale' }];
     page.seriesRoleUsage = async () => ([
@@ -1816,9 +1872,7 @@ test('the question names how many dates and how many people it costs', async () 
 });
 
 test('a Role nobody is on comes off the Event without a question', async () => {
-    const page = loadComponent('calendar-event.js', 'eventDetailPage');
-    page.rank = 'editor';
-    page.series = { id: 'midweek', name: 'Midweek', roleSlugs: ['sound_desk'], lockedRoleSlugs: [] };
+    const page = seriesPage({ id: 'midweek', name: 'Midweek', roleSlugs: ['sound_desk'], lockedRoleSlugs: [] });
     page.roleDefinitions = [SOUND];
     page.seriesRoleUsage = async () => [];
     let saved = null;
@@ -1880,8 +1934,9 @@ test('a repeating Event that is not a Sunday keeps all of that', () => {
 test('one Sunday has a way through to the Sunday Service itself', () => {
     // Without it, the only door to the Sunday Service as an Event is a button on
     // the Calendar — so from a Sunday you would have to go back to find it.
+    // Since MS-229 that door opens Recurring Events, on the Sunday.
     const page = sundayDate();
-    assert.strictEqual(page.eventHref, 'calendar-event.html?series=sunday_service');
+    assert.strictEqual(page.eventHref, 'recurring-events.html?series=sunday_service');
 
     const html = readPage('calendar-event.html');
     assert.ok(/:href="eventHref"/.test(html), 'no way through to the Event from one date of it');
@@ -1892,10 +1947,10 @@ test('the way through is offered on every date of a repeating Event, Sundays inc
     page.rank = 'editor';
 
     page.occurrence = { id: 'sunday_service_2026-08-02', seriesId: 'sunday_service', date: '2026-08-02' };
-    assert.strictEqual(page.eventHref, 'calendar-event.html?series=sunday_service');
+    assert.strictEqual(page.eventHref, 'recurring-events.html?series=sunday_service');
 
     page.occurrence = { id: 'midweek_2026-08-05', seriesId: 'midweek', date: '2026-08-05' };
-    assert.strictEqual(page.eventHref, 'calendar-event.html?series=midweek');
+    assert.strictEqual(page.eventHref, 'recurring-events.html?series=midweek');
 
     // A one-off has no Event above it — it IS the Event.
     page.occurrence = { id: 'harvest', seriesId: null, date: '2026-09-20' };
@@ -1907,13 +1962,12 @@ test('a liturgical Role on the Event screen is named, not slugged', () => {
     // lookup that only searches stored definitions falls through to the slug and
     // the screen reads "worship_helper" at somebody.
     const Roles = require('../public/roles-core.js');
-    const page = loadComponent('calendar-event.js', 'eventDetailPage');
-    page.roleDefinitions = [SOUND];
-    page.series = {
+    const page = seriesPage({
         id: 'sunday_service',
         roleSlugs: ['worship_helper', 'sermonette', 'prayer', 'sound_desk'],
         lockedRoleSlugs: ['worship_helper', 'sermonette', 'prayer'],
-    };
+    });
+    page.roleDefinitions = [SOUND];
 
     const named = {};
     page.seriesRoles.forEach(r => { named[r.slug] = r.name; });
@@ -1924,7 +1978,9 @@ test('a liturgical Role on the Event screen is named, not slugged', () => {
     assert.strictEqual(named.sound_desk, 'Sound desk');
 
     // And every liturgical slug resolves, not just these three.
-    page.series = { id: 'sunday_service', roleSlugs: Roles.LITURGICAL_SLUGS.slice(), lockedRoleSlugs: [] };
+    page.series = [{
+        id: 'sunday_service', roleSlugs: Roles.LITURGICAL_SLUGS.slice(), lockedRoleSlugs: [],
+    }];
     page.seriesRoles.forEach(r => {
         assert.notStrictEqual(r.name, r.slug, r.slug + ' renders as its slug');
     });
@@ -1933,13 +1989,12 @@ test('a liturgical Role on the Event screen is named, not slugged', () => {
 test('a Role says how many people it needs each time, not how many "places"', () => {
     // A slot is the model's word. What an editor is deciding is how many people
     // have to be there on the day.
-    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    const page = seriesPage({ id: 'x', roleSlugs: ['coffee', 'kids', 'greeter'], lockedRoleSlugs: [] });
     page.roleDefinitions = [
         { slug: 'coffee', name: 'Coffee', slots: [{ id: 's1' }] },
         { slug: 'kids', name: "Children's Ministry", slots: [{ id: 's1' }, { id: 's2' }] },
         { slug: 'greeter', name: 'Greeter', slots: [] },
     ];
-    page.series = { id: 'x', roleSlugs: ['coffee', 'kids', 'greeter'], lockedRoleSlugs: [] };
 
     const need = {};
     page.seriesRoles.forEach(r => { need[r.slug] = r.needed; });
@@ -2932,8 +2987,12 @@ test('Auto-assign is offered beside a chosen event, to editors, and not on a pho
     // that lifts the grid out cannot quietly drop it.
     assert.match(html, /x-if="isEditor"/, 'the page is offered to people who cannot use it');
     // The room it opens is a wide grid and says so when you arrive. Better not
-    // to offer the journey than to end it with a shrug.
-    assert.match(link[0], /re-desktop-only/, 'a phone is offered a page it will be refused');
+    // to offer the journey than to end it with a shrug — so the whole action
+    // bar stands down on a phone, and the door goes with it (MS-229).
+    const bar = html.match(/<div class="m-actionbar re-desktop-only"[\s\S]*?\n                    <\/div>/);
+    assert.ok(bar, 'the drafting footer is not the desktop-only bar');
+    assert.ok(bar[0].indexOf(link[0]) !== -1,
+        'a phone is offered a page it will be refused');
 });
 
 // ── The other door into the same room (MS-219) ───────────────────────────────
@@ -2959,18 +3018,37 @@ test('by hand sits beside auto-assign, carrying the same dates', () => {
     assert.strictEqual(page.draftLabel, 'Auto-assign 2 dates');
 });
 
-test('both doors are drawn, and neither is offered to a phone', () => {
+test('both doors are drawn ONCE, in a footer that holds still', () => {
+    // They used to be drawn TWICE — once above the grid and once in the ticked
+    // panel — because a long list of Roles scrolls a header pair off, and the
+    // count on the buttons has to stay next to the ticks that produced it.
+    //
+    // A footer that belongs to the PANE solves that properly (MS-229): it holds
+    // still while the grid scrolls under it, so saying it twice is now just
+    // saying it twice.
     const html = readPage('recurring-events.html');
-    const links = html.match(/<a[^>]*:href="byHandHref"[\s\S]*?<\/a>/g);
+    const byHand = html.match(/<a[^>]*:href="byHandHref"[\s\S]*?<\/a>/g) || [];
+    const draft = html.match(/<a[^>]*:href="draftHref"[\s\S]*?<\/a>/g) || [];
 
-    assert.ok(links && links.length === 2,
-        'by hand is missing from the header or from the ticked panel — the header ' +
-        'scrolls off behind a long list of Roles, which is why it is said twice');
-    links.forEach(link => {
-        assert.match(link, /re-desktop-only/,
-            'a phone is offered a grid it will be refused on arrival');
-        assert.match(link, /byHandLabel/, 'the label is written out rather than bound');
-    });
+    assert.strictEqual(byHand.length, 1, 'by hand is drawn ' + byHand.length + ' times, not once');
+    assert.strictEqual(draft.length, 1, 'auto-assign is drawn ' + draft.length + ' times, not once');
+    assert.match(byHand[0], /byHandLabel/, 'the label is written out rather than bound');
+    assert.match(draft[0], /draftLabel/, 'the label is written out rather than bound');
+
+    // Sticky, or it is a footer in name only.
+    const css = fs.readFileSync(path.join(__dirname, '..', 'build', 'design-components.mjs'), 'utf8');
+    assert.match(css, /\.m-actionbar \{[\s\S]*?position: sticky/,
+        'the action bar scrolls away with the grid');
+});
+
+test('the phone is told why it cannot draft, rather than given a dead button', () => {
+    const html = readPage('recurring-events.html');
+    const phone = html.match(/<div class="m-actionbar re-phone-only"[\s\S]*?<\/div>\s*<\/div>/);
+    assert.ok(phone, 'a phone gets no action bar at all');
+    assert.ok(phone[0].indexOf('draftHref') === -1 && phone[0].indexOf('byHandHref') === -1,
+        'a phone is offered a grid it will be refused on arrival');
+    assert.match(phone[0].replace(/\s+/g, ' '),
+        /Drafting a rota is a wide grid of dates against roles, so it waits for a computer\./);
 });
 
 // ⚠ A MISSING CORE FUNCTION IS INVISIBLE UNTIL SOMEBODY OPENS THE PAGE.
@@ -6039,10 +6117,11 @@ test('a member is shown the events that repeat rather than a wall', () => {
     assert.ok(!page.browsing && page.signedOut);
 });
 
-test('the browse lane opens and shuts one event at a time', async () => {
-    // An accordion, not a selection. The editor lane cannot land on nothing —
-    // an empty column beside a list reads as a grid that failed — but a list of
-    // rows where every one is already open is not a list.
+test('the browse lane opens one event beside the list, not under it', async () => {
+    // It was an accordion — rows that opened under themselves — because there
+    // was no pane to open into. Since MS-229 both lanes are the same split:
+    // list on the left, the one you picked on the right. So picking is a
+    // SELECTION, and the read it fires is the one that matters here.
     const filters = [];
     const query = {
         where(field, op, value) { filters.push({ field, op, value }); return query; },
@@ -6057,10 +6136,8 @@ test('the browse lane opens and shuts one event at a time', async () => {
         { id: 'midweek', name: 'Midweek', recurrence: { freq: 'weekly', weekday: 3, startDate: '2026-01-07' } },
     ];
 
-    assert.strictEqual(page.seriesId, '', 'the list opened itself before anybody asked');
-
-    await page.toggleSeries('midweek');
-    assert.ok(page.isOpen('midweek'));
+    await page.pickSeries('midweek');
+    assert.strictEqual(page.seriesId, 'midweek');
     assert.strictEqual(page.error, '', 'opening an event as a member failed the read');
 
     // ⚠ The member's read is constrained like every other. Unconstrained it does
@@ -6069,8 +6146,9 @@ test('the browse lane opens and shuts one event at a time', async () => {
     assert.ok(filters.some(f => f.field === 'visibility' && f.op === 'in'),
         'the browse lane reads occurrences without naming a rung');
 
-    await page.toggleSeries('midweek');
-    assert.ok(!page.isOpen('midweek'), 'tapping the open row again did not shut it');
+    // On a phone the pane IS the screen, so picking a row is a navigation and
+    // the shell's arrow has somewhere to come back to.
+    assert.strictEqual(page.phonePane, true, 'picking an event did not open it on a phone');
 });
 
 test('the browse lane offers nothing that writes', () => {
@@ -6082,14 +6160,18 @@ test('the browse lane offers nothing that writes', () => {
 
     assert.ok(lane.length > 400, 'the browse lane is not where this test thinks it is');
     [
-        'takeEverybodyOff', 'draftHref', 'byHandHref', 'newEventHref', 'seriesHref', 'eventHref',
+        'takeEverybodyOff', 'draftHref', 'byHandHref', 'newEventHref',
         'toggle(', 'clearSelection',
+        // The event's own controls are tabs now, so the lane that may not write
+        // must not carry the tab bar either (MS-229).
+        'm-tabs', 'seriesDraft', 'setColour', 'setSeriesVisibility', 'askRemoveSeriesRole',
+        'addPairRule', 'openPattern',
     ].forEach(control => {
         assert.ok(lane.indexOf(control) === -1,
             'the browse lane offers ' + control + ', which a member may not do');
     });
 
-    assert.ok(/toggleSeries\(/.test(lane), 'nothing in the browse lane opens an event');
+    assert.ok(/pickSeries\(/.test(lane), 'nothing in the browse lane opens an event');
     assert.ok(/dateHref\(/.test(lane), 'a member cannot reach a single date from the list');
 });
 
@@ -6121,14 +6203,15 @@ test('a series goes back to the list of what repeats, a date to the Calendar', (
     assert.strictEqual(makingOne.backHref, 'calendar.html');
 });
 
-test('the Event page says the way back once, and the page draws it three times', () => {
-    // The header arrow, the button beside the title, and the create form's
-    // Cancel. Three literals is three chances for one of them to keep pointing
-    // at the Calendar after the other two moved.
+test('the Event page says the way back once, and every exit reads it', () => {
+    // The header arrow and the create form's Cancel. (It was three until MS-229
+    // took the series body off this page.) A hard-coded literal is a chance for
+    // one exit to keep pointing at the Calendar after the others moved.
     const html = readPage('calendar-event.html');
     const hardCoded = (html.match(/href="calendar\.html"/g) || []).length;
     assert.strictEqual(hardCoded, 0,
         'a way out of the Event page still points at the Calendar whatever it is showing');
-    assert.ok((html.match(/:href="backHref"/g) || []).length >= 3,
-        'not every way out of the Event page reads the same answer');
+    const bound = (html.match(/:href="backHref"/g) || []).length;
+    assert.ok(bound >= 2,
+        'not every way out of the Event page reads the same answer (found ' + bound + ')');
 });

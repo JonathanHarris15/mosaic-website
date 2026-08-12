@@ -76,7 +76,13 @@ for (const path of walk(join(repo, "public"))) {
   // Hyphens are part of the name — matching m-icon out of m-icon-btn would
   // report a ghost for a class that exists and mark the real one unused.
   // Leading -- is excluded so --m-focus-ring is not read as a class.
-  for (const m of src.matchAll(/(?<!-)\bm-[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:__[a-z0-9]+)?(?:--[a-z0-9]+)?\b/g)) {
+  //
+  // ⚠ The ELEMENT may carry hyphens too. It could not until MS-229, so
+  // `m-rota__hole-dot` in the markup was read as `m-rota__hole` — which
+  // reported a class the page really draws as unused, and would have missed a
+  // ghost with a hyphen in its element. Widening only ever matches MORE, so no
+  // ghost this caught before can slip through it now.
+  for (const m of src.matchAll(/(?<!-)\bm-[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:__[a-z0-9]+(?:-[a-z0-9]+)*)?(?:--[a-z0-9]+)?\b/g)) {
     note(m[0], rel);
   }
 

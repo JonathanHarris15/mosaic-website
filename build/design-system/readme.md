@@ -113,11 +113,14 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 - **Avatar** `.m-avatar` — A Person's Directory Photo, or their initials when there is none.
 - **ScriptureBlock** `.m-scripture` — A quoted passage set in EB Garamond with a gold hairline down its edge, and the reference beneath in tracked caps.
 - **Divider** `.m-divider` — A warm hairline between things.
+- **RotaGrid** `.m-rota` — Roles down the side, dates across the top, and what is really stored in the cells.
+- **Settled** `.m-settled` — Where something cannot change because it is settled, the sentence is the control.
 
 **Feedback**
 - **Spinner** `.m-spinner` — The page's waiting state.
 - **Toast** `.m-toast` — A short confirmation at the foot of the screen.
 - **EmptyState** `.m-empty` — What a list says when it has nothing in it.
+- **Notice** `.m-notice` — The edged bar: signed out, a read that failed, a write that half-failed, or what a selection adds up to.
 
 **Layout**
 - **PageShell** `.m-page` — The body of a desktop page: warm background, navy ink, a column capped at --container-max.
@@ -125,6 +128,10 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 - **BackLink** `.m-back` — The way out of a page, top left.
 - **Row** `.m-row` — One line of a list: an optional leading avatar or medallion, a title, an optional second line, something trailing.
 - **CardList** `.m-card-list` — Rows gathered into one bordered surface, so a list reads as a single object rather than a stack of cards.
+- **SplitView** `.m-split` — A list of things beside the one that is open, where picking a row changes the whole right-hand side rather than navigating away.
+- **PickList** `.m-picklist` — The list half of a SplitView: rows you choose between, one of them current, each carrying a colour dot and two lines of detail.
+- **Tabs** `.m-tabs` — The tab bar inside a pane, when one selected thing has more sides to it than a page can sensibly stack.
+- **ActionBar** `.m-actionbar` — A pane's own sticky footer: what the current selection adds up to, said in words on the left, and the actions that take it somewhere on the right.
 
 <!-- @generated:end -->
 

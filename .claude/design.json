@@ -7,6 +7,17 @@
     "name": "Mosaic Website Design",
     "projectId": "f2292e35-4adc-4d33-a42d-7ca9373364c9"
   },
+  "$repo": [
+    "Claude Design can be given the source — 'Choose a repository' for GitHub, or",
+    "'Link local code'. A brief names this so the design reads the real files instead",
+    "of inventing what it was not told. Naming the repo is not the whole job: the brief",
+    "still has to say WHICH files answer which question, because 'read the repo' is an",
+    "instruction nobody can finish."
+  ],
+  "repo": {
+    "github": "JonathanHarris15/mosaic-website",
+    "branch": "main"
+  },
   "tokens": {
     "source": "tailwind.config.js",
     "build": "npm run build:tokens",

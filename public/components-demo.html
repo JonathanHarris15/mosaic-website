@@ -48,9 +48,9 @@
         <nav class="g-nav">
       <div class="g-navgroup"><span class="m-label">Core</span><a href="#m-btn">Button</a><a href="#m-icon-btn">IconButton</a></div>
       <div class="g-navgroup"><span class="m-label">Forms</span><a href="#m-input">Input</a><a href="#m-select">Select</a><a href="#m-check">Checkbox</a><a href="#m-search">SearchBar</a></div>
-      <div class="g-navgroup"><span class="m-label">Display</span><a href="#m-label">SectionLabel</a><a href="#m-serif-head">SerifHead</a><a href="#m-card">Card</a><a href="#m-nav-card">NavCard</a><a href="#m-medallion">Medallion</a><a href="#m-badge">Badge</a><a href="#m-avatar">Avatar</a><a href="#m-scripture">ScriptureBlock</a><a href="#m-divider">Divider</a></div>
-      <div class="g-navgroup"><span class="m-label">Feedback</span><a href="#m-spinner">Spinner</a><a href="#m-toast">Toast</a><a href="#m-empty">EmptyState</a></div>
-      <div class="g-navgroup"><span class="m-label">Layout</span><a href="#m-page">PageShell</a><a href="#m-header">PageHeader</a><a href="#m-back">BackLink</a><a href="#m-row">Row</a><a href="#m-card-list">CardList</a></div>
+      <div class="g-navgroup"><span class="m-label">Display</span><a href="#m-label">SectionLabel</a><a href="#m-serif-head">SerifHead</a><a href="#m-card">Card</a><a href="#m-nav-card">NavCard</a><a href="#m-medallion">Medallion</a><a href="#m-badge">Badge</a><a href="#m-avatar">Avatar</a><a href="#m-scripture">ScriptureBlock</a><a href="#m-divider">Divider</a><a href="#m-rota">RotaGrid</a><a href="#m-settled">Settled</a></div>
+      <div class="g-navgroup"><span class="m-label">Feedback</span><a href="#m-spinner">Spinner</a><a href="#m-toast">Toast</a><a href="#m-empty">EmptyState</a><a href="#m-notice">Notice</a></div>
+      <div class="g-navgroup"><span class="m-label">Layout</span><a href="#m-page">PageShell</a><a href="#m-header">PageHeader</a><a href="#m-back">BackLink</a><a href="#m-row">Row</a><a href="#m-card-list">CardList</a><a href="#m-split">SplitView</a><a href="#m-picklist">PickList</a><a href="#m-tabs">Tabs</a><a href="#m-actionbar">ActionBar</a></div>
         </nav>
 
     <h2 class="g-group">Core</h2>
@@ -60,7 +60,7 @@
           <code>.m-btn</code>
         </header>
         <p class="g-summary">The standard action. Primary for the one thing a screen is for, secondary for the alternative, ghost for everything that would otherwise be a link.</p>
-        <div class="g-variants"><b>variant</b> primary · secondary · ghost · quiet · danger</div><div class="g-variants"><b>size</b> sm · md · lg</div>
+        <div class="g-variants"><b>variant</b> primary · secondary · ghost · quiet · danger · danger-outline</div><div class="g-variants"><b>size</b> sm · md · lg</div>
         <div class="g-demo">
         <div class="g-item"><button class="m-btn m-btn--primary">Save the service</button></div>
         <div class="g-item"><button class="m-btn m-btn--secondary m-btn--sm">Cancel</button></div>
@@ -227,6 +227,28 @@
         <div class="g-item"><span class="m-divider m-divider--vertical"></span></div>
         </div>
       </section>
+      <section class="g-card" id="m-rota">
+        <header>
+          <h3>RotaGrid</h3>
+          <code>.m-rota</code>
+        </header>
+        <p class="g-summary">Roles down the side, dates across the top, and what is really stored in the cells. The role column stays put while the dates scroll, each column header ticks, and an unfilled place is drawn rather than left blank.</p>
+        <div class="g-variants"><b>column</b> default · picked</div>
+        <div class="g-demo">
+        <div class="g-item"><div class="m-rota"><div class="m-rota__scroll"><table class="m-rota__table">…</table></div></div></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-settled">
+        <header>
+          <h3>Settled</h3>
+          <code>.m-settled</code>
+        </header>
+        <p class="g-summary">Where something cannot change because it is settled, the sentence is the control. Greying one out implies a permission you might one day be given.</p>
+        <div class="g-variants"><b>size</b> md · sm</div>
+        <div class="g-demo">
+        <div class="g-item"><p class="m-settled">Anyone at all. A Sunday Service is always public — that is settled, not a setting.</p></div>
+        </div>
+      </section>
     <h2 class="g-group">Feedback</h2>
       <section class="g-card" id="m-spinner">
         <header>
@@ -260,6 +282,17 @@
         
         <div class="g-demo">
         <div class="g-item"><div class="m-empty"><span class="material-symbols-outlined">event_busy</span><p>Nothing on this week yet.</p></div></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-notice">
+        <header>
+          <h3>Notice</h3>
+          <code>.m-notice</code>
+        </header>
+        <p class="g-summary">The edged bar: signed out, a read that failed, a write that half-failed, or what a selection adds up to. One component, four tones, replacing eleven hand-rolled copies.</p>
+        <div class="g-variants"><b>tone</b> gold · info · warning · error</div>
+        <div class="g-demo">
+        <div class="g-item"><div class="m-notice m-notice--gold"><span class="material-symbols-outlined m-notice__icon">person_off</span><div class="m-notice__body"><p class="m-notice__title">You are not signed in.</p><p class="m-notice__text">Sign in to see the events that repeat and who is on them.</p></div><div class="m-notice__acts"><a class="m-btn m-btn--primary m-btn--sm" href="#">Sign in</a></div></div></div>
         </div>
       </section>
     <h2 class="g-group">Layout</h2>
@@ -318,6 +351,50 @@
         
         <div class="g-demo">
         <div class="g-item"><div class="m-card-list"><div class="m-row">…</div><div class="m-row">…</div></div></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-split">
+        <header>
+          <h3>SplitView</h3>
+          <code>.m-split</code>
+        </header>
+        <p class="g-summary">A list of things beside the one that is open, where picking a row changes the whole right-hand side rather than navigating away.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><div class="m-split"><div class="m-split__list">…</div><div class="m-split__pane">…</div></div></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-picklist">
+        <header>
+          <h3>PickList</h3>
+          <code>.m-picklist</code>
+        </header>
+        <p class="g-summary">The list half of a SplitView: rows you choose between, one of them current, each carrying a colour dot and two lines of detail.</p>
+        <div class="g-variants"><b>state</b> default · current</div>
+        <div class="g-demo">
+        <div class="g-item"><div class="m-picklist"><button class="m-picklist__item m-picklist__item--current"><span class="m-picklist__dot" style="background: var(--event-navy)"></span><span class="m-picklist__main"><span class="m-picklist__name">Sunday Service</span><span class="m-picklist__line">Every Sunday at 10:30 am</span><span class="m-picklist__meta">5 roles · next 17 Aug</span></span></button></div></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-tabs">
+        <header>
+          <h3>Tabs</h3>
+          <code>.m-tabs</code>
+        </header>
+        <p class="g-summary">The tab bar inside a pane, when one selected thing has more sides to it than a page can sensibly stack.</p>
+        <div class="g-variants"><b>state</b> default · current</div>
+        <div class="g-demo">
+        <div class="g-item"><div class="m-tabs"><button class="m-tabs__tab m-tabs__tab--current">Rota</button><button class="m-tabs__tab">The event<span class="m-tabs__dot"></span></button></div></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-actionbar">
+        <header>
+          <h3>ActionBar</h3>
+          <code>.m-actionbar</code>
+        </header>
+        <p class="g-summary">A pane's own sticky footer: what the current selection adds up to, said in words on the left, and the actions that take it somewhere on the right.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><div class="m-actionbar"><div class="m-actionbar__said"><p class="m-actionbar__count">5 dates ticked</p><p class="m-actionbar__note">Two more come with them.</p></div><div class="m-actionbar__acts"><button class="m-btn m-btn--primary m-btn--sm">Auto-assign 7 dates</button></div></div></div>
         </div>
       </section>
     </div>

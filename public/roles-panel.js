@@ -112,7 +112,7 @@
                         <p x-show="isEditor && !managedRoles.length && !oneOffRoles.length"
                            class="text-[13px] text-on-surface-variant mt-sm">
                             Nothing needed yet. Add a role below for this date only, or
-                            <a :href="'calendar-event.html?series=' + occurrence.seriesId" x-show="occurrence.seriesId"
+                            <a :href="'recurring-events.html?series=' + occurrence.seriesId" x-show="occurrence.seriesId"
                                class="text-secondary cal-focus rounded">add one to every date</a>.
                         </p>
 

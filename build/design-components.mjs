@@ -42,7 +42,7 @@ export const COMPONENTS = [
     summary:
       "The standard action. Primary for the one thing a screen is for, secondary for the alternative, ghost for everything that would otherwise be a link.",
     variants: {
-      variant: ["primary", "secondary", "ghost", "quiet", "danger"],
+      variant: ["primary", "secondary", "ghost", "quiet", "danger", "danger-outline"],
       size: ["sm", "md", "lg"],
     },
     notes: [
@@ -103,6 +103,16 @@ export const COMPONENTS = [
 
 .m-btn--danger { background: var(--error); color: var(--on-error); border-color: var(--error); }
 .m-btn--danger:hover:not(:disabled) { background: var(--on-error-container); border-color: var(--on-error-container); }
+
+/* The destructive action that has to be findable without ever being the thing
+   your eye lands on. Distinct from --danger because on a roster screen a
+   FILLED red button collides with the red that means somebody declined — the
+   loudest signal on the calendar cannot also be the colour of a button you are
+   meant to walk past. */
+.m-btn--danger-outline {
+  background: var(--surface-container-lowest); color: var(--error); border-color: var(--error);
+}
+.m-btn--danger-outline:hover:not(:disabled) { background: var(--error-container); color: var(--on-error-container); }
 `,
   },
 
@@ -818,6 +828,317 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
   overflow: hidden;
 }
+`,
+  },
+
+  /* ── MS-229 ─────────────────────────────────────────────────
+     Six things the merged Recurring Events screen needed and the
+     library did not have, plus one (.m-notice) it had in eleven
+     hand-rolled copies across two pages. */
+
+  {
+    name: "SplitView",
+    cls: "m-split",
+    group: "Layout",
+    summary:
+      "A list of things beside the one that is open, where picking a row changes the whole right-hand side rather than navigating away.",
+    variants: {},
+    notes: [
+      "The list is a PANEL, not a page. This is the shape for a screen whose subject is one of several similar things — not for a sidebar of navigation.",
+      "Stacks below 1000px by media query AND container query, so it collapses correctly whether the page is narrow or the pane it sits in is.",
+      "It only stops the two columns. A phone that wants the pane to REPLACE the list entirely does that itself — the component has no opinion about which of the two you are looking at.",
+      "--m-split-list overrides the list width; 320px otherwise.",
+    ],
+    examples: [
+      '<div class="m-split"><div class="m-split__list">…</div><div class="m-split__pane">…</div></div>',
+    ],
+    css: `
+.m-split {
+  display: grid; grid-template-columns: var(--m-split-list, 320px) minmax(0, 1fr);
+  gap: var(--space-md); align-items: start;
+}
+@media (max-width: 1000px) { .m-split { grid-template-columns: minmax(0, 1fr); } }
+@container (max-width: 1000px) { .m-split { grid-template-columns: minmax(0, 1fr); } }
+.m-split__list { min-width: 0; }
+.m-split__pane { min-width: 0; display: flex; flex-direction: column; }
+`,
+  },
+
+  {
+    name: "PickList",
+    cls: "m-picklist",
+    group: "Layout",
+    summary:
+      "The list half of a SplitView: rows you choose between, one of them current, each carrying a colour dot and two lines of detail.",
+    variants: { state: ["default", "current"] },
+    notes: [
+      "Not a CardList of Rows. A Row carries one sub-line, has no current state, and TRUNCATES its title — and the one list that names the subject of the whole screen must be allowed to wrap. A clipped name there is a bug waiting to be filed.",
+      "The current row is a tonal step plus a 3px --primary left edge. Both, because the tonal step alone is too quiet against a warm surface and the edge alone reads as decoration.",
+    ],
+    examples: [
+      '<div class="m-picklist"><button class="m-picklist__item m-picklist__item--current"><span class="m-picklist__dot" style="background: var(--event-navy)"></span><span class="m-picklist__main"><span class="m-picklist__name">Sunday Service</span><span class="m-picklist__line">Every Sunday at 10:30 am</span><span class="m-picklist__meta">5 roles · next 17 Aug</span></span></button></div>',
+    ],
+    css: `
+.m-picklist {
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+.m-picklist__item {
+  display: flex; align-items: flex-start; gap: var(--space-base);
+  width: 100%; padding: 11px var(--space-sm) 12px; text-align: left;
+  background: transparent; border: 0;
+  border-bottom: 1px solid var(--outline-variant);
+  border-left: 3px solid transparent;
+  cursor: pointer; font-family: var(--font-sans);
+  transition: background-color var(--duration) var(--ease-standard);
+}
+.m-picklist__item:last-child { border-bottom: 0; }
+.m-picklist__item:hover { background: var(--surface-container-low); }
+.m-picklist__item:focus-visible { outline: 2px solid var(--tertiary); outline-offset: -2px; }
+.m-picklist__item--current { background: var(--surface-container-low); border-left-color: var(--primary); }
+.m-picklist__dot {
+  width: 10px; height: 10px; margin-top: 5px; flex: 0 0 auto;
+  border-radius: var(--radius-full); border: 1px solid var(--outline-variant);
+}
+.m-picklist__main { min-width: 0; flex: 1 1 auto; }
+
+/* It WRAPS. There is no stored cap on the name, and clipping the one list
+   that identifies what the rest of the screen is about is not a saving. */
+.m-picklist__name {
+  display: block; font-size: 14.5px; line-height: 1.35;
+  color: var(--on-surface); text-wrap: pretty;
+}
+.m-picklist__item--current .m-picklist__name { font-weight: 600; }
+.m-picklist__line { display: block; margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--on-surface-variant); }
+.m-picklist__meta { display: block; margin-top: 2px; font-size: 11.5px; color: var(--outline); }
+`,
+  },
+
+  {
+    name: "Tabs",
+    cls: "m-tabs",
+    group: "Layout",
+    summary:
+      "The tab bar inside a pane, when one selected thing has more sides to it than a page can sensibly stack.",
+    variants: { state: ["default", "current"] },
+    notes: [
+      "Inside a PANE, over a hairline — not across the top of a page. A page with tabs is usually a page that should have been two pages.",
+      "Tracked caps at the same weight the header uses for a label, so the pane's chrome and the page's agree rather than competing.",
+      "46px is the button height; this is 44 — it is chrome, not an action, and it still clears the touch floor.",
+      "__dot marks a tab holding work that has not been saved. Amber, never red: red on a roster surface means somebody declined. Static, because the motion rule forbids a pulse.",
+      "overflow-x: auto with the scrollbar hidden, so four tabs survive a 390px phone.",
+    ],
+    examples: [
+      '<div class="m-tabs"><button class="m-tabs__tab m-tabs__tab--current">Rota</button><button class="m-tabs__tab">The event<span class="m-tabs__dot"></span></button></div>',
+    ],
+    css: `
+.m-tabs {
+  display: flex; align-items: stretch; gap: 2px; flex: 0 0 auto;
+  overflow-x: auto; scrollbar-width: none;
+  border-bottom: 1px solid var(--outline-variant);
+}
+.m-tabs::-webkit-scrollbar { display: none; }
+.m-tabs__tab {
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+  min-height: 44px; padding: 0 var(--space-sm);
+  background: transparent; border: 0; border-bottom: 2px solid transparent;
+  color: var(--on-surface-variant);
+  font-family: var(--font-sans); font-size: 11.5px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase; white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--duration) var(--ease-standard),
+              border-color var(--duration) var(--ease-standard);
+}
+.m-tabs__tab:hover { color: var(--primary); }
+.m-tabs__tab:focus-visible { outline: 2px solid var(--tertiary); outline-offset: -2px; }
+.m-tabs__tab--current { color: var(--primary); border-bottom-color: var(--primary); }
+
+/* Work not yet pressed into the record. */
+.m-tabs__dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: var(--radius-full); background: var(--warning); }
+`,
+  },
+
+  {
+    name: "ActionBar",
+    cls: "m-actionbar",
+    group: "Layout",
+    summary:
+      "A pane's own sticky footer: what the current selection adds up to, said in words on the left, and the actions that take it somewhere on the right.",
+    variants: {},
+    notes: [
+      "It belongs to the PANE, not to a tab. Where a selection is made in one place and acted on from another, a footer that scrolls away gets drawn twice — which is exactly what it replaces.",
+      "The words on the left are not a caption. They are what makes the buttons honest: how many, which ones, and what the action will quietly not touch.",
+      "Hidden in print. A sticky bar over a printed rota covers the last row.",
+    ],
+    examples: [
+      '<div class="m-actionbar"><div class="m-actionbar__said"><p class="m-actionbar__count">5 dates ticked</p><p class="m-actionbar__note">Two more come with them.</p></div><div class="m-actionbar__acts"><button class="m-btn m-btn--primary m-btn--sm">Auto-assign 7 dates</button></div></div>',
+    ],
+    css: `
+.m-actionbar {
+  position: sticky; bottom: 0; z-index: 5;
+  display: flex; align-items: flex-start; gap: var(--space-md); flex-wrap: wrap;
+  padding: var(--space-sm) var(--space-md);
+  background: color-mix(in srgb, var(--surface-container-lowest) 92%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--outline-variant);
+}
+.m-actionbar__said { flex: 1 1 22ch; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.m-actionbar__count { font-size: 14px; color: var(--on-surface); }
+.m-actionbar__note { font-size: 12.5px; line-height: 1.45; color: var(--on-surface-variant); text-wrap: pretty; }
+.m-actionbar__acts { display: flex; align-items: center; gap: var(--space-base); flex-wrap: wrap; flex: 0 0 auto; }
+@media print { .m-actionbar { display: none; } }
+`,
+  },
+
+  {
+    name: "RotaGrid",
+    cls: "m-rota",
+    group: "Display",
+    summary:
+      "Roles down the side, dates across the top, and what is really stored in the cells. The role column stays put while the dates scroll, each column header ticks, and an unfilled place is drawn rather than left blank.",
+    variants: { column: ["default", "picked"] },
+    notes: [
+      "⚠ THE ROLE COLUMN STAYS PUT. Eight date columns are wider than any screen, and scrolling that took the row headings away would leave you reading names three columns in with no idea which Role they are in.",
+      "An unfilled place is DRAWN — a dashed ring and a word. A blank cell reads as a place somebody forgot to fill; seeing the hole before the morning it matters is the whole point of reading ahead.",
+      "A ticked column is tinted the whole way down, so a selection reads as 'these dates' rather than as a row of checkboxes at the top. The header tint is stronger than the body's.",
+      "__state is the one line that lets an editor pick columns from the header instead of reading every cell under it.",
+      "Only __scroll scrolls sideways. The page never does.",
+    ],
+    examples: [
+      '<div class="m-rota"><div class="m-rota__scroll"><table class="m-rota__table">…</table></div></div>',
+    ],
+    css: `
+.m-rota {
+  border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
+  background: var(--surface-container-lowest); overflow: hidden;
+}
+.m-rota__scroll { overflow-x: auto; }
+.m-rota__table {
+  width: 100%; text-align: left; border-collapse: separate; border-spacing: 0;
+  font-family: var(--font-sans);
+}
+.m-rota__table th, .m-rota__table td { border-bottom: 1px solid var(--surface-dim); vertical-align: top; }
+.m-rota__table tbody tr:last-child th, .m-rota__table tbody tr:last-child td { border-bottom: 0; }
+.m-rota__stick {
+  position: sticky; left: 0; z-index: 2;
+  background: var(--surface-container-lowest);
+  border-right: 1px solid var(--surface-dim);
+}
+.m-rota__table thead .m-rota__stick { z-index: 3; }
+.m-rota__table thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--surface-container-lowest); vertical-align: bottom;
+  padding: 10px var(--space-sm);
+}
+.m-rota__table tbody th, .m-rota__table tbody td { padding: 10px var(--space-sm); }
+.m-rota__table tbody th { font-weight: 400; min-width: 180px; }
+.m-rota__col { min-width: 158px; }
+.m-rota__role { display: block; font-size: 13.5px; color: var(--on-surface); }
+.m-rota__rolesub { display: block; margin-top: 2px; font-size: 11px; color: var(--outline); }
+.m-rota__head { display: flex; align-items: flex-start; gap: var(--space-base); cursor: pointer; }
+.m-rota__day {
+  display: block; font-family: var(--font-sans); font-size: 10.5px; font-weight: 600;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant);
+}
+.m-rota__date { display: block; font-size: 13.5px; color: var(--on-surface); }
+.m-rota__state { display: block; margin-top: 2px; font-size: 11px; color: var(--on-surface-variant); }
+.m-rota__state--full { color: var(--success); }
+.m-rota__state--declined { color: var(--error); }
+.m-rota__state--off { color: var(--outline); }
+.m-rota__table th.m-rota--picked { background: color-mix(in srgb, var(--tertiary) 13%, var(--surface-container-lowest)); }
+.m-rota__table td.m-rota--picked { background: color-mix(in srgb, var(--tertiary) 7%, transparent); }
+.m-rota__cell { display: flex; flex-direction: column; gap: 5px; }
+.m-rota__place { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.m-rota__initials {
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; flex: 0 0 auto;
+  border-radius: var(--radius-full); border: 1px solid var(--outline-variant);
+  background: var(--surface-container-high);
+  font-size: 9.5px; font-weight: 600; letter-spacing: .02em; color: var(--on-surface-variant);
+}
+.m-rota__initials--declined { background: var(--error-container); border-color: var(--error); color: var(--on-error-container); }
+.m-rota__name {
+  min-width: 0; font-size: 13px; color: var(--on-surface);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.m-rota__name--declined { color: var(--error); text-decoration: line-through; }
+
+/* An unfilled place is DRAWN. */
+.m-rota__hole { display: flex; align-items: center; gap: 6px; color: var(--outline); }
+.m-rota__hole-dot { width: 22px; height: 22px; flex: 0 0 auto; border-radius: var(--radius-full); border: 1px dashed var(--outline-variant); }
+.m-rota__hole-label { font-size: 12.5px; font-style: italic; }
+.m-rota__none { font-size: 12px; color: var(--outline); }
+
+/* Narrow: the role column still stays put, but it stops eating half a phone. */
+@media (max-width: 640px) { .m-rota__table tbody th { min-width: 132px; } .m-rota__col { min-width: 140px; } }
+@container (max-width: 640px) { .m-rota__table tbody th { min-width: 132px; } .m-rota__col { min-width: 140px; } }
+`,
+  },
+
+  {
+    name: "Notice",
+    cls: "m-notice",
+    group: "Feedback",
+    summary:
+      "The edged bar: signed out, a read that failed, a write that half-failed, or what a selection adds up to. One component, four tones, replacing eleven hand-rolled copies.",
+    variants: { tone: ["gold", "info", "warning", "error"] },
+    notes: [
+      "Gold is 'you are not signed in' and other doors. Info (tertiary) is what the app is telling you about your own selection. Warning is amber — something needs looking at. Error is a read or a write that failed.",
+      "⚠ There is no 'danger' tone beyond --error, and nothing decorative is ever red. On the serving surfaces red already means somebody declined.",
+      "The left edge carries the tone at 3px; gold and info keep the ordinary surface behind them, warning and error take their container. A gold bar with a gold background would shout as loudly as an error.",
+    ],
+    examples: [
+      '<div class="m-notice m-notice--gold"><span class="material-symbols-outlined m-notice__icon">person_off</span><div class="m-notice__body"><p class="m-notice__title">You are not signed in.</p><p class="m-notice__text">Sign in to see the events that repeat and who is on them.</p></div><div class="m-notice__acts"><a class="m-btn m-btn--primary m-btn--sm" href="#">Sign in</a></div></div>',
+    ],
+    css: `
+.m-notice {
+  display: flex; align-items: flex-start; gap: var(--space-sm);
+  padding: 11px var(--space-md);
+  border: 1px solid var(--outline-variant); border-left-width: 3px;
+  border-radius: var(--radius); background: var(--surface-container-low);
+}
+.m-notice__icon { flex: 0 0 auto; font-size: 20px; color: var(--on-surface-variant); }
+.m-notice__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.m-notice__title { font-size: 14px; color: var(--on-surface); }
+.m-notice__text { font-size: 12.5px; line-height: 1.45; color: var(--on-surface-variant); text-wrap: pretty; }
+.m-notice__acts { flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-base); }
+.m-notice--gold { border-left-color: var(--gold); }
+.m-notice--gold .m-notice__icon { color: var(--gold); }
+.m-notice--info { border-left-color: var(--tertiary); }
+.m-notice--info .m-notice__icon { color: var(--tertiary); }
+.m-notice--warning { border-left-color: var(--warning); background: var(--warning-container); }
+.m-notice--warning .m-notice__icon { color: var(--on-warning-container); }
+.m-notice--warning .m-notice__title, .m-notice--warning .m-notice__text { color: var(--on-warning-container); }
+.m-notice--error { border-left-color: var(--error); background: var(--error-container); }
+.m-notice--error .m-notice__icon,
+.m-notice--error .m-notice__title,
+.m-notice--error .m-notice__text { color: var(--on-error-container); }
+`,
+  },
+
+  {
+    name: "Settled",
+    cls: "m-settled",
+    group: "Display",
+    summary:
+      "Where something cannot change because it is settled, the sentence is the control. Greying one out implies a permission you might one day be given.",
+    variants: { size: ["md", "sm"] },
+    notes: [
+      "Not a disabled input, not a tooltip, not a lock glyph on its own. A disabled control says 'not for you'; this says 'not a question'.",
+      "Serif, because it is read rather than operated. The rule marks it as quoted from the model rather than typed into a field.",
+    ],
+    examples: [
+      '<p class="m-settled">Anyone at all. A Sunday Service is always public — that is settled, not a setting.</p>',
+    ],
+    css: `
+.m-settled {
+  margin: 0; padding-left: var(--space-sm);
+  border-left: 2px solid var(--outline-variant);
+  font-family: var(--font-serif); font-size: 16px; line-height: 1.5;
+  color: var(--on-surface); text-wrap: pretty;
+}
+.m-settled--sm { font-size: 15px; }
 `,
   },
 ];

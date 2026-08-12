@@ -11,54 +11,169 @@
     <script src="mobile-shell.js"></script>
     <link rel="stylesheet" href="mobile-shell.css" />
     <script src="mobile/destinations.js"></script>
-    <script>window.MOBILE_HEADER = { title: 'Recurring events', back: 'calendar.html' };</script>
+    <!-- `onBack: true` rather than a URL. On a phone this page is TWO screens —
+         the list, then the one you picked — so the shell's arrow has to mean
+         "out of this event" before it means "out of this page", and only the
+         page knows which of those you are looking at. -->
+    <script>window.MOBILE_HEADER = { title: 'Recurring events', onBack: true };</script>
     <script src="person-photo-core.js"></script>
     <script src="mobile-shell-header.js"></script>
 
     <style>
         [x-cloak] { display: none !important; }
 
-        .re-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(93,148,169,.18); }
-        .re-motion { transition: background-color 150ms cubic-bezier(0.2,0,0,1),
-                                 opacity 150ms cubic-bezier(0.2,0,0,1),
-                                 border-color 150ms cubic-bezier(0.2,0,0,1); }
+        .re-focus:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--m-focus-ring); }
+        .re-motion { transition: background-color var(--duration-fast) var(--ease-standard),
+                                 opacity var(--duration-fast) var(--ease-standard),
+                                 border-color var(--duration-fast) var(--ease-standard); }
         .re-press:active { transform: scale(0.98); }
 
         /* The shell draws the page title in its own header, so the page's <h1>
            would say it a second time directly underneath. */
         html.shell-mobile .re-page-title { display: none; }
-        html.shell-mobile .re-title-block { border-bottom: none; padding-bottom: 0; }
 
         /* The draft room is a wide grid of dates against Roles and refuses to
-           draw itself on a phone — it shows a "needs a computer" panel instead.
-           Better not to offer the journey than to end it with a shrug. The rota
-           grid below still scrolls sideways, because READING it on a phone is a
+           draw itself on a phone. Better not to offer the journey than to end
+           it with a shrug — the action bar says so in words instead. The rota
+           below still scrolls sideways, because READING one on a phone is a
            real thing to want; drafting one is not. */
         html.shell-mobile .re-desktop-only { display: none !important; }
+        .re-phone-only { display: none; }
+        html.shell-mobile .re-phone-only { display: flex; }
 
-        /* The series list sits beside the grid where there is room for both, and
-           above it where there is not. */
-        .re-cols { display: grid; grid-template-columns: minmax(0,1fr); gap: 28px; align-items: start; }
-        @media (min-width: 1100px) { .re-cols { grid-template-columns: 300px minmax(0,1fr); } }
-
-        /* ⚠ THE ROLE COLUMN STAYS PUT. Eight dates of cards is wider than any
-           screen, and a grid you can scroll sideways is useless if scrolling it
-           takes the row headings away — three columns in you are reading names
-           with no idea which Role they are in. */
-        .re-grid { border-collapse: separate; border-spacing: 0; }
-        .re-grid th, .re-grid td { border-bottom: 1px solid var(--re-rule, var(--surface-dim)); }
-        .re-grid .re-stick {
-            position: sticky; left: 0; z-index: 2;
-            background: var(--surface);
-            border-right: 1px solid var(--re-rule, var(--surface-dim));
+        /* ── The pane ────────────────────────────────────────────────────────
+           The list is a panel and the pane is the rest. `.m-split` does the two
+           columns; everything here is this page's own arrangement inside them. */
+        .re-pane {
+            background: var(--surface-container-lowest);
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-xl);
+            overflow: hidden;
         }
-        .re-grid thead .re-stick { z-index: 3; }
-        .re-grid thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+        .re-pane__head {
+            display: flex; align-items: flex-start; gap: var(--space-sm);
+            padding: var(--space-sm) var(--space-md);
+        }
+        /* The event's name in EB Garamond, not Cinzel. The page title is still
+           "Recurring events" and the list is still on screen, so this is the
+           name of a record inside a place — a display face here would make one
+           screen feel like five as you clicked down the list. */
+        .re-pane__name {
+            font-family: var(--font-serif); font-size: 22px; line-height: 1.25;
+            font-weight: 600; color: var(--primary); text-wrap: pretty;
+        }
+        .re-pane__pattern { margin-top: 2px; font-size: 12.5px; color: var(--on-surface-variant); }
+        .re-pane__meta { flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-base); flex-wrap: wrap; }
+        .re-pane__body { padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-md); }
+        .re-pane__two {
+            display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-md); align-items: start;
+        }
+        @media (min-width: 1280px) { .re-pane__two { grid-template-columns: minmax(0, 1fr) 340px; } }
 
-        /* A ticked column is tinted the whole way down, so the selection reads
-           as "these dates" rather than as a row of checkboxes at the top. */
-        .re-grid td.re-picked, .re-grid th.re-picked { background: rgba(93,148,169,.07); }
-        .re-grid th.re-picked { background: rgba(93,148,169,.13); }
+        /* Out of the event, back to the list. Only ever drawn where the two are
+           not on screen together. */
+        .re-pane__back { display: none; }
+
+        .re-stack { display: flex; flex-direction: column; gap: var(--space-base); }
+        .re-paging { display: flex; align-items: center; gap: var(--space-base); flex-wrap: wrap; }
+        .re-paging__win { font-size: 13px; font-weight: 600; color: var(--on-surface); }
+        .re-undergrid {
+            display: flex; align-items: flex-start; gap: 6px;
+            font-size: 12px; line-height: 1.45; color: var(--on-surface-variant);
+        }
+        .re-standfirst { margin-top: 4px; font-size: 12.5px; line-height: 1.45; color: var(--on-surface-variant); }
+        .re-cardhead { font-family: var(--font-serif); font-size: 17px; font-weight: 600; color: var(--primary); }
+        .re-fields { margin-top: var(--space-sm); display: flex; flex-direction: column; gap: var(--space-md); }
+        .re-two-up { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-md); }
+        @media (min-width: 560px) { .re-two-up { grid-template-columns: 1fr 1fr; } }
+        .re-saverow { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-base); flex-wrap: wrap; }
+        .re-saverow__said {
+            flex: 1 1 18ch; display: inline-flex; align-items: center; gap: 6px;
+            font-size: 12.5px; color: var(--on-surface-variant);
+        }
+
+        /* Two rows that are nearly `.m-row` but are not: one carries a lock and
+           a tag instead of a title, the other a serif sentence. Page-local on
+           purpose — the `m-` prefix means "generated from the one source", and
+           these are not proposed as primitives. */
+        .re-locked-role {
+            display: flex; align-items: center; gap: var(--space-sm);
+            padding: 9px var(--space-sm);
+            border: 1px solid var(--outline-variant); border-radius: var(--radius);
+            background: var(--surface-container-low);
+        }
+        .re-rule-row {
+            display: flex; align-items: center; gap: var(--space-base);
+            padding: 8px var(--space-base);
+            border: 1px solid var(--outline-variant); border-radius: var(--radius);
+            background: var(--surface);
+        }
+        .re-rule-row--unavailable { border-color: var(--error); }
+        .re-rule-row__text {
+            flex: 1 1 auto; min-width: 0;
+            font-family: var(--font-serif); font-size: 15px; line-height: 1.4;
+            color: var(--on-surface); text-wrap: pretty;
+        }
+        .re-rule-row--unavailable .re-rule-row__text { color: var(--error); }
+
+        .re-composer {
+            margin-top: var(--space-sm); display: flex; flex-direction: column; gap: var(--space-base);
+            padding: var(--space-sm);
+            background: var(--surface-container-low);
+            border: 1px solid var(--outline-variant); border-radius: var(--radius);
+        }
+        .re-composer__row { display: flex; flex-direction: column; gap: var(--space-base); }
+        @media (min-width: 900px) { .re-composer__row { flex-direction: row; align-items: center; } }
+        .re-composer__and { font-size: 13px; color: var(--on-surface-variant); align-self: center; }
+
+        .re-swatches { margin-top: var(--space-sm); display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-base); }
+        .re-swatch {
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            padding: var(--space-base) 0; cursor: pointer;
+            background: transparent; border: 1px solid var(--outline-variant); border-radius: var(--radius);
+        }
+        .re-swatch:hover { background: var(--surface-container-low); }
+        .re-swatch--current { border-color: var(--primary); background: var(--surface-container-low); }
+        .re-swatch__dot { width: 22px; height: 22px; border-radius: var(--radius-full); border: 1px solid var(--outline-variant); }
+        .re-swatch__name { font-size: 10.5px; font-weight: 600; color: var(--on-surface-variant); }
+
+        .re-ladder { margin-top: var(--space-sm); display: flex; flex-direction: column; }
+        .re-rung {
+            display: flex; align-items: flex-start; gap: var(--space-sm);
+            width: 100%; padding: 10px var(--space-base); text-align: left; cursor: pointer;
+            background: transparent; border: 0; border-left: 3px solid transparent;
+            border-radius: var(--radius);
+        }
+        .re-rung:hover { background: var(--surface-container-low); }
+        .re-rung--current { border-left-color: var(--primary); background: var(--surface-container-low); }
+        .re-rung__label { display: block; font-size: 13.5px; font-weight: 600; color: var(--on-surface); }
+        .re-rung__who { display: block; font-size: 12px; line-height: 1.4; color: var(--on-surface-variant); }
+        .re-footnote { margin-top: var(--space-sm); font-size: 11.5px; color: var(--on-surface-variant); }
+
+        .re-datecard { border: 1px solid var(--outline-variant); border-radius: var(--radius); overflow: hidden; }
+        .re-datecard__head {
+            padding: 8px var(--space-sm); font-size: 14px; color: var(--on-surface);
+            background: var(--surface-container-lowest); border-bottom: 1px solid var(--outline-variant);
+        }
+        .re-datecard__link {
+            display: flex; align-items: center; gap: var(--space-base);
+            padding: 8px var(--space-sm); font-size: 13px; color: var(--on-surface);
+            border-top: 1px solid var(--outline-variant);
+        }
+        .re-datecard__link:first-of-type { border-top: 0; }
+        .re-datecard__link:hover { background: var(--surface-container-low); }
+
+        /* ── The phone: two screens, not two columns ─────────────────────────
+           At 390px a 320px panel beside anything is a panel and nothing else.
+           So the list is a screen, the event you picked replaces it, and the
+           shell's arrow comes back. */
+        @media (max-width: 640px) {
+            .re-pane__back { display: inline-flex; }
+            .re-split--list .m-split__pane { display: none; }
+            .re-split--pane .m-split__list { display: none; }
+            .re-pane { border-left: 0; border-right: 0; border-radius: 0; margin: 0 calc(var(--space-base) * -1); }
+            .re-pane__body { padding: var(--space-sm); }
+        }
     </style>
 
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -118,595 +233,949 @@
         <!-- Signed out, and signed in without the rank. Two different answers:
              one is a door, the other is a wall, and a single "no" for both
              leaves the first person nowhere to go. -->
-        <div x-show="signedOut"
-             class="mb-md bg-surface-container-low border border-outline-variant border-l-[3px] rounded-lg
-                    px-md py-3 flex items-start gap-sm" style="border-left-color:var(--gold);">
-            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:var(--gold);">person_off</span>
-            <div class="flex-grow min-w-0">
-                <p class="text-[14px] text-on-surface">You are not signed in.</p>
-                <p class="text-[12.5px] text-on-surface-variant mt-0.5">
-                    Sign in to see the events that repeat and who is on them.
-                </p>
+        <div x-show="signedOut" class="m-notice m-notice--gold mb-md">
+            <span class="material-symbols-outlined m-notice__icon">person_off</span>
+            <div class="m-notice__body">
+                <p class="m-notice__title">You are not signed in.</p>
+                <p class="m-notice__text">Sign in to see the events that repeat and who is on them.</p>
             </div>
-            <a :href="signInHref"
-               class="shrink-0 bg-primary text-on-primary px-3 py-2 rounded-lg font-label-md
-                      text-[11.5px] uppercase tracking-wider re-motion re-press re-focus">Sign in</a>
+            <div class="m-notice__acts">
+                <a :href="signInHref" class="m-btn m-btn--primary m-btn--sm re-motion re-press re-focus">
+                    <span class="m-btn__label">Sign in</span>
+                </a>
+            </div>
+        </div>
+
+        <div x-show="error" class="m-notice m-notice--error mb-md">
+            <span class="material-symbols-outlined m-notice__icon">error</span>
+            <div class="m-notice__body">
+                <p class="m-notice__text" x-text="error"></p>
+            </div>
         </div>
 
         <!-- ── Browsing: signed in, nothing to change ─────────────────────── -->
-        <!-- The same events, the same order, minus every control that writes.
-             Tap one to see when it next falls. -->
+        <!-- The same room with fewer doors. What runs every week, and until
+             when, is an ordinary question — what is privileged is changing the
+             list, not reading it. -->
         <template x-if="browsing">
-        <div class="max-w-[620px]">
-            <div class="re-title-block pb-md">
-                <p class="text-[13px] text-on-surface-variant max-w-[52ch]">
-                    Everything that comes round again. Open one to see when it next falls.
-                </p>
-            </div>
+        <div>
+            <p class="text-[13px] text-on-surface-variant max-w-[62ch] pb-md">
+                Everything that comes round again. Open one to see when it next falls.
+            </p>
 
-            <div x-show="error"
-                 class="mt-md bg-error-container text-on-error-container border border-outline-variant
-                        rounded-lg p-md flex items-start gap-sm">
-                <span class="material-symbols-outlined text-[20px]">error</span>
-                <p class="font-body-md text-body-md" x-text="error"></p>
-            </div>
-
-            <div x-show="!series.length"
-                 class="mt-gutter bg-surface-container-lowest border border-outline-variant rounded-lg p-lg text-center">
-                <span class="material-symbols-outlined text-[34px] text-outline">event_repeat</span>
-                <h2 class="font-display text-[20px] text-primary mt-2">Nothing repeats yet.</h2>
-                <p class="text-[13.5px] text-on-surface-variant mt-1 max-w-[46ch] mx-auto">
+            <div x-show="!series.length" class="m-empty">
+                <span class="material-symbols-outlined">event_repeat</span>
+                <h2 class="font-display text-[20px] text-primary">Nothing repeats yet.</h2>
+                <p class="max-w-[46ch]">
                     When the church has something that comes round — a Sunday, a midweek
                     gathering — it appears here.
                 </p>
             </div>
 
-            <div x-show="series.length" class="mt-gutter flex flex-col gap-2">
-                <template x-for="s in series" :key="s.id">
-                    <div class="rounded-lg border re-motion overflow-hidden"
-                         :class="isOpen(s.id)
-                            ? 'border-primary bg-surface-container-low'
-                            : 'border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low'">
+            <div x-show="series.length" class="m-split"
+                 :class="phonePane ? 're-split--pane' : 're-split--list'">
 
-                        <button @click="toggleSeries(s.id)" :disabled="gridLoading"
-                                :aria-expanded="isOpen(s.id) ? 'true' : 'false'"
-                                class="w-full text-left px-3 py-3 flex items-start gap-2 re-focus disabled:opacity-60">
-                            <span class="w-[10px] h-[10px] rounded-full mt-1.5 shrink-0 border border-black/10"
-                                  :style="'background:' + colourOf(s).bar"></span>
-                            <span class="min-w-0 flex-grow">
-                                <span class="block text-[15px] text-on-surface"
-                                      :class="isOpen(s.id) ? 'font-semibold' : ''"
-                                      x-text="s.name"></span>
-                                <span class="block text-[12.5px] text-on-surface-variant mt-0.5"
-                                      x-text="patternOf(s)"></span>
-                                <span class="block text-[11.5px] text-outline mt-0.5">
-                                    Next <span x-text="nextDateOf(s)"></span>
+                <div class="m-split__list">
+                    <span class="m-label" style="padding-left:4px">The events</span>
+                    <div class="m-picklist" style="margin-top:6px">
+                        <template x-for="s in series" :key="s.id">
+                            <button @click="pickSeries(s.id)" :disabled="gridLoading"
+                                    class="m-picklist__item re-motion"
+                                    :class="s.id === seriesId ? 'm-picklist__item--current' : ''">
+                                <span class="m-picklist__dot" :style="'background:' + colourOf(s).bar"></span>
+                                <span class="m-picklist__main">
+                                    <span class="m-picklist__name" x-text="s.name"></span>
+                                    <span class="m-picklist__line" x-text="patternOf(s)"></span>
+                                    <span class="m-picklist__meta" x-text="'Next ' + nextDateOf(s)"></span>
                                 </span>
-                            </span>
-                            <span class="material-symbols-outlined text-[20px] text-on-surface-variant shrink-0
-                                         re-motion mt-0.5"
-                                  :style="isOpen(s.id) ? 'transform:rotate(180deg)' : ''">expand_more</span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="m-split__pane re-pane" x-show="chosen">
+                    <div class="re-pane__head">
+                        <button @click="phonePane = false"
+                                class="re-pane__back m-icon-btn m-icon-btn--sm m-icon-btn--ghost re-focus"
+                                aria-label="Back to the events">
+                            <span class="material-symbols-outlined">chevron_left</span>
                         </button>
+                        <div class="min-w-0 flex-grow">
+                            <h2 class="re-pane__name" x-text="chosen ? chosen.name : ''"></h2>
+                            <p class="re-pane__pattern" x-text="chosen ? patternOf(chosen) : ''"></p>
+                        </div>
+                    </div>
 
-                        <!-- x-if, not x-show. The dates below belong to whichever
-                             row is OPEN, so a hidden copy under every other row
-                             would be that row rendering someone else's dates and
-                             merely not showing them. -->
-                        <template x-if="isOpen(s.id)">
-                        <div class="border-t border-outline-variant px-3 py-3">
-
-                            <p x-show="s.description" class="text-[13px] text-on-surface-variant mb-3"
-                               x-text="s.description"></p>
+                    <div class="re-pane__body">
+                        <div>
+                            <span class="m-label">Coming up</span>
 
                             <div x-show="gridLoading" class="flex items-center gap-1.5 text-[12.5px] text-on-surface-variant py-1">
-                                <span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                                <span class="material-symbols-outlined text-[16px] m-spinner">progress_activity</span>
                                 Reading the dates
                             </div>
 
-                            <div x-show="!gridLoading">
-                                <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant mb-2">
-                                    Coming up
-                                </div>
+                            <p x-show="finished" class="re-standfirst">
+                                This one has finished — there are no more dates coming.
+                            </p>
 
-                                <p x-show="finished" class="text-[13px] text-on-surface-variant">
-                                    This one has finished — there are no more dates coming.
-                                </p>
-
-                                <div class="flex flex-col gap-1">
-                                    <template x-for="row in upcoming" :key="row.date">
-                                        <a :href="dateHref(row.date)"
-                                           class="flex items-center gap-2 px-2 py-2 rounded-lg re-motion re-focus
-                                                  hover:bg-surface-container">
-                                            <span class="material-symbols-outlined text-[18px] shrink-0"
-                                                  :class="row.cancelled ? 'text-outline' : 'text-on-surface-variant'"
-                                                  x-text="row.cancelled ? 'event_busy' : 'event'"></span>
-                                            <span class="min-w-0 flex-grow text-[13.5px]"
-                                                  :class="row.cancelled ? 'text-outline line-through' : 'text-on-surface'"
+                            <div x-show="!gridLoading && upcoming.length" class="m-card-list" style="margin-top:var(--space-base);max-width:560px">
+                                <template x-for="row in upcoming" :key="row.date">
+                                    <a :href="dateHref(row.date)" class="m-row m-row--interactive re-focus">
+                                        <span class="material-symbols-outlined text-[18px]"
+                                              :class="row.cancelled ? 'text-outline' : 'text-on-surface-variant'"
+                                              x-text="row.cancelled ? 'event_busy' : 'event'"></span>
+                                        <span class="m-row__main">
+                                            <span class="m-row__title"
+                                                  :class="row.cancelled ? 'text-outline line-through' : ''"
                                                   x-text="longDate(row.date)"></span>
-                                            <!-- Two things worth flagging on a date,
-                                                 and neither is guessable from the
-                                                 date itself. -->
-                                            <span x-show="row.cancelled"
-                                                  class="shrink-0 text-[11px] font-label-md uppercase tracking-wider text-outline">
-                                                Not on
-                                            </span>
-                                            <span x-show="row.mine && !row.cancelled"
-                                                  class="shrink-0 flex items-center gap-1 text-[11px] font-label-md
-                                                         uppercase tracking-wider text-secondary">
-                                                <span class="material-symbols-outlined text-[14px]">person_check</span>
-                                                You're on
-                                            </span>
-                                            <span class="material-symbols-outlined text-[16px] text-outline shrink-0">chevron_right</span>
-                                        </a>
-                                    </template>
-                                </div>
-
-                                <p x-show="upcoming.length" class="mt-2 text-[11.5px] text-outline">
-                                    The Calendar has the rest.
-                                </p>
+                                        </span>
+                                        <!-- Two things worth flagging on a date, and
+                                             neither is guessable from the date itself. -->
+                                        <span x-show="row.cancelled" class="m-label m-label--sm">Not on</span>
+                                        <span x-show="row.mine && !row.cancelled"
+                                              class="m-label m-label--sm flex items-center gap-1 text-secondary">
+                                            <span class="material-symbols-outlined text-[14px]">person_check</span>
+                                            You're on
+                                        </span>
+                                        <span class="m-row__chevron">
+                                            <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+                                        </span>
+                                    </a>
+                                </template>
                             </div>
+
+                            <p x-show="upcoming.length" class="re-footnote">The Calendar has the rest.</p>
                         </div>
-                        </template>
                     </div>
-                </template>
+                </div>
             </div>
         </div>
         </template>
 
+        <!-- ── The editor's lane ──────────────────────────────────────────── -->
         <template x-if="isEditor">
         <div>
-            <!-- ── Title ──────────────────────────────────────────────────── -->
-            <div class="re-title-block pb-md">
-                <div class="min-w-0">
-                    <p class="text-[13px] text-on-surface-variant max-w-[62ch]">
-                        Everything that comes round again. Read the rota, tick the dates that need
-                        redrawing, and change the event itself from here.
-                    </p>
-                </div>
-            </div>
-
-            <div x-show="error"
-                 class="mt-md bg-error-container text-on-error-container border border-outline-variant
-                        rounded-lg p-md flex items-start gap-sm">
-                <span class="material-symbols-outlined text-[20px]">error</span>
-                <p class="font-body-md text-body-md" x-text="error"></p>
-            </div>
+            <p class="text-[13px] text-on-surface-variant max-w-[70ch] pb-md">
+                Everything that comes round again. Read the rota, tick the dates that need
+                redrawing, and change the event itself from here.
+            </p>
 
             <!-- Nothing repeats yet. Only reachable on a church with no Sunday
                  Service at all, but that is exactly the state a fresh install is
                  in, and an empty grid with no explanation is a dead end. -->
-            <div x-show="!series.length"
-                 class="mt-gutter bg-surface-container-lowest border border-outline-variant rounded-lg p-lg text-center">
-                <span class="material-symbols-outlined text-[34px] text-outline">event_repeat</span>
-                <h2 class="font-display text-[20px] text-primary mt-2">Nothing repeats yet.</h2>
-                <p class="text-[13.5px] text-on-surface-variant mt-1 max-w-[46ch] mx-auto">
+            <div x-show="!series.length" class="m-empty">
+                <span class="material-symbols-outlined">event_repeat</span>
+                <h2 class="font-display text-[20px] text-primary">Nothing repeats yet.</h2>
+                <p class="max-w-[46ch]">
                     A recurring event is anything that comes round — a Sunday, a midweek
                     gathering, an elders' meeting. Make the first one and its rota appears here.
                 </p>
+                <a :href="newEventHref" class="m-btn m-btn--primary m-btn--sm re-motion re-press re-focus">
+                    <span class="material-symbols-outlined">add</span>
+                    <span class="m-btn__label">New recurring event</span>
+                </a>
             </div>
 
-            <div x-show="series.length" class="mt-gutter re-cols">
+            <div x-show="series.length" class="m-split"
+                 :class="phonePane ? 're-split--pane' : 're-split--list'">
 
-                <!-- ── The series ─────────────────────────────────────────── -->
-                <aside class="flex flex-col gap-2 min-w-0">
-                    <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant px-1">
-                        The events
-                    </div>
-
-                    <template x-for="s in series" :key="s.id">
-                        <div class="rounded-lg border re-motion overflow-hidden"
-                             :class="s.id === seriesId
-                                ? 'border-primary bg-surface-container-low'
-                                : 'border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low'">
-                            <button @click="choose(s.id)" :disabled="gridLoading"
-                                    class="w-full text-left px-3 py-2.5 flex items-start gap-2 re-focus disabled:opacity-60">
-                                <span class="w-[10px] h-[10px] rounded-full mt-1.5 shrink-0 border border-black/10"
-                                      :style="'background:' + colourOf(s).bar"></span>
-                                <span class="min-w-0 flex-grow">
-                                    <span class="block text-[14.5px] text-on-surface truncate"
-                                          :class="s.id === seriesId ? 'font-semibold' : ''"
-                                          x-text="s.name"></span>
-                                    <span class="block text-[12px] text-on-surface-variant truncate mt-0.5"
-                                          x-text="patternOf(s)"></span>
-                                    <span class="block text-[11.5px] text-outline mt-0.5">
-                                        <span x-text="roleCountOf(s)"></span>
-                                        <span> · next </span><span x-text="nextDateOf(s)"></span>
-                                    </span>
+                <!-- ── The events ─────────────────────────────────────────── -->
+                <div class="m-split__list">
+                    <span class="m-label" style="padding-left:4px">The events</span>
+                    <div class="m-picklist" style="margin-top:6px">
+                        <template x-for="s in series" :key="s.id">
+                            <button @click="pickSeries(s.id)" :disabled="gridLoading"
+                                    class="m-picklist__item re-motion"
+                                    :class="s.id === seriesId ? 'm-picklist__item--current' : ''">
+                                <span class="m-picklist__dot" :style="'background:' + colourOf(s).bar"></span>
+                                <span class="m-picklist__main">
+                                    <span class="m-picklist__name" x-text="s.name"></span>
+                                    <span class="m-picklist__line" x-text="patternOf(s)"></span>
+                                    <span class="m-picklist__meta" x-text="listLineOf(s)"></span>
                                 </span>
                             </button>
-                            <!-- The door to the Event itself. On the row rather
-                                 than only above the grid, so changing a pattern
-                                 does not need the rota loaded first. -->
-                            <a :href="seriesHref(s.id)"
-                               class="flex items-center gap-1 px-3 py-1.5 border-t border-outline-variant text-[11.5px]
-                                      font-label-md uppercase tracking-wider text-secondary re-motion re-focus
-                                      hover:bg-surface-container">
-                                <span class="material-symbols-outlined text-[15px]">tune</span> Edit the event
-                            </a>
-                        </div>
-                    </template>
-                </aside>
-
-                <!-- ── The rota ───────────────────────────────────────────── -->
-                <section class="min-w-0" x-show="chosen">
-
-                    <div class="flex items-start justify-between gap-md flex-wrap pb-sm border-b border-outline-variant">
-                        <div class="min-w-0">
-                            <h2 class="font-display text-[22px] text-primary truncate"
-                                x-text="chosen ? chosen.name : ''"></h2>
-                            <p class="text-[12.5px] text-on-surface-variant mt-0.5"
-                               x-text="chosen ? patternOf(chosen) : ''"></p>
-                        </div>
-                        <div class="shrink-0 flex items-center gap-sm">
-                            <a :href="eventHref"
-                               class="flex items-center gap-1 border border-secondary text-secondary px-md py-2 rounded-lg
-                                      font-label-md text-xs uppercase tracking-wider re-motion re-press re-focus hover:bg-surface-container">
-                                <span class="material-symbols-outlined text-[18px]">tune</span> Edit the event
-                            </a>
-                            <!-- The same room, opened blank. Outlined and first,
-                                 so the ordinary journey stays the filled one
-                                 beside it — this is the answer to "I already
-                                 know who I want", not the common case. -->
-                            <a :href="byHandHref"
-                               class="re-desktop-only flex items-center gap-1 border border-secondary text-secondary px-md py-2 rounded-lg
-                                      font-label-md text-xs uppercase tracking-wider re-motion re-press re-focus hover:bg-surface-container">
-                                <span class="material-symbols-outlined text-[18px]">edit_note</span>
-                                <span x-text="byHandLabel"></span>
-                            </a>
-                            <!-- Staffing a RUN of dates, for the series already
-                                 open. Hidden on a phone, because the room it
-                                 opens is a wide grid of dates against Roles and
-                                 says as much when you get there — better not to
-                                 offer the journey than to end it with a shrug. -->
-                            <a :href="draftHref"
-                               class="re-desktop-only flex items-center gap-1 bg-primary text-on-primary px-md py-2 rounded-lg
-                                      shadow-xs font-label-md text-xs uppercase tracking-wider re-motion re-press re-focus
-                                      hover:bg-primary-container">
-                                <span class="material-symbols-outlined text-[18px]">auto_awesome_motion</span>
-                                <span x-text="draftLabel"></span>
-                            </a>
-                        </div>
+                        </template>
                     </div>
+                </div>
 
-                    <!-- Says which dates it will take before you press it. With
-                         nothing ticked that is the draft room's own default —
-                         the next stretch from tomorrow — and an editor who
-                         expected "the ones on screen" should find that out here
-                         rather than on the other side. -->
-                    <p x-show="!range" class="re-desktop-only mt-2 text-[12px] text-on-surface-variant">
-                        Both buttons open the next stretch of dates from tomorrow — auto-assign
-                        with a rota drafted for you, by hand with the grid empty. Tick columns
-                        below to open exactly those dates instead.
-                    </p>
+                <!-- ── The one that is open ───────────────────────────────── -->
+                <div class="m-split__pane re-pane" x-show="chosen">
 
-                    <!-- Paging, and what the window covers -->
-                    <div class="mt-sm flex items-center gap-sm flex-wrap">
-                        <button @click="earlier()" :disabled="!hasEarlier || gridLoading"
-                                class="flex items-center gap-1 border border-outline-variant text-on-surface-variant
-                                       px-3 py-1.5 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
-                                       re-motion re-press re-focus hover:bg-surface-container disabled:opacity-40">
-                            <span class="material-symbols-outlined text-[16px]">chevron_left</span> Earlier
+                    <div class="re-pane__head">
+                        <button @click="phonePane = false"
+                                class="re-pane__back m-icon-btn m-icon-btn--sm m-icon-btn--ghost re-focus"
+                                aria-label="Back to the events">
+                            <span class="material-symbols-outlined">chevron_left</span>
                         </button>
-                        <span class="text-[13px] text-on-surface font-label-md" x-text="windowLabel"></span>
-                        <button @click="later()" :disabled="!hasLater || gridLoading"
-                                class="flex items-center gap-1 border border-outline-variant text-on-surface-variant
-                                       px-3 py-1.5 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
-                                       re-motion re-press re-focus hover:bg-surface-container disabled:opacity-40">
-                            Later <span class="material-symbols-outlined text-[16px]">chevron_right</span>
-                        </button>
-                        <button @click="backToToday()" :disabled="gridLoading"
-                                class="text-[11.5px] font-label-md uppercase tracking-wider text-secondary
-                                       px-2 py-1.5 rounded-lg re-motion re-focus hover:bg-surface-container">
-                            Back to now
-                        </button>
-                        <span x-show="gridLoading" class="flex items-center gap-1 text-[12px] text-on-surface-variant">
-                            <span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
-                            Reading the rota
-                        </span>
-                    </div>
-
-                    <!-- What ticking columns is FOR. Absent until something is
-                         ticked, so it never sits there as an instruction. -->
-                    <div x-show="range"
-                         class="mt-sm bg-surface-container-low border border-outline-variant border-l-[3px] rounded-lg
-                                px-md py-3 flex items-start gap-sm" style="border-left-color:var(--tertiary);">
-                        <span class="material-symbols-outlined text-[20px] shrink-0" style="color:var(--tertiary);">auto_awesome_motion</span>
-                        <div class="flex-grow min-w-0">
-                            <p class="text-[14px] text-on-surface">
-                                <span x-text="range ? range.count : 0"></span>
-                                <span x-text="range && range.count === 1 ? ' date ticked' : ' dates ticked'"></span>
+                        <div class="min-w-0 flex-grow">
+                            <h2 class="re-pane__name" x-text="chosen ? chosen.name : ''"></h2>
+                            <!-- The pattern restated above the tab bar, on every
+                                 tab. The rota and the pattern used to be two
+                                 screens and are now two tabs, which is no better
+                                 on its own — so the one fact the rota needed from
+                                 the other screen never leaves the screen. -->
+                            <p class="re-pane__pattern">
+                                <span x-text="chosen ? patternOf(chosen) : ''"></span><span
+                                    x-show="chosen && chosen.location"
+                                    x-text="' · ' + (chosen ? chosen.location : '')"></span>
                             </p>
-                            <p x-show="sweepNote" class="text-[12.5px] text-on-surface-variant mt-0.5" x-text="sweepNote"></p>
-                            <!-- Why the emptying button is dead, when it is. A
-                                 control that correctly does nothing and says
-                                 nothing cannot be told from a broken one. -->
-                            <p x-show="wipeNote" class="text-[12.5px] text-on-surface-variant mt-0.5" x-text="wipeNote"></p>
                         </div>
-                        <div class="shrink-0 flex items-center justify-end gap-sm flex-wrap">
-                            <button @click="clearSelection()"
-                                    class="px-3 py-2 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
-                                           text-on-surface-variant re-motion re-focus hover:bg-surface-container">Clear</button>
-                            <!-- "Clear" above unticks; this empties. They cannot
-                                 both be called clearing, and the words have to
-                                 do the separating because the two controls sit
-                                 an inch apart.
+                        <div class="re-pane__meta">
+                            <span x-show="isSundaySeries" class="m-badge m-badge--neutral">
+                                <span class="material-symbols-outlined text-[14px]">lock</span> Settled
+                            </span>
+                            <span class="m-badge m-badge--neutral">
+                                <span class="material-symbols-outlined text-[14px]"
+                                      x-text="visibilityRung.icon"></span>
+                                <span x-text="visibilityRung.label"></span>
+                            </span>
+                        </div>
+                    </div>
 
-                                 Outlined rather than filled, and second in the
-                                 row: the ordinary journey from here is the draft
-                                 room, and this should be findable without ever
-                                 being the thing your eye lands on. -->
-                            <button @click="takeEverybodyOff()" :disabled="!canWipe"
-                                    class="flex items-center gap-1 border border-error text-error px-3 py-2 rounded-lg
-                                           font-label-md text-[11.5px] uppercase tracking-wider re-motion re-press re-focus
-                                           hover:bg-error-container disabled:opacity-40 disabled:hover:bg-transparent">
-                                <span class="material-symbols-outlined text-[16px]"
-                                      x-text="clearing ? 'progress_activity' : 'person_remove'"
-                                      :class="clearing ? 'animate-spin' : ''"></span>
-                                <span x-text="wipeLabel"></span>
+                    <div class="m-tabs">
+                        <template x-for="t in tabs" :key="t.id">
+                            <button @click="tab = t.id" class="m-tabs__tab re-focus"
+                                    :class="tab === t.id ? 'm-tabs__tab--current' : ''"
+                                    :aria-current="tab === t.id ? 'true' : 'false'">
+                                <span x-text="t.label"></span>
+                                <!-- Work not yet pressed into the record. Amber,
+                                     because red means somebody declined. -->
+                                <span x-show="t.id === 'event' && seriesDetailsChanged" class="m-tabs__dot"></span>
                             </button>
-                            <!-- Both doors as they appear above the grid, said
-                                 the same way. Repeated here because this is
-                                 where the ticking happened, and the header can
-                                 be scrolled off by a long list of Roles. -->
-                            <a :href="byHandHref"
-                               class="re-desktop-only flex items-center gap-1 border border-secondary text-secondary px-3 py-2 rounded-lg
-                                      font-label-md text-[11.5px] uppercase tracking-wider re-motion re-press re-focus
-                                      hover:bg-surface-container">
-                                <span x-text="byHandLabel"></span>
-                                <span class="material-symbols-outlined text-[16px]">north_east</span>
-                            </a>
-                            <a :href="draftHref"
-                               class="re-desktop-only flex items-center gap-1 bg-primary text-on-primary px-3 py-2 rounded-lg
-                                      shadow-xs font-label-md text-[11.5px] uppercase tracking-wider re-motion re-press re-focus">
-                                <span x-text="draftLabel"></span>
-                                <span class="material-symbols-outlined text-[16px]">north_east</span>
-                            </a>
-                        </div>
+                        </template>
                     </div>
 
-                    <!-- No Roles on the series at all -->
-                    <div x-show="!hasRoles"
-                         class="mt-md bg-surface-container-lowest border border-outline-variant rounded-lg p-lg text-center">
-                        <span class="material-symbols-outlined text-[30px] text-outline">badge</span>
-                        <h3 class="font-display text-[18px] text-primary mt-2">No roles on this event yet.</h3>
-                        <p class="text-[13px] text-on-surface-variant mt-1 max-w-[46ch] mx-auto">
-                            Add the jobs that come round every time — welcome team, sound desk,
-                            coffee — and the rota appears here.
-                        </p>
-                        <a :href="eventHref"
-                           class="inline-flex items-center gap-1 mt-3 border border-secondary text-secondary px-md py-2
-                                  rounded-lg font-label-md text-xs uppercase tracking-wider re-motion re-press re-focus">
-                            <span class="material-symbols-outlined text-[18px]">tune</span> Add roles
-                        </a>
-                    </div>
+                    <div class="re-pane__body">
 
-                    <!-- ── Rules across two Roles (MS-221) ────────────────────
-                         A Role's own rules live in the Roles Manager, because
-                         they are facts about that Role wherever it runs. "The
-                         Kids Leader and the Kids Helper must not be married to
-                         each other" is not: it is a fact about THIS event, the
-                         only thing that knows the two run together. So it is
-                         written here, under the Roles it is about. -->
-                    <div x-show="hasRoles" class="mt-md bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
-                        <div class="flex items-center gap-2">
-                            <span class="material-symbols-outlined text-[18px] text-secondary">hub</span>
-                            <h3 class="m-label">
-                                Rules across two roles
-                            </h3>
-                        </div>
-                        <p class="text-[13px] text-on-surface-variant mt-1 max-w-[62ch]">
-                            For things no single role can say — a leader and their helper who must not
-                            be from one household, or a team drawn from one house group.
-                        </p>
+                        <!-- ══ Rota ═══════════════════════════════════════════ -->
+                        <template x-if="tab === 'rota'">
+                        <div class="re-stack" style="gap:var(--space-md)">
 
-                        <ul x-show="pairRules.length" class="flex flex-col gap-2 mt-3">
-                            <template x-for="(rule, index) in pairRules" :key="index">
-                                <li class="group flex items-center gap-2 px-2 py-2 rounded-lg border bg-surface"
-                                    :class="pairRuleAvailable(rule) ? 'border-outline-variant' : 'border-error'">
-                                    <span class="material-symbols-outlined text-[18px] flex-shrink-0"
-                                          :class="pairRuleAvailable(rule) ? 'text-secondary' : 'text-error'"
-                                          x-text="rule.kind === 'sameGroup' ? 'groups' : 'group_remove'"></span>
-                                    <span class="flex-grow font-serif text-[15px] leading-snug"
-                                          :class="pairRuleAvailable(rule) ? 'text-on-surface' : 'text-error'"
-                                          x-text="pairRuleSentence(rule)"></span>
-                                    <button @click="removePairRule(index)" title="Remove this rule"
-                                            :disabled="savingPairRule"
-                                            class="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error disabled:opacity-40">
-                                        <span class="material-symbols-outlined text-[18px]">close</span>
-                                    </button>
-                                </li>
-                            </template>
-                        </ul>
-
-                        <div class="mt-3 bg-surface-container-low border border-outline-variant rounded-lg p-sm flex flex-col gap-2">
-                            <div class="flex flex-col lg:flex-row lg:items-center gap-2">
-                                <select x-model="newPairRoleA"
-                                        class="w-full lg:flex-1 lg:min-w-0 border border-outline-variant rounded-lg pl-sm pr-8 py-sm text-[14px] bg-surface re-focus">
-                                    <option value="">Pick a role…</option>
-                                    <template x-for="option in pairRoleOptions" :key="option.slug">
-                                        <option :value="option.slug" x-text="option.name"></option>
-                                    </template>
-                                </select>
-                                <span class="text-[13px] text-on-surface-variant self-center">and</span>
-                                <select x-model="newPairRoleB"
-                                        class="w-full lg:flex-1 lg:min-w-0 border border-outline-variant rounded-lg pl-sm pr-8 py-sm text-[14px] bg-surface re-focus">
-                                    <option value="">Pick a role…</option>
-                                    <template x-for="option in pairRoleOptions" :key="option.slug">
-                                        <option :value="option.slug" x-text="option.name"></option>
-                                    </template>
-                                </select>
-                            </div>
-                            <div class="flex flex-col lg:flex-row lg:items-center gap-2">
-                                <!-- The same two sentence openers the Roles Manager
-                                     uses for the one-Role version, on purpose. -->
-                                <select x-model="newPairKind"
-                                        class="w-full lg:w-[17.5rem] lg:flex-shrink-0 border border-outline-variant rounded-lg pl-sm pr-8 py-sm text-[14px] bg-surface re-focus">
-                                    <option value="notSameGroup">cannot be from the same</option>
-                                    <option value="sameGroup">must be from the same</option>
-                                </select>
-                                <select x-model="newPairTypeId"
-                                        class="w-full lg:flex-grow lg:min-w-0 border border-outline-variant rounded-lg pl-sm pr-8 py-sm text-[14px] bg-surface re-focus">
-                                    <option value="">Choose a relationship…</option>
-                                    <template x-for="option in pairTypeOptions" :key="option.id">
-                                        <option :value="option.id" x-text="option.name"></option>
-                                    </template>
-                                </select>
-                                <button @click="addPairRule()"
-                                        :disabled="savingPairRule"
-                                        class="lg:flex-shrink-0 px-md py-sm text-xs font-label-md uppercase tracking-wider text-secondary border border-secondary rounded-lg hover:bg-secondary hover:text-on-secondary re-motion re-press re-focus disabled:opacity-40">
-                                    Add rule
+                            <!-- No Roles on the series at all -->
+                            <div x-show="!hasRoles" class="m-empty">
+                                <span class="material-symbols-outlined">badge</span>
+                                <h3 class="font-display text-[18px] text-primary">No roles on this event yet.</h3>
+                                <p class="max-w-[46ch]">
+                                    Add the jobs that come round every time — welcome team, sound desk,
+                                    coffee — and the rota appears here.
+                                </p>
+                                <button @click="tab = 'roles'" class="m-btn m-btn--secondary m-btn--sm re-motion re-press re-focus">
+                                    <span class="material-symbols-outlined">badge</span>
+                                    <span class="m-btn__label">Add roles</span>
                                 </button>
                             </div>
 
-                            <template x-for="problem in pairRuleErrors" :key="problem">
-                                <p class="text-[13px] text-error" x-text="problem"></p>
-                            </template>
+                            <template x-if="hasRoles">
+                            <div class="re-stack" style="gap:var(--space-md)">
+                                <!-- Paging, and what the window covers -->
+                                <div class="re-paging">
+                                    <button @click="earlier()" :disabled="!hasEarlier || gridLoading"
+                                            class="m-btn m-btn--quiet m-btn--sm re-motion re-press re-focus">
+                                        <span class="material-symbols-outlined text-[18px]">chevron_left</span>
+                                        <span class="m-btn__label">Earlier</span>
+                                    </button>
+                                    <span class="re-paging__win" x-text="windowLabel"></span>
+                                    <button @click="later()" :disabled="!hasLater || gridLoading"
+                                            class="m-btn m-btn--quiet m-btn--sm re-motion re-press re-focus">
+                                        <span class="m-btn__label">Later</span>
+                                        <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                                    </button>
+                                    <button @click="backToToday()" :disabled="gridLoading"
+                                            class="m-btn m-btn--ghost m-btn--sm re-motion re-focus">
+                                        <span class="m-btn__label">Back to now</span>
+                                    </button>
+                                    <span x-show="gridLoading" class="flex items-center gap-1 text-[12px] text-on-surface-variant">
+                                        <span class="material-symbols-outlined text-[16px] m-spinner">progress_activity</span>
+                                        Reading the rota
+                                    </span>
+                                </div>
 
-                            <!-- An empty picker and a failed read look identical
-                                 from the outside and mean opposite things. -->
-                            <p x-show="groupTypesDenied" class="text-[13px] text-error">
-                                The relationship types could not be read, so only Family and Marriage
-                                are on offer. Ask an elder or admin to check.
+                                <!-- The grid -->
+                                <div x-show="grid" class="m-rota">
+                                    <div class="m-rota__scroll">
+                                        <table class="m-rota__table">
+                                            <thead>
+                                                <tr>
+                                                    <th class="m-rota__stick">
+                                                        <label class="m-rota__head">
+                                                            <input type="checkbox" :checked="allShown"
+                                                                   @change="toggleAllShown()"
+                                                                   class="accent-primary re-focus" />
+                                                            <span class="m-label m-label--sm">Role</span>
+                                                        </label>
+                                                    </th>
+                                                    <template x-for="col in grid.columns" :key="col.date">
+                                                        <th class="m-rota__col"
+                                                            :class="isSelected(col.date) ? 'm-rota--picked' : ''">
+                                                            <label class="m-rota__head">
+                                                                <input type="checkbox" :checked="isSelected(col.date)"
+                                                                       @change="toggle(col.date)"
+                                                                       class="accent-primary re-focus" style="margin-top:2px" />
+                                                                <span class="min-w-0">
+                                                                    <a :href="dateHref(col.date)" @click.stop
+                                                                       class="block re-motion re-focus">
+                                                                        <span class="m-rota__day" x-text="weekday(col.date)"></span>
+                                                                        <span class="m-rota__date" x-text="shortDate(col.date)"></span>
+                                                                    </a>
+                                                                    <!-- The state of the date in one line, so an
+                                                                         editor picks columns from the header rather
+                                                                         than by reading every cell under it. -->
+                                                                    <span class="m-rota__state"
+                                                                          :class="col.cancelled ? 'm-rota__state--off'
+                                                                                : col.declined ? 'm-rota__state--declined'
+                                                                                : col.empty ? '' : 'm-rota__state--full'">
+                                                                        <span x-show="col.cancelled">Cancelled</span>
+                                                                        <span x-show="!col.cancelled && col.untouched">Nobody yet</span>
+                                                                        <span x-show="!col.cancelled && !col.untouched && col.empty"
+                                                                              x-text="col.empty + ' to fill'"></span>
+                                                                        <span x-show="!col.cancelled && !col.untouched && !col.empty">Full</span>
+                                                                        <span x-show="!col.cancelled && col.declined"
+                                                                              x-text="' · ' + col.declined + ' declined'"></span>
+                                                                    </span>
+                                                                </span>
+                                                            </label>
+                                                        </th>
+                                                    </template>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <template x-for="row in grid.rows" :key="row.key">
+                                                    <tr>
+                                                        <th class="m-rota__stick">
+                                                            <span class="m-rota__role" x-text="row.name"></span>
+                                                            <span x-show="row.kind === 'oneOff'" class="m-rota__rolesub">
+                                                                Just this date
+                                                            </span>
+                                                            <span x-show="row.kind === 'role' && row.placeCount"
+                                                                  class="m-rota__rolesub"
+                                                                  x-text="row.placeCount + (row.placeCount === 1 ? ' place' : ' places')"></span>
+                                                        </th>
+
+                                                        <template x-for="cell in row.cells" :key="row.key + cell.date">
+                                                            <td :class="isSelected(cell.date) ? 'm-rota--picked' : ''">
+                                                                <!-- A cancelled date, and a one-off's other columns,
+                                                                     say so rather than sitting blank — a blank cell
+                                                                     reads as a place somebody forgot to fill. -->
+                                                                <span x-show="cell.cancelled" class="m-rota__none">—</span>
+                                                                <span x-show="!cell.cancelled && !cell.applicable" class="m-rota__none">·</span>
+
+                                                                <div x-show="cell.applicable" class="m-rota__cell">
+                                                                    <template x-for="(place, i) in cell.places" :key="i">
+                                                                        <div>
+                                                                            <div x-show="place.filled" class="m-rota__place">
+                                                                                <span class="m-rota__initials"
+                                                                                      :class="place.card && place.card.declined ? 'm-rota__initials--declined' : ''"
+                                                                                      x-text="place.card ? place.card.initials : ''"></span>
+                                                                                <span class="m-rota__name"
+                                                                                      :class="place.card && place.card.declined ? 'm-rota__name--declined' : ''"
+                                                                                      x-text="place.card ? place.card.name : ''"></span>
+                                                                            </div>
+                                                                            <!-- An unfilled place is DRAWN. The whole
+                                                                                 point of reading ahead is seeing the
+                                                                                 hole before the morning it matters. -->
+                                                                            <div x-show="!place.filled" class="m-rota__hole">
+                                                                                <span class="m-rota__hole-dot"></span>
+                                                                                <span class="m-rota__hole-label">Nobody yet</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </template>
+                                                                    <span x-show="!cell.places.length" class="m-rota__none">—</span>
+                                                                </div>
+                                                            </td>
+                                                        </template>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- Where the liturgy actually lives. Said once, under the
+                                     grid, because an editor who knows this series has a
+                                     preacher will otherwise read its absence as a fault. -->
+                                <p x-show="hasLiturgy" class="re-undergrid">
+                                    <span class="material-symbols-outlined text-[15px] shrink-0">menu_book</span>
+                                    <span>
+                                        Preaching, leading and the rest of the liturgy are not on this grid — they
+                                        belong to the order of service, one date at a time, which is what keeps the
+                                        printed booklet safe.
+                                    </span>
+                                </p>
+                                <p class="re-undergrid">
+                                    Tap a date to open it on its own. Tick dates to redraw them together.
+                                </p>
+                            </div>
+                            </template>
+                        </div>
+                        </template>
+
+                        <!-- ══ Roles & rules ══════════════════════════════════ -->
+                        <template x-if="tab === 'roles'">
+                        <div class="re-stack" style="gap:var(--space-md)">
+
+                            <!-- Liturgical: shown, never editable here. An editor
+                                 needs to see the whole shape of a Sunday, and these
+                                 are half of it — but they are filled in the order of
+                                 service, one Sunday at a time. -->
+                            <section x-show="liturgicalRoles.length" class="m-card">
+                                <span class="m-label">Filled in the order of service</span>
+                                <p class="re-standfirst">
+                                    These belong to the Sunday itself, not to the event — you put names
+                                    against them when you build that Sunday's order of service. They can't
+                                    be taken off, because the printed booklet expects them.
+                                </p>
+                                <div class="re-stack" style="margin-top:var(--space-sm)">
+                                    <template x-for="role in liturgicalRoles" :key="role.slug">
+                                        <div class="re-locked-role">
+                                            <span class="material-symbols-outlined text-[17px] text-outline shrink-0">lock</span>
+                                            <span class="text-[14px] text-on-surface flex-grow min-w-0" x-text="role.name"></span>
+                                            <span class="m-label m-label--sm">Locked</span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </section>
+
+                            <!-- Servant Roles: the editor's to choose. -->
+                            <section class="m-card">
+                                <span class="m-label">Roles you've added</span>
+                                <p x-show="!servantRoles.length" class="re-standfirst">
+                                    None yet. Add the jobs that come round every time — welcome team,
+                                    sound desk, coffee.
+                                </p>
+                                <div class="re-stack" style="margin-top:var(--space-sm)">
+                                    <template x-for="role in servantRoles" :key="role.slug">
+                                        <div class="re-rule-row">
+                                            <span class="material-symbols-outlined text-[17px] text-secondary shrink-0">badge</span>
+                                            <span class="text-[14px] text-on-surface flex-grow min-w-0" x-text="role.name"></span>
+                                            <span class="text-[11.5px] text-on-surface-variant shrink-0" x-text="role.needed"></span>
+                                            <button @click="askRemoveSeriesRole(role.slug)" :disabled="saving"
+                                                    class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost re-focus"
+                                                    :aria-label="'Take ' + role.name + ' off'">
+                                                <span class="material-symbols-outlined text-[17px]">close</span>
+                                            </button>
+                                        </div>
+                                    </template>
+                                </div>
+
+                                <div x-show="seriesRolesAvailable.length" style="margin-top:var(--space-sm);max-width:280px">
+                                    <label class="m-select-wrap">
+                                        <select class="m-select re-focus" :disabled="saving"
+                                                @change="addSeriesRole($event.target.value); $event.target.value = ''">
+                                            <option value="">+ Add a role</option>
+                                            <template x-for="def in seriesRolesAvailable" :key="def.slug">
+                                                <option :value="def.slug" x-text="def.name"></option>
+                                            </template>
+                                        </select>
+                                    </label>
+                                </div>
+                            </section>
+
+                            <!-- ── Rules across two Roles (MS-221) ────────────────
+                                 A Role's own rules live in the Roles Manager, because
+                                 they are facts about that Role wherever it runs. "The
+                                 Kids Leader and the Kids Helper must not be married to
+                                 each other" is not: it is a fact about THIS event, the
+                                 only thing that knows the two run together. So it is
+                                 written here, under the Roles it is about. -->
+                            <section class="m-card">
+                                <div class="flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-[18px] text-secondary">hub</span>
+                                    <span class="m-label">Rules across two roles</span>
+                                </div>
+                                <p class="re-standfirst" style="max-width:62ch">
+                                    For things no single role can say — a leader and their helper who must not
+                                    be from one household, or a team drawn from one house group.
+                                </p>
+
+                                <div x-show="pairRules.length" class="re-stack" style="margin-top:var(--space-sm)">
+                                    <template x-for="(rule, index) in pairRules" :key="index">
+                                        <div class="re-rule-row"
+                                             :class="pairRuleAvailable(rule) ? '' : 're-rule-row--unavailable'">
+                                            <span class="material-symbols-outlined text-[18px] shrink-0"
+                                                  :class="pairRuleAvailable(rule) ? 'text-secondary' : 'text-error'"
+                                                  x-text="rule.kind === 'sameGroup' ? 'groups' : 'group_remove'"></span>
+                                            <span class="re-rule-row__text" x-text="pairRuleSentence(rule)"></span>
+                                            <button @click="removePairRule(index)" :disabled="savingPairRule"
+                                                    class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost re-focus"
+                                                    aria-label="Remove this rule">
+                                                <span class="material-symbols-outlined text-[17px]">close</span>
+                                            </button>
+                                        </div>
+                                    </template>
+                                </div>
+
+                                <div class="re-composer">
+                                    <div class="re-composer__row">
+                                        <label class="m-select-wrap" style="flex:1 1 0;min-width:0">
+                                            <select x-model="newPairRoleA" class="m-select re-focus">
+                                                <option value="">Pick a role…</option>
+                                                <template x-for="option in pairRoleOptions" :key="option.slug">
+                                                    <option :value="option.slug" x-text="option.name"></option>
+                                                </template>
+                                            </select>
+                                        </label>
+                                        <span class="re-composer__and">and</span>
+                                        <label class="m-select-wrap" style="flex:1 1 0;min-width:0">
+                                            <select x-model="newPairRoleB" class="m-select re-focus">
+                                                <option value="">Pick a role…</option>
+                                                <template x-for="option in pairRoleOptions" :key="option.slug">
+                                                    <option :value="option.slug" x-text="option.name"></option>
+                                                </template>
+                                            </select>
+                                        </label>
+                                    </div>
+                                    <div class="re-composer__row">
+                                        <!-- The same two sentence openers the Roles Manager
+                                             uses for the one-Role version, on purpose. -->
+                                        <label class="m-select-wrap" style="flex:0 0 260px">
+                                            <select x-model="newPairKind" class="m-select re-focus">
+                                                <option value="notSameGroup">cannot be from the same</option>
+                                                <option value="sameGroup">must be from the same</option>
+                                            </select>
+                                        </label>
+                                        <label class="m-select-wrap" style="flex:1 1 0;min-width:0">
+                                            <select x-model="newPairTypeId" class="m-select re-focus">
+                                                <option value="">Choose a relationship…</option>
+                                                <template x-for="option in pairTypeOptions" :key="option.id">
+                                                    <option :value="option.id" x-text="option.name"></option>
+                                                </template>
+                                            </select>
+                                        </label>
+                                        <button @click="addPairRule()" :disabled="savingPairRule"
+                                                class="m-btn m-btn--secondary m-btn--sm re-motion re-press re-focus"
+                                                style="flex:0 0 auto">
+                                            <span class="m-btn__label">Add rule</span>
+                                        </button>
+                                    </div>
+
+                                    <template x-for="problem in pairRuleErrors" :key="problem">
+                                        <p class="text-[13px] text-error" x-text="problem"></p>
+                                    </template>
+
+                                    <!-- An empty picker and a failed read look identical
+                                         from the outside and mean opposite things. -->
+                                    <p x-show="groupTypesDenied" class="text-[13px] text-error">
+                                        The relationship types could not be read, so only Family and Marriage
+                                        are on offer. Ask an elder or admin to check.
+                                    </p>
+                                </div>
+                            </section>
+                        </div>
+                        </template>
+
+                        <!-- ══ The event ══════════════════════════════════════ -->
+                        <template x-if="tab === 'event'">
+                        <div class="re-pane__two">
+                            <div class="re-stack" style="gap:var(--space-md)">
+
+                                <!-- What it IS. These live on the series because they
+                                     are true of every date of it. -->
+                                <section class="m-card">
+                                    <h3 class="re-cardhead">Details</h3>
+                                    <p class="re-standfirst">True of every date of this event.</p>
+
+                                    <div class="re-fields">
+                                        <label class="m-field">
+                                            <span class="m-label">What is it</span>
+                                            <input type="text" class="m-input re-focus" x-model="seriesDraft.name"
+                                                   :disabled="isSundaySeries" placeholder="Midweek Gathering" />
+                                            <p x-show="isSundaySeries" class="m-settled m-settled--sm" style="margin-top:6px">
+                                                The Sunday Service keeps its name — everything else in the app
+                                                refers to it.
+                                            </p>
+                                        </label>
+
+                                        <div class="re-two-up">
+                                            <label class="m-field">
+                                                <span class="m-label">Starts at</span>
+                                                <input type="time" class="m-input re-focus" :value="seriesTime"
+                                                       @change="saveSeriesTime($event.target.value)" :disabled="saving" />
+                                                <span class="m-input-hint">Unless one date has its own time.</span>
+                                            </label>
+                                            <label class="m-field">
+                                                <span class="m-label">Where</span>
+                                                <input type="text" class="m-input re-focus" x-model="seriesDraft.location"
+                                                       placeholder="The hall" />
+                                            </label>
+                                        </div>
+
+                                        <label class="m-field">
+                                            <span class="m-label">What it's for</span>
+                                            <textarea rows="3" class="m-input re-focus" x-model="seriesDraft.description"
+                                                      placeholder="A short line for anyone who has not been before."></textarea>
+                                        </label>
+
+                                        <!-- The time saves on change; the typed fields need
+                                             a press, because a name is half-typed for most
+                                             of the time somebody is typing it. -->
+                                        <div class="re-saverow" x-show="seriesDetailsChanged">
+                                            <span class="re-saverow__said">
+                                                <span class="m-tabs__dot"></span>
+                                                Not saved yet.
+                                            </span>
+                                            <button @click="startSeriesDraft()"
+                                                    class="m-btn m-btn--quiet m-btn--sm re-motion re-focus">
+                                                <span class="m-btn__label">Undo</span>
+                                            </button>
+                                            <button @click="saveSeriesDetails()" :disabled="!seriesDetailsValid || saving"
+                                                    class="m-btn m-btn--primary m-btn--sm re-motion re-press re-focus">
+                                                <span class="m-btn__label">Save details</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <section class="m-card">
+                                    <h3 class="re-cardhead">When it happens</h3>
+                                    <p class="font-headline-lg text-[17px] text-on-surface mt-2"
+                                       x-text="chosen ? patternOf(chosen) : ''"></p>
+                                    <div x-show="patternEditable" style="margin-top:var(--space-sm)">
+                                        <button @click="openPattern()"
+                                                class="m-btn m-btn--secondary m-btn--sm re-motion re-press re-focus">
+                                            <span class="m-btn__label">Change pattern</span>
+                                        </button>
+                                    </div>
+                                    <p x-show="isSundaySeries" class="m-settled m-settled--sm" style="margin-top:var(--space-sm)">
+                                        Every Sunday, by definition. That one is settled.
+                                    </p>
+                                </section>
+                            </div>
+
+                            <div class="re-stack" style="gap:var(--space-md)">
+                                <!-- Colour, same control as any other Event. -->
+                                <section class="m-card">
+                                    <h3 class="re-cardhead">Colour on the calendar</h3>
+                                    <p class="re-standfirst">
+                                        Just so it's easy to pick out. An event that needs sorting still shows
+                                        red, whatever colour you pick.
+                                    </p>
+                                    <div class="re-swatches">
+                                        <template x-for="c in colours" :key="c.slug">
+                                            <button @click="setColour(c.slug)" :disabled="saving"
+                                                    class="re-swatch re-motion re-press re-focus"
+                                                    :class="colour.slug === c.slug ? 're-swatch--current' : ''"
+                                                    :aria-label="c.name" :aria-pressed="colour.slug === c.slug">
+                                                <span class="re-swatch__dot" :style="'background:' + c.bar"></span>
+                                                <span class="re-swatch__name" x-text="c.name"></span>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </section>
+
+                                <!-- The next few dates. A Role only ever gets somebody's
+                                     name against it on a DATE, so this screen has to
+                                     hand you one. -->
+                                <section class="m-card">
+                                    <h3 class="re-cardhead">The next few</h3>
+                                    <p class="re-standfirst">
+                                        A role only ever gets somebody's name against it on a date.
+                                    </p>
+                                    <div class="re-stack" style="margin-top:var(--space-sm)">
+                                        <template x-for="d in seriesNextDates" :key="d">
+                                            <div class="re-datecard">
+                                                <div class="re-datecard__head" x-text="longDate(d)"></div>
+                                                <!-- Two jobs, two links. Filling the sound desk and
+                                                     building the order of service are not the same
+                                                     act, and one screen pretending to be both is how
+                                                     the liturgy ends up editable from the Event. -->
+                                                <a :href="dateHref(d)" class="re-datecard__link re-motion re-focus">
+                                                    <span class="material-symbols-outlined text-[16px] text-secondary shrink-0">group</span>
+                                                    <span class="flex-grow">Who's on</span>
+                                                    <span class="material-symbols-outlined text-[14px] text-outline shrink-0">chevron_right</span>
+                                                </a>
+                                                <a x-show="isSundaySeries" :href="orderOfServiceHref(d)"
+                                                   class="re-datecard__link re-motion re-focus">
+                                                    <span class="material-symbols-outlined text-[16px] text-secondary shrink-0">menu_book</span>
+                                                    <span class="flex-grow">Order of service</span>
+                                                    <span class="material-symbols-outlined text-[14px] text-outline shrink-0">north_east</span>
+                                                </a>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </section>
+                            </div>
+                        </div>
+                        </template>
+
+                        <!-- ══ Who can see it ═════════════════════════════════ -->
+                        <template x-if="tab === 'who'">
+                        <div>
+                            <!-- Settled for a Sunday — not disabled, settled: there is
+                                 no control to grey out. -->
+                            <section x-show="isSundaySeries" class="m-card" style="max-width:620px">
+                                <h3 class="re-cardhead">Who can see this</h3>
+                                <p class="m-settled" style="margin-top:var(--space-sm)">
+                                    Anyone at all. A Sunday Service is always public — that is settled,
+                                    not a setting.
+                                </p>
+                            </section>
+
+                            <section x-show="!isSundaySeries" class="m-card" style="max-width:620px">
+                                <h3 class="re-cardhead">Who can see this</h3>
+                                <div class="re-ladder">
+                                    <template x-for="rung in visibilityLadder" :key="rung.level">
+                                        <button @click="setSeriesVisibility(rung.level)" :disabled="saving"
+                                                class="re-rung re-motion re-focus"
+                                                :class="seriesVisibility === rung.level ? 're-rung--current' : ''">
+                                            <span class="material-symbols-outlined text-[19px] shrink-0 mt-0.5"
+                                                  :class="seriesVisibility === rung.level ? 'text-primary' : 'text-on-surface-variant'"
+                                                  x-text="rung.icon"></span>
+                                            <span class="min-w-0 flex-grow">
+                                                <span class="re-rung__label" x-text="rung.label"></span>
+                                                <span class="re-rung__who" x-text="rung.who"></span>
+                                            </span>
+                                            <span x-show="seriesVisibility === rung.level"
+                                                  class="material-symbols-outlined text-[18px] text-primary shrink-0">check</span>
+                                        </button>
+                                    </template>
+                                </div>
+
+                                <!-- The roster toggle drops to 45% where it is
+                                     meaningless, and explains rather than silently
+                                     doing nothing. -->
+                                <div class="mt-sm pt-sm border-t border-outline-variant re-motion"
+                                     :style="rosterToggleApplies(seriesVisibility) ? '' : 'opacity:.45'">
+                                    <label class="m-check" style="align-items:flex-start">
+                                        <input type="checkbox" :checked="chosen && chosen.rosterShared"
+                                               @change="setSeriesRosterShared($event.target.checked)"
+                                               :disabled="!rosterToggleApplies(seriesVisibility)"
+                                               class="re-focus" style="margin-top:3px" />
+                                        <span>
+                                            <span class="block text-[13.5px] text-on-surface">The people serving can see the rest of the roster</span>
+                                            <span x-show="!rosterToggleApplies(seriesVisibility)"
+                                                  class="block text-[11.5px] text-on-surface-variant mt-0.5">
+                                                Everyone can see this event anyway, so this makes no difference here.
+                                            </span>
+                                        </span>
+                                    </label>
+                                </div>
+
+                                <p class="re-footnote">
+                                    This applies to every date of this event, past ones included.
+                                </p>
+                            </section>
+                        </div>
+                        </template>
+                    </div>
+
+                    <!-- ── The two doors out ──────────────────────────────────
+                         The pane's own footer, drawn ONCE. The ticks are made on
+                         the rota and the count rides on the buttons, so the
+                         buttons cannot be a tab away — and a long list of roles
+                         would scroll a header pair off, which is why the old
+                         page drew them twice. -->
+                    <div class="m-actionbar re-desktop-only" x-show="hasRoles">
+                        <div class="m-actionbar__said">
+                            <template x-if="!range">
+                                <p class="m-actionbar__note">
+                                    Both buttons open the next stretch of dates from tomorrow — auto-assign
+                                    with a rota drafted for you, by hand with the grid empty. Tick columns
+                                    <span x-text="tab === 'rota' ? 'below' : 'on the rota'"></span>
+                                    to open exactly those dates instead.
+                                </p>
+                            </template>
+                            <template x-if="range">
+                                <div>
+                                    <p class="m-actionbar__count">
+                                        <span x-text="range.count"></span><span
+                                            x-text="range.count === 1 ? ' date ticked' : ' dates ticked'"></span><span
+                                            x-show="tab !== 'rota'"> on the rota</span>
+                                    </p>
+                                    <p x-show="sweepNote" class="m-actionbar__note" x-text="sweepNote"></p>
+                                    <!-- Why the emptying button is dead, when it is. A
+                                         control that correctly does nothing and says
+                                         nothing cannot be told from a broken one. -->
+                                    <p x-show="wipeNote" class="m-actionbar__note" x-text="wipeNote"></p>
+                                </div>
+                            </template>
+                        </div>
+                        <div class="m-actionbar__acts">
+                            <button x-show="range && tab !== 'rota'" @click="tab = 'rota'"
+                                    class="m-btn m-btn--ghost m-btn--sm re-motion re-focus">
+                                <span class="m-btn__label">Show the rota</span>
+                            </button>
+                            <!-- "Clear" unticks; "Take everybody off" empties. They
+                                 cannot both be called clearing, and the words have to
+                                 do the separating because the two sit an inch apart. -->
+                            <button x-show="range" @click="clearSelection()"
+                                    class="m-btn m-btn--quiet m-btn--sm re-motion re-focus">
+                                <span class="m-btn__label">Clear</span>
+                            </button>
+                            <button x-show="range" @click="takeEverybodyOff()" :disabled="!canWipe"
+                                    class="m-btn m-btn--danger-outline m-btn--sm re-motion re-press re-focus">
+                                <span class="material-symbols-outlined text-[17px]"
+                                      x-text="clearing ? 'progress_activity' : 'person_remove'"
+                                      :class="clearing ? 'm-spinner' : ''"></span>
+                                <span class="m-btn__label" x-text="wipeLabel"></span>
+                            </button>
+                            <a :href="byHandHref" class="m-btn m-btn--secondary m-btn--sm re-motion re-press re-focus">
+                                <span class="material-symbols-outlined text-[18px]">edit_note</span>
+                                <span class="m-btn__label" x-text="byHandLabel"></span>
+                            </a>
+                            <a :href="draftHref" class="m-btn m-btn--primary m-btn--sm re-motion re-press re-focus">
+                                <span class="material-symbols-outlined text-[18px]">auto_awesome_motion</span>
+                                <span class="m-btn__label" x-text="draftLabel"></span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- The phone gets the reason rather than a dead button. -->
+                    <div class="m-actionbar re-phone-only" x-show="hasRoles">
+                        <div class="m-actionbar__said">
+                            <p class="m-actionbar__note">
+                                Drafting a rota is a wide grid of dates against roles, so it waits for a
+                                computer. Reading this one does not.
                             </p>
                         </div>
                     </div>
-
-                    <!-- ── The grid ───────────────────────────────────────── -->
-                    <div x-show="hasRoles && grid" class="mt-md">
-                        <div class="border border-outline-variant rounded-lg overflow-hidden bg-surface-container-lowest">
-                            <div class="overflow-x-auto">
-                                <table class="re-grid w-full text-left" style="--re-rule:var(--surface-dim);">
-                                    <thead>
-                                        <tr>
-                                            <th class="re-stick px-3 py-2 min-w-[170px] align-bottom">
-                                                <label class="flex items-center gap-2 cursor-pointer">
-                                                    <input type="checkbox" :checked="allShown"
-                                                           @change="toggleAllShown()"
-                                                           class="accent-primary re-focus" />
-                                                    <span class="m-label">
-                                                        Role
-                                                    </span>
-                                                </label>
-                                            </th>
-                                            <template x-for="col in grid.columns" :key="col.date">
-                                                <th class="px-3 py-2 min-w-[150px] align-bottom"
-                                                    :class="isSelected(col.date) ? 're-picked' : ''">
-                                                    <label class="flex items-start gap-2 cursor-pointer">
-                                                        <input type="checkbox" :checked="isSelected(col.date)"
-                                                               @change="toggle(col.date)"
-                                                               class="accent-primary mt-0.5 re-focus" />
-                                                        <span class="min-w-0">
-                                                            <a :href="dateHref(col.date)" @click.stop
-                                                               class="block hover:text-primary re-motion re-focus">
-                                                                <span class="block text-[10.5px] font-label-md tracking-[.12em]
-                                                                             uppercase text-on-surface-variant"
-                                                                      x-text="weekday(col.date)"></span>
-                                                                <span class="block text-[13.5px] text-on-surface"
-                                                                      x-text="shortDate(col.date)"></span>
-                                                            </a>
-                                                            <!-- The state of the date in one line, so an
-                                                                 editor picks columns from the header rather
-                                                                 than by reading every cell under it. -->
-                                                            <span class="block text-[11px] mt-0.5"
-                                                                  :class="col.cancelled ? 'text-outline'
-                                                                        : col.declined ? 'text-error'
-                                                                        : col.empty ? 'text-on-surface-variant' : 'text-success'">
-                                                                <span x-show="col.cancelled">Cancelled</span>
-                                                                <span x-show="!col.cancelled && col.untouched">Nobody yet</span>
-                                                                <span x-show="!col.cancelled && !col.untouched && col.empty"
-                                                                      x-text="col.empty + ' to fill'"></span>
-                                                                <span x-show="!col.cancelled && !col.untouched && !col.empty">Full</span>
-                                                                <span x-show="!col.cancelled && col.declined"
-                                                                      x-text="' · ' + col.declined + ' declined'"></span>
-                                                            </span>
-                                                        </span>
-                                                    </label>
-                                                </th>
-                                            </template>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <template x-for="row in grid.rows" :key="row.key">
-                                            <tr class="align-top">
-                                                <th class="re-stick px-3 py-2.5 font-normal">
-                                                    <span class="block text-[13.5px] text-on-surface" x-text="row.name"></span>
-                                                    <span x-show="row.kind === 'oneOff'"
-                                                          class="block text-[11px] text-outline mt-0.5">
-                                                        Just this date
-                                                    </span>
-                                                    <span x-show="row.kind === 'role' && row.placeCount"
-                                                          class="block text-[11px] text-outline mt-0.5"
-                                                          x-text="row.placeCount + (row.placeCount === 1 ? ' place' : ' places')"></span>
-                                                </th>
-
-                                                <template x-for="cell in row.cells" :key="row.key + cell.date">
-                                                    <td class="px-3 py-2.5"
-                                                        :class="isSelected(cell.date) ? 're-picked' : ''">
-                                                        <!-- A cancelled date, and a one-off's other columns,
-                                                             say so rather than sitting blank — a blank cell
-                                                             reads as a place somebody forgot to fill. -->
-                                                        <span x-show="cell.cancelled" class="text-[12px] text-outline">—</span>
-                                                        <span x-show="!cell.cancelled && !cell.applicable"
-                                                              class="text-[12px] text-outline">·</span>
-
-                                                        <div x-show="cell.applicable" class="flex flex-col gap-1">
-                                                            <template x-for="(place, i) in cell.places" :key="i">
-                                                                <div>
-                                                                    <div x-show="place.filled"
-                                                                         class="flex items-center gap-1.5">
-                                                                        <span class="w-[22px] h-[22px] rounded-full shrink-0 flex items-center
-                                                                                     justify-center text-[9.5px] font-label-md border"
-                                                                              :class="place.card && place.card.declined
-                                                                                ? 'bg-error-container text-on-error-container border-error'
-                                                                                : 'bg-surface-container-high border-outline-variant'"
-                                                                              x-text="place.card ? place.card.initials : ''"></span>
-                                                                        <span class="text-[13px] min-w-0 truncate"
-                                                                              :class="place.card && place.card.declined
-                                                                                ? 'text-error line-through' : 'text-on-surface'"
-                                                                              x-text="place.card ? place.card.name : ''"></span>
-                                                                    </div>
-                                                                    <!-- An unfilled place is DRAWN. The whole
-                                                                         point of reading ahead is seeing the
-                                                                         hole before the morning it matters. -->
-                                                                    <div x-show="!place.filled"
-                                                                         class="flex items-center gap-1.5 text-outline">
-                                                                        <span class="w-[22px] h-[22px] rounded-full shrink-0 border border-dashed
-                                                                                     border-outline-variant"></span>
-                                                                        <span class="text-[12.5px] italic">Nobody yet</span>
-                                                                    </div>
-                                                                </div>
-                                                            </template>
-                                                            <span x-show="!cell.places.length"
-                                                                  class="text-[12px] text-outline">—</span>
-                                                        </div>
-                                                    </td>
-                                                </template>
-                                            </tr>
-                                        </template>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <!-- Where the liturgy actually lives. Said once, under the
-                             grid, because an editor who knows this series has a
-                             preacher will otherwise read its absence as a fault. -->
-                        <p x-show="hasLiturgy" class="mt-sm text-[12px] text-on-surface-variant flex items-start gap-1.5">
-                            <span class="material-symbols-outlined text-[15px] shrink-0 mt-px">menu_book</span>
-                            <span>
-                                Preaching, leading and the rest of the liturgy are not on this grid — they
-                                belong to the order of service, one date at a time, which is what keeps the
-                                printed booklet safe.
-                            </span>
-                        </p>
-                        <p class="mt-1 text-[12px] text-on-surface-variant">
-                            Tap a date to open it on its own. Tick dates to redraw them together.
-                        </p>
-                    </div>
-                </section>
+                </div>
             </div>
         </div>
         </template>
     </main>
+
+    <!-- ── Changing the pattern ───────────────────────────────────────────── -->
+    <!-- Dates that already have people on them and do not fit the new pattern
+         are a QUESTION in gold, not an error in red. Never guessed: a pattern
+         change that silently deleted a rota would be the most expensive undo in
+         the app. -->
+    <div x-show="pattern.open" @keydown.escape.window="pattern.open = false"
+         class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
+        <div class="bg-surface-container-lowest rounded-lg w-full max-w-[720px] mt-[5vh] border"
+             style="border-color:var(--gold);">
+            <div class="px-md py-md flex items-start gap-sm">
+                <span class="material-symbols-outlined text-[26px] shrink-0" style="color:var(--gold);">help</span>
+                <div class="min-w-0">
+                    <h3 class="font-display text-[21px] text-primary">Change the pattern</h3>
+                    <p class="font-headline-lg text-[17px] text-on-surface mt-2" x-text="patternSentence"></p>
+                    <div class="mt-2 flex flex-wrap gap-1.5">
+                        <template x-for="d in patternDates" :key="d">
+                            <span class="rounded-md bg-surface-container px-2 py-0.5 text-[11.5px] text-on-surface-variant"
+                                  x-text="d"></span>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-md pb-md grid gap-sm" style="grid-template-columns: repeat(2, minmax(0,1fr));">
+                <template x-for="opt in [['once','Just once'],['weekly','Every week'],['fortnightly','Every other week'],['monthly','Every month']]" :key="opt[0]">
+                    <button @click="pattern.rule.freq = opt[0]; recomputeOrphans()"
+                            class="rounded-lg border px-3 py-2 text-[13px] font-label-md re-motion re-press re-focus"
+                            :class="pattern.rule && pattern.rule.freq === opt[0]
+                                ? 'border-primary bg-surface-container text-primary'
+                                : 'border-outline-variant text-on-surface-variant'"
+                            x-text="opt[1]"></button>
+                </template>
+            </div>
+
+            <div class="px-md pb-md flex gap-1.5 flex-wrap">
+                <template x-for="(d, i) in ['S','M','T','W','T','F','S']" :key="i">
+                    <button @click="pattern.rule.weekday = i; recomputeOrphans()"
+                            class="w-[48px] h-[40px] rounded-lg border text-[13px] font-label-md re-motion re-press re-focus"
+                            :class="pattern.rule && pattern.rule.weekday === i
+                                ? 'border-primary bg-primary text-on-primary'
+                                : 'border-outline-variant text-on-surface-variant'"
+                            x-text="d"></button>
+                </template>
+            </div>
+
+            <div x-show="pattern.orphans.length" class="border-t border-outline-variant">
+                <div class="px-md py-sm bg-surface-container-low flex items-center justify-between gap-sm flex-wrap">
+                    <p class="text-[13px] text-on-surface">
+                        <strong class="font-label-md" x-text="pattern.orphans.length"></strong>
+                        <span x-text="pattern.orphans.length === 1 ? ' date already has people on it' : ' dates already have people on them'"></span>
+                    </p>
+                    <div class="flex items-center gap-sm text-[11.5px] font-label-md uppercase tracking-wider">
+                        <span class="text-on-surface-variant">All of them:</span>
+                        <button @click="setAllOrphans('move')" class="text-secondary re-focus rounded">Move</button>
+                        <button @click="setAllOrphans('delete')" class="text-secondary re-focus rounded">Delete</button>
+                    </div>
+                </div>
+
+                <p class="px-md pt-sm text-[13px] text-on-surface-variant">
+                    These don't fit the new pattern, and each one already has a roster.
+                    We won't guess — tell us what to do with each.
+                </p>
+
+                <div class="px-md py-sm max-h-[30vh] overflow-y-auto flex flex-col gap-sm">
+                    <template x-for="o in pattern.orphans" :key="o.date">
+                        <div class="flex items-start gap-sm border-b border-outline-variant pb-sm last:border-b-0">
+                            <div class="w-[66px] shrink-0"
+                                 :class="pattern.choices[o.date] === 'delete' ? 'opacity-50 line-through' : ''">
+                                <div class="font-display text-[19px] text-on-surface" x-text="o.date"></div>
+                            </div>
+                            <div class="min-w-0 flex-grow">
+                                <div class="flex flex-wrap gap-1"
+                                     :class="pattern.choices[o.date] === 'delete' ? 'opacity-50' : ''">
+                                    <template x-for="a in (o.assignments || [])" :key="a.personId + (a.slotId||a.oneOffId)">
+                                        <span class="inline-flex items-center gap-1 rounded-full bg-surface-container px-2 py-0.5 text-[11.5px]">
+                                            <span x-text="personName(a.personId)"></span>
+                                        </span>
+                                    </template>
+                                </div>
+                                <p class="text-[12px] text-on-surface-variant mt-1" x-text="orphanOutcome(o)"></p>
+                            </div>
+                            <div class="shrink-0 flex gap-0.5 bg-surface-container rounded-lg p-[3px]">
+                                <template x-for="choice in ['move','delete']" :key="choice">
+                                    <button @click="pattern.choices[o.date] = choice"
+                                            class="px-2 py-1 rounded-md text-[11px] font-label-md uppercase tracking-wider re-motion re-focus"
+                                            :class="pattern.choices[o.date] === choice
+                                                ? 'bg-surface-container-lowest text-primary' : 'text-on-surface-variant'"
+                                            x-text="choice"></button>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div class="px-md py-md border-t border-outline-variant flex items-center justify-between gap-md flex-wrap">
+                <p class="text-[12.5px] text-on-surface-variant" x-text="orphanSummary"></p>
+                <div class="flex items-center gap-sm ml-auto">
+                    <button @click="pattern.open = false" class="m-btn m-btn--quiet m-btn--sm re-motion re-focus">
+                        <span class="m-btn__label">Leave the pattern as it was</span>
+                    </button>
+                    <button @click="applyPattern()" :disabled="saving"
+                            class="m-btn m-btn--primary m-btn--sm re-motion re-press re-focus">
+                        <span class="m-btn__label">Go ahead</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Taking a Role off that people are already on ───────────────────── -->
+    <!-- Small, and it names them. Taking a Role off the EVENT drops everybody in
+         it on EVERY date, so it only ever opens when somebody would actually be
+         dropped — an empty Role comes off without a word. -->
+    <div x-show="pendingRemoval" @keydown.escape.window="cancelRemoval()"
+         class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
+        <div class="bg-surface-container-lowest rounded-lg border border-outline-variant w-full max-w-[460px] mt-[14vh]">
+            <div class="px-md py-md flex items-start gap-sm">
+                <span class="material-symbols-outlined text-[22px] text-error shrink-0 mt-0.5">warning</span>
+                <div class="min-w-0">
+                    <h3 class="font-display text-[20px] text-primary">
+                        Take <span x-text="pendingRemoval && pendingRemoval.name"></span> off this event?
+                    </h3>
+                    <p class="font-headline-lg text-[16px] leading-[1.55] text-on-surface mt-2"
+                       x-text="pendingRemoval && pendingRemoval.sentence"></p>
+                    <p class="text-[13px] text-on-surface-variant mt-2">
+                        Nobody is told. Any rule written across this role and another one comes
+                        off with it.
+                    </p>
+                </div>
+            </div>
+            <div class="px-md py-md border-t border-outline-variant flex items-center justify-end gap-sm">
+                <button @click="cancelRemoval()" class="m-btn m-btn--quiet m-btn--sm re-motion re-focus">
+                    <span class="m-btn__label">Keep it</span>
+                </button>
+                <button @click="confirmRemoval()" :disabled="saving"
+                        class="m-btn m-btn--danger m-btn--sm re-motion re-press re-focus">
+                    <span class="m-btn__label">Take it off</span>
+                </button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
