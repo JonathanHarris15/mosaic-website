@@ -128,7 +128,7 @@ function createMentionSuggestion() {
             function redraw(items, rect, selIdx, command) {
                 if (!popup) {
                     popup = document.createElement('div');
-                    popup.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:220px;max-height:280px;overflow-y:auto;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
+                    popup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:220px;max-height:280px;overflow-y:auto;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
                     document.body.appendChild(popup);
                 }
 
@@ -144,7 +144,7 @@ function createMentionSuggestion() {
 
                 if (!items.length) {
                     const el = document.createElement('div');
-                    el.style.cssText = 'padding:8px 16px;color:#75777f;font-style:italic;';
+                    el.style.cssText = 'padding:8px 16px;color:var(--on-surface-variant);font-style:italic;';
                     el.textContent = 'No matches';
                     popup.appendChild(el);
                     return;
@@ -155,14 +155,14 @@ function createMentionSuggestion() {
                 grouped.forEach(entry => {
                     if (entry._hdr) {
                         const el = document.createElement('div');
-                        el.style.cssText = 'padding:4px 16px 2px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#75777f;';
+                        el.style.cssText = 'padding:4px 16px 2px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-surface-variant);';
                         el.textContent = entry._hdr;
                         popup.appendChild(el);
                     } else {
                         const myI = si++;
                         const el = document.createElement('button');
                         el.type = 'button';
-                        el.style.cssText = `display:block;width:100%;text-align:left;padding:6px 16px;cursor:pointer;border:none;background:${myI === selIdx ? '#d8e2ff' : 'transparent'};color:${myI === selIdx ? '#001a42' : '#1c1c18'};font-size:14px;font-family:inherit;`;
+                        el.style.cssText = `display:block;width:100%;text-align:left;padding:6px 16px;cursor:pointer;border:none;background:${myI === selIdx ? 'var(--primary-fixed)' : 'transparent'};color:${myI === selIdx ? 'var(--primary)' : 'var(--on-surface)'};font-size:14px;font-family:inherit;`;
                         el.textContent = entry.label;
                         el.addEventListener('mousedown', e => { e.preventDefault(); command(entry); });
                         popup.appendChild(el);
@@ -1260,16 +1260,20 @@ document.addEventListener('alpine:init', () => {
             if (!status) return '';
             const URGENCY    = ShepherdingCore.URGENCY_LEVELS;
             const IMPORTANCE = ShepherdingCore.IMPORTANCE_LEVELS;
-            const ACTIVE_COLOR  = { 0: '#ba1a1a', 1: '#ba1a1a', 2: '#436082', 3: '#436082', 4: '#75777f' };
-            const PASSIVE_COLOR = { 0: '#ffdad6', 1: '#ffdad6', 2: '#d1e4ff', 3: '#d1e4ff', 4: '#f0eee8' };
+            // Three bands over the 0-4 score: pressing, worth a look, settled.
+            // These were pre-brand Material values until the palette moved
+            // without them, which is why the grid drew a different red from
+            // every other warning in the app.
+            const ACTIVE_COLOR  = { 0: 'var(--error)', 1: 'var(--error)', 2: 'var(--secondary)', 3: 'var(--secondary)', 4: 'var(--outline)' };
+            const PASSIVE_COLOR = { 0: 'var(--error-container)', 1: 'var(--error-container)', 2: 'var(--primary-fixed)', 3: 'var(--primary-fixed)', 4: 'var(--surface-container)' };
             let html = '<div style="display:grid;grid-template-columns:repeat(3,20px);gap:2px;">';
             IMPORTANCE.forEach(imp => {
                 URGENCY.forEach(urg => {
                     const active = status.urgency === urg && status.importance === imp;
                     const score  = ShepherdingCore.statusScore(urg, imp);
-                    const bg     = active ? (ACTIVE_COLOR[score] || '#75777f') : (PASSIVE_COLOR[score] || '#f0eee8');
-                    html += `<div style="width:20px;height:20px;border-radius:3px;background:${bg};border:${active ? 'none' : '1px solid #c5c6d0'};display:flex;align-items:center;justify-content:center;">`;
-                    if (active) html += '<span style="width:5px;height:5px;border-radius:50%;background:#fff;display:block;"></span>';
+                    const bg     = active ? (ACTIVE_COLOR[score] || 'var(--outline)') : (PASSIVE_COLOR[score] || 'var(--surface-container)');
+                    html += `<div style="width:20px;height:20px;border-radius:3px;background:${bg};border:${active ? 'none' : '1px solid var(--outline-variant)'};display:flex;align-items:center;justify-content:center;">`;
+                    if (active) html += '<span style="width:5px;height:5px;border-radius:50%;background:var(--surface-container-lowest);display:block;"></span>';
                     html += '</div>';
                 });
             });

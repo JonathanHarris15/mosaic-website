@@ -20,12 +20,12 @@
         .ProseMirror p:last-child { margin-bottom: 0; }
         .ProseMirror ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.5em; }
         .ProseMirror ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 0.5em; }
-        .mention-chip { display:inline; background:#d8e2ff; color:#001a42; border-radius:3px; padding:0 4px; font-weight:500; text-decoration:none; cursor:pointer; }
+        .mention-chip { display:inline; background:var(--primary-fixed); color:var(--primary); border-radius:3px; padding:0 4px; font-weight:500; text-decoration:none; cursor:pointer; }
         .ProseMirror table { border-collapse:collapse; width:100%; margin-bottom:0.5em; table-layout:fixed; }
-        .ProseMirror th, .ProseMirror td { border:1px solid #c5c6d0; padding:4px 8px; min-width:50px; position:relative; vertical-align:top; }
-        .care-list-row:nth-child(even) { background-color: #f6f3ed; }
-        .active-editor-row { outline: 2px solid #182F57; outline-offset: -2px; }
-        .ProseMirror-selectednode[data-action-chip] { outline: 2px solid #182F57; outline-offset: 1px; border-radius: 3px; }
+        .ProseMirror th, .ProseMirror td { border:1px solid var(--outline-variant); padding:4px 8px; min-width:50px; position:relative; vertical-align:top; }
+        .care-list-row:nth-child(even) { background-color: var(--background); }
+        .active-editor-row { outline: 2px solid var(--primary); outline-offset: -2px; }
+        .ProseMirror-selectednode[data-action-chip] { outline: 2px solid var(--primary); outline-offset: 1px; border-radius: 3px; }
     </style>
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
@@ -43,7 +43,7 @@
 
     <!-- Header -->
     <header class="w-full max-w-6xl mx-auto px-4 md:px- margin pt-2 md:pt-md flex items-center justify-between">
-        <a href="shepherding-documents.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
+        <a href="shepherding-documents.html" class="m-back">
             <span class="material-symbols-outlined text-[20px]">arrow_back</span>
             <span class="font-label-md text-label-md">Documents</span>
         </a>
@@ -73,8 +73,8 @@
     </header>
 
     <!-- Loading -->
-    <div x-show="loading" class="flex-grow flex items-center justify-center">
-        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    <div x-show="loading" class="m-loading">
+        <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
     <!-- Main -->
@@ -124,7 +124,7 @@
                 <option value="24px">24</option>
             </select>
 
-            <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+            <div class="m-divider m-divider--vertical"></div>
 
             <button type="button" @mousedown.prevent="editorCmd('toggleBold')"
                 :class="editorUpdated >= 0 && isActive('bold') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
@@ -136,7 +136,7 @@
                 :class="editorUpdated >= 0 && isActive('underline') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
                 class="w-8 h-8 rounded flex items-center justify-center underline text-sm transition-colors" title="Underline">U</button>
 
-            <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+            <div class="m-divider m-divider--vertical"></div>
 
             <button type="button" @mousedown.prevent="editorCmd('toggleBulletList')"
                 :class="editorUpdated >= 0 && isActive('bulletList') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
@@ -149,7 +149,7 @@
                 <span class="material-symbols-outlined text-[16px]">format_list_numbered</span>
             </button>
 
-            <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+            <div class="m-divider m-divider--vertical"></div>
 
             <!-- Highlight -->
             <div class="relative" x-data="{ open: false }">
@@ -160,10 +160,12 @@
                 </button>
                 <div x-show="open" @mousedown.outside="open = false" style="display:none;min-width:116px"
                      class="absolute top-full left-0 mt-1 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-md z-50 p-2 flex flex-wrap gap-1">
-                    <button type="button" @mousedown.prevent="editorCmd('setHighlight', '#fef08a'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#fef08a"></button>
-                    <button type="button" @mousedown.prevent="editorCmd('setHighlight', '#bbf7d0'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#bbf7d0"></button>
-                    <button type="button" @mousedown.prevent="editorCmd('setHighlight', '#bfdbfe'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#bfdbfe"></button>
-                    <button type="button" @mousedown.prevent="editorCmd('setHighlight', '#fecaca'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#fecaca"></button>
+                    <button type="button" @mousedown.prevent="editorCmd('setHighlight', '#fef08a'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform bg-highlight-yellow" title="Yellow"></button>
+                    <button type="button" @mousedown.prevent="editorCmd('setHighlight', '#bbf7d0'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform bg-highlight-green" title="Green"></button>
+                    <button type="button" @mousedown.prevent="editorCmd('setHighlight', '#bfdbfe'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform bg-highlight-blue" title="Blue"></button>
+                    <button type="button" @mousedown.prevent="editorCmd('setHighlight', '#fecaca'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform bg-highlight-red" title="Red"></button>
+                    <button type="button" @mousedown.prevent="editorCmd('setHighlight', '#fed7aa'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform bg-highlight-orange" title="Orange"></button>
+                    <button type="button" @mousedown.prevent="editorCmd('setHighlight', '#f0abfc'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform bg-highlight-purple" title="Purple"></button>
                     <button type="button" @mousedown.prevent="editorCmd('setHighlight', null); open = false" class="w-6 h-6 rounded border border-outline-variant hover:bg-surface-container flex items-center justify-center text-on-surface-variant">
                         <span class="material-symbols-outlined text-[12px]">close</span>
                     </button>

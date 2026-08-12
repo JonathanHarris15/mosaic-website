@@ -2279,7 +2279,9 @@ test('an unfilled chip goes amber, and a decline still outranks it', () => {
 
     const open = { id: 'x', date: '2026-08-09', seriesRoleSlugs: ['sound_desk'] };
     assert.strictEqual(page.chipKind(open), 'unfilled');
-    assert.strictEqual(page.stripDots({ events: [open] })[0], '#B8862E');
+    assert.strictEqual(
+        page.stripDots({ events: [open] })[0],
+        require('../public/calendar-view.js').WARNING_COLOUR);
 
     // Somebody having said no is the thing that cannot wait.
     assert.strictEqual(page.chipKind(Object.assign({}, open, { needsAttention: true })), 'declined');
@@ -4891,7 +4893,7 @@ test('a folded liturgy cell still names who is tied up', () => {
 // that never coexist.
 // A date is the unit an editor reads down, and four cards a column with
 // nothing between them run together.
-// ⚠ Put `max-w-7xl mx-auto` on the SCROLLING element and its scrollbar is
+// ⚠ Put `max-w-container mx-auto` on the SCROLLING element and its scrollbar is
 // drawn at that element's right edge — floating in the middle of a wide
 // window with page either side of it.
 test('the setup step scrolls at the window edge, and has room at the bottom', () => {
@@ -4901,9 +4903,9 @@ test('the setup step scrolls at the window edge, and has room at the bottom', ()
         /x-show="view === 'setup'" class="flex-grow min-h-0 overflow-auto w-full">/,
         'the scroller is full width; the centring is a layer in');
     assert.doesNotMatch(html,
-        /x-show="view === 'setup'"[^>]*overflow-auto[^>]*max-w-7xl/,
+        /x-show="view === 'setup'"[^>]*overflow-auto[^>]*max-w-container/,
         'centring the scroller itself is what inset the scrollbar');
-    assert.match(html, /max-w-7xl mx-auto px-4 md:px-margin pt-md pb-20/,
+    assert.match(html, /max-w-container mx-auto px-4 md:px-margin pt-md pb-20/,
         'and the last card is not flush against the bottom edge');
 });
 

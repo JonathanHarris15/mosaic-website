@@ -1,0 +1,54 @@
+/* ============================================================
+   Mosaic Church — Spacing, radius, shadow tokens
+   ------------------------------------------------------------
+   8px base rhythm; generous "breathing room". Depth via tonal
+   layers + low-contrast warm outlines, not heavy shadows —
+   shadows are ambient navy glows reserved for modals/floating.
+
+   The block below is GENERATED from tailwind.config.js by
+   `npm run build:tokens`. Do not hand-edit it. Everything after
+   the closing marker is the design system's own — the app has no
+   opinion on layout width, hairline composition, or motion.
+   ============================================================ */
+
+:root {
+/* @generated:start spacing */
+  /* ---- Spacing (8px rhythm) ---- */
+  --space-xs:      4px;
+  --space-base:    8px;
+  --space-sm:      12px;
+  --space-md:      24px;
+  --space-lg:      48px;
+  --space-xl:      80px;
+  --space-gutter:  24px;
+  --space-margin:  32px;
+
+  /* ---- Layout container ---- */
+  --container-max: 1200px;
+
+  /* ---- Radius (one coherent scale; pills are pills) ---- */
+  --radius-none:   0;
+  --radius-sm:     6px;
+  --radius:        10px;   /* default card radius */
+  --radius-md:     10px;
+  --radius-lg:     10px;
+  --radius-xl:     16px;
+  --radius-2xl:    24px;
+  --radius-full:   9999px;
+
+  /* ---- Shadows — ambient navy glow, never harsh ---- */
+  --shadow-xs:     0 1px 2px rgba(14,28,54,.06);
+  --shadow-sm:     0 2px 6px rgba(14,28,54,.08);
+  --shadow-md:     0 8px 24px rgba(14,28,54,.10);
+  --shadow-lg:     0 18px 48px rgba(14,28,54,.14);
+/* @generated:end */
+
+  /* ---- Borders — warm sand hairlines ---- */
+  --border-hairline: 1px solid var(--outline-variant);
+
+  /* ---- Motion ---- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);   /* @kind other */
+  --duration-fast: 150ms;   /* @kind other */
+  --duration:      200ms;   /* @kind other */
+  --duration-slow: 300ms;   /* @kind other */
+}

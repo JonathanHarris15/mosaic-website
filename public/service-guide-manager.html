@@ -57,20 +57,20 @@
         .btn-ghost:hover { --tw-bg-opacity: 1; background-color: rgb(251 247 240 / var(--tw-bg-opacity, 1)); }
         .code-editor { width: 100%; border-radius: 10px; --tw-border-opacity: 1; border-color: rgb(218 208 192 / var(--tw-border-opacity, 1)); --tw-bg-opacity: 1; background-color: rgb(249 250 251 / var(--tw-bg-opacity, 1)); padding-left: 0.75rem; padding-right: 0.75rem; padding-top: 0.5rem; padding-bottom: 0.5rem; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 11px; }
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3a3f4b; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4b515f; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--editor-scroll); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--editor-scroll-hover); }
         /* CodeMirror fills its pane and reads like a real editor */
         .CodeMirror {
             height: 100%; font-size: 13px; line-height: 1.6;
             font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         }
-        .CodeMirror-gutters { border-right: 1px solid rgba(255,255,255,0.06); background: #181b24; }
-        .cm-s-material-darker.CodeMirror { background: #1b1e27; }
-        .cm-s-material-darker .CodeMirror-gutters { background: #181b24; }
+        .CodeMirror-gutters { border-right: 1px solid rgba(255,255,255,0.06); background: var(--editor-gutter); }
+        .cm-s-material-darker.CodeMirror { background: var(--editor-surface); }
+        .cm-s-material-darker .CodeMirror-gutters { background: var(--editor-gutter); }
     </style>
     <style id="manager-dynamic-style"></style>
 </head>
-<body class="bg-[#f0f2f5] font-sans antialiased text-black min-h-screen" x-data="guideManager()" x-init="init()">
+<body class="bg-preview-canvas font-sans antialiased text-black min-h-screen" x-data="guideManager()" x-init="init()">
 
     <header x-show="!editingPage" class="h-16 bg-primary text-white flex items-center justify-between px-6 sticky top-0 z-50 shadow-md">
         <div class="flex items-center gap-4">
@@ -88,7 +88,7 @@
         <span class="material-symbols-outlined animate-spin text-3xl mr-2">progress_activity</span> Loading…
     </div>
 
-    <main x-show="!loading" x-cloak class="max-w-7xl mx-auto p-6">
+    <main x-show="!loading" x-cloak class="max-w-container mx-auto p-6">
         <!-- tabs -->
         <div class="flex gap-2 mb-6">
             <button class="tab-btn" :class="tab === 'pages' ? 'tab-active' : 'tab-idle'" @click="tab='pages'">Page Library</button>
@@ -133,10 +133,10 @@
 
             <!-- IDE-style split authoring editor (x-if: not rendered until a page is opened) -->
             <template x-if="editingPage">
-            <div class="fixed inset-0 z-50 flex flex-col bg-[#0f1117] text-gray-200">
+            <div class="fixed inset-0 z-50 flex flex-col bg-editor-shell text-gray-200">
 
                 <!-- toolbar -->
-                <div class="h-11 flex items-center justify-between px-3 bg-[#15171f] border-b border-black/50 shrink-0">
+                <div class="h-11 flex items-center justify-between px-3 bg-editor-chrome border-b border-black/50 shrink-0">
                     <div class="flex items-center gap-2 min-w-0">
                         <button class="px-2 py-1 rounded hover:bg-white/10 flex items-center gap-1 text-sm text-gray-400" @click="closePage()">
                             <span class="material-symbols-outlined text-[18px]">arrow_back</span> Library
@@ -166,11 +166,11 @@
                     <div class="flex flex-col min-w-0 min-h-0" :style="'flex:0 0 ' + splitPct + '%'">
 
                         <!-- meta strip -->
-                        <div class="bg-[#13151c] border-b border-black/40 shrink-0">
+                        <div class="bg-editor-chrome border-b border-black/40 shrink-0">
                             <div class="flex items-center gap-3 px-3 py-2 text-xs flex-wrap">
                                 <label class="flex items-center gap-1.5 text-gray-400">
                                     <span class="material-symbols-outlined text-[15px]">palette</span>
-                                    <select x-model="editingPage.stylePresetId" @change="refreshPagePreview()" class="bg-[#1d2029] border border-black/40 rounded px-2 py-1 text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-secondary/60">
+                                    <select x-model="editingPage.stylePresetId" @change="refreshPagePreview()" class="bg-editor-surface border border-black/40 rounded px-2 py-1 text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-secondary/60">
                                         <option value="">(no preset)</option>
                                         <template x-for="sp in stylePresets" :key="sp.id"><option :value="sp.id" x-text="sp.name"></option></template>
                                     </select>
@@ -186,11 +186,11 @@
                         </div>
 
                         <!-- file tabs -->
-                        <div class="flex items-stretch bg-[#0f1117] border-b border-black/50 shrink-0 text-xs">
-                            <button class="px-4 py-2 flex items-center gap-1.5 border-r border-black/40 transition-colors" :class="editorTab === 'html' ? 'bg-[#1b1e27] text-gray-100' : 'text-gray-500 hover:text-gray-300'" @click="setEditorTab('html')">
+                        <div class="flex items-stretch bg-editor-shell border-b border-black/50 shrink-0 text-xs">
+                            <button class="px-4 py-2 flex items-center gap-1.5 border-r border-black/40 transition-colors" :class="editorTab === 'html' ? 'bg-editor-surface text-gray-100' : 'text-gray-500 hover:text-gray-300'" @click="setEditorTab('html')">
                                 <span class="material-symbols-outlined text-[15px] text-orange-400">html</span> page.html
                             </button>
-                            <button class="px-4 py-2 flex items-center gap-1.5 border-r border-black/40 transition-colors" :class="editorTab === 'css' ? 'bg-[#1b1e27] text-gray-100' : 'text-gray-500 hover:text-gray-300'" @click="setEditorTab('css')">
+                            <button class="px-4 py-2 flex items-center gap-1.5 border-r border-black/40 transition-colors" :class="editorTab === 'css' ? 'bg-editor-surface text-gray-100' : 'text-gray-500 hover:text-gray-300'" @click="setEditorTab('css')">
                                 <span class="material-symbols-outlined text-[15px] text-blue-400">style</span> styles.css
                             </button>
                         </div>
@@ -199,7 +199,7 @@
                         <div id="editor-area" class="flex-1 min-h-0 flex">
 
                             <!-- Insert palette — collapsible vertical panel -->
-                            <div class="shrink-0 flex flex-col bg-[#13151c] border-r border-black/40" :class="paletteOpen ? '' : 'w-10'" :style="paletteOpen ? ('width:' + paletteWidth + 'px') : ''">
+                            <div class="shrink-0 flex flex-col bg-editor-chrome border-r border-black/40" :class="paletteOpen ? '' : 'w-10'" :style="paletteOpen ? ('width:' + paletteWidth + 'px') : ''">
                                 <button @click="togglePalette()" class="h-8 shrink-0 flex items-center gap-1.5 px-2.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 hover:text-gray-200 border-b border-black/30" :title="paletteOpen ? 'Collapse Insert panel' : 'Expand Insert panel'">
                                     <span class="material-symbols-outlined text-[16px]" x-text="paletteOpen ? 'chevron_left' : 'chevron_right'"></span>
                                     <span x-show="paletteOpen">Insert</span>
@@ -220,12 +220,12 @@
                             <div x-show="paletteOpen" @mousedown="startResize($event, 'palette')" class="shrink-0 w-1.5 cursor-col-resize bg-black/40 hover:bg-secondary/70 transition-colors"></div>
 
                             <!-- code editors (CodeMirror enhances these textareas) -->
-                            <div class="flex-1 min-w-0 min-h-0 relative bg-[#1b1e27]">
+                            <div class="flex-1 min-w-0 min-h-0 relative bg-editor-surface">
                                 <div x-show="editorTab === 'html'" class="absolute inset-0 overflow-hidden">
-                                    <textarea id="page-html-editor" x-model="editingPage.html" @input="refreshPagePreview()" class="w-full h-full p-3 bg-[#1b1e27] text-gray-200 font-mono text-[13px] resize-none focus:outline-none"></textarea>
+                                    <textarea id="page-html-editor" x-model="editingPage.html" @input="refreshPagePreview()" class="w-full h-full p-3 bg-editor-surface text-gray-200 font-mono text-[13px] resize-none focus:outline-none"></textarea>
                                 </div>
                                 <div x-show="editorTab === 'css'" class="absolute inset-0 overflow-hidden">
-                                    <textarea id="page-css-editor" x-model="editingPage.css" @input="refreshPagePreview()" class="w-full h-full p-3 bg-[#1b1e27] text-gray-200 font-mono text-[13px] resize-none focus:outline-none"></textarea>
+                                    <textarea id="page-css-editor" x-model="editingPage.css" @input="refreshPagePreview()" class="w-full h-full p-3 bg-editor-surface text-gray-200 font-mono text-[13px] resize-none focus:outline-none"></textarea>
                                 </div>
                             </div>
                         </div>
@@ -235,8 +235,8 @@
                     <div @mousedown="startResize($event, 'main')" class="shrink-0 w-1.5 cursor-col-resize bg-black/50 hover:bg-secondary/70 transition-colors"></div>
 
                     <!-- RIGHT: live preview -->
-                    <div class="flex flex-col min-h-0 min-w-0 bg-[#202430] flex-1">
-                        <div class="h-9 flex items-center justify-between px-3 bg-[#13151c] border-b border-black/40 shrink-0 text-xs text-gray-400">
+                    <div class="flex flex-col min-h-0 min-w-0 bg-editor-surface flex-1">
+                        <div class="h-9 flex items-center justify-between px-3 bg-editor-chrome border-b border-black/40 shrink-0 text-xs text-gray-400">
                             <div class="flex items-center gap-1.5">
                                 <span class="material-symbols-outlined text-[15px]">visibility</span> Live preview
                                 <span class="text-gray-600" x-show="pagePreviewPages.length">· <span x-text="pagePreviewPages.length"></span> pg</span>
@@ -308,11 +308,11 @@
                 <button class="btn-ghost text-xs mb-4" @click="closePreset()"><span class="material-symbols-outlined text-[16px]">arrow_back</span> Back</button>
                 <div class="card space-y-3">
                     <div>
-                        <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Name</label>
+                        <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Name</label>
                         <input type="text" x-model="editingPreset.name" class="w-full text-sm rounded border-outline-variant px-3 py-2" />
                     </div>
                     <div>
-                        <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">CSS</label>
+                        <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">CSS</label>
                         <textarea x-model="editingPreset.css" rows="16" class="code-editor"></textarea>
                     </div>
                     <div class="flex justify-end"><button class="btn-primary text-sm" @click="savePreset()"><span class="material-symbols-outlined text-[18px]">save</span> Save</button></div>
@@ -362,11 +362,11 @@
                 <div class="card space-y-4">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div class="md:col-span-2">
-                            <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Name</label>
+                            <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Name</label>
                             <input type="text" x-model="editingTemplate.name" class="w-full text-sm rounded border-outline-variant px-3 py-2" />
                         </div>
                         <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Start numbering on page</label>
+                            <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Start numbering on page</label>
                             <input type="number" min="1" step="1" x-model.number="editingTemplate.numberStartPage" class="w-full text-sm rounded border-outline-variant px-3 py-2" />
                             <p class="text-[10px] text-gray-400 mt-1">Front matter before this page (cover, explainer) stays unnumbered. The first numbered page shows “1”. Default 2.</p>
                         </div>

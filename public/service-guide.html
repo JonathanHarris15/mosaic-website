@@ -117,8 +117,8 @@
 
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--preview-scroll); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--preview-scroll-hover); }
 
         .zoom-controls { position: absolute; bottom: 2rem; right: 2rem; z-index: 100; display: flex; flex-direction: column; gap: 0.5rem; }
 
@@ -130,7 +130,7 @@
         .zoom-btn:active { --tw-scale-x: .95; --tw-scale-y: .95; transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y)); }
     </style>
 </head>
-<body class="bg-[#f0f2f5] font-sans antialiased text-black" x-data="guideEditor()" x-init="init()">
+<body class="bg-preview-canvas font-sans antialiased text-black" x-data="guideEditor()" x-init="init()">
 
     <!-- Header / Top Bar -->
     <header class="no-print h-16 bg-primary text-white flex items-center justify-between px-6 sticky top-0 z-50 shadow-md">
@@ -607,19 +607,19 @@
                                 </div>
 
                                 <div class="grid grid-cols-2 gap-3">
-                                    <div class="col-span-2"><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Nation</label><textarea rows="1" x-model="selectedElement.nation" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
-                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Continent</label><textarea rows="1" x-model="selectedElement.continent" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
-                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Capital</label><textarea rows="1" x-model="selectedElement.capital" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
-                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Population</label><textarea rows="1" x-model="selectedElement.population" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
-                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Official Language</label><textarea rows="1" x-model="selectedElement.language" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
-                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Total Languages</label><textarea rows="1" x-model="selectedElement.totalLanguages" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
-                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Literacy Rate</label><textarea rows="1" x-model="selectedElement.literacy" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
-                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Christian</label><textarea rows="1" x-model="selectedElement.christianPct" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
-                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Evangelical</label><textarea rows="1" x-model="selectedElement.evangelicalPct" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
-                                    <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Un-evangelized</label><textarea rows="1" x-model="selectedElement.unevangelizedPct" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div class="col-span-2"><label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Nation</label><textarea rows="1" x-model="selectedElement.nation" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Continent</label><textarea rows="1" x-model="selectedElement.continent" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Capital</label><textarea rows="1" x-model="selectedElement.capital" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Population</label><textarea rows="1" x-model="selectedElement.population" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Official Language</label><textarea rows="1" x-model="selectedElement.language" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Total Languages</label><textarea rows="1" x-model="selectedElement.totalLanguages" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Literacy Rate</label><textarea rows="1" x-model="selectedElement.literacy" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Christian</label><textarea rows="1" x-model="selectedElement.christianPct" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Evangelical</label><textarea rows="1" x-model="selectedElement.evangelicalPct" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                    <div><label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Un-evangelized</label><textarea rows="1" x-model="selectedElement.unevangelizedPct" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
                                 </div>
                                 <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Prayer Prompts</label>
+                                    <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Prayer Prompts</label>
                                     <template x-for="(p, i) in selectedElement.prompts">
                                         <div class="flex gap-2 mb-2">
                                             <textarea rows="1" x-model="selectedElement.prompts[i]" x-init="autoResize($el)" @input="autoResize($el)" class="flex-1 text-sm rounded border-outline-variant px-3 py-1 resize-none overflow-hidden"></textarea>
@@ -636,10 +636,10 @@
                         <!-- Mosaic Kids Inputs -->
                         <template x-if="selectedElement.type === 'kids_section'">
                             <div class="space-y-4">
-                                <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Lesson Title</label><textarea rows="1" x-model="selectedElement.lessonTitle" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
-                                <div><label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Passage Reference</label><textarea rows="1" x-model="selectedElement.lessonVerse" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                <div><label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Lesson Title</label><textarea rows="1" x-model="selectedElement.lessonTitle" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
+                                <div><label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Passage Reference</label><textarea rows="1" x-model="selectedElement.lessonVerse" x-init="autoResize($el)" @input="autoResize($el)" class="w-full text-sm rounded border-outline-variant px-3 py-2 resize-none overflow-hidden"></textarea></div>
                                 <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Story Summary Points</label>
+                                    <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Story Summary Points</label>
                                     <template x-for="(s, i) in selectedElement.summary">
                                         <div class="flex gap-2 mb-2">
                                             <textarea rows="1" x-model="selectedElement.summary[i]" x-init="autoResize($el)" @input="autoResize($el)" class="flex-1 text-sm rounded border-outline-variant px-3 py-1 resize-none overflow-hidden"></textarea>
@@ -651,7 +651,7 @@
                                     </button>
                                 </div>
                                 <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Review Questions</label>
+                                    <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Review Questions</label>
                                     <template x-for="(q, i) in selectedElement.questions">
                                         <div class="flex gap-2 mb-2">
                                             <textarea rows="1" x-model="selectedElement.questions[i]" x-init="autoResize($el)" @input="autoResize($el)" class="flex-1 text-sm rounded border-outline-variant px-3 py-1 resize-none overflow-hidden"></textarea>
@@ -668,7 +668,7 @@
                         <!-- Announcements Inputs -->
                         <template x-if="selectedElement.type === 'announcements'">
                             <div class="space-y-4">
-                                <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Weekly Announcements</label>
+                                <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Weekly Announcements</label>
                                 <template x-for="(item, i) in selectedElement.items">
                                     <div class="p-3 bg-gray-50 rounded-lg border border-outline-variant space-y-2">
                                         <div class="flex justify-between items-center">
@@ -751,12 +751,12 @@
                                 </div>
 
                                 <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Page Title (Internal)</label>
+                                    <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Page Title (Internal)</label>
                                     <input type="text" x-model="selectedElement.label" class="w-full text-sm rounded border-outline-variant px-3 py-2" />
                                 </div>
                                 
                                 <div>
-                                    <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">Raw HTML Content</label>
+                                    <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">Raw HTML Content</label>
                                     <textarea x-model="selectedElement.content" rows="12" class="w-full text-[11px] font-mono rounded border-outline-variant px-3 py-2 bg-gray-50" placeholder="Paste or edit HTML here..."></textarea>
                                 </div>
                             </div>

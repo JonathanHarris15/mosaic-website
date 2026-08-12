@@ -76,10 +76,119 @@ module.exports = {
         "on-error":          "#ffffff",
         "error-container":   "#F3D9D4",
         "on-error-container":"#5C231C",
-        "success":           "#4B8A6B",
+        /* error and warning each carry a container and an on-container;
+           success carried neither, so anything needing a calm green panel
+           invented one — mobile's statusTone had #DCEBE2 / #22503A sitting
+           inline next to a perfectly good var(--success). Adopting those
+           values rather than choosing new ones: they are already on screen. */
+        "success":             "#4B8A6B",
+        "success-container":   "#DCEBE2",
+        "on-success-container":"#22503A",
         "warning":             "#B8862E",
         "warning-container":   "#F0E2C6",
         "on-warning-container":"#5A4212",
+
+        /* ---- Event colours (Calendar) ----
+           Eight choices an editor gives an Event, each a bar and the soft
+           tint the swatch uses when chosen. Six of the bars are already
+           semantic tokens and are repeated here on purpose: the list is a
+           palette an editor picks from, and a palette with holes in it
+           where the brand happens to supply the colour is not a palette.
+           Lived in calendar-view.js as a literal table until MS design-sync. */
+        "event-steel":  "#5D94A9",  "event-steel-tint":  "#D7E7EC",
+        "event-ocean":  "#3E6181",  "event-ocean-tint":  "#CFE0F1",
+        "event-navy":   "#182F57",  "event-navy-tint":   "#D5DCE9",
+        "event-green":  "#4B8A6B",  "event-green-tint":  "#D6E7DE",
+        "event-gold":   "#B89B6A",  "event-gold-tint":   "#EFE6D5",
+        "event-amber":  "#B8862E",  "event-amber-tint":  "#F0E2C6",
+        "event-plum":   "#7A5578",  "event-plum-tint":   "#E7DAE6",
+        "event-rose":   "#B0697C",  "event-rose-tint":   "#F0DBE0",
+
+        /* ---- Highlighter (Note Module) ----
+           Pen colours for highlighting a Note Body. Deliberately outside the
+           brand — a highlight has to sit under navy ink and stay readable,
+           which the warm palette cannot do. Defined in three places before
+           this, and the phone was missing orange and purple. */
+        "highlight-yellow": "#FEF08A",
+        "highlight-green":  "#BBF7D0",
+        "highlight-blue":   "#BFDBFE",
+        "highlight-red":    "#FECACA",
+        "highlight-orange": "#FED7AA",
+        "highlight-purple": "#F0ABFC",
+
+        /* ---- Inline trigger chips (Note Module) ----
+           A chip dropped into a Note Body when an Elder tags someone or
+           changes their Shepherding Status from inside the editor. The colour
+           is written into the Note Body as a literal and rendered back
+           wherever that note is read, so the code cannot call these by name —
+           but they are a set, and the set belongs here so a designer can see
+           it. Two of them repeat a value the brand already supplies; the
+           third had no name at all. */
+        "chip-tag-added":   "#D8E2FF",
+        "chip-tag-removed": "#EEE4D8",
+        "chip-status":      "#FEF9C3",
+
+        /* ---- Service Notes card (Order of Service editor) ----
+           A gold-brown card that deliberately reads as a margin note rather
+           than as part of the liturgy. Near the warning family but not it:
+           a note is not a caution, and colouring it amber would say so. */
+        "note-ink":     "#5B4D2E",
+        "note-heading": "#7A5E1F",
+        "note-border":  "#D8B878",
+        "note-icon":    "#D8C9A6",
+
+        /* ---- Printed-guide preview ----
+           The Service Guide pages sit a white page on a neutral grey, not on
+           parchment. That is deliberate and worth keeping: a warm surround
+           tints how the print reads, and these three screens exist to judge
+           the print. Outside the brand on purpose, like the highlighter. */
+        "preview-canvas":       "#F0F2F5",
+        "preview-scroll":       "#CBD5E1",
+        "preview-scroll-hover": "#94A3B8",
+
+        /* ---- Code editor (Service Guide Manager) ----
+           A Page Template is authored as HTML and CSS in a CodeMirror pane
+           dressed as material-darker. A dark editor in a light app is the
+           normal shape of that tool, not a stray dark mode — but it was six
+           undeclared values, so the design system could not see it. */
+        "editor-shell":        "#0F1117",
+        "editor-chrome":       "#13151C",
+        "editor-gutter":       "#181B24",
+        "editor-surface":      "#1B1E27",
+        "editor-scroll":       "#3A3F4B",
+        "editor-scroll-hover": "#4B515F",
+
+        /* ---- Relations Viewer ----
+           Two more line colours to finish the cycled edge palette. The other
+           four entries already read --gold, --success, --secondary and
+           --warning; these two had no token and sat as hexes among them.
+           Named for what they are, because the palette is cycled across
+           elder-defined types and no entry means anything in particular. */
+        "edge-terracotta": "#A26B5B",
+        "edge-violet":     "#7E5A8C",
+
+        /* Node ink. A shade off --on-surface on purpose: the emphasised node
+           uses --on-surface, and the two have to be told apart. */
+        "graph-ink": "#28324A",
+
+        /* An inactive Person: dimmed fill, dashed ring, muted label. The
+           label was #9A9384 in the DOM legend and #8A8372 on the canvas —
+           one concept, two greys, depending which one you were looking at. */
+        "inactive-surface": "#EFE9DF",
+        "inactive-outline": "#B9B0A0",
+        "on-inactive":      "#9A9384",
+
+        /* ---- Relationship Group bubbles (Relations Viewer) ----
+           Numbered, not named: the viewer cycles them by stable group order,
+           so graph-3 means "the third group", never "the violet one".
+           Muted and warm-harmonious, kept clear of the stage pips and the
+           edge palette by hue. ADR-0014. */
+        "graph-1": "#5E8C8A",
+        "graph-2": "#C0803A",
+        "graph-3": "#8E6FA6",
+        "graph-4": "#6F9E5C",
+        "graph-5": "#C26B6B",
+        "graph-6": "#4E7BA6",
       },
 
       borderRadius: {
@@ -111,12 +220,29 @@ module.exports = {
         "headline-md": ["24px", { lineHeight: "1.3", fontWeight: "600" }],
         "body-lg":     ["18px", { lineHeight: "1.6", fontWeight: "400" }],
         "body-md":     ["16px", { lineHeight: "1.5", fontWeight: "400" }],
-        "label-md":    ["13px", { lineHeight: "1.2", letterSpacing: "0.14em", fontWeight: "600" }],
+        /* Three sizes of tracked-caps label, because the app draws three.
+           `label-md` is the field and button label — 161 places render at
+           13px and read correctly. The overline above a group is a smaller
+           sibling, not that one drawn wrong: it existed at 10px, 10.5px,
+           11px and 12px in hand-written copies, and the phone had settled
+           on 11.5. Naming the two smaller sizes is what stops them being
+           magic numbers inside a component. */
+        "label-md":    ["13px",   { lineHeight: "1.2", letterSpacing: "0.14em", fontWeight: "600" }],
+        "label-sm":    ["11.5px", { lineHeight: "1.2", letterSpacing: "0.14em", fontWeight: "600" }],
+        "label-xs":    ["10.5px", { lineHeight: "1.2", letterSpacing: "0.14em", fontWeight: "600" }],
       },
 
       spacing: {
         "xs": "4px", "sm": "12px", "base": "8px", "md": "24px",
         "lg": "48px", "xl": "80px", "gutter": "24px", "margin": "32px",
+      },
+
+      /* The page container. Was 16 scattered uses of Tailwind's own
+         max-w-7xl (1280px) — a default, not a decision — against the
+         design system's chosen 1200px. The design system wins because
+         it actually chose; now the value has one home. */
+      maxWidth: {
+        "container": "1200px",
       },
 
       boxShadow: {

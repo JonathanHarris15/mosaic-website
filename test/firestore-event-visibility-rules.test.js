@@ -16,7 +16,10 @@ const path = require('node:path');
 //
 // Follows the pattern of firestore-relationship-sharing-rules.test.js.
 
-const rules = fs.readFileSync(path.join(__dirname, '..', 'firestore.rules'), 'utf8');
+// Normalised to LF — the block patterns close on `\n    \}`, which never
+// matches a CRLF checkout, leaving the shape they pin unchecked.
+const rules = fs.readFileSync(path.join(__dirname, '..', 'firestore.rules'), 'utf8')
+    .replace(/\r\n/g, '\n');
 
 const Core = require('../public/events-occurrence-core.js');
 

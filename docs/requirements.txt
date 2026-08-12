@@ -1,4 +1,0 @@
-sphinx
-sphinx-llms-txt
-sphinx-js
-sphinx-markdown-builder

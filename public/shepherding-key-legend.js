@@ -43,7 +43,7 @@
         const k = document.createElement('kbd');
         k.textContent = text;
         k.style.cssText = 'display:inline-block;min-width:18px;text-align:center;font-family:"Work Sans",sans-serif;' +
-            'font-size:12px;font-weight:600;line-height:1.4;color:#182F57;background:#d8e2ff;border:1px solid #b2c6f8;' +
+            'font-size:12px;font-weight:600;line-height:1.4;color:var(--primary);background:var(--primary-fixed);border:1px solid var(--primary-fixed-dim);' +
             'border-radius:4px;padding:1px 5px;';
         return k;
     }
@@ -60,22 +60,22 @@
         panel.id = 'shep-key-legend';
         panel.setAttribute('aria-label', 'Note editor key commands');
         panel.style.cssText = 'position:fixed;z-index:40;right:10px;top:50%;transform:translateY(-50%);' +
-            'width:' + PANEL_W + 'px;max-height:calc(100vh - 20px);overflow-y:auto;background:#fffdf7;' +
-            'border:1px solid #c5c6d0;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.12);' +
+            'width:' + PANEL_W + 'px;max-height:calc(100vh - 20px);overflow-y:auto;background:var(--surface);' +
+            'border:1px solid var(--outline-variant);border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.12);' +
             'padding:12px 14px;font-family:"Work Sans",sans-serif;display:none;';
 
         const hdr = document.createElement('div');
         hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;';
         const hTitle = document.createElement('span');
         hTitle.textContent = 'Quick keys';
-        hTitle.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#75777f;';
+        hTitle.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--on-surface-variant);';
         hdr.appendChild(hTitle);
         const collapseBtn = document.createElement('button');
         collapseBtn.type = 'button';
         collapseBtn.setAttribute('aria-label', 'Collapse quick keys');
         collapseBtn.title = 'Collapse';
         collapseBtn.textContent = '»'; // » — dock back to the edge
-        collapseBtn.style.cssText = 'border:none;background:transparent;cursor:pointer;color:#75777f;' +
+        collapseBtn.style.cssText = 'border:none;background:transparent;cursor:pointer;color:var(--on-surface-variant);' +
             'font-size:16px;line-height:1;padding:0 2px;';
         collapseBtn.addEventListener('click', () => setExpanded(false));
         hdr.appendChild(collapseBtn);
@@ -92,13 +92,13 @@
             cmd.keys.forEach(kk => top.appendChild(chip(kk)));
             const title = document.createElement('span');
             title.textContent = cmd.title;
-            title.style.cssText = 'font-size:13px;font-weight:600;color:#1c1c18;';
+            title.style.cssText = 'font-size:13px;font-weight:600;color:var(--on-surface);';
             top.appendChild(title);
             row.appendChild(top);
 
             const desc = document.createElement('div');
             desc.textContent = cmd.desc;
-            desc.style.cssText = 'font-size:11px;line-height:1.35;color:#75777f;';
+            desc.style.cssText = 'font-size:11px;line-height:1.35;color:var(--on-surface-variant);';
             row.appendChild(desc);
 
             panel.appendChild(row);
@@ -106,7 +106,7 @@
 
         const hint = document.createElement('div');
         hint.textContent = 'Type a key at the start of a word.';
-        hint.style.cssText = 'font-size:10px;font-style:italic;color:#9a9ba0;border-top:1px solid #e5e2dc;padding-top:8px;margin-top:2px;';
+        hint.style.cssText = 'font-size:10px;font-style:italic;color:var(--outline);border-top:1px solid var(--surface-container-high);padding-top:8px;margin-top:2px;';
         panel.appendChild(hint);
 
         return panel;
@@ -123,7 +123,7 @@
         tab.title = 'Quick keys';
         tab.style.cssText = 'position:fixed;z-index:40;right:0;top:50%;transform:translateY(-50%);' +
             'display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;' +
-            'background:#182F57;color:#fff;border:none;border-radius:10px 0 0 10px;' +
+            'background:var(--primary);color:var(--on-primary);border:none;border-radius:10px 0 0 10px;' +
             'box-shadow:0 4px 16px rgba(0,0,0,.14);padding:11px 6px;font-family:"Work Sans",sans-serif;';
 
         const icon = document.createElement('span');

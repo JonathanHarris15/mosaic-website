@@ -19,12 +19,19 @@
   },
   "scripts": {
     "test": "node --test",
-    "test:emulator": "node scripts/test-emulator.mjs",
+    "check:design": "npm run build:tokens -- --check && npm run build:components -- --check && npm run check:design-drift -- --strict && npm run check:design-components -- --strict",
+    "test:emulator": "node scripts/run-emulator-tests.mjs",
     "build:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/mosaic.css --minify",
+    "build:tokens": "node scripts/build-design-tokens.mjs",
+    "check:design-drift": "node scripts/check-design-drift.mjs",
     "watch:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/mosaic.css --watch",
     "vendor": "node scripts/vendor-assets.mjs && node scripts/vendor-fonts.mjs",
     "vendor:tiptap": "cd build/tiptap && npm install --no-audit --no-fund && npm run build",
     "sync": "npm run build:css && cap sync",
-    "mobile:build": "node scripts/mobile-build.mjs"
+    "mobile:build": "node scripts/mobile-build.mjs",
+    "fix:design-drift": "node scripts/fix-design-drift.mjs",
+    "compare:design-tokens": "node scripts/compare-design-tokens.mjs",
+    "build:components": "node scripts/build-design-components.mjs",
+    "check:design-components": "node scripts/check-design-components.mjs"
   }
 }

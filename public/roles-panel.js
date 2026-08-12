@@ -131,7 +131,7 @@
                                               x-text="role.def.name"></span>
                                         <span x-show="(role.def.restrictions || []).length"
                                               class="flex items-center gap-1 text-[11.5px] text-on-surface-variant">
-                                            <span class="material-symbols-outlined text-[14px]" style="color:#B89B6A;">rule</span>
+                                            <span class="material-symbols-outlined text-[14px]" style="color:var(--gold);">rule</span>
                                             <span x-text="(role.def.restrictions || []).length + ' rule' + ((role.def.restrictions||[]).length === 1 ? '' : 's')"></span>
                                         </span>
                                         <span class="rounded-md px-2 py-0.5 text-[11.5px] font-label-md"
@@ -265,7 +265,7 @@
                              and inside each, one person per row. -->
                         <div x-show="oneOffRoles.length || isEditor"
                              class="mt-md cal-oneoff-strip rounded-lg bg-surface-container-low p-md">
-                            <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
+                            <div class="m-label">
                                 Just for this one
                             </div>
                             <div class="mt-sm flex flex-col gap-sm">
@@ -430,7 +430,7 @@
          class="fixed inset-0 z-[70] bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
         <div class="bg-surface-container-lowest rounded-lg border border-outline-variant w-full max-w-[640px] mt-[6vh]">
             <div class="px-md py-md border-b border-outline-variant">
-                <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant"
+                <div class="m-label"
                      x-text="pickerTitle"></div>
                 <h3 class="font-display text-[21px] text-primary mt-1">Who's taking this place?</h3>
                 <div class="mt-2 flex items-center gap-2 flex-wrap">

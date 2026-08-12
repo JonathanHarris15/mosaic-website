@@ -7,11 +7,11 @@
     background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-    background: #e5e2dc; /* surface-variant */
+    background: var(--surface-variant);
     border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: #c5c6d0; /* outline-variant */
+    background: var(--outline-variant);
 }
 
 /* Toast Notifications - Redesigned for Mosaic Liturgy */
@@ -20,8 +20,8 @@
     bottom: 32px;
     right: 32px;
     padding: 16px 24px;
-    background-color: #182F57; /* primary */
-    color: #fcf9f3; /* background/cream */
+    background-color: var(--primary); /* primary */
+    color: var(--surface); /* background/cream */
     border-radius: 8px;
     box-shadow: 0 8px 24px rgba(0, 26, 67, 0.15);
     z-index: 9999;
@@ -36,12 +36,12 @@
 }
 
 .toast.success {
-    border-left: 4px solid #67a1b5; /* tertiary-container/accent */
+    border-left: 4px solid var(--tertiary); /* tertiary-container/accent */
 }
 
 .toast.error {
-    background-color: #ba1a1a; /* error */
-    border-left: 4px solid #ffdad6;
+    background-color: var(--error);
+    border-left: 4px solid var(--error-container);
 }
 
 @keyframes slideIn {
@@ -56,7 +56,7 @@
 
 /* Specific Tag Input Overrides (to complement Tailwind) */
 .tag-container input::placeholder {
-    color: #75777f; /* outline */
+    color: var(--outline);
     opacity: 0.6;
 }
 

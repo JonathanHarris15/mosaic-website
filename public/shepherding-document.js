@@ -123,7 +123,7 @@ function createDocMentionSuggestion() {
             function redraw(items, rect, selIdx, command) {
                 if (!popup) {
                     popup = document.createElement('div');
-                    popup.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:220px;max-height:280px;overflow-y:auto;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
+                    popup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:220px;max-height:280px;overflow-y:auto;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
                     document.body.appendChild(popup);
                 }
                 if (rect) {
@@ -133,7 +133,7 @@ function createDocMentionSuggestion() {
                 popup.innerHTML = '';
                 if (!items.length) {
                     const el = document.createElement('div');
-                    el.style.cssText = 'padding:8px 16px;color:#75777f;font-style:italic;';
+                    el.style.cssText = 'padding:8px 16px;color:var(--on-surface-variant);font-style:italic;';
                     el.textContent = 'No matches';
                     popup.appendChild(el);
                     return;
@@ -143,14 +143,14 @@ function createDocMentionSuggestion() {
                 grouped.forEach(entry => {
                     if (entry._hdr) {
                         const el = document.createElement('div');
-                        el.style.cssText = 'padding:4px 16px 2px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#75777f;';
+                        el.style.cssText = 'padding:4px 16px 2px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-surface-variant);';
                         el.textContent = entry._hdr;
                         popup.appendChild(el);
                     } else {
                         const myI = si++;
                         const el = document.createElement('button');
                         el.type = 'button';
-                        el.style.cssText = `display:block;width:100%;text-align:left;padding:6px 16px;cursor:pointer;border:none;background:${myI === selIdx ? '#d8e2ff' : 'transparent'};color:${myI === selIdx ? '#001a42' : '#1c1c18'};font-size:14px;font-family:inherit;`;
+                        el.style.cssText = `display:block;width:100%;text-align:left;padding:6px 16px;cursor:pointer;border:none;background:${myI === selIdx ? 'var(--primary-fixed)' : 'transparent'};color:${myI === selIdx ? 'var(--primary)' : 'var(--on-surface)'};font-size:14px;font-family:inherit;`;
                         el.textContent = entry.label;
                         el.addEventListener('mousedown', e => { e.preventDefault(); command(entry); });
                         popup.appendChild(el);
@@ -237,7 +237,7 @@ function createInlinePickerPlugin() {
 
         if (!popup) {
             popup = document.createElement('div');
-            popup.style.cssText = 'position:fixed;z-index:9999;background:#fff;color:#1c1c18;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.14);min-width:260px;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
+            popup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);color:var(--on-surface);border:1px solid var(--outline-variant);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.14);min-width:260px;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
             document.body.appendChild(popup);
         }
 
@@ -250,13 +250,13 @@ function createInlinePickerPlugin() {
         popup.innerHTML = '';
         const labels = { command: 'Insert', person: 'Select person' };
         const hdr = document.createElement('div');
-        hdr.style.cssText = 'padding:4px 16px 2px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#75777f;';
+        hdr.style.cssText = 'padding:4px 16px 2px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-surface-variant);';
         hdr.textContent = labels[ps.phase] || 'Insert';
         popup.appendChild(hdr);
 
         if (!items.length) {
             const el = document.createElement('div');
-            el.style.cssText = 'padding:8px 16px;color:#75777f;font-style:italic;';
+            el.style.cssText = 'padding:8px 16px;color:var(--on-surface-variant);font-style:italic;';
             el.textContent = ps.phase === 'person' ? 'No people found' : 'No matches';
             popup.appendChild(el);
             return;
@@ -266,18 +266,18 @@ function createInlinePickerPlugin() {
             const sel = i === ps.selectedIndex;
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.style.cssText = `display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:8px 16px;cursor:pointer;border:none;background:${sel ? '#d8e2ff' : 'transparent'};`;
+            btn.style.cssText = `display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:8px 16px;cursor:pointer;border:none;background:${sel ? 'var(--primary-fixed)' : 'transparent'};`;
             const ico = document.createElement('span');
-            ico.style.cssText = `font-family:'Material Symbols Outlined';font-size:20px;font-variation-settings:'FILL' 0;color:${sel ? '#001a42' : '#44474e'};flex-shrink:0;line-height:1;`;
+            ico.style.cssText = `font-family:'Material Symbols Outlined';font-size:20px;font-variation-settings:'FILL' 0;color:${sel ? 'var(--primary)' : 'var(--on-surface-variant)'};flex-shrink:0;line-height:1;`;
             ico.textContent = item.icon || 'chevron_right';
             const txt = document.createElement('div');
             const ttl = document.createElement('div');
-            ttl.style.cssText = `font-weight:600;color:${sel ? '#001a42' : '#1c1c18'};font-size:14px;font-family:inherit;`;
+            ttl.style.cssText = `font-weight:600;color:${sel ? 'var(--primary)' : 'var(--on-surface)'};font-size:14px;font-family:inherit;`;
             ttl.textContent = item.title;
             txt.appendChild(ttl);
             if (item.description) {
                 const dsc = document.createElement('div');
-                dsc.style.cssText = 'font-size:12px;color:#75777f;font-family:inherit;';
+                dsc.style.cssText = 'font-size:12px;color:var(--on-surface-variant);font-family:inherit;';
                 dsc.textContent = item.description;
                 txt.appendChild(dsc);
             }
@@ -470,10 +470,10 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
     function updatePanelStatusDisplay() {
         if (panelCurrentStatus) {
             statusBtn.textContent = `${PANEL_URGENCY_LABEL[panelCurrentStatus.urgency] || ''} · ${PANEL_IMPORTANCE_LABEL[panelCurrentStatus.importance] || ''}`;
-            statusBtn.style.color = '#436082';
+            statusBtn.style.color = 'var(--secondary)';
         } else {
             statusBtn.textContent = 'Set status';
-            statusBtn.style.color = '#75777f';
+            statusBtn.style.color = 'var(--on-surface-variant)';
         }
     }
 
@@ -554,14 +554,14 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
         if (statusMatrixPopup) { destroyStatusPopup(); return; }
 
         statusMatrixPopup = document.createElement('div');
-        statusMatrixPopup.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px;font-family:"Work Sans",sans-serif;font-size:12px;';
+        statusMatrixPopup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px;font-family:"Work Sans",sans-serif;font-size:12px;';
 
         const headerRow = document.createElement('div');
         headerRow.style.cssText = 'display:grid;grid-template-columns:44px 44px 44px 44px;gap:3px;margin-bottom:3px;';
         headerRow.appendChild(document.createElement('div'));
         PANEL_URGENCY_LEVELS.forEach(u => {
             const h = document.createElement('div');
-            h.style.cssText = 'text-align:center;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#75777f;padding-bottom:2px;';
+            h.style.cssText = 'text-align:center;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--on-surface-variant);padding-bottom:2px;';
             h.textContent = PANEL_URGENCY_LABEL[u].slice(0, 3);
             headerRow.appendChild(h);
         });
@@ -571,17 +571,17 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
             const row = document.createElement('div');
             row.style.cssText = 'display:grid;grid-template-columns:44px 44px 44px 44px;gap:3px;margin-bottom:3px;';
             const rowLabel = document.createElement('div');
-            rowLabel.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;padding-right:4px;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#75777f;line-height:1.2;text-align:right;';
+            rowLabel.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;padding-right:4px;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--on-surface-variant);line-height:1.2;text-align:right;';
             rowLabel.textContent = PANEL_IMPORTANCE_LABEL[imp].slice(0, 3);
             row.appendChild(rowLabel);
             PANEL_URGENCY_LEVELS.forEach(urg => {
                 const isActive = panelCurrentStatus?.urgency === urg && panelCurrentStatus?.importance === imp;
                 const cell = document.createElement('button');
                 cell.type = 'button';
-                cell.style.cssText = `width:44px;height:44px;border-radius:6px;border:2px solid ${isActive ? '#182F57' : '#c5c6d0'};background:${isActive ? '#182F57' : 'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;`;
+                cell.style.cssText = `width:44px;height:44px;border-radius:6px;border:2px solid ${isActive ? 'var(--primary)' : 'var(--outline-variant)'};background:${isActive ? 'var(--primary)' : 'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;`;
                 if (isActive) {
                     const dot = document.createElement('span');
-                    dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#fff;display:block;';
+                    dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:var(--surface-container-lowest);display:block;';
                     cell.appendChild(dot);
                 }
                 cell.addEventListener('mousedown', e2 => { e2.preventDefault(); e2.stopPropagation(); handlePanelStatusSet(urg, imp); });
@@ -593,7 +593,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
         if (panelCurrentStatus) {
             const clearBtn = document.createElement('button');
             clearBtn.type = 'button';
-            clearBtn.style.cssText = 'width:100%;margin-top:6px;padding:4px 8px;font-size:11px;font-family:inherit;color:#75777f;background:transparent;border:none;cursor:pointer;text-align:center;';
+            clearBtn.style.cssText = 'width:100%;margin-top:6px;padding:4px 8px;font-size:11px;font-family:inherit;color:var(--on-surface-variant);background:transparent;border:none;cursor:pointer;text-align:center;';
             clearBtn.textContent = 'Clear status';
             clearBtn.addEventListener('mousedown', e2 => { e2.preventDefault(); e2.stopPropagation(); handlePanelStatusSet(panelCurrentStatus.urgency, panelCurrentStatus.importance); });
             statusMatrixPopup.appendChild(clearBtn);

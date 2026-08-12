@@ -196,16 +196,17 @@
     // `tint` is the soft background the swatch uses when it is the chosen one —
     // never the chip background, which stays a surface so the label stays legible.
 
-    const EVENT_COLOURS = [
-        { slug: 'steel',  name: 'Steel',  bar: '#5D94A9', tint: '#D7E7EC' },
-        { slug: 'ocean',  name: 'Ocean',  bar: '#3E6181', tint: '#CFE0F1' },
-        { slug: 'navy',   name: 'Navy',   bar: '#182F57', tint: '#D5DCE9' },
-        { slug: 'green',  name: 'Green',  bar: '#4B8A6B', tint: '#D6E7DE' },
-        { slug: 'gold',   name: 'Gold',   bar: '#B89B6A', tint: '#EFE6D5' },
-        { slug: 'amber',  name: 'Amber',  bar: '#B8862E', tint: '#F0E2C6' },
-        { slug: 'plum',   name: 'Plum',   bar: '#7A5578', tint: '#E7DAE6' },
-        { slug: 'rose',   name: 'Rose',   bar: '#B0697C', tint: '#F0DBE0' },
-    ];
+    // The slug is what an Event stores; bar and tint are only ever written
+    // into CSS, so they are the variables themselves rather than copies of
+    // them. The palette lives in tailwind.config.js and reaches the page
+    // through mosaic.css — see build/design-tokens.
+    const EVENT_COLOURS = ['steel', 'ocean', 'navy', 'green', 'gold', 'amber', 'plum', 'rose']
+        .map(slug => ({
+            slug,
+            name: slug.charAt(0).toUpperCase() + slug.slice(1),
+            bar:  `var(--event-${slug})`,
+            tint: `var(--event-${slug}-tint)`,
+        }));
 
     // Steel, because that is what every event on this calendar already looks
     // like. Nothing has a colour stored on it yet, so the fallback IS the
@@ -220,10 +221,10 @@
     // its visibility and its liturgy are settled.
     const SUNDAY_COLOUR = 'ocean';
 
-    // The error red, restated so a chip can use it without importing Tailwind. A
-    // test holds it to the theme token — if they drift, "needs sorting" stops
-    // matching the red used everywhere else it appears.
-    const ATTENTION_COLOUR = '#A8463E';
+    // The error red. It used to be restated here as a hex, with a test holding
+    // it to the token so the two could not drift; now it IS the token, and the
+    // drift it was guarding against cannot happen.
+    const ATTENTION_COLOUR = 'var(--error)';
 
     // The warning amber, for a date that simply is not filled yet. A step below
     // the red and never instead of it.
@@ -233,7 +234,7 @@
     // chip, and this only ever tints the chip's BACKGROUND. No event colour
     // touches a background, so a tinted chip always means the app is saying
     // something rather than an editor having picked a shade.
-    const WARNING_COLOUR = '#B8862E';
+    const WARNING_COLOUR = 'var(--warning)';
 
     function colourFor(slug) {
         return EVENT_COLOURS.find(c => c.slug === slug)

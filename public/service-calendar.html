@@ -40,13 +40,13 @@
         }
 
         ::-webkit-scrollbar-thumb {
-            background: #e5e2dc;
+            background: var(--surface-container-high);
             /* surface-variant */
             border-radius: 4px;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: #c5c6d0;
+            background: var(--outline-variant);
             /* outline-variant */
         }
 
@@ -68,53 +68,53 @@
             position: sticky;
             top: 0;
             z-index: 30;
-            background-color: #ffffff !important; /* Match sticky column background */
-            border-bottom: 1px solid #c5c6d0; /* outline-variant */
+            background-color: var(--surface-container-lowest) !important; /* Match sticky column background */
+            border-bottom: 1px solid var(--outline-variant);
         }
 
         /* Specifically for the sticky actions header */
         .sticky-header th.sticky-column {
             z-index: 40;
-            background-color: #ffffff !important;
+            background-color: var(--surface-container-lowest) !important;
         }
 
         .sticky-column {
             position: sticky;
             right: 0;
             z-index: 20;
-            background-color: #ffffff !important;
+            background-color: var(--surface-container-lowest) !important;
         }
 
         .sticky-col-left {
             position: sticky;
             left: 0;
             z-index: 20;
-            background-color: #ffffff !important;
+            background-color: var(--surface-container-lowest) !important;
         }
 
         .sticky-header th.sticky-col-left {
             z-index: 40;
-            background-color: #ffffff !important;
+            background-color: var(--surface-container-lowest) !important;
         }
 
         /* Ensure dark mode also uses a consistent background */
         .dark .sticky-column, .dark .sticky-header th, .dark .sticky-col-left {
-            background-color: #ffffff !important;
-            color: #1c1c18 !important; /* Keep text dark for contrast on white bg */
+            background-color: var(--surface-container-lowest) !important;
+            color: var(--on-surface) !important; /* Keep text dark for contrast on white bg */
         }
         
         [x-cloak] { display: none !important; }
         
         /* Remove specific hover highlight */
         tr:hover td.sticky-column, tr:hover td.sticky-col-left {
-            background-color: #ffffff !important;
+            background-color: var(--surface-container-lowest) !important;
         }
 
         .sticky-month-row td {
             position: sticky;
             top: 41px; /* Height of the thead */
             z-index: 25;
-            background-color: #f0eee8; /* surface-container */
+            background-color: var(--surface-container);
             border-top: 1px solid rgba(0,0,0,0.05);
             border-bottom: 1px solid rgba(0,0,0,0.05);
         }

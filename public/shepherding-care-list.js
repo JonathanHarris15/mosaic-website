@@ -98,7 +98,7 @@ function createDocMentionSuggestion() {
             function redraw(items, rect, selIdx, command) {
                 if (!popup) {
                     popup = document.createElement('div');
-                    popup.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:220px;max-height:280px;overflow-y:auto;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
+                    popup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:220px;max-height:280px;overflow-y:auto;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
                     document.body.appendChild(popup);
                 }
                 if (rect) {
@@ -108,7 +108,7 @@ function createDocMentionSuggestion() {
                 popup.innerHTML = '';
                 if (!items.length) {
                     const el = document.createElement('div');
-                    el.style.cssText = 'padding:8px 16px;color:#75777f;font-style:italic;';
+                    el.style.cssText = 'padding:8px 16px;color:var(--on-surface-variant);font-style:italic;';
                     el.textContent = 'No matches';
                     popup.appendChild(el);
                     return;
@@ -118,14 +118,14 @@ function createDocMentionSuggestion() {
                 grouped.forEach(entry => {
                     if (entry._hdr) {
                         const el = document.createElement('div');
-                        el.style.cssText = 'padding:4px 16px 2px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#75777f;';
+                        el.style.cssText = 'padding:4px 16px 2px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-surface-variant);';
                         el.textContent = entry._hdr;
                         popup.appendChild(el);
                     } else {
                         const myI = si++;
                         const el = document.createElement('button');
                         el.type = 'button';
-                        el.style.cssText = `display:block;width:100%;text-align:left;padding:6px 16px;cursor:pointer;border:none;background:${myI === selIdx ? '#d8e2ff' : 'transparent'};color:${myI === selIdx ? '#001a42' : '#1c1c18'};font-size:14px;font-family:inherit;`;
+                        el.style.cssText = `display:block;width:100%;text-align:left;padding:6px 16px;cursor:pointer;border:none;background:${myI === selIdx ? 'var(--primary-fixed)' : 'transparent'};color:${myI === selIdx ? 'var(--primary)' : 'var(--on-surface)'};font-size:14px;font-family:inherit;`;
                         el.textContent = entry.label;
                         el.addEventListener('mousedown', e => { e.preventDefault(); command(entry); });
                         popup.appendChild(el);

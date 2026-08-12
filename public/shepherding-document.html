@@ -21,29 +21,29 @@
         .ProseMirror ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.5em; }
         .ProseMirror ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 0.5em; }
         .ProseMirror li p { margin: 0; }
-        .mention-chip { display:inline; background:#d8e2ff; color:#001a42; border-radius:3px; padding:0 4px; font-weight:500; text-decoration:none; cursor:pointer; }
-        a.mention-chip:hover { background:#b2c6f8; }
+        .mention-chip { display:inline; background:var(--primary-fixed); color:var(--primary); border-radius:3px; padding:0 4px; font-weight:500; text-decoration:none; cursor:pointer; }
+        a.mention-chip:hover { background:var(--primary-fixed-dim); }
         .ProseMirror table { border-collapse:collapse; width:100%; margin-bottom:0.5em; table-layout:fixed; }
-        .ProseMirror th, .ProseMirror td { border:1px solid #c5c6d0; padding:4px 8px; min-width:50px; position:relative; vertical-align:top; }
-        .ProseMirror th { background:#f0eee8; font-weight:600; }
-        .selectedCell { background:#d8e2ff !important; }
+        .ProseMirror th, .ProseMirror td { border:1px solid var(--outline-variant); padding:4px 8px; min-width:50px; position:relative; vertical-align:top; }
+        .ProseMirror th { background:var(--cream); font-weight:600; }
+        .selectedCell { background:var(--primary-fixed) !important; }
         .note-table { border-collapse:collapse; width:100%; margin-bottom:0.5em; }
-        .note-table th, .note-table td { border:1px solid #c5c6d0; padding:4px 8px; text-align:left; vertical-align:top; }
-        .note-table th { background:#f0eee8; font-weight:600; }
-        .person-panel { border:1px solid #b2c6f8; border-radius:8px; margin:8px 0; overflow:hidden; display:block; background:#f0f4ff; }
-        .person-panel-header { background:#dce6ff; border-bottom:1px solid #b2c6f8; padding:6px 12px; display:flex; align-items:center; gap:8px; }
-        .person-panel-name { font-family:'Work Sans',sans-serif; font-size:13px; font-weight:600; color:#182F57; background:transparent; border:none; cursor:pointer; padding:2px 6px; border-radius:4px; white-space:nowrap; }
-        .person-panel-name:hover { background:#dcdad4; }
-        .person-panel-type { font-family:'Work Sans',sans-serif; font-size:12px; color:#44474e; background:transparent; border:1px solid #c5c6d0; border-radius:4px; padding:2px 4px; cursor:pointer; }
-        .person-panel-status { font-family:'Work Sans',sans-serif; font-size:12px; color:#75777f; background:transparent; border:1px solid #c5c6d0; border-radius:4px; padding:2px 6px; cursor:pointer; white-space:nowrap; }
-        .person-panel-status:hover { border-color:#436082; color:#436082; }
-        .person-panel-view-link { font-family:'Work Sans',sans-serif; font-size:12px; color:#436082; text-decoration:none; margin-left:auto; white-space:nowrap; }
+        .note-table th, .note-table td { border:1px solid var(--outline-variant); padding:4px 8px; text-align:left; vertical-align:top; }
+        .note-table th { background:var(--cream); font-weight:600; }
+        .person-panel { border:1px solid var(--primary-fixed-dim); border-radius:8px; margin:8px 0; overflow:hidden; display:block; background:var(--primary-fixed); }
+        .person-panel-header { background:var(--primary-fixed); border-bottom:1px solid var(--primary-fixed-dim); padding:6px 12px; display:flex; align-items:center; gap:8px; }
+        .person-panel-name { font-family:'Work Sans',sans-serif; font-size:13px; font-weight:600; color:var(--primary); background:transparent; border:none; cursor:pointer; padding:2px 6px; border-radius:4px; white-space:nowrap; }
+        .person-panel-name:hover { background:var(--surface-dim); }
+        .person-panel-type { font-family:'Work Sans',sans-serif; font-size:12px; color:var(--on-surface-variant); background:transparent; border:1px solid var(--outline-variant); border-radius:4px; padding:2px 4px; cursor:pointer; }
+        .person-panel-status { font-family:'Work Sans',sans-serif; font-size:12px; color:var(--on-surface-variant); background:transparent; border:1px solid var(--outline-variant); border-radius:4px; padding:2px 6px; cursor:pointer; white-space:nowrap; }
+        .person-panel-status:hover { border-color:var(--secondary); color:var(--secondary); }
+        .person-panel-view-link { font-family:'Work Sans',sans-serif; font-size:12px; color:var(--secondary); text-decoration:none; margin-left:auto; white-space:nowrap; }
         .person-panel-view-link:hover { text-decoration:underline; }
-        .person-panel-delete { background:transparent; border:none; cursor:pointer; color:#75777f; padding:2px; display:flex; align-items:center; line-height:1; flex-shrink:0; }
-        .person-panel-delete:hover { color:#ba1a1a; }
-        .person-panel-body { background:#f0f4ff; min-height:80px; }
+        .person-panel-delete { background:transparent; border:none; cursor:pointer; color:var(--on-surface-variant); padding:2px; display:flex; align-items:center; line-height:1; flex-shrink:0; }
+        .person-panel-delete:hover { color:var(--error); }
+        .person-panel-body { background:var(--primary-fixed); min-height:80px; }
         .person-panel-body .ProseMirror { min-height:80px; padding:12px; box-sizing:border-box; }
-        .ProseMirror-selectednode[data-action-chip] { outline: 2px solid #182F57; outline-offset: 1px; border-radius: 3px; }
+        .ProseMirror-selectednode[data-action-chip] { outline: 2px solid var(--primary); outline-offset: 1px; border-radius: 3px; }
     </style>
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
@@ -62,7 +62,7 @@
 
     <!-- Header -->
     <header class="w-full px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a :href="backHref" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
+        <a :href="backHref" class="m-back">
             <span class="material-symbols-outlined text-[20px]">arrow_back</span>
             <span class="font-label-md text-label-md" x-text="backLabel">Documents</span>
         </a>
@@ -92,8 +92,8 @@
     </header>
 
     <!-- Loading -->
-    <div x-show="loading" class="flex-grow flex items-center justify-center">
-        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    <div x-show="loading" class="m-loading">
+        <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
     <!-- Main -->
@@ -146,7 +146,7 @@
                     <option value="32px">Heading</option>
                 </select>
 
-                <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+                <div class="m-divider m-divider--vertical"></div>
 
                 <button type="button" @mousedown.prevent="editorCmd('toggleBold')"
                     :class="editorUpdated >= 0 && isActive('bold') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
@@ -158,7 +158,7 @@
                     :class="editorUpdated >= 0 && isActive('underline') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
                     class="w-8 h-8 rounded flex items-center justify-center underline text-sm transition-colors" title="Underline">U</button>
 
-                <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+                <div class="m-divider m-divider--vertical"></div>
 
                 <button type="button" @mousedown.prevent="editorCmd('toggleBulletList')"
                     :class="editorUpdated >= 0 && isActive('bulletList') ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'"
@@ -171,7 +171,7 @@
                     <span class="material-symbols-outlined text-[16px]">format_list_numbered</span>
                 </button>
 
-                <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+                <div class="m-divider m-divider--vertical"></div>
 
                 <!-- Highlight -->
                 <div class="relative" x-data="{ open: false }">
@@ -182,12 +182,12 @@
                     </button>
                     <div x-show="open" style="display:none;min-width:116px"
                          class="absolute top-full left-0 mt-1 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-md z-50 p-2 flex flex-wrap gap-1">
-                        <button type="button" @mousedown.prevent="setHighlight('#fef08a'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#fef08a" title="Yellow"></button>
-                        <button type="button" @mousedown.prevent="setHighlight('#bbf7d0'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#bbf7d0" title="Green"></button>
-                        <button type="button" @mousedown.prevent="setHighlight('#bfdbfe'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#bfdbfe" title="Blue"></button>
-                        <button type="button" @mousedown.prevent="setHighlight('#fecaca'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#fecaca" title="Red"></button>
-                        <button type="button" @mousedown.prevent="setHighlight('#fed7aa'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#fed7aa" title="Orange"></button>
-                        <button type="button" @mousedown.prevent="setHighlight('#f0abfc'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform" style="background:#f0abfc" title="Purple"></button>
+                    <button type="button" @mousedown.prevent="setHighlight('#fef08a'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform bg-highlight-yellow" title="Yellow"></button>
+                    <button type="button" @mousedown.prevent="setHighlight('#bbf7d0'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform bg-highlight-green" title="Green"></button>
+                    <button type="button" @mousedown.prevent="setHighlight('#bfdbfe'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform bg-highlight-blue" title="Blue"></button>
+                    <button type="button" @mousedown.prevent="setHighlight('#fecaca'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform bg-highlight-red" title="Red"></button>
+                    <button type="button" @mousedown.prevent="setHighlight('#fed7aa'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform bg-highlight-orange" title="Orange"></button>
+                    <button type="button" @mousedown.prevent="setHighlight('#f0abfc'); open = false" class="w-6 h-6 rounded border border-outline-variant hover:scale-110 transition-transform bg-highlight-purple" title="Purple"></button>
                         <button type="button" @mousedown.prevent="setHighlight(null); open = false" class="w-6 h-6 rounded border border-outline-variant hover:bg-surface-container flex items-center justify-center text-on-surface-variant" title="Remove highlight">
                             <span class="material-symbols-outlined text-[12px]">close</span>
                         </button>
@@ -208,7 +208,7 @@
                     </button>
                 </div>
 
-                <div class="w-px h-5 bg-outline-variant mx-xs"></div>
+                <div class="m-divider m-divider--vertical"></div>
 
                 <!-- Person Panel -->
                 <button type="button" @mousedown.prevent="insertPersonPanel()"
@@ -224,12 +224,12 @@
                  style="display:none"
                  class="flex items-center flex-wrap gap-xs px-md py-xs border-b border-outline-variant bg-secondary-container/30">
                 <span class="font-label-md text-label-md text-on-surface-variant text-xs mr-xs">Table:</span>
-                <button type="button" @mousedown.prevent="editorCmd('addColumnBefore')" class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors">+ Col ←</button>
-                <button type="button" @mousedown.prevent="editorCmd('addColumnAfter')"  class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors">+ Col →</button>
+                <button type="button" @mousedown.prevent="editorCmd('addColumnBefore')" class="m-btn m-btn--quiet m-btn--sm">+ Col ←</button>
+                <button type="button" @mousedown.prevent="editorCmd('addColumnAfter')"  class="m-btn m-btn--quiet m-btn--sm">+ Col →</button>
                 <button type="button" @mousedown.prevent="editorCmd('deleteColumn')"    class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-error/10 hover:text-error rounded transition-colors">− Col</button>
                 <div class="w-px h-4 bg-outline-variant mx-xs"></div>
-                <button type="button" @mousedown.prevent="editorCmd('addRowBefore')"   class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors">+ Row ↑</button>
-                <button type="button" @mousedown.prevent="editorCmd('addRowAfter')"    class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-surface-container rounded transition-colors">+ Row ↓</button>
+                <button type="button" @mousedown.prevent="editorCmd('addRowBefore')"   class="m-btn m-btn--quiet m-btn--sm">+ Row ↑</button>
+                <button type="button" @mousedown.prevent="editorCmd('addRowAfter')"    class="m-btn m-btn--quiet m-btn--sm">+ Row ↓</button>
                 <button type="button" @mousedown.prevent="editorCmd('deleteRow')"      class="px-2 py-1 text-xs font-label-md text-on-surface-variant hover:bg-error/10 hover:text-error rounded transition-colors">− Row</button>
                 <div class="w-px h-4 bg-outline-variant mx-xs"></div>
                 <button type="button" @mousedown.prevent="editorCmd('deleteTable')"    class="px-2 py-1 text-xs font-label-md text-error hover:bg-error/10 rounded transition-colors">Delete table</button>
@@ -310,12 +310,12 @@
 
                 <div class="flex items-center justify-between gap-sm border-t border-outline-variant pt-md">
                     <button @click="pickerStep = 'person'"
-                        class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">
+                        class="m-btn m-btn--quiet m-btn--sm">
                         ← Back
                     </button>
                     <button @click="confirmPersonPicker()"
                         :disabled="pickerNoteMode === 'existing' && !pickerSelectedNoteId"
-                        class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                        class="m-btn m-btn--primary m-btn--sm">
                         Insert panel
                     </button>
                 </div>
@@ -344,7 +344,7 @@
                     <span class="block font-body-md text-xs font-normal opacity-80 mt-xs">Permanently removes the note from their Shepherding Profile too.</span>
                 </button>
                 <button @click="showPanelDeleteDialog = false"
-                    class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">
+                    class="m-btn m-btn--quiet m-btn--sm">
                     Cancel
                 </button>
             </div>

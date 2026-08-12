@@ -44,8 +44,8 @@
       x-data="shepherdingDashboard" x-cloak>
 
     <!-- Header -->
-    <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
-        <a :href="window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/home' : 'index.html'" href="index.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
+    <header class="w-full max-w-container mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
+        <a :href="window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/home' : 'index.html'" href="index.html" class="m-back">
             <span class="material-symbols-outlined text-[20px]">arrow_back</span>
             <span class="font-label-md text-label-md">Home</span>
         </a>
@@ -55,12 +55,12 @@
     </header>
 
     <!-- Loading state -->
-    <div x-show="loading" class="flex-grow flex items-center justify-center">
-        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    <div x-show="loading" class="m-loading">
+        <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
     <!-- Main content -->
-    <main x-show="!loading" class="flex-grow max-w-7xl w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
+    <main x-show="!loading" class="flex-grow max-w-container w-full mx-auto px-4 md:px-margin pb-lg flex flex-col gap-margin pt-md">
 
         <!-- Page Title -->
         <div>
@@ -71,40 +71,40 @@
         <!-- Navigation Buttons -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-md">
             <!-- Documents -->
-            <a href="shepherding-documents.html" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
-                <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
-                    <span class="material-symbols-outlined text-[28px] text-primary" style='font-variation-settings: "FILL" 1;'>folder_open</span>
+            <a href="shepherding-documents.html" class="m-nav-card">
+                <div class="m-medallion">
+                    <span class="material-symbols-outlined">folder_open</span>
                 </div>
-                <h2 class="font-headline-md text-headline-md text-on-surface mb-xs">Documents</h2>
-                <p class="font-body-md text-body-md text-on-surface-variant text-sm">Elder notes &amp; meeting minutes.</p>
+                <h2 class="m-nav-card__title">Documents</h2>
+                <p class="m-nav-card__desc">Elder notes &amp; meeting minutes.</p>
             </a>
 
             <!-- People -->
-            <a href="shepherding-people.html" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
-                <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
-                    <span class="material-symbols-outlined text-[28px] text-primary" style='font-variation-settings: "FILL" 1;'>group</span>
+            <a href="shepherding-people.html" class="m-nav-card">
+                <div class="m-medallion">
+                    <span class="material-symbols-outlined">group</span>
                 </div>
-                <h2 class="font-headline-md text-headline-md text-on-surface mb-xs">People</h2>
-                <p class="font-body-md text-body-md text-on-surface-variant text-sm">View &amp; manage member profiles.</p>
+                <h2 class="m-nav-card__title">People</h2>
+                <p class="m-nav-card__desc">View &amp; manage member profiles.</p>
             </a>
 
             <!-- Manage Tags and Relationships (MS-103) — the one home for the
                  elder-only vocabulary: Shepherding Tags and Relationship Types. -->
-            <a href="shepherding-tags.html" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
-                <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
-                    <span class="material-symbols-outlined text-[28px] text-primary" style='font-variation-settings: "FILL" 1;'>label</span>
+            <a href="shepherding-tags.html" class="m-nav-card">
+                <div class="m-medallion">
+                    <span class="material-symbols-outlined">label</span>
                 </div>
-                <h2 class="font-headline-md text-headline-md text-on-surface mb-xs">Manage Tags and Relationships</h2>
-                <p class="font-body-md text-body-md text-on-surface-variant text-sm">Shepherding tags, and the Relationship Types elders can apply.</p>
+                <h2 class="m-nav-card__title">Manage Tags and Relationships</h2>
+                <p class="m-nav-card__desc">Shepherding tags, and the Relationship Types elders can apply.</p>
             </a>
 
             <!-- Relations Viewer (MS-91) — the interactive relationship graph. -->
-            <a href="relations-viewer.html" class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300">
-                <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-sm group-hover:bg-primary-fixed transition-colors duration-300">
-                    <span class="material-symbols-outlined text-[28px] text-primary" style='font-variation-settings: "FILL" 1;'>hub</span>
+            <a href="relations-viewer.html" class="m-nav-card">
+                <div class="m-medallion">
+                    <span class="material-symbols-outlined">hub</span>
                 </div>
-                <h2 class="font-headline-md text-headline-md text-on-surface mb-xs">Relations Viewer</h2>
-                <p class="font-body-md text-body-md text-on-surface-variant text-sm">Visualize how members are connected.</p>
+                <h2 class="m-nav-card__title">Relations Viewer</h2>
+                <p class="m-nav-card__desc">Visualize how members are connected.</p>
             </a>
         </div>
 
@@ -269,10 +269,10 @@
             </div>
             <div class="flex justify-end gap-sm mt-xs">
                 <button @click="showReminderModal = false"
-                    class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">Cancel</button>
+                    class="m-btn m-btn--quiet m-btn--sm">Cancel</button>
                 <button @click="addReminder()"
                     :disabled="!newReminder.title.trim() || !newReminder.dueDatetime"
-                    class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    class="m-btn m-btn--primary m-btn--sm">
                     Add Reminder
                 </button>
             </div>
@@ -394,10 +394,10 @@
             <!-- Modal footer -->
             <div class="px-lg py-md border-t border-outline-variant flex justify-end gap-sm flex-shrink-0">
                 <button @click="showViewModal = false; editingViewId = null; newView = blankView()"
-                    class="px-md py-xs font-label-md text-label-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors">Cancel</button>
+                    class="m-btn m-btn--quiet m-btn--sm">Cancel</button>
                 <button @click="editingViewId ? updateView() : addView()"
                     :disabled="!newView.title.trim()"
-                    class="px-md py-xs font-label-md text-label-md bg-primary text-on-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    class="m-btn m-btn--primary m-btn--sm">
                     <span x-text="editingViewId ? 'Save Changes' : 'Create View'"></span>
                 </button>
             </div>

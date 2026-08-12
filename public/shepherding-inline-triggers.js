@@ -10,14 +10,14 @@ function _buildStatusMatrixPopup({ anchorCoords, currentStatus, onSelect }) {
     const ILbl = ShepherdingCore.IMPORTANCE_LABEL_TINY;
 
     const popup = document.createElement('div');
-    popup.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px;font-family:"Work Sans",sans-serif;font-size:12px;';
+    popup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px;font-family:"Work Sans",sans-serif;font-size:12px;';
 
     const hdrRow = document.createElement('div');
     hdrRow.style.cssText = 'display:grid;grid-template-columns:44px 44px 44px 44px;gap:3px;margin-bottom:3px;';
     hdrRow.appendChild(document.createElement('div'));
     UL.forEach(u => {
         const h = document.createElement('div');
-        h.style.cssText = 'text-align:center;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#75777f;';
+        h.style.cssText = 'text-align:center;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--on-surface-variant);';
         h.textContent = ULbl[u];
         hdrRow.appendChild(h);
     });
@@ -27,17 +27,17 @@ function _buildStatusMatrixPopup({ anchorCoords, currentStatus, onSelect }) {
         const row = document.createElement('div');
         row.style.cssText = 'display:grid;grid-template-columns:44px 44px 44px 44px;gap:3px;margin-bottom:3px;';
         const lbl = document.createElement('div');
-        lbl.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;padding-right:4px;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#75777f;line-height:1.2;text-align:right;';
+        lbl.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;padding-right:4px;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--on-surface-variant);line-height:1.2;text-align:right;';
         lbl.textContent = ILbl[imp];
         row.appendChild(lbl);
         UL.forEach(urg => {
             const active = currentStatus?.urgency === urg && currentStatus?.importance === imp;
             const cell = document.createElement('button');
             cell.type = 'button';
-            cell.style.cssText = `width:44px;height:44px;border-radius:6px;border:2px solid ${active ? '#182F57' : '#c5c6d0'};background:${active ? '#182F57' : 'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;`;
+            cell.style.cssText = `width:44px;height:44px;border-radius:6px;border:2px solid ${active ? 'var(--primary)' : 'var(--outline-variant)'};background:${active ? 'var(--primary)' : 'transparent'};cursor:pointer;display:flex;align-items:center;justify-content:center;`;
             if (active) {
                 const dot = document.createElement('span');
-                dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#fff;display:block;';
+                dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:var(--surface-container-lowest);display:block;';
                 cell.appendChild(dot);
             }
             cell.addEventListener('mousedown', e => { e.preventDefault(); popup.remove(); onSelect(urg, imp); });
@@ -48,7 +48,7 @@ function _buildStatusMatrixPopup({ anchorCoords, currentStatus, onSelect }) {
 
     const clr = document.createElement('button');
     clr.type = 'button';
-    clr.style.cssText = 'width:100%;margin-top:6px;padding:4px 8px;font-size:11px;font-family:inherit;color:#75777f;background:transparent;border:none;cursor:pointer;text-align:center;';
+    clr.style.cssText = 'width:100%;margin-top:6px;padding:4px 8px;font-size:11px;font-family:inherit;color:var(--on-surface-variant);background:transparent;border:none;cursor:pointer;text-align:center;';
     clr.textContent = currentStatus ? 'Clear status' : '(No status set)';
     if (currentStatus) clr.addEventListener('mousedown', e => { e.preventDefault(); popup.remove(); onSelect(null, null); });
     else clr.style.opacity = '0.5';
@@ -85,7 +85,7 @@ function _createActionChipNode(onChipDeleted) {
                 prevImportance: { default: null },
                 activityId:     { default: null },   // status: the logged record this chip created
                 label:          { default: '' },
-                chipColor:      { default: '#d8e2ff' },
+                chipColor:      { default: '#D8E2FF' },   // --chip-tag-added, stored literal
             };
         },
 
@@ -232,18 +232,18 @@ function createInlineTriggersExtension(config) {
         if (!coords) return;
 
         const el = document.createElement('div');
-        el.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:200px;max-height:280px;overflow-y:auto;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
+        el.style.cssText = 'position:fixed;z-index:9999;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:200px;max-height:280px;overflow-y:auto;padding:4px 0;font-family:"Work Sans",sans-serif;font-size:14px;';
         el.style.left = `${Math.min(coords.left, window.innerWidth - 220)}px`;
         el.style.top  = `${coords.bottom + 4}px`;
 
         const hdr = document.createElement('div');
-        hdr.style.cssText = 'padding:4px 16px 2px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#75777f;';
+        hdr.style.cssText = 'padding:4px 16px 2px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--on-surface-variant);';
         hdr.textContent = phase === 'tag-add' ? 'Add tag' : 'Remove tag';
         el.appendChild(hdr);
 
         if (!items.length) {
             const msg = document.createElement('div');
-            msg.style.cssText = 'padding:8px 16px;color:#75777f;font-style:italic;';
+            msg.style.cssText = 'padding:8px 16px;color:var(--on-surface-variant);font-style:italic;';
             msg.textContent = phase === 'tag-remove' ? 'No tags applied' : 'Type to search or create';
             el.appendChild(msg);
         } else {
@@ -251,7 +251,7 @@ function createInlineTriggersExtension(config) {
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 const sel = i === selIdx;
-                btn.style.cssText = `display:block;width:100%;text-align:left;padding:6px 16px;cursor:pointer;border:none;background:${sel ? '#d8e2ff' : 'transparent'};color:${sel ? '#001a42' : '#1c1c18'};font-size:14px;font-family:inherit;`;
+                btn.style.cssText = `display:block;width:100%;text-align:left;padding:6px 16px;cursor:pointer;border:none;background:${sel ? 'var(--primary-fixed)' : 'transparent'};color:${sel ? 'var(--primary)' : 'var(--on-surface)'};font-size:14px;font-family:inherit;`;
                 btn.textContent = item.isCreate ? `Create tag "#${item.name}"` : `#${item.name}`;
                 btn.addEventListener('mousedown', ev => { ev.preventDefault(); selectItem(item); });
                 el.appendChild(btn);
@@ -273,7 +273,10 @@ function createInlineTriggersExtension(config) {
                 tagId,
                 tagName,
                 label:     action === 'added' ? `#${tagName}` : `−#${tagName}`,
-                chipColor: action === 'added' ? '#d8e2ff' : '#e5e2dc',
+                // Stored into the Note Body, so a literal — see --chip-tag-added
+                // and --chip-tag-removed. The removed chip was still on its
+                // pre-brand value until the palette was consolidated.
+                chipColor: action === 'added' ? '#D8E2FF' : '#EEE4D8',
             });
             view.dispatch(view.state.tr.insert(Math.max(0, pos), node).setStoredMarks([]));
         } catch (e) { console.error('Insert tag chip:', e); }
@@ -295,7 +298,7 @@ function createInlineTriggersExtension(config) {
                 prevImportance:prevImportance || null,
                 activityId:    activityId || null,
                 label,
-                chipColor: '#fef9c3',
+                chipColor: '#FEF9C3',   // --chip-status, stored literal
             });
             const pos = view.state.selection.from;
             view.dispatch(view.state.tr.insert(Math.max(0, pos), node).setStoredMarks([]));

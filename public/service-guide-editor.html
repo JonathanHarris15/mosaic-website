@@ -65,7 +65,7 @@
         .toc-item:hover { --tw-bg-opacity: 1; background-color: rgb(251 247 240 / var(--tw-bg-opacity, 1)); }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--preview-scroll); border-radius: 10px; }
         .zoom-controls { position: absolute; bottom: 2rem; right: 2rem; z-index: 100; display: flex; flex-direction: column; gap: 0.5rem; }
         @media print {
             .zoom-controls { display: none; }
@@ -76,7 +76,7 @@
     </style>
     <style id="guide-dynamic-style"></style>
 </head>
-<body class="bg-[#f0f2f5] font-sans antialiased text-black" x-data="guideEditorV2()" x-init="init()">
+<body class="bg-preview-canvas font-sans antialiased text-black" x-data="guideEditorV2()" x-init="init()">
 
     <!-- Header -->
     <header class="no-print h-16 bg-primary text-white flex items-center justify-between px-6 sticky top-0 z-50 shadow-md">
@@ -215,7 +215,7 @@
                 <div class="space-y-5" x-show="selectedFields.length > 0">
                     <template x-for="field in selectedFields" :key="field.key">
                         <div>
-                            <label class="block text-[10px] font-bold uppercase text-gray-500 mb-1">
+                            <label class="m-label m-label--sm" style="display:block;margin-bottom:4px">
                                 <span x-text="field.label"></span>
                                 <span x-show="field.required" class="text-error">*</span>
                             </label>

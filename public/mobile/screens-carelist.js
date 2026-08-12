@@ -49,13 +49,13 @@
       render: function () {
         var popup = null, sel = 0, cur = null;
         function draw(items, rect, command) {
-          if (!popup) { popup = document.createElement("div"); popup.style.cssText = "position:fixed;z-index:9999;background:#fff;border:1px solid #c5c6d0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:200px;max-height:260px;overflow-y:auto;padding:4px 0;font-family:var(--font-sans);font-size:14px;"; document.body.appendChild(popup); }
+          if (!popup) { popup = document.createElement("div"); popup.style.cssText = "position:fixed;z-index:9999;background:var(--surface-container-lowest);border:1px solid var(--outline-variant);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:200px;max-height:260px;overflow-y:auto;padding:4px 0;font-family:var(--font-sans);font-size:14px;"; document.body.appendChild(popup); }
           if (rect) { var r = typeof rect === "function" ? rect() : rect; if (r) { popup.style.left = Math.min(r.left, window.innerWidth - 220) + "px"; popup.style.top = (r.bottom + 4) + "px"; } }
           popup.innerHTML = "";
-          if (!items.length) { var e = document.createElement("div"); e.style.cssText = "padding:8px 16px;color:#75777f;font-style:italic;"; e.textContent = "No matches"; popup.appendChild(e); return; }
+          if (!items.length) { var e = document.createElement("div"); e.style.cssText = "padding:8px 16px;color:var(--on-surface-variant);font-style:italic;"; e.textContent = "No matches"; popup.appendChild(e); return; }
           items.forEach(function (it, i) {
             var b = document.createElement("button"); b.type = "button";
-            b.style.cssText = "display:block;width:100%;text-align:left;padding:7px 16px;cursor:pointer;border:none;background:" + (i === sel ? "#d8e2ff" : "transparent") + ";color:#1c1c18;font-size:14px;font-family:inherit;";
+            b.style.cssText = "display:block;width:100%;text-align:left;padding:7px 16px;cursor:pointer;border:none;background:" + (i === sel ? "var(--primary-fixed)" : "transparent") + ";color:var(--on-surface);font-size:14px;font-family:inherit;";
             b.textContent = it.label;
             b.addEventListener("mousedown", function (ev) { ev.preventDefault(); command(it); });
             popup.appendChild(b);
@@ -445,7 +445,7 @@
           </div>
         </${Fragment}>` : null}
 
-        ${toastS[0] ? html`<div style=${{ position: "absolute", bottom: "calc(28px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", zIndex: 70, padding: "11px 18px", borderRadius: "var(--radius)", boxShadow: "var(--shadow-lg)", background: toastS[0].type === "error" ? "var(--error)" : "var(--primary)", color: "#fff", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", maxWidth: "90%" }}>${toastS[0].message}</div>` : null}
+        ${toastS[0] ? html`<div style=${{ position: "absolute", bottom: "calc(28px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", zIndex: 70, padding: "11px 18px", borderRadius: "var(--radius)", boxShadow: "var(--shadow-lg)", background: toastS[0].type === "error" ? "var(--error)" : "var(--primary)", color: toastS[0].type === "error" ? "var(--on-error)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", maxWidth: "90%" }}>${toastS[0].message}</div>` : null}
       </${Screen}>`;
   }
 

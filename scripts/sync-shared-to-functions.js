@@ -52,10 +52,16 @@ const BANNER = [
     '// test/functions-shared-sync.test.js fails if this copy is stale.',
     '',
     '',
-].join('\n');
+];
 
 function render(name, source) {
-    return BANNER.replace('%NAME%', name) + source;
+    // The banner takes the body's line ending. It used to be joined with \n
+    // and glued onto a source read straight off disk — so on a Windows
+    // checkout, where core.autocrlf hands over CRLF, every copy came out
+    // eight bytes different from itself and the staleness test could never
+    // pass. Eight bytes: one per banner line.
+    const eol = source.includes('\r\n') ? '\r\n' : '\n';
+    return BANNER.join(eol).replace('%NAME%', name) + source;
 }
 
 function sourceOf(name) {

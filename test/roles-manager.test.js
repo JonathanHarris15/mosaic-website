@@ -1178,20 +1178,34 @@ test('an editor can actually reach the Roles Manager from a phone', () => {
 });
 
 test('a desktop page in the shell never reaches for a token it does not have', () => {
-    // The token variables (--outline-variant and the rest) are defined in
-    // mobile/tokens.css, and ONLY mobile.html loads it. A desktop page opened
-    // with ?shell=mobile is a different document with none of them, so a bare
-    // `var(--outline-variant)` computes to nothing and the declaration is
-    // dropped — silently, leaving whatever the utility class already said.
-    // That shipped once as a row border nobody could see.
+    // A bare `var(--x)` that nothing defines does not fall back — the whole
+    // declaration is dropped, silently, leaving whatever the utility class
+    // already said. That shipped once as a row border nobody could see.
+    //
+    // The rule used to be "always write a fallback", because the tokens lived
+    // in mobile/tokens.css and only mobile.html loaded it. They are generated
+    // into mosaic.css now (build/design-tokens), which this page loads at line
+    // 8, so naming a real token is enough and a fallback is just a second copy
+    // of the value waiting to go stale. What still has to hold is that the
+    // token is real.
     const html = rolesManagerHtml();
+    assert.match(html, /<link rel="stylesheet" href="mosaic\.css"/,
+        'the page does not load the stylesheet its tokens come from');
+
+    const theme = require('../tailwind.config.js').theme.extend;
+    const generated = new Set([
+        ...Object.keys(theme.colors || {}),
+        ...Object.keys(theme.spacing || {}).map(k => 'space-' + k),
+        ...Object.keys(theme.boxShadow || {}).map(k => 'shadow-' + k),
+        ...Object.keys(theme.fontFamily || {}).map(k => 'font-' + k),
+    ].map(k => '--' + k));
+
     const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
     const defined = new Set([...style.matchAll(/(--[\w-]+):/g)].map(m => m[1]));
 
     [...style.matchAll(/var\(\s*(--[\w-]+)\s*([,)])/g)].forEach(m => {
-        if (defined.has(m[1])) return;
-        assert.equal(m[2], ',',
-            m[1] + ' has no fallback, and nothing on this page defines it');
+        if (defined.has(m[1]) || generated.has(m[1]) || m[2] === ',') return;
+        assert.fail(m[1] + ' is not a theme token, is not defined on this page, and has no fallback');
     });
 });
 

@@ -46,14 +46,14 @@
            takes the row headings away — three columns in you are reading names
            with no idea which Role they are in. */
         .re-grid { border-collapse: separate; border-spacing: 0; }
-        .re-grid th, .re-grid td { border-bottom: 1px solid var(--re-rule, #E4DACE); }
+        .re-grid th, .re-grid td { border-bottom: 1px solid var(--re-rule, var(--surface-dim)); }
         .re-grid .re-stick {
             position: sticky; left: 0; z-index: 2;
-            background: #FBF7F0;
-            border-right: 1px solid var(--re-rule, #E4DACE);
+            background: var(--surface);
+            border-right: 1px solid var(--re-rule, var(--surface-dim));
         }
         .re-grid thead .re-stick { z-index: 3; }
-        .re-grid thead th { position: sticky; top: 0; z-index: 1; background: #FBF7F0; }
+        .re-grid thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
 
         /* A ticked column is tinted the whole way down, so the selection reads
            as "these dates" rather than as a row of checkboxes at the top. */
@@ -91,8 +91,8 @@
         <div id="auth-container" class="flex items-center"><div class="h-10"></div></div>
     </header>
 
-    <div x-show="loading" class="flex-grow flex items-center justify-center">
-        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    <div x-show="loading" class="m-loading">
+        <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
     <main x-show="!loading" class="flex-grow w-full max-w-[1600px] mx-auto px-4 md:px-margin pb-lg pt-md">
@@ -102,8 +102,8 @@
              leaves the first person nowhere to go. -->
         <div x-show="signedOut"
              class="mb-md bg-surface-container-low border border-outline-variant border-l-[3px] rounded-lg
-                    px-md py-3 flex items-start gap-sm" style="border-left-color:#B89B6A;">
-            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">person_off</span>
+                    px-md py-3 flex items-start gap-sm" style="border-left-color:var(--gold);">
+            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:var(--gold);">person_off</span>
             <div class="flex-grow min-w-0">
                 <p class="text-[14px] text-on-surface">You are not signed in.</p>
                 <p class="text-[12.5px] text-on-surface-variant mt-0.5">
@@ -402,8 +402,8 @@
                          ticked, so it never sits there as an instruction. -->
                     <div x-show="range"
                          class="mt-sm bg-surface-container-low border border-outline-variant border-l-[3px] rounded-lg
-                                px-md py-3 flex items-start gap-sm" style="border-left-color:#5D94A9;">
-                        <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#5D94A9;">auto_awesome_motion</span>
+                                px-md py-3 flex items-start gap-sm" style="border-left-color:var(--tertiary);">
+                        <span class="material-symbols-outlined text-[20px] shrink-0" style="color:var(--tertiary);">auto_awesome_motion</span>
                         <div class="flex-grow min-w-0">
                             <p class="text-[14px] text-on-surface">
                                 <span x-text="range ? range.count : 0"></span>
@@ -483,7 +483,7 @@
                     <div x-show="hasRoles" class="mt-md bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
                         <div class="flex items-center gap-2">
                             <span class="material-symbols-outlined text-[18px] text-secondary">hub</span>
-                            <h3 class="font-label-md text-xs uppercase tracking-wider text-on-surface-variant">
+                            <h3 class="m-label">
                                 Rules across two roles
                             </h3>
                         </div>
@@ -568,7 +568,7 @@
                     <div x-show="hasRoles && grid" class="mt-md">
                         <div class="border border-outline-variant rounded-lg overflow-hidden bg-surface-container-lowest">
                             <div class="overflow-x-auto">
-                                <table class="re-grid w-full text-left" style="--re-rule:#E4DACE;">
+                                <table class="re-grid w-full text-left" style="--re-rule:var(--surface-dim);">
                                     <thead>
                                         <tr>
                                             <th class="re-stick px-3 py-2 min-w-[170px] align-bottom">
@@ -576,7 +576,7 @@
                                                     <input type="checkbox" :checked="allShown"
                                                            @change="toggleAllShown()"
                                                            class="accent-primary re-focus" />
-                                                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
+                                                    <span class="m-label">
                                                         Role
                                                     </span>
                                                 </label>

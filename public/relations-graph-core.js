@@ -22,7 +22,7 @@
     // Deliberately clear of the membership-stage pips and the custom-edge palette:
     // bubbles are filled regions, so they must not be mistaken for either. Assigned
     // here rather than in the viewer, so a group keeps its colour across reloads.
-    var GROUP_PALETTE = ['#5E8C8A', '#C0803A', '#8E6FA6', '#6F9E5C', '#C26B6B', '#4E7BA6'];
+    var GROUP_PALETTE = [1, 2, 3, 4, 5, 6].map(function (i) { return "var(--graph-" + i + ")"; });
 
     // A Relationship Type is a kind × priority structure (ADR-0014). Legacy docs
     // carry a `directional` flag instead — read them defensively, so the graph is

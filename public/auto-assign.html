@@ -53,18 +53,18 @@
            variables, so a `var(--…)` here would silently resolve to nothing.
            Keep these in step with tailwind.config.js. */
         .aa-grid { width: max-content; min-width: 100%; }
-        .aa-grid th, .aa-grid td { border-bottom: 1px solid #DAD0C0; }
+        .aa-grid th, .aa-grid td { border-bottom: 1px solid var(--outline-variant); }
 
         .aa-head, .aa-corner {
             position: sticky; top: 0; z-index: 2;
-            background: #ffffff;
-            border-bottom: 1px solid #DAD0C0;
+            background: var(--surface-container-lowest);
+            border-bottom: 1px solid var(--outline-variant);
         }
         .aa-rowhead, .aa-corner {
             position: sticky; left: 0; z-index: 2;
-            background: #ffffff;
+            background: var(--surface-container-lowest);
             width: 190px; min-width: 190px;
-            border-right: 1px solid #DAD0C0;
+            border-right: 1px solid var(--outline-variant);
         }
         .aa-corner { z-index: 3; }
         .aa-cell { width: 220px; min-width: 220px; }
@@ -76,29 +76,29 @@
            wash is what survives being glanced at, the rule is what makes the
            edge exact. Both are quiet: this is a hundred cards, and anything
            louder competes with the cards themselves. */
-        .aa-cell, .aa-head { border-right: 1px solid #DAD0C0; }
+        .aa-cell, .aa-head { border-right: 1px solid var(--outline-variant); }
         .aa-col-alt { background: rgba(24, 47, 87, .028); }
         /* The header sets its own background to stay opaque while sticky, so
            the wash has to beat it — and carry through, or the column starts
            halfway down. */
-        .aa-head.aa-col-alt { background: #F4F2F3; }
+        .aa-head.aa-col-alt { background: var(--background); }
 
         /* A one-off Role is a different kind of thing from a managed one, and
            the divider is what says so without a second heading row. */
-        .aa-divider th, .aa-divider td { border-top: 2px solid #DAD0C0; }
+        .aa-divider th, .aa-divider td { border-top: 2px solid var(--outline-variant); }
 
         .aa-card {
-            background: #ffffff;
-            border: 1px solid #DAD0C0;
+            background: var(--surface-container-lowest);
+            border: 1px solid var(--outline-variant);
             border-radius: 8px; padding: 7px 9px;
         }
         /* Over budget has to be readable across a hundred cards without
            shouting — a warm tint and a gold hairline, not a red box. */
-        .aa-card-spent { background: rgba(184,155,106,.10); border-color: #B89B6A; }
-        .aa-card-warn { background: rgba(168,70,62,.06); border-color: #A8463E; }
+        .aa-card-spent { background: rgba(184,155,106,.10); border-color: var(--gold); }
+        .aa-card-warn { background: rgba(168,70,62,.06); border-color: var(--error); }
 
         .aa-empty {
-            border: 1px dashed #DAD0C0;
+            border: 1px dashed var(--outline-variant);
             border-radius: 8px; padding: 7px 9px; min-height: 38px;
         }
 
@@ -109,7 +109,7 @@
         .aa-avatar {
             display: inline-flex; align-items: center; justify-content: center;
             width: 26px; height: 26px; border-radius: 999px; flex-shrink: 0;
-            background: #EEE4D8; color: #5E6B82;
+            background: var(--surface-container-high); color: var(--on-surface-variant);
             font-size: 10px; letter-spacing: .02em;
             overflow: hidden;
         }
@@ -157,7 +157,7 @@
         .aa-window {
             position: absolute; top: 0; bottom: 0; z-index: 0;
             background: rgba(184,155,106,.16);
-            border: 1px solid #B89B6A; border-radius: 6px;
+            border: 1px solid var(--gold); border-radius: 6px;
             pointer-events: none;
             transition: left 90ms linear, width 90ms linear;
         }
@@ -170,17 +170,17 @@
            a bar can be compared down a whole column at a glance. */
         .aa-load {
             display: block; height: 3px; border-radius: 999px;
-            background: #E8DDCD; overflow: hidden;
+            background: var(--surface-variant); overflow: hidden;
         }
-        .aa-load-fill { display: block; height: 100%; background: #5D94A9; border-radius: 999px; }
-        .aa-load-spent { background: #B89B6A; }
+        .aa-load-fill { display: block; height: 100%; background: var(--tertiary); border-radius: 999px; }
+        .aa-load-spent { background: var(--gold); }
 
         /* Dragging. The lifted card stays visible where it came from — a card
            that disappears mid-drag makes the editor guess what they picked up. */
         .aa-card[draggable="true"] { cursor: grab; }
         .aa-lifting { opacity: .4; }
-        .aa-target { outline: 2px solid #5D94A9; outline-offset: 1px; border-radius: 8px; }
-        .aa-picked { outline: 2px solid #182F57; outline-offset: 1px; }
+        .aa-target { outline: 2px solid var(--tertiary); outline-offset: 1px; border-radius: 8px; }
+        .aa-picked { outline: 2px solid var(--primary); outline-offset: 1px; }
 
         /* Wide enough for a name, a reason and a date side by side, and no
            wider — the grid is what the editor came for. */
@@ -190,19 +190,19 @@
            late — the card is already falling. */
         .aa-consequence {
             position: absolute; left: 0; right: 0; top: -18px; z-index: 4;
-            background: #182F57; color: #F2EAE2;
+            background: var(--primary); color: var(--on-primary);
             font-size: 10px; line-height: 16px; text-align: center;
             border-radius: 4px; pointer-events: none;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
-        .aa-consequence-out { background: #7A5C1F; }
+        .aa-consequence-out { background: var(--on-warning-container); }
 
         /* Holding the card still turns the trade into a displace. This line
            running out under the words is what says so BEFORE it happens — a
            gesture nobody is told about is a gesture nobody finds. */
         .aa-dwell {
             position: absolute; left: 0; bottom: 0; height: 2px; width: 0;
-            background: #B89B6A;
+            background: var(--gold);
             animation: aa-dwell-out 700ms linear forwards;
         }
         @keyframes aa-dwell-out { to { width: 100%; } }
@@ -211,18 +211,18 @@
         .aa-ghost {
             position: absolute; inset: 0; z-index: 5;
             display: flex; align-items: center; gap: 7px; padding: 7px 9px;
-            border: 1px dashed #5D94A9; border-radius: 8px;
+            border: 1px dashed var(--tertiary); border-radius: 8px;
             background: rgba(242, 240, 236, .94);
             pointer-events: none;
         }
         .aa-out-chip {
             display: flex; align-items: center; gap: 7px; padding: 4px 8px;
-            border: 1px solid #DAD0C0; border-radius: 999px;
+            border: 1px solid var(--outline-variant); border-radius: 999px;
             background: rgba(242, 240, 236, .7);
         }
         .aa-ghost-chip {
             display: flex; align-items: center; gap: 7px; padding: 5px 9px;
-            border: 1px dashed #B89B6A; border-radius: 8px;
+            border: 1px dashed var(--gold); border-radius: 8px;
             background: rgba(242, 240, 236, .6);
             pointer-events: none;
         }
@@ -328,8 +328,8 @@
         <div id="auth-container" class="flex items-center ml-auto"><div class="h-10"></div></div>
     </header>
 
-    <div x-show="loading" class="flex-grow flex items-center justify-center">
-        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    <div x-show="loading" class="m-loading">
+        <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
     <!-- Signed out, or signed in without the rank. Two different sentences:
@@ -354,11 +354,11 @@
 
         <!-- ══════════════ Setup ══════════════ -->
         <!-- ⚠ THE SCROLLER IS THE FULL WIDTH, the centring is a layer in. Put
-             `max-w-7xl mx-auto` on the scrolling element itself and its
+             `max-w-container mx-auto` on the scrolling element itself and its
              scrollbar is drawn at ITS right edge — floating in the middle of a
              wide window with page either side of it. -->
         <div x-show="view === 'setup'" class="flex-grow min-h-0 overflow-auto w-full">
-            <div class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-md pb-20 flex justify-center">
+            <div class="w-full max-w-container mx-auto px-4 md:px-margin pt-md pb-20 flex justify-center">
             <div class="w-full max-w-[720px] flex flex-col gap-8 pt-6">
 
                 <div class="flex flex-col gap-2.5">
@@ -895,7 +895,7 @@
                 <template x-if="!selected">
                     <div class="flex flex-col min-h-0 h-full">
                         <div class="shrink-0 px-4 pt-4 pb-3 flex flex-col gap-2 border-b border-outline-variant">
-                            <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                            <span class="m-label">
                                 Directory
                             </span>
                             <input type="search" x-model="search" placeholder="Search the church"
@@ -975,7 +975,7 @@
                                  control: these Roles launch cold. -->
                             <div class="flex flex-col gap-2">
                                 <div class="flex items-baseline justify-between">
-                                    <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                                    <span class="m-label">
                                         This season
                                     </span>
                                     <span class="text-[11.5px] text-on-surface tabular-nums"
@@ -1048,7 +1048,7 @@
                             <!-- Everything they hold across the range, so the
                                  editor need not scan every column for the rest. -->
                             <div class="flex flex-col gap-1.5">
-                                <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                                <span class="m-label">
                                     Across this range
                                 </span>
                                 <template x-for="a in placement.across" :key="a.date + a.roleSlug + a.slotId">
@@ -1072,7 +1072,7 @@
                                  the load gate and tells the solve nothing about
                                  any Role. Two claims, deliberately apart. -->
                             <div class="flex flex-col gap-2 border-t border-outline-variant pt-3">
-                                <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                                <span class="m-label">
                                     Carrying more than we know
                                 </span>
                                 <div class="flex items-center gap-2">
@@ -1103,7 +1103,7 @@
                                  other says "give me somebody". Either one picked
                                  on the editor's behalf is wrong half the time. -->
                             <div class="flex flex-col gap-2 border-t border-outline-variant pt-3">
-                                <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                                <span class="m-label">
                                     Not available
                                 </span>
 
@@ -1158,7 +1158,7 @@
                                  to change it, not to read how it was reached. -->
                             <div x-show="placement.atPlace"
                                  class="flex flex-col gap-2 border-t border-outline-variant pt-3">
-                                <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                                <span class="m-label">
                                     Somebody else instead
                                 </span>
                                 <input type="search" x-model="replaceSearch" placeholder="Search the church"
@@ -1255,7 +1255,7 @@
                      out of one draft, and labelling them the same thing would
                      put a claim in their mouth they never made. -->
                 <div x-show="outNames.length" class="flex items-center gap-2 shrink-0 ml-auto">
-                    <span class="text-[11px] font-label-md uppercase tracking-[.14em] text-on-surface-variant">
+                    <span class="m-label">
                         Left out
                     </span>
                     <template x-for="a in outNames" :key="a.personId">

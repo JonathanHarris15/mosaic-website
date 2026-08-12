@@ -160,7 +160,7 @@
       x-data="calendarPage()" x-cloak>
 
     <!-- Header -->
-    <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
+    <header class="w-full max-w-container mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
         <a href="index.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary cal-motion">
             <span class="material-symbols-outlined text-[20px]">arrow_back</span>
             <span class="text-xs font-label-md uppercase tracking-wider">Dashboard</span>
@@ -168,11 +168,11 @@
         <div id="auth-container" class="flex items-center"><div class="h-10"></div></div>
     </header>
 
-    <div x-show="loading" class="flex-grow flex items-center justify-center">
-        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    <div x-show="loading" class="m-loading">
+        <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
-    <main x-show="!loading" class="flex-grow w-full max-w-7xl mx-auto px-4 md:px-margin pb-lg pt-md">
+    <main x-show="!loading" class="flex-grow w-full max-w-container mx-auto px-4 md:px-margin pb-lg pt-md">
 
         <!-- Title block -->
         <div class="cal-title-block pb-md border-b border-outline-variant flex items-start justify-between gap-md">
@@ -225,8 +225,8 @@
              looks like the church's and is missing everything you are part of. -->
         <div x-show="signedOut"
              class="mt-md bg-surface-container-low border border-outline-variant border-l-[3px] rounded-lg
-                    px-md py-3 flex items-start gap-sm" style="border-left-color:#B89B6A;">
-            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">person_off</span>
+                    px-md py-3 flex items-start gap-sm" style="border-left-color:var(--gold);">
+            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:var(--gold);">person_off</span>
             <div class="flex-grow min-w-0">
                 <p class="text-[14px] text-on-surface">You are not signed in.</p>
                 <p class="text-[12.5px] text-on-surface-variant mt-0.5">
@@ -288,7 +288,7 @@
                 <label class="flex items-center gap-2 rounded-lg border border-outline-variant px-3 py-1.5 cursor-pointer cal-motion"
                        :class="onlyMine ? 'bg-surface-container' : 'bg-surface-container-lowest'">
                     <input type="checkbox" x-model="onlyMine" class="accent-primary cal-focus" />
-                    <span class="font-label-md text-xs uppercase tracking-wider text-on-surface-variant">Only mine</span>
+                    <span class="m-label">Only mine</span>
                 </label>
 
                 <div class="flex gap-0.5 bg-surface-container rounded-lg p-[3px]">
@@ -841,7 +841,7 @@
                      heading is the whole of the answer. -->
                 <section x-show="personId"
                          class="cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
-                    <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant"
+                    <div class="m-label"
                          x-text="myMonthHeading"></div>
                     <p class="font-headline-lg text-[16.5px] leading-[1.4] mt-2 text-on-surface" x-text="mySentence"></p>
 
@@ -922,7 +922,7 @@
 
                 <section x-show="needsSorting.length"
                          class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
-                    <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Needs sorting</div>
+                    <div class="m-label">Needs sorting</div>
                     <div class="mt-sm flex flex-col gap-sm">
                         <template x-for="row in needsSorting" :key="row.occurrenceId + row.sentence">
                             <button @click="open(occurrences.find(o => o.id === row.occurrenceId))"
@@ -938,8 +938,8 @@
                 </section>
 
                 <section x-show="seriesFilters.length > 1"
-                         class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
-                    <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Show</div>
+                         class="m-card">
+                    <div class="m-label">Show</div>
                     <div class="mt-sm flex flex-col gap-1.5">
                         <template x-for="s in seriesFilters" :key="s.id">
                             <label class="flex items-center gap-2 cursor-pointer">

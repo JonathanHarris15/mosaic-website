@@ -1,0 +1,90 @@
+{
+  "$comment": [
+    "Project-specific facts for the design-* skills, which live in ~/.claude/skills",
+    "and must not hard-code any one project. See CONTEXT.md for the domain language."
+  ],
+  "designSystem": {
+    "name": "Mosaic Website Design",
+    "projectId": "f2292e35-4adc-4d33-a42d-7ca9373364c9"
+  },
+  "tokens": {
+    "source": "tailwind.config.js",
+    "build": "npm run build:tokens",
+    "check": "npm run build:tokens -- --check",
+    "localDir": "build/design-tokens",
+    "remoteDir": "tokens",
+    "generated": [
+      "colors.css",
+      "spacing.css",
+      "typography.css"
+    ],
+    "handAuthored": [
+      "fonts.css",
+      "base.css"
+    ],
+    "compare": "node scripts/compare-design-tokens.mjs <file> < remote"
+  },
+  "drift": {
+    "check": "npm run check:design-drift",
+    "scan": [
+      "public/**/*.{html,js,css}"
+    ],
+    "$comment": "Files that legitimately hold raw colour. Each needs a reason — an unexplained entry here is how a real drift gets buried.",
+    "ignore": [
+      "public/vendor/**",
+      "public/fonts/**",
+      "public/assets/**",
+      "public/**/*.min.js",
+      "public/mosaic.css",
+      "public/mobile/tokens.css",
+      "public/mosaic-theme.js",
+      "public/guide-seed.js",
+      "public/relations-graph-core.js",
+      "public/404.html"
+    ],
+    "why": {
+      "public/mosaic.css": "compiled Tailwind output",
+      "public/mosaic-theme.js": "the legacy runtime token source — superseded by tailwind.config.js, and a second palette definition is its own problem, not a drift finding",
+      "public/guide-seed.js": "printed Service Guide templates — a different medium with its own palette",
+      "public/relations-graph-core.js": "the Relations Viewer group palette, documented in CONTEXT.md as deliberately raw",
+      "public/404.html": "Firebase's stock error page",
+      "public/mobile/tokens.css": "generated output — the phone stylesheet, written by npm run build:components from the same source as mosaic.css. A token file holds hex by definition; it was a hand-maintained copy until the component library was unified, and that is what made it worth watching before."
+    },
+    "$allow": "Colours that must stay literal. Every entry needs a reason — this list is the difference between accounted for and stopped counting. Anything raw and not matched here fails --strict.",
+    "allow": [
+      {
+        "match": "setHighlight\\(|editorCmd\\('setHighlight'|\\[\"#fef08a\"",
+        "why": "the highlighter's pen colours. TipTap writes the value into the Note Body and renders it back wherever that note is read — including surfaces this stylesheet does not reach. The palette is declared as --highlight-* so a designer can see it; the code stores the number."
+      },
+      {
+        "match": "chipColor",
+        "why": "an inline trigger chip's colour, stored into the Note Body like a highlight. Declared as --chip-tag-added, --chip-tag-removed and --chip-status."
+      },
+      {
+        "file": "public/tiptap-render.js",
+        "why": "the fallback highlight for a note written before a colour was stored. Same reason as the pens."
+      },
+      {
+        "file": "public/auth.js",
+        "why": "the 'this page didn't finish loading' bar. If the page failed, mosaic.css may have failed with it — and a var() that resolves to nothing does not fall back, it removes the property. These literals are what make the error visible at all."
+      },
+      {
+        "file": "public/mobile.html",
+        "match": "theme-color",
+        "why": "<meta name=theme-color>. The browser chrome reads it before any stylesheet, and var() is not honoured in a meta tag."
+      }
+    ],
+    "fix": "npm run fix:design-drift",
+    "$comment2": "check finds, fix mends. fix is mechanical and reversible; it stops where judgement starts and lists what it left."
+  },
+  "components": {
+    "source": "build/design-components.mjs",
+    "build": "npm run build:components",
+    "check": "npm run build:components -- --check",
+    "parity": "npm run check:design-components",
+    "gallery": "public/components-demo.html",
+    "stylesheetDesktop": "build/tailwind-input.css (spliced) -> public/mosaic.css",
+    "stylesheetMobile": "public/mobile/tokens.css",
+    "designSystemStaging": "build/design-system"
+  }
+}

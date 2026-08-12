@@ -61,7 +61,7 @@
 <body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
       x-data="eventDetailPage()" x-cloak>
 
-    <header class="w-full max-w-7xl mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
+    <header class="w-full max-w-container mx-auto px-4 md:px-margin pt-2 md:pt-md flex items-center justify-between">
         <a :href="backHref" class="flex items-center gap-1 text-on-surface-variant hover:text-primary cal-motion">
             <span class="material-symbols-outlined text-[20px]">arrow_back</span>
             <span class="text-xs font-label-md uppercase tracking-wider" x-text="backLabel"></span>
@@ -69,11 +69,11 @@
         <div id="auth-container" class="flex items-center"><div class="h-10"></div></div>
     </header>
 
-    <div x-show="loading" class="flex-grow flex items-center justify-center">
-        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+    <div x-show="loading" class="m-loading">
+        <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
-    <main x-show="!loading" class="flex-grow w-full max-w-7xl mx-auto px-4 md:px-margin pb-lg pt-md">
+    <main x-show="!loading" class="flex-grow w-full max-w-container mx-auto px-4 md:px-margin pb-lg pt-md">
 
         <div x-show="error"
              class="mb-md bg-error-container text-on-error-container border border-outline-variant rounded-lg p-md flex items-start gap-sm">
@@ -85,8 +85,8 @@
              disabled, which reads as a missing feature unless this says so. -->
         <div x-show="signedOut"
              class="mb-md bg-surface-container-low border border-outline-variant border-l-[3px] rounded-lg
-                    px-md py-3 flex items-start gap-sm" style="border-left-color:#B89B6A;">
-            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">person_off</span>
+                    px-md py-3 flex items-start gap-sm" style="border-left-color:var(--gold);">
+            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:var(--gold);">person_off</span>
             <div class="flex-grow min-w-0">
                 <p class="text-[14px] text-on-surface">You are not signed in.</p>
                 <p class="text-[12.5px] text-on-surface-variant mt-0.5">
@@ -126,7 +126,7 @@
                     <!-- What it IS. These live on the series because they are true
                          of every date of it, which is exactly why this screen and
                          not one date's screen is where they are edited. -->
-                    <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                    <section class="m-card">
                         <h3 class="font-display text-[17px] text-primary">Details</h3>
                         <p class="text-[12.5px] text-on-surface-variant mt-1">
                             True of every date of this event.
@@ -134,7 +134,7 @@
 
                         <div class="mt-sm flex flex-col gap-md">
                             <label class="block">
-                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">What is it</span>
+                                <span class="m-label">What is it</span>
                                 <input type="text" x-model="seriesDraft.name" :disabled="isSundaySeries"
                                        placeholder="Midweek Gathering"
                                        class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
@@ -146,7 +146,7 @@
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-md">
                                 <label class="block">
-                                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Starts at</span>
+                                    <span class="m-label">Starts at</span>
                                     <input type="time" :value="seriesTime" @change="saveSeriesTime($event.target.value)"
                                            :disabled="saving"
                                            class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
@@ -156,7 +156,7 @@
                                     </span>
                                 </label>
                                 <label class="block">
-                                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Where</span>
+                                    <span class="m-label">Where</span>
                                     <input type="text" x-model="seriesDraft.location" placeholder="The hall"
                                            class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
                                                   text-[15px] text-on-surface placeholder:text-outline cal-focus" />
@@ -164,7 +164,7 @@
                             </div>
 
                             <label class="block">
-                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">What it's for</span>
+                                <span class="m-label">What it's for</span>
                                 <textarea x-model="seriesDraft.description" rows="3"
                                           placeholder="A short line for anyone who has not been before."
                                           class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
@@ -187,7 +187,7 @@
                     </section>
 
                     <!-- When it happens -->
-                    <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                    <section class="m-card">
                         <h3 class="font-display text-[17px] text-primary">When it happens</h3>
                         <p class="font-headline-lg text-[17px] text-on-surface mt-2" x-text="seriesPattern"></p>
                         <div x-show="!isSundaySeries" class="mt-sm">
@@ -203,7 +203,7 @@
                     </section>
 
                     <!-- The Roles it carries -->
-                    <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                    <section class="m-card">
                         <h3 class="font-display text-[17px] text-primary">The roles it needs</h3>
 
                         <!-- Liturgical: shown, never editable here. An editor
@@ -211,7 +211,7 @@
                              are half of it — but they are filled in the order of
                              service, one Sunday at a time. -->
                         <div x-show="liturgicalRoles.length" class="mt-sm">
-                            <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
+                            <div class="m-label">
                                 Filled in the order of service
                             </div>
                             <p class="text-[12px] text-on-surface-variant mt-1 leading-snug">
@@ -235,7 +235,7 @@
 
                         <!-- Servant Roles: the editor's to choose. -->
                         <div class="mt-md pt-md border-t border-outline-variant">
-                            <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
+                            <div class="m-label">
                                 Roles you've added
                             </div>
                             <p x-show="!servantRoles.length" class="text-[13px] text-on-surface-variant mt-1">
@@ -278,7 +278,7 @@
                 <aside class="flex flex-col gap-gutter min-w-0">
                     <!-- The next few dates. A Role only ever gets somebody's name
                          against it on a DATE, so this screen has to hand you one. -->
-                    <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                    <section class="m-card">
                         <h3 class="font-display text-[17px] text-primary">The next few</h3>
                         <p class="text-[12.5px] text-on-surface-variant mt-1">
                             A role only ever gets somebody's name against it on a date.
@@ -311,7 +311,7 @@
                     </section>
 
                     <!-- Colour, same control as any other Event. -->
-                    <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                    <section class="m-card">
                         <h3 class="font-display text-[17px] text-primary">Colour on the calendar</h3>
                         <div class="mt-sm grid grid-cols-4 gap-2">
                             <template x-for="c in colours" :key="c.slug">
@@ -342,7 +342,7 @@
                     </section>
 
                     <section x-show="!isSundaySeries"
-                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                             class="m-card">
                         <h3 class="font-display text-[17px] text-primary">Who can see this</h3>
                         <div class="mt-sm flex flex-col">
                             <template x-for="rung in visibilityLadder" :key="rung.level">
@@ -402,7 +402,7 @@
 
             <div class="mt-gutter flex flex-col gap-md">
                 <label class="block">
-                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">What is it</span>
+                    <span class="m-label">What is it</span>
                     <input x-model="draft.name" placeholder="Midweek Gathering"
                            class="mt-1 w-full rounded-lg border border-outline-variant bg-surface px-3 py-2
                                   text-[15px] text-on-surface cal-focus" />
@@ -410,7 +410,7 @@
 
                 <div class="grid gap-md" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
                     <label class="block">
-                        <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">First date</span>
+                        <span class="m-label">First date</span>
                         <input type="date" x-model="draft.date"
                                class="mt-1 w-full rounded-lg border border-outline-variant bg-surface px-3 py-2
                                       text-[15px] text-on-surface cal-focus" />
@@ -420,7 +420,7 @@
                          how often it comes round, and a pattern answers the
                          second. Blank is one day, which is nearly everything. -->
                     <label class="block" x-show="draft.recurrence.freq === 'once'">
-                        <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Last day</span>
+                        <span class="m-label">Last day</span>
                         <input type="date" x-model="draft.endDate" :min="draft.date"
                                class="mt-1 w-full rounded-lg border bg-surface px-3 py-2
                                       text-[15px] text-on-surface cal-focus"
@@ -430,13 +430,13 @@
                         </span>
                     </label>
                     <label class="block">
-                        <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Starts at</span>
+                        <span class="m-label">Starts at</span>
                         <input type="time" x-model="draft.time"
                                class="mt-1 w-full rounded-lg border border-outline-variant bg-surface px-3 py-2
                                       text-[15px] text-on-surface cal-focus" />
                     </label>
                     <label class="block">
-                        <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Where</span>
+                        <span class="m-label">Where</span>
                         <input x-model="draft.location" placeholder="The hall"
                                class="mt-1 w-full rounded-lg border border-outline-variant bg-surface px-3 py-2
                                       text-[15px] text-on-surface cal-focus" />
@@ -444,7 +444,7 @@
                 </div>
 
                 <label class="block">
-                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Anything to say about it</span>
+                    <span class="m-label">Anything to say about it</span>
                     <textarea x-model="draft.description" rows="3" placeholder="Optional."
                               class="mt-1 w-full rounded-lg border border-outline-variant bg-surface px-3 py-2
                                      text-[15px] text-on-surface cal-focus"></textarea>
@@ -453,7 +453,7 @@
                 <!-- How often. Weekly, fortnightly, monthly — nothing more.
                      This is not a general-purpose recurrence editor. -->
                 <div>
-                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">How often</span>
+                    <span class="m-label">How often</span>
                     <div class="mt-1 grid gap-sm" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
                         <template x-for="opt in [['once','Just once'],['weekly','Every week'],['fortnightly','Every other week'],['monthly','Every month']]" :key="opt[0]">
                             <button @click="draft.recurrence.freq = opt[0]"
@@ -468,7 +468,7 @@
 
                 <!-- Carries on. Only meaningful for a repeating Event. -->
                 <div x-show="draft.recurrence.freq !== 'once'">
-                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Carries on</span>
+                    <span class="m-label">Carries on</span>
                     <div class="mt-1 flex flex-col gap-1.5">
                         <template x-for="opt in [['never','Until further notice'],['onDate','Until a date'],['afterCount','For a set number of times']]" :key="opt[0]">
                             <label class="flex items-center gap-2 cursor-pointer">
@@ -493,7 +493,7 @@
                      back to themselves. -->
                 <div x-show="draft.date" class="bg-surface-container-low border rounded-lg p-md"
                      :class="draftSpanError ? 'border-error' : 'border-outline-variant'">
-                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Reads as</span>
+                    <span class="m-label">Reads as</span>
                     <!-- A span that cannot be stored says so HERE, where the
                          editor is already checking their intent, rather than
                          after they press the button. -->
@@ -513,7 +513,7 @@
 
                 <!-- Who can see it -->
                 <div>
-                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Who can see this</span>
+                    <span class="m-label">Who can see this</span>
                     <div class="mt-1 flex flex-col">
                         <template x-for="rung in visibilityLadder" :key="rung.level">
                             <button @click="draft.visibility = rung.level"
@@ -640,8 +640,8 @@
             <button x-show="unconfirmedPrompt" @click="openTidyUp()"
                     class="mt-md w-full text-left bg-surface-container-low border border-outline-variant border-l-[3px]
                            rounded-lg px-md py-3 flex items-center gap-sm cal-motion cal-focus hover:bg-surface-container"
-                    style="border-left-color: #B89B6A;">
-                <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">contact_support</span>
+                    style="border-left-color: var(--gold);">
+                <span class="material-symbols-outlined text-[20px] shrink-0" style="color:var(--gold);">contact_support</span>
                 <div class="flex-grow min-w-0">
                     <p class="text-[14px] text-on-surface" x-text="unconfirmedPrompt"></p>
                     <p class="text-[12.5px] text-on-surface-variant mt-0.5">
@@ -680,14 +680,14 @@
                     </section>
 
                     <section x-show="occurrence.description"
-                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                             class="m-card">
                         <p class="font-headline-lg text-[17px] leading-[1.55] text-on-surface" x-text="occurrence.description"></p>
                     </section>
 
                     <!-- ── Sunday: settled, not disabled ──────────────────── -->
                     <section x-show="isSunday" class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
                         <div class="flex items-start gap-sm">
-                            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:#B89B6A;">public</span>
+                            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:var(--gold);">public</span>
                             <p class="text-[14px] text-on-surface">
                                 <strong class="font-label-md">Sunday is public.</strong>
                                 Everyone can see it, signed in or not — that is how Sundays work.
@@ -723,7 +723,7 @@
                          screen. Administering an Event is the editor's job; a
                          member is answering "who else is coming". -->
                     <section x-show="!isEditor && canSeeRoster && assignments.length"
-                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                             class="m-card">
                         <h2 class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant
                                    pb-sm border-b border-outline-variant">Who's serving</h2>
                         <div class="flex flex-col">
@@ -773,7 +773,7 @@
                          (One date OF A SERIES is "Move this one", which has to
                          rewrite the id and leave a note behind.) -->
                     <section x-show="isEditor && isOneOff"
-                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                             class="m-card">
                         <h3 class="font-display text-[17px] text-primary">Details</h3>
                         <p class="text-[12.5px] text-on-surface-variant mt-1">
                             This event happens once, so this is all of it.
@@ -781,7 +781,7 @@
 
                         <div class="mt-sm flex flex-col gap-md">
                             <label class="block">
-                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">What is it</span>
+                                <span class="m-label">What is it</span>
                                 <input type="text" x-model="occurrenceDraft.name" placeholder="Harvest Supper"
                                        class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
                                               text-[15px] text-on-surface placeholder:text-outline cal-focus" />
@@ -789,13 +789,13 @@
 
                             <div class="grid grid-cols-2 gap-md">
                                 <label class="block">
-                                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">When</span>
+                                    <span class="m-label">When</span>
                                     <input type="date" x-model="occurrenceDraft.date"
                                            class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
                                                   text-[15px] text-on-surface cal-focus" />
                                 </label>
                                 <label class="block">
-                                    <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Starts at</span>
+                                    <span class="m-label">Starts at</span>
                                     <input type="time" x-model="occurrenceDraft.time"
                                            class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
                                                   text-[15px] text-on-surface cal-focus" />
@@ -805,7 +805,7 @@
                             <!-- Runs over several days. A one-off's occurrence IS
                                  the whole Event, so this is where its span lives. -->
                             <label class="block">
-                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Last day</span>
+                                <span class="m-label">Last day</span>
                                 <input type="date" x-model="occurrenceDraft.endDate" :min="occurrenceDraft.date"
                                        class="mt-1 w-full bg-surface border rounded-lg px-3 py-2
                                               text-[15px] text-on-surface cal-focus"
@@ -821,14 +821,14 @@
                             </label>
 
                             <label class="block">
-                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Where</span>
+                                <span class="m-label">Where</span>
                                 <input type="text" x-model="occurrenceDraft.location" placeholder="The hall"
                                        class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
                                               text-[15px] text-on-surface placeholder:text-outline cal-focus" />
                             </label>
 
                             <label class="block">
-                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">What it's for</span>
+                                <span class="m-label">What it's for</span>
                                 <textarea x-model="occurrenceDraft.description" rows="3"
                                           placeholder="A short line for anyone who has not been before."
                                           class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
@@ -865,7 +865,7 @@
                          A ladder here would change every date from a screen that
                          looks like it is about one of them. -->
                     <section x-show="isEditor && isOneOff"
-                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                             class="m-card">
                         <h3 class="font-display text-[17px] text-primary">Who can see this</h3>
                         <div class="mt-sm flex flex-col">
                             <template x-for="rung in visibilityLadder" :key="rung.level">
@@ -915,7 +915,7 @@
                     <!-- Colour on the calendar. Also the Event's, not one date's —
                          a colour set here would restyle every other date. -->
                     <section x-show="isEditor && colourEditable"
-                             class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                             class="m-card">
                         <h3 class="font-display text-[17px] text-primary">Colour on the calendar</h3>
                         <p class="text-[12.5px] text-on-surface-variant mt-1">
                             Just so it's easy to pick out. It doesn't change who can see it.
@@ -959,14 +959,14 @@
                         <h3 class="font-display text-[17px] text-primary">When it happens</h3>
                         <p class="font-headline-lg text-[17px] text-on-surface mt-2"
                            x-text="series ? recurrenceSentence(series.recurrence) : ''"></p>
-                        <p x-show="occurrence.cancelled" class="text-[12.5px] mt-1" style="color:#B89B6A;">
+                        <p x-show="occurrence.cancelled" class="text-[12.5px] mt-1" style="color:var(--gold);">
                             This one is cancelled. The rest of the series is untouched.
                         </p>
                         <!-- Where this instance went, or came from. Somebody looking at
                              the first Sunday needs to know the gathering is on the
                              fifteenth, not simply that it is not here. -->
                         <p x-show="occurrence.movedTo || occurrence.movedFrom"
-                           class="text-[12.5px] mt-1 flex items-center gap-1" style="color:#B89B6A;">
+                           class="text-[12.5px] mt-1 flex items-center gap-1" style="color:var(--gold);">
                             <span class="material-symbols-outlined text-[15px]">event_repeat</span>
                             <span x-text="movedNote"></span>
                         </p>
@@ -977,7 +977,7 @@
                              nobody meant to make. -->
                         <div x-show="move.open" class="mt-sm bg-surface-container-lowest border border-outline-variant rounded-lg p-3">
                             <label class="block">
-                                <span class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">
+                                <span class="m-label">
                                     Move this one to
                                 </span>
                                 <input type="date" x-model="move.toDate"
@@ -1030,9 +1030,9 @@
     <div x-show="pattern.open" @keydown.escape.window="pattern.open = false"
          class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
         <div class="bg-surface-container-lowest rounded-lg w-full max-w-[720px] mt-[5vh] border"
-             style="border-color:#B89B6A;">
+             style="border-color:var(--gold);">
             <div class="px-md py-md flex items-start gap-sm">
-                <span class="material-symbols-outlined text-[26px] shrink-0" style="color:#B89B6A;">help</span>
+                <span class="material-symbols-outlined text-[26px] shrink-0" style="color:var(--gold);">help</span>
                 <div class="min-w-0">
                     <h3 class="font-display text-[21px] text-primary">Change the pattern</h3>
                     <p class="font-headline-lg text-[17px] text-on-surface mt-2" x-text="patternSentence"></p>

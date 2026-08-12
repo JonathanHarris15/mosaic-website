@@ -14,9 +14,9 @@ change. The Order of Service editor (`service-builder.js`) and the Service Guide
 
 We want churches to compose their own pages (HTML/CSS + reusable Components) into named **Service
 Guide Templates**, pick a default, override per week, and generate a variable-length booklet — all
-from a single tool launched off the Service Calendar. See the executable plan in
-[docs/plans/service_guide_template_system.md](../plans/service_guide_template_system.md) and the
-glossary in [CONTEXT.md](../../CONTEXT.md) ("Service Guide Template System").
+from a single tool launched off the Service Calendar. The build plan this ADR was written alongside
+has since been carried out and removed; the glossary in [CONTEXT.md](../../CONTEXT.md) ("Service
+Guide Template System") is now the standing description.
 
 Three choices in this design are hard to reverse, surprising without context, and the result of
 real trade-offs. They are recorded here.

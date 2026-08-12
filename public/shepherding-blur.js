@@ -149,15 +149,15 @@
                 display: inline-flex; align-items: center; gap: 8px;
                 padding: 8px 12px; border-radius: 999px; border: none;
                 font: 500 12px/1 system-ui, sans-serif; letter-spacing: .01em;
-                color: #fff; background: #334155; cursor: pointer;
+                color: var(--on-primary); background: var(--on-surface); cursor: pointer;
                 box-shadow: 0 2px 8px rgba(0,0,0,.25); opacity: .85;
             }
             #sb-blur-toggle:hover { opacity: 1; }
             #sb-blur-toggle .sb-dot {
-                width: 8px; height: 8px; border-radius: 50%; background: #f87171;
+                width: 8px; height: 8px; border-radius: 50%; background: var(--error);
             }
-            #sb-blur-toggle[data-on="off"] { background: #475569; }
-            #sb-blur-toggle[data-on="off"] .sb-dot { background: #4ade80; }
+            #sb-blur-toggle[data-on="off"] { background: var(--on-surface-variant); }
+            #sb-blur-toggle[data-on="off"] .sb-dot { background: var(--success); }
         `;
         document.head.appendChild(style);
     }

@@ -70,7 +70,7 @@
         <img src=${props.photoUrl} alt="" style=${Object.assign({ width: "100%", height: "100%" }, window.PersonPhotoCore.frameStyleObject(props.photoCrop))} />
       </span>`;
     }
-    return html`<span style=${Object.assign({}, base, { background: props.tone === "ocean" ? "var(--secondary)" : "var(--primary)", color: "#fff", fontFamily: "var(--font-sans)", fontSize: 10.5, fontWeight: 700 })}>${initials(props.name)}</span>`;
+    return html`<span style=${Object.assign({}, base, { background: props.tone === "ocean" ? "var(--secondary)" : "var(--primary)", color: props.tone === "ocean" ? "var(--on-secondary)" : "var(--on-primary)", fontFamily: "var(--font-sans)", fontSize: 10.5, fontWeight: 700 })}>${initials(props.name)}</span>`;
   }
 
   var BLANK_FORM = { name: "", kind: "pairwise", priority: false, holderLabel: "", counterpartLabel: "", leaderLabel: "", memberLabel: "", label: "" };
@@ -288,7 +288,7 @@
               ${t.priority ? html`<div>
                 <div style=${Object.assign({}, OVER, { marginBottom: 6 })}>${labelFor(t, "leader")}</div>
                 ${g.leaderId
-                  ? html`<div style=${{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 8px", border: "1px solid var(--warning, #B8862E)", borderRadius: "var(--radius)" }}>
+                  ? html`<div style=${{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 8px", border: "1px solid var(--warning)", borderRadius: "var(--radius)" }}>
                       <${Avatar} name=${personName(g.leaderId)} />
                       <span style=${{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600 }}>${personName(g.leaderId)}</span>
                       <button onClick=${function () { writeGroup(GC.clearLeader(g)); }} style=${iconBtn} aria-label="Stand down">${Ic("x", 15)}</button>

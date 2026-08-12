@@ -114,7 +114,7 @@
     <!-- HEADER                                      -->
     <!-- ═══════════════════════════════════════════ -->
     <header style="max-width:80rem; margin:0 auto; padding:8px 32px;" class="flex items-center justify-between">
-        <a href="shepherding-dashboard.html" class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-colors duration-200">
+        <a href="shepherding-dashboard.html" class="m-back">
             <span class="material-symbols-outlined text-[20px]">arrow_back</span>
             <span class="font-label-md text-label-md">Dashboard</span>
         </a>
@@ -125,7 +125,7 @@
 
     <!-- Loading spinner -->
     <div x-show="loading" style="display:flex; align-items:center; justify-content:center; flex:1; min-height:60vh;">
-        <span class="material-symbols-outlined text-[48px] text-outline animate-spin">progress_activity</span>
+        <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
@@ -440,27 +440,27 @@
                 </header>
                 <div class="p-6 overflow-y-auto custom-scrollbar space-y-4">
                     <div class="flex flex-col gap-1">
-                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Full Name</label>
+                        <label class="m-label">Full Name</label>
                         <input type="text" x-model="newPerson.name" placeholder="Required" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
                     </div>
                     <div class="flex flex-col gap-1">
-                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Email</label>
+                        <label class="m-label">Email</label>
                         <input type="email" x-model="newPerson.email" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
                     </div>
                     <div class="flex flex-col gap-1">
-                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Phone</label>
+                        <label class="m-label">Phone</label>
                         <input type="tel" x-model="newPerson.phone" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
                     </div>
                     <div class="flex flex-col gap-1">
-                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Address</label>
+                        <label class="m-label">Address</label>
                         <textarea x-model="newPerson.address" rows="2" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm"></textarea>
                     </div>
                     <div class="flex flex-col gap-1">
-                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Birthday</label>
+                        <label class="m-label">Birthday</label>
                         <input type="date" x-model="newPerson.birthday" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
                     </div>
                     <div class="flex flex-col gap-1">
-                        <label class="font-label-md text-[10px] uppercase tracking-widest text-on-surface-variant">Sex</label>
+                        <label class="m-label">Sex</label>
                         <select x-model="newPerson.sex" class="w-full py-2.5 px-4 bg-surface-container-low border border-outline-variant rounded-lg focus:ring-1 focus:ring-primary outline-none text-sm">
                             <option value="">Unknown</option>
                             <option value="male">Male</option>
