@@ -1129,7 +1129,9 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
       "⚠ WHICH COLUMN A CELL IS IN IS A CLASS — `--sunday`, `--rowend` — NEVER `nth-child`. Alpine's `<template x-for>` stays put as the grid's first child, so the nth cell is not the nth child and a positional rule lands one column out. That shipped once: Saturday tinted, Friday missing its rule.",
       "A day from the month either side keeps the week rule under it — a horizontal line has to run the full width — but loses its vertical, so the corners of the month dissolve rather than being ruled off into boxes nobody is meant to read. It is not tinted: two tones in a row is one too many.",
       "`--fit` divides whatever height is left into equal rows, so the month ends where the window does. You scroll for more information, never to see the rest of what is already on screen.",
-      "⚠ `--open` IS A WEEK, NOT A DAY. A cell cannot be taller than its row, so opening one opens the row — and every day on that row then shows everything, rather than sitting beside empty space with events still hidden. `--open` stops the grid dividing the window; the caller pins the other rows to the height they already had, so the opened week is the only thing that moves.",
+      "⚠ `--open` IS A WEEK, NOT A DAY. A cell cannot be taller than its row, so opening one opens the row — and every day on that row then shows everything, rather than sitting beside empty space with events still hidden. `--open` stops the grid dividing the window; the caller pins every cell to a height in pixels, so the opened week is the only one that moves and the growing is something you can watch.",
+      "The grid takes the scroll while a week is open, never the page. The month is the only thing that grew, and letting the page take it moves the header, the toolbar and the rail for a change that happened inside one week — and hands back a different scroll position than the one you were reading at.",
+      "`__more` is at the TOP of the cell, in the head. It is the way in and the way out, and a way in at the top with a way out at the bottom is two places to look for one thing.",
     ],
     examples: [
       '<section class="m-cal"><div class="m-cal__days"><div class="m-cal__day">SUN</div>…</div><div class="m-cal__grid"><div class="m-cal__cell"><div class="m-cal__head"><span class="m-cal__num">3</span></div><div class="m-cal__events">…</div></div>…</div></section>',
@@ -1192,15 +1194,26 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 .m-cal__flag { font-size: 16px; color: var(--error); flex: 0 0 auto; }
 .m-cal__events { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 
-/* What the day is holding and not drawing. Never a silent truncation.
-   A LABEL, NOT A CONTROL — the whole cell is what opens the week, so a
-   second small target inside it would be hiding the answer twice. */
+/* What the day is holding and not drawing — never a silent truncation —
+   and the control that opens it. It sits at the TOP of the cell, in the
+   head beside the numeral, because that is where it has to be readable
+   again once the row is open: a way in at the top and a way out at the
+   bottom is two places to look for one thing.
+
+   The auto right margin is what keeps the numeral against the right
+   edge whether this is here or not. */
 .m-cal__more {
-  align-self: flex-start; padding: 2px 8px;
-  font-family: var(--font-sans); font-size: 11.5px;
-  color: var(--on-surface-variant); pointer-events: none;
+  display: inline-flex; align-items: center; gap: 2px;
+  margin-right: auto; padding: 1px 5px 1px 3px;
+  background: transparent; border: 0; border-radius: var(--radius-sm);
+  font-family: var(--font-sans); font-size: 11px; line-height: 1;
+  color: var(--on-surface-variant); cursor: pointer;
+  transition: background-color var(--duration) var(--ease-standard),
+              color var(--duration) var(--ease-standard);
 }
-.m-cal__cell--clickable:hover .m-cal__more { color: var(--primary); }
+.m-cal__more:hover { background: var(--surface-container-high); color: var(--primary); }
+.m-cal__more:focus-visible { outline: 2px solid var(--tertiary); outline-offset: -1px; }
+.m-cal__more .material-symbols-outlined { font-size: 14px; }
 
 /* ── Fitted to the window ─────────────────────────────────────
    The rows divide the height left after everything above them, so the
@@ -1218,9 +1231,6 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .m-cal--fit .m-chip--sunday .m-chip__label { font-size: 13px; }
-/* Fitted, the count rides in the free corner opposite the numeral
-   rather than taking a line the row has not got. */
-.m-cal--fit .m-cal__more { position: absolute; top: 4px; left: 5px; padding: 0; font-size: 10.5px; letter-spacing: .04em; }
 
 /* ── A week opened out ────────────────────────────────────────
    A cell cannot be taller than its row, so what grows is the ROW —
@@ -1230,11 +1240,22 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
    ⚠ THE OTHER ROWS ARE PINNED, NOT LEFT TO REFLOW. Dropping the
    1fr lets every row size to its own contents, which would redraw
    the whole month around the week somebody asked to read. So the
-   grid stops dividing the window and the page pins every other cell
-   to the height it already had — the opened week is the only thing
-   that moves. The page is allowed to scroll while one is open. */
+   grid stops dividing the window and the caller pins every cell to
+   a height in pixels — the opened week is the only one that moves.
+
+   ⚠ AND THE GRID TAKES THE SCROLL, NOT THE PAGE. The month is the
+   only thing that grew, so it is the only thing that should have to
+   scroll; letting the page take it moves the header, the toolbar and
+   the rail for a change that happened inside one week, and gives back
+   a different scroll position than the one you were reading at. */
 .m-cal--fit.m-cal--open .m-cal__grid { grid-auto-rows: auto; }
-.m-cal__cell--expanded { overflow: visible; }
+/* Pixels, because a height has to be a number at both ends for the
+   growing to be something you can watch rather than something that
+   has already happened. */
+.m-cal--open .m-cal__cell { transition: height var(--duration-slow) var(--ease-standard); }
+@media (prefers-reduced-motion: reduce) {
+  .m-cal--open .m-cal__cell { transition: none; }
+}
 /* Whatever a fitted cell clipped to make the month fit is unclipped
    here — the whole point of opening it is to read what was cut. */
 .m-cal--fit .m-cal__cell--expanded .m-chip__label {

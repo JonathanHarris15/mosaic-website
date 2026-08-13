@@ -2460,6 +2460,7 @@ test('opening a day opens its WEEK, and the rows around it hold still', () => {
     // 35 and 37 are the same row (week 5); 28 is the row above it (week 4).
     page.cellClick(sunday, '2026-08', 35, { clientX: 10, clientY: 10 });
     assert.strictEqual(page.expandedWeek, '2026-08#5', 'a crowded day did not open its week');
+    assert.strictEqual(page.expandedFrom, '2026-08-30', 'the week forgot which day opened it');
 
     assert.strictEqual(page.chipsOn(sunday, '2026-08', 35).length, 3, 'the opened day is still cut');
     assert.strictEqual(page.chipsOn(tuesday, '2026-08', 37).length, 2,
@@ -2467,14 +2468,57 @@ test('opening a day opens its WEEK, and the rows around it hold still', () => {
     assert.strictEqual(page.chipsOn(weekAbove, '2026-08', 28).length, 2,
         'opening one week redrew the week above it');
 
-    // Pinned, so only the opened row moves.
-    assert.strictEqual(page.cellStyle('2026-08', 28), 'height:118px');
-    assert.strictEqual(page.cellStyle('2026-08', 35), '', 'the opened row was pinned too');
+    // Every cell is pinned to a number — the others to what they were, the
+    // opened row to what it is growing towards. Off a browser there is
+    // nothing to grow into, so it starts and stays where it began.
+    assert.strictEqual(page.cellStyle('2026-08', 28), 'height:118px', 'the week above was left to reflow');
+    assert.strictEqual(page.cellStyle('2026-08', 35), 'height:118px', 'the opened row has no height to travel from');
 
-    // And the page is allowed to scroll while one is open.
-    assert.strictEqual(page.fitGrid, false, 'the month is still pinned to the window with a week open');
     page.collapseWeek();
-    assert.strictEqual(page.fitGrid, true, 'the month did not go back to fitting the window');
+    assert.strictEqual(page.expandedWeek, null, 'the week did not close');
+    assert.strictEqual(page.cellStyle('2026-08', 28), '', 'the rows stayed pinned after closing');
+});
+
+test('a week opens from the height it already had, never straight to the answer', () => {
+    // Setting the finished height at once is not a fast animation, it is no
+    // animation: the browser has nothing to interpolate from because the row
+    // never had a number. So it is pinned to where it was first, and the
+    // target is measured a drawn frame later.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.cellHeight = 118;
+
+    page.openWeek('2026-08', 35, '2026-08-30');
+    assert.strictEqual(page.openHeight, 118,
+        'the row was given its finished height on the same frame it opened');
+
+    // And a cell that cannot be measured falls back to where it started
+    // rather than to zero — a row collapsing to nothing is not an animation
+    // either, it is a disappearance.
+    assert.strictEqual(page.openRowHeight(), 0, 'a grid with no layout claimed a height');
+    assert.strictEqual(page.cellStyle('2026-08', 35), 'height:118px');
+});
+
+test('the way out is the control you came in by', () => {
+    // One collapse button, on the day whose button opened the week — where
+    // the eye and the mouse already are. Seven across an opened row would be
+    // seven ways to do one thing.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.cellHeight = 118;
+    page.fits = { '2026-08-30': 2 };
+    const opener = { date: '2026-08-30', events: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] };
+    const neighbour = { date: '2026-09-01', events: [{ id: 'd' }] };
+
+    assert.ok(page.showsToggle(opener, '2026-08', 35), 'a day holding events back offers no way in');
+    assert.ok(!page.showsToggle(neighbour, '2026-08', 37), 'a day drawing everything still offered one');
+
+    page.toggleWeek(opener, '2026-08', 35);
+    assert.ok(page.showsToggle(opener, '2026-08', 35), 'the opened day offers no way back out');
+    assert.ok(!page.showsToggle(neighbour, '2026-08', 37),
+        'every day on the opened row grew its own collapse button');
+
+    // And the same control closes it.
+    page.toggleWeek(opener, '2026-08', 35);
+    assert.strictEqual(page.expandedWeek, null, 'the button that opened the week would not close it');
 });
 
 test('a click on a day means different things depending on what that day is doing', () => {
@@ -2584,19 +2628,50 @@ test('the legend is gone, and so is the church glyph', () => {
     assert.ok(/>Sunday</.test(html), 'the word Sunday went with the glyph');
 });
 
-test('the month is pinned to the window on a desktop and never on a phone', () => {
-    // Half a week hanging below the fold is most of why this page read as
-    // unfinished. But a phone draws a strip and a list of cards, which are
-    // honestly as long as they are — pinning THAT would move the scrolling
-    // somewhere with less room for it.
+test('the desktop page never scrolls, so opening a week cannot move it', () => {
+    // ⚠ THE SCROLL POSITION IS THE POINT. `cal-fit` is unconditional: the page
+    // does not scroll at all, so growing a row cannot hand back a different
+    // scroll position than the one you were reading at. When a row runs past
+    // the window it is the GRID that takes it — the month is the only thing
+    // that changed, and moving the header, the toolbar and the rail for
+    // something that happened inside one week is a bigger answer than the
+    // question.
     const html = readPage('calendar.html');
     const flat = html.replace(/\s+/g, ' ');
 
     assert.ok(flat.indexOf('html:not(.shell-mobile) body.cal-fit { height: 100%; overflow: hidden; }') !== -1,
         'the desktop page no longer fits the window');
+    assert.ok(/antialiased min-h-screen flex flex-col cal-fit/.test(flat),
+        'the page is allowed to scroll again under some condition');
+    assert.ok(flat.indexOf(":class=\"fitGrid") === -1,
+        'the page still turns its own scrolling on and off');
+
+    // The rail's own box is what grows a scrollbar, and only while open.
+    assert.ok(flat.indexOf('.m-cal--fit.m-cal--open .cal-rail-months { overflow-y: auto;') !== -1,
+        'nothing takes the scroll when a week runs past the window');
+
+    // A phone draws a strip and a list of cards, which are honestly as long as
+    // they are — pinning THAT would move the scrolling somewhere with less
+    // room for it.
     assert.ok(/html:not\(\.shell-mobile\)/.test(html), 'the fit is not scoped off the phone shell');
-    assert.ok(flat.indexOf(':class="fitGrid ? \'cal-fit\' : \'\'"') !== -1,
-        'nothing lets the page scroll again when a day is opened');
+});
+
+test('a row that grows does it visibly, unless somebody asked for less movement', () => {
+    // ⚠ NOT WHITESPACE-STRIPPED. The minifier keeps the space in a descendant
+    // selector, and stripping it turns `.m-cal--open .m-cal__cell` into
+    // `.m-cal--open.m-cal__cell` — a different rule about a different element.
+    const css = readPage('mosaic.css');
+
+    assert.ok(css.indexOf('.m-cal--open .m-cal__cell{transition:height var(--duration-slow)') !== -1,
+        'an opening week snaps rather than grows');
+    assert.ok(/@media \(prefers-reduced-motion:reduce\)\{\.m-cal--open \.m-cal__cell\{transition:none\}\}/.test(css),
+        'asking for less movement does not stop the row animating');
+
+    // The duration the page waits before letting the grid divide the window
+    // again has to be at least the one the row animates for, or it snaps shut.
+    const js = readPage('calendar.js');
+    assert.ok(/const OPEN_MS = (3[2-9]\d|[4-9]\d\d)/.test(js),
+        'the wait before closing is shorter than --duration-slow, so the row snaps shut');
 });
 
 test('the strip shows at most three dots a day', () => {

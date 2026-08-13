@@ -35,6 +35,18 @@
     const SWIPE_MIN = 45;
     const SWIPE_BIAS = 1.4;
 
+    // How long a week takes to open, and it must match `--duration-slow` on
+    // `.m-cal--open .m-cal__cell`. Closing waits for it before letting the grid
+    // go back to dividing the window equally — do that on the same frame and
+    // the row snaps shut instead of closing.
+    const OPEN_MS = 320;
+
+    // Timers, where there may not be any. The component is loaded into a bare
+    // context by the tests, so `setTimeout` is not a given — and an animation
+    // nobody can see does not need one.
+    const canTime = () => typeof setTimeout === 'function' && typeof clearTimeout === 'function';
+    const stopTimer = id => { if (id && canTime()) clearTimeout(id); };
+
     // Run something once the browser has drawn what was just asked for.
     //
     // Two frames, not one: a frame callback runs BEFORE that frame is drawn, so
@@ -170,6 +182,17 @@
             // months at once. One week at a time. The phone has no month grid:
             // tapping a day on the strip already shows the whole of it.
             expandedWeek: null,
+
+            // Which day's button opened it. The way out is the control you came
+            // in by, in the place your eye and your mouse already are — one
+            // collapse button, not seven.
+            expandedFrom: null,
+
+            // What the opened row is animating to, in pixels. A height has to
+            // be a number at both ends for the growing to be something you can
+            // watch rather than something that has already happened.
+            openHeight: 0,
+            closeTimer: null,
 
             // How tall a row came out, measured — what every other row is
             // pinned to while one is open, so the month does not redraw itself
@@ -475,7 +498,7 @@
                 // Leaving the grid closes whatever week was open on it: coming
                 // back to a month with one row still hanging open is a state
                 // nobody asked for and nothing on screen would explain.
-                this.expandedWeek = null;
+                this.resetWeek();
                 if (next === 'month') {
                     this.slideRail();
                     // The grid is only laid out in Month, so this is the first
@@ -685,9 +708,6 @@
             // window height and shrinking the other rows to pay for it would
             // redraw five days nobody was looking at, and push their chips
             // behind their own "more" line.
-            // Nothing is open, so the month is pinned to the window.
-            get fitGrid() { return !this.expandedWeek; },
-
             // Which week a cell belongs to. The rail draws five months at once,
             // so the month has to be part of the key or the third week of
             // August and the third week of September are the same week.
@@ -697,8 +717,56 @@
                 return !!this.expandedWeek && this.expandedWeek === this.weekKey(month, index);
             },
 
-            openWeek(month, index) {
+            get reducedMotion() {
+                return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+                    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            },
+
+            // ⚠ IT OPENS AT THE HEIGHT IT ALREADY HAD, then grows. Setting the
+            // finished height straight away is not an animation with a fast
+            // duration, it is no animation at all — the browser has nothing to
+            // interpolate from because the row never had a number.
+            //
+            // And the target has to be MEASURED after the extra chips are in
+            // the DOM, which is why it waits a drawn frame. `scrollHeight` on a
+            // cell still clipped to the old height is the only honest answer to
+            // "how tall would this be if you let it".
+            openWeek(month, index, date) {
+                if (!this.cellHeight) this.measureCell();
+                stopTimer(this.closeTimer);
                 this.expandedWeek = this.weekKey(month, index);
+                this.expandedFrom = date || null;
+                this.openHeight = this.cellHeight;
+                afterPaint(() => {
+                    this.openHeight = this.openRowHeight() || this.cellHeight;
+                });
+            },
+
+            openRowHeight() {
+                const grid = this.$refs && this.$refs.monthRailWide;
+                if (!grid || typeof grid.querySelectorAll !== 'function') return 0;
+                const cells = grid.querySelectorAll('.m-cal__cell--expanded') || [];
+                let tallest = 0;
+                Array.prototype.forEach.call(cells, cell => {
+                    if (!cell || typeof cell.scrollHeight !== 'number') return;
+                    if (cell.scrollHeight > tallest) tallest = cell.scrollHeight;
+                });
+                return tallest;
+            },
+
+            toggleWeek(cell, month, index) {
+                if (this.isOpenWeek(month, index)) return this.collapseWeek();
+                this.openWeek(month, index, cell && cell.date);
+            },
+
+            // The button is on the day it was opened from, and on a day holding
+            // events back. Seven collapse buttons across an opened row would be
+            // seven ways to do one thing.
+            showsToggle(cell, month, index) {
+                if (this.isOpenWeek(month, index)) {
+                    return !!cell && cell.date === this.expandedFrom;
+                }
+                return this.moreOn(cell, month, index) > 0;
             },
 
             chipsOn(cell, month, index) {
@@ -722,20 +790,45 @@
                 return Math.max(0, events.length - this.chipsOn(cell, month, index).length);
             },
 
-            // Every other row is pinned to the height it already had, so the
-            // week being opened is the only thing that moves.
+            // Every cell is pinned to a number while a week is open: the others
+            // to the height they already had, the opened one to what it is
+            // growing towards. Only the opened row moves, and it moves visibly.
             cellStyle(month, index) {
                 if (!this.expandedWeek || !this.cellHeight) return '';
-                if (this.isOpenWeek(month, index)) return '';
-                return 'height:' + this.cellHeight + 'px';
+                const open = this.isOpenWeek(month, index);
+                return 'height:' + ((open && this.openHeight) || this.cellHeight) + 'px';
             },
 
+            // Shrink first, THEN let the grid go back to dividing the window.
+            // Doing both on one frame gives the row nothing to travel between
+            // and it snaps shut, which is the thing the animation exists to
+            // stop happening in the other direction.
             collapseWeek() {
                 if (!this.expandedWeek) return;
+                this.openHeight = this.cellHeight;
+                const settle = () => {
+                    this.resetWeek();
+                    // The rows have just re-clipped, so what fits has to be
+                    // taken again — and taken with everything drawn.
+                    this.remeasure();
+                };
+                stopTimer(this.closeTimer);
+                // Nothing to watch — somebody asked for less movement, or there
+                // is no browser to move anything. Either way, waiting for an
+                // animation that is not running is just a delay.
+                const animated = !this.reducedMotion
+                    && typeof requestAnimationFrame === 'function' && canTime();
+                if (!animated) return settle();
+                this.closeTimer = setTimeout(settle, OPEN_MS);
+            },
+
+            // Closed with nothing to watch — the month is changing under it
+            // anyway, so there is nothing for a shrinking row to mean.
+            resetWeek() {
+                stopTimer(this.closeTimer);
                 this.expandedWeek = null;
-                // The rows have just re-clipped, so what fits has to be taken
-                // again — and taken with everything drawn.
-                this.remeasure();
+                this.expandedFrom = null;
+                this.openHeight = 0;
             },
 
             // What a click on a day means depends on what that day is doing.
@@ -750,7 +843,7 @@
             cellClick(cell, month, index, event) {
                 if (!cell) return;
                 if (this.isOpenWeek(month, index)) return;
-                if (this.moreOn(cell, month, index)) return this.openWeek(month, index);
+                if (this.moreOn(cell, month, index)) return this.openWeek(month, index, cell.date);
                 if (this.expandedWeek) return this.collapseWeek();
                 this.openDayMenu(cell, event);
             },
@@ -963,7 +1056,7 @@
                 // set would highlight a day the strip is no longer showing. The
                 // same goes for a day left open on the grid.
                 this.focusDate = null;
-                this.expandedWeek = null;
+                this.resetWeek();
                 // A month spanning six weeks has shorter rows than one spanning
                 // five, so what a day can hold changes with the month.
                 this.remeasure();
