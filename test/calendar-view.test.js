@@ -739,9 +739,13 @@ test('the store and the display layer agree on what the colours are', () => {
     );
 });
 
-test('a Sunday keeps the colour it already draws in', () => {
+test('a Sunday draws in navy by default', () => {
+    // Navy, the deepest of the three seal tiles, for the one date the whole
+    // church turns up to. It was ocean because ocean was what Sundays happened
+    // to be drawing in already — an argument that would have kept the first
+    // guess forever. Settled in MS-231.
     const Core = require('../public/events-occurrence-core.js');
-    assert.strictEqual(View.colourOf({ seriesId: Core.SUNDAY_SERVICE_ID }).slug, 'ocean');
+    assert.strictEqual(View.colourOf({ seriesId: Core.SUNDAY_SERVICE_ID }).slug, 'navy');
     // But it is only a default. A colour is decoration — unlike a Sunday's
     // visibility and its liturgy, there is nothing to protect by settling it.
     assert.strictEqual(

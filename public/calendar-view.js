@@ -214,12 +214,19 @@
     // itself overnight for no reason anybody asked for.
     const DEFAULT_COLOUR = 'steel';
 
-    // Sundays already draw in ocean. Same argument — leaving it alone is the
-    // only way nobody's calendar changes under them. It is still only a default:
-    // the Sunday Service's colour can be changed like any other, because a
-    // colour is decoration and there is no safety reason to settle it the way
-    // its visibility and its liturgy are settled.
-    const SUNDAY_COLOUR = 'ocean';
+    // Navy — the deepest of the three seal tiles, for the one date the whole
+    // church turns up to. It was ocean, on the argument that ocean was what
+    // Sundays already drew in and nobody's calendar should restyle itself
+    // overnight; that argument holds for every colour on this list and would
+    // have kept the first guess forever. Settled deliberately (MS-231), and
+    // the MS-229 brief had said navy all along.
+    //
+    // Still only a default: the Sunday Service's colour can be changed like any
+    // other, because a colour is decoration and there is no safety reason to
+    // settle it the way its visibility and its liturgy are settled. A Sunday
+    // with a colour stored on its series keeps that one — this is the fallback,
+    // not an override.
+    const SUNDAY_COLOUR = 'navy';
 
     // The error red. It used to be restated here as a hex, with a test holding
     // it to the token so the two could not drift; now it IS the token, and the
