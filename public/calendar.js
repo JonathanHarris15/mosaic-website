@@ -804,6 +804,13 @@
             // growing towards. Only the opened row moves, and it moves visibly.
             cellStyle(month, index) {
                 if (!this.expandedWeek || !this.cellHeight) return '';
+                // ⚠ ONLY THE MONTH ON SCREEN. A row height belongs to the month
+                // it was measured in, and the four others on the rail may span a
+                // different number of weeks — pinning their cells to this
+                // month's row would make their grids the wrong height and drag
+                // the whole rail's box with them. They keep dividing their own
+                // space, which is what they were already doing.
+                if (month !== this.month) return '';
                 const open = this.isOpenWeek(month, index);
                 return 'height:' + ((open && this.openHeight) || this.cellHeight) + 'px';
             },
@@ -871,8 +878,27 @@
                 // Off a browser there is nothing laid out to measure. Every day
                 // then draws everything it has, which is the honest answer when
                 // nobody can say what fits.
-                if (!grid || typeof grid.querySelector !== 'function') return;
-                const cell = grid.querySelector('.m-cal__cell');
+                if (!grid || typeof grid.querySelectorAll !== 'function') return;
+                // A grid that is not laid out measures zero, and zero is a real
+                // answer. The grid is only laid out in Month — same guard, same
+                // reason, as `slideRail` and `measureCells`.
+                if (!grid.offsetParent || !grid.offsetWidth) return;
+                // ⚠ THE MONTH ON SCREEN, NOT THE FIRST ONE DRAWN. Five months
+                // are laid out at once and they do not have the same number of
+                // weeks — a month spanning six divides the same height into six
+                // rows, one spanning five into five. Measuring whichever came
+                // first pinned August's six rows to June's five-row height, so
+                // every row on screen came out a fifth too tall, the grid
+                // overflowed, and the "animation" was the whole month jumping
+                // at once. Closing then snapped twice: once back to the wrong
+                // height, once to the real one.
+                //
+                // Same mistake as keying a column on nth-child: position does
+                // not tell you which thing you are holding.
+                const months = grid.querySelectorAll('[data-rail-month]');
+                const month = months && months[this.railIndex];
+                if (!month || typeof month.querySelector !== 'function') return;
+                const cell = month.querySelector('.m-cal__cell');
                 if (!cell || !cell.offsetParent || !cell.offsetHeight) return;
                 // ⚠ THE RECT, NOT `offsetHeight`. A row is a fifth of whatever
                 // is left, so its real height has a fraction in it; the rounded

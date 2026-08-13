@@ -2479,6 +2479,40 @@ test('opening a day opens its WEEK, and the rows around it hold still', () => {
     assert.strictEqual(page.cellStyle('2026-08', 28), '', 'the rows stayed pinned after closing');
 });
 
+test('a row height belongs to the month it was measured in', () => {
+    // ⚠ THE BUG THIS EXISTS FOR. Five months are laid out at once and they do
+    // not span the same number of weeks: June 2026 takes five rows, August
+    // takes six. Measuring whichever cell came first in the rail took June's
+    // five-row height and pinned August's six rows to it — every row on screen
+    // a fifth too tall, the grid overflowing, the "animation" the whole month
+    // jumping at once, and two snaps on the way back down.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.month = '2026-08';
+    page.cellHeight = 118;
+    page.expandedWeek = '2026-08#5';
+
+    assert.strictEqual(page.cellStyle('2026-08', 0), 'height:118px',
+        'the month on screen is not pinned at all');
+    assert.strictEqual(page.cellStyle('2026-06', 0), '',
+        'a neighbouring month was pinned to this month row height');
+    assert.strictEqual(page.cellStyle('2026-09', 0), '',
+        'a neighbouring month was pinned to this month row height');
+
+    // And it reads the month on screen out of the rail rather than the first
+    // one drawn — the rail starts two months back.
+    const js = readPage('calendar.js');
+    assert.ok(/months\s*&&\s*months\[this\.railIndex\]/.test(js),
+        'the row height is measured off whichever month happens to be first');
+
+    // The grid that stops dividing its space equally is that one grid, not
+    // every grid on the rail.
+    const html = readPage('calendar.html');
+    assert.ok(html.indexOf("expandedWeek && m.month === month ? 'm-cal__grid--open' : ''") !== -1,
+        'every month on the rail stops dividing its space, not just the open one');
+    assert.ok(readPage('mosaic.css').indexOf('.m-cal--fit .m-cal__grid--open{grid-auto-rows:auto}') !== -1,
+        'the open grid still divides its space equally, so no row can grow');
+});
+
 test('a week opens from the height it already had, never straight to the answer', () => {
     // Setting the finished height at once is not a fast animation, it is no
     // animation: the browser has nothing to interpolate from because the row

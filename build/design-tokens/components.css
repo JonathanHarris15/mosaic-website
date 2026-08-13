@@ -464,7 +464,7 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
    The page is allowed to scroll while one is open, and only then:
    what the fit is for is a month that arrives whole, not a page that
    may never scroll. */
-.m-cal--fit.m-cal--open .m-cal__grid { grid-auto-rows: auto; }
+.m-cal--fit .m-cal__grid--open { grid-auto-rows: auto; }
 /* Pixels, because a height has to be a number at both ends for the
    growing to be something you can watch rather than something that
    has already happened. */

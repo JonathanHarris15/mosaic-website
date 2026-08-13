@@ -740,7 +740,11 @@
                 <div class="cal-rail-months" x-ref="monthRailWide">
                 <div class="cal-rail-track" :class="railSnap ? 'cal-rail-snap' : ''" :style="railStyle">
                 <template x-for="(m, i) in railMonths" :key="m.month">
-                <div data-rail-month :inert="!onRail(i)" class="m-cal__grid">
+                <!-- Only the month on screen stops dividing its space equally
+                     when a week opens. The other four keep their own row
+                     counts — a month spanning six weeks is not this one. -->
+                <div data-rail-month :inert="!onRail(i)" class="m-cal__grid"
+                     :class="expandedWeek && m.month === month ? 'm-cal__grid--open' : ''">
                     <template x-for="(cell, ci) in m.cells" :key="cell.date">
                         <!-- The whole cell is the target: the empty space under the
                              chips is what you click to add something to the day, and
