@@ -158,6 +158,29 @@
             // selected, because the list underneath it is that day.
             focusDate: null,
 
+            // ── A day opened out (desktop) ───────────────────────────────────
+            //
+            // Fitted, a cell holds what its row holds and says how many more it
+            // is carrying. Opening one grows THAT CELL, in place, and the week
+            // around it holds still — a layer over the top would cover the days
+            // either side of the answer, which is most of why you were looking
+            // at a calendar rather than a list.
+            //
+            // One at a time. The phone has no month grid: tapping a day on the
+            // strip already shows the whole of it.
+            expandedDate: null,
+
+            // How tall a row came out, measured. What a cell can hold follows
+            // the row rather than being a number typed in here — the same grid
+            // on a 27" monitor has room for four.
+            cellHeight: 0,
+
+            // "Only mine" and the series ticks, which used to be a toolbar
+            // control and a permanent rail panel. Both are filters, so they are
+            // one thing now, and one thing asked for about once a month is not
+            // what a rail with room for two panels should spend the third on.
+            filtersOpen: false,
+
             // ── Loading ──────────────────────────────────────────────────────
 
             async init() {
@@ -181,7 +204,7 @@
                 // `recentreRail` because arriving is not a move — the calendar
                 // should be ON this month, not glide onto it from two months
                 // back every time the page opens.
-                afterPaint(() => this.recentreRail());
+                afterPaint(() => { this.recentreRail(); this.measureCell(); });
                 this.loadRoleDefinitions();
             },
 
@@ -438,7 +461,16 @@
             // where the rail catches up with any paging done while it was away.
             setView(next) {
                 this.view = next;
-                if (next === 'month') this.slideRail();
+                // Leaving the grid closes whatever day was open on it: coming
+                // back to a month with one cell still hanging open is a state
+                // nobody asked for and nothing on screen would explain.
+                this.expandedDate = null;
+                if (next === 'month') {
+                    this.slideRail();
+                    // The grid is only laid out in Month, so this is the first
+                    // moment there is a row to measure.
+                    afterPaint(() => this.measureCell());
+                }
             },
 
             // Put the month on screen back in the middle of the rail, without
@@ -628,6 +660,95 @@
                 return View.placesToFillLabel(this.placesToFill(occurrence));
             },
 
+            // ── The month, fitted to the window ──────────────────────────────
+            //
+            // The grid's rows divide whatever height is left after the header
+            // and the toolbar, so the last week ends where the window does. You
+            // scroll for more information, never to see the rest of what is
+            // already on screen — half a week hanging below the fold is most of
+            // why this page read as unfinished.
+            //
+            // ⚠ A DAY OPENED TAKES THE GRID OUT OF FIT. A cell showing six
+            // things is not an equal share of the window, and the page has to
+            // be allowed to scroll while one is open. Holding the grid at
+            // window height and shrinking the other rows to pay for it would
+            // redraw five days nobody was looking at, and push their chips
+            // behind their own "more" line.
+            get fitGrid() { return !this.expandedDate; },
+
+            // How many chips a row has room for. Two at 1440x900.
+            get chipCap() {
+                if (!this.cellHeight) return 2;
+                return Math.max(1, Math.floor((this.cellHeight - 30) / 26));
+            },
+
+            chipsOn(cell) {
+                const events = (cell && cell.events) || [];
+                if (!cell || cell.date === this.expandedDate) return events;
+                return events.slice(0, this.chipCap);
+            },
+
+            // Never a silent truncation. A day that is not drawing everything
+            // says how much it is holding back.
+            moreOn(cell) {
+                const events = (cell && cell.events) || [];
+                if (!cell || cell.date === this.expandedDate) return 0;
+                return Math.max(0, events.length - this.chipCap);
+            },
+
+            toggleExpand(date) {
+                this.expandedDate = this.expandedDate === date ? null : date;
+                // The grid has just changed shape. Measure again once it has
+                // been drawn, or the cap is one layout behind.
+                afterPaint(() => this.measureCell());
+            },
+
+            collapseDay() {
+                if (!this.expandedDate) return;
+                this.expandedDate = null;
+                afterPaint(() => this.measureCell());
+            },
+
+            // What a click on a day cell means depends on whether one is open.
+            // Inside the open day it means nothing — you are reading it, and
+            // offering to create an event under the thing somebody just asked
+            // to see more of is the opposite of the answer. On any other day it
+            // shuts the open one, and only then does a click mean "new event".
+            cellClick(cell, event) {
+                if (!cell) return;
+                if (this.expandedDate === cell.date) return;
+                if (this.expandedDate) return this.collapseDay();
+                this.openDayMenu(cell, event);
+            },
+
+            // ⚠ MEASURED, NOT WORKED OUT HERE. A row is a share of whatever is
+            // left after everything above it, and the one thing that knows what
+            // that is in pixels is the browser. A number computed here would
+            // drift the moment the window changed size.
+            //
+            // ⚠ AND NOT WHILE A DAY IS OPEN. Out of fit the rows are as tall as
+            // their contents, so measuring one would raise the cap for every
+            // other cell and reflow the month around the day being read. The
+            // cap freezes at what it was until the day closes.
+            measureCell() {
+                if (this.expandedDate) return;
+                const grid = this.$refs && this.$refs.monthRailWide;
+                // Off a browser there is nothing laid out to measure, and the
+                // cap falls back to two — the same answer a 1440x900 window
+                // gives, so a test reads what a laptop reads.
+                if (!grid || typeof grid.querySelector !== 'function') return;
+                const cell = grid.querySelector('.m-cal__cell');
+                if (!cell || !cell.offsetParent || !cell.offsetHeight) return;
+                this.cellHeight = cell.offsetHeight;
+            },
+
+            // A filter left on must never be invisible. The panel it used to
+            // live in was always on screen; a disclosure is not, so the count
+            // rides on the button that opens it.
+            get activeFilters() {
+                return this.hiddenSeries.length + (this.onlyMine ? 1 : 0);
+            },
+
             // The navy dot that says you are serving. It reads off `mine`, so an
             // amber chip does not swallow it — but it stays off the chips that
             // are shouting or struck through, where it was never drawn.
@@ -672,6 +793,23 @@
                 return events.length
                     ? [{ weekStart: this.focusedDate, label: this.focusedLabel, events: events }]
                     : [];
+            },
+
+            // The ONE thing about the event worth a line on a phone card,
+            // loudest first. What is about YOU keeps its own line above this,
+            // because that is a different question from how the date is doing.
+            //
+            // The card could stack five of these at once and read as a list of
+            // alarms — and a card that is all alarm is a card nobody reads the
+            // top line of. Needs sorting wins because it is the one somebody
+            // would act on; out for cover is the system working, so it loses to
+            // both of the others rather than sitting alongside them.
+            phoneNotice(occurrence) {
+                if (!occurrence) return '';
+                if (occurrence.needsAttention) return 'sorting';
+                if (this.placesToFill(occurrence)) return 'places';
+                if (occurrence.outForCover) return 'cover';
+                return '';
             },
 
             // An empty day and an empty month are different facts, and saying
@@ -744,8 +882,13 @@
                 const jump = Math.abs(monthsBetween(this.month, month)) > 1;
 
                 // A day tapped in July means nothing in August, and leaving it
-                // set would highlight a day the strip is no longer showing.
+                // set would highlight a day the strip is no longer showing. The
+                // same goes for a day left open on the grid.
                 this.focusDate = null;
+                this.expandedDate = null;
+                // A month spanning six weeks has shorter rows than one spanning
+                // five, so what a cell can hold changes with the month.
+                afterPaint(() => this.measureCell());
 
                 if (jump) {
                     this.month = month;

@@ -48,7 +48,7 @@
         <nav class="g-nav">
       <div class="g-navgroup"><span class="m-label">Core</span><a href="#m-btn">Button</a><a href="#m-icon-btn">IconButton</a></div>
       <div class="g-navgroup"><span class="m-label">Forms</span><a href="#m-input">Input</a><a href="#m-select">Select</a><a href="#m-check">Checkbox</a><a href="#m-search">SearchBar</a></div>
-      <div class="g-navgroup"><span class="m-label">Display</span><a href="#m-label">SectionLabel</a><a href="#m-serif-head">SerifHead</a><a href="#m-card">Card</a><a href="#m-nav-card">NavCard</a><a href="#m-medallion">Medallion</a><a href="#m-badge">Badge</a><a href="#m-avatar">Avatar</a><a href="#m-scripture">ScriptureBlock</a><a href="#m-divider">Divider</a><a href="#m-rota">RotaGrid</a><a href="#m-settled">Settled</a></div>
+      <div class="g-navgroup"><span class="m-label">Display</span><a href="#m-label">SectionLabel</a><a href="#m-serif-head">SerifHead</a><a href="#m-card">Card</a><a href="#m-nav-card">NavCard</a><a href="#m-medallion">Medallion</a><a href="#m-badge">Badge</a><a href="#m-avatar">Avatar</a><a href="#m-scripture">ScriptureBlock</a><a href="#m-divider">Divider</a><a href="#m-rota">RotaGrid</a><a href="#m-cal">MonthGrid</a><a href="#m-chip">EventChip</a><a href="#m-strip">MonthStrip</a><a href="#m-settled">Settled</a></div>
       <div class="g-navgroup"><span class="m-label">Feedback</span><a href="#m-spinner">Spinner</a><a href="#m-toast">Toast</a><a href="#m-empty">EmptyState</a><a href="#m-notice">Notice</a></div>
       <div class="g-navgroup"><span class="m-label">Layout</span><a href="#m-page">PageShell</a><a href="#m-header">PageHeader</a><a href="#m-back">BackLink</a><a href="#m-row">Row</a><a href="#m-card-list">CardList</a><a href="#m-split">SplitView</a><a href="#m-picklist">PickList</a><a href="#m-tabs">Tabs</a><a href="#m-actionbar">ActionBar</a></div>
         </nav>
@@ -236,6 +236,40 @@
         <div class="g-variants"><b>column</b> default · picked</div>
         <div class="g-demo">
         <div class="g-item"><div class="m-rota"><div class="m-rota__scroll"><table class="m-rota__table">…</table></div></div></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-cal">
+        <header>
+          <h3>MonthGrid</h3>
+          <code>.m-cal</code>
+        </header>
+        <p class="g-summary">The month, seven columns wide. Rows floor at 112px and grow to what is on them; the numeral sits out of the way on the right, and a day carrying more than its row holds says so rather than hiding it.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><section class="m-cal"><div class="m-cal__days"><div class="m-cal__day">SUN</div>…</div><div class="m-cal__grid"><div class="m-cal__cell"><div class="m-cal__head"><span class="m-cal__num">3</span></div><div class="m-cal__events">…</div></div>…</div></section></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-chip">
+        <header>
+          <h3>EventChip</h3>
+          <code>.m-chip</code>
+        </header>
+        <p class="g-summary">One event, in a day cell or anywhere else that lists them. One shape, six families, and only the two that ask something of somebody carry a fill.</p>
+        <div class="g-variants"><b>family</b> other · sunday · mine · unfilled · declined · off</div>
+        <div class="g-demo">
+        <div class="g-item"><button class="m-chip m-chip--other" style="border-left-color: var(--event-steel)"><span class="m-chip__label">Midweek Gathering</span></button></div>
+        <div class="g-item"><button class="m-chip m-chip--unfilled" style="border-left-color: var(--event-ocean)"><span class="m-chip__you"></span><span class="material-symbols-outlined m-chip__icon">warning</span><span class="m-chip__label">Sunday Service</span></button></div>
+        </div>
+      </section>
+      <section class="g-card" id="m-strip">
+        <header>
+          <h3>MonthStrip</h3>
+          <code>.m-strip</code>
+        </header>
+        <p class="g-summary">The phone's month: seven columns of day numbers, each carrying up to three dots. A glance, not a list — the count lives in the cards underneath it.</p>
+        
+        <div class="g-demo">
+        <div class="g-item"><div class="m-strip"><div class="m-strip__day">S</div>…</div><div class="m-strip"><button class="m-strip__cell m-strip__cell--current"><span class="m-strip__num">16</span><span class="m-strip__dots"><span class="m-strip__dot" style="background: var(--event-ocean)"></span></span></button>…</div></div>
         </div>
       </section>
       <section class="g-card" id="m-settled">

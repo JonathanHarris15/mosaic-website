@@ -114,6 +114,9 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 - **ScriptureBlock** `.m-scripture` — A quoted passage set in EB Garamond with a gold hairline down its edge, and the reference beneath in tracked caps.
 - **Divider** `.m-divider` — A warm hairline between things.
 - **RotaGrid** `.m-rota` — Roles down the side, dates across the top, and what is really stored in the cells.
+- **MonthGrid** `.m-cal` — The month, seven columns wide.
+- **EventChip** `.m-chip` — One event, in a day cell or anywhere else that lists them.
+- **MonthStrip** `.m-strip` — The phone's month: seven columns of day numbers, each carrying up to three dots.
 - **Settled** `.m-settled` — Where something cannot change because it is settled, the sentence is the control.
 
 **Feedback**

@@ -1118,6 +1118,224 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   },
 
   {
+    name: "MonthGrid",
+    cls: "m-cal",
+    group: "Display",
+    summary:
+      "The month, seven columns wide. Rows floor at 112px and grow to what is on them; the numeral sits out of the way on the right, and a day carrying more than its row holds says so rather than hiding it.",
+    notes: [
+      "⚠ A CELL IS NOT A CARD. `.m-card` was tried and bent out of shape: this needs seven equal columns, a row that grows, a per-cell overflow line and a chip whose colour bar comes from data. It is the only grid of its kind in the app.",
+      "Both weekend columns carry one tonal step. The church's week has a shape and the grid should show it before you read a word.",
+      "A day from the month either side keeps the week rule under it — a horizontal line has to run the full width — but loses its vertical, so the corners of the month dissolve rather than being ruled off into boxes nobody is meant to read. It is not weekend-tinted: three tones in a row is one too many.",
+      "`--fit` divides whatever height is left into equal rows, so the month ends where the window does. You scroll for more information, never to see the rest of what is already on screen.",
+      "⚠ `--fit` AND `--expanded` ARE MUTUALLY EXCLUSIVE. A cell opened to show everything on it needs a row taller than an equal share, so the page drops `--fit` while one is open and the month may run past the window until it closes. Shrinking the other rows to pay for it would change five days nobody was looking at.",
+    ],
+    examples: [
+      '<section class="m-cal"><div class="m-cal__days"><div class="m-cal__day">SUN</div>…</div><div class="m-cal__grid"><div class="m-cal__cell"><div class="m-cal__head"><span class="m-cal__num">3</span></div><div class="m-cal__events">…</div></div>…</div></section>',
+    ],
+    css: `
+.m-cal {
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+.m-cal__days {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  background: var(--surface-container-low);
+  border-bottom: 1px solid var(--outline-variant);
+}
+.m-cal__day {
+  padding: 9px var(--space-sm); text-align: right;
+  font-family: var(--font-sans); font-size: 10.5px; font-weight: 600;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant);
+}
+.m-cal__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.m-cal__cell {
+  position: relative; display: flex; flex-direction: column; gap: 6px;
+  min-width: 0; min-height: 112px; padding: 7px 0 10px; text-align: left;
+  background: transparent;
+  border-right: 1px solid var(--outline-variant);
+  border-bottom: 1px solid var(--outline-variant);
+  transition: background-color var(--duration) var(--ease-standard);
+}
+.m-cal__grid > .m-cal__cell:nth-child(7n) { border-right: 0; }
+
+/* Saturday and Sunday — never a day belonging to the month either side. */
+.m-cal__grid > .m-cal__cell:nth-child(7n+1):not(.m-cal__cell--outside),
+.m-cal__grid > .m-cal__cell:nth-child(7n):not(.m-cal__cell--outside) { background: var(--surface-container-low); }
+.m-cal__cell--outside { opacity: .45; border-right-color: transparent; }
+.m-cal__cell--outside + .m-cal__cell:not(.m-cal__cell--outside) { border-left: 1px solid var(--outline-variant); }
+.m-cal__cell--clickable { cursor: pointer; }
+.m-cal__cell--clickable:hover { background: var(--surface-container); }
+.m-cal__cell:focus-visible { outline: 2px solid var(--tertiary); outline-offset: -2px; }
+
+.m-cal__head { display: flex; align-items: center; justify-content: flex-end; gap: 5px; min-height: 23px; padding: 0 8px; }
+
+/* The date is a record, not chrome — serif, and tabular so a column of
+   them lines up. Display-face numerals read as a heading. */
+.m-cal__num {
+  font-family: var(--font-serif); font-size: 15px; line-height: 1;
+  color: var(--on-surface); font-variant-numeric: tabular-nums;
+}
+.m-cal__num--outside { color: var(--outline); }
+.m-cal__num--today {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 23px; height: 23px; border-radius: var(--radius-full);
+  background: var(--primary); color: var(--on-primary); font-weight: 600;
+}
+.m-cal__flag { font-size: 16px; color: var(--error); flex: 0 0 auto; }
+.m-cal__events { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+
+/* What the day is holding and not drawing. Never a silent truncation. */
+.m-cal__more {
+  align-self: flex-start; padding: 2px 8px;
+  background: transparent; border: 0;
+  font-family: var(--font-sans); font-size: 11.5px;
+  color: var(--on-surface-variant); cursor: pointer;
+}
+.m-cal__more:hover { color: var(--primary); text-decoration: underline; }
+
+/* ── Fitted to the window ─────────────────────────────────────
+   The rows divide the height left after everything above them, so the
+   last week ends where the window does. What a cell can hold follows
+   the row rather than being fixed. */
+.m-cal--fit { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.m-cal--fit .m-cal__grid { flex: 1 1 auto; min-height: 0; grid-auto-rows: minmax(0, 1fr); }
+.m-cal--fit .m-cal__cell { min-height: 0; overflow: hidden; gap: 4px; padding: 5px 0 7px; }
+.m-cal--fit .m-cal__head { min-height: 21px; }
+/* Fitted, a name past two lines is cut. It is whole on the chip's
+   title, on the list row, and in the cell once it is opened. */
+.m-cal--fit .m-chip { padding: 4px 8px; }
+.m-cal--fit .m-chip__label {
+  font-size: 11.5px; line-height: 1.25;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.m-cal--fit .m-chip--sunday .m-chip__label { font-size: 13px; }
+/* Fitted, the count rides in the free corner opposite the numeral
+   rather than taking a line the row has not got. */
+.m-cal--fit .m-cal__more { position: absolute; top: 4px; left: 5px; padding: 0; font-size: 10.5px; letter-spacing: .04em; }
+
+/* ── A day opened ─────────────────────────────────────────────
+   The cell grows in place and its row grows with it. Not a popover:
+   the day stays where it is in the week and everything around it
+   holds still. The page drops --fit while one is open. */
+.m-cal__cell--expanded {
+  z-index: 1; overflow: visible;
+  background: var(--surface-container-lowest);
+  box-shadow: var(--shadow-sm);
+}
+.m-cal__grid > .m-cal__cell--expanded { border-right-color: var(--outline-variant); }
+.m-cal__cell--expanded .m-chip__label { display: block; -webkit-line-clamp: none; overflow: visible; }
+`,
+  },
+
+  {
+    name: "EventChip",
+    cls: "m-chip",
+    group: "Display",
+    summary:
+      "One event, in a day cell or anywhere else that lists them. One shape, six families, and only the two that ask something of somebody carry a fill.",
+    variants: { family: ["other", "sunday", "mine", "unfilled", "declined", "off"] },
+    notes: [
+      "⚠ THE RULE THE WHOLE CALENDAR RESTS ON. A chosen event colour only ever draws the BAR down the side; a tint only ever fills the BACKGROUND. So a filled chip always means the app is saying something, and a bar always means somebody picked a shade. Set the bar with an inline `border-left-color` from data — it is the one value that cannot be a class.",
+      "Loudness, and it is deliberate: off · declined · unfilled · mine · sunday · other. Only `--declined` (error) and `--unfilled` (warning) fill. `mine` is a semibold name and the navy dot; `other` is a bar and a name.",
+      "⚠ RED IS SPOKEN FOR. `--declined` means somebody said no. Nothing decorative is ever red, and no event colour includes one.",
+      "The `__you` dot reads off whether the person is serving, NOT off the family — so an amber chip you are on still says so.",
+      "A name WRAPS rather than truncating, and breaks at a space and nowhere else: `overflow-wrap: break-word` put \"Servic / e\" in a 90px cell, which is worse than either.",
+      "A chip carrying a leading glyph drops its trailing one. Two glyphs and a name in a 110px chip is one too many.",
+      "⚠ THE FAMILIES ARE BUILT, NOT TYPED — `'m-chip--' + chipKind(ev)`. So the class checker reports most of them as unused and always will. They are not dead; deleting one silently drops a whole state off the Calendar.",
+    ],
+    examples: [
+      '<button class="m-chip m-chip--other" style="border-left-color: var(--event-steel)"><span class="m-chip__label">Midweek Gathering</span></button>',
+      '<button class="m-chip m-chip--unfilled" style="border-left-color: var(--event-ocean)"><span class="m-chip__you"></span><span class="material-symbols-outlined m-chip__icon">warning</span><span class="m-chip__label">Sunday Service</span></button>',
+    ],
+    css: `
+.m-chip {
+  display: flex; align-items: flex-start; gap: 5px;
+  width: 100%; min-width: 0; padding: 5px 8px; text-align: left;
+  background: transparent; border: 0;
+  border-left: 3px solid var(--outline-variant); border-radius: var(--radius-sm);
+  cursor: pointer; font-family: var(--font-sans);
+  transition: background-color var(--duration) var(--ease-standard);
+}
+.m-chip:hover { background: var(--surface-container); }
+.m-chip:focus-visible { outline: 2px solid var(--tertiary); outline-offset: -1px; }
+.m-chip__label {
+  min-width: 0; font-size: 12px; font-weight: 500; line-height: 1.3;
+  color: var(--on-surface);
+  overflow-wrap: normal; word-break: normal; hyphens: none; text-wrap: pretty;
+}
+.m-chip__icon { flex: 0 0 auto; font-size: 14px; margin-top: 1px; }
+.m-chip__trail { flex: 0 0 auto; margin-left: auto; font-size: 13px; color: var(--outline); }
+.m-chip--declined .m-chip__trail, .m-chip--unfilled .m-chip__trail { display: none; }
+.m-chip__you {
+  width: 5px; height: 5px; flex: 0 0 auto; margin-top: 5px;
+  border-radius: var(--radius-full); background: var(--primary);
+}
+
+/* In a day cell the chip is full-bleed: the column edge does the
+   aligning, so it needs no corner of its own. */
+.m-cal__events .m-chip { border-radius: 0; }
+
+.m-chip--mine .m-chip__label { font-weight: 600; }
+.m-chip--sunday .m-chip__label { font-family: var(--font-serif); font-size: 13.5px; font-weight: 600; line-height: 1.25; }
+.m-chip--declined { background: var(--error-container); }
+.m-chip--declined .m-chip__label, .m-chip--declined .m-chip__icon { color: var(--on-error-container); }
+.m-chip--declined:hover { background: color-mix(in srgb, var(--error-container) 80%, var(--error)); }
+.m-chip--unfilled { background: var(--warning-container); }
+.m-chip--unfilled .m-chip__label, .m-chip--unfilled .m-chip__icon { color: var(--on-warning-container); }
+.m-chip--unfilled:hover { background: color-mix(in srgb, var(--warning-container) 80%, var(--warning)); }
+
+/* Called off, or moved away. It never carries the dot or a glyph —
+   there is nothing to do about it. */
+.m-chip--off { border-left-style: dashed; opacity: .55; }
+.m-chip--off .m-chip__label { text-decoration: line-through; }
+
+/* Day two onwards of something running over several days: named,
+   because somebody scanning Wednesday needs to know half-term is on —
+   but quieter, so five days do not read as five events. */
+.m-chip--continues { opacity: .7; }
+`,
+  },
+
+  {
+    name: "MonthStrip",
+    cls: "m-strip",
+    group: "Display",
+    summary:
+      "The phone's month: seven columns of day numbers, each carrying up to three dots. A glance, not a list — the count lives in the cards underneath it.",
+    notes: [
+      "Three dots and no more. A fourth 5px dot in a ~46px cell has nowhere to go, and asking the strip to be exhaustive is asking it to stop being a glance.",
+      "A dot takes the same colour the chip's family would, so the strip and the cards under it cannot disagree about what a day looks like.",
+      "Two grids, not one: the weekday letters and the days. They share the column count so they line up without either knowing about the other.",
+    ],
+    examples: [
+      '<div class="m-strip"><div class="m-strip__day">S</div>…</div><div class="m-strip"><button class="m-strip__cell m-strip__cell--current"><span class="m-strip__num">16</span><span class="m-strip__dots"><span class="m-strip__dot" style="background: var(--event-ocean)"></span></span></button>…</div>',
+    ],
+    css: `
+.m-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.m-strip__day {
+  text-align: center; padding-bottom: 4px;
+  font-family: var(--font-sans); font-size: 9.5px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--outline);
+}
+.m-strip__cell {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 7px 0; border: 0; background: transparent;
+  border-radius: var(--radius); cursor: pointer;
+  transition: background-color var(--duration) var(--ease-standard);
+}
+.m-strip__cell--current { background: var(--surface-container); }
+.m-strip__cell:focus-visible { outline: 2px solid var(--tertiary); outline-offset: -2px; }
+.m-strip__num { font-family: var(--font-serif); font-size: 14px; line-height: 1; color: var(--on-surface); }
+.m-strip__cell--outside .m-strip__num { color: var(--outline); }
+.m-strip__cell--current .m-strip__num { color: var(--primary); font-weight: 600; }
+.m-strip__dots { display: flex; gap: 2px; height: 5px; }
+.m-strip__dot { width: 5px; height: 5px; border-radius: var(--radius-full); }
+`,
+  },
+
+  {
     name: "Settled",
     cls: "m-settled",
     group: "Display",

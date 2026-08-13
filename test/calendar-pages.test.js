@@ -2097,7 +2097,7 @@ test('the phone has a month of its own, and the desktop grid never runs there', 
         'the phone block draws on a desktop too');
 
     // The grid, the desktop toolbar and the desktop list all stand down.
-    ['cal-desktop-only mt-gutter flex flex-wrap', 'cal-desktop-only bg-surface-container-lowest']
+    ['cal-desktop-only cal-toolbar', 'cal-desktop-only m-cal', 'cal-desktop-only cal-list-scroll']
         .forEach(marker => assert.ok(html.indexOf(marker) !== -1,
             'a desktop-only block was never marked as one: ' + marker));
 
@@ -2367,11 +2367,175 @@ test('the warning lives on the chip, not in the corner of the day', () => {
     // many, and the day marks would then have to be kept in step by hand.
     const html = readPage('calendar.html');
     const corner = html.indexOf('x-show="cell.needsAttention"');
-    const chips = html.indexOf('x-for="ev in cell.events"');
+    const chips = html.indexOf('x-for="ev in chipsOn(cell)"');
     assert.ok(corner !== -1 && chips > corner, 'the cell corner moved — this test no longer looks at it');
 
     const dayHeader = html.slice(corner, chips);
     assert.ok(!/warning/.test(dayHeader), 'the amber mark is back in the corner of the day');
+});
+
+/* ── The cleanup pass (MS-230) ──────────────────────────────────────────── */
+
+test('only the two families that ask something of somebody carry a fill', () => {
+    // The rule the whole screen rests on: a chosen event colour draws the BAR,
+    // a tint fills the BACKGROUND. So a filled chip always means the app is
+    // saying something — which only works while most chips are not filled.
+    const css = readPage('mosaic.css');
+
+    ['.m-chip--declined{background:var(--error-container)',
+     '.m-chip--unfilled{background:var(--warning-container)']
+        .forEach(rule => assert.ok(css.replace(/\s+/g, '').indexOf(rule.replace(/\s+/g, '')) !== -1,
+            'a family that must fill no longer does: ' + rule));
+
+    // `mine` and `other` are the pass. If either grows a background again, a
+    // quiet week stops being quiet and the loud ones stop being loud.
+    const flat = css.replace(/\s+/g, '');
+    ['.m-chip--mine{background', '.m-chip--other{background']
+        .forEach(rule => assert.ok(flat.indexOf(rule) === -1,
+            'a fill came back on a family that must not have one: ' + rule));
+});
+
+test('a day draws what its row holds and says how much it is holding back', () => {
+    // Never a silent truncation. A fourth chip in a 118px cell is what made
+    // this grid unreadable; a fourth chip nobody is told about would be worse.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    const cell = { date: '2026-08-16', events: [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }] };
+
+    assert.strictEqual(page.chipsOn(cell).length, 2, 'the cell drew more than its row holds');
+    assert.strictEqual(page.moreOn(cell), 2, 'the day did not say what it was holding back');
+
+    // A day with room for everything says nothing.
+    const quiet = { date: '2026-08-17', events: [{ id: 'a' }] };
+    assert.strictEqual(page.moreOn(quiet), 0, 'a day drawing everything still offered a "more"');
+});
+
+test('opening a day grows that day, and leaves the rest of the week alone', () => {
+    // ⚠ THE CELL, NOT A POPOVER. A layer over the top would cover the days
+    // either side of the answer, which is most of why somebody opened a
+    // calendar rather than a list.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    const open = { date: '2026-08-16', events: [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }] };
+    const other = { date: '2026-08-23', events: [{ id: 'e' }, { id: 'f' }, { id: 'g' }] };
+
+    page.toggleExpand('2026-08-16');
+    assert.strictEqual(page.chipsOn(open).length, 4, 'the opened day is still holding something back');
+    assert.strictEqual(page.moreOn(open), 0, 'the opened day still offers to open');
+
+    // The day next to it is untouched — it did not ask to be opened.
+    assert.strictEqual(page.chipsOn(other).length, 2, 'opening one day redrew another');
+    assert.strictEqual(page.moreOn(other), 1, 'the day beside it lost its own count');
+
+    // And the grid comes out of fit while one is open, so the page may scroll.
+    assert.strictEqual(page.fitGrid, false, 'the month is still pinned to the window with a day open');
+
+    page.collapseDay();
+    assert.strictEqual(page.fitGrid, true, 'the month did not go back to fitting the window');
+    assert.strictEqual(page.chipsOn(open).length, 2, 'the day stayed open after being collapsed');
+});
+
+test('a click on a day means different things depending on what is open', () => {
+    // Inside the open day it means nothing: offering to create an event under
+    // the thing somebody just asked to see more of is the opposite of the
+    // answer. On any other day it shuts the open one first.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.rank = 'editor';
+    page.viewport = { width: 1440, height: 900 };
+
+    page.expandedDate = '2026-08-16';
+    page.cellClick({ date: '2026-08-16' }, { clientX: 100, clientY: 100 });
+    assert.strictEqual(page.dayMenu, null, 'the open day offered to create an event under itself');
+    assert.strictEqual(page.expandedDate, '2026-08-16', 'clicking inside the open day closed it');
+
+    page.cellClick({ date: '2026-08-23' }, { clientX: 100, clientY: 100 });
+    assert.strictEqual(page.expandedDate, null, 'clicking another day left the first one open');
+    assert.strictEqual(page.dayMenu, null, 'the click that closed a day also created a menu');
+
+    // With nothing open it is the day menu, exactly as before.
+    page.cellClick({ date: '2026-08-23' }, { clientX: 100, clientY: 100 });
+    assert.ok(page.dayMenu && page.dayMenu.date === '2026-08-23', 'the day menu stopped opening');
+});
+
+test('leaving the grid closes whatever day was open on it', () => {
+    // Coming back to a month with one cell still hanging open is a state
+    // nobody asked for and nothing on screen would explain.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.expandedDate = '2026-08-16';
+    page.setView('list');
+    assert.strictEqual(page.expandedDate, null, 'a day stayed open behind the list');
+});
+
+test('a filter left on is never invisible', () => {
+    // "Only mine" and the series ticks moved into a disclosure, and a
+    // disclosure is closed most of the time. The panel they came from was
+    // always on screen, so the count on the button is what replaces it.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    assert.strictEqual(page.activeFilters, 0, 'a page with nothing filtered claims a filter');
+
+    page.onlyMine = true;
+    assert.strictEqual(page.activeFilters, 1, '"Only mine" is on and nothing says so');
+
+    page.hiddenSeries = ['midweek', 'youth'];
+    assert.strictEqual(page.activeFilters, 3, 'unticked series are not counted');
+});
+
+test('a phone card carries one notice about the event, not five', () => {
+    // The card could stack out-for-cover, needs-sorting, places-to-fill and
+    // Sunday at once, and a card that is all alarm is one nobody reads the top
+    // line of. Loudest wins; what is about YOU keeps its own line above.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.rank = 'editor';
+    page.roleDefinitions = [{ slug: 'sound', slots: [{ id: 's1' }] }];
+
+    const short = { seriesRoleSlugs: ['sound'], assignments: [], date: '2026-08-23' };
+    assert.strictEqual(page.phoneNotice({ needsAttention: true, outForCover: true }), 'sorting',
+        'out for cover shouted over somebody actually saying no');
+    assert.strictEqual(page.phoneNotice(Object.assign({ outForCover: true }, short)), 'places',
+        'a date short of people lost to the quietest of the three');
+    assert.strictEqual(page.phoneNotice({ outForCover: true }), 'cover');
+    assert.strictEqual(page.phoneNotice({}), '', 'a date with nothing wrong drew a notice anyway');
+});
+
+test('a member is never shown a count of places they cannot fill', () => {
+    // The amber is a job, and a count of gaps somebody can do nothing about is
+    // weather. This is the one gate the cleanup pass must not have loosened.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.rank = 'member';
+    page.roleDefinitions = [{ slug: 'sound', slots: [{ id: 's1' }] }];
+
+    const short = { seriesRoleSlugs: ['sound'], assignments: [], date: '2026-08-23' };
+    assert.strictEqual(page.placesToFill(short), 0, 'a member was told how many places are open');
+    assert.strictEqual(page.chipKind(short), 'other', 'a member got an amber chip');
+    assert.strictEqual(page.phoneNotice(short), '', 'a member got the amber line on a phone card');
+});
+
+test('the legend is gone, and so is the church glyph', () => {
+    // Three of the legend's four items were already said in words an inch
+    // away. The glyph was a fourth way of saying Sunday, next to a name that
+    // says it, in a serif that says it, over a bar that says it.
+    const html = readPage('calendar.html');
+
+    assert.ok(html.indexOf('You are serving') === -1, 'the legend is still under the grid');
+    assert.ok(html.indexOf('Places to fill') === -1, 'the legend is still under the grid');
+    assert.ok(html.indexOf('>church<') === -1 && html.indexOf('church</span>') === -1,
+        'the church glyph is still drawn somewhere on the Calendar');
+
+    // The WORD stays. It is the glyph that was repeating, not the label.
+    assert.ok(/>Sunday</.test(html), 'the word Sunday went with the glyph');
+});
+
+test('the month is pinned to the window on a desktop and never on a phone', () => {
+    // Half a week hanging below the fold is most of why this page read as
+    // unfinished. But a phone draws a strip and a list of cards, which are
+    // honestly as long as they are — pinning THAT would move the scrolling
+    // somewhere with less room for it.
+    const html = readPage('calendar.html');
+    const flat = html.replace(/\s+/g, ' ');
+
+    assert.ok(flat.indexOf('html:not(.shell-mobile) body.cal-fit { height: 100%; overflow: hidden; }') !== -1,
+        'the desktop page no longer fits the window');
+    assert.ok(/html:not\(\.shell-mobile\)/.test(html), 'the fit is not scoped off the phone shell');
+    assert.ok(flat.indexOf(':class="fitGrid ? \'cal-fit\' : \'\'"') !== -1,
+        'nothing lets the page scroll again when a day is opened');
 });
 
 test('the strip shows at most three dots a day', () => {

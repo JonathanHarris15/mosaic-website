@@ -66,21 +66,83 @@
         html.shell-mobile .cal-phone-only { display: flex; }
         html.shell-mobile .cal-desktop-only { display: none !important; }
 
-        /* An event label WRAPS rather than truncating — at ~110px cells
-           "Midweek Gathering" has to read in full. */
-        .cal-chip-label { overflow-wrap: break-word; line-height: 1.22; }
+        /* An event label wraps rather than truncating, and the rule for that
+           now lives on `.m-chip__label` in the component layer — where the
+           list row and the phone card can read the same one. */
+
+        /* ── The month fits the window ────────────────────────────────────────
+           You scroll for more information, never to see the rest of what is
+           already on screen. Half a week hanging below the fold is most of why
+           this page read as unfinished before anybody had read a word of it.
+
+           ⚠ DESKTOP ONLY, and scoped off the shell rather than a media query.
+           The phone draws a strip and a list of cards, which are honestly as
+           long as they are — pinning THAT to the window would just move the
+           scrolling somewhere with less room for it. */
+        html:not(.shell-mobile) { height: 100%; }
+        html:not(.shell-mobile) body.cal-fit { height: 100%; overflow: hidden; }
+        html:not(.shell-mobile) body.cal-fit > main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+        html:not(.shell-mobile) body.cal-fit .cal-layout--fit { flex: 1 1 auto; min-height: 0; }
+        /* A list is honestly a list, so it takes the height that is left and
+           scrolls inside itself rather than taking the page with it. */
+        html:not(.shell-mobile) body.cal-fit .cal-list-scroll { min-height: 0; overflow-y: auto; }
+        /* ⚠ THE FLEX CHAIN HAS TO PASS THROUGH THE RAIL. The grid is two boxes
+           down from the section — the rail's clipping box and its sliding track
+           — and a row can only divide a height its parent actually has. Miss
+           either of these and `grid-auto-rows: minmax(0,1fr)` divides nothing,
+           which draws as a grid collapsed to its chips. */
+        html:not(.shell-mobile) .m-cal--fit .cal-rail-months { flex: 1 1 auto; min-height: 0; }
+        html:not(.shell-mobile) .m-cal--fit .cal-rail-track,
+        html:not(.shell-mobile) .m-cal--fit [data-rail-month] { height: 100%; }
 
         /* minmax(0,1fr) is REQUIRED. With a plain 1fr the event chips give the
            track a min-content floor and the grid overflows its container by
            ~120px. Below the breakpoint there is no room for a rail, so the
-           layout stacks and the rail comes FIRST — on a phone the answer to
-           "am I serving?" matters more than the month at a glance. */
+           layout stacks and the rail comes FIRST — on a narrow window the
+           answer to "am I serving?" matters more than the month at a glance. */
         .cal-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
         .cal-layout > .cal-rail { order: -1; }
         @media (min-width: 900px) {
-            .cal-layout { grid-template-columns: minmax(0, 1fr) 300px; }
+            .cal-layout { grid-template-columns: minmax(0, 1fr) 300px; align-items: stretch; }
             .cal-layout > .cal-rail { order: 0; }
         }
+
+        /* ── The toolbar: three objects, not five controls ────────────────────
+           The two arrows and Today became one stepper with the month beside
+           it; Show and the view sit opposite. */
+        .cal-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .cal-toolbar__right { position: relative; display: flex; align-items: center; gap: 12px; }
+        .cal-stepper { display: flex; align-items: stretch; border: 1px solid var(--outline-variant);
+                       border-radius: var(--radius); overflow: hidden; background: var(--surface-container-lowest); }
+        .cal-stepper > button { display: flex; align-items: center; justify-content: center; gap: 5px;
+                                min-width: 34px; height: 34px; padding: 0 9px; background: transparent;
+                                border: 0; border-left: 1px solid var(--outline-variant);
+                                color: var(--on-surface-variant); font-family: var(--font-sans);
+                                font-size: 11.5px; font-weight: 600; letter-spacing: .14em;
+                                text-transform: uppercase; cursor: pointer; }
+        .cal-stepper > button:first-child { border-left: 0; }
+        .cal-stepper > button:hover:not(:disabled) { background: var(--surface-container); color: var(--primary); }
+        .cal-stepper > button:disabled { opacity: .4; cursor: not-allowed; }
+        .cal-viewtoggle { display: flex; gap: 2px; padding: 3px; background: var(--surface-container); border-radius: var(--radius); }
+        .cal-viewtoggle > button { display: flex; align-items: center; justify-content: center; gap: 6px;
+                                   min-width: 96px; height: 30px; padding: 0 12px; border: 0;
+                                   border-radius: var(--radius-sm); background: transparent;
+                                   color: var(--on-surface-variant); font-family: var(--font-sans);
+                                   font-size: 11.5px; font-weight: 600; letter-spacing: .14em;
+                                   text-transform: uppercase; cursor: pointer; }
+        .cal-viewtoggle > button[aria-pressed="true"] { background: var(--surface-container-lowest); color: var(--primary); }
+
+        /* Show is a DISCLOSURE, not a panel. It is asked for about once a
+           month, and as a permanent third panel it was what stood between the
+           rail and the bottom of the window. The count on the button is what
+           keeps a filter left on from being invisible. */
+        .cal-filters { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: 296px; box-shadow: var(--shadow-md); }
+
+        /* Needs sorting absorbs the overflow instead of the rail growing past
+           the window, so no panel is ever sliced by the fold. */
+        .cal-rail__scroll { min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+        .cal-empty { display: flex; flex-direction: column; align-items: center; justify-content: center;
+                     gap: 12px; padding: 48px 16px; text-align: center; }
 
         /* ── The months, on a rail ────────────────────────────────────────────
            Five months in one row, with the one on screen a window onto it, so
@@ -134,7 +196,12 @@
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
 </head>
 
+<!-- `cal-fit` is what pins the month to the window, and it comes off ONE
+     question: is a day opened out? A cell showing six things is not an equal
+     share of the window, so while one is open the page is allowed to scroll
+     again. See `fitGrid`. -->
 <body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex flex-col"
+      :class="fitGrid ? 'cal-fit' : ''"
       x-data="calendarPage()" x-cloak>
 
     <!-- Header -->
@@ -197,86 +264,100 @@
 
         <!-- Signed out. Says so, because the alternative is a calendar that
              looks like the church's and is missing everything you are part of. -->
-        <div x-show="signedOut"
-             class="mt-md bg-surface-container-low border border-outline-variant border-l-[3px] rounded-lg
-                    px-md py-3 flex items-start gap-sm" style="border-left-color:var(--gold);">
-            <span class="material-symbols-outlined text-[20px] shrink-0" style="color:var(--gold);">person_off</span>
-            <div class="flex-grow min-w-0">
-                <p class="text-[14px] text-on-surface">You are not signed in.</p>
-                <p class="text-[12.5px] text-on-surface-variant mt-0.5">
+        <div x-show="signedOut" class="m-notice m-notice--gold mt-md">
+            <span class="material-symbols-outlined m-notice__icon">person_off</span>
+            <div class="m-notice__body">
+                <p class="m-notice__title">You are not signed in.</p>
+                <p class="m-notice__text">
                     This is only what the church shows publicly — anything you serve at,
                     and anything for members, is missing.
                 </p>
             </div>
-            <a :href="signInHref"
-               class="shrink-0 bg-primary text-on-primary px-3 py-2 rounded-lg font-label-md
-                      text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus">Sign in</a>
+            <div class="m-notice__acts">
+                <a :href="signInHref" class="m-btn m-btn--primary m-btn--sm cal-motion cal-press cal-focus">Sign in</a>
+            </div>
         </div>
 
         <!-- Every failure here renders as an empty calendar if you let it, and
              "this church has no events" is what a real one looks like from the
              outside. So each cause says which it is. -->
-        <div x-show="error"
-             class="mt-md bg-error-container text-on-error-container border border-outline-variant rounded-lg p-md flex items-start gap-sm">
-            <span class="material-symbols-outlined text-[20px]">error</span>
-            <p class="font-body-md text-body-md flex-grow" x-text="error"></p>
+        <div x-show="error" class="m-notice m-notice--error mt-md">
+            <span class="material-symbols-outlined m-notice__icon">error</span>
+            <div class="m-notice__body">
+                <p class="m-notice__text text-[14px]" x-text="error"></p>
+            </div>
             <!-- A building index fixes itself, so offer to try again rather than
                  making somebody reload by hand. -->
-            <button x-show="retryable" @click="load()"
-                    class="shrink-0 border border-error text-on-error-container px-3 py-1.5 rounded-lg
-                           font-label-md text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus">
-                Try again
-            </button>
-        </div>
-
-        <!-- Toolbar -->
-        <div class="cal-desktop-only mt-gutter flex flex-wrap items-center justify-between gap-sm">
-            <div class="flex items-center gap-sm">
-                <div class="flex rounded-lg border border-outline-variant overflow-hidden">
-                    <button @click="prevMonth()" aria-label="Previous month"
-                            class="w-[34px] h-[34px] flex items-center justify-center text-on-surface-variant
-                                   hover:bg-surface-container cal-motion cal-focus">
-                        <span class="material-symbols-outlined text-[20px]">chevron_left</span>
-                    </button>
-                    <button @click="nextMonth()" aria-label="Next month"
-                            class="w-[34px] h-[34px] flex items-center justify-center text-on-surface-variant
-                                   border-l border-outline-variant hover:bg-surface-container cal-motion cal-focus">
-                        <span class="material-symbols-outlined text-[20px]">chevron_right</span>
-                    </button>
-                </div>
-                <h2 class="font-display text-[21px] text-primary" x-text="monthLabel"></h2>
-                <!-- The way back. Bordered like the arrows beside it because it
-                     is the same kind of thing — a plain word in the quiet colour
-                     read as a caption, and got looked straight past. -->
-                <button @click="goToToday()" :disabled="!awayFromToday"
-                        class="flex items-center gap-1 rounded-lg border border-outline-variant px-2.5 h-[34px]
-                               text-on-surface-variant font-label-md text-xs uppercase tracking-wider
-                               hover:bg-surface-container disabled:opacity-40 disabled:hover:bg-transparent
-                               cal-motion cal-press cal-focus">
-                    <span class="material-symbols-outlined text-[18px]">today</span>
-                    Today
+            <div class="m-notice__acts" x-show="retryable">
+                <button @click="load()" class="m-btn m-btn--secondary m-btn--sm cal-motion cal-press cal-focus">
+                    Try again
                 </button>
             </div>
+        </div>
 
+        <!-- ── The toolbar ─────────────────────────────────────────────────
+             Three objects, not five controls. The two arrows and the way back
+             are one stepper — Today was a plain word in the quiet colour, read
+             as a caption and looked straight past — with the month beside it.
+             Show and the view sit opposite. -->
+        <div class="cal-desktop-only cal-toolbar mt-gutter">
             <div class="flex items-center gap-sm">
-                <label class="flex items-center gap-2 rounded-lg border border-outline-variant px-3 py-1.5 cursor-pointer cal-motion"
-                       :class="onlyMine ? 'bg-surface-container' : 'bg-surface-container-lowest'">
-                    <input type="checkbox" x-model="onlyMine" class="accent-primary cal-focus" />
-                    <span class="m-label">Only mine</span>
-                </label>
+                <div class="cal-stepper">
+                    <button @click="prevMonth()" aria-label="Previous month" class="cal-motion cal-focus">
+                        <span class="material-symbols-outlined text-[20px]">chevron_left</span>
+                    </button>
+                    <button @click="nextMonth()" aria-label="Next month" class="cal-motion cal-focus">
+                        <span class="material-symbols-outlined text-[20px]">chevron_right</span>
+                    </button>
+                    <button @click="goToToday()" :disabled="!awayFromToday" class="cal-motion cal-press cal-focus">
+                        <span class="material-symbols-outlined text-[17px]">today</span>Today
+                    </button>
+                </div>
+                <h2 class="font-display text-[24px] text-primary" x-text="monthLabel"></h2>
+            </div>
 
-                <div class="flex gap-0.5 bg-surface-container rounded-lg p-[3px]">
+            <div class="cal-toolbar__right">
+                <!-- "Only mine" and the series ticks are one thing — they are
+                     both filters — and one thing asked for about once a month
+                     should not be a permanent panel in a rail with room for
+                     two. The count is what keeps a filter left on from being
+                     invisible now that the panel is closed by default. -->
+                <button @click="filtersOpen = !filtersOpen" :aria-expanded="filtersOpen"
+                        class="m-btn m-btn--secondary m-btn--sm cal-motion cal-press cal-focus">
+                    <span class="material-symbols-outlined text-[17px]">tune</span>
+                    <span class="m-btn__label">Show</span>
+                    <span x-show="activeFilters" class="m-badge m-badge--primary" x-text="activeFilters"></span>
+                </button>
+
+                <div class="cal-viewtoggle">
                     <template x-for="opt in [['month','Month','calendar_month'],['list','List','view_agenda']]" :key="opt[0]">
-                        <button @click="setView(opt[0])"
-                                class="min-w-[96px] rounded-lg px-3 py-1 flex items-center justify-center gap-1
-                                       font-label-md text-xs uppercase tracking-wider cal-motion cal-focus"
-                                :class="view === opt[0]
-                                    ? 'bg-surface-container-lowest text-primary'
-                                    : 'text-on-surface-variant'">
+                        <button @click="setView(opt[0])" :aria-pressed="view === opt[0]" class="cal-motion cal-focus">
                             <span class="material-symbols-outlined text-[16px]" x-text="opt[2]"></span>
                             <span x-text="opt[1]"></span>
                         </button>
                     </template>
+                </div>
+
+                <div x-show="filtersOpen" x-cloak class="cal-filters"
+                     @click.outside="filtersOpen = false" @keydown.escape.window="filtersOpen = false">
+                    <section class="m-card">
+                        <div class="m-label">Show</div>
+                        <div class="mt-sm flex flex-col gap-0.5">
+                            <label class="flex items-center gap-2 min-h-[34px] cursor-pointer">
+                                <input type="checkbox" x-model="onlyMine" class="accent-primary cal-focus" />
+                                <span class="text-[13px] text-on-surface flex-grow">Only mine</span>
+                            </label>
+                            <div x-show="seriesFilters.length > 1" class="border-t border-outline-variant my-1"></div>
+                            <template x-for="s in seriesFilters" :key="s.id">
+                                <label class="flex items-center gap-2 min-h-[30px] cursor-pointer">
+                                    <input type="checkbox" :checked="isShown(s.id)" @change="toggleSeries(s.id)"
+                                           class="accent-primary cal-focus" />
+                                    <span class="text-[13px] text-on-surface flex-grow truncate" x-text="s.name"></span>
+                                    <span class="text-[12px] text-outline" x-text="s.count"></span>
+                                </label>
+                            </template>
+                        </div>
+                    </section>
                 </div>
             </div>
         </div>
@@ -356,24 +437,24 @@
                          Alpine leaves its own <template> as the track's first
                          element, so the nth month is not the nth child. -->
                     <template x-for="(m, i) in railMonths" :key="m.month">
-                        <div data-rail-month :inert="!onRail(i)" class="grid gap-0.5 self-start"
-                             style="grid-template-columns: repeat(7, minmax(0,1fr));">
+                        <!-- One grid, not two: the seven letters are simply the
+                             first seven children of the same seven columns, so
+                             they cannot come unaligned from the days. -->
+                        <div data-rail-month :inert="!onRail(i)" class="m-strip self-start">
                             <template x-for="(d, j) in ['S','M','T','W','T','F','S']" :key="j">
-                                <div class="text-center pb-1 text-[9.5px] font-label-md tracking-[.1em] uppercase text-outline"
-                                     x-text="d"></div>
+                                <div class="m-strip__day" x-text="d"></div>
                             </template>
                             <template x-for="cell in m.cells" :key="cell.date">
                                 <button @click="focusDay(cell)"
-                                        class="flex flex-col items-center gap-[3px] py-1.5 rounded-lg cal-motion cal-focus"
-                                        :class="cell.date === focusedDate ? 'bg-surface-container' : ''">
-                                    <span class="text-[12px] font-label-md"
-                                          :class="cell.date === focusedDate
-                                            ? 'text-primary font-bold'
-                                            : (cell.inMonth ? 'text-on-surface' : 'text-outline')"
-                                          x-text="cell.day"></span>
-                                    <span class="flex gap-0.5 h-[5px]">
+                                        class="m-strip__cell cal-motion cal-focus"
+                                        :class="[
+                                            cell.date === focusedDate ? 'm-strip__cell--current' : '',
+                                            cell.inMonth ? '' : 'm-strip__cell--outside'
+                                        ]">
+                                    <span class="m-strip__num" x-text="cell.day"></span>
+                                    <span class="m-strip__dots">
                                         <template x-for="(colour, k) in stripDots(cell)" :key="k">
-                                            <span class="w-[5px] h-[5px] rounded-full" :style="'background:' + colour"></span>
+                                            <span class="m-strip__dot" :style="'background:' + colour"></span>
                                         </template>
                                     </span>
                                 </button>
@@ -541,19 +622,16 @@
                                                   x-text="ev.mine ? 'You · ' + ev.mine.label + ' · ' + ev.mine.stateLabel : ''"></span>
                                         </div>
 
-                                        <!-- Out for cover is the system working,
-                                             so it does not use the red. It says
-                                             what is happening and gets out of
-                                             the way (MS-207). -->
-                                        <div x-show="ev.outForCover"
-                                             class="mt-2 flex items-center gap-1.5 rounded-md border border-outline-variant px-2.5 py-2">
-                                            <span class="material-symbols-outlined text-[17px] text-on-surface-variant">volunteer_activism</span>
-                                            <span class="text-[11px] font-label-md tracking-[.08em] uppercase text-on-surface-variant">
-                                                Out for cover
-                                            </span>
-                                        </div>
-
-                                        <div x-show="ev.needsAttention"
+                                        <!-- ⚠ ONE NOTICE, NOT FIVE. This block could
+                                             stack out-for-cover, needs-sorting,
+                                             places-to-fill and Sunday all at once, and a
+                                             card that is all alarm is a card nobody reads
+                                             the top line of. `phoneNotice` picks the
+                                             loudest that applies; the "you" chip above
+                                             keeps its own line, because what you are down
+                                             for is a different question from how the date
+                                             is doing. -->
+                                        <div x-show="phoneNotice(ev) === 'sorting'"
                                              class="mt-2 flex items-center gap-1.5 rounded-md bg-error-container px-2.5 py-2">
                                             <span class="material-symbols-outlined text-[17px] text-error">error</span>
                                             <span class="text-[11px] font-label-md tracking-[.08em] uppercase text-on-error-container">
@@ -561,23 +639,35 @@
                                             </span>
                                         </div>
 
-                                        <!-- Quieter than the red above it on purpose. A date
-                                             three weeks out with a place still open is normal;
+                                        <!-- Quieter than the red on purpose. A date three
+                                             weeks out with a place still open is normal;
                                              somebody saying no is not. -->
-                                        <div x-show="placesToFill(ev)"
+                                        <div x-show="phoneNotice(ev) === 'places'"
                                              class="mt-2 flex items-center gap-1.5 rounded-md bg-warning-container px-2.5 py-2">
                                             <span class="material-symbols-outlined text-[16px] text-warning">warning</span>
                                             <span class="text-[11px] font-label-md tracking-[.08em] uppercase text-on-warning-container"
                                                   x-text="placesToFillLabel(ev)"></span>
                                         </div>
 
+                                        <!-- Out for cover is the system working, so it does
+                                             not use the red. It says what is happening and
+                                             gets out of the way (MS-207). -->
+                                        <div x-show="phoneNotice(ev) === 'cover'"
+                                             class="mt-2 flex items-center gap-1.5 rounded-md border border-outline-variant px-2.5 py-2">
+                                            <span class="material-symbols-outlined text-[17px] text-on-surface-variant">volunteer_activism</span>
+                                            <span class="text-[11px] font-label-md tracking-[.08em] uppercase text-on-surface-variant">
+                                                Out for cover
+                                            </span>
+                                        </div>
+
                                         <!-- "Sunday", not "Sunday service" — the name
-                                             directly above it already says that, and a
-                                             card that says the same thing twice reads
-                                             as a bug. -->
+                                             directly above it already says that. The church
+                                             glyph is gone from this page: the name, the
+                                             serif setting and the ocean bar were already
+                                             saying it three other ways. -->
                                         <div x-show="ev.isSunday"
-                                             class="mt-2 flex items-center gap-1 text-[11px] font-label-md tracking-[.1em] uppercase text-secondary">
-                                            <span class="material-symbols-outlined text-[14px]">church</span> Sunday
+                                             class="mt-2 text-[11px] font-label-md tracking-[.1em] uppercase text-secondary">
+                                            Sunday
                                         </div>
                                     </div>
                                 </button>
@@ -593,16 +683,18 @@
             </div>
         </div>
 
-        <div class="mt-gutter cal-layout">
+        <div class="mt-gutter cal-layout" :class="fitGrid ? 'cal-layout--fit' : ''">
 
             <!-- ── The month grid ─────────────────────────────────────────── -->
             <section x-show="view === 'month'"
-                     class="cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden min-w-0">
-                <div class="grid bg-surface-container-low border-b border-outline-variant"
-                     style="grid-template-columns: repeat(7, minmax(0,1fr));">
+                     class="cal-desktop-only m-cal min-w-0"
+                     :class="fitGrid ? 'm-cal--fit' : ''"
+                     @resize.window="measureCell()"
+                     @keydown.escape.window="collapseDay()"
+                     @click.outside="collapseDay()">
+                <div class="m-cal__days">
                     <template x-for="d in ['SUN','MON','TUE','WED','THU','FRI','SAT']" :key="d">
-                        <div class="px-2 py-2.5 text-[10.5px] font-label-md tracking-[.12em] uppercase
-                                    text-on-surface-variant" x-text="d"></div>
+                        <div class="m-cal__day" x-text="d"></div>
                     </template>
                 </div>
 
@@ -613,78 +705,74 @@
                 <div class="cal-rail-months" x-ref="monthRailWide">
                 <div class="cal-rail-track" :class="railSnap ? 'cal-rail-snap' : ''" :style="railStyle">
                 <template x-for="(m, i) in railMonths" :key="m.month">
-                <div data-rail-month :inert="!onRail(i)" class="grid self-start"
-                     style="grid-template-columns: repeat(7, minmax(0,1fr));">
+                <div data-rail-month :inert="!onRail(i)" class="m-cal__grid">
                     <template x-for="cell in m.cells" :key="cell.date">
                         <!-- The whole cell is the target, so the empty space under
                              the chips is what you click to add something to the day.
                              A chip stops its own click, or the same gesture would
                              both open an event and offer to create one. -->
-                        <div @click="openDayMenu(cell, $event)"
-                             class="min-w-0 overflow-hidden min-h-[128px] px-1.5 pt-[9px] pb-[11px]
-                                    border-r border-b border-outline-variant relative cal-motion hover:bg-surface-container-low"
-                             :class="[cell.inMonth ? '' : 'bg-surface-container-low', canCreate ? 'cursor-pointer' : '']">
+                        <div @click="cellClick(cell, $event)"
+                             class="m-cal__cell cal-motion"
+                             :class="[
+                                cell.inMonth ? '' : 'm-cal__cell--outside',
+                                canCreate ? 'm-cal__cell--clickable' : '',
+                                cell.date === expandedDate ? 'm-cal__cell--expanded' : ''
+                             ]">
 
-                            <div class="flex items-start justify-between">
-                                <span class="min-w-[23px] h-[23px] inline-flex items-center justify-center rounded-full
-                                             text-[12.5px] font-label-md"
-                                      :class="cell.isToday
-                                        ? 'bg-primary text-on-primary font-bold'
-                                        : (cell.inMonth ? 'text-on-surface' : 'text-outline')"
-                                      x-text="cell.day"></span>
+                            <div class="m-cal__head">
                                 <!-- One glyph, from the same switch every other
                                      surface uses, so they cannot disagree. Only
                                      the red: a day is either something to sort
                                      or it is not. Which EVENT is short of people
                                      is said on the chip, where the answer is,
-                                     rather than twice in two places. -->
+                                     rather than twice in two places.
+
+                                     It sits LEFT of the numeral, which has moved
+                                     to the right of the cell in tabular figures
+                                     so a column of dates lines up and the chips
+                                     underneath get the whole width. -->
                                 <span x-show="cell.needsAttention"
-                                      class="material-symbols-outlined text-[17px] text-error">error</span>
+                                      class="material-symbols-outlined m-cal__flag">error</span>
+                                <span class="m-cal__num"
+                                      :class="cell.isToday
+                                        ? 'm-cal__num--today'
+                                        : (cell.inMonth ? '' : 'm-cal__num--outside')"
+                                      x-text="cell.day"></span>
                             </div>
 
-                            <div class="mt-1 flex flex-col gap-[3px]">
+                            <!-- What the day is holding and is not drawing. Never
+                                 a silent truncation.
+                                 ⚠ IT OPENS THE CELL, NOT A POPOVER. The day grows
+                                 in place and the week around it holds still. A
+                                 layer over the top would cover the days either
+                                 side of the answer, which is most of why somebody
+                                 opened a calendar rather than a list. -->
+                            <button x-show="moreOn(cell)" @click.stop="toggleExpand(cell.date)"
+                                    class="m-cal__more cal-focus"
+                                    x-text="moreOn(cell) + ' more'"></button>
+
+                            <div class="m-cal__events" x-show="cell.events.length">
                                 <!-- `spanContinues` is day two onwards of an Event
                                      that runs over several. Still named — somebody
                                      scanning Wednesday needs to know half-term is
                                      on — but quieter, so five days of one break do
                                      not read as five separate breaks. -->
-                                <template x-for="ev in cell.events" :key="ev.id">
+                                <template x-for="ev in chipsOn(cell)" :key="ev.id">
                                     <button @click.stop="open(ev)"
-                                            class="w-full text-left flex items-start gap-[5px] rounded-md
-                                                   pl-1 pr-1.5 py-[5px] cal-motion cal-press cal-focus"
+                                            class="m-chip cal-motion cal-press cal-focus"
+                                            :class="['m-chip--' + chipKind(ev), ev.spanContinues ? 'm-chip--continues' : '']"
                                             :style="'border-left-color:' + chipBar(ev)"
-                                            :class="{
-                                                'border-l-[3px] bg-error-container text-on-error-container': chipKind(ev) === 'declined',
-                                                'border-l-[3px] bg-warning-container text-on-warning-container': chipKind(ev) === 'unfilled',
-                                                'border-l-[3px] bg-surface-container': chipKind(ev) === 'mine',
-                                                'border-l-[3px]': chipKind(ev) === 'sunday',
-                                                'border-l-[3px] bg-surface-container-low': chipKind(ev) === 'other',
-                                                'border-l-[3px] border-dashed opacity-[.55] line-through': chipKind(ev) === 'off',
-                                                'opacity-[.7]': ev.spanContinues
-                                            }"
                                             :title="spanSentence(ev) ? (ev.name || 'Event') + ' · ' + spanSentence(ev) : null">
-                                        <span x-show="showsYou(ev)"
-                                              class="mt-[5px] w-[5px] h-[5px] rounded-full bg-primary shrink-0"></span>
+                                        <span x-show="showsYou(ev)" class="m-chip__you"></span>
                                         <span x-show="chipKind(ev) === 'declined'"
-                                              class="material-symbols-outlined text-[14px] shrink-0">priority_high</span>
+                                              class="material-symbols-outlined m-chip__icon">priority_high</span>
                                         <!-- Places nobody is standing in yet. Editors only — it
-                                             is a job, and a member cannot do it. Small, and in
-                                             front of the name rather than sat out on the right,
-                                             so the amber chip reads as one thing. -->
+                                             is a job, and a member cannot do it. In front of the
+                                             name rather than sat out on the right, so the amber
+                                             chip reads as one thing. -->
                                         <span x-show="chipKind(ev) === 'unfilled'"
-                                              class="material-symbols-outlined text-[8px] mt-[5px] shrink-0">warning</span>
-                                        <span class="cal-chip-label min-w-0"
-                                              :class="{
-                                                'font-headline-lg text-[13.5px]': ev.isSunday,
-                                                'font-label-md text-[12px] font-medium': !ev.isSunday,
-                                                'font-bold': showsYou(ev)
-                                              }"
-                                              x-text="ev.name || ev.seriesName || 'Event'"></span>
-                                        <!-- A Sunday opens the same page as anything else now, so
-                                             there is no leaving-for-another-surface arrow. The
-                                             church icon says which kind of thing it is. -->
-                                        <span x-show="ev.isSunday"
-                                              class="material-symbols-outlined text-[13px] text-outline shrink-0 ml-auto">church</span>
+                                              class="material-symbols-outlined m-chip__icon">warning</span>
+                                        <span class="m-chip__label" x-text="ev.name || ev.seriesName || 'Event'"></span>
                                     </button>
                                 </template>
                             </div>
@@ -694,27 +782,12 @@
                 </template>
                 </div>
                 </div>
-
-                <div class="flex flex-wrap gap-[18px] px-md py-sm text-[11.5px] text-on-surface-variant border-t border-outline-variant">
-                    <span class="flex items-center gap-1.5">
-                        <span class="w-[5px] h-[5px] rounded-full bg-primary"></span> You are serving
-                    </span>
-                    <span class="flex items-center gap-1.5">
-                        <span class="material-symbols-outlined text-[14px] text-error">priority_high</span> Needs sorting
-                    </span>
-                    <span x-show="isEditor" class="flex items-center gap-1.5">
-                        <span class="material-symbols-outlined text-[14px] text-warning">warning</span> Places to fill
-                    </span>
-                    <span class="flex items-center gap-1.5">
-                        <span class="material-symbols-outlined text-[13px] text-outline">church</span>
-                        Sunday service
-                    </span>
-                </div>
             </section>
 
             <!-- ── The list view ──────────────────────────────────────────── -->
             <section x-show="view === 'list'"
-                     class="cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden min-w-0">
+                     class="cal-desktop-only cal-list-scroll bg-surface-container-lowest border border-outline-variant
+                            rounded-lg overflow-hidden min-w-0">
                 <template x-for="group in groups" :key="group.weekStart">
                     <div>
                         <div class="bg-surface-container-low px-md py-2 text-[10.5px] font-label-md
@@ -739,11 +812,12 @@
                                         <span class="cal-list-name text-[18px] truncate"
                                               :class="ev.isSunday ? 'font-headline-lg' : 'font-label-md font-medium'"
                                               x-text="ev.name || ev.seriesName || 'Event'"></span>
-                                        <span x-show="ev.isSunday"
-                                              class="shrink-0 inline-flex items-center gap-0.5 rounded-md bg-secondary-container
-                                                     text-on-secondary-container px-1.5 py-0.5 text-[10.5px] font-label-md uppercase tracking-wider">
-                                            <span class="material-symbols-outlined text-[12px]">church</span> Sunday
-                                        </span>
+                                        <!-- The word, without the glyph. A Sunday is already
+                                             told apart by its name, its serif setting and its
+                                             ocean bar; the church icon was a fourth way of
+                                             saying it and the loudest chips had to drop it
+                                             anyway to fit a name in. -->
+                                        <span x-show="ev.isSunday" class="m-badge m-badge--secondary shrink-0">Sunday</span>
                                     </div>
                                     <div class="text-[12.5px] text-on-surface-variant mt-0.5 flex items-center gap-1.5 flex-wrap">
                                         <!-- "23–27 November", where the day number in the
@@ -768,24 +842,19 @@
                                          span looks like. The same badge two
                                          hundred lines up already said it twice
                                          for this reason. -->
-                                    <span x-show="ev.mine"
-                                          class="rounded-md bg-surface-container px-2 py-1 text-[11.5px] font-label-md
-                                                 text-on-surface-variant whitespace-nowrap"
+                                    <!-- Four hand-rolled spans became four badges. Same four
+                                         conditions, same four strings — the shapes were four
+                                         near-copies of a component that already existed. -->
+                                    <span x-show="ev.mine" class="m-badge m-badge--neutral"
                                           x-text="ev.mine ? 'You · ' + ev.mine.label : ''"></span>
-                                    <span x-show="placesToFill(ev)"
-                                          class="inline-flex items-center gap-1 rounded-md bg-warning-container
-                                                 text-on-warning-container px-2 py-1 text-[11.5px] font-label-md whitespace-nowrap">
+                                    <span x-show="placesToFill(ev)" class="m-badge m-badge--warning">
                                         <span class="material-symbols-outlined text-[14px]">warning</span>
                                         <span x-text="placesToFillLabel(ev)"></span>
                                     </span>
-                                    <span x-show="ev.outForCover"
-                                          class="inline-flex items-center gap-1 rounded-md border border-outline-variant
-                                                 text-on-surface-variant px-2 py-1 text-[11.5px] font-label-md whitespace-nowrap">
+                                    <span x-show="ev.outForCover" class="m-badge m-badge--neutral">
                                         <span class="material-symbols-outlined text-[14px]">volunteer_activism</span> Out for cover
                                     </span>
-                                    <span x-show="ev.needsAttention"
-                                          class="inline-flex items-center gap-1 rounded-md bg-error-container border border-error
-                                                 text-on-error-container px-2 py-1 text-[11.5px] font-label-md whitespace-nowrap">
+                                    <span x-show="ev.needsAttention" class="m-badge m-badge--error">
                                         <span class="material-symbols-outlined text-[14px]">error</span> Needs sorting
                                     </span>
                                     <span class="material-symbols-outlined text-[20px] text-outline">chevron_right</span>
@@ -794,14 +863,25 @@
                         </template>
                     </div>
                 </template>
-                <!-- An empty month shows the shape, not an apology. -->
-                <div x-show="!groups.length" class="px-md py-lg text-center text-on-surface-variant font-headline-lg text-[16.5px]">
-                    Nothing on this month.
+                <!-- An empty month shows the shape, not an apology — and for
+                     somebody who can fix it, the way to. It is the state a new
+                     church sees first. -->
+                <div x-show="!groups.length" class="cal-empty">
+                    <p class="text-on-surface-variant font-headline-lg text-[16.5px]">Nothing on this month.</p>
+                    <a x-show="canCreate" href="calendar-event.html?new=1"
+                       class="m-btn m-btn--secondary m-btn--sm cal-motion cal-press cal-focus">
+                        <span class="material-symbols-outlined">add</span>
+                        <span class="m-btn__label">New event</span>
+                    </a>
                 </div>
             </section>
 
             <!-- ── The right rail ─────────────────────────────────────────── -->
-            <aside class="cal-rail flex flex-col gap-gutter min-w-0">
+            <!-- `min-h-0` is what lets Needs sorting scroll instead of the rail
+                 growing past the window: a flex child's default min-height is
+                 its content, so without it the panel below simply gets taller
+                 and takes the fold with it. -->
+            <aside class="cal-rail flex flex-col gap-gutter min-w-0 min-h-0">
 
                 <!-- ── You, in the month on screen ─────────────────────────
                      Beside the grid, not under it: a desktop month is most of a
@@ -814,7 +894,7 @@
                      which window. Now that it follows the month on screen, the
                      heading is the whole of the answer. -->
                 <section x-show="personId"
-                         class="cal-desktop-only bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
+                         class="cal-desktop-only shrink-0 bg-surface-container-lowest border border-outline-variant rounded-lg p-md">
                     <div class="m-label"
                          x-text="myMonthHeading"></div>
                     <p class="font-headline-lg text-[16.5px] leading-[1.4] mt-2 text-on-surface" x-text="mySentence"></p>
@@ -894,34 +974,27 @@
                     </a>
                 </section>
 
+                <!-- The second and last panel. It takes whatever height the card
+                     above it leaves and scrolls its own rows, so the rail never
+                     grows past the window and no panel is ever sliced by the
+                     fold. A list of problems is honestly a list.
+
+                     The third panel — the series ticks — is now half of the
+                     toolbar's Show disclosure, with "Only mine" beside it. -->
                 <section x-show="needsSorting.length"
-                         class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
-                    <div class="m-label">Needs sorting</div>
-                    <div class="mt-sm flex flex-col gap-sm">
+                         class="bg-surface-container-low border border-outline-variant rounded-lg p-md
+                                flex flex-col min-h-0 flex-[0_1_auto]">
+                    <div class="m-label shrink-0">Needs sorting</div>
+                    <div class="cal-rail__scroll mt-sm flex flex-col gap-sm">
                         <template x-for="row in needsSorting" :key="row.occurrenceId + row.sentence">
                             <button @click="open(occurrences.find(o => o.id === row.occurrenceId))"
-                                    class="text-left flex items-start gap-2 cal-focus rounded">
+                                    class="text-left flex items-start gap-2 cal-focus rounded shrink-0">
                                 <span class="material-symbols-outlined text-[18px] text-error shrink-0" x-text="row.icon"></span>
                                 <p class="text-[12.5px] text-on-surface">
                                     <strong class="font-label-md" x-text="formatDayMonthShort(row.date)"></strong>
                                     <span x-text="' ' + row.sentence"></span>
                                 </p>
                             </button>
-                        </template>
-                    </div>
-                </section>
-
-                <section x-show="seriesFilters.length > 1"
-                         class="m-card">
-                    <div class="m-label">Show</div>
-                    <div class="mt-sm flex flex-col gap-1.5">
-                        <template x-for="s in seriesFilters" :key="s.id">
-                            <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" :checked="isShown(s.id)" @change="toggleSeries(s.id)"
-                                       class="accent-primary cal-focus" />
-                                <span class="text-[13px] text-on-surface flex-grow truncate" x-text="s.name"></span>
-                                <span class="text-[12px] text-outline" x-text="s.count"></span>
-                            </label>
                         </template>
                     </div>
                 </section>
