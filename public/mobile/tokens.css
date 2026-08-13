@@ -581,11 +581,16 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   border-bottom: 1px solid var(--outline-variant);
   transition: background-color var(--duration) var(--ease-standard);
 }
-.m-cal__grid > .m-cal__cell:nth-child(7n) { border-right: 0; }
+/* ⚠ THE COLUMN A CELL IS IN IS A CLASS, NEVER nth-child. A framework that
+   renders a list leaves its own element among the children — Alpine's
+   x-for template stays put as the grid's first child — so the nth cell is
+   not the nth child and every rule keyed on position lands one column out.
+   It is the same trap data-rail-month exists for on the rail. */
+.m-cal__cell--rowend { border-right: 0; }
 
-/* Saturday and Sunday — never a day belonging to the month either side. */
-.m-cal__grid > .m-cal__cell:nth-child(7n+1):not(.m-cal__cell--outside),
-.m-cal__grid > .m-cal__cell:nth-child(7n):not(.m-cal__cell--outside) { background: var(--surface-container-low); }
+/* Sunday, and never a day belonging to the month either side: the church's
+   week has a shape and the grid should show it before you read a word. */
+.m-cal__cell--sunday:not(.m-cal__cell--outside) { background: var(--surface-container-low); }
 .m-cal__cell--outside { opacity: .45; border-right-color: transparent; }
 .m-cal__cell--outside + .m-cal__cell:not(.m-cal__cell--outside) { border-left: 1px solid var(--outline-variant); }
 .m-cal__cell--clickable { cursor: pointer; }
@@ -609,14 +614,15 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 .m-cal__flag { font-size: 16px; color: var(--error); flex: 0 0 auto; }
 .m-cal__events { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 
-/* What the day is holding and not drawing. Never a silent truncation. */
+/* What the day is holding and not drawing. Never a silent truncation.
+   A LABEL, NOT A CONTROL — the whole cell is what opens the week, so a
+   second small target inside it would be hiding the answer twice. */
 .m-cal__more {
   align-self: flex-start; padding: 2px 8px;
-  background: transparent; border: 0;
   font-family: var(--font-sans); font-size: 11.5px;
-  color: var(--on-surface-variant); cursor: pointer;
+  color: var(--on-surface-variant); pointer-events: none;
 }
-.m-cal__more:hover { color: var(--primary); text-decoration: underline; }
+.m-cal__cell--clickable:hover .m-cal__more { color: var(--primary); }
 
 /* ── Fitted to the window ─────────────────────────────────────
    The rows divide the height left after everything above them, so the
@@ -638,17 +644,24 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
    rather than taking a line the row has not got. */
 .m-cal--fit .m-cal__more { position: absolute; top: 4px; left: 5px; padding: 0; font-size: 10.5px; letter-spacing: .04em; }
 
-/* ── A day opened ─────────────────────────────────────────────
-   The cell grows in place and its row grows with it. Not a popover:
-   the day stays where it is in the week and everything around it
-   holds still. The page drops --fit while one is open. */
-.m-cal__cell--expanded {
-  z-index: 1; overflow: visible;
-  background: var(--surface-container-lowest);
-  box-shadow: var(--shadow-sm);
+/* ── A week opened out ────────────────────────────────────────
+   A cell cannot be taller than its row, so what grows is the ROW —
+   and once a row is taller, every day on it shows everything it has
+   rather than sitting next to empty space with events still hidden.
+
+   ⚠ THE OTHER ROWS ARE PINNED, NOT LEFT TO REFLOW. Dropping the
+   1fr lets every row size to its own contents, which would redraw
+   the whole month around the week somebody asked to read. So the
+   grid stops dividing the window and the page pins every other cell
+   to the height it already had — the opened week is the only thing
+   that moves. The page is allowed to scroll while one is open. */
+.m-cal--fit.m-cal--open .m-cal__grid { grid-auto-rows: auto; }
+.m-cal__cell--expanded { overflow: visible; }
+/* Whatever a fitted cell clipped to make the month fit is unclipped
+   here — the whole point of opening it is to read what was cut. */
+.m-cal--fit .m-cal__cell--expanded .m-chip__label {
+  display: block; -webkit-line-clamp: none; overflow: visible;
 }
-.m-cal__grid > .m-cal__cell--expanded { border-right-color: var(--outline-variant); }
-.m-cal__cell--expanded .m-chip__label { display: block; -webkit-line-clamp: none; overflow: visible; }
 
 /* EventChip — One event, in a day cell or anywhere else that lists them. */
 .m-chip {

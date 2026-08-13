@@ -2367,7 +2367,7 @@ test('the warning lives on the chip, not in the corner of the day', () => {
     // many, and the day marks would then have to be kept in step by hand.
     const html = readPage('calendar.html');
     const corner = html.indexOf('x-show="cell.needsAttention"');
-    const chips = html.indexOf('x-for="ev in chipsOn(cell)"');
+    const chips = html.indexOf('x-for="ev in chipsOn(');
     assert.ok(corner !== -1 && chips > corner, 'the cell corner moved — this test no longer looks at it');
 
     const dayHeader = html.slice(corner, chips);
@@ -2395,73 +2395,134 @@ test('only the two families that ask something of somebody carry a fill', () => 
             'a fill came back on a family that must not have one: ' + rule));
 });
 
-test('a day draws what its row holds and says how much it is holding back', () => {
-    // Never a silent truncation. A fourth chip in a 118px cell is what made
-    // this grid unreadable; a fourth chip nobody is told about would be worse.
-    const page = loadComponent('calendar.js', 'calendarPage');
-    const cell = { date: '2026-08-16', events: [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }] };
+test('which column a cell is in comes from the data, never from its position', () => {
+    // ⚠ THE BUG THIS EXISTS FOR. Alpine leaves its own <template> as the
+    // grid's first child, so the nth cell is NOT the nth child. Keyed on
+    // nth-child, the Sunday tint landed on Saturday and the last column's
+    // rule landed on Friday — which is exactly what shipped to the preview.
+    const html = readPage('calendar.html');
+    const css = readPage('mosaic.css').replace(/\s+/g, '');
 
-    assert.strictEqual(page.chipsOn(cell).length, 2, 'the cell drew more than its row holds');
-    assert.strictEqual(page.moreOn(cell), 2, 'the day did not say what it was holding back');
+    assert.ok(html.indexOf("ci % 7 === 0 ? 'm-cal__cell--sunday'") !== -1,
+        'the Sunday column is no longer marked from the loop index');
+    assert.ok(html.indexOf("ci % 7 === 6 ? 'm-cal__cell--rowend'") !== -1,
+        'the last column is no longer marked from the loop index');
 
-    // A day with room for everything says nothing.
-    const quiet = { date: '2026-08-17', events: [{ id: 'a' }] };
-    assert.strictEqual(page.moreOn(quiet), 0, 'a day drawing everything still offered a "more"');
+    assert.ok(css.indexOf('.m-cal__cell--sunday:not(.m-cal__cell--outside){background') !== -1,
+        'Sunday lost its tone');
+    assert.ok(css.indexOf('.m-cal__cell--rowend{border-right:0') !== -1,
+        'the last column lost the rule that stops it doubling the container border');
+
+    // Saturday is a day like any other. Tinting both ends draws a box round
+    // the weekend, which is somebody else's week, not this one's.
+    assert.ok(!/m-cal__cell--saturday/.test(css) && !/m-cal__cell--weekend/.test(css),
+        'the weekend is tinted at both ends again');
+
+    // And nothing in the grid keys off position any more.
+    assert.ok(!/\.m-cal__(cell|grid)[^{]*nth-child/.test(css),
+        'a rule in the month grid is keyed on nth-child again');
 });
 
-test('opening a day grows that day, and leaves the rest of the week alone', () => {
-    // ⚠ THE CELL, NOT A POPOVER. A layer over the top would cover the days
-    // either side of the answer, which is most of why somebody opened a
-    // calendar rather than a list.
+test('what a day can hold is measured, never calculated', () => {
+    // The first try divided the row height by a chip height, and a chip is not
+    // one height — a name that wraps to two lines is half as tall again, so the
+    // day that got cut was exactly the crowded one the sum was protecting.
     const page = loadComponent('calendar.js', 'calendarPage');
-    const open = { date: '2026-08-16', events: [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }] };
-    const other = { date: '2026-08-23', events: [{ id: 'e' }, { id: 'f' }, { id: 'g' }] };
+    const cell = { date: '2026-08-30', events: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] };
 
-    page.toggleExpand('2026-08-16');
-    assert.strictEqual(page.chipsOn(open).length, 4, 'the opened day is still holding something back');
-    assert.strictEqual(page.moreOn(open), 0, 'the opened day still offers to open');
+    // Unmeasured, a day draws everything and claims to be hiding nothing —
+    // that is the state the measurement has to be taken in.
+    assert.strictEqual(page.chipsOn(cell, '2026-08', 30).length, 3);
+    assert.strictEqual(page.moreOn(cell, '2026-08', 30), 0);
 
-    // The day next to it is untouched — it did not ask to be opened.
-    assert.strictEqual(page.chipsOn(other).length, 2, 'opening one day redrew another');
-    assert.strictEqual(page.moreOn(other), 1, 'the day beside it lost its own count');
+    page.fits = { '2026-08-30': 2 };
+    assert.strictEqual(page.chipsOn(cell, '2026-08', 30).length, 2, 'the day drew past what fits');
+    assert.strictEqual(page.moreOn(cell, '2026-08', 30), 1, 'the day did not say what it was holding back');
 
-    // And the grid comes out of fit while one is open, so the page may scroll.
-    assert.strictEqual(page.fitGrid, false, 'the month is still pinned to the window with a day open');
+    // A day where not even one fits still draws one. Blank tells you less
+    // than half.
+    page.fits = { '2026-08-30': 0 };
+    assert.strictEqual(page.chipsOn(cell, '2026-08', 30).length, 1, 'a crowded day was drawn blank');
+});
 
-    page.collapseDay();
+test('opening a day opens its WEEK, and the rows around it hold still', () => {
+    // A cell cannot be taller than its row, so the row is what grows — and once
+    // it has, every day on it shows everything rather than sitting beside empty
+    // space with events still hidden.
+    const page = loadComponent('calendar.js', 'calendarPage');
+    page.cellHeight = 118;
+    page.fits = { '2026-08-30': 2, '2026-09-01': 1, '2026-08-23': 2 };
+
+    const sunday = { date: '2026-08-30', events: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] };
+    const tuesday = { date: '2026-09-01', events: [{ id: 'd' }, { id: 'e' }] };
+    const weekAbove = { date: '2026-08-23', events: [{ id: 'f' }, { id: 'g' }, { id: 'h' }] };
+
+    // 35 and 37 are the same row (week 5); 28 is the row above it (week 4).
+    page.cellClick(sunday, '2026-08', 35, { clientX: 10, clientY: 10 });
+    assert.strictEqual(page.expandedWeek, '2026-08#5', 'a crowded day did not open its week');
+
+    assert.strictEqual(page.chipsOn(sunday, '2026-08', 35).length, 3, 'the opened day is still cut');
+    assert.strictEqual(page.chipsOn(tuesday, '2026-08', 37).length, 2,
+        'a day on the opened row is still cut, next to a row that grew for it');
+    assert.strictEqual(page.chipsOn(weekAbove, '2026-08', 28).length, 2,
+        'opening one week redrew the week above it');
+
+    // Pinned, so only the opened row moves.
+    assert.strictEqual(page.cellStyle('2026-08', 28), 'height:118px');
+    assert.strictEqual(page.cellStyle('2026-08', 35), '', 'the opened row was pinned too');
+
+    // And the page is allowed to scroll while one is open.
+    assert.strictEqual(page.fitGrid, false, 'the month is still pinned to the window with a week open');
+    page.collapseWeek();
     assert.strictEqual(page.fitGrid, true, 'the month did not go back to fitting the window');
-    assert.strictEqual(page.chipsOn(open).length, 2, 'the day stayed open after being collapsed');
 });
 
-test('a click on a day means different things depending on what is open', () => {
-    // Inside the open day it means nothing: offering to create an event under
-    // the thing somebody just asked to see more of is the opposite of the
-    // answer. On any other day it shuts the open one first.
+test('a click on a day means different things depending on what that day is doing', () => {
+    // A day holding events back opens its week — that is the whole affordance.
+    // Inside the open week a click means nothing: offering to create an event
+    // under the thing somebody just asked to see more of is the opposite of
+    // the answer.
     const page = loadComponent('calendar.js', 'calendarPage');
     page.rank = 'editor';
     page.viewport = { width: 1440, height: 900 };
+    page.fits = { '2026-08-30': 2 };
 
-    page.expandedDate = '2026-08-16';
-    page.cellClick({ date: '2026-08-16' }, { clientX: 100, clientY: 100 });
-    assert.strictEqual(page.dayMenu, null, 'the open day offered to create an event under itself');
-    assert.strictEqual(page.expandedDate, '2026-08-16', 'clicking inside the open day closed it');
+    const crowded = { date: '2026-08-30', events: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] };
+    const quiet = { date: '2026-08-31', events: [{ id: 'd' }] };
 
-    page.cellClick({ date: '2026-08-23' }, { clientX: 100, clientY: 100 });
-    assert.strictEqual(page.expandedDate, null, 'clicking another day left the first one open');
-    assert.strictEqual(page.dayMenu, null, 'the click that closed a day also created a menu');
+    page.cellClick(crowded, '2026-08', 35, { clientX: 10, clientY: 10 });
+    assert.strictEqual(page.expandedWeek, '2026-08#5', 'a crowded day did not open its week');
+    assert.strictEqual(page.dayMenu, null, 'opening a week also offered to create an event');
 
-    // With nothing open it is the day menu, exactly as before.
-    page.cellClick({ date: '2026-08-23' }, { clientX: 100, clientY: 100 });
-    assert.ok(page.dayMenu && page.dayMenu.date === '2026-08-23', 'the day menu stopped opening');
+    // Inside the open week, nothing.
+    page.cellClick(quiet, '2026-08', 36, { clientX: 10, clientY: 10 });
+    assert.strictEqual(page.expandedWeek, '2026-08#5', 'a click inside the open week closed it');
+    assert.strictEqual(page.dayMenu, null, 'a click inside the open week offered a new event');
+
+    // A quiet day on another row shuts it.
+    page.cellClick(quiet, '2026-08', 28, { clientX: 10, clientY: 10 });
+    assert.strictEqual(page.expandedWeek, null, 'clicking off the open week left it open');
+
+    // With nothing open and nothing hidden, it is the day menu, as before.
+    page.cellClick(quiet, '2026-08', 28, { clientX: 10, clientY: 10 });
+    assert.ok(page.dayMenu && page.dayMenu.date === '2026-08-31', 'the day menu stopped opening');
 });
 
-test('leaving the grid closes whatever day was open on it', () => {
-    // Coming back to a month with one cell still hanging open is a state
-    // nobody asked for and nothing on screen would explain.
+test('a day holding events back is clickable for everyone, not just editors', () => {
+    // A member cannot create an event, but a day that is hiding three of their
+    // church's events from them is still theirs to open.
+    const html = readPage('calendar.html');
+    assert.ok(html.indexOf("canCreate || moreOn(cell, m.month, ci) ? 'm-cal__cell--clickable'") !== -1,
+        'only an editor can open a crowded day');
+});
+
+test('leaving the grid closes whatever week was open on it', () => {
+    // Coming back to a month with one row still hanging open is a state nobody
+    // asked for and nothing on screen would explain.
     const page = loadComponent('calendar.js', 'calendarPage');
-    page.expandedDate = '2026-08-16';
+    page.expandedWeek = '2026-08#5';
     page.setView('list');
-    assert.strictEqual(page.expandedDate, null, 'a day stayed open behind the list');
+    assert.strictEqual(page.expandedWeek, null, 'a week stayed open behind the list');
 });
 
 test('a filter left on is never invisible', () => {

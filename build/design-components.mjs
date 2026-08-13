@@ -1125,10 +1125,11 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
       "The month, seven columns wide. Rows floor at 112px and grow to what is on them; the numeral sits out of the way on the right, and a day carrying more than its row holds says so rather than hiding it.",
     notes: [
       "⚠ A CELL IS NOT A CARD. `.m-card` was tried and bent out of shape: this needs seven equal columns, a row that grows, a per-cell overflow line and a chip whose colour bar comes from data. It is the only grid of its kind in the app.",
-      "Both weekend columns carry one tonal step. The church's week has a shape and the grid should show it before you read a word.",
-      "A day from the month either side keeps the week rule under it — a horizontal line has to run the full width — but loses its vertical, so the corners of the month dissolve rather than being ruled off into boxes nobody is meant to read. It is not weekend-tinted: three tones in a row is one too many.",
+      "Sunday carries one tonal step and nothing else does. The church's week has a shape and the grid should show it before you read a word — but tinting both ends draws a box round the weekend, which is somebody else's week, not this one's.",
+      "⚠ WHICH COLUMN A CELL IS IN IS A CLASS — `--sunday`, `--rowend` — NEVER `nth-child`. Alpine's `<template x-for>` stays put as the grid's first child, so the nth cell is not the nth child and a positional rule lands one column out. That shipped once: Saturday tinted, Friday missing its rule.",
+      "A day from the month either side keeps the week rule under it — a horizontal line has to run the full width — but loses its vertical, so the corners of the month dissolve rather than being ruled off into boxes nobody is meant to read. It is not tinted: two tones in a row is one too many.",
       "`--fit` divides whatever height is left into equal rows, so the month ends where the window does. You scroll for more information, never to see the rest of what is already on screen.",
-      "⚠ `--fit` AND `--expanded` ARE MUTUALLY EXCLUSIVE. A cell opened to show everything on it needs a row taller than an equal share, so the page drops `--fit` while one is open and the month may run past the window until it closes. Shrinking the other rows to pay for it would change five days nobody was looking at.",
+      "⚠ `--open` IS A WEEK, NOT A DAY. A cell cannot be taller than its row, so opening one opens the row — and every day on that row then shows everything, rather than sitting beside empty space with events still hidden. `--open` stops the grid dividing the window; the caller pins the other rows to the height they already had, so the opened week is the only thing that moves.",
     ],
     examples: [
       '<section class="m-cal"><div class="m-cal__days"><div class="m-cal__day">SUN</div>…</div><div class="m-cal__grid"><div class="m-cal__cell"><div class="m-cal__head"><span class="m-cal__num">3</span></div><div class="m-cal__events">…</div></div>…</div></section>',
@@ -1158,11 +1159,16 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   border-bottom: 1px solid var(--outline-variant);
   transition: background-color var(--duration) var(--ease-standard);
 }
-.m-cal__grid > .m-cal__cell:nth-child(7n) { border-right: 0; }
+/* ⚠ THE COLUMN A CELL IS IN IS A CLASS, NEVER nth-child. A framework that
+   renders a list leaves its own element among the children — Alpine's
+   x-for template stays put as the grid's first child — so the nth cell is
+   not the nth child and every rule keyed on position lands one column out.
+   It is the same trap data-rail-month exists for on the rail. */
+.m-cal__cell--rowend { border-right: 0; }
 
-/* Saturday and Sunday — never a day belonging to the month either side. */
-.m-cal__grid > .m-cal__cell:nth-child(7n+1):not(.m-cal__cell--outside),
-.m-cal__grid > .m-cal__cell:nth-child(7n):not(.m-cal__cell--outside) { background: var(--surface-container-low); }
+/* Sunday, and never a day belonging to the month either side: the church's
+   week has a shape and the grid should show it before you read a word. */
+.m-cal__cell--sunday:not(.m-cal__cell--outside) { background: var(--surface-container-low); }
 .m-cal__cell--outside { opacity: .45; border-right-color: transparent; }
 .m-cal__cell--outside + .m-cal__cell:not(.m-cal__cell--outside) { border-left: 1px solid var(--outline-variant); }
 .m-cal__cell--clickable { cursor: pointer; }
@@ -1186,14 +1192,15 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 .m-cal__flag { font-size: 16px; color: var(--error); flex: 0 0 auto; }
 .m-cal__events { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 
-/* What the day is holding and not drawing. Never a silent truncation. */
+/* What the day is holding and not drawing. Never a silent truncation.
+   A LABEL, NOT A CONTROL — the whole cell is what opens the week, so a
+   second small target inside it would be hiding the answer twice. */
 .m-cal__more {
   align-self: flex-start; padding: 2px 8px;
-  background: transparent; border: 0;
   font-family: var(--font-sans); font-size: 11.5px;
-  color: var(--on-surface-variant); cursor: pointer;
+  color: var(--on-surface-variant); pointer-events: none;
 }
-.m-cal__more:hover { color: var(--primary); text-decoration: underline; }
+.m-cal__cell--clickable:hover .m-cal__more { color: var(--primary); }
 
 /* ── Fitted to the window ─────────────────────────────────────
    The rows divide the height left after everything above them, so the
@@ -1215,17 +1222,24 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
    rather than taking a line the row has not got. */
 .m-cal--fit .m-cal__more { position: absolute; top: 4px; left: 5px; padding: 0; font-size: 10.5px; letter-spacing: .04em; }
 
-/* ── A day opened ─────────────────────────────────────────────
-   The cell grows in place and its row grows with it. Not a popover:
-   the day stays where it is in the week and everything around it
-   holds still. The page drops --fit while one is open. */
-.m-cal__cell--expanded {
-  z-index: 1; overflow: visible;
-  background: var(--surface-container-lowest);
-  box-shadow: var(--shadow-sm);
+/* ── A week opened out ────────────────────────────────────────
+   A cell cannot be taller than its row, so what grows is the ROW —
+   and once a row is taller, every day on it shows everything it has
+   rather than sitting next to empty space with events still hidden.
+
+   ⚠ THE OTHER ROWS ARE PINNED, NOT LEFT TO REFLOW. Dropping the
+   1fr lets every row size to its own contents, which would redraw
+   the whole month around the week somebody asked to read. So the
+   grid stops dividing the window and the page pins every other cell
+   to the height it already had — the opened week is the only thing
+   that moves. The page is allowed to scroll while one is open. */
+.m-cal--fit.m-cal--open .m-cal__grid { grid-auto-rows: auto; }
+.m-cal__cell--expanded { overflow: visible; }
+/* Whatever a fitted cell clipped to make the month fit is unclipped
+   here — the whole point of opening it is to read what was cut. */
+.m-cal--fit .m-cal__cell--expanded .m-chip__label {
+  display: block; -webkit-line-clamp: none; overflow: visible;
 }
-.m-cal__grid > .m-cal__cell--expanded { border-right-color: var(--outline-variant); }
-.m-cal__cell--expanded .m-chip__label { display: block; -webkit-line-clamp: none; overflow: visible; }
 `,
   },
 

@@ -687,11 +687,11 @@
 
             <!-- ── The month grid ─────────────────────────────────────────── -->
             <section x-show="view === 'month'"
-                     class="cal-desktop-only m-cal min-w-0"
-                     :class="fitGrid ? 'm-cal--fit' : ''"
-                     @resize.window="measureCell()"
-                     @keydown.escape.window="collapseDay()"
-                     @click.outside="collapseDay()">
+                     class="cal-desktop-only m-cal m-cal--fit min-w-0"
+                     :class="expandedWeek ? 'm-cal--open' : ''"
+                     @resize.window="remeasure()"
+                     @keydown.escape.window="collapseWeek()"
+                     @click.outside="collapseWeek()">
                 <div class="m-cal__days">
                     <template x-for="d in ['SUN','MON','TUE','WED','THU','FRI','SAT']" :key="d">
                         <div class="m-cal__day" x-text="d"></div>
@@ -706,17 +706,29 @@
                 <div class="cal-rail-track" :class="railSnap ? 'cal-rail-snap' : ''" :style="railStyle">
                 <template x-for="(m, i) in railMonths" :key="m.month">
                 <div data-rail-month :inert="!onRail(i)" class="m-cal__grid">
-                    <template x-for="cell in m.cells" :key="cell.date">
-                        <!-- The whole cell is the target, so the empty space under
-                             the chips is what you click to add something to the day.
-                             A chip stops its own click, or the same gesture would
-                             both open an event and offer to create one. -->
-                        <div @click="cellClick(cell, $event)"
+                    <template x-for="(cell, ci) in m.cells" :key="cell.date">
+                        <!-- The whole cell is the target: the empty space under the
+                             chips is what you click to add something to the day, and
+                             on a day that is holding events back it is what opens the
+                             week. A chip stops its own click, or the same gesture
+                             would both open an event and do one of those.
+
+                             ⚠ WHICH COLUMN A CELL IS IN COMES FROM `ci`, NOT FROM
+                             `nth-child`. Alpine leaves its own <template> as the
+                             grid's first child, so the nth cell is not the nth child
+                             — the same trap `data-rail-month` exists for on the rail.
+                             Keyed on position, the Sunday tint landed on Saturday and
+                             the last column's rule landed on Friday. -->
+                        <div @click="cellClick(cell, m.month, ci, $event)"
+                             :data-date="cell.date"
                              class="m-cal__cell cal-motion"
+                             :style="cellStyle(m.month, ci)"
                              :class="[
+                                ci % 7 === 0 ? 'm-cal__cell--sunday' : '',
+                                ci % 7 === 6 ? 'm-cal__cell--rowend' : '',
                                 cell.inMonth ? '' : 'm-cal__cell--outside',
-                                canCreate ? 'm-cal__cell--clickable' : '',
-                                cell.date === expandedDate ? 'm-cal__cell--expanded' : ''
+                                canCreate || moreOn(cell, m.month, ci) ? 'm-cal__cell--clickable' : '',
+                                isOpenWeek(m.month, ci) ? 'm-cal__cell--expanded' : ''
                              ]">
 
                             <div class="m-cal__head">
@@ -740,16 +752,19 @@
                                       x-text="cell.day"></span>
                             </div>
 
-                            <!-- What the day is holding and is not drawing. Never
-                                 a silent truncation.
-                                 ⚠ IT OPENS THE CELL, NOT A POPOVER. The day grows
-                                 in place and the week around it holds still. A
-                                 layer over the top would cover the days either
+                            <!-- What the day is holding and is not drawing — never a
+                                 silent truncation. It is a label, not the control:
+                                 the whole cell opens the week, because making
+                                 somebody find a small word in the corner would be
+                                 hiding the answer twice.
+                                 ⚠ IT OPENS THE WEEK, NOT A POPOVER. A cell cannot be
+                                 taller than its row, so the row is what grows — and
+                                 a layer over the top would cover the days either
                                  side of the answer, which is most of why somebody
                                  opened a calendar rather than a list. -->
-                            <button x-show="moreOn(cell)" @click.stop="toggleExpand(cell.date)"
-                                    class="m-cal__more cal-focus"
-                                    x-text="moreOn(cell) + ' more'"></button>
+                            <span x-show="moreOn(cell, m.month, ci)"
+                                  class="m-cal__more"
+                                  x-text="moreOn(cell, m.month, ci) + ' more'"></span>
 
                             <div class="m-cal__events" x-show="cell.events.length">
                                 <!-- `spanContinues` is day two onwards of an Event
@@ -757,7 +772,7 @@
                                      scanning Wednesday needs to know half-term is
                                      on — but quieter, so five days of one break do
                                      not read as five separate breaks. -->
-                                <template x-for="ev in chipsOn(cell)" :key="ev.id">
+                                <template x-for="ev in chipsOn(cell, m.month, ci)" :key="ev.id">
                                     <button @click.stop="open(ev)"
                                             class="m-chip cal-motion cal-press cal-focus"
                                             :class="['m-chip--' + chipKind(ev), ev.spanContinues ? 'm-chip--continues' : '']"

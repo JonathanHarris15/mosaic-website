@@ -158,22 +158,33 @@
             // selected, because the list underneath it is that day.
             focusDate: null,
 
-            // ── A day opened out (desktop) ───────────────────────────────────
+            // ── A week opened out (desktop) ──────────────────────────────────
             //
-            // Fitted, a cell holds what its row holds and says how many more it
-            // is carrying. Opening one grows THAT CELL, in place, and the week
-            // around it holds still — a layer over the top would cover the days
-            // either side of the answer, which is most of why you were looking
-            // at a calendar rather than a list.
+            // Fitted, a day holds what its row holds and says how many more it
+            // is carrying. Opening one opens the WEEK, because a cell cannot be
+            // taller than its row — and once the row is taller, every day on it
+            // shows everything rather than sitting beside empty space with
+            // events still hidden.
             //
-            // One at a time. The phone has no month grid: tapping a day on the
-            // strip already shows the whole of it.
-            expandedDate: null,
+            // Keyed `YYYY-MM#n` so it survives the rail, which draws five
+            // months at once. One week at a time. The phone has no month grid:
+            // tapping a day on the strip already shows the whole of it.
+            expandedWeek: null,
 
-            // How tall a row came out, measured. What a cell can hold follows
-            // the row rather than being a number typed in here — the same grid
-            // on a 27" monitor has room for four.
+            // How tall a row came out, measured — what every other row is
+            // pinned to while one is open, so the month does not redraw itself
+            // around the week somebody asked to read.
             cellHeight: 0,
+
+            // How many chips each day can actually show, per date, MEASURED.
+            //
+            // ⚠ NOT ARITHMETIC. The first try divided the row height by a chip
+            // height, and a chip is not one height: a name that wraps to two
+            // lines is half as tall again, and the day that gets cut is exactly
+            // the crowded one the sum was supposed to protect. Empty means
+            // "not measured yet", which is the state — everything drawn, the
+            // browser clipping — that the measurement has to be taken in.
+            fits: {},
 
             // "Only mine" and the series ticks, which used to be a toolbar
             // control and a permanent rail panel. Both are filters, so they are
@@ -204,7 +215,7 @@
                 // `recentreRail` because arriving is not a move — the calendar
                 // should be ON this month, not glide onto it from two months
                 // back every time the page opens.
-                afterPaint(() => { this.recentreRail(); this.measureCell(); });
+                afterPaint(() => { this.recentreRail(); this.remeasure(); });
                 this.loadRoleDefinitions();
             },
 
@@ -461,15 +472,15 @@
             // where the rail catches up with any paging done while it was away.
             setView(next) {
                 this.view = next;
-                // Leaving the grid closes whatever day was open on it: coming
-                // back to a month with one cell still hanging open is a state
+                // Leaving the grid closes whatever week was open on it: coming
+                // back to a month with one row still hanging open is a state
                 // nobody asked for and nothing on screen would explain.
-                this.expandedDate = null;
+                this.expandedWeek = null;
                 if (next === 'month') {
                     this.slideRail();
                     // The grid is only laid out in Month, so this is the first
                     // moment there is a row to measure.
-                    afterPaint(() => this.measureCell());
+                    this.remeasure();
                 }
             },
 
@@ -674,50 +685,73 @@
             // window height and shrinking the other rows to pay for it would
             // redraw five days nobody was looking at, and push their chips
             // behind their own "more" line.
-            get fitGrid() { return !this.expandedDate; },
+            // Nothing is open, so the month is pinned to the window.
+            get fitGrid() { return !this.expandedWeek; },
 
-            // How many chips a row has room for. Two at 1440x900.
-            get chipCap() {
-                if (!this.cellHeight) return 2;
-                return Math.max(1, Math.floor((this.cellHeight - 30) / 26));
+            // Which week a cell belongs to. The rail draws five months at once,
+            // so the month has to be part of the key or the third week of
+            // August and the third week of September are the same week.
+            weekKey(month, index) { return month + '#' + Math.floor(index / 7); },
+
+            isOpenWeek(month, index) {
+                return !!this.expandedWeek && this.expandedWeek === this.weekKey(month, index);
             },
 
-            chipsOn(cell) {
+            openWeek(month, index) {
+                this.expandedWeek = this.weekKey(month, index);
+            },
+
+            chipsOn(cell, month, index) {
                 const events = (cell && cell.events) || [];
-                if (!cell || cell.date === this.expandedDate) return events;
-                return events.slice(0, this.chipCap);
+                if (!cell) return events;
+                // The open week shows everything; so does a day nobody has
+                // measured yet, which is the state the measurement is taken in.
+                if (this.isOpenWeek(month, index)) return events;
+                const fit = this.fits[cell.date];
+                if (fit === undefined || fit >= events.length) return events;
+                // Always at least one. A day drawn completely blank because
+                // nothing fits tells you less than a day drawn half.
+                return events.slice(0, Math.max(1, fit));
             },
 
             // Never a silent truncation. A day that is not drawing everything
             // says how much it is holding back.
-            moreOn(cell) {
+            moreOn(cell, month, index) {
                 const events = (cell && cell.events) || [];
-                if (!cell || cell.date === this.expandedDate) return 0;
-                return Math.max(0, events.length - this.chipCap);
+                if (!cell || this.isOpenWeek(month, index)) return 0;
+                return Math.max(0, events.length - this.chipsOn(cell, month, index).length);
             },
 
-            toggleExpand(date) {
-                this.expandedDate = this.expandedDate === date ? null : date;
-                // The grid has just changed shape. Measure again once it has
-                // been drawn, or the cap is one layout behind.
-                afterPaint(() => this.measureCell());
+            // Every other row is pinned to the height it already had, so the
+            // week being opened is the only thing that moves.
+            cellStyle(month, index) {
+                if (!this.expandedWeek || !this.cellHeight) return '';
+                if (this.isOpenWeek(month, index)) return '';
+                return 'height:' + this.cellHeight + 'px';
             },
 
-            collapseDay() {
-                if (!this.expandedDate) return;
-                this.expandedDate = null;
-                afterPaint(() => this.measureCell());
+            collapseWeek() {
+                if (!this.expandedWeek) return;
+                this.expandedWeek = null;
+                // The rows have just re-clipped, so what fits has to be taken
+                // again — and taken with everything drawn.
+                this.remeasure();
             },
 
-            // What a click on a day cell means depends on whether one is open.
-            // Inside the open day it means nothing — you are reading it, and
-            // offering to create an event under the thing somebody just asked
-            // to see more of is the opposite of the answer. On any other day it
-            // shuts the open one, and only then does a click mean "new event".
-            cellClick(cell, event) {
+            // What a click on a day means depends on what that day is doing.
+            //
+            // A day that is holding events back opens its week — that is the
+            // whole affordance, and making somebody find a small word in the
+            // corner to do it would be hiding the answer twice. Inside the open
+            // week a click means nothing: you are reading it, and offering to
+            // create an event under the thing somebody just asked to see more
+            // of is the opposite of the answer. Only a day that is showing
+            // everything, with nothing open, still means "new event".
+            cellClick(cell, month, index, event) {
                 if (!cell) return;
-                if (this.expandedDate === cell.date) return;
-                if (this.expandedDate) return this.collapseDay();
+                if (this.isOpenWeek(month, index)) return;
+                if (this.moreOn(cell, month, index)) return this.openWeek(month, index);
+                if (this.expandedWeek) return this.collapseWeek();
                 this.openDayMenu(cell, event);
             },
 
@@ -731,15 +765,59 @@
             // other cell and reflow the month around the day being read. The
             // cap freezes at what it was until the day closes.
             measureCell() {
-                if (this.expandedDate) return;
                 const grid = this.$refs && this.$refs.monthRailWide;
-                // Off a browser there is nothing laid out to measure, and the
-                // cap falls back to two — the same answer a 1440x900 window
-                // gives, so a test reads what a laptop reads.
+                // Off a browser there is nothing laid out to measure. Every day
+                // then draws everything it has, which is the honest answer when
+                // nobody can say what fits.
                 if (!grid || typeof grid.querySelector !== 'function') return;
                 const cell = grid.querySelector('.m-cal__cell');
                 if (!cell || !cell.offsetParent || !cell.offsetHeight) return;
                 this.cellHeight = cell.offsetHeight;
+            },
+
+            // ⚠ TAKEN WITH EVERYTHING DRAWN, WHICH IS WHY `remeasure` CLEARS
+            // `fits` FIRST. Measured against days already trimmed, every day
+            // reports that it fits perfectly and the trim never comes back off
+            // — the month would quietly keep whatever it was cut to the first
+            // time the window was that size.
+            measureCells() {
+                const grid = this.$refs && this.$refs.monthRailWide;
+                if (!grid || typeof grid.querySelectorAll !== 'function') return;
+                // ⚠ A GRID THAT IS NOT LAID OUT MEASURES ZERO, AND ZERO IS A
+                // REAL ANSWER — it would record every day as fitting nothing.
+                // The grid is only laid out in Month; `setView` measures the
+                // moment it appears. Same guard, same reason, as `slideRail`.
+                if (!grid.offsetParent || !grid.offsetWidth) return;
+                const cells = grid.querySelectorAll('.m-cal__cell[data-date]') || [];
+                const next = {};
+                Array.prototype.forEach.call(cells, cell => {
+                    // Off a browser these are stubs, not elements. Nothing can
+                    // be measured, so nothing is claimed — every day draws what
+                    // it has, which is the honest answer.
+                    if (!cell || typeof cell.getAttribute !== 'function'
+                        || typeof cell.getBoundingClientRect !== 'function') return;
+                    const date = cell.getAttribute('data-date');
+                    const chips = cell.querySelectorAll('.m-chip') || [];
+                    if (!date || !chips.length || !cell.offsetHeight) return;
+                    const floor = cell.getBoundingClientRect().bottom - 4;
+                    let fit = 0;
+                    for (let i = 0; i < chips.length; i++) {
+                        // The first one that does not fit ENDS it. Counting the
+                        // ones that happen to fit further down would draw a day
+                        // with a hole in the middle of it.
+                        if (chips[i].getBoundingClientRect().bottom > floor) break;
+                        fit++;
+                    }
+                    next[date] = fit;
+                });
+                this.fits = next;
+            },
+
+            // Everything drawn, one frame, then measured. See `measureCells`.
+            remeasure() {
+                if (this.expandedWeek) return;
+                this.fits = {};
+                afterPaint(() => { this.measureCell(); this.measureCells(); });
             },
 
             // A filter left on must never be invisible. The panel it used to
@@ -885,10 +963,10 @@
                 // set would highlight a day the strip is no longer showing. The
                 // same goes for a day left open on the grid.
                 this.focusDate = null;
-                this.expandedDate = null;
+                this.expandedWeek = null;
                 // A month spanning six weeks has shorter rows than one spanning
-                // five, so what a cell can hold changes with the month.
-                afterPaint(() => this.measureCell());
+                // five, so what a day can hold changes with the month.
+                this.remeasure();
 
                 if (jump) {
                     this.month = month;
