@@ -1,6 +1,7 @@
 # Calendar — a cleanup pass: design brief
 
-**Ticket:** none. Raised in conversation, 13 August 2026.
+**Ticket:** [MS-230](https://methodllc.atlassian.net/browse/MS-230) — To Plan, no PRD yet.
+**Date:** 13 August 2026.
 **For:** Claude Design, against the **Mosaic Website Design** system (project `f2292e35-4adc-4d33-a42d-7ca9373364c9`).
 **Deliverable:** a UI kit at `ui_kits/calendar/`, following `ui_kits/recurring-events/` — an `index.html` entry point, JSX screens, and a `README.md` naming the screens and the components used.
 **Read first, in the design system project:** `readme.md`, `styles.css`, `guidelines/`, `components/`. Tokens were verified current against the app on 13 August 2026 — nothing to re-check.
