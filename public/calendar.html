@@ -101,7 +101,17 @@
            the month would grow inside a box that refused to. The scrollbar
            belongs to the rail's own box, which is where the growing happened —
            and it is why the page never has to move. */
-        html:not(.shell-mobile) .m-cal--fit.m-cal--open .cal-rail-months { overflow-y: auto; scrollbar-width: thin; }
+        /* ⚠ `scrollbar-gutter: stable` IS LOAD-BEARING, NOT POLISH. Without it
+           the scrollbar appears partway through the row growing, takes ~15px
+           off every month on the rail, and the rail is still translated by a
+           pixel count measured when they were wider — so it over-slides by a
+           scrollbar per month it has moved. That draws as the next month
+           bleeding in at the right edge and the Sundays cut off at the left,
+           which is exactly what shipped. Reserving the gutter for the whole
+           time a week is open means the width never changes under the rail. */
+        html:not(.shell-mobile) .m-cal--fit.m-cal--open .cal-rail-months {
+            overflow-y: auto; scrollbar-gutter: stable; scrollbar-width: thin;
+        }
         html:not(.shell-mobile) .m-cal--fit.m-cal--open .cal-rail-track,
         html:not(.shell-mobile) .m-cal--fit.m-cal--open [data-rail-month] { height: auto; min-height: 100%; }
 
@@ -700,6 +710,7 @@
             <section x-show="view === 'month'"
                      class="cal-desktop-only m-cal m-cal--fit min-w-0"
                      :class="expandedWeek ? 'm-cal--open' : ''"
+                     :style="'--m-cal-gutter:' + railGutter + 'px'"
                      @resize.window="remeasure()"
                      @keydown.escape.window="collapseWeek()"
                      @click.outside="collapseWeek()">

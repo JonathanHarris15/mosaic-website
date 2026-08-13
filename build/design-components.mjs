@@ -1142,8 +1142,15 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
   overflow: hidden;
 }
+/* ⚠ THE HEADING PAYS THE SAME GUTTER THE GRID DOES. It sits OUTSIDE the
+   box that scrolls, so when that box reserves room for a scrollbar the
+   columns under it narrow and the heading does not — and SAT ends up
+   sitting over Friday. The caller sets --m-cal-gutter to the width the
+   scrollbar actually took, measured, because it is a different number on
+   every platform and nobody can type it. */
 .m-cal__days {
   display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  padding-right: var(--m-cal-gutter, 0px);
   background: var(--surface-container-low);
   border-bottom: 1px solid var(--outline-variant);
 }

@@ -2656,6 +2656,33 @@ test('the desktop page never scrolls, so opening a week cannot move it', () => {
     assert.ok(/html:not\(\.shell-mobile\)/.test(html), 'the fit is not scoped off the phone shell');
 });
 
+test('the grid growing a scrollbar cannot slide the rail out from under the month', () => {
+    // ⚠ THE BUG THIS EXISTS FOR. Five months sit in one row, each 100% of the
+    // rail's box, and the rail is translated by a pixel COUNT. A scrollbar
+    // appearing partway through a row growing took ~15px off every month while
+    // that count stayed where it was — so the rail over-slid by a scrollbar for
+    // every month it had moved. It drew as the next month bleeding in at the
+    // right edge and the Sundays cut off at the left, and it shipped.
+    const flat = readPage('calendar.html').replace(/\s+/g, ' ');
+    const css = readPage('mosaic.css');
+    const js = readPage('calendar.js');
+
+    assert.ok(/\.m-cal--open \.cal-rail-months \{ overflow-y: auto; scrollbar-gutter: stable;/.test(flat),
+        'the gutter is not reserved, so the months change width mid-animation');
+    assert.ok(flat.indexOf(":style=\"'--m-cal-gutter:' + railGutter + 'px'\"") !== -1,
+        'the measured gutter never reaches the grid');
+    // The minifier normalises the 0px fallback to 0, so match the var, not it.
+    assert.ok(/padding-right:var\(--m-cal-gutter,\s*0(px)?\)/.test(css),
+        'the weekday heading does not pay the gutter the columns beneath it pay');
+
+    // Measured, never typed — it is a different width on every platform.
+    assert.ok(/offsetWidth - rail\.clientWidth/.test(js), 'the gutter is a number somebody typed');
+    // And the rail is slid again, because a shift in pixels means something
+    // else once a month is narrower.
+    assert.ok(/applyGutter\(\)\s*\{[\s\S]*?this\.slideRail\(\);/.test(js),
+        'the gutter is applied without re-measuring the rail');
+});
+
 test('a row that grows does it visibly, unless somebody asked for less movement', () => {
     // ⚠ NOT WHITESPACE-STRIPPED. The minifier keeps the space in a descendant
     // selector, and stripping it turns `.m-cal--open .m-cal__cell` into

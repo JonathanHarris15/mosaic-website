@@ -194,6 +194,11 @@
             openHeight: 0,
             closeTimer: null,
 
+            // How much width the grid's scrollbar took, measured. The weekday
+            // heading sits outside the box that scrolls, so it has to be told —
+            // and the number is different on every platform.
+            railGutter: 0,
+
             // How tall a row came out, measured — what every other row is
             // pinned to while one is open, so the month does not redraw itself
             // around the week somebody asked to read.
@@ -738,8 +743,32 @@
                 this.expandedFrom = date || null;
                 this.openHeight = this.cellHeight;
                 afterPaint(() => {
-                    this.openHeight = this.openRowHeight() || this.cellHeight;
+                    // ⚠ THE GUTTER BEFORE THE HEIGHT, AND BOTH BEFORE ANYTHING
+                    // MOVES. Reserving room for the grid's scrollbar makes every
+                    // month narrower, which moves where the rail has to sit AND
+                    // changes how tall the opened row will be once its names have
+                    // re-wrapped into the narrower cells. Measure the height first
+                    // and the row settles at the wrong one.
+                    this.applyGutter();
+                    afterPaint(() => {
+                        this.openHeight = this.openRowHeight() || this.cellHeight;
+                    });
                 });
+            },
+
+            // ⚠ THE RAIL IS TRANSLATED BY A PIXEL COUNT, AND THE SCROLLBAR
+            // CHANGES WHAT A PIXEL COUNT MEANS. Five months sit in one row, each
+            // 100% of a box that just got a scrollbar's width narrower — so a
+            // shift measured before it appeared over-slides by that width for
+            // every month it has moved. It draws as the next month bleeding in
+            // at the right edge and the Sundays cut off at the left.
+            applyGutter() {
+                const rail = this.$refs && this.$refs.monthRailWide;
+                if (!rail || typeof rail.offsetWidth !== 'number'
+                    || typeof rail.clientWidth !== 'number') return;
+                if (!rail.offsetParent || !rail.offsetWidth) return;
+                this.railGutter = Math.max(0, rail.offsetWidth - rail.clientWidth);
+                this.slideRail();
             },
 
             openRowHeight() {
@@ -809,8 +838,10 @@
                 const settle = () => {
                     this.resetWeek();
                     // The rows have just re-clipped, so what fits has to be
-                    // taken again — and taken with everything drawn.
+                    // taken again — and taken with everything drawn. The gutter
+                    // goes back with them, which moves the rail again.
                     this.remeasure();
+                    afterPaint(() => this.applyGutter());
                 };
                 stopTimer(this.closeTimer);
                 // Nothing to watch — somebody asked for less movement, or there
