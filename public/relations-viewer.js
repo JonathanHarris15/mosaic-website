@@ -967,6 +967,11 @@
             '<div style="width:1px;height:30px;background:var(--outline-variant)"></div>' +
             '<div style="display:flex;flex-direction:column;align-items:flex-end;line-height:1.1"><span data-rv="edgeCount" style="font-size:16px;font-weight:600;color:var(--ocean);font-family:var(--font-display)">0</span><span style="font-size:9px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-variant)">Links Shown</span></div>' +
           '</div>' +
+          // The account, which is the one thing this bar was missing and the
+          // only reason the page carried a second header above it (MS-233).
+          // auth.js fills it; see the refresh at the end of buildSkeleton.
+          '<div style="width:1px;height:30px;background:var(--outline-variant);flex:0 0 auto"></div>' +
+          '<div id="auth-container" style="flex:0 0 auto;display:flex;align-items:center;gap:8px;min-height:40px"></div>' +
         '</header>' +
         // body
         '<div style="flex:1 1 auto;display:flex;min-height:0;position:relative">' +
@@ -1001,6 +1006,14 @@
           '<aside data-rv="panel" class="rv-scroll" style="display:none;flex:0 0 340px;width:340px;background:var(--surface-container-lowest);border-left:1px solid var(--outline-variant);overflow-y:auto;overflow-x:hidden"></aside>' +
         '</div>' +
       '</div>';
+
+    // ⚠ #auth-container HAS ONLY JUST COME INTO EXISTENCE, WHICH IS LATER THAN
+    // auth.js EVER LOOKS. It fills the account slot when Firebase answers, and
+    // again on DOMContentLoaded if the answer beat the body — but this bar is
+    // built from script after both. Without asking again the slot stays empty
+    // for the whole visit, which is the same "header that sometimes does not
+    // show up" auth.js already documents, arriving by a third road.
+    if (typeof window.refreshAuthUI === 'function') window.refreshAuthUI();
   };
 
   RelationsViewer.prototype.grabRefs = function () {

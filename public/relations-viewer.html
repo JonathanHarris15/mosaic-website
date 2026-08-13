@@ -54,24 +54,18 @@
     <script src="auth.js"></script>
 </head>
 <body>
-    <!-- The one page in the app with nothing across the top at all. Nobody had
-         complained, because nobody could leave it (MS-187). The graph fills the
-         viewport, so the bar is a Tool Bar and #app takes the rest. -->
-    <header class="m-header m-header--tool">
-        <div class="m-header__inner">
-            <div class="m-header__lead">
-                <a href="shepherding-dashboard.html" class="m-back">
-                    <span class="material-symbols-outlined">chevron_left</span>
-                    <span class="m-back__label">Shepherd Dashboard</span>
-                </a>
-                <div class="m-header__titles">
-                    <h1 class="m-header__title">Relations Viewer</h1>
-                </div>
-            </div>
-            <div class="m-header__rule"></div>
-            <div class="m-header__auth" id="auth-container"></div>
-        </div>
-    </header>
+    <!-- ⚠ THE ONE PAGE WITH NO `.m-header`, ON PURPOSE (MS-233).
+         MS-187 gave this page a Tool Bar because it had nothing across the top
+         at all and nobody could leave it. But the viewer already draws its own
+         bar — the same way back, the same title, plus a search and the counts
+         it exists to show — so the two sat one above the other saying the same
+         thing twice, and the graph started 56px further down than the 100vh it
+         asks for.
+
+         This screen is a tool of its own rather than a page of the app, which
+         is the one case where breaking the convention is the right answer. The
+         viewer's bar wins; what it was missing was the account, so
+         `#auth-container` is built into it by `buildSkeleton`. -->
     <div id="app"></div>
     <script src="relations-graph-core.js"></script>
     <script src="relations-viewer.js"></script>

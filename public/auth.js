@@ -143,6 +143,17 @@ document.addEventListener('DOMContentLoaded', () => {
     applyAuthState(lastKnownUser);
 });
 
+// The same race, arriving by a third road: a page that BUILDS its own chrome
+// from script creates #auth-container after the answer AND after the catch-up
+// above, so both have already given up on it. The Relations Viewer mounts its
+// whole bar this way. It asks again once the room exists.
+//
+// Held, not re-fetched — the state was right, it just had nowhere to go.
+window.refreshAuthUI = function refreshAuthUI() {
+    if (!authStateKnown) { waitingForTheHeader = true; return; }
+    updateAuthUI(lastKnownUser);
+};
+
 /**
  * Helper to check if the current user has a specific role.
  * Roles are stored in /users/{uid}
