@@ -194,11 +194,6 @@
             openHeight: 0,
             closeTimer: null,
 
-            // How much width the grid's scrollbar took, measured. The weekday
-            // heading sits outside the box that scrolls, so it has to be told —
-            // and the number is different on every platform.
-            railGutter: 0,
-
             // How tall a row came out, measured — what every other row is
             // pinned to while one is open, so the month does not redraw itself
             // around the week somebody asked to read.
@@ -477,6 +472,9 @@
             // window changed width. `offsetLeft` is a layout position, so a
             // transform does not move it and measuring mid-slide still answers.
             slideRail() {
+                // Off Alpine there is nothing to schedule against and no layout
+                // to read — the same reason `measureCell` gives up early.
+                if (typeof this.$nextTick !== 'function') return;
                 this.$nextTick(() => {
                     const rail = this.rail;
                     if (!rail) return;
@@ -743,32 +741,19 @@
                 this.expandedFrom = date || null;
                 this.openHeight = this.cellHeight;
                 afterPaint(() => {
-                    // ⚠ THE GUTTER BEFORE THE HEIGHT, AND BOTH BEFORE ANYTHING
-                    // MOVES. Reserving room for the grid's scrollbar makes every
-                    // month narrower, which moves where the rail has to sit AND
-                    // changes how tall the opened row will be once its names have
-                    // re-wrapped into the narrower cells. Measure the height first
-                    // and the row settles at the wrong one.
-                    this.applyGutter();
+                    // ⚠ THE RAIL BEFORE THE HEIGHT, AND BOTH BEFORE ANYTHING
+                    // MOVES. Letting the page scroll reserves a scrollbar, which
+                    // takes width off everything — so the rail's shift, which is
+                    // a pixel count measured against wider months, has to be
+                    // taken again, and the row's target height has to be measured
+                    // in cells whose names have re-wrapped to the new width.
+                    // Measure the height first and the row settles at the wrong
+                    // one; skip the rail and the month slides out from under it.
+                    this.slideRail();
                     afterPaint(() => {
                         this.openHeight = this.openRowHeight() || this.cellHeight;
                     });
                 });
-            },
-
-            // ⚠ THE RAIL IS TRANSLATED BY A PIXEL COUNT, AND THE SCROLLBAR
-            // CHANGES WHAT A PIXEL COUNT MEANS. Five months sit in one row, each
-            // 100% of a box that just got a scrollbar's width narrower — so a
-            // shift measured before it appeared over-slides by that width for
-            // every month it has moved. It draws as the next month bleeding in
-            // at the right edge and the Sundays cut off at the left.
-            applyGutter() {
-                const rail = this.$refs && this.$refs.monthRailWide;
-                if (!rail || typeof rail.offsetWidth !== 'number'
-                    || typeof rail.clientWidth !== 'number') return;
-                if (!rail.offsetParent || !rail.offsetWidth) return;
-                this.railGutter = Math.max(0, rail.offsetWidth - rail.clientWidth);
-                this.slideRail();
             },
 
             openRowHeight() {
@@ -838,10 +823,10 @@
                 const settle = () => {
                     this.resetWeek();
                     // The rows have just re-clipped, so what fits has to be
-                    // taken again — and taken with everything drawn. The gutter
-                    // goes back with them, which moves the rail again.
+                    // taken again — and taken with everything drawn. The
+                    // scrollbar goes with them, so the rail moves again too.
                     this.remeasure();
-                    afterPaint(() => this.applyGutter());
+                    afterPaint(() => this.slideRail());
                 };
                 stopTimer(this.closeTimer);
                 // Nothing to watch — somebody asked for less movement, or there

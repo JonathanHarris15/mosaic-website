@@ -2628,27 +2628,20 @@ test('the legend is gone, and so is the church glyph', () => {
     assert.ok(/>Sunday</.test(html), 'the word Sunday went with the glyph');
 });
 
-test('the desktop page never scrolls, so opening a week cannot move it', () => {
-    // ⚠ THE SCROLL POSITION IS THE POINT. `cal-fit` is unconditional: the page
-    // does not scroll at all, so growing a row cannot hand back a different
-    // scroll position than the one you were reading at. When a row runs past
-    // the window it is the GRID that takes it — the month is the only thing
-    // that changed, and moving the header, the toolbar and the rail for
-    // something that happened inside one week is a bigger answer than the
-    // question.
+test('the desktop page scrolls only ever with a week open', () => {
+    // The month arrives whole — half a week hanging below the fold is most of
+    // why this read as unfinished. A week opened out is the ONE thing allowed
+    // to make the page longer than the window, because the alternative is a
+    // row that cannot show what somebody just asked to see.
     const html = readPage('calendar.html');
     const flat = html.replace(/\s+/g, ' ');
 
-    assert.ok(flat.indexOf('html:not(.shell-mobile) body.cal-fit { height: 100%; overflow: hidden; }') !== -1,
+    assert.ok(flat.indexOf('html:not(.shell-mobile) body { overflow: hidden; }') !== -1,
         'the desktop page no longer fits the window');
-    assert.ok(/antialiased min-h-screen flex flex-col cal-fit/.test(flat),
-        'the page is allowed to scroll again under some condition');
-    assert.ok(flat.indexOf(":class=\"fitGrid") === -1,
-        'the page still turns its own scrolling on and off');
-
-    // The rail's own box is what grows a scrollbar, and only while open.
-    assert.ok(flat.indexOf('.m-cal--fit.m-cal--open .cal-rail-months { overflow-y: auto;') !== -1,
-        'nothing takes the scroll when a week runs past the window');
+    assert.ok(flat.indexOf('html:not(.shell-mobile) body.cal-open { overflow-y: scroll; }') !== -1,
+        'an opened week has nowhere to grow into');
+    assert.ok(flat.indexOf(":class=\"expandedWeek ? 'cal-open' : ''\"") !== -1,
+        'nothing lets the page scroll when a week opens');
 
     // A phone draws a strip and a list of cards, which are honestly as long as
     // they are — pinning THAT would move the scrolling somewhere with less
@@ -2664,23 +2657,20 @@ test('the grid growing a scrollbar cannot slide the rail out from under the mont
     // every month it had moved. It drew as the next month bleeding in at the
     // right edge and the Sundays cut off at the left, and it shipped.
     const flat = readPage('calendar.html').replace(/\s+/g, ' ');
-    const css = readPage('mosaic.css');
     const js = readPage('calendar.js');
 
-    assert.ok(/\.m-cal--open \.cal-rail-months \{ overflow-y: auto; scrollbar-gutter: stable;/.test(flat),
-        'the gutter is not reserved, so the months change width mid-animation');
-    assert.ok(flat.indexOf(":style=\"'--m-cal-gutter:' + railGutter + 'px'\"") !== -1,
-        'the measured gutter never reaches the grid');
-    // The minifier normalises the 0px fallback to 0, so match the var, not it.
-    assert.ok(/padding-right:var\(--m-cal-gutter,\s*0(px)?\)/.test(css),
-        'the weekday heading does not pay the gutter the columns beneath it pay');
+    // ⚠ `scroll`, NOT `auto`. On auto the scrollbar arrives partway through
+    // the row growing and the width changes under whatever is moving. Reserved
+    // from the first frame, it changes once, before anything moves.
+    assert.ok(flat.indexOf('body.cal-open { overflow-y: scroll; }') !== -1,
+        'the scrollbar can still turn up partway through the row growing');
 
-    // Measured, never typed — it is a different width on every platform.
-    assert.ok(/offsetWidth - rail\.clientWidth/.test(js), 'the gutter is a number somebody typed');
-    // And the rail is slid again, because a shift in pixels means something
-    // else once a month is narrower.
-    assert.ok(/applyGutter\(\)\s*\{[\s\S]*?this\.slideRail\(\);/.test(js),
-        'the gutter is applied without re-measuring the rail');
+    // And the rail is slid again once it has, because its shift is a pixel
+    // count and a scrollbar changes what a pixel count means.
+    assert.ok(/openWeek\([\s\S]*?this\.slideRail\(\);[\s\S]*?openRowHeight\(\)/.test(js),
+        'the rail is not re-measured after the page reserves its scrollbar');
+    assert.ok(/settle = \(\) => \{[\s\S]*?afterPaint\(\(\) => this\.slideRail\(\)\)/.test(js),
+        'closing gives the width back without moving the rail to match');
 });
 
 test('a row that grows does it visibly, unless somebody asked for less movement', () => {

@@ -1130,7 +1130,7 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
       "A day from the month either side keeps the week rule under it — a horizontal line has to run the full width — but loses its vertical, so the corners of the month dissolve rather than being ruled off into boxes nobody is meant to read. It is not tinted: two tones in a row is one too many.",
       "`--fit` divides whatever height is left into equal rows, so the month ends where the window does. You scroll for more information, never to see the rest of what is already on screen.",
       "⚠ `--open` IS A WEEK, NOT A DAY. A cell cannot be taller than its row, so opening one opens the row — and every day on that row then shows everything, rather than sitting beside empty space with events still hidden. `--open` stops the grid dividing the window; the caller pins every cell to a height in pixels, so the opened week is the only one that moves and the growing is something you can watch.",
-      "The grid takes the scroll while a week is open, never the page. The month is the only thing that grew, and letting the page take it moves the header, the toolbar and the rail for a change that happened inside one week — and hands back a different scroll position than the one you were reading at.",
+      "⚠ THE PAGE MAY SCROLL WHILE ONE IS OPEN, AND THE SCROLLBAR IS PART OF THE LAYOUT. It takes width off everything, so anything positioned in pixels — a rail translated by a measured offset, say — has to be measured again once it appears. Reserve its room from the first frame, or it turns up partway through the row growing and the width changes under whatever is moving.",
       "`__more` is at the TOP of the cell, in the head. It is the way in and the way out, and a way in at the top with a way out at the bottom is two places to look for one thing.",
     ],
     examples: [
@@ -1142,15 +1142,8 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
   overflow: hidden;
 }
-/* ⚠ THE HEADING PAYS THE SAME GUTTER THE GRID DOES. It sits OUTSIDE the
-   box that scrolls, so when that box reserves room for a scrollbar the
-   columns under it narrow and the heading does not — and SAT ends up
-   sitting over Friday. The caller sets --m-cal-gutter to the width the
-   scrollbar actually took, measured, because it is a different number on
-   every platform and nobody can type it. */
 .m-cal__days {
   display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
-  padding-right: var(--m-cal-gutter, 0px);
   background: var(--surface-container-low);
   border-bottom: 1px solid var(--outline-variant);
 }
@@ -1250,11 +1243,9 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
    grid stops dividing the window and the caller pins every cell to
    a height in pixels — the opened week is the only one that moves.
 
-   ⚠ AND THE GRID TAKES THE SCROLL, NOT THE PAGE. The month is the
-   only thing that grew, so it is the only thing that should have to
-   scroll; letting the page take it moves the header, the toolbar and
-   the rail for a change that happened inside one week, and gives back
-   a different scroll position than the one you were reading at. */
+   The page is allowed to scroll while one is open, and only then:
+   what the fit is for is a month that arrives whole, not a page that
+   may never scroll. */
 .m-cal--fit.m-cal--open .m-cal__grid { grid-auto-rows: auto; }
 /* Pixels, because a height has to be a number at both ends for the
    growing to be something you can watch rather than something that
