@@ -596,8 +596,9 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
       "The strip across the top of every desktop page: the way back, the page's name, the page's actions, and the account. One component replacing the eight shapes thirty-four pages had arrived at.",
     variants: { type: ["standing", "tool"], title: ["display", "serif"] },
     notes: [
-      "WHICH TYPE, in four questions. 1) Does the page fill the viewport and scroll inside its own panes? Yes → --tool. No → the Standing Bar. 2) Is the body one long scroll passing under the top of the window? Yes → --sticky. 3) How wide is the page's column? Set --m-header-max (default --container-max; 1600px for the wide grids; none for full-bleed). 4) Is the title a place in the app or a record in the database? A place → Cinzel. A record → __title--serif.",
-      "The bar spans the WINDOW; only its contents align to the page's column. That is the whole reason the top of the screen can look identical on a 760px reading page and a 1600px table, and it is what .m-page__bar could not do.",
+      "WHICH TYPE, in three questions. 1) Does the page fill the viewport and scroll inside its own panes? Yes → --tool. No → the Standing Bar. 2) Is the body one long scroll passing under the top of the window? Yes → --sticky. 3) Is the title a place in the app or a record in the database? A place → Cinzel. A record → __title--serif.",
+      "⚠ THE BAR USES THE WHOLE WINDOW, AND HAS NO SETTING FOR ANYTHING ELSE. There was a fourth question once — how wide is the page's column? — and `--m-header-max` to answer it with. It made the top of the app move from page to page: a 720px reading page crushed Home, the title, the actions and the account into the middle third of the screen with empty parchment either side, while a 1600px table spread the same four things right out. One page bound it to a tab, so the bar jumped when you switched. Chrome is not content; it belongs to the window, and Home being in the same place on every page is the whole of what a person wants from it.",
+      "Its contents sit on `--space-margin`, the same gutter the page's own body uses, so the bar lines up with the window rather than with whatever is under it.",
       "A Person's name is not chrome. Cinzel is the app's own word for a place — Calendar, Roles Manager. A record the database holds — a Person, a dated Service Guide — is set in EB Garamond, because setting somebody's name in tracked caps makes a member of the church look like a menu item.",
       "The account slot reserves 40px unconditionally. auth.js injects into #auth-container after Firebase resolves, and a bar that changes height when it lands is the layout shift this replaces.",
       "Actions live here, not stacked under the title in main. Up to three. A fourth would go behind a more_vert menu — that rule is written down but deliberately NOT built, because no page has four today and speculative chrome rots (MS-187).",
@@ -611,9 +612,8 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     ],
     css: `
 .m-header {
-  --m-header-max: var(--container-max);
   --m-header-h: 64px;
-  --m-header-pad: var(--space-md);
+  --m-header-pad: var(--space-margin);
   --m-header-title: 28px;
   --m-header-title-serif: 30px;
   --m-header-title-track: .02em;
@@ -622,9 +622,19 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   background: var(--surface-container-lowest);
   border-bottom: 1px solid var(--outline-variant);
 }
+/* ⚠ THE BAR USES THE WHOLE WINDOW, AND NEVER THE PAGE'S COLUMN. It used to
+   cap itself at whatever width the body below it was, which meant the top of
+   the app moved from page to page: a 720px reading page crushed the back link,
+   the title, the actions and the account into the middle third of the screen
+   with empty parchment either side, while a 1600px table spread them out. On
+   one page it was bound to a TAB, so the whole bar jumped when you switched.
+
+   Chrome is not content. It belongs to the window it is drawn in, and the one
+   thing a person needs from it — that Home is always in the same place — is
+   exactly what aligning it to the body took away. */
 .m-header__inner {
   display: flex; align-items: center; gap: var(--space-md);
-  width: 100%; max-width: var(--m-header-max); margin: 0 auto;
+  width: 100%;
   min-height: var(--m-header-h); padding: 0 var(--m-header-pad);
 }
 .m-header__lead { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; flex: 1 1 auto; }
@@ -680,7 +690,7 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
    without leaving the parchment — this is what replaced the navy bar, which
    was the only filled header in the app and needed a bespoke white button. */
 .m-header--tool {
-  --m-header-max: none; --m-header-h: 56px;
+  --m-header-h: 56px;
   --m-header-title: 24px; --m-header-title-serif: 24px;
   position: sticky; top: 0; z-index: 50;
   background: var(--surface-container);

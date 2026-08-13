@@ -625,9 +625,8 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 
 /* PageHeader — The strip across the top of every desktop page: the way back, the page's name, the page's actions, and the account. */
 .m-header {
-  --m-header-max: var(--container-max);
   --m-header-h: 64px;
-  --m-header-pad: var(--space-md);
+  --m-header-pad: var(--space-margin);
   --m-header-title: 28px;
   --m-header-title-serif: 30px;
   --m-header-title-track: .02em;
@@ -636,9 +635,19 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   background: var(--surface-container-lowest);
   border-bottom: 1px solid var(--outline-variant);
 }
+/* ⚠ THE BAR USES THE WHOLE WINDOW, AND NEVER THE PAGE'S COLUMN. It used to
+   cap itself at whatever width the body below it was, which meant the top of
+   the app moved from page to page: a 720px reading page crushed the back link,
+   the title, the actions and the account into the middle third of the screen
+   with empty parchment either side, while a 1600px table spread them out. On
+   one page it was bound to a TAB, so the whole bar jumped when you switched.
+
+   Chrome is not content. It belongs to the window it is drawn in, and the one
+   thing a person needs from it — that Home is always in the same place — is
+   exactly what aligning it to the body took away. */
 .m-header__inner {
   display: flex; align-items: center; gap: var(--space-md);
-  width: 100%; max-width: var(--m-header-max); margin: 0 auto;
+  width: 100%;
   min-height: var(--m-header-h); padding: 0 var(--m-header-pad);
 }
 .m-header__lead { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; flex: 1 1 auto; }
@@ -694,7 +703,7 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
    without leaving the parchment — this is what replaced the navy bar, which
    was the only filled header in the app and needed a bespoke white button. */
 .m-header--tool {
-  --m-header-max: none; --m-header-h: 56px;
+  --m-header-h: 56px;
   --m-header-title: 24px; --m-header-title-serif: 24px;
   position: sticky; top: 0; z-index: 50;
   background: var(--surface-container);

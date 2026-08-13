@@ -93,8 +93,10 @@
       x-data="shepherdingTags" x-cloak>
 
     <!-- Header -->
-    <header class="m-header"
-            :style="activeTab === 'relationships' ? '--m-header-max: 1080px' : '--m-header-max: 48rem'">
+    <!-- The bar used to be as wide as whichever tab was open, so switching tabs
+         moved the back link, the title and the account. A page's chrome does
+         not belong to the page's content, let alone to one tab of it. -->
+    <header class="m-header">
         <div class="m-header__inner">
             <div class="m-header__lead">
                 <a :href="window.MOSAIC_SHELL === 'mobile' ? 'mobile.html#/shepherd' : 'shepherding-dashboard.html'" href="shepherding-dashboard.html" class="m-back">
