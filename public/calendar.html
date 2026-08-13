@@ -79,34 +79,38 @@
            The phone draws a strip and a list of cards, which are honestly as
            long as they are — pinning THAT to the window would just move the
            scrolling somewhere with less room for it. */
+        /* ⚠ THE SCROLLBAR IS ALWAYS THERE, AND THAT IS THE WHOLE FIX. `scroll`,
+           never `auto`: a scrollbar that comes and goes takes ~15px off the
+           page each time it appears, and this page positions the month rail by
+           a pixel count measured off the DOM. Every version of that scrollbar
+           arriving late — on the row growing, on `auto` at the page level, on
+           a gutter inside the grid — slid the months out from under the
+           heading, which drew as the next month bleeding in at the right edge
+           and the Sundays cut off at the left. Present from the first paint,
+           the width is a constant and nothing can shift under anything.
+
+           The page still FITS the window with nothing open: body is exactly
+           the window tall and the bar sits there inert. It only has anything
+           to do once a week is opened out. */
         html:not(.shell-mobile), html:not(.shell-mobile) body { height: 100%; }
-        html:not(.shell-mobile) body { overflow: hidden; }
+        html:not(.shell-mobile) body { overflow-y: scroll; overflow-x: hidden; }
         html:not(.shell-mobile) body > main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
         html:not(.shell-mobile) .cal-layout--fit { flex: 1 1 auto; min-height: 0; }
         /* A list is honestly a list, so it takes the height that is left and
            scrolls inside itself rather than taking the page with it. */
         html:not(.shell-mobile) .cal-list-scroll { min-height: 0; overflow-y: auto; }
 
-        /* ── A week open: the page is allowed to scroll ───────────────────────
+        /* ── A week open: the page grows ──────────────────────────────────────
            What the fit is for is a month that arrives whole, not a page that
-           may never scroll. So opening a row lets the page grow and take the
-           scrollbar, and everything above stops being pinned to the window.
+           may never scroll. So an opened row stops everything above it being
+           pinned to the window and lets the page run past it.
 
-           ⚠ `overflow-y: scroll`, NOT `auto`, AND THAT IS THE FIX FOR WHAT
-           SHIPPED. On `auto` the scrollbar turns up partway through the row
-           growing, takes ~15px off the page, and the rail is still translated
-           by a pixel count measured when the months were wider — so it
-           over-slides by a scrollbar for every month it has moved, which draws
-           as the next month bleeding in at the right and the Sundays cut off
-           at the left. Reserved from the first frame, the width changes once,
-           before anything moves, and `slideRail` corrects for it there. */
-        html:not(.shell-mobile) body.cal-open { overflow-y: scroll; }
+           The rail is deliberately left to stretch with the grid rather than
+           dropping to its own height — stretching follows the row as it grows,
+           and switching how it is aligned would move it in one frame while
+           everything beside it was still travelling. */
         html:not(.shell-mobile) body.cal-open > main { flex: 0 0 auto; }
         html:not(.shell-mobile) body.cal-open .cal-layout--fit { flex: 0 0 auto; min-height: 0; }
-        /* The rail keeps its own height rather than stretching to a grid that
-           has just grown a week taller than it. */
-        html:not(.shell-mobile) body.cal-open .cal-layout { align-items: start; }
-        html:not(.shell-mobile) body.cal-open .cal-list-scroll { overflow-y: visible; }
         /* ⚠ THE FLEX CHAIN HAS TO PASS THROUGH THE RAIL. The grid is two boxes
            down from the section — the rail's clipping box and its sliding track
            — and a row can only divide a height its parent actually has. Miss

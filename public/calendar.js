@@ -740,19 +740,14 @@
                 this.expandedWeek = this.weekKey(month, index);
                 this.expandedFrom = date || null;
                 this.openHeight = this.cellHeight;
+                // ⚠ A DRAWN FRAME BETWEEN THE TWO HEIGHTS, OR THERE IS NO
+                // ANIMATION. The browser decides what to animate when it comes
+                // to draw; set both on one frame and it sees a single value and
+                // has nothing to travel between. The page's scrollbar is
+                // permanent, so nothing changes width in here and the height
+                // measured now is the height the row will settle at.
                 afterPaint(() => {
-                    // ⚠ THE RAIL BEFORE THE HEIGHT, AND BOTH BEFORE ANYTHING
-                    // MOVES. Letting the page scroll reserves a scrollbar, which
-                    // takes width off everything — so the rail's shift, which is
-                    // a pixel count measured against wider months, has to be
-                    // taken again, and the row's target height has to be measured
-                    // in cells whose names have re-wrapped to the new width.
-                    // Measure the height first and the row settles at the wrong
-                    // one; skip the rail and the month slides out from under it.
-                    this.slideRail();
-                    afterPaint(() => {
-                        this.openHeight = this.openRowHeight() || this.cellHeight;
-                    });
+                    this.openHeight = this.openRowHeight() || this.cellHeight;
                 });
             },
 
@@ -823,10 +818,8 @@
                 const settle = () => {
                     this.resetWeek();
                     // The rows have just re-clipped, so what fits has to be
-                    // taken again — and taken with everything drawn. The
-                    // scrollbar goes with them, so the rail moves again too.
+                    // taken again — and taken with everything drawn.
                     this.remeasure();
-                    afterPaint(() => this.slideRail());
                 };
                 stopTimer(this.closeTimer);
                 // Nothing to watch — somebody asked for less movement, or there
@@ -881,7 +874,14 @@
                 if (!grid || typeof grid.querySelector !== 'function') return;
                 const cell = grid.querySelector('.m-cal__cell');
                 if (!cell || !cell.offsetParent || !cell.offsetHeight) return;
-                this.cellHeight = cell.offsetHeight;
+                // ⚠ THE RECT, NOT `offsetHeight`. A row is a fifth of whatever
+                // is left, so its real height has a fraction in it; the rounded
+                // number is what the cell is pinned to when a week opens, and a
+                // pin half a pixel off its own row is a visible twitch on every
+                // row before the one being read has travelled anywhere.
+                const rect = typeof cell.getBoundingClientRect === 'function'
+                    ? cell.getBoundingClientRect() : null;
+                this.cellHeight = (rect && rect.height) || cell.offsetHeight;
             },
 
             // ⚠ TAKEN WITH EVERYTHING DRAWN, WHICH IS WHY `remeasure` CLEARS

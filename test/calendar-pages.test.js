@@ -2636,12 +2636,14 @@ test('the desktop page scrolls only ever with a week open', () => {
     const html = readPage('calendar.html');
     const flat = html.replace(/\s+/g, ' ');
 
-    assert.ok(flat.indexOf('html:not(.shell-mobile) body { overflow: hidden; }') !== -1,
+    // Body is exactly the window tall with nothing open, so the permanent
+    // scrollbar sits there inert — the month still arrives whole.
+    assert.ok(flat.indexOf('html:not(.shell-mobile), html:not(.shell-mobile) body { height: 100%; }') !== -1,
         'the desktop page no longer fits the window');
-    assert.ok(flat.indexOf('html:not(.shell-mobile) body.cal-open { overflow-y: scroll; }') !== -1,
-        'an opened week has nowhere to grow into');
+    assert.ok(flat.indexOf('html:not(.shell-mobile) body.cal-open > main { flex: 0 0 auto; }') !== -1,
+        'an opened week has nowhere to grow into — main is still pinned to the window');
     assert.ok(flat.indexOf(":class=\"expandedWeek ? 'cal-open' : ''\"") !== -1,
-        'nothing lets the page scroll when a week opens');
+        'nothing lets the page grow when a week opens');
 
     // A phone draws a strip and a list of cards, which are honestly as long as
     // they are — pinning THAT would move the scrolling somewhere with less
@@ -2649,28 +2651,26 @@ test('the desktop page scrolls only ever with a week open', () => {
     assert.ok(/html:not\(\.shell-mobile\)/.test(html), 'the fit is not scoped off the phone shell');
 });
 
-test('the grid growing a scrollbar cannot slide the rail out from under the month', () => {
-    // ⚠ THE BUG THIS EXISTS FOR. Five months sit in one row, each 100% of the
-    // rail's box, and the rail is translated by a pixel COUNT. A scrollbar
-    // appearing partway through a row growing took ~15px off every month while
-    // that count stayed where it was — so the rail over-slid by a scrollbar for
-    // every month it had moved. It drew as the next month bleeding in at the
-    // right edge and the Sundays cut off at the left, and it shipped.
+test('a scrollbar that comes and goes cannot slide the rail out from under the month', () => {
+    // ⚠ THE BUG THIS EXISTS FOR, AND IT SHIPPED THREE WAYS. Five months sit in
+    // one row, each 100% of a box, and the rail is translated by a pixel COUNT
+    // measured off the DOM. A scrollbar appearing later — on the page, inside
+    // the grid, partway through a row growing — takes ~15px off that box while
+    // the count stays where it was, so the rail over-slides by a scrollbar for
+    // every month it has already moved. It draws as the next month bleeding in
+    // at the right edge and the Sundays cut off at the left.
+    //
+    // Present from the first paint, the width is a constant. That is the fix,
+    // and it is why nothing here has to re-measure anything.
     const flat = readPage('calendar.html').replace(/\s+/g, ' ');
-    const js = readPage('calendar.js');
 
-    // ⚠ `scroll`, NOT `auto`. On auto the scrollbar arrives partway through
-    // the row growing and the width changes under whatever is moving. Reserved
-    // from the first frame, it changes once, before anything moves.
-    assert.ok(flat.indexOf('body.cal-open { overflow-y: scroll; }') !== -1,
-        'the scrollbar can still turn up partway through the row growing');
-
-    // And the rail is slid again once it has, because its shift is a pixel
-    // count and a scrollbar changes what a pixel count means.
-    assert.ok(/openWeek\([\s\S]*?this\.slideRail\(\);[\s\S]*?openRowHeight\(\)/.test(js),
-        'the rail is not re-measured after the page reserves its scrollbar');
-    assert.ok(/settle = \(\) => \{[\s\S]*?afterPaint\(\(\) => this\.slideRail\(\)\)/.test(js),
-        'closing gives the width back without moving the rail to match');
+    assert.ok(flat.indexOf('html:not(.shell-mobile) body { overflow-y: scroll; overflow-x: hidden; }') !== -1,
+        'the page scrollbar can appear and disappear again');
+    assert.ok(!/overflow-y:\s*auto;[^}]*\}[^{]*\{[^}]*cal-rail-months/.test(flat)
+        && !/cal-rail-months\s*\{[^}]*overflow-y:\s*auto/.test(flat),
+        'the rail box grows its own scrollbar again, which changes a month width');
+    assert.ok(flat.indexOf('scrollbar-gutter') === -1,
+        'a gutter is being reserved for a scrollbar that is now always there');
 });
 
 test('a row that grows does it visibly, unless somebody asked for less movement', () => {
