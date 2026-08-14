@@ -720,47 +720,17 @@ function serviceForm() {
             }
         },
 
+        // Shared with the Planning view on the Service Calendar (MS-245), so
+        // both screens offer the same hymns for the same typing. See
+        // hymn-registry.js.
         async loadHymnRegistry() {
-            try {
-                const getHymnIndex = firebase.app().functions('us-central1').httpsCallable('getHymnIndex');
-                const result = await getHymnIndex();
-                this.hymnRegistry = result.data;
-            } catch (error) {
-                console.warn("getHymnIndex failed, falling back to direct Firestore fetch:", error);
-                try {
-                    const snap = await db.collection('hymns').get();
-                    this.hymnRegistry = snap.docs.map(doc => {
-                        const data = doc.data();
-                        return {
-                            id: doc.id,
-                            hymn_name: data.hymn_name || "Unknown",
-                            variations: data.versions ? data.versions.length : 0,
-                            music_writer: data.music_writer || "Unknown",
-                            lyrics_writer: data.lyrics_writer || "Unknown",
-                            last_played_date: data.last_played_date || null,
-                            tags: data.tags || [],
-                            database_url: `/hymns/${doc.id}`
-                        };
-                    });
-                } catch (fsError) {
-                    console.error("Error loading hymn registry from Firestore:", fsError);
-                }
-            }
-
-            if (typeof Fuse !== 'undefined' && this.hymnRegistry && this.hymnRegistry.length > 0) {
-                try {
-                    // Initialize Fuse.js for fuzzy searching
-                    this.fuse = new Fuse(this.hymnRegistry, {
-                        keys: ['id', 'hymn_name', 'lyrics_writer', 'music_writer'],
-                        threshold: 0.4, // Lenient threshold for matching prefixes/typos
-                        distance: 100,
-                        minMatchCharLength: 1, // Allow 1-character queries
-                        includeScore: true
-                    });
-                } catch (fuseErr) {
-                    console.error("Error creating Fuse instance for hymns:", fuseErr);
-                }
-            }
+            const index = await HymnRegistry.load({
+                getHymnIndex: firebase.app().functions('us-central1').httpsCallable('getHymnIndex'),
+                db: db,
+                Fuse: typeof Fuse !== 'undefined' ? Fuse : null
+            });
+            this.hymnRegistry = index.hymns;
+            this.fuse = index.fuse;
         },
 
         async loadPeopleRegistry() {
@@ -2360,22 +2330,14 @@ function hymnPicker(hymnRef, parent = null) {
         async search() {
             const hasFuse = !!(this.parent && this.parent.fuse);
             
-            // Use Fuse.js if available (pre-loaded registry)
+            // Use the pre-loaded registry if it has arrived. The ranking is
+            // shared with the Planning view (MS-245) so both screens offer the
+            // same hymns for the same typing — see hymn-registry.js.
             if (hasFuse) {
                 this.hadFuse = true;
-                if (!this.query || this.query.trim().length === 0) {
-                    this.results = this.parent.hymnRegistry.slice(0, 5);
-                } else {
-                    const lowerQuery = this.query.trim().toLowerCase();
-                    // Check for exact/case-insensitive ID match first
-                    const exactIdMatch = this.parent.hymnRegistry.find(h => h.id.toLowerCase() === lowerQuery);
-                    
-                    let fuseResults = this.parent.fuse.search(this.query).map(r => r.item);
-                    if (exactIdMatch) {
-                        fuseResults = [exactIdMatch, ...fuseResults.filter(h => h.id !== exactIdMatch.id)];
-                    }
-                    this.results = fuseResults.slice(0, 5);        
-                }
+                this.results = HymnRegistry.search(
+                    { hymns: this.parent.hymnRegistry, fuse: this.parent.fuse },
+                    this.query);
                 return;
             }
 

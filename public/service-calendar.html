@@ -154,6 +154,24 @@
         tr:hover .sticky-column, tr:hover .sticky-col-left {
             background-color: inherit;
         }
+
+        /* ── Planning view (MS-245) ──────────────────────────────────────────
+           The liturgy columns are always in the markup and hidden by default,
+           so turning the Planning view on is a class rather than a re-render.
+           A re-render would take away the box somebody was mid-way through
+           typing into. */
+        .planning-col { display: none; }
+        .planning-mode .planning-col { display: table-cell; }
+
+        /* The Directory folds back to a rail so the table gets the page. */
+        .planning-rail {
+            width: 3.5rem !important;
+            min-width: 3.5rem;
+        }
+        .planning-rail .rail-hidden { display: none; }
+
+        /* Wide work wants the whole screen, not the reading column. */
+        .planning-wide { max-width: none !important; }
     </style>
     <!-- Firebase SDKs -->
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -175,6 +193,7 @@
     <script src="docx-importer.js"></script>
     <script src="bible-data.js"></script>
     <script src="verse-picker.js"></script>
+    <script src="hymn-registry.js"></script>
     <link href="verse-picker.css" rel="stylesheet" />
 </head>
 
@@ -461,22 +480,38 @@
         </div>
     </header>
 
-    <main class="flex-grow flex flex-col md:flex-row gap-margin px-margin pb-md pt-base overflow-hidden max-w-[1600px] w-full mx-auto">
-        <!-- Sidebar Navigation -->
-        <aside class="hidden md:flex md:w-80 flex-shrink-0 flex-col md:overflow-hidden">
-            <div class="flex-grow bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col overflow-hidden">
-                <h2 class="font-headline-md text-primary mb-sm flex items-center justify-between flex-shrink-0">
+    <main :class="planning && view === 'table' ? 'planning-wide px-sm' : 'max-w-[1600px] px-margin'"
+          class="flex-grow flex flex-col md:flex-row gap-margin pb-md pt-base overflow-hidden w-full mx-auto transition-all duration-300">
+        <!-- Sidebar Navigation. In the Planning view it folds back to a rail
+             against the left edge so the table gets the width. -->
+        <aside :class="planning && view === 'table' ? 'planning-rail' : 'md:w-80'"
+               class="hidden md:flex flex-shrink-0 flex-col md:overflow-hidden transition-all duration-300">
+            <div class="flex-grow bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col overflow-hidden"
+                 :class="planning && view === 'table' ? 'px-1 items-center' : ''">
+                <h2 class="font-headline-md text-primary mb-sm flex items-center justify-between flex-shrink-0"
+                    :class="planning && view === 'table' ? 'w-full justify-center' : ''">
                     <div class="flex items-center gap-2">
                         <span class="material-symbols-outlined">explore</span>
-                        Directory
+                        <span :class="planning && view === 'table' ? 'rail-hidden' : ''">Directory</span>
                     </div>
-                    <button onclick="window.jumpToUpcoming()" class="p-1 text-secondary hover:text-primary rounded-full hover:bg-surface-container transition-colors" title="Jump to upcoming service">
+                    <button onclick="window.jumpToUpcoming()"
+                            :class="planning && view === 'table' ? 'rail-hidden' : ''"
+                            class="p-1 text-secondary hover:text-primary rounded-full hover:bg-surface-container transition-colors" title="Jump to upcoming service">
                         <span class="material-symbols-outlined text-[20px]">event_repeat</span>
                     </button>
                 </h2>
-                <nav id="sidebar-nav" class="flex-grow space-y-xs overflow-y-auto pr-2 custom-scrollbar">
+                <nav id="sidebar-nav" class="flex-grow space-y-xs overflow-y-auto pr-2 custom-scrollbar"
+                     :class="planning && view === 'table' ? 'rail-hidden' : ''">
                     <!-- Nav links will be injected here -->
                 </nav>
+                <!-- The rail keeps one way back, so the Directory is never
+                     lost behind a view somebody forgot they turned on. -->
+                <button x-show="planning && view === 'table'" x-cloak
+                        @click="planning = false"
+                        class="p-2 text-secondary hover:text-primary rounded-full hover:bg-surface-container transition-colors"
+                        title="Leave the Planning view">
+                    <span class="material-symbols-outlined">chevron_right</span>
+                </button>
             </div>
         </aside>
 
@@ -520,13 +555,27 @@
                     </div>
                 </div>
 
-                <div x-show="view === 'table'" x-cloak id="table-view" class="flex-grow overflow-hidden flex flex-col">
+                <div x-show="view === 'table'" x-cloak id="table-view"
+                     :class="planning ? 'planning-mode' : ''"
+                     class="flex-grow overflow-hidden flex flex-col">
                     <div id="calendar-table-container" class="flex-grow overflow-hidden flex flex-col">
                         <!-- Table will be injected here -->
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- The way into the Planning view: the table opened out to every
+             liturgy slot, for writing many Sundays in one sitting. Only
+             offered on the table, which is the only view it changes. -->
+        <button x-show="view === 'table'" x-cloak
+                @click="planning = !planning"
+                :title="planning ? 'Back to the ordinary table' : 'Open every liturgy column'"
+                :class="planning ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-primary'"
+                class="fixed bottom-6 right-6 z-40 flex items-center gap-2 pl-4 pr-5 py-3 rounded-full border border-outline-variant shadow-lg hover:shadow-xl transition-all font-label-md text-sm">
+            <span class="material-symbols-outlined text-[20px]" x-text="planning ? 'close_fullscreen' : 'open_in_full'"></span>
+            <span x-text="planning ? 'Close Planning view' : 'Planning view'"></span>
+        </button>
     </main>
 
     <!-- Mobile Directory Modal -->

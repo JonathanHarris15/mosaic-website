@@ -21,6 +21,11 @@ async function recomputeLastPrayerDate(personId) {
 function calendarPage() {
     return {
         view: localStorage.getItem('calendarView') || 'list',
+        // The Planning view: the table opened out to every liturgy slot, for
+        // writing many Sundays in one sitting (MS-245). Remembered, because
+        // somebody who is planning is planning for the evening, not for one
+        // page load.
+        planning: localStorage.getItem('calendarPlanning') === 'true',
         showHistory: false,
         showDirectory: false,
         peopleRegistry: [],
@@ -328,6 +333,9 @@ function calendarPage() {
                 localStorage.setItem('calendarView', val);
                 if (window.refreshCalendar) window.refreshCalendar(this.showHistory);
             });
+            this.$watch('planning', val => {
+                localStorage.setItem('calendarPlanning', val ? 'true' : 'false');
+            });
             this.$watch('showHistory', val => {
                 if (window.refreshCalendar) window.refreshCalendar(val);
             });
@@ -384,6 +392,27 @@ function calendarPage() {
 let allSundays = [];
 let serviceDataMap = {};
 
+// The hymn index behind the Planning view's hymn columns. Shared with the Order
+// of Service so both offer the same hymns for the same typing — see
+// hymn-registry.js.
+let hymnIndex = { hymns: [], fuse: null };
+
+// Fetched alongside the calendar rather than before it: an empty index means
+// the dropdown offers nothing for a moment, not that the page is broken, and
+// you can still type a hymn the index has never heard of.
+async function loadHymnIndex() {
+    if (typeof firebase === 'undefined' || typeof db === 'undefined') return;
+    try {
+        hymnIndex = await HymnRegistry.load({
+            getHymnIndex: firebase.app().functions('us-central1').httpsCallable('getHymnIndex'),
+            db: db,
+            Fuse: typeof Fuse !== 'undefined' ? Fuse : null
+        });
+    } catch (e) {
+        console.error('Could not load the hymn index:', e);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     const startDate = new Date(2023, 6, 9); // July 9, 2023 (Month is 0-indexed)
     const endDate = new Date();
@@ -400,7 +429,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const showHistory = false;
     window.refreshCalendar(showHistory);
-    
+
+    loadHymnIndex();
+
     // Wait for service data to load so layout is final before we scroll
     await loadServiceData();
     
@@ -913,6 +944,45 @@ function renderList(grouped) {
     });
 }
 
+// The liturgy columns the Planning view adds (MS-245).
+//
+// One list, read three times — the header, the cell, and the editor that opens
+// when the cell is clicked. Adding a slot to the order of service means adding
+// a line here and nothing else; three hand-kept lists is how a column ends up
+// with a heading and no way to type into it.
+//
+// Pastoral Prayer is deliberately absent: the table already carries it.
+//
+// The names are the ones the code stores (hymnMid1, hymnEnd1 …) rather than the
+// Hymn 3/4/5/6 people say in the room. Jonathan's call — the fields keep their
+// names, so the headings match what is underneath them.
+const PLANNING_COLUMNS = [
+    { label: 'Preparatory',           cell: 'prep-hymn-cell',       field: 'preparatoryHymn',   type: 'hymn'  },
+    { label: 'Hymn 1',                cell: 'hymn1-cell',           field: 'hymn1',             type: 'hymn'  },
+    { label: 'Hymn 2',                cell: 'hymn2-cell',           field: 'hymn2',             type: 'hymn'  },
+    { label: 'Call to Confession',    cell: 'call-confession-cell', field: 'callToConfession',  type: 'verse' },
+    { label: 'Assurance of Pardon',   cell: 'assurance-cell',       field: 'assuranceOfPardon', type: 'verse' },
+    { label: 'Hymn Mid 1',            cell: 'hymn-mid1-cell',       field: 'hymnMid1',          type: 'hymn'  },
+    { label: 'Hymn Mid 2',            cell: 'hymn-mid2-cell',       field: 'hymnMid2',          type: 'hymn'  },
+    { label: 'Hymn End 1',            cell: 'hymn-end1-cell',       field: 'hymnEnd1',          type: 'hymn'  },
+    { label: 'Hymn End 2',            cell: 'hymn-end2-cell',       field: 'hymnEnd2',          type: 'hymn'  },
+];
+
+// Liturgy fields edited with the scripture picker rather than a plain box.
+const LITURGY_VERSE_FIELDS = ['sermon'].concat(
+    PLANNING_COLUMNS.filter(c => c.type === 'verse').map(c => c.field));
+
+const LITURGY_HYMN_FIELDS = PLANNING_COLUMNS
+    .filter(c => c.type === 'hymn').map(c => c.field);
+
+// How a hymn slot reads in a cell. A slot holds {id, name}: a chosen hymn has
+// both, one typed in freehand has only a name, and an empty one has neither.
+function hymnCellText(slot) {
+    if (!slot) return '—';
+    if (typeof slot === 'string') return slot || '—';
+    return slot.name || '—';
+}
+
 function renderTable(grouped) {
     const container = document.getElementById('calendar-table-container');
     container.innerHTML = '';
@@ -937,6 +1007,9 @@ function renderTable(grouped) {
             <th class="px-md py-sm border-b border-outline-variant">Music</th>
             <th class="px-md py-sm border-b border-outline-variant">Prayers</th>
             <th class="px-md py-sm border-b border-outline-variant">Pastoral Prayer</th>
+            ${PLANNING_COLUMNS.map(c =>
+                `<th class="px-md py-sm border-b border-outline-variant planning-col whitespace-nowrap">${c.label}</th>`
+            ).join('')}
             <th class="px-md py-sm border-b border-outline-variant text-right sticky-column">Actions</th>
         </tr>
     `;
@@ -957,7 +1030,7 @@ function renderTable(grouped) {
                 separatorRow.id = `table-month-${year}-${month}`;
                 separatorRow.className = 'sticky-month-row bg-surface-container-low/50 scroll-mt-24';
                 separatorRow.innerHTML = `
-                    <td colspan="9" class="px-md py-2 z-25 bg-surface-container-low/90 backdrop-blur-sm">
+                    <td colspan="${10 + PLANNING_COLUMNS.length}" class="px-md py-2 z-25 bg-surface-container-low/90 backdrop-blur-sm">
                         <h3 class="font-headline-md text-sm uppercase tracking-wider text-secondary">${month} ${year}</h3>
                     </td>
                 `;
@@ -999,6 +1072,10 @@ function renderTable(grouped) {
                         <td class="px-md py-md whitespace-nowrap">
                             <div class="pastoral-prayer-cell font-body-md text-on-surface-variant text-xs space-y-0.5">—</div>
                         </td>
+                        ${PLANNING_COLUMNS.map(c => `
+                        <td class="px-md py-md planning-col min-w-[150px] relative">
+                            <div class="${c.cell} font-body-md text-on-surface-variant text-sm">—</div>
+                        </td>`).join('')}
                         <td class="px-md py-md text-right whitespace-nowrap sticky-column">
                             <div class="flex justify-end gap-xs">
                                 <button onclick="window.navigateToGuide('${formattedDate}')" title="Service Guide" class="p-2 text-secondary hover:text-primary hover:bg-surface-container rounded-full transition-colors">
@@ -1315,6 +1392,21 @@ function injectServiceData(serviceMap) {
             }
         }
 
+        // The Planning view's liturgy columns (MS-245). Present in the markup
+        // whether or not the Planning view is on, so turning it on is a class
+        // on the table rather than a re-render — a re-render would take away
+        // the box somebody was typing in.
+        const liturgy = svc.liturgy || {};
+        PLANNING_COLUMNS.forEach(col => {
+            const cell = el.querySelector('.' + col.cell);
+            if (!cell) return;
+            const value = col.type === 'hymn'
+                ? hymnCellText(liturgy[col.field])
+                : (liturgy[col.field] || '—');
+            setCellText(cell, value);
+            if (canEdit) setupInlineEdit(cell, dateKey, col.field);
+        });
+
         const prayersCell = el.querySelector('.prayers-cell');
         if (prayersCell && !hasEditorOpen(prayersCell)) {
             prayersCell.innerHTML = '';
@@ -1340,6 +1432,137 @@ function injectServiceData(serviceMap) {
     });
 }
 
+// Write one liturgy slot, and only that slot.
+//
+// The same rule the Order of Service now follows (MS-243): update() reads
+// 'liturgy.hymn1' as a path to one field, so nothing else on the Sunday is
+// touched and nobody else's slot can be overwritten by a stale copy of it.
+// set(merge) would read that string as a field NAME containing a dot and
+// quietly build a second, parallel liturgy beside the real one.
+async function writeLiturgyField(dateKey, field, value) {
+    const ref = db.collection('services').doc(dateKey);
+    const stamp = firebase.firestore.FieldValue.serverTimestamp();
+
+    try {
+        await ref.update({ [`liturgy.${field}`]: value, updatedAt: stamp });
+    } catch (e) {
+        if (e.code !== 'not-found') throw e;
+        // No document for this Sunday yet. Nothing can be racing it, so the
+        // nested shape is written directly.
+        await ref.set({ liturgy: { [field]: value }, updatedAt: stamp }, { merge: true });
+    }
+
+    if (!serviceDataMap[dateKey]) serviceDataMap[dateKey] = {};
+    if (!serviceDataMap[dateKey].liturgy) serviceDataMap[dateKey].liturgy = {};
+    serviceDataMap[dateKey].liturgy[field] = value;
+}
+
+// Pick a hymn straight from the table.
+//
+// A slot holds {id, name}. Choosing from the list gives both; typing something
+// the index does not know still saves, as a name with no id — the Order of
+// Service has always allowed that ("isLiteral") and the Planning view must not
+// be stricter, or a hymn nobody has catalogued yet cannot be planned.
+function openHymnEditor(el, dateKey, field) {
+    if (el.dataset.editorOpen === 'true') return;
+
+    const slot = (serviceDataMap[dateKey] && serviceDataMap[dateKey].liturgy || {})[field];
+    const original = (slot && typeof slot === 'object') ? slot : { id: null, name: (slot || '') };
+    const originalDisplay = el.style.display;
+
+    el.dataset.editorOpen = 'true';
+    el.style.display = 'none';
+
+    const box = document.createElement('div');
+    box.className = 'hymn-inline-editor relative w-full';
+    box.innerHTML = `
+        <input type="text" class="w-full bg-surface-container-highest border-primary border rounded px-2 py-1 font-body-md text-sm outline-none focus:ring-1 focus:ring-primary shadow-inner" />
+        <div class="hymn-inline-results absolute left-0 right-0 top-full mt-1 z-50 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg overflow-hidden hidden"></div>
+    `;
+    const input = box.querySelector('input');
+    const list = box.querySelector('.hymn-inline-results');
+    input.value = original.name || '';
+
+    el.parentElement.appendChild(box);
+    input.focus();
+    input.select();
+
+    let chosen = null;          // set when a hymn is picked off the list
+    let closed = false;
+
+    const render = () => {
+        const matches = HymnRegistry.search(hymnIndex, input.value);
+        list.innerHTML = '';
+        if (!matches.length) {
+            list.classList.add('hidden');
+            return;
+        }
+        matches.forEach(h => {
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'w-full text-left px-3 py-2 text-sm hover:bg-primary-fixed/40 transition-colors block';
+            row.innerHTML = `<span class="text-on-surface">${escapeHtml(h.hymn_name)}</span>
+                             <span class="text-on-surface-variant/60 text-xs ml-2">${escapeHtml(h.id)}</span>`;
+            // mousedown, not click: blur would close the editor first and the
+            // click would land on nothing.
+            row.onmousedown = (e) => {
+                e.preventDefault();
+                chosen = { id: h.id, name: h.hymn_name };
+                input.value = h.hymn_name;
+                commit();
+            };
+            list.appendChild(row);
+        });
+        list.classList.remove('hidden');
+    };
+
+    const close = () => {
+        if (closed) return;
+        closed = true;
+        box.remove();
+        delete el.dataset.editorOpen;
+        el.style.display = originalDisplay;
+    };
+
+    const commit = async () => {
+        if (closed) return;
+        const typed = input.value.trim();
+        // A hymn off the list keeps its id. Anything else is a literal, and a
+        // literal must drop the old id — otherwise the cell reads one hymn and
+        // the printed guide fetches another.
+        const value = chosen && chosen.name === typed
+            ? chosen
+            : { id: null, name: typed };
+
+        close();
+
+        if (value.id === original.id && value.name === (original.name || '')) return;
+
+        el.textContent = hymnCellText(value);
+        el.classList.add('saving-pulse', 'text-secondary/50');
+        try {
+            await writeLiturgyField(dateKey, field, value);
+            injectServiceData(serviceDataMap);
+        } catch (err) {
+            console.error('Error saving hymn:', err);
+            alert('Failed to save.');
+            el.textContent = hymnCellText(original);
+        } finally {
+            el.classList.remove('saving-pulse', 'text-secondary/50');
+        }
+    };
+
+    input.oninput = () => { chosen = null; render(); };
+    input.onfocus = render;
+    input.onblur = () => commit();
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        if (e.key === 'Escape') { e.preventDefault(); close(); }
+    };
+
+    render();
+}
+
 function setupInlineEdit(el, dateKey, field) {
     el.classList.add('cursor-edit', 'hover:bg-primary-fixed/30', 'rounded', 'px-1', '-mx-1', 'transition-colors');
     el.title = 'Click to edit';
@@ -1357,7 +1580,12 @@ function setupInlineEdit(el, dateKey, field) {
             return;
         }
 
-        if (field === 'sermon') {
+        if (LITURGY_HYMN_FIELDS.includes(field)) {
+            openHymnEditor(el, dateKey, field);
+            return;
+        }
+
+        if (LITURGY_VERSE_FIELDS.includes(field)) {
             const currentVal = el.textContent === '—' ? '' : el.textContent;
 
             // Fix flicker by checking if already editing this cell
@@ -1449,28 +1677,10 @@ function setupInlineEdit(el, dateKey, field) {
 
                 if (finalVal !== currentVal) {
                     try {
-                        const ref = db.collection('services').doc(dateKey);
-                        try {
-                            // update() interprets dot notation as a nested field path.
-                            // set() with merge treats 'liturgy.sermon' as a literal key name.
-                            await ref.update({
-                                'liturgy.sermon': finalVal,
-                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                            });
-                        } catch (e) {
-                            if (e.code !== 'not-found') throw e;
-                            // Document doesn't exist yet — create it
-                            await ref.set({
-                                liturgy: { sermon: finalVal },
-                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                            });
-                        }
-                        if (!serviceDataMap[dateKey]) serviceDataMap[dateKey] = {};
-                        if (!serviceDataMap[dateKey].liturgy) serviceDataMap[dateKey].liturgy = {};
-                        serviceDataMap[dateKey].liturgy.sermon = finalVal;
+                        await writeLiturgyField(dateKey, field, finalVal);
                         injectServiceData(serviceDataMap);
                     } catch (err) {
-                        console.error('Error saving sermon reference:', err);
+                        console.error('Error saving scripture reference:', err);
                         alert('Failed to save.');
                     }
                 }
@@ -1827,5 +2037,8 @@ function escapeHtml(str) {
 }
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { normalizeServiceDoc, isCellBeingEdited, setCellText, hasEditorOpen };
+    module.exports = {
+        normalizeServiceDoc, isCellBeingEdited, setCellText, hasEditorOpen,
+        PLANNING_COLUMNS, LITURGY_HYMN_FIELDS, LITURGY_VERSE_FIELDS, hymnCellText
+    };
 }
