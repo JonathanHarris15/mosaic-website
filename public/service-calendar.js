@@ -1539,10 +1539,17 @@ function injectServiceData(serviceMap) {
         if (assignedBtn) {
             const assigned = svc[ASSIGNED_FIELD] || null;
             const person = assigned && assigned.id ? peopleById[assigned.id] : null;
-            assignedBtn.innerHTML = assignedBadgeHtml(assigned, person);
+
+            // Somebody who cannot edit gets the face but not the invitation.
+            // The empty badge is an offer to do something, and an offer that
+            // does nothing when pressed is worse than no offer at all.
+            assignedBtn.innerHTML = (!canEdit && !assigned)
+                ? ''
+                : assignedBadgeHtml(assigned, person);
             assignedBtn.title = assigned && assigned.name
                 ? `${assigned.name} is writing this Sunday`
-                : 'Assign someone to write this Sunday';
+                : (canEdit ? 'Assign someone to write this Sunday' : '');
+
             if (canEdit) {
                 assignedBtn.onclick = (e) => {
                     e.stopPropagation();

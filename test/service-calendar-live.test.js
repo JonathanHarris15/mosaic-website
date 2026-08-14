@@ -271,3 +271,47 @@ test('a properly nested value wins over the legacy dotted one', () => {
     });
     assert.strictEqual(out.liturgy.sermon, 'John 1');
 });
+
+// ── Assigned travels the same way ─────────────────────────────────────────
+
+test('someone else assigning a Sunday shows up on your screen', async () => {
+    // Assigned is a field on the Service, and the badge is drawn by
+    // injectServiceData, so it rides the same listener as everything else.
+    // Pinned because it is the sort of thing that only APPEARS to work: the
+    // first person to try it sees their own write and assumes the room does.
+    const btn = cell({ innerHTML: '' });
+    const db = fakeDb();
+    const sb = load({ PersonPhotoCore: require('../public/person-photo-core.js') });
+    sb.db = db;
+    // An editor: the empty badge is an invitation, and only they get one.
+    sb.document.body = { classList: { contains: (c) => c === 'can-edit' } };
+    sb.document.querySelectorAll = () => [row('2026-08-16', { '.assigned-btn': btn })];
+
+    const pending = sb.loadServiceData();
+    db.emit({ '2026-08-16': {} });
+    await pending;
+    assert.match(btn.innerHTML, /person_add/, 'starts unassigned');
+
+    // Another editor, on another machine, picks somebody.
+    db.emit({ '2026-08-16': { assignedWriter: { id: 'p-1', name: 'Bill Smith' } } });
+
+    assert.match(btn.innerHTML, />BS</, 'their initials should arrive without a reload');
+    assert.match(btn.title, /Bill Smith is writing this Sunday/);
+});
+
+test('un-assigning travels too', async () => {
+    const btn = cell({ innerHTML: '' });
+    const db = fakeDb();
+    const sb = load({ PersonPhotoCore: require('../public/person-photo-core.js') });
+    sb.db = db;
+    // An editor: the empty badge is an invitation, and only they get one.
+    sb.document.body = { classList: { contains: (c) => c === 'can-edit' } };
+    sb.document.querySelectorAll = () => [row('2026-08-16', { '.assigned-btn': btn })];
+
+    const pending = sb.loadServiceData();
+    db.emit({ '2026-08-16': { assignedWriter: { id: 'p-1', name: 'Bill Smith' } } });
+    await pending;
+
+    db.emit({ '2026-08-16': { assignedWriter: null } });
+    assert.match(btn.innerHTML, /person_add/, 'the badge should go back to empty');
+});

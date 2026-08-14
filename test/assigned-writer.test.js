@@ -215,3 +215,13 @@ test('the pastoral prayer pickers keep it, because there it is the point', () =>
     page.selectorField = sb.ASSIGNED_FIELD;
     assert.strictEqual(page.showLastPrayed, false);
 });
+
+test('a viewer sees who is assigned but is not invited to change it', () => {
+    // An empty badge is an offer. Offering a button that does nothing when
+    // pressed is worse than offering nothing.
+    const body = SRC.slice(SRC.indexOf("el.querySelector('.assigned-btn')"),
+                           SRC.indexOf('PLANNING_COLUMNS.forEach'));
+    assert.match(body, /!canEdit && !assigned/);
+    assert.match(body, /if \(canEdit\) \{[\s\S]{0,80}assignedBtn\.onclick/,
+        'only an editor gets the click');
+});
