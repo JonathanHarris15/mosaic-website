@@ -102,6 +102,8 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 - **Select** `.m-select` — A native dropdown matched to Input, with an inline chevron drawn as a Material Symbol rather than a bundled SVG.
 - **Checkbox** `.m-check` — A checkbox and its label, as one target.
 - **SearchBar** `.m-search` — An Input with a leading search glyph and a clear button that only appears once there is something to clear.
+- **Segmented** `.m-seg` — Two to four named choices with one of them chosen, all visible at once.
+- **UnitField** `.m-unitfield` — A number and the unit it is in, as one field.
 
 **Display**
 - **SectionLabel** `.m-label` — The tracked-caps overline above a group of things.
@@ -113,6 +115,9 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 - **Avatar** `.m-avatar` — A Person's Directory Photo, or their initials when there is none.
 - **ScriptureBlock** `.m-scripture` — A quoted passage set in EB Garamond with a gold hairline down its edge, and the reference beneath in tracked caps.
 - **Divider** `.m-divider` — A warm hairline between things.
+- **Token** `.m-token` — A name, and the control that takes it off the list.
+- **RuleRow** `.m-rule-row` — One rule, read back as a sentence in serif, with whatever it is made of underneath.
+- **LockedRole** `.m-locked-role` — A Role that cannot be edited, and the one thing about it that can.
 - **RotaGrid** `.m-rota` — Roles down the side, dates across the top, and what is really stored in the cells.
 - **MonthGrid** `.m-cal` — The month, seven columns wide.
 - **EventChip** `.m-chip` — One event, in a day cell or anywhere else that lists them.

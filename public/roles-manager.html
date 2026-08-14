@@ -31,25 +31,253 @@
     <style>
         [x-cloak] { display: none !important; }
 
+        /* ── MS-234: one screen, using the width it has ───────────────────────
+           The list is only Roles. The pane holds whichever of three things is
+           open — a Role, the six locked Sunday Roles, or the people no rota
+           offers — and an open Role uses the pane ACROSS rather than down.
+
+           1000px is the one breakpoint, and it is the one `.m-split` already
+           collapses at. Above it: two sides, each scrolling on its own, and the
+           page itself holds still. Below it: one side at a time, and the page
+           scrolls the way it always has. Narrow is the base; wide overrides. */
+
+        .rm-main {
+            flex: 1 1 auto;
+            width: 100%;
+            max-width: var(--container-max);
+            margin: 0 auto;
+            padding: var(--space-sm) var(--space-margin) var(--space-md);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+        .rm-main .m-split { --m-split-list: 372px; }
+
+        /* ── The list side ───────────────────────────────────────────────── */
+        .rm-list { display: flex; flex-direction: column; gap: var(--space-sm); flex: 0 0 auto; }
+        .rm-listhead { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+        .rm-count {
+            font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600;
+            letter-spacing: .14em; text-transform: uppercase; color: var(--outline);
+        }
+        .rm-create { display: flex; gap: var(--space-base); }
+        .rm-create .m-input { flex: 1 1 auto; min-width: 0; }
+        .rm-create .m-icon-btn { width: 48px; height: 48px; border-radius: var(--radius); flex: 0 0 auto; }
+
+        /* What a row says before it is opened. Enough to audit the rota by
+           reading seven rows instead of opening seven Roles. */
+        .rm-rowmeta {
+            display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-base); margin-top: 5px;
+            font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600;
+            letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant);
+        }
+        .rm-rowmeta__rules { color: var(--secondary); }
+        /* The one thing on a row that needs acting on, so it is not in caps
+           with everything else — it is a sentence, and it is read. */
+        .rm-rowmeta__warn { color: var(--error); text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12px; }
+        .rm-dot { width: 3px; height: 3px; flex: 0 0 auto; border-radius: var(--radius-full); background: var(--outline); }
+        .rm-places { display: flex; align-items: center; gap: 3px; margin-top: 6px; }
+        .rm-place {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 20px; height: 20px; flex: 0 0 auto;
+            border: 1px solid var(--outline-variant); border-radius: var(--radius-sm);
+            background: var(--surface-container-low);
+            font-family: var(--font-sans); font-size: 10px; font-weight: 700; color: var(--on-surface-variant);
+        }
+        .rm-place--either { color: var(--outline); }
+        .rm-rest { margin-left: auto; font-family: var(--font-sans); font-size: 11px; color: var(--on-surface-variant); }
+
+        /* The two church-wide destinations. Rarely read, rarely changed, and
+           not about the Role you have open — so they are rows under the list
+           and they open in the pane. Kept visually apart from the Roles (a
+           hairline, a label, `.m-row` rather than `.m-picklist__item`) but
+           sharing one selected state, because only one thing can be open. */
+        .rm-side {
+            display: flex; flex-direction: column; gap: var(--space-base); flex: 0 0 auto;
+            padding-top: var(--space-sm); border-top: 1px solid var(--outline-variant);
+        }
+        .rm-side .m-row { min-height: 56px; }
+        /* `.m-row__main/__title/__sub` are spans inside a <button> here, so they
+           need to be blocks or the title runs under the chevron. */
+        .rm-side .m-row__main { display: block; min-width: 0; }
+        .rm-side .m-row__title, .rm-side .m-row__sub { display: block; }
+        .rm-side .m-row__title { font-weight: 600; }
+
+        /* ── The pane ────────────────────────────────────────────────────── */
+        .rm-pane {
+            display: flex; flex-direction: column; min-height: 0;
+            background: var(--surface-container-lowest);
+            border: 1px solid var(--outline-variant); border-radius: var(--radius-xl);
+            overflow: hidden;
+        }
+        .rm-paneview { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+        .rm-pane__head {
+            display: none; flex: 0 0 auto; align-items: flex-start; justify-content: space-between;
+            gap: var(--space-md); padding: var(--space-sm) var(--space-md);
+            border-bottom: 1px solid var(--outline-variant);
+        }
+        .rm-pane__name { margin: 0; font-family: var(--font-serif); font-size: 26px; font-weight: 600; line-height: 1.2; color: var(--on-surface); text-wrap: pretty; }
+        .rm-pane__name--place { font-family: var(--font-display); font-size: 22px; letter-spacing: .02em; color: var(--primary); }
+        .rm-pane__sub { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-base); margin-top: 5px; }
+        .rm-pane__acts { display: flex; align-items: center; gap: var(--space-base); flex: 0 0 auto; }
+        .rm-pane__body { flex: 1 1 auto; min-height: 0; padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-md); }
+
+        /* Two columns of settings, then the rules across the foot: the wide
+           pane is used across, not down. */
+        .rm-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-md) var(--space-lg); align-items: start; }
+        .rm-col { display: flex; flex-direction: column; gap: var(--space-md); min-width: 0; }
+        .rm-group { display: flex; flex-direction: column; gap: var(--space-base); min-width: 0; }
+        .rm-grouphead { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); flex-wrap: wrap; }
+        /* The rules run the full width: the composer is a sentence, and a
+           sentence in a 410px column is a stack of three controls. */
+        .rm-foot { display: flex; flex-direction: column; gap: var(--space-md); min-width: 0; padding-top: var(--space-md); border-top: 1px solid var(--outline-variant); }
+        .rm-hint { margin: 0; max-width: 62ch; font-size: 12.5px; line-height: 1.5; color: var(--on-surface-variant); text-wrap: pretty; }
+        .rm-hint--error { color: var(--error); }
+        .rm-block {
+            display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-sm);
+            background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-radius: var(--radius);
+        }
+        .rm-fieldname { font-size: 15px; color: var(--on-surface); margin-bottom: 6px; }
+
+        /* Who it needs */
+        .rm-slots, .rm-rules, .rm-locked, .rm-people { display: flex; flex-direction: column; gap: var(--space-base); margin: 0; padding: 0; list-style: none; }
+        .rm-slot {
+            display: flex; flex-direction: column; align-items: stretch; gap: var(--space-base);
+            padding: 8px var(--space-sm) 10px;
+            border: 1px solid var(--outline-variant); border-radius: var(--radius); background: var(--surface);
+        }
+        .rm-slot__head { display: flex; align-items: center; gap: var(--space-base); }
+        .rm-slot__n { flex: 1 1 auto; min-width: 0; font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant); }
+        .rm-slot__acts { display: flex; align-items: center; margin-left: auto; flex: 0 0 auto; }
+        .rm-add {
+            align-self: stretch; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs);
+            min-height: 46px; padding: 0 var(--space-sm); background: transparent;
+            border: 1px dashed var(--outline-variant); border-radius: var(--radius); color: var(--secondary);
+            font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600;
+            letter-spacing: .14em; text-transform: uppercase; cursor: pointer;
+            /* ⚠ NOT var(--duration) / var(--ease-standard). Those two are the
+               design system's own, declared after the @generated marker in
+               spacing.css, and nothing splices them into mosaic.css — so they
+               resolve to nothing here and take the whole declaration with them.
+               Every component in the library reaches for them and loses its
+               transition the same way; see the note in the export file. */
+            transition: background-color 200ms cubic-bezier(0.2, 0, 0, 1);
+        }
+        .rm-add:hover { background: var(--surface-container-low); }
+
+        /* The composer. One row that reads left to right as a sentence. */
+        .rm-composer {
+            display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-sm);
+            background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-radius: var(--radius);
+        }
+        .rm-composer__row { display: flex; flex-direction: column; gap: var(--space-base); }
+        .rm-composer__chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); }
+
+        /* The two church-wide panes. */
+        .rm-person {
+            display: flex; align-items: center; gap: var(--space-sm);
+            padding: 6px var(--space-sm) 6px var(--space-base);
+            border: 1px solid var(--outline-variant); border-radius: var(--radius); background: var(--surface);
+        }
+        .rm-person__name { flex: 1 1 auto; min-width: 0; font-family: var(--font-serif); font-size: 16px; color: var(--on-surface); }
+        .rm-suggest { display: flex; flex-direction: column; gap: 2px; margin-top: var(--space-base); }
+        .rm-suggest button {
+            display: flex; align-items: center; gap: var(--space-base); min-height: 44px; padding: 0 var(--space-sm);
+            background: transparent; border: 0; border-radius: var(--radius); color: var(--on-surface);
+            font-family: var(--font-sans); font-size: 15px; text-align: left; cursor: pointer;
+        }
+        .rm-suggest button:hover { background: var(--surface-container); }
+        .rm-suggest button:disabled { opacity: .4; cursor: not-allowed; }
+
+        /* Nothing to open. The ONLY empty pane left: a church with no Servant
+           Roles at all. What stood here before was a dashed box on every load,
+           which was the first impression of the screen and said nothing. */
+        .rm-first { display: flex; flex-direction: column; gap: var(--space-sm); align-items: flex-start; max-width: 52ch; margin: auto; padding: var(--space-lg) var(--space-md); }
+        .rm-first .material-symbols-outlined { font-size: 40px; color: var(--outline-variant); }
+        .rm-first h3 { margin: 0; font-family: var(--font-serif); font-size: 22px; font-weight: 600; color: var(--on-surface); }
+        .rm-first p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--on-surface-variant); text-wrap: pretty; }
+
+        /* ── Wide: two sides, and the page holds still ───────────────────── */
+        @media (min-width: 1000.02px) {
+            html, body { height: 100%; }
+            body { overflow: hidden; }
+            .rm-main { min-height: 0; overflow: hidden; }
+            .rm-main .m-split { flex: 1 1 auto; min-height: 0; align-items: stretch; grid-template-rows: minmax(0, 1fr); }
+            .rm-main .m-split__list { min-height: 0; overflow-y: auto; }
+            .rm-main .m-split__pane { min-height: 0; overflow: hidden; }
+            .rm-pane { flex: 1 1 auto; }
+            .rm-pane__body { overflow-y: auto; }
+            .rm-pane__head { display: flex; }
+            /* The narrow chrome is the editor's own bar and footer; a pane with
+               its own head has no use for either. */
+            .rm-editor-bar, .rm-editor-actions { display: none; }
+            /* Reveal-on-hover is a pointer affordance and belongs only here. */
+            .rm-slot__acts { opacity: 0; transition: opacity 200ms cubic-bezier(0.2, 0, 0, 1); }
+            .rm-slot:hover .rm-slot__acts, .rm-slot:focus-within .rm-slot__acts { opacity: 1; }
+            .rm-add { align-self: flex-start; min-height: 40px; }
+            .rm-composer__row { flex-direction: row; align-items: center; }
+            /* A fixed width on the sentence opener, not an intrinsic one: the
+               longest label is "No two people from the same", and letting the
+               box size itself to that ran the text under the arrow. */
+            .rm-composer__opener { flex: 0 0 17.5rem; min-width: 0; }
+            .rm-composer__value { flex: 1 1 auto; min-width: 0; }
+            .rm-composer__row .m-btn { flex: 0 0 auto; }
+        }
+
+        /* Two columns inside the pane once there is room for them. Lower than
+           the split's own breakpoint on purpose: below 1000 the pane has the
+           whole width to itself, and two columns are still the right answer. */
+        @media (min-width: 860px) {
+            .rm-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 320px); }
+            .rm-cols--people { grid-template-columns: minmax(0, 340px) minmax(0, 1fr); }
+            .rm-locked--two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-base); }
+        }
+
+        /* ── Narrow: one side at a time ──────────────────────────────────── */
+        @media (max-width: 1000px) {
+            .rm-onepane .m-split__list { display: none; }
+            .rm-main:not(.rm-onepane) .m-split__pane { display: none; }
+        }
+
         /* ── The Roles Manager on a phone ────────────────────────────────────
-           The two-pane / one-pane switch is already a `lg:` question and needs
-           nothing here. What the shell changes is the CHROME: it draws the
-           header, so the page must not draw a second one. */
+           The list-or-pane switch is the media query above and needs nothing
+           here. What the shell changes is the CHROME: it draws the header, so
+           the page must not draw a second one. */
 
-        /* The whole title block goes: the shell header already says "Roles
-           Manager", and a paragraph explaining the page costs most of a phone
-           screen before the first Role. The list says what this is. */
-        html.shell-mobile .rm-title-block { display: none; }
+        /* The standfirst that used to sit here is gone on every width (MS-234):
+           the list says what the page is, and a paragraph explaining it cost
+           most of a phone screen before the first Role. The page's own header
+           needs no rule — mobile-shell-header.js hides `body > header` itself,
+           after adopting its actions. */
+        html.shell-mobile .rm-main { padding: var(--space-sm); }
 
-        /* The editor's own bar keeps what the shell header cannot say — the
+        /* The pane's own bar keeps what the shell header cannot say — the
            Role's name, how many people it needs, delete, and the way back to
-           the list. It carries that last one in the shell as well now: the
-           header is a hamburger here, so its arrow is not there to borrow.
+           the list. It carries that last one in the shell as well: the header
+           is a hamburger here, so its arrow is not there to borrow.
 
            Sticky at 0 would pin it UNDER the shell header (z-index 1000) and it
            would never be seen again. */
+        .rm-editor-bar {
+            display: flex; align-items: center; gap: var(--space-base); flex: 0 0 auto;
+            position: sticky; top: 0; z-index: 10;
+            padding: var(--space-base) var(--space-xs);
+            background: var(--surface-container-lowest);
+            border-bottom: 1px solid var(--outline-variant);
+        }
         html.shell-mobile .rm-editor-bar { top: var(--msh-height, 62px); }
+        .rm-editor-bar__title { flex: 1 1 auto; min-width: 0; }
+        .rm-editor-bar__name { margin: 0; font-family: var(--font-serif); font-size: 19px; font-weight: 600; line-height: 1.25; color: var(--on-surface); text-wrap: pretty; }
+        .rm-editor-bar__meta { margin-top: 2px; font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant); }
 
+        .rm-editor-actions {
+            display: flex; align-items: center; gap: var(--space-base); flex: 0 0 auto;
+            position: sticky; bottom: 0; z-index: 10;
+            padding: var(--space-base) var(--space-sm) var(--space-sm);
+            background: var(--surface-container-lowest);
+            border-top: 1px solid var(--outline-variant);
+        }
+        .rm-editor-actions .m-btn { flex: 1 1 auto; }
         /* Sticky to the bottom of the WebView means sticky over the home
            indicator. The body inset can't help: the bar is pinned to the
            scrollport, not to the end of the document. */
@@ -60,16 +288,9 @@
            carries its own edge instead of waiting for a hover that never comes.
 
            Border only — NOT background: the selected row says so with
-           `bg-surface-container`, and a background set here would win on
-           specificity and paint that difference out.
-
-           ⚠ THE FALLBACK IS THE VALUE HERE. `--outline-variant` and the rest of
-           the token variables live in mobile/tokens.css, which only mobile.html
-           loads — a DESKTOP page running in the shell is a different document
-           and has none of them. Written bare, this rule computes to nothing and
-           the row falls back to `border-transparent`: an invisible border,
-           which is what shipped for one build. */
-        html.shell-mobile .rm-role-row { min-height: 64px; border-color: var(--outline-variant); }
+           `--current`, and a background set here would win on specificity and
+           paint that difference out. */
+        html.shell-mobile .rm-role-row { min-height: 64px; border: 1px solid var(--outline-variant); border-radius: var(--radius); }
         html.shell-mobile .rm-role-list { gap: 8px; }
     </style>
 
@@ -114,554 +335,656 @@
         <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
-    <main x-show="!loading" class="flex-grow w-full max-w-container mx-auto px-4 md:px-margin pb-lg pt-md">
-
-        <!-- The page's standfirst. The header names the page; this explains it,
-             and it is two sentences — content, not the header's one-line __sub. -->
-        <div class="rm-title-block pb-md">
-            <p class="font-body-md text-body-md text-on-surface-variant max-w-[64ch]">
-                Every serving Role in one place. Set how many people a Role needs, who each place is for,
-                and any rules about who can fill it.
-            </p>
-        </div>
+    <main x-show="!loading" class="rm-main" :class="paneOpen ? 'rm-onepane' : ''">
 
         <!-- A definition stored under a liturgical slug can't be shown in the list;
              say so rather than silently hiding it. -->
-        <div x-show="conflictingDefinitions.length"
-             class="mt-md bg-error-container text-on-error-container border border-outline-variant rounded-lg p-md flex items-start gap-sm">
-            <span class="material-symbols-outlined text-[20px]">warning</span>
-            <p class="font-body-md text-body-md">
-                <template x-for="def in conflictingDefinitions" :key="def.id">
-                    <span x-text="`A saved Role called “${def.name}” clashes with the built-in Role “${def.slug}” and is not shown. `"></span>
-                </template>
-                Ask an admin to remove it.
-            </p>
+        <div x-show="conflictingDefinitions.length" class="m-notice m-notice--error">
+            <span class="material-symbols-outlined m-notice__icon">warning</span>
+            <div class="m-notice__body">
+                <p class="m-notice__text">
+                    <template x-for="def in conflictingDefinitions" :key="def.id">
+                        <span x-text="`A saved Role called “${def.name}” clashes with the built-in Role “${def.clashesWith}” and is not shown. `"></span>
+                    </template>
+                    Ask an admin to remove it.
+                </p>
+            </div>
         </div>
 
-        <!-- Two panes: the roles, and the one being edited. Below `lg` there is
-             only room for one, so the pane you are not using steps aside — the
-             list until you open a Role, the editor once you have. -->
-        <div class="mt-md grid lg:grid-cols-[360px_minmax(0,1fr)] gap-md items-start">
+        <!-- Two sides: the Roles, and whatever is open. Below 1000px there is
+             only room for one, so the side you are not using steps aside. -->
+        <div class="m-split">
 
-            <!-- ── The roles ─────────────────────────────────────────────────── -->
-            <div class="flex-col gap-md" :class="draft ? 'hidden lg:flex' : 'flex'">
+            <!-- ── The Roles, and the two church-wide destinations ───────────── -->
+            <div class="m-split__list">
 
-                <section class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md flex flex-col gap-sm">
-
-                    <div class="flex items-center justify-between gap-sm">
-                        <h2 class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">Serving Roles</h2>
-                        <span class="text-xs font-label-md tracking-wider text-outline" x-text="roleCountLabel"></span>
+                <div class="rm-list">
+                    <div class="rm-listhead">
+                        <span class="m-label">Serving Roles</span>
+                        <span class="rm-count" x-text="roleCountLabel"></span>
                     </div>
 
-                    <!-- Create -->
-                    <div class="flex gap-base">
-                        <input type="text" x-model="newRoleName" placeholder="New role, e.g. Kids Ministry"
-                               @keydown.enter="createRole(newRoleName)"
-                               class="flex-grow min-w-0 border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary" />
+                    <!-- Create. It stays at the top of the list because the thing
+                         it makes appears directly underneath it. -->
+                    <div class="rm-create">
+                        <input type="text" class="m-input" x-model="newRoleName"
+                               placeholder="New role, e.g. Kids Ministry"
+                               @keydown.enter="createRole(newRoleName)" />
                         <button @click="createRole(newRoleName)"
                                 :disabled="!newRoleName.trim()"
                                 title="Create role" aria-label="Create role"
-                                class="w-11 flex-shrink-0 flex items-center justify-center bg-primary text-on-primary border border-primary rounded-lg shadow-xs hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                            <span class="material-symbols-outlined text-[20px]">add</span>
+                                class="m-icon-btn m-icon-btn--primary">
+                            <span class="material-symbols-outlined">add</span>
                         </button>
                     </div>
 
                     <!-- Empty state — an invitation, not an empty table. -->
-                    <div x-show="!hasServantRoles" class="text-center py-md flex flex-col items-center gap-xs">
-                        <span class="material-symbols-outlined text-[40px] text-outline-variant">volunteer_activism</span>
-                        <p class="font-body-md text-body-md text-on-surface-variant">
-                            No serving roles yet. Name one above — kids ministry, setup, coffee, sound — and say who it needs.
-                        </p>
+                    <div x-show="!hasServantRoles" class="m-empty">
+                        <span class="material-symbols-outlined">volunteer_activism</span>
+                        <p>No serving roles yet. Name one above — kids ministry, setup, coffee, sound — and say who it needs.</p>
                     </div>
 
-                    <!-- The row IS the edit control: opening a Role is the point of the list. -->
-                    <ul x-show="hasServantRoles" class="rm-role-list flex flex-col">
+                    <!-- The row IS the edit control: opening a Role is the point
+                         of the list. It says enough to check the rota is set up
+                         properly without opening all of them — what it needs, in
+                         what order, how much rest it owes, and whether one of its
+                         rules has stopped working.
+
+                         ⚠ Delete is NOT here any more. It lives in the open
+                         Role's own head. A destructive control a thumb-width from
+                         the tap that OPENS a Role is how you delete the Role you
+                         meant to edit — and hiding it with CSS was worse, because
+                         inside the WebView a tap on the row still arrived as a
+                         synthesized click on the hidden button. -->
+                    <ul x-show="hasServantRoles" class="m-picklist rm-role-list">
                         <template x-for="role in servantRoles" :key="role.slug">
                             <li>
-                                <div class="rm-role-row group relative w-full flex items-center gap-sm pl-[14px] pr-xs py-sm rounded-lg border cursor-pointer transition-colors"
-                                     :class="isSelected(role) ? 'bg-surface-container border-outline-variant' : 'border-transparent hover:bg-surface-container-low'"
-                                     role="button" tabindex="0"
-                                     @click="startEdit(role)"
-                                     @keydown.enter.prevent="startEdit(role)"
-                                     @keydown.space.prevent="startEdit(role)">
-
-                                    <span class="absolute left-0 top-[9px] bottom-[9px] w-[3px] rounded-r-[3px] bg-primary transition-opacity"
-                                          :class="isSelected(role) ? 'opacity-100' : 'opacity-0'"></span>
-
-                                    <div class="flex-grow min-w-0">
-                                        <div class="font-serif text-[18px] leading-tight text-on-surface" x-text="role.name"></div>
-                                        <div class="flex items-center gap-base mt-[3px] text-xs font-label-md uppercase tracking-wider text-on-surface-variant">
+                                <button type="button"
+                                        class="m-picklist__item rm-role-row"
+                                        :class="isSelected(role) ? 'm-picklist__item--current' : ''"
+                                        :aria-current="isSelected(role) ? 'true' : null"
+                                        @click="startEdit(role)">
+                                    <span class="m-picklist__main">
+                                        <span class="m-picklist__name" style="font-family: var(--font-serif); font-size: 17px;"
+                                              x-text="role.name"></span>
+                                        <span class="rm-rowmeta">
                                             <span x-text="peopleNeededLabel(role)"></span>
                                             <template x-if="restrictionCount(role)">
-                                                <span class="flex items-center gap-base">
-                                                    <span class="w-[3px] h-[3px] rounded-full bg-outline"></span>
-                                                    <span class="text-secondary" x-text="ruleCountLabel(role)"></span>
-                                                </span>
+                                                <span class="rm-dot"></span>
                                             </template>
+                                            <template x-if="restrictionCount(role)">
+                                                <span class="rm-rowmeta__rules" x-text="ruleCountLabel(role)"></span>
+                                            </template>
+                                        </span>
+                                        <span class="rm-places">
+                                            <template x-for="place in placeMarks(role)" :key="place.id">
+                                                <span class="rm-place" :class="place.either ? 'rm-place--either' : ''"
+                                                      :title="place.label" x-text="place.mark"></span>
+                                            </template>
+                                            <span class="rm-rest" x-text="restLabel(role)"></span>
+                                        </span>
+                                        <template x-if="unavailableRuleLabel(role)">
+                                            <span class="rm-rowmeta">
+                                                <span class="rm-rowmeta__warn" x-text="unavailableRuleLabel(role)"></span>
+                                            </span>
+                                        </template>
+                                    </span>
+                                    <span class="m-picklist__meta">
+                                        <span class="material-symbols-outlined" style="font-size: 19px; color: var(--outline);">chevron_right</span>
+                                    </span>
+                                </button>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+
+                <!-- ── The whole church ─────────────────────────────────────────
+                     Neither of these is about the Role you have open, and neither
+                     wants a 372px column: the locked six become two columns of
+                     boxes, and Doesn't serve gets its search beside its list. -->
+                <div class="rm-side">
+                    <span class="m-label m-label--sm">The whole church</span>
+                    <div class="m-card-list">
+                        <button type="button" @click="openPane('sunday')"
+                                class="m-row m-row--interactive"
+                                :class="pane === 'sunday' ? 'm-row--current' : ''">
+                            <span class="material-symbols-outlined" style="color: var(--outline); flex: 0 0 auto;">lock</span>
+                            <span class="m-row__main">
+                                <span class="m-row__title">Sunday Service Roles</span>
+                                <span class="m-row__sub">Six, built in · rest only</span>
+                            </span>
+                            <span class="m-row__chevron">
+                                <span class="material-symbols-outlined" style="font-size: 19px;">chevron_right</span>
+                            </span>
+                        </button>
+                        <button type="button" @click="openPane('nonservers')"
+                                class="m-row m-row--interactive m-row--last"
+                                :class="pane === 'nonservers' ? 'm-row--current' : ''">
+                            <span class="material-symbols-outlined" style="color: var(--outline); flex: 0 0 auto;">person_off</span>
+                            <span class="m-row__main">
+                                <span class="m-row__title">Doesn't serve</span>
+                                <span class="m-row__sub" x-text="`${nonServers.length === 1 ? '1 person' : nonServers.length + ' people'} · never offered a Role`"></span>
+                            </span>
+                            <span class="m-row__chevron">
+                                <span class="material-symbols-outlined" style="font-size: 19px;">chevron_right</span>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── The pane ──────────────────────────────────────────────────── -->
+            <div class="m-split__pane">
+                <div class="rm-pane">
+
+                    <!-- ── An open Role ─────────────────────────────────────────
+                         x-if, not x-show: x-show only hides, it still evaluates
+                         every binding inside, and `draft` is null between Roles. -->
+                    <template x-if="pane === 'role' && draft">
+                        <div class="rm-paneview">
+
+                            <!-- Below 1000px the pane is the whole screen, so it
+                                 carries its own way back and its own delete.
+                                 ⚠ THE ONLY WAY OUT OF AN OPEN ROLE, and it must
+                                 render in the shell too: the header is a hamburger
+                                 there, so its arrow is not there to borrow. -->
+                            <div class="rm-editor-bar">
+                                <button @click="backToList()" title="Back to the roles list" aria-label="Back to the roles list"
+                                        class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost">
+                                    <span class="material-symbols-outlined" style="font-size: 24px;">chevron_left</span>
+                                </button>
+                                <span class="rm-editor-bar__title">
+                                    <h2 class="rm-editor-bar__name" x-text="draft.name"></h2>
+                                    <div class="rm-editor-bar__meta" x-text="draftPeopleNeededLabel"></div>
+                                </span>
+                                <button @click="deleteRole(draftRole)" title="Delete this role" aria-label="Delete this role"
+                                        class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost">
+                                    <span class="material-symbols-outlined" style="font-size: 21px; color: var(--error);">delete</span>
+                                </button>
+                            </div>
+
+                            <div class="rm-pane__head">
+                                <div style="min-width: 0;">
+                                    <span class="m-label m-label--sm">Editing Role</span>
+                                    <h2 class="rm-pane__name" x-text="draft.name"></h2>
+                                    <div class="rm-pane__sub">
+                                        <span class="m-badge m-badge--secondary" x-text="draftPeopleNeededLabel"></span>
+                                        <span class="m-badge" x-text="restLabel(draft)"></span>
+                                        <span class="m-badge" x-text="draft.allowsAnotherRole ? 'Can double up' : 'Takes the morning'"></span>
+                                    </div>
+                                </div>
+                                <div class="rm-pane__acts">
+                                    <button @click="deleteRole(draftRole)" class="m-btn m-btn--danger-outline m-btn--sm">
+                                        <span class="material-symbols-outlined" style="font-size: 18px;">delete</span>
+                                        <span class="m-btn__label">Delete</span>
+                                    </button>
+                                    <button @click="cancelEdit()" class="m-btn m-btn--secondary m-btn--sm">Cancel</button>
+                                    <button @click="saveDraft()" class="m-btn m-btn--primary m-btn--sm">Save</button>
+                                </div>
+                            </div>
+
+                            <div class="rm-pane__body">
+
+                                <!-- Every problem at once, not one save at a time. -->
+                                <div x-show="saveAttempted && draftErrors.length" class="m-notice m-notice--error">
+                                    <span class="material-symbols-outlined m-notice__icon">error</span>
+                                    <div class="m-notice__body">
+                                        <p class="m-notice__title">This Role can't be saved yet:</p>
+                                        <template x-for="problem in draftErrors" :key="problem">
+                                            <p class="m-notice__text" x-text="problem"></p>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <div class="rm-cols">
+                                    <div class="rm-col">
+
+                                        <!-- Name. Renaming changes the label only. -->
+                                        <div class="rm-group">
+                                            <label class="m-label" for="rm-name">Name</label>
+                                            <input id="rm-name" type="text" class="m-input" x-model="draft.name"
+                                                   :class="saveAttempted && !draft.name.trim() ? 'm-input--invalid' : ''"
+                                                   :aria-invalid="saveAttempted && !draft.name.trim() ? 'true' : null" />
+                                            <p class="rm-hint">Renaming changes the label only — the Role keeps its serve history.</p>
+                                        </div>
+
+                                        <!-- ── What the job actually is (MS-222) ────────
+                                             A name is a label, and a label is not an answer
+                                             to "what am I meant to do?". This is that
+                                             answer, in the editor's own words, and it is
+                                             read by whoever is down for the Role on their
+                                             Commitments page.
+
+                                             One field of plain prose on purpose. The moment
+                                             it has structure it wants a screen of its own. -->
+                                        <div class="rm-group">
+                                            <label class="m-label" for="rm-desc">What it involves</label>
+                                            <textarea id="rm-desc" class="m-input" rows="6"
+                                                      x-model="draft.description"
+                                                      :maxlength="descriptionLimit"
+                                                      placeholder="Arrive by 9:15, put the urns on, and set out the mugs on the side table."></textarea>
+                                            <p class="rm-hint" :class="descriptionLeft < 0 ? 'rm-hint--error' : ''">
+                                                Anyone down for this Role reads it beside the date.
+                                                <span x-show="draft.description" x-text="'· ' + descriptionLeft + ' left'"></span>
+                                            </p>
+                                        </div>
+
+                                        <!-- ── How often, and whether it uses up the morning
+                                             Two separate questions that are easy to conflate:
+                                             rest says the job TIRES you, exclusivity says it
+                                             OCCUPIES you. Sound is plausibly 1 week's rest
+                                             and still exclusive — easy work, but you're stuck
+                                             at the desk. Kept apart on purpose, and the
+                                             checkbox's sentence says what UNTICKED means,
+                                             because that is the state nobody reads. -->
+                                        <div class="rm-group">
+                                            <span class="m-label">How often it can be asked of someone</span>
+                                            <div class="rm-block">
+                                                <div>
+                                                    <div class="rm-fieldname">Rest between turns</div>
+                                                    <!-- ⚠ `.number` IS LOAD-BEARING. Plain x-model on a
+                                                         number input writes a STRING, and the model reads
+                                                         intensity strictly — so typing 1.2 made the Role
+                                                         unsaveable with "intensity must be a number of weeks". -->
+                                                    <span class="m-unitfield">
+                                                        <input type="number" min="0" step="0.25" x-model.number="draft.intensity" />
+                                                        <span class="m-unitfield__unit" x-text="draft.intensity === 1 ? 'week' : 'weeks'"></span>
+                                                    </span>
+                                                    <p class="rm-hint" style="margin-top: 6px;">
+                                                        How long the rota leaves somebody alone afterwards. Left empty it reads as 1.
+                                                    </p>
+                                                </div>
+                                                <hr class="m-divider" />
+                                                <div>
+                                                    <label class="m-check">
+                                                        <input type="checkbox" x-model="draft.allowsAnotherRole" />
+                                                        <span>They can also take another Role that day</span>
+                                                    </label>
+                                                    <p class="rm-hint" x-text="draft.allowsAnotherRole
+                                                        ? 'Ticked: somebody on this Role can also be given a second one that morning.'
+                                                        : 'Unticked: this Role uses up the morning, so nobody on it is offered a second one. Separate from rest — rest says the job tires you, this says it occupies you.'"></p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <!-- Hover-revealed on a pointer; touch has no hover, so always visible below lg. -->
-                                    <div class="flex items-center flex-shrink-0 transition-opacity opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
-                                         :class="isSelected(role) ? 'lg:opacity-100' : ''">
-                                        <!-- ⚠ x-if, NOT a CSS `display: none`.
-                                             On a phone delete belongs in the editor's header (design 1b) —
-                                             a destructive control a thumb-width from the tap that OPENS a
-                                             Role is how you delete the Role you meant to edit. It was hidden
-                                             with CSS first, and inside the WebView a tap anywhere on the row
-                                             still arrived here as a synthesized click (clientX/Y 0,0) on the
-                                             hidden button: every tap on a Role asked to delete it. A control
-                                             that is only invisible can still be pressed. -->
-                                        <template x-if="!inShell">
-                                            <button @click.stop="deleteRole(role)" title="Delete this role"
-                                                    class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error transition-colors">
-                                                <span class="material-symbols-outlined text-[19px]">delete</span>
+                                    <!-- Slots -->
+                                    <div class="rm-col">
+                                        <div class="rm-group">
+                                            <div class="rm-grouphead">
+                                                <span class="m-label">Who it needs</span>
+                                                <span class="rm-count" x-text="draftPeopleNeededLabel"></span>
+                                            </div>
+                                            <p class="rm-hint">
+                                                One line per person — three people means three lines, so you can ask for two women and one man.
+                                            </p>
+                                            <ul class="rm-slots">
+                                                <template x-for="(slot, index) in draft.slots" :key="slot.id">
+                                                    <li class="rm-slot">
+                                                        <div class="rm-slot__head">
+                                                            <span class="rm-slot__n" x-text="`Person ${index + 1}`"></span>
+                                                            <span class="rm-slot__acts">
+                                                                <button @click="moveSlot(index, index - 1)" :disabled="index === 0"
+                                                                        title="Move up" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost">
+                                                                    <span class="material-symbols-outlined" style="font-size: 18px;">arrow_upward</span>
+                                                                </button>
+                                                                <button @click="moveSlot(index, index + 1)" :disabled="index === draft.slots.length - 1"
+                                                                        title="Move down" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost">
+                                                                    <span class="material-symbols-outlined" style="font-size: 18px;">arrow_downward</span>
+                                                                </button>
+                                                                <button @click="removeSlot(slot.id)" title="Remove this person"
+                                                                        class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost">
+                                                                    <span class="material-symbols-outlined" style="font-size: 18px;">close</span>
+                                                                </button>
+                                                            </span>
+                                                        </div>
+                                                        <!-- Three named choices, all visible: the requirement is
+                                                             the point of the row, not something to go looking for
+                                                             in a menu. `aria-pressed` IS the selected state. -->
+                                                        <div class="m-seg m-seg--fill m-seg--lg">
+                                                            <template x-for="value in requirementOptions" :key="value">
+                                                                <button type="button" class="m-seg__opt"
+                                                                        @click="setSlotRequirement(slot.id, value)"
+                                                                        :aria-pressed="slot.requirement === value"
+                                                                        x-text="requirementLabel(value)"></button>
+                                                            </template>
+                                                        </div>
+                                                    </li>
+                                                </template>
+                                            </ul>
+                                            <button @click="addSlot()" class="rm-add">
+                                                <span class="material-symbols-outlined" style="font-size: 18px;">add</span>Add another person
                                             </button>
-                                        </template>
-                                        <span class="material-symbols-outlined text-[19px] text-outline">chevron_right</span>
+                                        </div>
                                     </div>
                                 </div>
-                            </li>
-                        </template>
-                    </ul>
-                </section>
 
-                <!-- ── Liturgical Roles: listed, never editable ───────────────── -->
-                <section class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
-                    <div class="flex items-center gap-base mb-xs">
-                        <span class="material-symbols-outlined text-[17px] text-outline">lock</span>
-                        <h2 class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">Sunday Service Roles</h2>
-                    </div>
-                    <p class="font-body-md text-[13px] leading-normal text-on-surface-variant mb-sm">
-                        Built into the app — filled on the service page and printed in the service guide,
-                        so who does them, and what they need, can't be changed here.
-                        The one thing you can set is how much rest each one owes, because preparing a
-                        sermon and reading a prayer aren't the same work and the rota needs to know.
-                    </p>
-                    <ul class="flex flex-col gap-base">
-                        <template x-for="role in liturgicalRoles" :key="role.slug">
-                            <li class="flex items-center gap-sm px-sm py-sm rounded-lg border border-outline-variant bg-surface-container-lowest">
-                                <span class="material-symbols-outlined text-[17px] text-outline flex-shrink-0">lock</span>
-                                <span class="flex-grow font-serif text-[16px] text-on-surface-variant truncate" x-text="role.name"></span>
-                                <input type="number" min="0" step="0.25"
-                                       :value="liturgicalIntensity(role.slug)"
-                                       @change="setLiturgicalIntensity(role.slug, $event.target.value)"
-                                       :disabled="savingIntensity === role.slug"
-                                       class="w-20 flex-shrink-0 border border-outline-variant rounded-lg px-sm py-[6px] font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary disabled:opacity-50" />
-                                <span class="flex-shrink-0 font-body-md text-[13px] text-on-surface-variant">weeks' rest</span>
-                            </li>
-                        </template>
-                    </ul>
-                </section>
+                                <!-- Restriction rules, across the foot: the composer is a
+                                     sentence, and a sentence in a 410px column is a stack
+                                     of three controls. -->
+                                <div class="rm-foot">
+                                    <div class="rm-group">
+                                        <div class="rm-grouphead">
+                                            <span class="m-label">Rules about who can fill it</span>
+                                            <template x-if="draftRestrictions.length">
+                                                <span class="rm-count" x-text="ruleCountLabel(draft)"></span>
+                                            </template>
+                                        </div>
 
-                <!-- ── Who does not serve ─────────────────────────────────────
-                     ⚠ NOT A PRIVACY SETTING, and it hides nobody. The name is
-                     still everywhere it was; it is only never offered for a
-                     Role. Kept apart from the tags that hide people, because
-                     confusing the two would mean a small child's name quietly
-                     disappearing from the directory as well. -->
-                <section class="bg-surface-container-low border border-outline-variant rounded-lg p-md">
-                    <div class="flex items-center justify-between gap-sm mb-xs">
-                        <h2 class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">
-                            Doesn't serve
-                        </h2>
-                        <span class="text-xs font-label-md tracking-wider text-outline"
-                              x-text="nonServers.length"></span>
-                    </div>
-                    <p class="font-body-md text-[13px] leading-normal text-on-surface-variant mb-sm">
-                        People no rota should ever offer — the youngest children, anyone too frail,
-                        anyone in a season of not serving. They stay everywhere else in Mosaic;
-                        they just stop coming up when a Role needs filling.
-                    </p>
+                                        <ul x-show="draftRestrictions.length" class="rm-rules">
+                                            <template x-for="(rule, index) in draftRestrictions" :key="index">
+                                                <li class="m-rule-row"
+                                                    :class="isRulePrivate(rule) ? 'm-rule-row--private'
+                                                          : (isRuleAvailable(rule) ? '' : 'm-rule-row--unavailable')">
+                                                    <div class="m-rule-row__line">
+                                                        <span class="material-symbols-outlined m-rule-row__icon"
+                                                              x-text="isRulePrivate(rule) ? 'lock' : ruleIcon(rule)"></span>
+                                                        <span class="m-rule-row__text" x-text="ruleSentence(rule)"></span>
+                                                        <button @click="removeRule(index)" title="Remove this rule"
+                                                                class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost">
+                                                            <span class="material-symbols-outlined" style="font-size: 19px;">close</span>
+                                                        </button>
+                                                    </div>
 
-                    <div class="relative mb-sm">
-                        <input type="text" x-model="nonServerSearch" placeholder="Find someone by name"
-                               class="w-full border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary" />
-                        <ul x-show="nonServerMatches.length"
-                            class="absolute z-10 left-0 right-0 mt-base bg-surface-container-lowest border border-outline-variant rounded-lg shadow-md overflow-hidden">
-                            <template x-for="p in nonServerMatches" :key="p.id">
-                                <li>
-                                    <!-- ⚠ `!!`, NOT the bare string. Alpine only
-                                         removes a boolean attribute for false,
-                                         null or undefined — an empty string
-                                         becomes `disabled="disabled"`, so every
-                                         row greys out and nothing can be added. -->
-                                    <button type="button" @click="setDoesNotServe(p.id, true)"
-                                            :disabled="!!savingNonServer"
-                                            class="w-full text-left px-sm py-sm font-body-md text-body-md text-on-surface hover:bg-surface-container transition-colors disabled:opacity-40"
-                                            x-text="p.name"></button>
-                                </li>
-                            </template>
-                        </ul>
-                        <p x-show="nonServerSearch.trim() && !nonServerMatches.length"
-                           class="mt-base font-body-md text-[13px] text-on-surface-variant">
-                            Nobody left to add by that name.
-                        </p>
-                    </div>
+                                                    <!-- A list is the one rule made of many things, so it is
+                                                         the one that can be half-wrong later. It is amended
+                                                         where it sits: rebuilding eleven names to add a
+                                                         twelfth is how one of the eleven gets left off. -->
+                                                    <div x-show="rule.kind === 'allowlist'" class="m-rule-row__body">
+                                                        <template x-for="(personId, i) in (rule.personIds || [])" :key="personId">
+                                                            <span class="m-token">
+                                                                <span x-text="allowlistNames(rule)[i]"></span>
+                                                                <button @click="removeFromAllowlistRule(index, personId)"
+                                                                        :title="`Take ${allowlistNames(rule)[i]} off this list`"
+                                                                        class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost">
+                                                                    <span class="material-symbols-outlined" style="font-size: 15px;">close</span>
+                                                                </button>
+                                                            </span>
+                                                        </template>
+                                                        <span class="m-select-wrap" style="width: 17.5rem;">
+                                                            <select class="m-select" @change="pickIntoAllowlistRule(index, $event)">
+                                                                <option value="">Add someone to this list…</option>
+                                                                <template x-for="option in allowlistOptionsFor(rule)" :key="option.id">
+                                                                    <option :value="option.id" x-text="option.name"></option>
+                                                                </template>
+                                                            </select>
+                                                        </span>
+                                                    </div>
+                                                </li>
+                                            </template>
+                                        </ul>
 
-                    <ul x-show="nonServers.length" class="flex flex-col gap-base">
-                        <template x-for="p in nonServers" :key="p.id">
-                            <li class="flex items-center gap-sm px-sm py-sm rounded-lg border border-outline-variant bg-surface-container-lowest">
-                                <span class="flex-grow font-body-md text-body-md text-on-surface truncate"
-                                      x-text="p.name || 'Someone no longer in the directory'"></span>
-                                <button type="button" @click="setDoesNotServe(p.id, false)"
-                                        :disabled="savingNonServer === p.id"
-                                        title="Put them back on the rotas"
-                                        class="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary transition-colors disabled:opacity-40">
-                                    <span class="material-symbols-outlined text-[19px]">undo</span>
-                                </button>
-                            </li>
-                        </template>
-                    </ul>
-                    <p x-show="!nonServers.length" class="font-body-md text-[13px] text-on-surface-variant">
-                        Nobody yet. Everyone in the directory can be offered a Role.
-                    </p>
-                </section>
-            </div>
+                                        <div x-show="!draftRestrictions.length" class="m-empty" style="padding: var(--space-md);">
+                                            <span class="material-symbols-outlined">how_to_reg</span>
+                                            <p>No rules — anyone can fill this Role.</p>
+                                        </div>
 
-            <!-- ── The editor ────────────────────────────────────────────────── -->
-            <!-- x-if, not x-show: x-show only hides, it still evaluates every
-                 binding inside, and `draft` is null until a Role is opened. -->
-            <div class="flex-col bg-surface-container-lowest border border-outline-variant rounded-lg"
-                 :class="draft ? 'flex' : 'hidden lg:flex'">
+                                        <!-- One pair of pickers, reading as a sentence. Only Shared
+                                             Relationship Types are ever offered (ADR-0017). -->
+                                        <div class="rm-composer">
+                                            <span class="m-label m-label--sm">Add a rule</span>
 
-                <template x-if="draft">
-                    <div class="flex flex-col">
+                                            <div class="rm-composer__row">
+                                                <span class="m-select-wrap rm-composer__opener">
+                                                    <select class="m-select" x-model="newRuleKind" @change="newRuleValue = ''">
+                                                        <template x-for="option in ruleKindOptions" :key="option.value">
+                                                            <option :value="option.value" x-text="option.label"></option>
+                                                        </template>
+                                                    </select>
+                                                </span>
 
-                        <!-- Below lg the editor is the whole screen, so it carries its own
-                             way back and its own delete. -->
-                        <div class="rm-editor-bar lg:hidden sticky top-0 z-10 flex items-center gap-base bg-surface-container-lowest border-b border-outline-variant rounded-t-lg px-sm py-base">
-                            <!-- ⚠ THE ONLY WAY OUT OF AN OPEN ROLE, and it must render in the
-                                 shell too. It used to be skipped there as a duplicate of the
-                                 shell header's back arrow, which asked the page what back
-                                 meant. The header is a hamburger now — this page is a drawer
-                                 destination — so that arrow is gone, and skipping this one
-                                 would leave an open Role with no way back to the list. -->
-                            <button @click="cancelEdit()" title="Back to the roles list" aria-label="Back to the roles list"
-                                    class="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-lg text-on-surface-variant">
-                                <span class="material-symbols-outlined text-[24px]">chevron_left</span>
-                            </button>
-                            <div class="flex-grow min-w-0">
-                                <div class="font-display text-[17px] tracking-[.02em] text-primary truncate" x-text="draft.name"></div>
-                                <div class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant" x-text="draftPeopleNeededLabel"></div>
-                            </div>
-                            <button @click="deleteRole(draftRole)" title="Delete this role" aria-label="Delete this role"
-                                    class="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error transition-colors">
-                                <span class="material-symbols-outlined text-[21px]">delete</span>
-                            </button>
-                        </div>
+                                                <!-- An allowlist names people, so it collects them one
+                                                     at a time instead of taking a single value. -->
+                                                <span x-show="composingAllowlist" class="m-select-wrap rm-composer__value">
+                                                    <select class="m-select" x-model="newAllowlistPick" @change="addToNewAllowlist()">
+                                                        <option value="">Add someone…</option>
+                                                        <template x-for="option in allowlistOptions" :key="option.id">
+                                                            <option :value="option.id" x-text="option.name"></option>
+                                                        </template>
+                                                    </select>
+                                                </span>
 
-                        <div class="p-md flex flex-col gap-md">
+                                                <span x-show="!composingAllowlist" class="m-select-wrap rm-composer__value">
+                                                    <select class="m-select" x-model="newRuleValue">
+                                                        <option value="" x-text="ruleValuePlaceholder"></option>
+                                                        <template x-for="option in ruleValueOptions" :key="option.id">
+                                                            <option :value="option.id" x-text="option.name"></option>
+                                                        </template>
+                                                    </select>
+                                                </span>
 
-                            <div class="hidden lg:flex items-start justify-between gap-md pb-sm border-b border-outline-variant">
-                                <div>
-                                    <div class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant mb-xs">Editing Role</div>
-                                    <div class="font-display text-headline-md tracking-[.02em] text-primary" x-text="draft.name"></div>
-                                </div>
-                                <div class="flex items-center gap-base flex-shrink-0">
-                                    <span class="text-xs font-label-md uppercase tracking-wider text-on-secondary-container bg-secondary-container rounded-sm px-base py-xs"
-                                          x-text="draftPeopleNeededLabel"></span>
-                                    <button @click="cancelEdit()"
-                                            class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant border border-outline-variant rounded-lg px-md py-sm hover:bg-surface-container transition-colors">
-                                        Cancel
-                                    </button>
-                                    <button @click="saveDraft()"
-                                            class="text-xs font-label-md uppercase tracking-wider text-on-primary bg-primary border border-primary rounded-lg px-md py-sm shadow-xs hover:bg-primary/90 transition-colors">
-                                        Save
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Name. Renaming changes the label only — the Role keeps its serve history. -->
-                            <label class="flex flex-col gap-base max-w-[440px]">
-                                <span class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">Name</span>
-                                <input type="text" x-model="draft.name"
-                                       class="border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary" />
-                                <span class="font-body-md text-[13px] text-on-surface-variant">
-                                    Renaming changes the label only — the Role keeps its serve history.
-                                </span>
-                            </label>
-
-                            <!-- ── What the job actually is (MS-222) ─────────────────────
-                                 A name is a label, and a label is not an answer to "what
-                                 am I meant to do?". This is that answer, in the editor's
-                                 own words, and it is read by whoever is down for the Role
-                                 on their Commitments page.
-
-                                 One field of plain prose on purpose. The moment it has
-                                 structure it wants a screen of its own, and the thing
-                                 worth having is the sentence the Role's organiser would
-                                 say if you asked them in the corridor. -->
-                            <label class="flex flex-col gap-base max-w-[560px] pt-sm border-t border-outline-variant">
-                                <span class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">What it involves</span>
-                                <textarea x-model="draft.description" rows="3"
-                                          :maxlength="descriptionLimit"
-                                          placeholder="Arrive by 9:15, put the urns on, and set out the mugs on the side table."
-                                          class="border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary"></textarea>
-                                <span class="font-body-md text-[13px]"
-                                      :class="descriptionLeft < 0 ? 'text-error' : 'text-on-surface-variant'">
-                                    Anyone down for this Role reads it beside the date.
-                                    <span x-show="draft.description"
-                                          x-text="'· ' + descriptionLeft + ' left'"></span>
-                                </span>
-                            </label>
-
-                            <!-- ── How often, and whether it uses up the morning ──────────
-                                 Two separate questions that are easy to conflate: intensity
-                                 says the job TIRES you, exclusivity says it OCCUPIES you.
-                                 Sound is plausibly 1 week's rest and still exclusive — easy
-                                 work, but you're stuck at the desk. Kept apart on purpose. -->
-                            <div class="flex flex-col gap-base pt-sm border-t border-outline-variant">
-                                <span class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">How often it can be asked of someone</span>
-
-                                <label class="flex flex-col gap-base max-w-[440px]">
-                                    <span class="font-body-md text-body-md text-on-surface">Rest between turns</span>
-                                    <div class="flex items-center gap-sm">
-                                        <!-- ⚠ `.number` IS LOAD-BEARING. Plain x-model on a number input
-                                             writes a STRING, and the model reads intensity
-                                             strictly — so typing 1.2 made the Role unsaveable
-                                             with "intensity must be a number of weeks". -->
-                                        <input type="number" min="0" step="0.25" x-model.number="draft.intensity"
-                                               class="w-24 border border-outline-variant rounded-lg px-sm py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary" />
-                                        <span class="font-body-md text-body-md text-on-surface-variant">weeks</span>
-                                    </div>
-                                </label>
-
-                                <label class="flex items-start gap-sm max-w-[560px] cursor-pointer">
-                                    <input type="checkbox" x-model="draft.allowsAnotherRole"
-                                           class="mt-[3px] w-4 h-4 flex-shrink-0 accent-primary" />
-                                    <span class="font-body-md text-body-md text-on-surface">They can also take another Role that day</span>
-                                </label>
-                            </div>
-
-                            <!-- Slots -->
-                            <div class="flex flex-col gap-base">
-                                <div class="flex items-baseline justify-between gap-sm flex-wrap">
-                                    <span class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">Who it needs</span>
-                                    <span class="font-body-md text-[13px] text-on-surface-variant">
-                                        One line per person — three people means three lines, so you can ask for two women and one man.
-                                    </span>
-                                </div>
-
-                                <ul class="flex flex-col gap-base">
-                                    <template x-for="(slot, index) in draft.slots" :key="slot.id">
-                                        <li class="group flex flex-col lg:flex-row lg:items-center gap-base px-sm py-sm rounded-lg border border-outline-variant bg-surface">
-
-                                            <div class="flex items-center justify-between gap-sm lg:w-20 lg:flex-shrink-0">
-                                                <span class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant"
-                                                      x-text="`Person ${index + 1}`"></span>
-                                                <button @click="removeSlot(slot.id)" title="Remove this person"
-                                                        class="lg:hidden w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error transition-colors">
-                                                    <span class="material-symbols-outlined text-[20px]">close</span>
-                                                </button>
+                                                <button @click="addComposedRule()" class="m-btn m-btn--secondary">Add rule</button>
                                             </div>
 
-                                            <!-- Three named choices, all visible: the requirement is the
-                                                 point of the row, not something to go looking for in a menu. -->
-                                            <div class="flex gap-[2px] p-[3px] bg-surface-container border border-outline-variant rounded-lg">
-                                                <template x-for="value in requirementOptions" :key="value">
-                                                    <button @click="setSlotRequirement(slot.id, value)"
-                                                            :aria-pressed="slot.requirement === value"
-                                                            :class="slot.requirement === value
-                                                                ? 'bg-primary text-on-primary'
-                                                                : 'text-on-surface-variant hover:text-on-surface'"
-                                                            class="flex-1 lg:flex-none lg:min-w-[88px] h-11 lg:h-auto px-sm lg:py-xs rounded-sm text-xs font-label-md uppercase tracking-wider transition-colors"
-                                                            x-text="requirementLabel(value)"></button>
+                                            <!-- Chosen people, as names. Removable before the rule is
+                                                 added, since an allowlist is written whole. -->
+                                            <div x-show="composingAllowlist && newAllowlist.length" class="rm-composer__chips">
+                                                <template x-for="(personId, i) in newAllowlist" :key="personId">
+                                                    <span class="m-token">
+                                                        <span x-text="newAllowlistNames[i]"></span>
+                                                        <button @click="removeFromNewAllowlist(personId)" title="Remove"
+                                                                class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost">
+                                                            <span class="material-symbols-outlined" style="font-size: 15px;">close</span>
+                                                        </button>
+                                                    </span>
                                                 </template>
                                             </div>
 
-                                            <span class="hidden lg:block flex-grow"></span>
+                                            <p x-show="composingAllowlist" class="rm-hint">
+                                                Naming people directly is right for the four who serve communion,
+                                                and wrong for anything a tag could say.
+                                            </p>
+                                            <p x-show="composingAllowlist && !newAllowlist.length" class="rm-hint">
+                                                Pick the people who do this Role. Nobody else will be suggested for it,
+                                                or offered when you fill it by hand.
+                                            </p>
+                                            <p x-show="composingAllowlist && peopleDenied" class="rm-hint rm-hint--error">
+                                                The directory could not be read, so there is nobody to choose from.
+                                            </p>
+                                        </div>
 
-                                            <div class="hidden lg:flex items-center flex-shrink-0 transition-opacity opacity-0 group-hover:opacity-100">
-                                                <button @click="moveSlot(index, index - 1)" :disabled="index === 0"
-                                                        class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary transition-colors disabled:opacity-30"
-                                                        title="Move up">
-                                                    <span class="material-symbols-outlined text-[19px]">arrow_upward</span>
-                                                </button>
-                                                <button @click="moveSlot(index, index + 1)" :disabled="index === draft.slots.length - 1"
-                                                        class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary transition-colors disabled:opacity-30"
-                                                        title="Move down">
-                                                    <span class="material-symbols-outlined text-[19px]">arrow_downward</span>
-                                                </button>
-                                                <button @click="removeSlot(slot.id)" title="Remove this person"
-                                                        class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error transition-colors">
-                                                    <span class="material-symbols-outlined text-[19px]">close</span>
-                                                </button>
+                                        <!-- An empty picker and a failed read look identical; say which. -->
+                                        <div x-show="relationshipTypesNotice"
+                                             class="m-notice" :class="relationshipTypesDenied ? 'm-notice--error' : 'm-notice--info'">
+                                            <span class="material-symbols-outlined m-notice__icon"
+                                                  x-text="relationshipTypesDenied ? 'error' : 'info'"></span>
+                                            <div class="m-notice__body">
+                                                <p class="m-notice__text" x-text="relationshipTypesNotice"></p>
                                             </div>
-                                        </li>
-                                    </template>
-                                </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-                                <button @click="addSlot()"
-                                        class="self-stretch lg:self-start inline-flex items-center justify-center gap-xs px-md py-sm text-xs font-label-md uppercase tracking-wider text-secondary border border-dashed border-outline-variant rounded-lg hover:bg-surface-container-low transition-colors">
-                                    <span class="material-symbols-outlined text-[18px]">add</span>Add another person
+                            <div class="rm-editor-actions">
+                                <button @click="cancelEdit()" class="m-btn m-btn--secondary">Cancel</button>
+                                <button @click="saveDraft()" class="m-btn m-btn--primary">Save Role</button>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- ── Nothing to open ──────────────────────────────────────
+                         A church with no Servant Roles at all. The ONLY empty pane
+                         left, and it says what a serving Role is rather than
+                         telling you to click something. -->
+                    <template x-if="pane === 'role' && !draft && !hasServantRoles">
+                        <div class="rm-paneview">
+                            <div class="rm-pane__body">
+                                <div class="rm-first">
+                                    <span class="material-symbols-outlined">volunteer_activism</span>
+                                    <h3>Nothing to set up yet</h3>
+                                    <p>
+                                        A serving Role is a job the church needs doing on a Sunday — kids ministry, setup,
+                                        coffee, sound. Name one on the left and this is where you say how many people it
+                                        needs, who each place is for, what it involves, and who may fill it.
+                                    </p>
+                                    <p>The six Sunday Service Roles are built in, and they are under the list.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- ── Liturgical Roles: listed, never editable ─────────────
+                         Locked three times over — a badge on the pane, a lock on
+                         every row, and rest as the only control on the surface. -->
+                    <template x-if="pane === 'sunday'">
+                        <div class="rm-paneview">
+                            <div class="rm-editor-bar">
+                                <button @click="backToList()" title="Back to the roles list" aria-label="Back to the roles list"
+                                        class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost">
+                                    <span class="material-symbols-outlined" style="font-size: 24px;">chevron_left</span>
                                 </button>
+                                <span class="rm-editor-bar__title">
+                                    <h2 class="rm-editor-bar__name">Sunday Service Roles</h2>
+                                    <div class="rm-editor-bar__meta">Six, built in · rest only</div>
+                                </span>
                             </div>
 
-                            <!-- Restriction rules -->
-                            <div class="flex flex-col gap-base pt-sm border-t border-outline-variant">
-                                <span class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">Rules about who can fill it</span>
+                            <div class="rm-pane__head">
+                                <div style="min-width: 0;">
+                                    <span class="m-label m-label--sm">The whole church</span>
+                                    <h2 class="rm-pane__name rm-pane__name--place">Sunday Service Roles</h2>
+                                </div>
+                                <div class="rm-pane__acts">
+                                    <span class="m-badge m-badge--neutral">
+                                        <span class="material-symbols-outlined" style="font-size: 14px;">lock</span>Built in
+                                    </span>
+                                </div>
+                            </div>
 
-                                <ul x-show="draftRestrictions.length" class="flex flex-col gap-base">
-                                    <template x-for="(rule, index) in draftRestrictions" :key="index">
-                                        <li class="group flex flex-col gap-sm px-sm py-sm rounded-lg border bg-surface"
-                                            :class="isRuleAvailable(rule) ? 'border-outline-variant' : 'border-error'">
-                                            <div class="flex items-center gap-sm">
-                                                <span class="material-symbols-outlined text-[19px] flex-shrink-0"
-                                                      :class="isRuleAvailable(rule) ? 'text-secondary' : 'text-error'"
-                                                      x-text="ruleIcon(rule)"></span>
-                                                <span class="flex-grow font-serif text-[16px] leading-snug"
-                                                      :class="isRuleAvailable(rule) ? 'text-on-surface' : 'text-error'"
-                                                      x-text="ruleSentence(rule)"></span>
-                                                <button @click="removeRule(index)" title="Remove this rule"
-                                                        class="w-9 h-9 lg:w-8 lg:h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error transition-opacity transition-colors opacity-100 lg:opacity-0 lg:group-hover:opacity-100">
-                                                    <span class="material-symbols-outlined text-[19px]">close</span>
-                                                </button>
-                                            </div>
-
-                                            <!-- A list is the one rule made of many things, so it is
-                                                 the one that can be half-wrong later. It is amended
-                                                 where it sits: rebuilding eleven names to add a
-                                                 twelfth is how one of the eleven gets left off. -->
-                                            <div x-show="rule.kind === 'allowlist'"
-                                                 class="flex flex-col gap-sm pl-[27px]">
-                                                <div class="flex flex-wrap gap-xs">
-                                                    <template x-for="(personId, i) in (rule.personIds || [])" :key="personId">
-                                                        <span class="inline-flex items-center gap-xs font-serif text-[15px] text-on-surface bg-surface-container-low border border-outline-variant rounded-sm pl-base pr-[5px] py-[4px]">
-                                                            <span x-text="allowlistNames(rule)[i]"></span>
-                                                            <button @click="removeFromAllowlistRule(index, personId)"
-                                                                    :title="`Take ${allowlistNames(rule)[i]} off this list`"
-                                                                    class="w-5 h-5 flex items-center justify-center rounded text-on-surface-variant hover:text-error">
-                                                                <span class="material-symbols-outlined text-[15px]">close</span>
-                                                            </button>
-                                                        </span>
-                                                    </template>
-                                                </div>
-                                                <select @change="pickIntoAllowlistRule(index, $event)"
-                                                        class="w-full lg:w-[17.5rem] border border-outline-variant rounded-lg pl-sm pr-8 py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary">
-                                                    <option value="">Add someone to this list…</option>
-                                                    <template x-for="option in allowlistOptionsFor(rule)" :key="option.id">
-                                                        <option :value="option.id" x-text="option.name"></option>
-                                                    </template>
-                                                </select>
-                                            </div>
+                            <div class="rm-pane__body">
+                                <p class="m-settled">
+                                    Built into the app — filled on the service page and printed in the service guide,
+                                    so who does them, and what they need, can't be changed here.
+                                    The one thing you can set is how much rest each one owes, because preparing a
+                                    sermon and reading a prayer aren't the same work and the rota needs to know.
+                                </p>
+                                <ul class="rm-locked rm-locked--two">
+                                    <template x-for="role in liturgicalRoles" :key="role.slug">
+                                        <li class="m-locked-role">
+                                            <span class="material-symbols-outlined m-locked-role__lock">lock</span>
+                                            <span class="m-locked-role__name" x-text="role.name"></span>
+                                            <span class="m-unitfield m-unitfield--sm">
+                                                <input type="number" min="0" step="0.25"
+                                                       :value="liturgicalIntensity(role.slug)"
+                                                       @change="setLiturgicalIntensity(role.slug, $event.target.value)"
+                                                       :disabled="savingIntensity === role.slug" />
+                                                <span class="m-unitfield__unit" x-text="liturgicalRestUnit(role.slug)"></span>
+                                            </span>
                                         </li>
                                     </template>
                                 </ul>
+                                <p class="rm-hint">
+                                    There are six, there is no seventh, and none of them can be renamed, removed,
+                                    given places or given rules.
+                                </p>
+                            </div>
+                        </div>
+                    </template>
 
-                                <div x-show="!draftRestrictions.length"
-                                     class="flex items-center gap-sm p-md border border-dashed border-outline-variant rounded-lg text-on-surface-variant">
-                                    <span class="material-symbols-outlined text-[20px] text-outline">how_to_reg</span>
-                                    <span class="font-body-md text-body-md">No rules — anyone can fill this Role.</span>
+                    <!-- ── Who does not serve ───────────────────────────────────
+                         ⚠ NOT A PRIVACY SETTING, and it hides nobody. The name is
+                         still everywhere it was; it is only never offered for a
+                         Role. Kept apart from the tags that hide people, because
+                         confusing the two would mean a small child's name quietly
+                         disappearing from the directory as well — which is why the
+                         gold notice says so rather than leaving it to be inferred. -->
+                    <template x-if="pane === 'nonservers'">
+                        <div class="rm-paneview">
+                            <div class="rm-editor-bar">
+                                <button @click="backToList()" title="Back to the roles list" aria-label="Back to the roles list"
+                                        class="m-icon-btn m-icon-btn--lg m-icon-btn--ghost">
+                                    <span class="material-symbols-outlined" style="font-size: 24px;">chevron_left</span>
+                                </button>
+                                <span class="rm-editor-bar__title">
+                                    <h2 class="rm-editor-bar__name">Doesn't serve</h2>
+                                    <div class="rm-editor-bar__meta">Never offered a Role</div>
+                                </span>
+                            </div>
+
+                            <div class="rm-pane__head">
+                                <div style="min-width: 0;">
+                                    <span class="m-label m-label--sm">The whole church</span>
+                                    <h2 class="rm-pane__name rm-pane__name--place">Doesn't serve</h2>
+                                </div>
+                                <div class="rm-pane__acts">
+                                    <span class="m-badge" x-text="nonServers.length === 1 ? '1 person' : nonServers.length + ' people'"></span>
+                                </div>
+                            </div>
+
+                            <div class="rm-pane__body">
+                                <p class="m-settled">
+                                    People no rota should ever offer — the youngest children, anyone too frail,
+                                    anyone in a season of not serving. They stay everywhere else in Mosaic;
+                                    they just stop coming up when a Role needs filling.
+                                </p>
+
+                                <div class="m-notice m-notice--gold">
+                                    <span class="material-symbols-outlined m-notice__icon">visibility</span>
+                                    <div class="m-notice__body">
+                                        <p class="m-notice__title">This hides nobody.</p>
+                                        <p class="m-notice__text">
+                                            It is not a privacy setting. Their name stays in the directory, on their profile
+                                            and everywhere else it already is — the tags that hide people are somewhere else entirely.
+                                        </p>
+                                    </div>
                                 </div>
 
-                                <!-- One pair of pickers, reading as a sentence. Only Shared
-                                     Relationship Types are ever offered (ADR-0017). -->
-                                <div class="mt-xs bg-surface-container-low border border-outline-variant rounded-lg p-sm flex flex-col gap-base">
-                                    <span class="text-xs font-label-md uppercase tracking-wider text-on-surface-variant">Add a rule</span>
-
-                                    <div class="flex flex-col lg:flex-row lg:items-center gap-base">
-                                        <!-- A fixed width on the sentence opener, not an
-                                             intrinsic one: the longest label is "No two people
-                                             from the same", and letting the box size itself to
-                                             that ran the text under the arrow. -->
-                                        <select x-model="newRuleKind" @change="newRuleValue = ''"
-                                                class="w-full lg:w-[17.5rem] lg:flex-shrink-0 border border-outline-variant rounded-lg pl-sm pr-8 py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary">
-                                            <template x-for="option in ruleKindOptions" :key="option.value">
-                                                <option :value="option.value" x-text="option.label"></option>
-                                            </template>
-                                        </select>
-
-                                        <!-- An allowlist names people, so it collects them one
-                                             at a time instead of taking a single value. -->
-                                        <select x-show="composingAllowlist" x-model="newAllowlistPick"
-                                                @change="addToNewAllowlist()"
-                                                class="w-full lg:flex-grow lg:min-w-0 border border-outline-variant rounded-lg pl-sm pr-8 py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary">
-                                            <option value="">Add someone…</option>
-                                            <template x-for="option in allowlistOptions" :key="option.id">
-                                                <option :value="option.id" x-text="option.name"></option>
-                                            </template>
-                                        </select>
-
-                                        <select x-show="!composingAllowlist" x-model="newRuleValue"
-                                                class="w-full lg:flex-grow lg:min-w-0 border border-outline-variant rounded-lg pl-sm pr-8 py-sm font-body-md text-body-md bg-surface focus:outline-none focus:ring-2 focus:ring-tertiary/30 focus:border-tertiary">
-                                            <option value="" x-text="ruleValuePlaceholder"></option>
-                                            <template x-for="option in ruleValueOptions" :key="option.id">
-                                                <option :value="option.id" x-text="option.name"></option>
-                                            </template>
-                                        </select>
-                                        <button @click="addComposedRule()"
-                                                class="lg:flex-shrink-0 px-md py-sm text-xs font-label-md uppercase tracking-wider text-secondary border border-secondary rounded-lg hover:bg-secondary hover:text-on-secondary transition-colors">
-                                            Add rule
-                                        </button>
-                                    </div>
-
-                                    <!-- Chosen people, as names. Removable before the rule is
-                                         added, since an allowlist is written whole. -->
-                                    <div x-show="composingAllowlist && newAllowlist.length" class="flex flex-wrap gap-xs">
-                                        <template x-for="(personId, i) in newAllowlist" :key="personId">
-                                            <span class="inline-flex items-center gap-xs font-serif text-[15px] text-on-surface bg-surface border border-outline-variant rounded-sm pl-base pr-[5px] py-[4px]">
-                                                <span x-text="newAllowlistNames[i]"></span>
-                                                <button @click="removeFromNewAllowlist(personId)" title="Remove"
-                                                        class="w-5 h-5 flex items-center justify-center rounded text-on-surface-variant hover:text-error">
-                                                    <span class="material-symbols-outlined text-[15px]">close</span>
+                                <div class="rm-cols rm-cols--people">
+                                    <div class="rm-group">
+                                        <span class="m-label">Add somebody</span>
+                                        <div class="m-search">
+                                            <span class="material-symbols-outlined">search</span>
+                                            <input type="text" x-model="nonServerSearch" placeholder="Find someone by name" />
+                                        </div>
+                                        <div x-show="nonServerMatches.length" class="rm-suggest">
+                                            <template x-for="p in nonServerMatches" :key="p.id">
+                                                <!-- ⚠ `!!`, NOT the bare string. Alpine only removes a
+                                                     boolean attribute for false, null or undefined — an
+                                                     empty string becomes `disabled="disabled"`, so every
+                                                     row greys out and nothing can be added. -->
+                                                <button type="button" @click="setDoesNotServe(p.id, true)"
+                                                        :disabled="!!savingNonServer">
+                                                    <span class="material-symbols-outlined" style="font-size: 19px; color: var(--outline);">person_add</span>
+                                                    <span x-text="p.name"></span>
                                                 </button>
-                                            </span>
-                                        </template>
+                                            </template>
+                                        </div>
+                                        <p x-show="nonServerSearch.trim() && !nonServerMatches.length" class="rm-hint">
+                                            Nobody left to add by that name.
+                                        </p>
+                                        <div x-show="peopleDenied" class="m-notice m-notice--error">
+                                            <span class="material-symbols-outlined m-notice__icon">error</span>
+                                            <div class="m-notice__body">
+                                                <p class="m-notice__text">The directory could not be read, so there is nobody to choose from.</p>
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    <p x-show="composingAllowlist && !newAllowlist.length"
-                                       class="font-body-md text-[13px] text-on-surface-variant">
-                                        Pick the people who do this Role. Nobody else will be suggested for it,
-                                        or offered when you fill it by hand.
-                                    </p>
-                                    <p x-show="composingAllowlist && peopleDenied"
-                                       class="font-body-md text-[13px] text-error">
-                                        The directory could not be read, so there is nobody to choose from.
-                                    </p>
-
-                                    <!-- An empty picker and a failed read look identical; say which. -->
-                                    <p x-show="relationshipTypesNotice"
-                                       class="font-body-md text-[13px]"
-                                       :class="relationshipTypesDenied ? 'text-error' : 'text-on-surface-variant'"
-                                       x-text="relationshipTypesNotice"></p>
+                                    <div class="rm-group">
+                                        <span class="m-label">Never offered a Role</span>
+                                        <ul x-show="nonServers.length" class="rm-people">
+                                            <template x-for="p in nonServers" :key="p.id">
+                                                <li class="rm-person">
+                                                    <span class="rm-person__name" x-text="p.name || 'Someone no longer in the directory'"></span>
+                                                    <button type="button" @click="setDoesNotServe(p.id, false)"
+                                                            :disabled="savingNonServer === p.id"
+                                                            title="Put them back on the rotas"
+                                                            class="m-icon-btn m-icon-btn--ghost">
+                                                        <span class="material-symbols-outlined" style="font-size: 19px;">undo</span>
+                                                    </button>
+                                                </li>
+                                            </template>
+                                        </ul>
+                                        <p x-show="!nonServers.length" class="rm-hint">
+                                            Nobody yet. Everyone in the directory can be offered a Role.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
-
-                            <!-- Every problem at once, not one save at a time. -->
-                            <div x-show="saveAttempted && draftErrors.length"
-                                 class="bg-error-container text-on-error-container border border-outline-variant rounded-lg p-md">
-                                <p class="text-xs font-label-md uppercase tracking-wider mb-xs">This role can't be saved yet:</p>
-                                <ul class="list-disc pl-md font-body-md text-body-md">
-                                    <template x-for="problem in draftErrors" :key="problem">
-                                        <li x-text="problem"></li>
-                                    </template>
-                                </ul>
-                            </div>
                         </div>
-
-                        <div class="rm-editor-actions lg:hidden sticky bottom-0 flex gap-base bg-surface-container-lowest border-t border-outline-variant rounded-b-lg px-sm py-sm">
-                            <button @click="cancelEdit()"
-                                    class="flex-1 h-12 text-xs font-label-md uppercase tracking-wider text-on-surface-variant border border-outline-variant rounded-lg">
-                                Cancel
-                            </button>
-                            <button @click="saveDraft()"
-                                    class="flex-[2] h-12 text-xs font-label-md uppercase tracking-wider text-on-primary bg-primary border border-primary rounded-lg shadow-xs">
-                                Save Role
-                            </button>
-                        </div>
-                    </div>
-                </template>
-
-                <!-- Nothing open: the pane says what it is for rather than sitting blank. -->
-                <template x-if="!draft">
-                    <div class="p-md">
-                        <div class="min-h-[520px] flex flex-col items-center justify-center gap-base border border-dashed border-outline-variant rounded-lg text-on-surface-variant">
-                            <span class="material-symbols-outlined text-[38px] text-outline-variant">volunteer_activism</span>
-                            <span class="font-serif text-[17px]">Choose a Role on the left to set who it needs.</span>
-                        </div>
-                    </div>
-                </template>
+                    </template>
+                </div>
             </div>
         </div>
     </main>
@@ -671,8 +994,8 @@
          It sits above the narrow-screen action bar. -->
     <div class="fixed inset-x-0 bottom-[92px] lg:bottom-lg z-50 flex justify-center px-4 pointer-events-none">
         <div x-show="toast.show" x-transition
-             class="text-center px-md py-sm rounded-lg shadow-md font-body-md text-body-md"
-             :class="toast.type === 'error' ? 'bg-error text-on-error' : 'bg-primary text-on-primary'"
+             class="m-toast"
+             :class="toast.type === 'error' ? 'm-toast--error' : ''"
              x-text="toast.message"></div>
     </div>
 

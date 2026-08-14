@@ -172,6 +172,53 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 }
 .m-search > input:focus { outline: none; border-color: var(--tertiary); box-shadow: 0 0 0 3px var(--m-focus-ring); }
 
+/* Segmented — Two to four named choices with one of them chosen, all visible at once. */
+.m-seg {
+  display: inline-flex; gap: 2px; padding: 3px;
+  background: var(--surface-container); border: 1px solid var(--outline-variant);
+  border-radius: var(--radius);
+}
+.m-seg__opt {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 38px; padding: 0 var(--space-sm);
+  border: 0; border-radius: var(--radius-sm); background: transparent;
+  color: var(--on-surface-variant);
+  font-family: var(--font-sans); font-size: 11.5px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase; white-space: nowrap; cursor: pointer;
+  transition: background-color var(--duration) var(--ease-standard),
+              color var(--duration) var(--ease-standard);
+}
+.m-seg__opt:hover { color: var(--on-surface); }
+.m-seg__opt:focus-visible { outline: 2px solid var(--tertiary); outline-offset: -2px; }
+.m-seg__opt[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
+/* Filled: one row of equal thirds, which is what a phone wants. */
+.m-seg--fill { display: flex; width: 100%; }
+.m-seg--fill .m-seg__opt { flex: 1 1 0; min-width: 0; padding: 0 var(--space-base); }
+.m-seg--lg .m-seg__opt { min-height: 44px; }
+
+/* UnitField — A number and the unit it is in, as one field. */
+.m-unitfield {
+  display: inline-flex; align-items: center; height: 48px; padding-right: var(--space-sm);
+  border: 1px solid var(--outline-variant); border-radius: var(--radius);
+  background: var(--surface-container-lowest);
+  transition: border-color var(--duration) var(--ease-standard),
+              box-shadow var(--duration) var(--ease-standard);
+}
+.m-unitfield:focus-within { border-color: var(--tertiary); box-shadow: 0 0 0 3px var(--m-focus-ring); }
+.m-unitfield > input {
+  width: 78px; height: 100%; padding: 0 var(--space-base) 0 14px;
+  border: 0; background: transparent; color: var(--on-surface);
+  font-family: var(--font-sans); font-size: 16px;
+}
+.m-unitfield > input:focus { outline: none; }
+.m-unitfield > input:disabled { opacity: .5; cursor: not-allowed; }
+.m-unitfield__unit {
+  flex: 0 0 auto; font-family: var(--font-sans); font-size: 13px;
+  color: var(--on-surface-variant); white-space: nowrap;
+}
+.m-unitfield--sm { height: 40px; }
+.m-unitfield--sm > input { width: 62px; font-size: 15px; }
+
 /* ── Display ───────────────────────────────────────────────── */
 
 /* SectionLabel — The tracked-caps overline above a group of things. */
@@ -287,6 +334,59 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 /* Divider — A warm hairline between things. */
 .m-divider { display: block; width: 100%; height: 1px; background: var(--outline-variant); border: 0; }
 .m-divider--vertical { width: 1px; height: 20px; margin: 0 var(--space-xs); display: inline-block; }
+
+/* Token — A name, and the control that takes it off the list. */
+.m-token {
+  display: inline-flex; align-items: center; gap: var(--space-xs);
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--outline-variant); border-radius: var(--radius-sm);
+  background: var(--surface-container-low);
+  font-family: var(--font-serif); font-size: 15px; line-height: 1.3; color: var(--on-surface);
+}
+.m-token--plain { padding: 5px 10px; }
+.m-token--lg .m-icon-btn { width: 36px; height: 36px; }
+
+/* RuleRow — One rule, read back as a sentence in serif, with whatever it is made of underneath. */
+.m-rule-row {
+  display: flex; flex-direction: column; gap: var(--space-base);
+  padding: 9px var(--space-sm);
+  border: 1px solid var(--outline-variant); border-radius: var(--radius);
+  background: var(--surface);
+}
+.m-rule-row__line { display: flex; align-items: flex-start; gap: var(--space-base); }
+.m-rule-row__icon { flex: 0 0 auto; margin-top: 1px; font-size: 19px; color: var(--secondary); }
+.m-rule-row__text {
+  flex: 1 1 auto; min-width: 0;
+  font-family: var(--font-serif); font-size: 15.5px; line-height: 1.4;
+  color: var(--on-surface); text-wrap: pretty;
+}
+/* What the rule is made of, under what it says. */
+.m-rule-row__body {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs);
+  padding-left: 27px;
+}
+.m-rule-row--unavailable { border-color: var(--error); }
+.m-rule-row--unavailable .m-rule-row__icon,
+.m-rule-row--unavailable .m-rule-row__text { color: var(--error); }
+/* Still applies, and cannot be read. Not an error — nothing is broken and
+   nothing should be removed. */
+.m-rule-row--private { border-color: var(--gold); }
+.m-rule-row--private .m-rule-row__icon { color: var(--gold); }
+.m-rule-row--private .m-rule-row__text { color: var(--on-surface-variant); }
+
+/* LockedRole — A Role that cannot be edited, and the one thing about it that can. */
+.m-locked-role {
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: 8px var(--space-sm);
+  border: 1px solid var(--outline-variant); border-radius: var(--radius);
+  background: var(--surface-container-low);
+}
+.m-locked-role__lock { flex: 0 0 auto; font-size: 17px; color: var(--outline); }
+.m-locked-role__name {
+  flex: 1 1 auto; min-width: 0;
+  font-family: var(--font-serif); font-size: 16px; line-height: 1.3;
+  color: var(--on-surface-variant);
+}
 
 /* RotaGrid — Roles down the side, dates across the top, and what is really stored in the cells. */
 .m-rota {
@@ -789,6 +889,7 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 .m-row:last-child, .m-row--last { border-bottom: 0; }
 .m-row--interactive { cursor: pointer; }
 .m-row--interactive:hover { background: var(--surface-container-low); }
+.m-row--current { background: var(--surface-container-low); box-shadow: inset 3px 0 0 var(--primary); }
 .m-row__main { flex: 1; min-width: 0; }
 .m-row__title {
   font-family: var(--font-sans); font-size: 15.5px; font-weight: 500; color: var(--on-surface);
