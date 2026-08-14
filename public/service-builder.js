@@ -679,6 +679,8 @@ function serviceForm() {
                         // Who this is, as a Person — stamped onto every element
                         // they decide (MS-246).
                         this.me = await MosaicIdentity.me({ db, getUserData, uid: user.uid });
+                        // After `me`, which is what the badges are drawn from.
+                        if (this.canEdit) this.watchPresence();
                         this.loadPrayerRequests();
                     } catch (error) {
                         console.error("Error checking user permissions:", error);
@@ -1736,10 +1738,66 @@ function serviceForm() {
         // rows commits the current note first, so service.notes stays in sync (and
         // the Service Notes sidebar updates live).
         toggleRow(key) {
-            if (this.openKey === key) { this.commitNote(); this.openKey = null; return; }
+            if (this.openKey === key) { this.closeRow(); return; }
+
+            // One person per box (MS-246). A row somebody else is in does not
+            // open at all — refusing at the door is what removes the whole
+            // question of whose version wins, because two people are never in
+            // the same box to disagree.
+            if (this.heldBy(key)) return;
+            if (!this.takeRow(key)) return;
+
             this.commitNote();
             this.openKey = key;
             this.$nextTick(() => this.mountNote(key));
+        },
+
+        closeRow() {
+            this.commitNote();
+            this.openKey = null;
+            PresenceStore.release();
+        },
+
+        // ── Presence (MS-246) ───────────────────────────────────────────────
+        presenceEntries: [],
+
+        watchPresence() {
+            if (!this.me || !this.user) return;
+            PresenceStore.start({
+                db: db,
+                uid: this.user.uid,
+                identity: this.me,
+                surface: 'order-of-service',
+                stamp: () => firebase.firestore.FieldValue.serverTimestamp(),
+                // Alpine redraws from this; the store's own list is the truth.
+                onChange: (entries) => { this.presenceEntries = entries; }
+            });
+
+            // A courtesy, not the mechanism. Expiry is what actually frees a
+            // box — this just makes the common case instant.
+            window.addEventListener('beforeunload', () => PresenceStore.release());
+        },
+
+        takeRow(key) {
+            if (!this.canEdit) return true;
+            return PresenceStore.claim(this.date, 'liturgy.' + key);
+        },
+
+        // Whoever else is in this row, or null. Read off presenceEntries rather
+        // than the store so Alpine re-renders when somebody arrives or leaves.
+        heldBy(key) {
+            if (!this.user) return null;
+            return ServicePresence.holderOf(
+                this.presenceEntries, this.user.uid, this.date, 'liturgy.' + key, Date.now());
+        },
+
+        heldLabel(key) { return ServicePresence.holderLabel(this.heldBy(key)); },
+        heldTitle(key) { return ServicePresence.holderTitle(this.heldBy(key)); },
+
+        // Everybody else on this Sunday right now — the row of faces up top.
+        get othersHere() {
+            if (!this.user) return [];
+            return ServicePresence.peopleHere(this.presenceEntries, this.user.uid, Date.now());
         },
 
         // Open a specific row (from the Service Notes sidebar) and scroll to it.

@@ -79,6 +79,13 @@ function load(overrides) {
         body: { classList: { contains: () => false } },
     };
     sandbox.DateUtils = require('../public/date-utils.js');
+    sandbox.HymnRegistry = require('../public/hymn-registry.js');
+    sandbox.PersonPhotoCore = require('../public/person-photo-core.js');
+    sandbox.MosaicIdentity = require('../public/mosaic-identity.js');
+    sandbox.ServiceAuthorship = require('../public/service-authorship.js');
+    const presence = require('../public/service-presence.js');
+    sandbox.ServicePresence = presence.ServicePresence;
+    sandbox.PresenceStore = presence.PresenceStore;
     Object.assign(sandbox, overrides || {});
 
     vm.createContext(sandbox);
@@ -314,4 +321,102 @@ test('un-assigning travels too', async () => {
 
     db.emit({ '2026-08-16': { assignedWriter: null } });
     assert.match(btn.innerHTML, /person_add/, 'the badge should go back to empty');
+});
+
+// ── A cell somebody else is in ────────────────────────────────────────────
+
+// A cell rich enough for the presence badge, which appends a child and
+// toggles classes rather than only writing text.
+function editableCell(overrides = {}) {
+    const classes = new Set();
+    return Object.assign(cell({
+        classList: {
+            add: (...c) => c.forEach(x => classes.add(x)),
+            remove: (...c) => c.forEach(x => classes.delete(x)),
+            toggle: (c, on) => { on ? classes.add(c) : classes.delete(c); },
+            contains: (c) => classes.has(c),
+        },
+        appendChild() {},
+        querySelectorAll: () => [],
+        onclick: undefined,
+        _classes: classes,
+    }), overrides);
+}
+
+function withPresence(sb, holders) {
+    // Drive the real store through its snapshot callback, the way Firestore
+    // would, rather than reaching into its internals.
+    let deliver = null;
+    sb.PresenceStore.start({
+        db: {
+            collection: () => ({
+                doc: () => ({ set: () => Promise.resolve() }),
+                onSnapshot: (onNext) => { deliver = onNext; return () => {}; },
+            })
+        },
+        uid: 'uid-me',
+        identity: { id: 'p-me', name: 'Bill Smith' },
+        surface: 'calendar',
+        stamp: () => ({ toMillis: () => Date.now() }),
+        setInterval: () => 1,
+        clearInterval: () => {},
+    });
+    deliver({ forEach(fn) { holders.forEach(h => fn({ id: h.uid, data: () => h })); } });
+}
+
+test('a cell somebody else is in cannot be clicked into', () => {
+    const sb = load({ db: fakeDb() });
+    const target = editableCell();
+
+    withPresence(sb, [{
+        uid: 'uid-ann', personId: 'p-ann', name: 'Ann Lee',
+        surface: 'calendar', dateKey: '2026-08-16', fieldKey: 'liturgy.hymn1',
+        updatedAt: { toMillis: () => Date.now() },
+    }]);
+
+    sb.setupInlineEdit(target, '2026-08-16', 'hymn1');
+
+    assert.strictEqual(target.onclick, null, 'a held cell must have no way in');
+    assert.ok(target._classes.has('cell-held'));
+    assert.match(target.title, /Ann Lee is editing this/);
+    sb.PresenceStore.stop();
+});
+
+test('a free cell is editable as usual', () => {
+    const sb = load({ db: fakeDb() });
+    const target = editableCell();
+    withPresence(sb, []);
+
+    sb.setupInlineEdit(target, '2026-08-16', 'hymn1');
+
+    assert.strictEqual(typeof target.onclick, 'function');
+    assert.ok(!target._classes.has('cell-held'));
+    sb.PresenceStore.stop();
+});
+
+test('a cell held on a DIFFERENT Sunday is still mine to edit', () => {
+    // Twelve rows of Hymn 1 in the Planning view are twelve separate boxes.
+    const sb = load({ db: fakeDb() });
+    const target = editableCell();
+
+    withPresence(sb, [{
+        uid: 'uid-ann', personId: 'p-ann', name: 'Ann Lee',
+        surface: 'calendar', dateKey: '2026-08-23', fieldKey: 'liturgy.hymn1',
+        updatedAt: { toMillis: () => Date.now() },
+    }]);
+
+    sb.setupInlineEdit(target, '2026-08-16', 'hymn1');
+    assert.strictEqual(typeof target.onclick, 'function');
+    sb.PresenceStore.stop();
+});
+
+test('the Planning view and the Order of Service claim the same box', () => {
+    // A hymn locked on one must be locked on the other, or the lock is
+    // decoration. Both name the element the way it is stored.
+    const sb = load({ db: fakeDb() });
+    assert.strictEqual(sb.presenceKeyFor('hymn1'), 'liturgy.hymn1');
+    assert.strictEqual(sb.presenceKeyFor('benediction'), 'liturgy.benediction');
+    // Fields that live at the top of the document keep their own names.
+    assert.strictEqual(sb.presenceKeyFor('theme'), 'theme');
+    assert.strictEqual(sb.presenceKeyFor('preacher'), 'preacher');
 });

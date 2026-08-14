@@ -183,6 +183,27 @@
             transition: background-color 0.15s ease;
         }
         .assigned-btn:hover { background-color: var(--surface-container); }
+
+        /* A cell somebody else is in (MS-246). Faded and not-allowed, so the
+           cell says it is shut before you click it. */
+        .cell-held {
+            cursor: not-allowed !important;
+            opacity: .75;
+        }
+        .held-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        .held-name {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            color: var(--on-surface-variant);
+        }
         .assigned-name {
             font-size: 10px;
             line-height: 1.1;
@@ -256,6 +277,7 @@
     <script src="hymn-registry.js"></script>
     <script src="mosaic-identity.js"></script>
     <script src="service-authorship.js"></script>
+    <script src="service-presence.js"></script>
     <script src="person-photo-core.js"></script>
     <link href="verse-picker.css" rel="stylesheet" />
 </head>
@@ -273,7 +295,7 @@
          class="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-primary/20 backdrop-blur-sm"
          x-transition x-cloak>
         <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl max-w-sm w-full p-6"
-             @click.away="showPersonSelector = false">
+             @click.away="closePersonSelector()">
             
             <div class="flex items-center gap-3 mb-6 text-primary">
                 <span class="material-symbols-outlined text-2xl">person_search</span>
@@ -324,7 +346,7 @@
             </div>
 
             <div class="flex justify-end gap-3">
-                <button @click="showPersonSelector = false" 
+                <button @click="closePersonSelector()" 
                         class="px-4 py-2 rounded-full font-label-md text-sm text-secondary hover:bg-surface-container transition-colors">
                     Cancel
                 </button>

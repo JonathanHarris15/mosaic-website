@@ -153,13 +153,20 @@ function calendarPage() {
                 serviceDataMap[dateKey][ASSIGNED_FIELD] = value;
                 injectServiceData(serviceDataMap);
 
-                this.showPersonSelector = false;
+                this.closePersonSelector();
             } catch (err) {
                 console.error('Error saving who is assigned:', err);
                 alert('Failed to save.');
             } finally {
                 this.saving = false;
             }
+        },
+
+        // Every way out of the person picker comes through here, so no exit
+        // can leave a box locked behind it (MS-246).
+        closePersonSelector() {
+            this.showPersonSelector = false;
+            PresenceStore.release();
         },
 
         getRoleName(field) {
@@ -337,7 +344,7 @@ function calendarPage() {
                     }
                 }
 
-                this.showPersonSelector = false;
+                this.closePersonSelector();
                 // Redraw from the map the live listener maintains. The write
                 // above will arrive through that listener anyway; this just
                 // puts it on screen without waiting for the round trip.
@@ -1710,6 +1717,7 @@ function openHymnEditor(el, dateKey, field) {
         box.remove();
         delete el.dataset.editorOpen;
         el.style.display = originalDisplay;
+        PresenceStore.release();
     };
 
     const commit = async () => {
@@ -1751,15 +1759,63 @@ function openHymnEditor(el, dateKey, field) {
     render();
 }
 
+// The presence key for a cell. Liturgy slots are named the way they are
+// stored, so the Order of Service page and the Planning view claim the SAME
+// box for the same element — a hymn locked on one is locked on the other,
+// which is the entire point of locking it.
+function presenceKeyFor(field) {
+    return LITURGY_HYMN_FIELDS.includes(field) || LITURGY_VERSE_FIELDS.includes(field)
+        ? 'liturgy.' + field
+        : field;
+}
+
+// Mark a cell somebody else is in: a face, a name, and no way in. Drawn on the
+// cell rather than beside it so it cannot be missed, and returns whether the
+// cell is held so the caller can leave the edit handler off entirely.
+function markIfHeld(el, dateKey, field) {
+    const holder = PresenceStore.holder(dateKey, presenceKeyFor(field));
+
+    el.querySelectorAll('.held-badge').forEach(b => b.remove());
+    el.classList.toggle('cell-held', !!holder);
+
+    if (!holder) return null;
+
+    const badge = document.createElement('span');
+    badge.className = 'held-badge';
+    badge.title = ServicePresence.holderTitle(holder);
+    badge.innerHTML =
+        `<span class="m-avatar m-avatar--sm">${
+            holder.photoUrl
+                ? `<img src="${escapeHtml(holder.photoUrl)}" alt="" style="${escapeHtml(PersonPhotoCore.frameStyle(holder.photoCrop))}">`
+                : escapeHtml(PersonPhotoCore.initialsOf(holder.name))
+        }</span><span class="held-name">${escapeHtml(ServicePresence.holderLabel(holder))}</span>`;
+    el.appendChild(badge);
+    return holder;
+}
+
 function setupInlineEdit(el, dateKey, field) {
+    // A cell somebody else is in gets a face instead of an editor. Checked
+    // before the handler is attached, so the cell is not merely refusing
+    // clicks — it has nothing to click (MS-246).
+    if (markIfHeld(el, dateKey, field)) {
+        el.classList.remove('cursor-edit');
+        el.onclick = null;
+        el.title = ServicePresence.holderTitle(PresenceStore.holder(dateKey, presenceKeyFor(field)));
+        return;
+    }
+
     el.classList.add('cursor-edit', 'hover:bg-primary-fixed/30', 'rounded', 'px-1', '-mx-1', 'transition-colors');
     el.title = 'Click to edit';
-    
+
     // Check if it's a Person field
     const personFields = ['serviceLeader', 'musicLeader', 'preacher', 'prayerPraiseName', 'prayerConfessionName', 'prayerMale', 'prayerFemale'];
 
     el.onclick = (e) => {
         e.stopPropagation();
+
+        // One person per box (MS-246). Refused at the door, so two people are
+        // never in the same cell to disagree about whose version wins.
+        if (!PresenceStore.claim(dateKey, presenceKeyFor(field))) return;
 
         if (personFields.includes(field)) {
             let currentVal = el.textContent === '—' ? '' : el.textContent;
@@ -1862,6 +1918,7 @@ function setupInlineEdit(el, dateKey, field) {
 
                 pickerEl.remove();
                 el.style.display = originalDisplay;
+                PresenceStore.release();
 
                 if (finalVal !== currentVal) {
                     try {
@@ -1974,6 +2031,7 @@ function setupInlineEdit(el, dateKey, field) {
             }
             input.remove();
             el.style.display = originalDisplay;
+            PresenceStore.release();
         };
 
         input.onblur = save;
@@ -1982,6 +2040,7 @@ function setupInlineEdit(el, dateKey, field) {
             if (e.key === 'Escape') {
                 input.remove();
                 el.style.display = originalDisplay;
+                PresenceStore.release();
             }
         };
     };
@@ -2196,6 +2255,18 @@ auth.onAuthStateChanged(async (user) => {
             // who decided it (MS-246).
             currentIdentity = await MosaicIdentity.me({ db, getUserData, uid: user.uid });
             if (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
+                // Who else is editing, and which cells they hold (MS-246).
+                PresenceStore.start({
+                    db: db,
+                    uid: user.uid,
+                    identity: currentIdentity,
+                    surface: 'calendar',
+                    stamp: () => firebase.firestore.FieldValue.serverTimestamp(),
+                    onChange: () => injectServiceData(serviceDataMap)
+                });
+                // A courtesy that makes the common case instant. Expiry is
+                // what actually frees a box.
+                window.addEventListener('beforeunload', () => PresenceStore.release());
                 document.body.classList.add('can-edit');
                 const importBtn = document.getElementById('import-docx-btn');
                 if (importBtn) {
@@ -2238,6 +2309,7 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         normalizeServiceDoc, isCellBeingEdited, setCellText, hasEditorOpen,
         PLANNING_COLUMNS, LITURGY_HYMN_FIELDS, LITURGY_VERSE_FIELDS, hymnCellText,
-        ASSIGNED_FIELD, assignedBadgeHtml, firstNameOf, escapeHtml
+        ASSIGNED_FIELD, assignedBadgeHtml, firstNameOf, escapeHtml,
+        presenceKeyFor, setupInlineEdit, markIfHeld
     };
 }

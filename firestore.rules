@@ -601,5 +601,25 @@ service cloud.firestore {
     match /sms_messages/{messageId} {
       allow read: if isAdmin();
     }
+
+    // Who is editing what, right now (MS-246). One document per signed-in
+    // editor, at their own uid, saying which box on which Sunday they are in.
+    // Everything here is transient — a claim is a heartbeat that expires after
+    // half a minute, and nothing reads this collection except the live badges.
+    //
+    // ⚠ THE DOCUMENT ID IS THE LOCK. Keying by uid is what makes "one person
+    // per box" enforceable rather than merely agreed: you can only ever write
+    // the document named after you, so nobody can release, steal or forge
+    // somebody else's claim by writing over it. A collection keyed any other
+    // way would leave the whole scheme on the honour system.
+    //
+    // Readable by editors only. It carries names and photo URLs of people
+    // working on services, which is nothing secret, but it is also of no use
+    // to anybody who cannot edit — and the Service Calendar is a page an
+    // anonymous visitor can open.
+    match /presence/{uid} {
+      allow read: if isEditor();
+      allow write, delete: if isEditor() && request.auth.uid == uid;
+    }
   }
 }
