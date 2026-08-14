@@ -77,14 +77,27 @@ var ServicePresence = (function () {
         return claimsByBox(entries, myUid, nowMs, ttlMs)[boxKey(dateKey, fieldKey)] || null;
     }
 
-    // Everyone present on a surface right now, whether or not they hold a box —
-    // the row of faces along the top that says who else is here.
-    function peopleHere(entries, myUid, nowMs, ttlMs) {
+    // Everyone looking at THIS page right now, whether or not they hold a box —
+    // the row of faces that says who else is here.
+    //
+    // ⚠ Scoped to the surface AND the page. Without both, "also here" meant
+    // "signed in and has this app open somewhere", so a man reading the
+    // calendar appeared to be sitting on a Sunday he had never opened. A
+    // presence badge that is wrong is worse than absent: the whole point is to
+    // know who you are working alongside, and a room where everybody appears to
+    // be on everything tells you nothing.
+    //
+    // `pageKey` is the Sunday for the Order of Service and null for the
+    // calendar, which is one page covering every date.
+    function peopleHere(entries, myUid, surface, pageKey, nowMs, ttlMs) {
         var seen = {};
         var out = [];
+        var wanted = (pageKey === undefined) ? null : pageKey;
         (entries || []).forEach(function (entry) {
             if (!entry || entry.uid === myUid) return;
             if (isStale(entry, nowMs, ttlMs)) return;
+            if (entry.surface !== surface) return;
+            if ((entry.pageKey || null) !== wanted) return;
             if (!entry.personId || seen[entry.personId]) return;
             seen[entry.personId] = true;
             out.push(entry);
@@ -107,13 +120,21 @@ var ServicePresence = (function () {
 
     // The document one person's presence is written as. Keyed by uid by the
     // caller, which is what lets the rules say "write only your own".
-    function claimRecord(identity, surface, dateKey, fieldKey, at) {
+    // WHERE YOU ARE and WHAT YOU HOLD are two different facts, and conflating
+    // them is what made "also here" meaningless. `surface` + `pageKey` say
+    // which screen you are looking at and are always set; `dateKey` +
+    // `fieldKey` say which box you have and are null while you hold none.
+    //
+    // They are separate because the calendar can hold a box on any Sunday
+    // while sitting on no particular one.
+    function claimRecord(identity, surface, pageKey, dateKey, fieldKey, at) {
         return {
             personId: (identity && identity.id) || null,
             name: (identity && identity.name) || '',
             photoUrl: (identity && identity.photoUrl) || null,
             photoCrop: (identity && identity.photoCrop) || null,
             surface: surface || null,
+            pageKey: pageKey || null,
             dateKey: dateKey || null,
             fieldKey: fieldKey || null,
             updatedAt: at || null
@@ -157,7 +178,7 @@ var PresenceStore = (function () {
     var state = {
         db: null, uid: null, identity: null, surface: null,
         entries: [], unsubscribe: null, heartbeat: null, started: false,
-        dateKey: null, fieldKey: null,
+        pageKey: null, dateKey: null, fieldKey: null,
         onChange: function () {},
         stamp: function () { return null; },
         now: function () { return Date.now(); },
@@ -190,6 +211,7 @@ var PresenceStore = (function () {
         state.uid = deps.uid;
         state.identity = deps.identity;
         state.surface = deps.surface;
+        state.pageKey = deps.pageKey || null;
         state.onChange = deps.onChange || function () {};
         state.stamp = deps.stamp;
         state.now = deps.now || function () { return Date.now(); };
@@ -241,7 +263,7 @@ var PresenceStore = (function () {
     function write(dateKey, fieldKey) {
         if (!state.db || !state.uid) return Promise.resolve();
         var record = ServicePresence.claimRecord(
-            state.identity, state.surface, dateKey, fieldKey, state.stamp());
+            state.identity, state.surface, state.pageKey, dateKey, fieldKey, state.stamp());
         return state.db.collection('presence').doc(state.uid)
             .set(record)
             .catch(function (e) { console.warn('Could not record presence:', e); });
@@ -282,7 +304,24 @@ var PresenceStore = (function () {
 
     function here() {
         if (!state.started) return [];
-        return ServicePresence.peopleHere(state.entries, state.uid, state.now());
+        return ServicePresence.peopleHere(
+            state.entries, state.uid, state.surface, state.pageKey, state.now());
+    }
+
+    // Closing the page. DELETES the claim rather than rewriting it — release()
+    // writes a fresh timestamp, so using it here left somebody looking newly
+    // arrived for half a minute after they had gone, which is most of why
+    // "also here" read as "signed in anywhere". Best-effort, as an unload
+    // always is; expiry is still the thing that guarantees it.
+    function leave() {
+        if (!state.started || !state.db || !state.uid) return;
+        state.dateKey = null;
+        state.fieldKey = null;
+        try {
+            state.db.collection('presence').doc(state.uid).delete();
+        } catch (e) {
+            console.warn('Could not clear presence on leaving:', e);
+        }
     }
 
     function stop() {
@@ -298,7 +337,7 @@ var PresenceStore = (function () {
 
     return {
         start: start, stop: stop,
-        claim: claim, release: release,
+        claim: claim, release: release, leave: leave,
         holder: holder, claims: claims, here: here,
         _state: state
     };

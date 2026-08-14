@@ -33,6 +33,7 @@ function entry(overrides = {}) {
         photoUrl: null,
         photoCrop: null,
         surface: 'order-of-service',
+        pageKey: '2026-08-16',
         dateKey: '2026-08-16',
         fieldKey: 'liturgy.hymn1',
         updatedAt: ts(NOW - 1000),
@@ -114,18 +115,18 @@ test('everybody here is listed, whether or not they hold a box', () => {
     const people = ServicePresence.peopleHere([
         entry({ uid: 'uid-ann', personId: 'p-ann', name: 'Ann Lee' }),
         entry({ uid: 'uid-ben', personId: 'p-ben', name: 'Ben Ross', fieldKey: null }),
-    ], ME, NOW);
+    ], ME, 'order-of-service', '2026-08-16', NOW);
 
     assert.deepStrictEqual(people.map(p => p.name), ['Ann Lee', 'Ben Ross']);
 });
 
 test('you are not in your own list of who else is here', () => {
-    const people = ServicePresence.peopleHere([entry({ uid: ME })], ME, NOW);
+    const people = ServicePresence.peopleHere([entry({ uid: ME })], ME, 'order-of-service', '2026-08-16', NOW);
     assert.deepStrictEqual(people, []);
 });
 
 test('somebody gone is no longer here', () => {
-    const people = ServicePresence.peopleHere([entry({ updatedAt: ts(NOW - 60000) })], ME, NOW);
+    const people = ServicePresence.peopleHere([entry({ updatedAt: ts(NOW - 60000) })], ME, 'order-of-service', '2026-08-16', NOW);
     assert.deepStrictEqual(people, []);
 });
 
@@ -133,7 +134,7 @@ test('one person with two tabs is one face', () => {
     const people = ServicePresence.peopleHere([
         entry({ uid: 'uid-ann-1', personId: 'p-ann' }),
         entry({ uid: 'uid-ann-2', personId: 'p-ann' }),
-    ], ME, NOW);
+    ], ME, 'order-of-service', '2026-08-16', NOW);
 
     assert.strictEqual(people.length, 1);
 });
@@ -467,4 +468,102 @@ test('editing rights are granted before presence is started', () => {
     const watch = builder.indexOf('if (this.canEdit) this.watchPresence();');
     assert.ok(watch > guard,
         'the Order of Service must start presence outside the catch that revokes editing');
+});
+
+// ── "Also here" has to mean HERE ──────────────────────────────────────────
+//
+// It used to mean "signed in, with this app open somewhere", so a man reading
+// the calendar appeared to be sitting on a Sunday he had never opened. A
+// presence badge that is wrong is worse than one that is absent: the point is
+// knowing who you are working alongside, and a room where everybody appears to
+// be on everything tells you nothing.
+
+test('somebody on another Sunday is not here', () => {
+    const elsewhere = entry({ pageKey: '2026-08-23', dateKey: '2026-08-23' });
+    assert.deepStrictEqual(
+        ServicePresence.peopleHere([elsewhere], ME, 'order-of-service', '2026-08-16', NOW), []);
+});
+
+test('somebody on the calendar is not on your Sunday', () => {
+    const onCalendar = entry({ surface: 'calendar', pageKey: null, fieldKey: null, dateKey: null });
+    assert.deepStrictEqual(
+        ServicePresence.peopleHere([onCalendar], ME, 'order-of-service', '2026-08-16', NOW), []);
+});
+
+test('somebody merely signed in elsewhere is not here', () => {
+    const stray = entry({ surface: null, pageKey: null, fieldKey: null, dateKey: null });
+    assert.deepStrictEqual(
+        ServicePresence.peopleHere([stray], ME, 'order-of-service', '2026-08-16', NOW), []);
+});
+
+test('somebody on the same Sunday IS here', () => {
+    const people = ServicePresence.peopleHere([entry()], ME, 'order-of-service', '2026-08-16', NOW);
+    assert.deepStrictEqual(people.map(p => p.name), ['Ann Lee']);
+});
+
+test('everyone on the calendar shares one page', () => {
+    // It is a single screen covering every Sunday, so it has no page key.
+    const onCalendar = entry({ surface: 'calendar', pageKey: null, fieldKey: null, dateKey: null });
+    const people = ServicePresence.peopleHere([onCalendar], ME, 'calendar', null, NOW);
+    assert.strictEqual(people.length, 1);
+});
+
+test('a lock still crosses surfaces, even though presence does not', () => {
+    // Being "here" is per-page; holding a box is not. A hymn claimed from the
+    // Planning view must lock that hymn on the Order of Service page too.
+    const fromCalendar = entry({
+        surface: 'calendar', pageKey: null,
+        dateKey: '2026-08-16', fieldKey: 'liturgy.hymn1',
+    });
+    assert.ok(ServicePresence.holderOf(
+        [fromCalendar], ME, '2026-08-16', 'liturgy.hymn1', NOW),
+        'a lock taken on one surface must hold on the other');
+});
+
+// ── Leaving ───────────────────────────────────────────────────────────────
+
+test('closing the page clears the claim rather than refreshing it', () => {
+    // release() writes a fresh timestamp. Using it on unload left somebody
+    // looking newly arrived for half a minute after they had gone, which was
+    // most of why "also here" read as "signed in anywhere".
+    const deletes = [];
+    const writes = [];
+    PresenceStore.start({
+        db: {
+            collection: () => ({
+                doc: () => ({
+                    set(r) { writes.push(r); return Promise.resolve(); },
+                    delete() { deletes.push(true); return Promise.resolve(); },
+                }),
+                onSnapshot: () => () => {},
+            })
+        },
+        uid: ME, identity: { id: 'p-me', name: 'Bill Smith' },
+        surface: 'order-of-service', pageKey: '2026-08-16',
+        stamp: () => ts(NOW), now: () => NOW,
+        setInterval: () => 1, clearInterval: () => {},
+    });
+
+    const before = writes.length;
+    PresenceStore.leave();
+
+    assert.strictEqual(deletes.length, 1, 'leaving should remove the claim');
+    assert.strictEqual(writes.length, before,
+        'and must not write a fresh timestamp on the way out');
+    PresenceStore.stop();
+});
+
+test('leaving before presence started is harmless', () => {
+    PresenceStore.stop();
+    assert.doesNotThrow(() => PresenceStore.leave());
+});
+
+test('both pages clear their claim on the way out, not refresh it', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    ['service-calendar.js', 'service-builder.js'].forEach(file => {
+        const src = fs.readFileSync(path.join(__dirname, '..', 'public', file), 'utf8');
+        assert.match(src, /beforeunload'[\s\S]{0,40}PresenceStore\.leave\(\)/,
+            `${file} should leave, not release, on unload`);
+    });
 });

@@ -1783,6 +1783,9 @@ function serviceForm() {
                 uid: this.user.uid,
                 identity: this.me,
                 surface: 'order-of-service',
+                // Which Sunday this page is, so "also here" means here rather
+                // than "signed in somewhere".
+                pageKey: this.date,
                 stamp: () => firebase.firestore.FieldValue.serverTimestamp(),
                 // Alpine redraws from this; the store's own list is the truth.
                 onChange: (entries) => { this.presenceEntries = entries; }
@@ -1790,7 +1793,10 @@ function serviceForm() {
 
             // A courtesy, not the mechanism. Expiry is what actually frees a
             // box — this just makes the common case instant.
-            window.addEventListener('beforeunload', () => PresenceStore.release());
+            // leave(), not release(): release writes a fresh timestamp, which
+            // would leave you looking newly arrived for half a minute after
+            // closing the tab.
+            window.addEventListener('beforeunload', () => PresenceStore.leave());
         },
 
         takeRow(key) {
@@ -1812,7 +1818,9 @@ function serviceForm() {
         // Everybody else on this Sunday right now — the row of faces up top.
         get othersHere() {
             if (!this.user) return [];
-            return ServicePresence.peopleHere(this.presenceEntries, this.user.uid, Date.now());
+            return ServicePresence.peopleHere(
+                this.presenceEntries, this.user.uid,
+                'order-of-service', this.date, Date.now());
         },
 
         // Open a specific row (from the Service Notes sidebar) and scroll to it.

@@ -2283,12 +2283,17 @@ auth.onAuthStateChanged(async (user) => {
                     uid: user.uid,
                     identity: currentIdentity,
                     surface: 'calendar',
+                    // One page covering every Sunday, so it has no page key.
+                    pageKey: null,
                     stamp: () => firebase.firestore.FieldValue.serverTimestamp(),
                     onChange: () => injectServiceData(serviceDataMap)
                 });
                 // A courtesy that makes the common case instant. Expiry is
                 // what actually frees a box.
-                window.addEventListener('beforeunload', () => PresenceStore.release());
+                // leave(), not release(): release writes a fresh timestamp,
+                // which would leave you looking newly arrived for half a
+                // minute after closing the tab.
+                window.addEventListener('beforeunload', () => PresenceStore.leave());
                 const importBtn = document.getElementById('import-docx-btn');
                 if (importBtn) {
                     importBtn.classList.remove('hidden');
