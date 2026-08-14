@@ -67,11 +67,34 @@ for (const [name, block] of Object.entries(DIRECTORY)) {
     test(`${name} requires an account to read`, () => {
         assert.match(
             block(),
-            /allow read: if request\.auth != null/,
+            /allow read: if isSignedIn\(\)/,
             `${name} must ask for a signed-in reader`
         );
     });
+
+    test(`${name} is not readable by an anonymous session`, () => {
+        // ⚠ `request.auth != null` IS NOT AN ACCOUNT, and this project is one
+        // where that matters: anonymous sign-in is enabled, so anybody holding
+        // the public API key (it ships in the browser, by design) can mint a
+        // token in ONE request, with no email and no sign-up form, and satisfy
+        // it. That is how this shipped the first time, and it made the whole
+        // boundary decorative.
+        assert.doesNotMatch(
+            block(),
+            /allow read: if request\.auth != null/,
+            `${name} accepts a bare auth token — an anonymous session passes that`
+        );
+    });
 }
+
+test('isSignedIn excludes anonymous sessions', () => {
+    // The one place the distinction is made. Every directory rule above asks
+    // this rather than restating it, so there is one thing to get right.
+    const fn = blockFor(/function isSignedIn\(\)\s*\{([\s\S]*?)\n    \}/);
+    assert.match(fn, /request\.auth != null/);
+    assert.match(fn, /sign_in_provider != 'anonymous'/,
+        'isSignedIn does not exclude anonymous — it is then just request.auth != null');
+});
 
 // ── The floor is an account, not a rank ──────────────────────────────────────
 

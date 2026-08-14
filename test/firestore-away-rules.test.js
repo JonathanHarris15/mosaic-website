@@ -49,7 +49,7 @@ test('the Person document is no longer world-readable (MS-197 answered the tripw
         /allow read: if true/,
         'the directory has gone back to being world-readable — see ADR-0031'
     );
-    assert.match(peopleBlock(), /allow read: if request\.auth != null/);
+    assert.match(peopleBlock(), /allow read: if isSignedIn\(\)/);
 });
 
 test('Away is narrower than the Person record it hangs off', () => {
@@ -59,7 +59,7 @@ test('Away is narrower than the Person record it hangs off', () => {
     // somebody tidying up.
     const away = awayBlock();
     const person = peopleBlock();
-    assert.match(person, /allow read: if request\.auth != null/);
+    assert.match(person, /allow read: if isSignedIn\(\)/);
     assert.doesNotMatch(
         away,
         /allow read[^\n]*if request\.auth != null;/,

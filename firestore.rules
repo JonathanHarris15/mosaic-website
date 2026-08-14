@@ -11,6 +11,30 @@ service cloud.firestore {
       return ('permissionLevel' in d) ? d.permissionLevel : d.role;
     }
 
+    // Somebody holding an account, which is NOT the same as `request.auth !=
+    // null` — and on this project the difference is the whole boundary.
+    //
+    // ⚠ ANONYMOUS SIGN-IN IS ENABLED HERE. The API key ships in the browser
+    // because that is what an API key is for, and one POST to the Identity
+    // Toolkit with nothing but that key returns a valid token. No email, no
+    // password, no sign-up form, no trace anybody would recognise as a person.
+    // `request.auth != null` accepts that token, so a rule written that way is
+    // open to the internet with an extra HTTP request in front of it — which
+    // is exactly how MS-197 shipped the first time.
+    //
+    // Nothing in this app ever calls signInAnonymously. Every client already
+    // treats an anonymous session as signed out (auth.js, login.html, main.js,
+    // profile.js, mobile/data.js all test `!user.isAnonymous`), so this is the
+    // rules file catching up with what the app has always believed.
+    //
+    // Belt and braces: anonymous sign-in should also be turned OFF in the
+    // Firebase console, since nothing uses it. This rule holds either way, and
+    // a console toggle somebody can flip back is not where a boundary belongs.
+    function isSignedIn() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
     // Helper to check if user is admin
     function isAdmin() {
       return request.auth != null && permissionLevel() in ['admin', 'super_admin'];
@@ -337,7 +361,7 @@ service cloud.firestore {
     // an email address rather than nothing. That is the gate in front of this
     // lock and it is filed as MS-240.
     match /people/{personId} {
-      allow read: if request.auth != null;
+      allow read: if isSignedIn();
       allow create, delete: if isEditor();
       allow update: if isEditor();
 
@@ -363,7 +387,7 @@ service cloud.firestore {
       // What this named person has served, and when. Directory data about a
       // Person, so it moves with the Person (MS-197, ADR-0031).
       match /involvement/{involvementId} {
-        allow read: if request.auth != null;
+        allow read: if isSignedIn();
         allow create, update, delete: if isEditor();
       }
 
@@ -372,7 +396,7 @@ service cloud.firestore {
       // prayer_requests subcollection below, and that stays true whatever this
       // rule says. Closed with the rest of the directory (MS-197, ADR-0031).
       match /pastoral_prayer_history/{historyId} {
-        allow read: if request.auth != null;
+        allow read: if isSignedIn();
         allow create, update, delete: if isEditor();
       }
 
@@ -408,14 +432,14 @@ service cloud.firestore {
     // boundary as the per-person rule above (MS-197, ADR-0031) — a collection
     // group left open would be the whole church's history by another door.
     match /{path=**}/pastoral_prayer_history/{historyId} {
-      allow read: if request.auth != null;
+      allow read: if isSignedIn();
     }
 
     // Allow collection group queries for involvement (used by service injection
     // to re-key role assignments when services are shifted to a later Sunday).
     // Same boundary as the per-person rule above (MS-197, ADR-0031).
     match /{path=**}/involvement/{involvementId} {
-      allow read: if request.auth != null;
+      allow read: if isSignedIn();
     }
 
     // Away across everybody at once (MS-188) — what the person picker, the
@@ -433,7 +457,7 @@ service cloud.firestore {
     // The directory's tag vocabulary, including which tags hide people. Read
     // by the directory, so it is closed with it (MS-197, ADR-0031).
     match /people_tags/{tagId} {
-      allow read: if request.auth != null;
+      allow read: if isSignedIn();
       allow create, update, delete: if isEditor();
     }
 
@@ -445,7 +469,7 @@ service cloud.firestore {
     // Person id — closing the names while leaving the household graph open
     // would have been a half fix.
     match /families/{familyId} {
-      allow read: if request.auth != null;
+      allow read: if isSignedIn();
       allow create, update, delete: if isEditor();
     }
 
