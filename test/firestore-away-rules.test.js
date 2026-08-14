@@ -8,11 +8,19 @@ const path = require('node:path');
 // Like the other rules tests here, this pins the SHAPE rather than exercising
 // it: live enforcement needs a real project and stays a human verification step.
 //
-// The failure being guarded against is specific and quiet. `people/{personId}`
-// is `allow read: if true` — every name, email, phone number and home address,
-// open to the internet. If an Away ever ends up readable the same way, the app
-// starts publishing which houses are empty on which dates. That is not a crash,
-// it is a rule that looks fine in a diff.
+// The failure being guarded against is specific and quiet. If an Away ever
+// ends up as readable as the rest of the directory, the app starts publishing
+// which houses are empty on which dates. That is not a crash, it is a rule
+// that looks fine in a diff.
+//
+// ⚠ THE TRIPWIRE BELOW HAS FIRED, AND WAS ANSWERED RATHER THAN DELETED.
+// When this file was written, `people/{personId}` was `allow read: if true` —
+// every name, email, phone number and home address, open to the internet — and
+// the test asserted it, deliberately, so that whoever closed the directory
+// would be sent back here to re-read the Away decision rather than discover
+// it. MS-197 closed it (ADR-0031). The decision survives one rung lower: the
+// directory is now readable by any signed-in account, and Away is still not,
+// because a member has no business knowing who is on holiday.
 //
 // Follows the pattern of firestore-event-visibility-rules.test.js.
 
@@ -30,13 +38,32 @@ const peopleBlock = () => blockFor(/match \/people\/\{personId\}\s*\{([\s\S]*?)\
 
 // ── The thing this rule exists to prevent ────────────────────────────────────
 
-test('the Person document is still world-readable, which is WHY Away is not on it', () => {
-    // If this ever stops being true the reasoning above changes, and somebody
-    // should come back and re-read the decision rather than discovering it.
-    assert.match(
+test('the Person document is no longer world-readable (MS-197 answered the tripwire)', () => {
+    // This assertion used to run the other way round. See the note at the top:
+    // it was the marker MS-188 left for whoever closed the directory, and
+    // MS-197 is that person. Kept, inverted, so the two decisions stay tied
+    // together — Away's rule is defined by being NARROWER than this one, and a
+    // test that stops mentioning it stops explaining itself.
+    assert.doesNotMatch(
         peopleBlock(),
         /allow read: if true/,
-        'people is no longer world-readable — revisit why Away lives in a subcollection'
+        'the directory has gone back to being world-readable — see ADR-0031'
+    );
+    assert.match(peopleBlock(), /allow read: if request\.auth != null/);
+});
+
+test('Away is narrower than the Person record it hangs off', () => {
+    // The whole reason Away is a subcollection rather than a field. The
+    // directory asks for an account; Away asks for the person themselves or an
+    // editor. If these two ever say the same thing, Away has been widened by
+    // somebody tidying up.
+    const away = awayBlock();
+    const person = peopleBlock();
+    assert.match(person, /allow read: if request\.auth != null/);
+    assert.doesNotMatch(
+        away,
+        /allow read[^\n]*if request\.auth != null;/,
+        'Away has been flattened to the directory boundary — re-read ADR-0023'
     );
 });
 

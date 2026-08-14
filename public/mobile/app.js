@@ -165,7 +165,10 @@
       { icon: "church", label: "Services", route: "calendar" },
       // Route "events", not "calendar" — see data.js. "calendar" is Services.
       { icon: "calendar-days", label: "Calendar", route: "events" },
-      { icon: "users", label: "Membership Directory", route: "people" },
+      // Same gate as the drawer's entry (destinations.js) and as the web's
+      // dashboard card. Ungated, this tile handed a signed-out guest the whole
+      // directory — see MS-197 / ADR-0031.
+      { icon: "users", label: "Membership Directory", route: "people", permissionLevels: ["member", "editor", "elder", "admin", "super_admin"] },
       { icon: "shield", label: "Shepherd", route: "shepherd", permissionLevels: ["elder", "super_admin"] },
       { icon: "settings-2", label: "Admin", route: "admin", permissionLevels: ["admin", "super_admin"] },
       // A drawer destination now as well as a tile here (destinations.js) —

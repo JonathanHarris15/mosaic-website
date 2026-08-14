@@ -77,6 +77,7 @@ Whether a participant sees the Event's full roster is **an editor's choice per E
 
 ## Consequences
 
+- **↑ The directory question was filed, eventually.** [ADR 0031](0031-the-directory-asks-for-an-account.md) closed the directory to signed-in accounts. The trade below is unchanged in shape and better in effect: those ids no longer resolve to a name for an anonymous reader, which is what this bullet said it wanted and could not have. The text stands as written.
 - **`participantIds` leaks the roster as ids.** The rule needs the list on the document the participant is allowed to read, so an editor who hides the roster hides it in the interface, not in the data — anyone opening devtools can resolve the ids against `people`, which is world-readable. Accepted **for this ticket only**, on the grounds that the entire directory (names, emails, phone numbers, addresses) is already world-readable, so this discloses very little that is not already out. That is an argument that the app's read posture is loose, not that this feature should be — the directory question is filed separately and is much larger than this one.
 - The `events` series collection stops being world-readable. Today every series is the Sunday Service so it is harmless; the moment "Elders' Meeting" can be a series, its name is public.
 - **`injectServiceAtDate`** — the "shift everything forward a week" tool — currently moves `services`, `involvement`, and `pastoral_prayer_history`. It must move occurrences and assignments too, or a shifted week silently loses its roster.

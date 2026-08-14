@@ -71,6 +71,8 @@ A draft saved under the old `away` key is still read, so nobody's work is lost t
 
 That reasoning does not stretch here. A name, a home address and *"away 10–24 August"* together are not directory data — they are a notice that a particular house is empty on particular dates. An Away is therefore a document in a **subcollection with its own rule**, readable by the person themselves and by editors and above, and by nobody else. Rules are per-path, so a subcollection under a world-readable parent is closed unless it is opened.
 
+> **The premise moved; the decision did not.** [ADR 0031](0031-the-directory-asks-for-an-account.md) closed the directory, so the Person record is no longer world-readable — it needs an account. Away is now narrower than the *directory* rather than narrower than the *internet*, for the same reason stated one rung lower: a member has no business knowing whose house is empty. The tripwire this ADR left in `firestore-away-rules.test.js` fired and was answered rather than deleted.
+
 It carries **no reason field**. "Away" is the whole of what a rota needs, and a *why* is pastoral — which has one home in Mosaic already, behind `isElder()`. A note here would be a second, thinner-walled place for the same kind of information.
 
 ## Consequences

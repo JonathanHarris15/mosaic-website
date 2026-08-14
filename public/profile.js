@@ -562,9 +562,12 @@ function setLinkKind(kind) {
     document.getElementById('lr-status').textContent = '';
 }
 
-// The directory is publicly readable, so a viewer can find themselves. People
-// already claimed by another account are shown but not selectable — seeing the
-// name is how someone realises the church has them twice.
+// The directory needs an account and nothing more (ADR-0031), so a viewer with
+// no Person and no rank can still find themselves here — which is the reason
+// that boundary is set at an account rather than at membership: this is the
+// flow that MAKES somebody a member. People already claimed by another account
+// are shown but not selectable — seeing the name is how someone realises the
+// church has them twice.
 function renderLinkMatches(query) {
     const list = document.getElementById('lr-results');
     const q = (query || '').toLowerCase().trim();

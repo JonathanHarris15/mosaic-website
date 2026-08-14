@@ -317,8 +317,27 @@ service cloud.firestore {
       allow create, update, delete: if isEditor();
     }
 
+    // ── The People's Directory (MS-197, ADR-0031) ───────────────────────────
+    //
+    // ⚠ THE FLOOR IS AN ACCOUNT, NOT A RANK, AND THAT IS THE DECISION.
+    // Until MS-197 this was `allow read: if true` — every name, email address,
+    // phone number and home address, readable by anybody who could reach the
+    // endpoint. Two ADRs accepted a smaller disclosure on the grounds that
+    // this one was already out (ADR-0018 §Consequences, ADR-0020), and both
+    // said the directory question was filed separately. This is that filing.
+    //
+    // `isMember()` looks like the tighter, better rule and is the wrong one. A
+    // brand-new account has no Person and no rank; the way it gets one is the
+    // Directory Request flow (ADR-0025, ADR-0027), where somebody searches the
+    // directory for their own name and says "that is me". Gating the directory
+    // on membership breaks the flow that MAKES people members. Storage already
+    // draws the line here — a Directory Photo is `if request.auth != null`.
+    //
+    // What this does NOT do: sign-up is self-service, so this costs a stranger
+    // an email address rather than nothing. That is the gate in front of this
+    // lock and it is filed as MS-240.
     match /people/{personId} {
-      allow read: if true;
+      allow read: if request.auth != null;
       allow create, delete: if isEditor();
       allow update: if isEditor();
 
@@ -341,13 +360,19 @@ service cloud.firestore {
         );
 
 
+      // What this named person has served, and when. Directory data about a
+      // Person, so it moves with the Person (MS-197, ADR-0031).
       match /involvement/{involvementId} {
-        allow read: if true;
+        allow read: if request.auth != null;
         allow create, update, delete: if isEditor();
       }
 
+      // Which named person was prayed for, and when. The public "was prayed
+      // for" fact only — ADR-0007 keeps the request TEXT in the elder-only
+      // prayer_requests subcollection below, and that stays true whatever this
+      // rule says. Closed with the rest of the directory (MS-197, ADR-0031).
       match /pastoral_prayer_history/{historyId} {
-        allow read: if true;
+        allow read: if request.auth != null;
         allow create, update, delete: if isEditor();
       }
 
@@ -360,14 +385,14 @@ service cloud.firestore {
       // Away (MS-188): stretches of whole days this Person said they will not
       // be here.
       //
-      // ⚠ NOT A FIELD ON THE PERSON, AND THIS RULE IS THE REASON. The Person
-      // document above is `allow read: if true` — every name, email, phone
-      // number and home address, readable by anyone at all. ADR-0018 accepted
-      // that posture for `participantIds` because ids disclose little that is
-      // not already out. It does not stretch to this: a name, an address and
-      // "away 10-24 August" together say a particular house is empty on
-      // particular dates. Rules are per-path, so this subcollection is closed
-      // even though its parent is open.
+      // ⚠ NOT A FIELD ON THE PERSON, AND THIS RULE IS STILL THE REASON.
+      // When MS-188 wrote this, the Person document above was `allow read: if
+      // true` and the argument was about the open internet. MS-197 closed the
+      // directory to any signed-in account, and the argument survives it
+      // intact, one rung lower: a name, an address and "away 10-24 August"
+      // together say a particular house is empty on particular dates, and that
+      // is not something to hand every account in the church. Rules are
+      // per-path, so this subcollection stays narrower than its parent.
       //
       // The person themselves and editors above them, and nobody else. A member
       // has no business knowing who is on holiday, and every reader is blast
@@ -379,15 +404,18 @@ service cloud.firestore {
       }
     }
 
-    // Allow collection group queries for pastoral_prayer_history
+    // Allow collection group queries for pastoral_prayer_history. Same
+    // boundary as the per-person rule above (MS-197, ADR-0031) — a collection
+    // group left open would be the whole church's history by another door.
     match /{path=**}/pastoral_prayer_history/{historyId} {
-      allow read: if true;
+      allow read: if request.auth != null;
     }
 
     // Allow collection group queries for involvement (used by service injection
-    // to re-key role assignments when services are shifted to a later Sunday)
+    // to re-key role assignments when services are shifted to a later Sunday).
+    // Same boundary as the per-person rule above (MS-197, ADR-0031).
     match /{path=**}/involvement/{involvementId} {
-      allow read: if true;
+      allow read: if request.auth != null;
     }
 
     // Away across everybody at once (MS-188) — what the person picker, the
@@ -402,16 +430,22 @@ service cloud.firestore {
       allow read: if isEditor();
     }
 
+    // The directory's tag vocabulary, including which tags hide people. Read
+    // by the directory, so it is closed with it (MS-197, ADR-0031).
     match /people_tags/{tagId} {
-      allow read: if true;
+      allow read: if request.auth != null;
       allow create, update, delete: if isEditor();
     }
 
     // Families (ADR-0012, MS-88): household entities for the Membership Directory.
-    // Public read (the directory shows households to the congregation); editor+
-    // write (families are managed alongside People).
+    // Editor+ write (families are managed alongside People).
+    //
+    // Readable by any signed-in account, NOT by the world (MS-197, ADR-0031).
+    // A Family is who is married to whom and whose children are whose, by
+    // Person id — closing the names while leaving the household graph open
+    // would have been a half fix.
     match /families/{familyId} {
-      allow read: if true;
+      allow read: if request.auth != null;
       allow create, update, delete: if isEditor();
     }
 

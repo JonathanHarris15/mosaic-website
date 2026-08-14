@@ -137,9 +137,29 @@
   function isDirectoryAdmin(user) {
     return !!user && (user.permissionLevel === "elder" || user.permissionLevel === "super_admin");
   }
+
+  // Who may open this screen — asked of the ONE list the tile and the drawer
+  // are filtered by (destinations.js), never restated here, because a deep
+  // link (`#/people`) reaches this screen without passing either of them and a
+  // second copy of the gate is a gate that drifts.
+  //
+  // ⚠ `undefined` means we do not know yet; `null` means signed out (app.js).
+  // Refusing on `undefined` would tell a member to sign in while their own
+  // account is still loading.
+  function mayOpenDirectory(user) {
+    var entry = (data.DESTINATIONS || []).filter(function (d) { return d.key === "directory"; })[0];
+    return entry ? data.canSee(entry, user) : !!user;
+  }
+  function noPeople() { return []; }
+
   function PeopleScreen(props) {
-    var st = useAsync(data.getPeople, []);
-    var tagsSt = useAsync(data.getShepherdingTags, []);
+    // The read is skipped rather than issued and refused — since MS-197 the
+    // directory needs an account (ADR-0031), so for a guest this could only
+    // fail, and a failure logged on a screen that already knows the answer is
+    // noise. Re-runs when we learn who is looking.
+    var mayOpen = mayOpenDirectory(props.user);
+    var st = useAsync(mayOpen ? data.getPeople : noPeople, [mayOpen]);
+    var tagsSt = useAsync(mayOpen ? data.getShepherdingTags : noPeople, [mayOpen]);
     var qS = useState(""), fS = useState("members");
     var people = st.data || [];
     var vis = tagVisibility(tagsSt.data);
@@ -161,7 +181,10 @@
           <div style=${{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px 12px" }}>
             ${tabs.map(function (t) { return html`<${Chip} key=${t[0]} active=${t[0] === tab} onClick=${function () { fS[1](t[0]); }}>${t[1]}<//>`; })}
           </div>
-          ${st.loading ? html`<${Loading} label="Loading people…" />` : st.error ? html`<${ErrorNote}>Couldn't load the directory.<//>` : html`
+          ${props.user === undefined ? html`<${Loading} label="Loading people…" />`
+            : props.user === null ? html`<${ErrorNote}>The directory is for people with an account. Sign in to see it.<//>`
+            : !mayOpen ? html`<${ErrorNote}>The directory isn't available on your account yet. Ask an admin to connect you.<//>`
+            : st.loading ? html`<${Loading} label="Loading people…" />` : st.error ? html`<${ErrorNote}>Couldn't load the directory.<//>` : html`
             <div style=${{ padding: "0 16px 4px" }}><${Overline}>${results.length} People<//></div>
             <div style=${{ padding: "8px 16px 90px" }}>
               <div style=${{ background: "var(--surface-container-lowest)", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", overflow: "hidden" }}>

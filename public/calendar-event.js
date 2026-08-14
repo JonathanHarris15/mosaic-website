@@ -443,7 +443,16 @@
                             ? db.collection('events').doc(loaded.seriesId).get()
                             : Promise.resolve(null),
 
-                        this.isEditor ? this.loadEditorData() : this.loadPeople(),
+                        // ⚠ NOTHING FOR A STRANGER TO READ HERE, AND ASKING
+                        // WOULD BREAK THE PAGE. This page draws signed out (see
+                        // `signedOut`), and since MS-197 the directory needs an
+                        // account (ADR-0031). A refusal lands in `core`, which
+                        // is the one result worth throwing for — so an
+                        // unguarded read would turn a public Event into an
+                        // error screen. A signed-out visitor sees no roster
+                        // anyway: those rows are editors-or-your-own.
+                        !this.rank ? Promise.resolve()
+                            : this.isEditor ? this.loadEditorData() : this.loadPeople(),
 
                         // A Sunday's liturgy lives on the Service document, not
                         // in assignments, and the picker has to see it to know
