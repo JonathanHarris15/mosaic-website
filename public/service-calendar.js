@@ -475,6 +475,11 @@ let serviceDataMap = {};
 // that fetches it.
 let peopleById = {};
 
+// Who is signed in, as a Person. Null until it resolves, and null for good on
+// an account with no Person attached — in which case an edit records no
+// authorship rather than a stamp nobody can be named from.
+let currentIdentity = null;
+
 // The hymn index behind the Planning view's hymn columns. Shared with the Order
 // of Service so both offer the same hymns for the same typing — see
 // hymn-registry.js.
@@ -1612,13 +1617,21 @@ async function writeLiturgyField(dateKey, field, value) {
     const ref = db.collection('services').doc(dateKey);
     const stamp = firebase.firestore.FieldValue.serverTimestamp();
 
+    // An element decided from the Planning view is just as decided as one
+    // chosen on the Order of Service page, so it is recorded the same way
+    // (MS-246). The tag is only ever SHOWN on the Order of Service page — but
+    // recording it in only one place would make that tag a liar.
+    const authorship = ServiceAuthorship.stampFor(field, currentIdentity, stamp);
+
     try {
-        await ref.update({ [`liturgy.${field}`]: value, updatedAt: stamp });
+        await ref.update(Object.assign(
+            { [`liturgy.${field}`]: value, updatedAt: stamp }, authorship));
     } catch (e) {
         if (e.code !== 'not-found') throw e;
         // No document for this Sunday yet. Nothing can be racing it, so the
         // nested shape is written directly.
-        await ref.set({ liturgy: { [field]: value }, updatedAt: stamp }, { merge: true });
+        await ref.set(Object.assign(
+            { liturgy: { [field]: value }, updatedAt: stamp }, authorship), { merge: true });
     }
 
     if (!serviceDataMap[dateKey]) serviceDataMap[dateKey] = {};
@@ -2173,6 +2186,9 @@ auth.onAuthStateChanged(async (user) => {
             const userData = await getUserData(user.uid);
             const permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
             window.currentPermissionLevel = permissionLevel;
+            // Needed before the first edit, so an element decided here records
+            // who decided it (MS-246).
+            currentIdentity = await MosaicIdentity.me({ db, getUserData, uid: user.uid });
             if (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
                 document.body.classList.add('can-edit');
                 const importBtn = document.getElementById('import-docx-btn');

@@ -254,7 +254,7 @@ test('a liturgy slot is written by path, so nothing else on the Sunday moves', (
     // The same rule as MS-243: update() reads 'liturgy.hymn1' as a path to one
     // field. set(merge) would read it as a field NAME containing a dot and
     // build a second liturgy beside the real one.
-    assert.match(SRC, /await ref\.update\(\{ \[`liturgy\.\$\{field\}`\]: value/);
+    assert.match(SRC, /ref\.update\([\s\S]{0,60}\[`liturgy\.\$\{field\}`\]: value/);
 });
 
 test('choosing a hymn from the list keeps its id, and typing over it does not', () => {

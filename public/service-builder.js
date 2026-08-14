@@ -355,6 +355,8 @@ function serviceForm() {
         prayerSending: { male: false, female: false },
         user: null,
         originalService: '',
+        // The signed-in user as a Person, for the authorship tags (MS-246).
+        me: null,
         // The liturgy element whose station row is currently expanded (one at a
         // time). null = every row collapsed. Drives the inline picker + note editor.
         openKey: null,
@@ -674,6 +676,9 @@ function serviceForm() {
                         this.currentPermissionLevel = permissionLevel;
                         this.canEdit = (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel));
                         this.isShepherd = ['elder', 'super_admin'].includes(permissionLevel);
+                        // Who this is, as a Person — stamped onto every element
+                        // they decide (MS-246).
+                        this.me = await MosaicIdentity.me({ db, getUserData, uid: user.uid });
                         this.loadPrayerRequests();
                     } catch (error) {
                         console.error("Error checking user permissions:", error);
@@ -857,6 +862,10 @@ function serviceForm() {
                 // free-text value (pre-migration) is wrapped as a single literal
                 // candidate so it still displays; the migration resolves it properly.
                 this.service.liturgy.baptism = coerceBaptismCandidates(this.service.liturgy.baptism);
+                // Who decided each element (MS-246). Read-only on this page —
+                // it is written by the save, never edited directly — so it is
+                // kept off flattenServiceForSave and moved by hand.
+                this.service[ServiceAuthorship.FIELD] = data[ServiceAuthorship.FIELD] || {};
                 // Store guide data to preserve/update it during save
                 this.service.guide = data.guide || null;
                 // Which Service Guide system this week is on (ADR-0010): explicit
@@ -1361,6 +1370,14 @@ function serviceForm() {
                 // a second pass would add a duplicate rather than overwrite.
                 toSave.involvementDeferred = !hasHappened;
                 toSave.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+
+                // Who decided each element this save is changing (MS-246).
+                // Merged into the SAME update as the values, so an element and
+                // the record of who chose it can never land apart — a half
+                // failure would otherwise leave a hymn nobody appears to have
+                // chosen, or a name against a hymn that never saved.
+                Object.assign(toSave, ServiceAuthorship.stampsFor(
+                    toSave, this.me, firebase.firestore.FieldValue.serverTimestamp()));
                 // Only persist the guide system once the editor has engaged the new
                 // controls, so untouched pre-ADR-0010 weeks are never silently flipped.
                 if (this._guideEngaged) toSave.guideSystem = this.guideSystem;
@@ -1409,11 +1426,16 @@ function serviceForm() {
                 } else {
                     // Nothing to race yet, so the first write lays the whole
                     // document down at once. Dot paths are meaningless here.
+                    const firstStamps = ServiceAuthorship.nestStamps(toSave);
                     batch.set(serviceRef, Object.assign({}, flatNow, {
                         involvementDeferred: toSave.involvementDeferred,
                         updatedAt: toSave.updatedAt
                     }, toSave.guide ? { guide: toSave.guide } : {},
-                       toSave.guideSystem ? { guideSystem: toSave.guideSystem } : {}
+                       toSave.guideSystem ? { guideSystem: toSave.guideSystem } : {},
+                       // Nested, because set() reads a dot as part of a field
+                       // NAME. Without this the first save of a brand-new
+                       // Sunday would be the one save that records nobody.
+                       firstStamps ? { [ServiceAuthorship.FIELD]: firstStamps } : {}
                     ), { merge: true });
                 }
 
@@ -1505,7 +1527,19 @@ function serviceForm() {
                 normalizeDottedKeys(doc.data())
             );
 
-            let adopted = 0;
+            // Who decided each element travels wholesale. Nobody edits it on
+            // this page — it is a by-product of saving — so there is no local
+            // version to protect, and a tag that did not keep up would credit
+            // the wrong person until somebody reloaded. Applied to BOTH copies
+            // for the same reason as everything below.
+            const remoteDecided = doc.data()[ServiceAuthorship.FIELD] || {};
+            let adopted = JSON.stringify(this.service[ServiceAuthorship.FIELD] || {})
+                !== JSON.stringify(remoteDecided) ? 1 : 0;
+            if (adopted) {
+                this.service[ServiceAuthorship.FIELD] = remoteDecided;
+                original[ServiceAuthorship.FIELD] = remoteDecided;
+            }
+
             for (const [path, value] of Object.entries(adoptions)) {
                 // Applied to BOTH the live model and the loaded snapshot. Miss
                 // the snapshot and the next save reads the adopted value as a
@@ -1620,6 +1654,20 @@ function serviceForm() {
                     })
                     .map(([key, label, type]) => this._buildItem(key, label, type, lit)),
             }));
+        },
+
+        // ── Who decided this element (MS-246) ───────────────────────────────
+        // A quiet note under a row, not a column of its own: the row already
+        // carries a label and a value, and the interesting thing is almost
+        // always what was chosen rather than who chose it.
+        decidedTag(key) {
+            return ServiceAuthorship.tagLabel(
+                ServiceAuthorship.decidedBy(this.service, key));
+        },
+
+        decidedTitle(key) {
+            return ServiceAuthorship.tagTitle(
+                ServiceAuthorship.decidedBy(this.service, key));
         },
 
         // Fields beyond the liturgy grid that a fully-ready service needs: the two
