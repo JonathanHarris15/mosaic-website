@@ -61,6 +61,87 @@ function normalizeDottedKeys(raw) {
     return data;
 }
 
+// The liturgy slots and note keys a save descends into one level, so an edit
+// names the slot it touched rather than the whole map. Anything else nested
+// (guide, irregularElements) is written whole — it is rebuilt wholesale by
+// whoever owns it, so a partial write of it would mean less, not more.
+const NESTED_SAVE_MAPS = ['liturgy', 'notes'];
+
+// The editor's nested in-memory model, flattened to the shape the `services`
+// document actually stores (name and id side by side rather than a ref object).
+// Pure, and the same function is run over the loaded snapshot and over the
+// current model, so `changedFieldPaths` gets two things it can compare
+// like-for-like. The parts of a save that are not a function of the model —
+// the timestamp, the guide record, involvementDeferred — are added by save().
+function flattenServiceForSave(service) {
+    const ref = (r) => (r && typeof r === 'object') ? r : { id: null, name: '' };
+    const s = service || {};
+    return {
+        theme: s.theme,
+        keyVerse: s.keyVerse,
+        serviceLeader: ref(s.serviceLeader).name,
+        serviceLeaderId: ref(s.serviceLeader).id,
+        musicLeader: ref(s.musicLeader).name,
+        musicLeaderId: ref(s.musicLeader).id,
+        musicHelpers: (Array.isArray(s.musicHelpers) ? s.musicHelpers : [])
+            .map(h => ({ name: h.name || '', id: h.id || null })),
+        preacher: ref(s.preacher).name,
+        preacherId: ref(s.preacher).id,
+        prayerPraiseName: ref(s.prayerPraise).name,
+        prayerPraiseId: ref(s.prayerPraise).id,
+        prayerConfessionName: ref(s.prayerConfession).name,
+        prayerConfessionId: ref(s.prayerConfession).id,
+        elementsName: ref(s.elements).name,
+        elementsId: ref(s.elements).id,
+        otherName: ref(s.other).name,
+        otherId: ref(s.other).id,
+        hasBaptism: s.hasBaptism,
+        removedHymns: s.removedHymns || [],
+        isIrregular: s.isIrregular,
+        irregularElements: s.irregularElements,
+        notes: s.notes,
+        liturgy: s.liturgy
+    };
+}
+
+// What this editor actually changed, as Firestore dot-path field updates.
+//
+// This is what makes a Sunday safe to edit two-up. A save used to send every
+// field it held, so a slot left blank on this screen overwrote the same slot
+// another editor had just filled — the loser never saw it happen, because a
+// stale blank is an ordinary write. Diffing first means an untouched slot is
+// not in the write at all, and a race it never entered is a race it cannot
+// lose.
+//
+// Descends exactly one level into the maps in NESTED_SAVE_MAPS and no further.
+// A hymn is {id, name} chosen as one act, so the SLOT is the unit; splitting
+// it could leave an id pointing at one hymn and a name reading another. Arrays
+// are compared whole and replaced whole — a list is edited as a list.
+function changedFieldPaths(before, after) {
+    const same = (a, b) => JSON.stringify(a === undefined ? null : a) ===
+                           JSON.stringify(b === undefined ? null : b);
+    const update = {};
+
+    for (const [key, val] of Object.entries(after || {})) {
+        const prev = (before || {})[key];
+
+        const nested = NESTED_SAVE_MAPS.includes(key)
+            && val && typeof val === 'object' && !Array.isArray(val);
+
+        if (!nested) {
+            if (!same(prev, val)) update[key] = val;
+            continue;
+        }
+
+        const prevMap = (prev && typeof prev === 'object') ? prev : {};
+        for (const [slot, slotVal] of Object.entries(val)) {
+            if (!same(prevMap[slot], slotVal)) update[`${key}.${slot}`] = slotVal;
+        }
+    }
+
+    return update;
+}
+
 // Diffs two lists of Person references as SETS keyed by Person id, reporting
 // which ids were added and which were removed. Entries without an id (no
 // selected Person) are ignored, and a Person listed twice counts once.
@@ -622,6 +703,12 @@ function serviceForm() {
 
         async load() {
             const doc = await db.collection('services').doc(this.date).get();
+            // A save writes dot-path field updates, which only update() honours —
+            // set(merge) would store 'liturgy.hymn1' as a field name with a dot in
+            // it. update() refuses a document that is not there, so the first save
+            // of a never-saved Sunday writes the whole thing with set() instead.
+            // Nothing can be racing a document that does not exist yet.
+            this._docExists = doc.exists;
             if (doc.exists) {
                 const raw = doc.data();
 
@@ -1165,39 +1252,25 @@ function serviceForm() {
                     });
                 }
 
-                // Flatten service object for Firestore storage
-                const toSave = {
-                    theme: this.service.theme,
-                    keyVerse: this.service.keyVerse,
-                    serviceLeader: this.service.serviceLeader.name,
-                    serviceLeaderId: this.service.serviceLeader.id,
-                    musicLeader: this.service.musicLeader.name,
-                    musicLeaderId: this.service.musicLeader.id,
-                    musicHelpers: this.service.musicHelpers.map(h => ({ name: h.name || '', id: h.id || null })),
-                    preacher: this.service.preacher.name,
-                    preacherId: this.service.preacher.id,
-                    prayerPraiseName: this.service.prayerPraise.name,
-                    prayerPraiseId: this.service.prayerPraise.id,
-                    prayerConfessionName: this.service.prayerConfession.name,
-                    prayerConfessionId: this.service.prayerConfession.id,
-                    elementsName: this.service.elements.name,
-                    elementsId: this.service.elements.id,
-                    otherName: this.service.other.name,
-                    otherId: this.service.other.id,
-                    hasBaptism: this.service.hasBaptism,
-                    removedHymns: this.service.removedHymns || [],
-                    isIrregular: this.service.isIrregular,
-                    irregularElements: this.service.irregularElements,
-                    notes: this.service.notes,
-                    liturgy: this.service.liturgy,
-                    // Whether this Sunday still owes its serve records. The
-                    // scheduled job converts only Services carrying it, which is
-                    // what stops it re-crediting every Sunday in the archive —
-                    // those were written the old way under auto-generated ids, so
-                    // a second pass would add a duplicate rather than overwrite.
-                    involvementDeferred: !hasHappened,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                };
+                // Write only what THIS editor changed.
+                //
+                // A Sunday is edited by several people at once at a guide-writing
+                // session, so the old whole-document save was a silent clobber:
+                // it sent every slot it held, and a slot left blank on this screen
+                // overwrote the same slot another editor had just filled. Diffing
+                // the flattened model against the flattened snapshot we loaded
+                // leaves an untouched slot out of the write entirely, so it cannot
+                // lose a race it never entered. See changedFieldPaths.
+                const flatNow = flattenServiceForSave(this.service);
+                const toSave = changedFieldPaths(flattenServiceForSave(original), flatNow);
+
+                // Whether this Sunday still owes its serve records. The
+                // scheduled job converts only Services carrying it, which is
+                // what stops it re-crediting every Sunday in the archive —
+                // those were written the old way under auto-generated ids, so
+                // a second pass would add a duplicate rather than overwrite.
+                toSave.involvementDeferred = !hasHappened;
+                toSave.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
                 // Only persist the guide system once the editor has engaged the new
                 // controls, so untouched pre-ADR-0010 weeks are never silently flipped.
                 if (this._guideEngaged) toSave.guideSystem = this.guideSystem;
@@ -1237,11 +1310,26 @@ function serviceForm() {
                 }
 
                 const serviceRef = db.collection('services').doc(this.date);
-                // Use merge: true to preserve other top-level fields (like 'guide' if it wasn't updated here)
-                batch.set(serviceRef, toSave, { merge: true });
+                if (this._docExists) {
+                    // update() reads 'liturgy.hymn1' as a path to one slot.
+                    // set(merge) would read it as a field NAME containing a dot
+                    // and write a second, parallel copy of the liturgy — the same
+                    // trap normalizeDottedKeys exists to clean up after.
+                    batch.update(serviceRef, toSave);
+                } else {
+                    // Nothing to race yet, so the first write lays the whole
+                    // document down at once. Dot paths are meaningless here.
+                    batch.set(serviceRef, Object.assign({}, flatNow, {
+                        involvementDeferred: toSave.involvementDeferred,
+                        updatedAt: toSave.updatedAt
+                    }, toSave.guide ? { guide: toSave.guide } : {},
+                       toSave.guideSystem ? { guideSystem: toSave.guideSystem } : {}
+                    ), { merge: true });
+                }
 
                 await batch.commit();
                 committed = true;
+                this._docExists = true;
                 this.originalService = JSON.stringify(this.service);
                 console.log('Service and involvements saved successfully.');
             } catch (e) {
@@ -2174,5 +2262,5 @@ function hymnPicker(hymnRef, parent = null) {
 
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates };
+    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths };
 }
