@@ -265,7 +265,9 @@ function calendarPage() {
                 }
 
                 this.showPersonSelector = false;
-                // Full reload to ensure everything is perfectly in sync with Firestore
+                // Redraw from the map the live listener maintains. The write
+                // above will arrive through that listener anyway; this just
+                // puts it on screen without waiting for the round trip.
                 if (window.loadServiceData) await window.loadServiceData();
             } catch (error) {
                 console.error('Error saving person selection:', error);
@@ -1023,47 +1025,113 @@ function renderTable(grouped) {
  * Fetch all service documents from Firestore and inject summary info
  * (theme, service leader, preacher) into the matching calendar cards.
  */
+// Older saves used set() with merge and dotted key names like 'liturgy.sermon',
+// which Firestore stores as a literal field name containing a dot rather than
+// as a nested path. Normalize those back into their proper nested structure so
+// the display code (which reads svc.liturgy.sermon) finds the value.
+function normalizeServiceDoc(raw) {
+    const data = {};
+    for (const [key, val] of Object.entries(raw || {})) {
+        if (!key.includes('.')) {
+            data[key] = val;
+        }
+    }
+    for (const [key, val] of Object.entries(raw || {})) {
+        if (key.includes('.')) {
+            const parts = key.split('.');
+            let obj = data;
+            for (let i = 0; i < parts.length - 1; i++) {
+                if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) {
+                    obj[parts[i]] = {};
+                }
+                obj = obj[parts[i]];
+            }
+            const leaf = parts[parts.length - 1];
+            if (!obj[leaf]) obj[leaf] = val;
+        }
+    }
+    return data;
+}
+
+// Is this cell's editor open?
+//
+// Every inline editor on this page works the same way: it hides the cell and
+// puts an input or a picker in its place (see setupInlineEdit). So the cell
+// being hidden IS the signal that somebody is typing into it, and no separate
+// register of who-is-editing-what can drift out of step with the DOM.
+//
+// This is what makes a live calendar safe. A snapshot landing while you are
+// halfway through a hymn must not reach in and rewrite the box under your
+// hands; it updates every other cell and leaves yours alone until you are out
+// of it.
+function isCellBeingEdited(el) {
+    return !!el && el.style && el.style.display === 'none';
+}
+
+// Write a cell's text unless its editor is open. Reports whether it wrote, so
+// a caller can hold back the attributes that belong with the text (a person's
+// id has to travel with their name or the cell starts lying about who it is).
+function setCellText(el, text) {
+    if (!el || isCellBeingEdited(el)) return false;
+    el.textContent = text;
+    return true;
+}
+
+// Is anything inside this container being edited? For cells rebuilt wholesale
+// from innerHTML, where refreshing at the wrong moment does not overwrite the
+// box — it deletes it.
+function hasEditorOpen(container) {
+    if (!container || !container.querySelectorAll) return false;
+    return Array.from(container.querySelectorAll('*')).some(isCellBeingEdited);
+}
+
+let servicesUnsubscribe = null;
+
+// Listen to every Service, for as long as the page is open.
+//
+// This used to be a single get() at load, which meant the calendar showed you
+// the church as it was the moment you arrived and never mentioned that anything
+// had changed since. At a service guide session — a dozen men filling in
+// Sundays in the same room — that is the whole problem: you cannot see the work
+// happening beside you, and two people pick up the same Sunday because neither
+// can tell the other has it.
+//
+// Resolves on the first snapshot so the callers that await it (and then scroll)
+// still behave; every snapshot after that just re-injects.
 async function loadServiceData() {
     if (typeof db === 'undefined') return;
 
-    try {
-        const snapshot = await db.collection('services').get();
-        serviceDataMap = {};
-        snapshot.forEach(doc => {
-            const raw = doc.data();
-
-            // Older saves used set() with merge and dotted key names like 'liturgy.sermon',
-            // which Firestore stores as a literal field name containing a dot rather than
-            // as a nested path. Normalize those back into their proper nested structure so
-            // the display code (which reads svc.liturgy.sermon) finds the value.
-            const data = {};
-            for (const [key, val] of Object.entries(raw)) {
-                if (!key.includes('.')) {
-                    data[key] = val;
-                }
-            }
-            for (const [key, val] of Object.entries(raw)) {
-                if (key.includes('.')) {
-                    const parts = key.split('.');
-                    let obj = data;
-                    for (let i = 0; i < parts.length - 1; i++) {
-                        if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) {
-                            obj[parts[i]] = {};
-                        }
-                        obj = obj[parts[i]];
-                    }
-                    const leaf = parts[parts.length - 1];
-                    if (!obj[leaf]) obj[leaf] = val;
-                }
-            }
-
-            serviceDataMap[doc.id] = data;
-        });
-
+    if (servicesUnsubscribe) {
         injectServiceData(serviceDataMap);
-    } catch (e) {
-        console.error('Error loading service data for calendar:', e);
+        return;
     }
+
+    await new Promise((resolve) => {
+        let settled = false;
+        const settle = () => {
+            if (settled) return;
+            settled = true;
+            resolve();
+        };
+
+        servicesUnsubscribe = db.collection('services').onSnapshot(
+            (snapshot) => {
+                serviceDataMap = {};
+                snapshot.forEach(doc => {
+                    serviceDataMap[doc.id] = normalizeServiceDoc(doc.data());
+                });
+                injectServiceData(serviceDataMap);
+                settle();
+            },
+            (e) => {
+                console.error('Error loading service data for calendar:', e);
+                // A listener that failed is not a listener. Drop it so a later
+                // call can try again rather than sit on a dead subscription.
+                servicesUnsubscribe = null;
+                settle();
+            }
+        );
+    });
 }
 
 function injectServiceData(serviceMap) {
@@ -1163,27 +1231,29 @@ function injectServiceData(serviceMap) {
 
         const sermonCell = el.querySelector('.sermon-cell');
         if (sermonCell) {
-            sermonCell.textContent = (svc.liturgy && svc.liturgy.sermon) || '—';
+            setCellText(sermonCell, (svc.liturgy && svc.liturgy.sermon) || '—');
             if (canEdit) setupInlineEdit(sermonCell, dateKey, 'sermon');
         }
 
         const themeCell = el.querySelector('.theme-cell');
         if (themeCell) {
-            themeCell.textContent = svc.theme || '—';
+            setCellText(themeCell, svc.theme || '—');
             if (canEdit) setupInlineEdit(themeCell, dateKey, 'theme');
         }
 
         const leaderCell = el.querySelector('.leader-cell');
         if (leaderCell) {
-            leaderCell.textContent = svc.serviceLeader || '—';
-            leaderCell.setAttribute('data-person-id', svc.serviceLeaderId || '');
+            if (setCellText(leaderCell, svc.serviceLeader || '—')) {
+                leaderCell.setAttribute('data-person-id', svc.serviceLeaderId || '');
+            }
             if (canEdit) setupInlineEdit(leaderCell, dateKey, 'serviceLeader');
         }
 
         const preacherCell = el.querySelector('.preacher-cell');
         if (preacherCell) {
-            preacherCell.textContent = svc.preacher || '—';
-            preacherCell.setAttribute('data-person-id', svc.preacherId || '');
+            if (setCellText(preacherCell, svc.preacher || '—')) {
+                preacherCell.setAttribute('data-person-id', svc.preacherId || '');
+            }
             if (canEdit) setupInlineEdit(preacherCell, dateKey, 'preacher');
         }
 
@@ -1194,13 +1264,14 @@ function injectServiceData(serviceMap) {
             // hasBaptism so a stale candidate left in liturgy.baptism (e.g. after
             // the flag was toggled/derived off) isn't shown as an upcoming
             // baptism here when every other view hides it.
-            baptismCell.textContent = (svc.hasBaptism && baptismCandidateNames(svc)) || '—';
+            setCellText(baptismCell, (svc.hasBaptism && baptismCandidateNames(svc)) || '—');
         }
 
         const musicCell = el.querySelector('.music-cell');
         if (musicCell) {
-            musicCell.textContent = svc.musicLeader || '—';
-            musicCell.setAttribute('data-person-id', svc.musicLeaderId || '');
+            if (setCellText(musicCell, svc.musicLeader || '—')) {
+                musicCell.setAttribute('data-person-id', svc.musicLeaderId || '');
+            }
             if (canEdit) setupInlineEdit(musicCell, dateKey, 'musicLeader');
         }
 
@@ -1208,13 +1279,17 @@ function injectServiceData(serviceMap) {
         if (prayerFemaleCell) {
             const val = (svc.liturgy && svc.liturgy.prayerFemale) ? svc.liturgy.prayerFemale.name : '—';
             const id = (svc.liturgy && svc.liturgy.prayerFemale) ? svc.liturgy.prayerFemale.id : '';
-            prayerFemaleCell.textContent = val || '—';
-            prayerFemaleCell.setAttribute('data-person-id', id || '');
+            if (setCellText(prayerFemaleCell, val || '—')) {
+                prayerFemaleCell.setAttribute('data-person-id', id || '');
+            }
             if (canEdit) setupInlineEdit(prayerFemaleCell, dateKey, 'prayerFemale');
         }
 
+        // These two cells are rebuilt from innerHTML rather than written into,
+        // so a snapshot landing mid-edit would take the box away underneath the
+        // person typing in it. Leave the whole cell alone until they are out.
         const pastoralPrayerCell = el.querySelector('.pastoral-prayer-cell');
-        if (pastoralPrayerCell) {
+        if (pastoralPrayerCell && !hasEditorOpen(pastoralPrayerCell)) {
             pastoralPrayerCell.innerHTML = '';
             
             const maleRow = document.createElement('div');
@@ -1241,7 +1316,7 @@ function injectServiceData(serviceMap) {
         }
 
         const prayersCell = el.querySelector('.prayers-cell');
-        if (prayersCell) {
+        if (prayersCell && !hasEditorOpen(prayersCell)) {
             prayersCell.innerHTML = '';
             
             const praiseRow = document.createElement('div');
@@ -1749,4 +1824,8 @@ function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+// Expose pure helpers for Node-based unit tests; ignored in the browser.
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { normalizeServiceDoc, isCellBeingEdited, setCellText, hasEditorOpen };
 }

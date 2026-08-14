@@ -142,6 +142,123 @@ function changedFieldPaths(before, after) {
     return update;
 }
 
+// A Person is one thing on screen and two fields in the document — the name
+// and the id sit side by side rather than nested. This is the way back:
+// document field -> [model key, leaf].
+const PERSON_REF_PATHS = {
+    serviceLeader:        ['serviceLeader', 'name'],
+    serviceLeaderId:      ['serviceLeader', 'id'],
+    musicLeader:          ['musicLeader', 'name'],
+    musicLeaderId:        ['musicLeader', 'id'],
+    preacher:             ['preacher', 'name'],
+    preacherId:           ['preacher', 'id'],
+    prayerPraiseName:     ['prayerPraise', 'name'],
+    prayerPraiseId:       ['prayerPraise', 'id'],
+    prayerConfessionName: ['prayerConfession', 'name'],
+    prayerConfessionId:   ['prayerConfession', 'id'],
+    elementsName:         ['elements', 'name'],
+    elementsId:           ['elements', 'id'],
+    otherName:            ['other', 'name'],
+    otherId:              ['other', 'id']
+};
+
+// Fields that go into the document as they are.
+const PLAIN_SAVE_FIELDS = [
+    'theme', 'keyVerse', 'musicHelpers', 'hasBaptism', 'removedHymns',
+    'isIrregular', 'irregularElements', 'notes', 'liturgy'
+];
+
+// Writes one dot-path field back into the editor's nested model — the inverse
+// of flattenServiceForSave, and how another editor's change reaches this
+// screen without a reload.
+//
+// A liturgy slot is mutated IN PLACE rather than replaced, because the hymn
+// pickers hold a reference to the very object (see load(): "Preserve reference
+// for components like hymnPicker"). Swapping it would leave the picker bound to
+// an object no longer on the model, and the next thing you typed would go
+// nowhere.
+//
+// Returns whether it recognised the path. An unknown one is ignored rather than
+// guessed at: the document carries fields this editor does not own (guide,
+// updatedAt, involvementDeferred), and inventing a home for them here would put
+// junk on the model.
+function applyFlatFieldPath(service, path, value) {
+    if (!service || !path) return false;
+
+    const dot = path.indexOf('.');
+    if (dot !== -1) {
+        const map = path.slice(0, dot);
+        const slot = path.slice(dot + 1);
+        if (!NESTED_SAVE_MAPS.includes(map)) return false;
+        if (!service[map] || typeof service[map] !== 'object') service[map] = {};
+
+        const current = service[map][slot];
+        const bothPlainObjects =
+            current && typeof current === 'object' && !Array.isArray(current) &&
+            value && typeof value === 'object' && !Array.isArray(value);
+
+        if (bothPlainObjects) {
+            for (const key of Object.keys(current)) delete current[key];
+            Object.assign(current, value);
+        } else {
+            service[map][slot] = value;
+        }
+        return true;
+    }
+
+    const ref = PERSON_REF_PATHS[path];
+    if (ref) {
+        const [key, leaf] = ref;
+        if (!service[key] || typeof service[key] !== 'object') {
+            service[key] = { id: null, name: '' };
+        }
+        service[key][leaf] = value;
+        return true;
+    }
+
+    if (PLAIN_SAVE_FIELDS.includes(path)) {
+        service[path] = value;
+        return true;
+    }
+
+    return false;
+}
+
+// The document, reduced to the fields this editor actually owns. Everything
+// else on a Service — the guide record, updatedAt, involvementDeferred — is
+// written by somebody else and is not this screen's to adopt.
+function pickSaveFields(docData) {
+    const owned = Object.keys(flattenServiceForSave({}));
+    const out = {};
+    for (const key of owned) {
+        if (docData && Object.prototype.hasOwnProperty.call(docData, key)) {
+            out[key] = docData[key];
+        }
+    }
+    return out;
+}
+
+// What this editor should take from a change that arrived while the page was
+// open: every field the document now disagrees with our loaded snapshot about,
+// EXCEPT the ones this editor has itself changed.
+//
+// That exception is the whole rule. A field you have touched is yours until you
+// save it; a field you have not touched is not yours to hold, so somebody
+// else's value simply arrives. Nothing merges and nothing is asked of anybody —
+// the only case that could need a decision, two people in one box, is the case
+// the box lock exists to prevent.
+function remoteAdoptions(originalFlat, currentFlat, remoteDocData) {
+    const mine = changedFieldPaths(originalFlat, currentFlat);
+    const theirs = changedFieldPaths(originalFlat, pickSaveFields(remoteDocData));
+
+    const adoptions = {};
+    for (const [path, value] of Object.entries(theirs)) {
+        if (Object.prototype.hasOwnProperty.call(mine, path)) continue;
+        adoptions[path] = value;
+    }
+    return adoptions;
+}
+
 // Diffs two lists of Person references as SETS keyed by Person id, reporting
 // which ids were added and which were removed. Entries without an id (no
 // selected Person) are ignored, and a Person listed twice counts once.
@@ -583,6 +700,9 @@ function serviceForm() {
             await this.autoLinkHymns();
             await this.fetchPrayerSuggestions();
             this.watchForChanges();
+            // After watchForChanges, so the snapshot that arrives immediately
+            // on subscribing finds originalService already settled by load().
+            this.watchRemoteChanges();
 
             if (urlParams.get('validate') === 'true') {
                 this.validateForm();
@@ -1373,6 +1493,62 @@ function serviceForm() {
 
         watchForChanges() {
             this.$watch('service', () => this.scheduleSave());
+        },
+
+        // ── Keeping up with the other editors ───────────────────────────────
+        // This Sunday is one document and, on a guide-writing night, several
+        // people. The page used to read it once on open and never look again,
+        // so you worked all evening against the version you arrived at and
+        // found out what everyone else had done by reloading.
+        //
+        // Now it listens. A field nobody here has touched simply takes the new
+        // value; a field this editor has changed is left alone until it saves.
+        // See remoteAdoptions for why that needs no merge and asks nobody a
+        // question.
+        _remoteUnsubscribe: null,
+
+        watchRemoteChanges() {
+            if (typeof db === 'undefined' || this._remoteUnsubscribe) return;
+
+            this._remoteUnsubscribe = db.collection('services').doc(this.date)
+                .onSnapshot(
+                    (doc) => this.adoptRemoteChanges(doc),
+                    (e) => {
+                        console.error('Lost the live connection to this Sunday:', e);
+                        this._remoteUnsubscribe = null;
+                    }
+                );
+        },
+
+        adoptRemoteChanges(doc) {
+            if (!doc || !doc.exists) return;
+            // Our own write, echoing back before the server has confirmed it.
+            // Adopting it would be answering our own question.
+            if (doc.metadata && doc.metadata.hasPendingWrites) return;
+
+            this._docExists = true;
+
+            const original = JSON.parse(this.originalService);
+            const adoptions = remoteAdoptions(
+                flattenServiceForSave(original),
+                flattenServiceForSave(this.service),
+                normalizeDottedKeys(doc.data())
+            );
+
+            let adopted = 0;
+            for (const [path, value] of Object.entries(adoptions)) {
+                // Applied to BOTH the live model and the loaded snapshot. Miss
+                // the snapshot and the next save reads the adopted value as a
+                // local edit and writes it straight back — turning a value we
+                // merely received into one we claim, and re-opening the race
+                // this was built to end.
+                if (applyFlatFieldPath(this.service, path, value)) {
+                    applyFlatFieldPath(original, path, value);
+                    adopted++;
+                }
+            }
+
+            if (adopted) this.originalService = JSON.stringify(original);
         },
 
         scheduleSave() {
@@ -2262,5 +2438,5 @@ function hymnPicker(hymnRef, parent = null) {
 
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths };
+    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions };
 }
