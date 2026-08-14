@@ -503,6 +503,7 @@ function serviceForm() {
             await this.loadPrayerRequests();
             await this.autoLinkHymns();
             await this.fetchPrayerSuggestions();
+            this.watchForChanges();
 
             if (urlParams.get('validate') === 'true') {
                 this.validateForm();
@@ -1010,8 +1011,10 @@ function serviceForm() {
             });
         },
 
-        async save() {
+        async save(manual = false) {
+            clearTimeout(this._saveTimer);
             this.saving = true;
+            let committed = false;
             try {
                 const batch = db.batch();
                 const original = JSON.parse(this.originalService);
@@ -1245,18 +1248,61 @@ function serviceForm() {
                 batch.set(serviceRef, toSave, { merge: true });
 
                 await batch.commit();
+                committed = true;
                 this.originalService = JSON.stringify(this.service);
                 console.log('Service and involvements saved successfully.');
             } catch (e) {
-                if (e.code === 'permission-denied') {
-                    alert('Permission denied. Your account does not have permission to save services.');
-                } else {
-                    alert('Error saving. Check console for details.');
+                // An autosave that fails stays quiet — the "Unsaved changes"
+                // marker is already on screen and the next edit tries again.
+                // Pressing Save yourself is a question, so it gets an answer.
+                if (manual) {
+                    if (e.code === 'permission-denied') {
+                        alert('Permission denied. Your account does not have permission to save services.');
+                    } else {
+                        alert('Error saving. Check console for details.');
+                    }
                 }
                 console.error(e);
             } finally {
                 this.saving = false;
+                // Edits made while the write was in flight got no timer, because
+                // scheduleSave stands down during a save. Pick them up here so
+                // they are not left sitting until the next keystroke.
+                //
+                // Only after a write that worked. Re-arming after a failure is a
+                // retry loop: a Sunday you have no permission to save would ask
+                // Firestore again every three seconds, forever. A failed save
+                // leaves the marker up and waits for you to do something.
+                if (committed && this.isDirty) this.scheduleSave();
             }
+        },
+
+        // ── Autosave ────────────────────────────────────────────────────────────
+        // A Sunday saves itself 3s after the last edit. Longer than the 1.5s the
+        // elder documents use, because this save is not one write: it also
+        // settles who served and hands the fairness engine new numbers. Three
+        // seconds is past the end of a sentence but still short enough that
+        // leaving the page loses nothing.
+        //
+        // The watcher is armed at the end of init, after autoLinkHymns and the
+        // rest have had their say, so merely opening a Sunday never writes it.
+        //
+        // The Save button stays. It cancels the pending timer and writes now.
+        _saveTimer: null,
+
+        watchForChanges() {
+            this.$watch('service', () => this.scheduleSave());
+        },
+
+        scheduleSave() {
+            if (!this.canEdit || this.saving) return;
+            clearTimeout(this._saveTimer);
+            this._saveTimer = setTimeout(() => {
+                // save() rewrites parts of `service` for irregular Sundays, which
+                // trips the watcher again. Re-checking isDirty here is what stops
+                // that from becoming a save loop.
+                if (this.isDirty && !this.saving) this.save();
+            }, 3000);
         },
 
         // ── Order of Service model (movement-grouped station rows) ──────────────

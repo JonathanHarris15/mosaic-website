@@ -19,6 +19,8 @@ function guideEditor() {
         loading: true,
         permissionLevel: 'viewer',
         hasChanges: false,
+        _saveTimer: null,
+        saveStatus: 'saved',  // 'saved' | 'saving' | 'unsaved'
         selectedElement: null,
         zoomLevel: 1.0,
 
@@ -68,12 +70,14 @@ function guideEditor() {
                     self.$watch('elements', (val) => {
                         if (!self.loading) {
                             self.hasChanges = true;
+                            self.scheduleSave();
                         }
                     }, { deep: true });
-                    
+
                     self.$watch('selectedElement', (newVal, oldVal) => {
                         if (!self.loading && newVal && oldVal && newVal.id === oldVal.id) {
                             self.hasChanges = true;
+                            self.scheduleSave();
                         }
                     }, { deep: true });
                 }
@@ -466,7 +470,18 @@ function guideEditor() {
             if (pageEl) pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
         },
 
+        // Saves itself 1.5s after the last edit, the same debounce the elder
+        // documents use. The Save Progress button remains for anyone who wants
+        // the write now rather than in a second and a half.
+        scheduleSave() {
+            this.saveStatus = 'unsaved';
+            clearTimeout(this._saveTimer);
+            this._saveTimer = setTimeout(() => this.save(), 1500);
+        },
+
         async save() {
+            clearTimeout(this._saveTimer);
+            this.saveStatus = 'saving';
             try {
                 await db.collection('services').doc(this.date).update({
                     guide: {
@@ -475,7 +490,11 @@ function guideEditor() {
                     }
                 });
                 this.hasChanges = false;
-            } catch (error) { console.error("Error saving guide config:", error); }
+                this.saveStatus = 'saved';
+            } catch (error) {
+                console.error("Error saving guide config:", error);
+                this.saveStatus = 'unsaved';
+            }
         },
 
         // Build the print booklet by cloning the live-preview pages into

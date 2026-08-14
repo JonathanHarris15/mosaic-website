@@ -208,14 +208,19 @@
                 </div>
             </div>
             <div class="m-header__actions">
-                <span id="header-dirty-pill" x-show="canEdit && isDirty" x-transition
+                <span id="header-dirty-pill" x-show="canEdit && isDirty && !saving" x-transition
                       class="m-badge m-badge--warning m-header__chip">
                     <span class="m-chip-dot m-chip-dot--pulse"></span>
                     <span class="m-btn__label">Unsaved Changes</span>
                 </span>
+                <span x-show="canEdit && !isDirty && !saving" x-transition
+                      class="m-badge m-badge--success m-header__chip">
+                    <span class="material-symbols-outlined text-[14px]">check_circle</span>
+                    <span class="m-btn__label">All Changes Saved</span>
+                </span>
 
                 <template x-if="user && canEdit">
-                    <button id="header-save-btn" @click="save()" :disabled="saving" class="m-btn m-btn--primary m-btn--sm">
+                    <button id="header-save-btn" @click="save(true)" :disabled="saving" class="m-btn m-btn--primary m-btn--sm">
                         <span class="material-symbols-outlined" x-show="!saving">save</span>
                         <span class="material-symbols-outlined animate-spin" x-show="saving">sync</span>
                         <span class="m-btn__label" x-text="saving ? 'Saving...' : 'Save Service'"></span>
@@ -1236,7 +1241,7 @@
             <span class="font-label-md text-[11px] uppercase tracking-wider text-on-surface-variant">All changes saved</span>
         </div>
 
-        <button @click="save()" :disabled="saving"
+        <button @click="save(true)" :disabled="saving"
             class="bg-primary text-on-primary px-6 py-2.5 rounded-full font-label-md text-label-md transition-all flex items-center gap-2 disabled:opacity-50 shrink-0">
             <span class="material-symbols-outlined text-[20px]" x-show="!saving">save</span>
             <span class="animate-spin material-symbols-outlined text-[20px]" x-show="saving">sync</span>

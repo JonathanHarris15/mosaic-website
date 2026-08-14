@@ -28,6 +28,8 @@ function guideEditorV2() {
         legacyGuideUrl: '',
         _baseline: null,      // JSON of the saved state; drives hasChanges by diff
         _resolveTimer: null,
+        _saveTimer: null,
+        saveStatus: 'saved',  // 'saved' | 'saving' | 'unsaved'
 
         service: null,
         context: null,
@@ -75,6 +77,7 @@ function guideEditorV2() {
 
                 try {
                     await self.bootstrap();
+                    self.watchForChanges();
                 } catch (e) {
                     console.error('Failed to load the guide editor:', e);
                     alert('Could not load the service guide. Check the console for details.');
@@ -343,17 +346,43 @@ function guideEditorV2() {
         },
 
         // ── persistence ──────────────────────────────────────────────────────────
-        async save() {
+        //
+        // The guide saves itself 1.5s after you stop typing — the same debounce
+        // the elder documents use. The Save Progress button stays for anyone who
+        // wants the write to happen now rather than in a second and a half.
+        //
+        // The watchers are armed only once bootstrap has finished, so loading a
+        // week never writes it back.
+        watchForChanges() {
+            this.$watch('values', () => this.scheduleSave());
+            this.$watch('selectedTemplateId', () => this.scheduleSave());
+        },
+
+        scheduleSave() {
             if (!this.canEdit || !this.snapshot) return;
+            this.saveStatus = 'unsaved';
+            clearTimeout(this._saveTimer);
+            this._saveTimer = setTimeout(() => this.save(), 1500);
+        },
+
+        async save(manual = false) {
+            if (!this.canEdit || !this.snapshot) return;
+            clearTimeout(this._saveTimer);
             this.saving = true;
+            this.saveStatus = 'saving';
             try {
                 const template = this.templates.find(t => t.id === this.selectedTemplateId) || { id: this.selectedTemplateId };
                 const record = GuideStore.buildGuideRecord(template, this.snapshot, JSON.parse(JSON.stringify(this.values)));
                 await GuideStore.saveWeekGuide(db, this.date, record);
                 this.markBaseline();
+                this.saveStatus = 'saved';
             } catch (e) {
                 console.error('Error saving guide:', e);
-                alert('Error saving. Check the console for details.');
+                // A failed autosave must not throw a dialog at somebody who is
+                // still typing — the chip says "Unsaved changes" and the next
+                // keystroke tries again. A save you asked for still speaks up.
+                this.saveStatus = 'unsaved';
+                if (manual) alert('Error saving. Check the console for details.');
             } finally {
                 this.saving = false;
             }

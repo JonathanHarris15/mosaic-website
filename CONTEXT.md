@@ -716,6 +716,9 @@ An `@`-prefixed inline reference inside a TipTap editor. The mention system span
 
 ## User Interface Conventions
 
+### Autosave
+**A page editor saves itself; a dialog keeps its button** ([ADR 0032](docs/adr/0032-a-page-saves-itself-a-dialog-does-not.md)). The line is whether you are looking at a record or at a form proposing one: a page editor is already open on something that exists, so every edit is a further fact about it, while a dialog's Cancel is what makes it safe to open — and most dialogs here double as the way a thing is *created*, where there is no record to write into yet. Autosaving surfaces: the **Order of Service**, both **Service Guide** editors, your own details on the **profile page**, and — since [ADR 0004](docs/adr/0004-person-panel-sync-model.md) — **Elder Documents** and the **Care List**. The debounce is **1.5s** everywhere except the Order of Service, which waits **3s** because its save also settles [[Involvement]] and re-runs [[Fairness]]. The **Save button stays** on every autosaving surface and means "write it now" — it cancels the pending timer. A status chip carries the state (Unsaved changes → Saving… → Saved). A **failed autosave is silent** (the chip goes back to unsaved and the next edit retries); a save you pressed still reports its error, and never re-arms itself, because retrying a refused write on a timer is a loop with no end.
+
 ### Services
 The week-by-week view of Sunday **Services** — the Sunday Service series and nothing else. **Renamed from "Service Calendar"** (MS-99): unchanged in function, renamed so it is not confused with the [[Calendar]], which is a different view.
 - **Baptism Indicator**: 

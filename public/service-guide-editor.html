@@ -109,7 +109,7 @@
                     <span class="material-symbols-outlined">edit_note</span>
                     <span class="m-btn__label">Order of Service</span>
                 </a>
-                <button x-show="canEdit" @click="save()" :disabled="saving" class="m-btn m-btn--primary m-btn--sm">
+                <button x-show="canEdit" @click="save(true)" :disabled="saving" class="m-btn m-btn--primary m-btn--sm">
                     <span class="material-symbols-outlined">save</span>
                     <span class="m-btn__label" x-text="saving ? 'Saving…' : 'Save'"></span>
                 </button>
@@ -343,8 +343,26 @@
                         </div>
                     </template>
                 </button>
-                <div class="mt-2 text-center">
-                    <button @click="save()" class="text-[10px] text-gray-400 hover:text-primary underline">Save Progress</button>
+                <div class="mt-2 flex flex-col items-center gap-1">
+                    <template x-if="saveStatus === 'saving'">
+                        <span class="m-badge m-badge--neutral">
+                            <span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                            <span class="m-btn__label">Saving…</span>
+                        </span>
+                    </template>
+                    <template x-if="saveStatus === 'saved'">
+                        <span class="m-badge m-badge--success">
+                            <span class="material-symbols-outlined text-[14px]">check_circle</span>
+                            <span class="m-btn__label">Saved</span>
+                        </span>
+                    </template>
+                    <template x-if="saveStatus === 'unsaved'">
+                        <span class="m-badge m-badge--warning">
+                            <span class="m-chip-dot m-chip-dot--pulse"></span>
+                            <span class="m-btn__label">Unsaved changes</span>
+                        </span>
+                    </template>
+                    <button @click="save(true)" class="text-[10px] text-gray-400 hover:text-primary underline">Save Progress</button>
                 </div>
             </div>
         </aside>
