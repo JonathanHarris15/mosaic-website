@@ -169,8 +169,7 @@ async function initMyInfo(personId) {
         return;
     }
 
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    async function saveMyInfo() {
         const status = document.getElementById('my-info-status');
         status.textContent = 'Saving…';
         status.className = 'text-[11px] font-body-md text-primary animate-pulse';
@@ -205,6 +204,33 @@ async function initMyInfo(personId) {
             status.textContent = 'Save failed: ' + err.message;
             status.className = 'text-[11px] font-body-md text-error';
         }
+    }
+
+    // Your details save themselves 1.5s after you stop typing, the same debounce
+    // the elder documents use. The button stays for anyone who wants to press
+    // something — it writes now instead of waiting out the timer.
+    //
+    // Sex is set-once, so it is deliberately NOT on the timer: picking it from a
+    // dropdown by accident and having that stick a second later is a door that
+    // only an editor can reopen. That one still waits for the button.
+    let saveTimer = null;
+    const debouncedFields = ['my-email', 'my-phone', 'my-address', 'my-birthday'];
+    debouncedFields.forEach((id) => {
+        const field = document.getElementById(id);
+        if (!field) return;
+        field.addEventListener('input', () => {
+            const status = document.getElementById('my-info-status');
+            status.textContent = 'Unsaved changes';
+            status.className = 'text-[11px] font-body-md text-on-surface-variant';
+            clearTimeout(saveTimer);
+            saveTimer = setTimeout(saveMyInfo, 1500);
+        });
+    });
+
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        clearTimeout(saveTimer);
+        saveMyInfo();
     });
 }
 

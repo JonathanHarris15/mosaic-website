@@ -230,7 +230,7 @@ test('the liturgy is not offered a second time on the Roles tab', () => {
     // second way to set them would be a second source of truth for who is
     // preaching, and the loser is the booklet on a Sunday morning.
     const markup = RolesPanel.MARKUP.roles;
-    ['preacherId', 'serviceLeaderId', 'musicLeaderId', 'sermonetteId'].forEach(field => {
+    ['preacherId', 'serviceLeaderId', 'musicLeaderId'].forEach(field => {
         assert.ok(!markup.includes(field),
             'the shared panel writes ' + field + ', which only the order of service may');
     });

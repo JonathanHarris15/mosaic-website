@@ -354,7 +354,7 @@
   function CalTable(props) {
     var TH = { padding: "10px 12px", textAlign: "left", fontFamily: "var(--font-sans)", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--primary)", borderBottom: "1px solid var(--outline-variant)", whiteSpace: "nowrap", background: "var(--surface-container-low)" };
     var TD = { padding: "11px 12px", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--on-surface-variant)", borderBottom: "1px solid var(--outline-variant)", whiteSpace: "nowrap", verticalAlign: "top" };
-    var cols = ["Date", "Theme", "Leader", "Preacher", "Music", "Baptism", "Sermonette"];
+    var cols = ["Date", "Theme", "Leader", "Preacher", "Music", "Baptism"];
     function dash(v) { return v && String(v).length ? v : "—"; }
     function open(d) { if (props.onOpen) props.onOpen(d); }
     return html`<div style=${{ margin: "0 16px", overflowX: "auto", WebkitOverflowScrolling: "touch", border: "1px solid var(--outline-variant)", borderRadius: "var(--radius-xl)", background: "var(--surface-container-lowest)" }}>
@@ -370,7 +370,6 @@
               <td style=${TD}>${dash(s.preacher)}</td>
               <td style=${TD}>${dash(s.musicLeader)}</td>
               <td style=${TD}>${s.hasBaptism ? "Yes" : "—"}</td>
-              <td style=${TD}>${dash(s.sermonette)}</td>
             </tr>`;
           })}
         </tbody>
@@ -457,10 +456,10 @@
             <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14.5, fontWeight: 600, color: "var(--on-surface)" }}>${d.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}</div>
             ${s ? html`<${M.Fragment}>
               <div style=${{ fontFamily: "var(--font-serif)", fontSize: 15, fontWeight: 600, color: "var(--primary)", marginTop: 3, lineHeight: 1.25 }}>${s.theme}</div>
+              ${s.sermon ? html`<div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 500, color: "var(--primary)", marginTop: 3 }}>${s.sermon}</div>` : null}
               <div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 3 }}>${s.preacher ? "Preaching · " + s.preacher : "Sunday Service"}</div>
               <div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
                 ${s.hasBaptism ? html`<${CalChip} icon="droplets" tone="tertiary">Baptism<//>` : null}
-                ${s.sermonette ? html`<${CalChip} icon="mic" tone="secondary">Sermonette<//>` : null}
                 ${!complete ? html`<${CalChip} icon="triangle-alert" tone="error">Incomplete<//>` : null}
               </div>
             </${M.Fragment}>` : html`<div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 3 }}>Sunday Service · <span style=${{ fontStyle: "italic" }}>unscheduled</span></div>`}

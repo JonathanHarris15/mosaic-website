@@ -1964,8 +1964,8 @@ test('a liturgical Role on the Event screen is named, not slugged', () => {
     const Roles = require('../public/roles-core.js');
     const page = seriesPage({
         id: 'sunday_service',
-        roleSlugs: ['worship_helper', 'sermonette', 'prayer', 'sound_desk'],
-        lockedRoleSlugs: ['worship_helper', 'sermonette', 'prayer'],
+        roleSlugs: ['worship_helper', 'service_leader', 'prayer', 'sound_desk'],
+        lockedRoleSlugs: ['worship_helper', 'service_leader', 'prayer'],
     });
     page.roleDefinitions = [SOUND];
 
@@ -1973,7 +1973,7 @@ test('a liturgical Role on the Event screen is named, not slugged', () => {
     page.seriesRoles.forEach(r => { named[r.slug] = r.name; });
 
     assert.strictEqual(named.worship_helper, 'Music Helper');
-    assert.strictEqual(named.sermonette, 'Sermonette');
+    assert.strictEqual(named.service_leader, 'Service Leader');
     assert.strictEqual(named.prayer, 'Prayer');
     assert.strictEqual(named.sound_desk, 'Sound desk');
 

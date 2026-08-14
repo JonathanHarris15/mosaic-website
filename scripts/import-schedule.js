@@ -147,8 +147,7 @@ async function run() {
         { col: 1, type: 'preacher' },
         { col: 2, type: 'service_leader' },
         { col: 3, type: 'prayer' },
-        { col: 4, type: 'worship_leader' },
-        { col: 5, type: 'sermonette' }
+        { col: 4, type: 'worship_leader' }
     ];
 
     console.log('Processing people and involvements...');
@@ -180,7 +179,7 @@ async function run() {
             if (isPrayerException) {
                 // User explicitly mentioned this case: 1st is Praise, 2nd is Confession
                 namesToProcess = rawValue.split('/').map(n => n.trim());
-            } else if (role.type === 'worship_leader' || role.type === 'service_leader' || role.type === 'preacher' || role.type === 'sermonette') {
+            } else if (role.type === 'worship_leader' || role.type === 'service_leader' || role.type === 'preacher') {
                 // Split by '/' for multiple people in other roles too
                 namesToProcess = rawValue.split('/').map(n => n.trim());
             } else {

@@ -20,7 +20,10 @@ test('a serve record for a Sunday still ahead goes', () => {
 });
 
 test('every Role a Service save writes is caught', () => {
-    ['service_leader', 'worship_leader', 'preacher', 'sermonette',
+    // Sermonette is deliberately absent: it is no longer a Service field, so a
+    // record carrying that slug now belongs to a Servant Role's Assignment, and
+    // deleting one of those is exactly what this list exists to prevent.
+    ['service_leader', 'worship_leader', 'preacher',
         'prayer', 'elements', 'other', 'worship_helper'].forEach(type => {
         assert.strictEqual(isFutureServing(record({ type }), TODAY), true,
             'a Role left out here keeps its duplicate forever: ' + type);

@@ -19,7 +19,6 @@ function fullService() {
         musicLeaderId: 'p-mia',
         musicHelpers: [{ name: 'Ade Bello', id: 'p-ade' }, { name: 'Ruth Vale', id: 'p-ruth' }],
         preacherId: 'p-jono',
-        sermonetteId: 'p-tom',
         prayerPraiseId: 'p-ana',
         prayerConfessionId: 'p-ben',
         elementsId: 'p-cara',
@@ -65,7 +64,7 @@ test('a Sunday still ahead converts nothing', () => {
 
 test('the Sunday itself has not passed until the next day', () => {
     assert.deepStrictEqual(fn.conversion(fullService(), '2026-10-12', '2026-10-12'), []);
-    assert.strictEqual(fn.conversion(fullService(), '2026-10-12', '2026-10-13').length, 10);
+    assert.strictEqual(fn.conversion(fullService(), '2026-10-12', '2026-10-13').length, 9);
 });
 
 test('conversion is unconditional — there is no state to be confirmed', () => {

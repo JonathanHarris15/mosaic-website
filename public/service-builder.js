@@ -11,7 +11,6 @@ const CANONICAL_MAPPING = {
     'Service Leader': { field: 'serviceLeader', type: 'person' },
     'Music Leader': { field: 'musicLeader', type: 'person' },
     'Preacher': { field: 'preacher', type: 'person' },
-    'Sermonette': { field: 'sermonette', type: 'person' },
     'Prayer (Praise)': { field: 'prayerPraise', type: 'person' },
     'Prayer (Confession)': { field: 'prayerConfession', type: 'person' },
     'Elements of the Service': { field: 'elements', type: 'person' },
@@ -176,7 +175,6 @@ function serviceForm() {
             musicLeader: { name: '', id: null },
             musicHelpers: [],
             preacher: { name: '', id: null },
-            sermonette: { name: '', id: null },
             prayerPraise: { name: '', id: null },
             prayerConfession: { name: '', id: null },
             elements: { name: '', id: null },
@@ -503,6 +501,7 @@ function serviceForm() {
             await this.loadPrayerRequests();
             await this.autoLinkHymns();
             await this.fetchPrayerSuggestions();
+            this.watchForChanges();
 
             if (urlParams.get('validate') === 'true') {
                 this.validateForm();
@@ -644,8 +643,6 @@ function serviceForm() {
                     : [];
                 this.service.preacher.name = data.preacher || '';
                 this.service.preacher.id = data.preacherId || null;
-                this.service.sermonette.name = data.sermonette || '';
-                this.service.sermonette.id = data.sermonetteId || null;
                 
                 this.service.prayerPraise.name = data.prayerPraiseName || '';
                 this.service.prayerPraise.id = data.prayerPraiseId || null;
@@ -845,7 +842,7 @@ function serviceForm() {
                 const elements = [];
                 // Add in a logical order
                 const orderedKeys = [
-                    'Theme', 'Key Verse', 'Service Leader', 'Music Leader', 'Preacher', 'Sermonette',
+                    'Theme', 'Key Verse', 'Service Leader', 'Music Leader', 'Preacher',
                     'Prayer (Praise)', 'Prayer (Confession)', 'Baptism', 'Preparatory Hymn', 'Call to Worship',
                     'Hymn 1', 'Hymn 2', 'Call to Confession', 'Assurance of Pardon', 'Hymn Mid 1', 'Hymn Mid 2',
                     'Pastoral Prayer', 'Sermon', 'Hymn End 1', 'Hymn End 2', 'Benediction'
@@ -1010,8 +1007,10 @@ function serviceForm() {
             });
         },
 
-        async save() {
+        async save(manual = false) {
+            clearTimeout(this._saveTimer);
             this.saving = true;
+            let committed = false;
             try {
                 const batch = db.batch();
                 const original = JSON.parse(this.originalService);
@@ -1036,7 +1035,6 @@ function serviceForm() {
                     { field: 'serviceLeader', role: 'service_leader' },
                     { field: 'musicLeader', role: 'worship_leader' },
                     { field: 'preacher', role: 'preacher' },
-                    { field: 'sermonette', role: 'sermonette' },
                     { field: 'prayerPraise', role: 'prayer', metadata: { prayer_type: 'praise' } },
                     { field: 'prayerConfession', role: 'prayer', metadata: { prayer_type: 'confession' } },
                     { field: 'elements', role: 'elements' },
@@ -1178,8 +1176,6 @@ function serviceForm() {
                     musicHelpers: this.service.musicHelpers.map(h => ({ name: h.name || '', id: h.id || null })),
                     preacher: this.service.preacher.name,
                     preacherId: this.service.preacher.id,
-                    sermonette: this.service.sermonette.name,
-                    sermonetteId: this.service.sermonette.id,
                     prayerPraiseName: this.service.prayerPraise.name,
                     prayerPraiseId: this.service.prayerPraise.id,
                     prayerConfessionName: this.service.prayerConfession.name,
@@ -1245,18 +1241,61 @@ function serviceForm() {
                 batch.set(serviceRef, toSave, { merge: true });
 
                 await batch.commit();
+                committed = true;
                 this.originalService = JSON.stringify(this.service);
                 console.log('Service and involvements saved successfully.');
             } catch (e) {
-                if (e.code === 'permission-denied') {
-                    alert('Permission denied. Your account does not have permission to save services.');
-                } else {
-                    alert('Error saving. Check console for details.');
+                // An autosave that fails stays quiet — the "Unsaved changes"
+                // marker is already on screen and the next edit tries again.
+                // Pressing Save yourself is a question, so it gets an answer.
+                if (manual) {
+                    if (e.code === 'permission-denied') {
+                        alert('Permission denied. Your account does not have permission to save services.');
+                    } else {
+                        alert('Error saving. Check console for details.');
+                    }
                 }
                 console.error(e);
             } finally {
                 this.saving = false;
+                // Edits made while the write was in flight got no timer, because
+                // scheduleSave stands down during a save. Pick them up here so
+                // they are not left sitting until the next keystroke.
+                //
+                // Only after a write that worked. Re-arming after a failure is a
+                // retry loop: a Sunday you have no permission to save would ask
+                // Firestore again every three seconds, forever. A failed save
+                // leaves the marker up and waits for you to do something.
+                if (committed && this.isDirty) this.scheduleSave();
             }
+        },
+
+        // ── Autosave ────────────────────────────────────────────────────────────
+        // A Sunday saves itself 3s after the last edit. Longer than the 1.5s the
+        // elder documents use, because this save is not one write: it also
+        // settles who served and hands the fairness engine new numbers. Three
+        // seconds is past the end of a sentence but still short enough that
+        // leaving the page loses nothing.
+        //
+        // The watcher is armed at the end of init, after autoLinkHymns and the
+        // rest have had their say, so merely opening a Sunday never writes it.
+        //
+        // The Save button stays. It cancels the pending timer and writes now.
+        _saveTimer: null,
+
+        watchForChanges() {
+            this.$watch('service', () => this.scheduleSave());
+        },
+
+        scheduleSave() {
+            if (!this.canEdit || this.saving) return;
+            clearTimeout(this._saveTimer);
+            this._saveTimer = setTimeout(() => {
+                // save() rewrites parts of `service` for irregular Sundays, which
+                // trips the watcher again. Re-checking isDirty here is what stops
+                // that from becoming a save loop.
+                if (this.isDirty && !this.saving) this.save();
+            }, 3000);
         },
 
         // ── Order of Service model (movement-grouped station rows) ──────────────
@@ -1352,7 +1391,7 @@ function serviceForm() {
         // Fields beyond the liturgy grid that a fully-ready service needs: the two
         // header references (Theme, Key Verse) and the core people roles. Person
         // roles count as set once they have an id or a typed-in name. Optional
-        // roles (Sermonette, Elements, Other Involvement) are deliberately left out
+        // roles (Elements, Other Involvement) are deliberately left out
         // so the tally can still reach "complete" on a normal Sunday.
         _readinessFields: [
             { label: 'Theme',              get: s => s.theme,            type: 'text'   },
@@ -1520,7 +1559,6 @@ function serviceForm() {
             this.service.musicLeader = { name: '', id: null };
             this.service.musicHelpers = [];
             this.service.preacher = { name: '', id: null };
-            this.service.sermonette = { name: '', id: null };
             this.service.prayerPraise = { name: '', id: null };
             this.service.prayerConfession = { name: '', id: null };
             this.service.elements = { name: '', id: null };

@@ -64,10 +64,6 @@ async function run() {
                         s.prayerConfessionName = name;
                     }
                     break;
-                case 'sermonette':
-                    s.sermonetteId = personId;
-                    s.sermonette = name;
-                    break;
             }
         });
     }

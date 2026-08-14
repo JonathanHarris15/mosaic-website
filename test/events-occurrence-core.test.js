@@ -631,14 +631,13 @@ test('the people holding liturgical Roles on a Sunday are read off the Service',
         preacherId: 'p2', preacher: 'Sam Hale',
         musicLeaderId: 'p3',
         musicHelpers: [{ id: 'p4' }, { id: 'p5' }],
-        sermonetteId: 'p6',
         prayerPraiseId: 'p7',
         prayerConfessionId: 'p8',
     };
 
     const held = Core.liturgicalHolders(service);
     assert.deepStrictEqual(held.map(h => h.personId).sort(),
-        ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8']);
+        ['p1', 'p2', 'p3', 'p4', 'p5', 'p7', 'p8']);
     assert.strictEqual(held.find(h => h.personId === 'p2').roleSlug, 'preacher');
     assert.strictEqual(held.find(h => h.personId === 'p4').roleSlug, 'worship_helper');
 });

@@ -255,10 +255,12 @@
       id: doc.id,
       date: d.date || doc.id,
       theme: d.theme || d.title || "(no theme)",
+      // Older inline-calendar saves wrote 'liturgy.sermon' as a literal dotted
+      // key rather than a nested path, so read both shapes.
+      sermon: (d.liturgy && d.liturgy.sermon) || d["liturgy.sermon"] || "",
       preacher: d.preacher || "",
       serviceLeader: d.serviceLeader || d.leader || "",
       musicLeader: d.musicLeader || "",
-      sermonette: d.sermonette || "",
       hasBaptism: !!d.hasBaptism,
     };
   }

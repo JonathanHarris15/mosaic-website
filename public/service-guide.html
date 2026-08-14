@@ -158,10 +158,20 @@
                     <span class="m-chip-dot m-chip-dot--pulse"></span>
                     <span class="m-btn__label" x-text="visibleElements.length + ' Pages (Limit 16)'"></span>
                 </span>
-                <span x-show="typeof hasChanges !== 'undefined' && hasChanges" x-cloak
+                <span x-show="typeof saveStatus !== 'undefined' && saveStatus === 'saving'" x-cloak
+                      class="m-badge m-badge--neutral m-header__chip">
+                    <span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                    <span class="m-btn__label">Saving…</span>
+                </span>
+                <span x-show="typeof hasChanges !== 'undefined' && hasChanges && saveStatus !== 'saving'" x-cloak
                       class="m-badge m-badge--warning m-header__chip">
                     <span class="m-chip-dot m-chip-dot--pulse"></span>
                     <span class="m-btn__label">Unsaved</span>
+                </span>
+                <span x-show="typeof saveStatus !== 'undefined' && saveStatus === 'saved' && !hasChanges && permissionLevel !== 'viewer'" x-cloak
+                      class="m-badge m-badge--success m-header__chip">
+                    <span class="material-symbols-outlined text-[14px]">check_circle</span>
+                    <span class="m-btn__label">Saved</span>
                 </span>
                 <button x-show="permissionLevel !== 'viewer'" @click="save()" class="m-btn m-btn--primary m-btn--sm">
                     <span class="material-symbols-outlined">save</span>

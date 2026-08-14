@@ -466,8 +466,9 @@ Code-defined in `RolesCore.LITURGICAL_ROLES`, undeletable and uneditable, and st
 - `preacher`: The person delivering the sermon.
 - `worship_leader`: The person leading the musical worship. Surfaces in the UI as the "Music Leader."
 - `worship_helper`: A person who accompanies the Music Leader (e.g. an accompanist or additional musician). A Service may have several. Surfaces in the UI as a "Music Helper." Distinct from `worship_leader` so helpers are separable in participation history and analytics.
-- `sermonette`: The person delivering a shorter message. In the calendar view, this is displayed as a badge and is editable inline by admins.
 - `prayer`: The person leading a specific prayer (praise or confession).
+
+**`sermonette` used to be one of these and no longer is** ([ADR 0033](docs/adr/0033-a-sermonette-is-an-event-not-a-liturgical-role.md)). A sermonette is a shorter message given at a members meeting — a different gathering on a different day — so modelling it as a field on the Sunday Service meant recording it against a Sunday it did not happen on. It is now an [[Event]] with a [[Servant Role]] like every other non-Sunday serving. Involvement already written under the slug stays; the slug itself is deliberately free, so a Servant Role named "Sermonette" inherits that history rather than starting from nothing.
 
 Related, but not Roles in the registry:
 - `baptism`: A liturgical event marked by `hasBaptism: true`. The people being baptized are the Service's Baptism Candidates. Displayed as a read-only badge in the calendar views.
@@ -526,7 +527,7 @@ Who is considered:
 - **Not** anyone holding a [[Liturgical Roles (locked)|Liturgical Role]] at this occurrence, and **not** anyone who has held one in at least half the window. The first is because you cannot preach and run the sound desk; the second is a guarantee where load alone would only be a tendency.
 - The least-loaded are taken with room to spare, and the pool **widens** rather than failing when the Role's rules make a roster impossible. A spot that still cannot be filled is **left empty with the reason given**, never quietly dropped.
 
-**It starts cold, and that is fixed by recording serving rather than by typing a number.** A Role that has just been created has no history, so everyone reads as equally fresh with no load and the first draft is settled almost entirely by the tie-break. An editor seeds it by adding the [[Involvement]] that already happened — the same manual add/delete the People's Directory has, offered on [[Auto-assign]] where they are looking. Never a stored load figure: load has one source and must keep it, and a figure would move only the load dial while leaving [[Fairness]] still believing the person has never held the Role. It is not a blocker either — an unseeded first draft is arbitrary but still even, and it corrects itself from the second date, because the loop carries its own picks forward.
+**It starts cold, and that is fixed by recording serving rather than by typing a number.** A Role that has just been created has no history, so everyone reads as equally fresh with no load and the first draft is settled almost entirely by the tie-break. An editor seeds it by adding the [[Involvement]] that already happened — the same manual add/delete the [[Membership Directory]] has, offered on [[Auto-assign]] where they are looking. Never a stored load figure: load has one source and must keep it, and a figure would move only the load dial while leaving [[Fairness]] still believing the person has never held the Role. It is not a blocker either — an unseeded first draft is arbitrary but still even, and it corrects itself from the second date, because the loop carries its own picks forward.
 
 Fairness **proposes; it never forbids**. Everything it decides is a draft an editor approves ([[Auto-assign]]). Fairness itself will not propose a roster that breaks a Role's rules — a draft that starts by breaking the editor's own rules is not worth reviewing — but the editor may place whoever they need to, and gets a [[Warning]] rather than a refusal (ADR-0021).
 
@@ -716,18 +717,17 @@ An `@`-prefixed inline reference inside a TipTap editor. The mention system span
 
 ## User Interface Conventions
 
+### Autosave
+**A page editor saves itself; a dialog keeps its button** ([ADR 0032](docs/adr/0032-a-page-saves-itself-a-dialog-does-not.md)). The line is whether you are looking at a record or at a form proposing one: a page editor is already open on something that exists, so every edit is a further fact about it, while a dialog's Cancel is what makes it safe to open — and most dialogs here double as the way a thing is *created*, where there is no record to write into yet. Autosaving surfaces: the **Order of Service**, both **Service Guide** editors, your own details on the **profile page**, and — since [ADR 0004](docs/adr/0004-person-panel-sync-model.md) — **Elder Documents** and the **Care List**. The debounce is **1.5s** everywhere except the Order of Service, which waits **3s** because its save also settles [[Involvement]] and re-runs [[Fairness]]. The **Save button stays** on every autosaving surface and means "write it now" — it cancels the pending timer. A status chip carries the state (Unsaved changes → Saving… → Saved). A **failed autosave is silent** (the chip goes back to unsaved and the next edit retries); a save you pressed still reports its error, and never re-arms itself, because retrying a refused write on a timer is a loop with no end.
+
 ### Services
 The week-by-week view of Sunday **Services** — the Sunday Service series and nothing else. **Renamed from "Service Calendar"** (MS-99): unchanged in function, renamed so it is not confused with the [[Calendar]], which is a different view.
 - **Baptism Indicator**: 
   - **List View**: A blue status badge with a `water_drop` icon.
   - **Table View**: A dedicated "Baptism" column showing the Baptism Candidates' names.
   - **Editing**: Read-only in the calendar; Baptism Candidates are managed in the Order of Service editor (linked to Person records). In the legacy system the "Include Baptism?" toggle sets `hasBaptism`; in the new system `hasBaptism` is derived from whether the week's Service Guide Template requests the baptism component (ADR-0010).
-- **Sermonette Indicator**: 
-  - **List View**: A purple status badge with a `mic` icon.
-  - **Table View**: Displayed within the "Preacher" column as a secondary entry (e.g., "Jane Doe (Sermonette)").
-  - **Editing**: Editable inline by admins, linked to a Person record.
+- **Sermon passage**: shown in **both** views — its own column in the Table View, and a `menu_book` line under the theme in the List View. It carries as much of "what is this Sunday" as the theme does, so a view that hides it is answering the question half-way. It reaches the phone's services list and both **Sunday at a Glance** panels for the same reason.
 - **Editing Summary**: 
-  - Sermonette leaders are linked to People and editable from list/table.
   - Baptism Candidates are linked to People and editable from the Order of Service editor (read-only in the calendar).
 
 ### Calendar

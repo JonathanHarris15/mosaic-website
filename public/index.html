@@ -322,7 +322,7 @@
                 const cardClass = 'bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center cursor-pointer group hover:shadow-[0_4px_16px_rgba(4,22,46,0.05)] transition-shadow duration-300';
                 const grid = document.getElementById('nav-cards-grid');
 
-                // People's Directory — members and above (members get a read-only view)
+                // Membership Directory — members and above (members get a read-only view)
                 if (grid && !document.getElementById('directory-card') &&
                     ['member', 'editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
                     const dirCard = document.createElement('a');
@@ -334,7 +334,7 @@
                         <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
                             <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>groups</span>
                         </div>
-                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">People's Directory</h2>
+                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">Membership Directory</h2>
                         <p class="font-body-md text-body-md text-on-surface-variant">Browse the church directory.</p>
                     `;
                     // Place it right after the Hymn Directory card
@@ -505,6 +505,15 @@
                             `;
                         }
                         
+                        if (svc.liturgy?.sermon) {
+                            glanceHtml += `
+                                <div class="flex flex-col">
+                                    <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Sermon</span>
+                                    <span class="text-body-md text-primary font-medium">${svc.liturgy.sermon}</span>
+                                </div>
+                            `;
+                        }
+
                         if (svc.preacher) {
                             glanceHtml += `
                                 <div class="flex flex-col">
