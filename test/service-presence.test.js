@@ -383,3 +383,88 @@ test('the Order of Service starts presence without waiting for a Person', () => 
     assert.ok(!/if \(!this\.me/.test(body),
         'gating the start on a resolved Person is the bug this file records');
 });
+
+// ── Presence must not be able to make a page read-only ────────────────────
+//
+// It did, twice, and neither time looked like an error. Both callers start
+// presence from inside the auth handler that also grants editing rights, and
+// both of those handlers catch — so a throw in here skipped `can-edit` on the
+// calendar and actively set `canEdit = false` on the Order of Service page.
+// The symptom was "I cannot click into any input box".
+
+test('the browser refusing a bare timer reference does not break the page', () => {
+    // `state.setInterval = setInterval` then `state.setInterval(fn, ms)` is a
+    // METHOD call, so `this` is the state object rather than the window — and
+    // the browser's timers are WebIDL operations on Window that refuse a
+    // foreign `this` with "Illegal invocation". Node's timers are plain
+    // functions and do not care, which is exactly why every test here passed
+    // while both pages were dead. This stands in for the browser.
+    const hostile = function () {
+        if (this !== globalThis) throw new TypeError('Illegal invocation');
+        return 1;
+    };
+
+    assert.doesNotThrow(() => PresenceStore.start({
+        db: {
+            collection: () => ({
+                doc: () => ({ set: () => Promise.resolve() }),
+                onSnapshot: () => () => {},
+            })
+        },
+        uid: ME,
+        identity: { id: 'p-me', name: 'Bill Smith' },
+        surface: 'calendar',
+        stamp: () => ts(NOW), now: () => NOW,
+        setInterval: hostile,
+        clearInterval: () => {},
+    }), 'starting presence must never throw at its caller');
+
+    // And having failed, it must leave editing alone.
+    assert.strictEqual(PresenceStore.claim('2026-08-16', 'liturgy.hymn1'), true);
+    PresenceStore.stop();
+});
+
+test('the timers are wrapped rather than referenced', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const src = fs.readFileSync(
+        path.join(__dirname, '..', 'public', 'service-presence.js'), 'utf8');
+
+    assert.ok(!/deps\.setInterval \|\| setInterval;/.test(src),
+        'a bare reference is called with the wrong `this` in a browser');
+    assert.match(src, /deps\.setInterval \|\|\s*\n?\s*function \(fn, ms\) \{ return setInterval\(fn, ms\); \}/);
+});
+
+test('anything else going wrong in start is contained too', () => {
+    assert.doesNotThrow(() => PresenceStore.start({
+        db: { collection() { throw new Error('rules refused'); } },
+        uid: ME,
+        identity: null,
+        surface: 'calendar',
+        stamp: () => ts(NOW), now: () => NOW,
+    }));
+    assert.strictEqual(PresenceStore.claim('2026-08-16', 'liturgy.hymn1'), true,
+        'a failed start must leave every box open');
+    PresenceStore.stop();
+});
+
+test('editing rights are granted before presence is started', () => {
+    // Both blocks sit inside a try/catch, so anything above the grant that
+    // throws is swallowed and the grant never lands — which does not look like
+    // an error, it looks like a page where nothing can be clicked into.
+    const fs = require('node:fs');
+    const path = require('node:path');
+
+    const calendar = fs.readFileSync(
+        path.join(__dirname, '..', 'public', 'service-calendar.js'), 'utf8');
+    assert.ok(calendar.indexOf("document.body.classList.add('can-edit')")
+              < calendar.indexOf('PresenceStore.start('),
+        'the calendar must grant editing before it starts presence');
+
+    const builder = fs.readFileSync(
+        path.join(__dirname, '..', 'public', 'service-builder.js'), 'utf8');
+    const guard = builder.indexOf('this.canEdit = false;');
+    const watch = builder.indexOf('if (this.canEdit) this.watchPresence();');
+    assert.ok(watch > guard,
+        'the Order of Service must start presence outside the catch that revokes editing');
+});

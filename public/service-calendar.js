@@ -2267,7 +2267,17 @@ auth.onAuthStateChanged(async (user) => {
             // who decided it (MS-246).
             currentIdentity = await MosaicIdentity.me({ db, getUserData, uid: user.uid });
             if (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
+                // ⚠ EDITING RIGHTS FIRST, ALWAYS.
+                //
+                // This whole block sits inside a try/catch. Anything that
+                // throws above this line is swallowed and `can-edit` never
+                // lands, which does not look like an error — it looks like a
+                // page where nothing can be clicked into. Presence used to run
+                // first and did exactly that.
+                document.body.classList.add('can-edit');
+
                 // Who else is editing, and which cells they hold (MS-246).
+                // After the line above, and cannot throw regardless.
                 PresenceStore.start({
                     db: db,
                     uid: user.uid,
@@ -2279,7 +2289,6 @@ auth.onAuthStateChanged(async (user) => {
                 // A courtesy that makes the common case instant. Expiry is
                 // what actually frees a box.
                 window.addEventListener('beforeunload', () => PresenceStore.release());
-                document.body.classList.add('can-edit');
                 const importBtn = document.getElementById('import-docx-btn');
                 if (importBtn) {
                     importBtn.classList.remove('hidden');

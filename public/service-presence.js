@@ -164,7 +164,27 @@ var PresenceStore = (function () {
         setInterval: null, clearInterval: null
     };
 
+    // ⚠ STARTING PRESENCE CAN NEVER THROW AT ITS CALLER.
+    //
+    // Both callers start presence from inside the auth handler that also grants
+    // editing rights, and both of those handlers catch. So a throw in here did
+    // not surface as a broken badge — it skipped `can-edit` on the calendar and
+    // actively set `canEdit = false` on the Order of Service page. Presence
+    // failing turned the whole application read-only, twice, silently.
+    //
+    // The seatbelt is here rather than only at the call sites because there is
+    // no version of this worth crashing a page over: at worst you cannot see
+    // who else is in the room.
     function start(deps) {
+        try {
+            begin(deps);
+        } catch (e) {
+            console.error('Presence could not start; carrying on without it:', e);
+            stop();
+        }
+    }
+
+    function begin(deps) {
         stop();
         state.db = deps.db;
         state.uid = deps.uid;
@@ -173,8 +193,19 @@ var PresenceStore = (function () {
         state.onChange = deps.onChange || function () {};
         state.stamp = deps.stamp;
         state.now = deps.now || function () { return Date.now(); };
-        state.setInterval = deps.setInterval || setInterval;
-        state.clearInterval = deps.clearInterval || clearInterval;
+
+        // ⚠ WRAPPED, NOT REFERENCED.
+        //
+        // `state.setInterval = setInterval` then `state.setInterval(fn, ms)` is
+        // a METHOD call, so `this` is `state` rather than the window — and the
+        // browser's timers are WebIDL operations on Window that refuse a
+        // foreign `this` with "Illegal invocation". Node's timers are ordinary
+        // functions and do not care, which is precisely why every test passed
+        // while both pages were dead.
+        state.setInterval = deps.setInterval ||
+            function (fn, ms) { return setInterval(fn, ms); };
+        state.clearInterval = deps.clearInterval ||
+            function (id) { return clearInterval(id); };
 
         if (!state.db || !state.uid) return;
         state.started = true;

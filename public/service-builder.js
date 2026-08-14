@@ -679,13 +679,22 @@ function serviceForm() {
                         // Who this is, as a Person — stamped onto every element
                         // they decide (MS-246).
                         this.me = await MosaicIdentity.me({ db, getUserData, uid: user.uid });
-                        // After `me`, which is what the badges are drawn from.
-                        if (this.canEdit) this.watchPresence();
                         this.loadPrayerRequests();
                     } catch (error) {
                         console.error("Error checking user permissions:", error);
                         this.canEdit = false;
                     }
+
+                    // ⚠ OUTSIDE THE TRY, AND LAST.
+                    //
+                    // The catch above turns any failure into "you may not
+                    // edit" — the right answer for a permissions read, and a
+                    // disaster for anything else that happens to be in the same
+                    // block. Presence was in it, and one throw made the whole
+                    // page read-only with nothing on screen to say why. Being
+                    // unable to see who else is here is not a reason to stop
+                    // somebody working.
+                    if (this.canEdit) this.watchPresence();
                 } else {
                     this.canEdit = false;
                 }
