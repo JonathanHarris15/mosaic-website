@@ -96,6 +96,8 @@ Living in `restrictions[]` rather than as its own field means it composes with t
 
 **It is editor-facing in the interface, not in the data.** `/roles` is `allow read: if true`, so an allowlist's person ids are world-readable, and "these four people serve communion" is resolvable against the world-readable directory by anyone who opens devtools. This is the same trade ADR-0018 accepted for `participantIds` and it is accepted here on the same narrow grounds — the directory is already open, so this discloses little that is not — but it is a second instance of the same smell, and the argument is about the app's read posture rather than about this feature. The directory question is filed separately and is larger than either.
 
+> **Since resolved.** [ADR 0031](0031-the-directory-asks-for-an-account.md) closed the directory to signed-in accounts. `/roles` is still `allow read: if true` and an allowlist's ids are still readable, but they no longer resolve to names for an anonymous reader. The paragraph above stands as the record of the trade that was made at the time.
+
 ## Consequences
 
 - **The Role data type grows three fields** — `intensity`, `allowsAnotherRole`, and an `allowlist` restriction — and all three need authoring UI. Servant Roles in the Roles Manager; one-off Roles on the Event page, which has no Roles Manager to fall back on; liturgical intensity on the locked card that already renders.

@@ -11,6 +11,8 @@ A Prayer Request (what a pastoral-prayer subject asks the church to pray about f
 
 The request can arrive two ways — typed by an elder in the Service Builder, or supplied by the subject replying to an automated text (handled server-side in `smsInbound`). Either way it must end up in both places. How should the two homes relate?
 
+> **Premise updated by [ADR 0031](0031-the-directory-asks-for-an-account.md).** `pastoral_prayer_history` is no longer world-readable — it needs a signed-in account. The decision below is unaffected: the collection is readable by *any* account, the Prayer Request text is for elders, and Firestore still has no field-level read rules. The paragraph reads as written at the time.
+
 **Privacy constraint:** the existing `pastoral_prayer_history/{serviceDate}` sub-collection is world-readable (`allow read: if true`, including a public collection-group read) because the public "was prayed for" fact and `lastPastoralPrayerDate` drive non-elder views (analytics, calendar, suggestions). Firestore has no field-level read rules, so the Prayer Request **text cannot live there** without leaking sensitive content that the automated text explicitly promises is "private and only shared with Elders."
 
 ## Decision

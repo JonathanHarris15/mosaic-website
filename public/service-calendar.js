@@ -335,7 +335,37 @@ function calendarPage() {
             await this.loadPeopleRegistry();
         },
 
+        // ⚠ THIS PAGE IS VIEWABLE SIGNED OUT, AND THIS READ IS NOT.
+        //
+        // The registry is the whole directory, and only the editor's person
+        // picker ever looks at it. Since MS-197 the directory needs an account
+        // (ADR-0031), so for an anonymous visitor this read is refused. The
+        // catch below would swallow it, but a permission error logged on every
+        // visit to a public page is an error nobody reads.
+        //
+        // ⚠ A STANDING LISTENER, NOT A ONE-SHOT. Signing in is a thing that
+        // happens ON this page, and the editing controls appear the moment it
+        // does (see the listener at the bottom of this file). A registry that
+        // asked once, found nobody and gave up would leave that editor's person
+        // picker empty for the rest of the visit — and an empty picker does not
+        // look broken, it looks like a church with nobody in it and offers to
+        // add a new person, which is how duplicate People get made.
+        //
+        // Waiting for the state rather than reading `currentUser` matters for
+        // the same reason in reverse: a signed-in editor's session may still be
+        // coming back off IndexedDB when this runs.
         async loadPeopleRegistry() {
+            return new Promise(resolve => {
+                auth.onAuthStateChanged(async user => {
+                    if (user && !this.peopleRegistry.length) await this.fetchPeopleRegistry();
+                    // Whatever the answer, init() may carry on. Later calls are
+                    // ignored — a promise settles once.
+                    resolve();
+                });
+            });
+        },
+
+        async fetchPeopleRegistry() {
             try {
                 const snap = await db.collection('people').get();
                 this.peopleRegistry = snap.docs.map(d => ({ id: d.id, ...d.data() }));

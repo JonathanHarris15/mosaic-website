@@ -295,7 +295,14 @@
                     // wait for all of it anyway. That was a whole round trip
                     // (185–300ms on a phone) added to the end of every visit for
                     // a read that could have gone first.
-                    const directory = this.people.length ? null : this.loadPeople();
+                    //
+                    // ⚠ NOT WHEN SIGNED OUT. A Calendar with no rank still
+                    // draws (see `signedOut`), and since MS-197 the directory
+                    // needs an account (ADR-0031) — so for a stranger this is a
+                    // request that can only be refused, on a page that already
+                    // knows nobody is there. Nothing on a signed-out Calendar
+                    // renders a name anyway.
+                    const directory = (this.people.length || !this.rank) ? null : this.loadPeople();
 
                     // The whole rail, not just the month on screen. See the
                     // note on `railAnchor`.

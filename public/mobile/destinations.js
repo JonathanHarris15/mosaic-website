@@ -31,7 +31,13 @@
         { key: 'hymn-directory', label: 'Hymn Directory', icon: 'book-open', symbol: 'menu_book', route: 'hymnDirectory' },
         { key: 'calendar', label: 'Services', icon: 'church', symbol: 'church', route: 'calendar' },
         { key: 'events', label: 'Calendar', icon: 'calendar-days', symbol: 'calendar_month', route: 'events' },
-        { key: 'directory', label: 'Membership Directory', icon: 'users', symbol: 'group', route: 'people' },
+        // ⚠ GATED SINCE MS-197, AND THE MISSING GATE WAS THE BUG. This entry
+        // had none, and `canSee` treats no gate as "everyone" — so a signed-out
+        // guest (the phone's "Continue as guest") got a tile straight into the
+        // whole church directory. It worked because `people` was world-readable.
+        // ADR-0031 closed that, and the gate here now matches the web, where the
+        // directory card has always been injected for member and above only.
+        { key: 'directory', label: 'Membership Directory', icon: 'users', symbol: 'group', route: 'people', permissionLevels: ['member', 'editor', 'elder', 'admin', 'super_admin'] },
         { key: 'shepherd', label: 'Shepherd Dashboard', icon: 'shield', symbol: 'shield', route: 'shepherd', permissionLevels: ['elder', 'super_admin'] },
         { key: 'admin', label: 'Admin Dashboard', icon: 'settings-2', symbol: 'settings', route: 'admin', permissionLevels: ['admin', 'super_admin'] },
         // On the web the Roles Manager is a dashboard CARD rather than

@@ -10,12 +10,17 @@ const path = require('node:path');
 // for the people who staff Sundays, and a different thing from a member reading
 // the rota. Editors and above.
 //
-// ⚠ It is a DOOR, NOT A LOCK, and these tests cannot pretend otherwise.
-// `services`, `people` and `involvement` are world-readable in firestore.rules
-// because the congregant-facing Service Guide needs them, so this stops the
-// SCREEN. What it must therefore get exactly right is that the refusal lands
-// BEFORE the read: a page that assembles the history and then hides it has
-// already handed it to the browser.
+// ⚠ It is a DOOR, and these tests cannot pretend it is more than that. There
+// is a lock behind it now — MS-197 closed `people` and `involvement` to
+// signed-in accounts (ADR-0031) — but the door and the lock are set at
+// different heights: the page is editors-and-above, the collections are anyone
+// with an account. So a member who types the URL is stopped by this screen and
+// by nothing else, and what it must get exactly right is that the refusal
+// lands BEFORE the read. A page that assembles the history and then hides it
+// has already handed it to the browser.
+//
+// (`services` stays world-readable — the congregant-facing Service Guide is on
+// the other side of it.)
 
 const PUBLIC = path.join(__dirname, '..', 'public');
 
