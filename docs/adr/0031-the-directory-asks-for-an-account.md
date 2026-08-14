@@ -45,7 +45,7 @@ This is that closing.
 **The directory is for people who have an account. Nobody else.**
 
 Every directory collection moves from `allow read: if true` to
-`allow read: if request.auth != null`:
+`allow read: if isSignedIn()`:
 
 | Path | What it discloses |
 | --- | --- |
@@ -56,6 +56,30 @@ Every directory collection moves from `allow read: if true` to
 | `people_tags/{tagId}` | The directory's tag vocabulary |
 
 Writes are untouched. This changes who may **read**.
+
+### 0. `request.auth != null` is not an account, and on this project that is the whole boundary
+
+This shipped once written that way and it was very nearly decorative.
+
+**Anonymous sign-in is enabled on this project.** The API key ships in the
+browser, because that is what an API key is for. One POST to the Identity
+Toolkit carrying nothing but that key returns a valid Firebase token — no email,
+no password, no sign-up form, no record anybody would read as a person. That
+token satisfies `request.auth != null`. Verified against production: a directory
+read as an anonymous token came back `200` with the congregation's names in it.
+
+So the rule asks `isSignedIn()`, which is `request.auth != null` **and** the
+token's sign-in provider is not `anonymous`.
+
+Nothing in the app has ever called `signInAnonymously`. Every client already
+treats an anonymous session as signed out — `auth.js`, `login.html`, `main.js`,
+`profile.js` and `mobile/data.js` all test `!user.isAnonymous`. This is the rules
+file catching up with what the app always believed.
+
+**Anonymous sign-in should also be turned off in the Firebase console**, since
+nothing uses it. The rule holds either way, and that is the point: a boundary
+that depends on a console toggle is a boundary somebody can flip off without
+touching the repo, and no test would notice.
 
 ### 1. The floor is an account, not a rank — and that is the load-bearing part
 
@@ -112,7 +136,7 @@ narrower than the directory. Editors and the person themselves, still, because a
 member has no business knowing who is on holiday. The premise moved a rung and
 the conclusion did not.
 
-## The gap this leaves open
+## The gap this leaves open, and the decision to leave it
 
 **Sign-up is self-service.** The login page offers Create Account to anybody who
 reaches it, and the rules let a new account write its own `users/{uid}` at
@@ -121,16 +145,28 @@ permission level `viewer`. Nobody approves it and no email is verified.
 So this ADR does not put the directory behind a wall. It puts it behind a
 sign-up form.
 
-That is still worth doing, and the reasoning should be stated rather than
-implied: it ends anonymous and zero-effort scraping, it costs a real identity,
-and every reader is now a row an admin can see and disable. What it is not is a
-boundary against somebody who wants in.
+**That was raised as MS-240 and decided: sign-up stays open** (Jonathan,
+2026-08-14). So the boundary the church is keeping is *anybody may have an
+account, and an account is what the directory asks for* — in practice, an email
+address and a minute.
 
-Closing that is **MS-240**, and it is deliberately not this ADR. Who may hold an
-account is a decision about the church — invitation, approval, a domain
-restriction, or admins creating accounts by hand — and it changes the front door
-of the Directory Request flow. That is a decision to be made by the people whose
-directory it is, not folded into a rules fix.
+Stated plainly so nobody later reads it as an oversight. What it buys: the
+self-service door stays open, so somebody new can sign up, find themselves and
+raise a Directory Request without an editor noticing them first; every reader is
+a row in `users` that an admin can see and disable, where an anonymous scraper
+left no trace at all; and there is no approval queue for anybody to staff. What
+it does not buy is a wall.
+
+Revisit if that trade stops holding — the likeliest triggers are somebody
+actually scraping it, or the directory growing something more sensitive than
+contact details. The options that were on the table: invitation-only, admin-created
+accounts, a domain restriction, or approval-before-access.
+
+Note the asymmetry with §0, which is not a contradiction. An *email address* is a
+deliberate, chosen cost the church is happy with. An *anonymous token* is not a
+cost at all — it is one HTTP request that anybody's script can make, and nothing
+is left behind to look at afterwards. Leaving the front door unlocked is a
+decision; leaving the back window open is a bug.
 
 ## Consequences
 
