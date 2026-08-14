@@ -37,6 +37,16 @@ function calendarPage() {
         get isRail() {
             return this.planning && this.view === 'table';
         },
+
+        // "Last prayed for" under each name in the person search.
+        //
+        // It is pastoral-prayer information and it belongs to the question
+        // "who has waited longest to be prayed for". Asking who is down to
+        // WRITE a Sunday is not that question, and the date under every name
+        // is just noise to read past.
+        get showLastPrayed() {
+            return this.selectorField !== ASSIGNED_FIELD;
+        },
         peopleRegistry: [],
         peopleFuse: null,
 

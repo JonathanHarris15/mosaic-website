@@ -197,3 +197,21 @@ test('the faces are drawn again once the directory arrives', () => {
     assert.match(fetchBody, /peopleById\[p\.id\] = p/);
     assert.match(fetchBody, /injectServiceData\(serviceDataMap\)/);
 });
+
+test('the Assigned picker does not report when people were last prayed for', () => {
+    // That line answers "who has waited longest to be prayed for". Asking who
+    // is down to WRITE a Sunday is a different question, and a date under
+    // every name is noise to read past.
+    assert.match(HTML, /x-if="!p\.isNew && showLastPrayed"/);
+    assert.match(SRC, /get showLastPrayed\(\)[\s\S]{0,120}selectorField !== ASSIGNED_FIELD/);
+});
+
+test('the pastoral prayer pickers keep it, because there it is the point', () => {
+    const sb = load();
+    sb.selectorField = 'prayerMale';
+    const page = sb.calendarPage();
+    page.selectorField = 'prayerMale';
+    assert.strictEqual(page.showLastPrayed, true);
+    page.selectorField = sb.ASSIGNED_FIELD;
+    assert.strictEqual(page.showLastPrayed, false);
+});

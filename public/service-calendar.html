@@ -313,7 +313,7 @@
                                 <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
                                 <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
                             </div>
-                            <template x-if="!p.isNew">
+                            <template x-if="!p.isNew && showLastPrayed">
                                 <span class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
                             </template>
                         </button>
