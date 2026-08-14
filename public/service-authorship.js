@@ -24,6 +24,22 @@ var ServiceAuthorship = (function () {
     // `decidedBy.hymn1` are obviously the same element.
     var FIELD = 'decidedBy';
 
+    // Is this element empty? An emptied slot has no author, so clearing one
+    // has to take the credit with it — see stampsFor.
+    //
+    // Recursive, because a liturgy slot is not one shape: a hymn is
+    // {id, name}, a scripture is a string, the baptism candidates are a list.
+    // Blank is blank all the way down.
+    function isBlank(value) {
+        if (value === null || value === undefined) return true;
+        if (typeof value === 'string') return value.trim() === '';
+        if (Array.isArray(value)) return value.length === 0;
+        if (typeof value === 'object') {
+            return Object.keys(value).every(function (k) { return isBlank(value[k]); });
+        }
+        return false;
+    }
+
     // Turn the paths a save is about to write into the stamps that go with
     // them. Given {'liturgy.hymn1': …, 'theme': …} only the liturgy slots come
     // back, because the tag sits under liturgy elements and nothing else.
@@ -32,38 +48,54 @@ var ServiceAuthorship = (function () {
     // the record of who chose it land in ONE write. Two writes could half-fail
     // and leave a hymn nobody appears to have chosen, or a name against a hymn
     // that never saved.
-    function stampsFor(changedPaths, identity, at) {
+    //
+    // ⚠ Clearing an element clears its author too, and does so WHETHER OR NOT
+    // we can say who cleared it. Taking your hymn back out should take your
+    // name out with it; a tag left standing over an empty row claims somebody
+    // chose the emptiness, and the next person to look sees a decision that
+    // nobody made. That is why the remove runs outside the `stamp` check —
+    // "we don't know who did this" is no reason to leave a wrong tag up.
+    function stampsFor(changedPaths, identity, at, remove) {
         var stamp = MosaicIdentity.stamp(identity, at);
         var out = {};
-        if (!stamp) return out;
 
         Object.keys(changedPaths || {}).forEach(function (path) {
             if (path.indexOf('liturgy.') !== 0) return;
             var slot = path.slice('liturgy.'.length);
             if (!slot) return;
-            out[FIELD + '.' + slot] = stamp;
+
+            if (isBlank(changedPaths[path])) {
+                if (remove !== undefined) out[FIELD + '.' + slot] = remove;
+                return;
+            }
+            if (stamp) out[FIELD + '.' + slot] = stamp;
         });
 
         return out;
     }
 
-    // The stamp for one slot, for the surfaces that write a single field.
-    function stampFor(slot, identity, at) {
-        var stamp = MosaicIdentity.stamp(identity, at);
-        if (!stamp || !slot) return {};
-        var out = {};
-        out[FIELD + '.' + slot] = stamp;
-        return out;
+    // One slot, for the surfaces that write a single field. Same rules — it is
+    // the same function underneath, so a cleared hymn loses its tag whichever
+    // screen cleared it.
+    function stampFor(slot, value, identity, at, remove) {
+        if (!slot) return {};
+        var paths = {};
+        paths['liturgy.' + slot] = value;
+        return stampsFor(paths, identity, at, remove);
     }
 
     // The same stamps as a nested map, for the one write that cannot use dot
     // paths: the very first save of a Sunday that has no document yet, which
     // has to lay the whole thing down with set().
-    function nestStamps(stampPaths) {
+    // Removals are dropped rather than nested: this shape is only ever used to
+    // lay down a document that does not exist yet, and there is nothing there
+    // to take a tag off.
+    function nestStamps(stampPaths, remove) {
         var nested = {};
         var any = false;
         Object.keys(stampPaths || {}).forEach(function (path) {
             if (path.indexOf(FIELD + '.') !== 0) return;
+            if (remove !== undefined && stampPaths[path] === remove) return;
             nested[path.slice(FIELD.length + 1)] = stampPaths[path];
             any = true;
         });
@@ -97,6 +129,7 @@ var ServiceAuthorship = (function () {
         FIELD: FIELD,
         stampsFor: stampsFor,
         stampFor: stampFor,
+        isBlank: isBlank,
         nestStamps: nestStamps,
         decidedBy: decidedBy,
         tagLabel: tagLabel,

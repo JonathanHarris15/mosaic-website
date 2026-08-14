@@ -1620,18 +1620,24 @@ async function writeLiturgyField(dateKey, field, value) {
     // An element decided from the Planning view is just as decided as one
     // chosen on the Order of Service page, so it is recorded the same way
     // (MS-246). The tag is only ever SHOWN on the Order of Service page — but
-    // recording it in only one place would make that tag a liar.
-    const authorship = ServiceAuthorship.stampFor(field, currentIdentity, stamp);
+    // recording it in only one place would make that tag a liar. Clearing a
+    // slot takes the tag off with it.
+    const remove = firebase.firestore.FieldValue.delete();
+    const authorship = ServiceAuthorship.stampFor(field, value, currentIdentity, stamp, remove);
 
     try {
         await ref.update(Object.assign(
             { [`liturgy.${field}`]: value, updatedAt: stamp }, authorship));
     } catch (e) {
         if (e.code !== 'not-found') throw e;
-        // No document for this Sunday yet. Nothing can be racing it, so the
-        // nested shape is written directly.
+        // No document for this Sunday yet, so the nested shape is written
+        // directly — set() would read 'decidedBy.hymn1' as a field NAME with a
+        // dot in it and build a parallel record beside the real one.
+        const nested = ServiceAuthorship.nestStamps(authorship, remove);
         await ref.set(Object.assign(
-            { liturgy: { [field]: value }, updatedAt: stamp }, authorship), { merge: true });
+            { liturgy: { [field]: value }, updatedAt: stamp },
+            nested ? { [ServiceAuthorship.FIELD]: nested } : {}
+        ), { merge: true });
     }
 
     if (!serviceDataMap[dateKey]) serviceDataMap[dateKey] = {};

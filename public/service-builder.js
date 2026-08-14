@@ -1376,8 +1376,12 @@ function serviceForm() {
                 // the record of who chose it can never land apart — a half
                 // failure would otherwise leave a hymn nobody appears to have
                 // chosen, or a name against a hymn that never saved.
+                //
+                // Taking an element back out takes your name out with it.
+                const authorRemove = firebase.firestore.FieldValue.delete();
                 Object.assign(toSave, ServiceAuthorship.stampsFor(
-                    toSave, this.me, firebase.firestore.FieldValue.serverTimestamp()));
+                    toSave, this.me,
+                    firebase.firestore.FieldValue.serverTimestamp(), authorRemove));
                 // Only persist the guide system once the editor has engaged the new
                 // controls, so untouched pre-ADR-0010 weeks are never silently flipped.
                 if (this._guideEngaged) toSave.guideSystem = this.guideSystem;
@@ -1426,7 +1430,7 @@ function serviceForm() {
                 } else {
                     // Nothing to race yet, so the first write lays the whole
                     // document down at once. Dot paths are meaningless here.
-                    const firstStamps = ServiceAuthorship.nestStamps(toSave);
+                    const firstStamps = ServiceAuthorship.nestStamps(toSave, authorRemove);
                     batch.set(serviceRef, Object.assign({}, flatNow, {
                         involvementDeferred: toSave.involvementDeferred,
                         updatedAt: toSave.updatedAt

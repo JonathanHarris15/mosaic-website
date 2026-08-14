@@ -25,6 +25,8 @@ const Authorship = require('../public/service-authorship.js');
 
 const ME = { id: 'p-1', name: 'Bill Smith', photoUrl: null, photoCrop: null };
 const AT = 'server-stamp';
+// Stands in for firebase.firestore.FieldValue.delete().
+const GONE = { __delete: true };
 
 // ── What gets stamped ──────────────────────────────────────────────────────
 
@@ -38,13 +40,13 @@ test('changing a hymn records who chose it', () => {
 });
 
 test('the stamp is keyed the same as the value, so the pair is obvious', () => {
-    const stamps = Authorship.stampsFor({ 'liturgy.hymnEnd2': {} }, ME, AT);
+    const stamps = Authorship.stampsFor({ 'liturgy.hymnEnd2': { id: 'h-2', name: 'It Is Well' } }, ME, AT);
     assert.ok('decidedBy.hymnEnd2' in stamps);
 });
 
 test('several slots in one save each get their own stamp', () => {
     const stamps = Authorship.stampsFor({
-        'liturgy.hymn1': {},
+        'liturgy.hymn1': { id: 'h-1', name: 'Holy Holy Holy' },
         'liturgy.benediction': 'Numbers 6',
         'liturgy.scriptureReading': 'Psalm 23',
     }, ME, AT);
@@ -58,7 +60,7 @@ test('only liturgy elements are stamped', () => {
     // The tag sits under a liturgy row. Stamping the theme or the preacher
     // would record something nothing ever draws.
     const stamps = Authorship.stampsFor({
-        'liturgy.hymn1': {},
+        'liturgy.hymn1': { id: 'h-1', name: 'Holy Holy Holy' },
         theme: 'Grace',
         preacher: 'Dan Hall',
         preacherId: 'p-4',
@@ -76,18 +78,99 @@ test('a save that changed nothing stamps nothing', () => {
 test('an account with no Person records no stamp rather than a bad one', () => {
     // A tag reading for an unknown id is worse than no tag: it claims a
     // decision has an owner and then cannot name them.
-    assert.deepStrictEqual(Authorship.stampsFor({ 'liturgy.hymn1': {} }, null, AT), {});
+    const hymn = { id: 'h-1', name: 'Holy Holy Holy' };
+    assert.deepStrictEqual(Authorship.stampsFor({ 'liturgy.hymn1': hymn }, null, AT), {});
     assert.deepStrictEqual(
-        Authorship.stampsFor({ 'liturgy.hymn1': {} }, { id: null, name: 'x' }, AT), {});
+        Authorship.stampsFor({ 'liturgy.hymn1': hymn }, { id: null, name: 'x' }, AT), {});
 });
 
 test('a single-field surface stamps its one slot', () => {
     // The Planning view writes one liturgy field at a time.
-    assert.deepStrictEqual(Authorship.stampFor('hymnMid1', ME, AT), {
+    const hymn = { id: 'h-1', name: 'Holy Holy Holy' };
+    assert.deepStrictEqual(Authorship.stampFor('hymnMid1', hymn, ME, AT, GONE), {
         'decidedBy.hymnMid1': { id: 'p-1', name: 'Bill Smith', at: AT }
     });
-    assert.deepStrictEqual(Authorship.stampFor('', ME, AT), {});
-    assert.deepStrictEqual(Authorship.stampFor('hymn1', null, AT), {});
+    assert.deepStrictEqual(Authorship.stampFor('', hymn, ME, AT, GONE), {});
+    assert.deepStrictEqual(Authorship.stampFor('hymn1', hymn, null, AT, GONE), {});
+});
+
+// ── Taking it back out takes your name with it ─────────────────────────────
+
+test('clearing a hymn clears who chose it', () => {
+    // A tag left standing over an empty row claims somebody chose the
+    // emptiness, and the next person to look sees a decision nobody made.
+    assert.deepStrictEqual(
+        Authorship.stampsFor({ 'liturgy.hymn1': { id: null, name: '' } }, ME, AT, GONE),
+        { 'decidedBy.hymn1': GONE });
+});
+
+test('clearing a scripture reference clears its tag too', () => {
+    assert.deepStrictEqual(
+        Authorship.stampsFor({ 'liturgy.benediction': '' }, ME, AT, GONE),
+        { 'decidedBy.benediction': GONE });
+    assert.deepStrictEqual(
+        Authorship.stampsFor({ 'liturgy.benediction': '   ' }, ME, AT, GONE),
+        { 'decidedBy.benediction': GONE });
+});
+
+test('emptying the baptism candidates clears its tag', () => {
+    assert.deepStrictEqual(
+        Authorship.stampsFor({ 'liturgy.baptism': [] }, ME, AT, GONE),
+        { 'decidedBy.baptism': GONE });
+});
+
+test('clearing from the Planning view clears it the same way', () => {
+    assert.deepStrictEqual(
+        Authorship.stampFor('hymnEnd1', { id: null, name: '' }, ME, AT, GONE),
+        { 'decidedBy.hymnEnd1': GONE });
+});
+
+test('a clear removes the tag even when we cannot say who cleared it', () => {
+    // "We don't know who did this" is no reason to leave a wrong tag up.
+    assert.deepStrictEqual(
+        Authorship.stampsFor({ 'liturgy.hymn1': { id: null, name: '' } }, null, AT, GONE),
+        { 'decidedBy.hymn1': GONE });
+});
+
+test('setting and clearing in one save do the right thing each', () => {
+    const out = Authorship.stampsFor({
+        'liturgy.hymn1': { id: 'h-1', name: 'Holy Holy Holy' },
+        'liturgy.hymn2': { id: null, name: '' },
+    }, ME, AT, GONE);
+
+    assert.deepStrictEqual(out['decidedBy.hymn1'], { id: 'p-1', name: 'Bill Smith', at: AT });
+    assert.strictEqual(out['decidedBy.hymn2'], GONE);
+});
+
+test('a hymn typed in freehand still counts as decided', () => {
+    // No id, but a name — somebody chose it.
+    assert.deepStrictEqual(
+        Authorship.stampsFor({ 'liturgy.hymn1': { id: null, name: 'A New Song' } }, ME, AT, GONE),
+        { 'decidedBy.hymn1': { id: 'p-1', name: 'Bill Smith', at: AT } });
+});
+
+test('what counts as empty, all the way down', () => {
+    assert.strictEqual(Authorship.isBlank(null), true);
+    assert.strictEqual(Authorship.isBlank(undefined), true);
+    assert.strictEqual(Authorship.isBlank(''), true);
+    assert.strictEqual(Authorship.isBlank('  '), true);
+    assert.strictEqual(Authorship.isBlank([]), true);
+    assert.strictEqual(Authorship.isBlank({}), true);
+    assert.strictEqual(Authorship.isBlank({ id: null, name: '' }), true);
+
+    assert.strictEqual(Authorship.isBlank('Psalm 23'), false);
+    assert.strictEqual(Authorship.isBlank({ id: 'h-1', name: '' }), false);
+    assert.strictEqual(Authorship.isBlank({ id: null, name: 'A New Song' }), false);
+    assert.strictEqual(Authorship.isBlank([{ id: 'p-1' }]), false);
+});
+
+test('a removal is not nested onto a brand-new Sunday', () => {
+    // That shape only ever lays down a document that does not exist, and there
+    // is nothing there to take a tag off.
+    assert.strictEqual(Authorship.nestStamps({ 'decidedBy.hymn1': GONE }, GONE), null);
+    assert.deepStrictEqual(
+        Authorship.nestStamps({ 'decidedBy.hymn1': { id: 'p-1' }, 'decidedBy.hymn2': GONE }, GONE),
+        { hymn1: { id: 'p-1' } });
 });
 
 // ── Reading it back ────────────────────────────────────────────────────────
@@ -228,7 +311,7 @@ test('the first save of a brand-new Sunday still records who decided', () => {
     // one save that credits nobody.
     const nested = Authorship.nestStamps({
         'decidedBy.hymn1': { id: 'p-1', name: 'Bill Smith', at: AT },
-        'liturgy.hymn1': {},
+        'liturgy.hymn1': { id: 'h-1', name: 'Holy Holy Holy' },
         updatedAt: 'x',
     });
     assert.deepStrictEqual(nested, { hymn1: { id: 'p-1', name: 'Bill Smith', at: AT } });
