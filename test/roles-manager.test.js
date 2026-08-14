@@ -11,7 +11,10 @@ const assert = require('node:assert');
 // unconstrained one does not return fewer rows, it errors, and the error looks
 // exactly like "this church has no relationship types".
 //
-// The Alpine template is not covered; it needs a real page.
+// The Alpine template's LAYOUT is not covered; that needs a real page. What is
+// covered is that every name it binds exists on the factory — see "the template
+// only reaches for things the page defines". A name that does not resolve
+// renders as nothing at all, with no error anywhere.
 
 // ── An in-memory Firestore that remembers how it was queried ─────────────────
 
@@ -1051,8 +1054,14 @@ test('the phone never draws two headers, or two back arrows', () => {
 
     // The shell header says "Roles Manager", so the page's own title block —
     // heading and the paragraph explaining the page — stands down entirely.
-    assert.match(html, /html\.shell-mobile \.rm-title-block\s*{\s*display:\s*none/,
-        'the page still prints its own title under the shell\'s');
+    //
+    // It used to stand down only in the shell, with a `display: none` rule.
+    // MS-234 deleted it at every width: the list says what the page is, and the
+    // paragraph was costing most of a phone screen before the first Role. So
+    // the check is now that it does not exist rather than that it is hidden,
+    // which is the stronger of the two.
+    assert.doesNotMatch(html, /rm-title-block/,
+        'the standfirst is back — the shell would print it under the shell\'s own title');
 
     // The page is a DRAWER DESTINATION, so its header carries a hamburger like
     // every other one. It used to carry a back arrow that asked the page what
@@ -1083,18 +1092,26 @@ test('a phone row is a card, and it does not offer delete next to open', () => {
     const html = rolesManagerHtml();
     // No pointer means no hover, so a row that only shows its edge on hover
     // shows nothing at all.
-    assert.match(html, /html\.shell-mobile \.rm-role-row\s*{[^}]*border-color/,
-        'the rows are an undifferentiated stack on a phone');
-    // Delete lives in the editor's header there (design 1b), and the row's copy
-    // is NOT RENDERED rather than hidden — see the next test.
-    const upto = html.slice(0, html.indexOf('deleteRole(role)'));
-    assert.match(upto.slice(-500), /<template x-if="!inShell">/,
-        'a phone still offers delete beside the tap that opens a Role');
-
-    // And it must not paint over the selected row: `bg-surface-container` is one
-    // class, this rule is two, so a background set here would win and the
-    // selection would vanish.
     const rule = html.match(/html\.shell-mobile \.rm-role-row\s*{([^}]*)}/)[1];
+    assert.match(rule, /border/,
+        'the rows are an undifferentiated stack on a phone');
+
+    // ⚠ DELETE IS NOT ON THE ROW AT ALL any more, at any width (MS-234). It
+    // used to be rendered on a desktop and gated off a phone, which is the
+    // arrangement the next test's comment describes at length. The hazard it
+    // was guarding — a destructive control a thumb-width from the tap that
+    // OPENS a Role — is now gone rather than gated, and the only delete is in
+    // the open Role's own head, where nothing else is competing for the tap.
+    const rows = html.slice(html.indexOf('<ul x-show="hasServantRoles"'), html.indexOf('</ul>', html.indexOf('<ul x-show="hasServantRoles"')));
+    assert.doesNotMatch(rows, /deleteRole/,
+        'a Role row offers delete beside the tap that opens the Role');
+    assert.match(html, /deleteRole\(draftRole\)/,
+        'the open Role has no delete, so a Role cannot be removed at all');
+
+    // And the row rule must not paint over the selected row: the selection is
+    // `.m-picklist__item--current`, one class, and this rule is two — so a
+    // background set here would win on specificity and the selection would
+    // vanish.
     assert.doesNotMatch(rule, /background/,
         'the phone row rule repaints the selected row as unselected');
 });
@@ -1192,20 +1209,87 @@ test('a desktop page in the shell never reaches for a token it does not have', (
     assert.match(html, /<link rel="stylesheet" href="mosaic\.css"/,
         'the page does not load the stylesheet its tokens come from');
 
+    // ⚠ This list has to mirror scripts/build-design-tokens.mjs, not a subset of
+    // it. It carried only colours, spacing, shadows and families, which was
+    // enough while the page's own CSS reached for almost nothing — the first
+    // rule to name --radius or --label-xs-size would have failed against a real
+    // token. Radius, the container width and the type scale are generated too,
+    // and the whole point of the check is that the token is REAL.
     const theme = require('../tailwind.config.js').theme.extend;
+    const sizes = theme.fontSize || {};
     const generated = new Set([
         ...Object.keys(theme.colors || {}),
         ...Object.keys(theme.spacing || {}).map(k => 'space-' + k),
         ...Object.keys(theme.boxShadow || {}).map(k => 'shadow-' + k),
+        // fontFamily also carries one alias per size role; the build emits only
+        // the families that are not also a role, so neither list is wrong here.
         ...Object.keys(theme.fontFamily || {}).map(k => 'font-' + k),
+        ...Object.keys(theme.maxWidth || {}).map(k => (k === 'container' ? 'container-max' : 'width-' + k)),
+        ...Object.keys(theme.borderRadius || {}).map(k => (k === 'DEFAULT' ? 'radius' : 'radius-' + k)),
+        ...Object.keys(sizes).flatMap(k => [k + '-size', k + '-line', k + '-spacing']),
     ].map(k => '--' + k));
 
-    const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+    // Not generated, and this is the trap. --duration, --ease-standard and the
+    // rest of the motion set live AFTER the @generated marker in spacing.css —
+    // they are the design system's own, and nothing splices them into
+    // mosaic.css. A page that names one loses the whole declaration.
+    ['--duration', '--duration-fast', '--duration-slow', '--ease-standard', '--border-hairline']
+        .forEach(t => assert.equal(generated.has(t), false,
+            t + ' is generated now — this guard is stale, and the page may use it'));
+
+    // Comments are stripped first, the same way the next test does it. A note
+    // saying "⚠ NOT var(--duration), it resolves to nothing here" is the most
+    // useful thing that can be written next to one of these rules, and scanning
+    // it as if it were a declaration makes writing it impossible.
+    const raw = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+    const style = raw.replace(/\/\*[\s\S]*?\*\//g, '');
     const defined = new Set([...style.matchAll(/(--[\w-]+):/g)].map(m => m[1]));
 
     [...style.matchAll(/var\(\s*(--[\w-]+)\s*([,)])/g)].forEach(m => {
         if (defined.has(m[1]) || generated.has(m[1]) || m[2] === ',') return;
         assert.fail(m[1] + ' is not a theme token, is not defined on this page, and has no fallback');
+    });
+});
+
+test('the template only reaches for things the page defines', () => {
+    // ⚠ A NAME THE FACTORY DOES NOT HAVE FAILS SILENTLY. Alpine evaluates the
+    // expression, gets undefined, and renders nothing — no error, no warning,
+    // an empty row where a Role's name should be. Which makes a renamed helper
+    // the cheapest possible way to blank a section of this page, and the
+    // rewrite in MS-234 touched every binding on it.
+    //
+    // This is the check the header of this file used to say was missing.
+    const html = rolesManagerHtml();
+    const DIRECTIVES = /(?:x-text|x-show|x-if|x-model(?:\.\w+)?|x-for|@click|@change|@keydown[\w.]*|:class|:value|:title|:disabled|:aria-[\w-]+|:maxlength)="([^"]*)"/g;
+    const exprs = [...html.matchAll(DIRECTIVES)].map(m => m[1]);
+    assert.ok(exprs.length > 40, 'the directives are not being found — this test is passing vacuously');
+
+    // Names x-for introduces are locals, not page state, and Alpine's magics
+    // belong to Alpine.
+    const locals = new Set(['$event', '$el', '$refs', '$store', '$watch', '$dispatch', '$nextTick']);
+    for (const [, e] of html.matchAll(/x-for="([^"]*)"/g)) {
+        e.split(/\s+in\s+/)[0].trim().replace(/^\(|\)$/g, '')
+            .split(',').forEach(v => locals.add(v.trim()));
+    }
+    const builtin = new Set(['true', 'false', 'null', 'undefined', 'new', 'typeof', 'in', 'of',
+        'return', 'if', 'else', 'this', 'length', 'trim', 'indexOf', 'filter', 'map', 'find',
+        'slice', 'toLowerCase', 'push', 'concat', 'includes', 'Number', 'String', 'Boolean',
+        'Object', 'Array', 'Math', 'JSON']);
+
+    const page = window.RolesManager();
+    const defined = new Set(Object.getOwnPropertyNames(page));
+
+    exprs.forEach(e => {
+        const code = e
+            // A template literal is mostly prose; only what is inside ${} is code.
+            .replace(/`([^`]*)`/g, (_, body) => [...body.matchAll(/\$\{([^}]*)\}/g)].map(x => x[1]).join(';'))
+            .replace(/'[^']*'/g, "''")
+            .replace(/"[^"]*"/g, '""');
+        // Leading identifiers only: `draft.name` is a question about `draft`.
+        [...code.matchAll(/(?<![.\w$])([A-Za-z_$][\w$]*)/g)].forEach(([, id]) => {
+            if (builtin.has(id) || locals.has(id) || defined.has(id)) return;
+            assert.fail(id + ' is bound in the template and defined nowhere on the page: ' + e);
+        });
     });
 });
 
@@ -1252,12 +1336,20 @@ test('a phone control that must not be pressed is not rendered, not hidden', () 
             hook + ' is a control hidden by CSS — hidden is not the same as gone');
     });
 
-    // One gate now: the row's delete. The editor's back arrow used to be the
-    // second, and stopped being gated when this page joined the drawer — a
-    // hamburger cannot close a Role, so that arrow is the only way out and
-    // always renders.
-    assert.equal((html.match(/x-if="!inShell"/g) || []).length, 1,
-        'the row\'s delete is no longer gated, or the back arrow has been gated again');
+    // NO gates left, and that is the end state rather than a regression. There
+    // were two. The editor's back arrow stopped being gated when this page
+    // joined the drawer — a hamburger cannot close a Role, so that arrow is the
+    // only way out and always renders. The row's delete stopped being gated in
+    // MS-234 because it stopped existing: delete moved into the open Role's own
+    // head at every width, so there is no phone-only control left to gate.
+    //
+    // A gate coming back means a control has been put somewhere it has to be
+    // taken away from again, which is the pattern this whole test distrusts.
+    assert.equal((html.match(/x-if="!inShell"/g) || []).length, 0,
+        'a control is being gated off the phone again — render it nowhere instead');
+
+    // `inShell` itself still has to answer honestly: the page reads it for the
+    // sign-in and permission gates, which send a WebView somewhere different.
     const page = window.RolesManager();
     global.MOSAIC_SHELL = 'mobile';
     try {

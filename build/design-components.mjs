@@ -280,6 +280,88 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 `,
   },
 
+  {
+    name: "Segmented",
+    cls: "m-seg",
+    group: "Forms",
+    summary:
+      "Two to four named choices with one of them chosen, all visible at once. For the choice that is the point of the row rather than something to go looking for in a menu.",
+    variants: { fill: ["default", "fill"], size: ["md", "lg"] },
+    notes: [
+      "`aria-pressed=\"true\"` IS the selected state — there is no --current class. A screen reader has to be told which one is chosen, and a class alone does not.",
+      "Two to four. More than that is a Select, and a single on/off is a Checkbox.",
+      "--fill gives equal thirds across the full width, which is what a phone wants; --lg takes the options to 44px for touch.",
+    ],
+    examples: [
+      '<div class="m-seg"><button class="m-seg__opt" aria-pressed="true">A man</button><button class="m-seg__opt" aria-pressed="false">A woman</button><button class="m-seg__opt" aria-pressed="false">Anyone</button></div>',
+      '<div class="m-seg m-seg--fill m-seg--lg"><button class="m-seg__opt" aria-pressed="true">Anyone</button><button class="m-seg__opt" aria-pressed="false">A woman</button></div>',
+    ],
+    css: `
+.m-seg {
+  display: inline-flex; gap: 2px; padding: 3px;
+  background: var(--surface-container); border: 1px solid var(--outline-variant);
+  border-radius: var(--radius);
+}
+.m-seg__opt {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 38px; padding: 0 var(--space-sm);
+  border: 0; border-radius: var(--radius-sm); background: transparent;
+  color: var(--on-surface-variant);
+  font-family: var(--font-sans); font-size: 11.5px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase; white-space: nowrap; cursor: pointer;
+  transition: background-color var(--duration) var(--ease-standard),
+              color var(--duration) var(--ease-standard);
+}
+.m-seg__opt:hover { color: var(--on-surface); }
+.m-seg__opt:focus-visible { outline: 2px solid var(--tertiary); outline-offset: -2px; }
+.m-seg__opt[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
+/* Filled: one row of equal thirds, which is what a phone wants. */
+.m-seg--fill { display: flex; width: 100%; }
+.m-seg--fill .m-seg__opt { flex: 1 1 0; min-width: 0; padding: 0 var(--space-base); }
+.m-seg--lg .m-seg__opt { min-height: 44px; }
+`,
+  },
+
+  {
+    name: "UnitField",
+    cls: "m-unitfield",
+    group: "Forms",
+    summary: "A number and the unit it is in, as one field.",
+    variants: { size: ["md", "sm"] },
+    notes: [
+      "The unit sits INSIDE the border. A word floating beside a box is a word that wraps away from it in a narrow column, and a number of weeks read as a number of anything is a rota that rests people for four days.",
+      "The unit is text the page supplies, so it can take the singular: \"1 week's rest\", never \"1 weeks' rest\".",
+      "Focus ring is the Input's, on the wrapper rather than the input, so the whole field lights up.",
+    ],
+    examples: [
+      '<span class="m-unitfield"><input type="number" min="0" step="0.25" value="4" /><span class="m-unitfield__unit">weeks</span></span>',
+      '<span class="m-unitfield m-unitfield--sm"><input type="number" min="0" step="0.25" value="1" /><span class="m-unitfield__unit">week\'s rest</span></span>',
+    ],
+    css: `
+.m-unitfield {
+  display: inline-flex; align-items: center; height: 48px; padding-right: var(--space-sm);
+  border: 1px solid var(--outline-variant); border-radius: var(--radius);
+  background: var(--surface-container-lowest);
+  transition: border-color var(--duration) var(--ease-standard),
+              box-shadow var(--duration) var(--ease-standard);
+}
+.m-unitfield:focus-within { border-color: var(--tertiary); box-shadow: 0 0 0 3px var(--m-focus-ring); }
+.m-unitfield > input {
+  width: 78px; height: 100%; padding: 0 var(--space-base) 0 14px;
+  border: 0; background: transparent; color: var(--on-surface);
+  font-family: var(--font-sans); font-size: 16px;
+}
+.m-unitfield > input:focus { outline: none; }
+.m-unitfield > input:disabled { opacity: .5; cursor: not-allowed; }
+.m-unitfield__unit {
+  flex: 0 0 auto; font-family: var(--font-sans); font-size: 13px;
+  color: var(--on-surface-variant); white-space: nowrap;
+}
+.m-unitfield--sm { height: 40px; }
+.m-unitfield--sm > input { width: 62px; font-size: 15px; }
+`,
+  },
+
   /* ── Display ────────────────────────────────────────────── */
   {
     name: "SectionLabel",
@@ -492,6 +574,110 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     css: `
 .m-divider { display: block; width: 100%; height: 1px; background: var(--outline-variant); border: 0; }
 .m-divider--vertical { width: 1px; height: 20px; margin: 0 var(--space-xs); display: inline-block; }
+`,
+  },
+
+  {
+    name: "Token",
+    cls: "m-token",
+    group: "Display",
+    summary: "A name, and the control that takes it off the list. Serif, because it is a Person.",
+    variants: { variant: ["default", "plain"], size: ["md", "lg"] },
+    notes: [
+      "Not a Badge and not an EventChip. A Badge is a STATE and cannot be removed; an EventChip is an event on a calendar. This is one member of a list somebody is building.",
+      "--plain where there is nothing to remove — a list being read rather than edited.",
+      "The remove control is an IconButton, so it inherits the touch floor rather than inventing a second small-target rule.",
+    ],
+    examples: [
+      '<span class="m-token">Sarah Whitfield<button class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Take Sarah Whitfield off this list"><span class="material-symbols-outlined">close</span></button></span>',
+      '<span class="m-token m-token--plain">Tom Brackley</span>',
+    ],
+    css: `
+.m-token {
+  display: inline-flex; align-items: center; gap: var(--space-xs);
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--outline-variant); border-radius: var(--radius-sm);
+  background: var(--surface-container-low);
+  font-family: var(--font-serif); font-size: 15px; line-height: 1.3; color: var(--on-surface);
+}
+.m-token--plain { padding: 5px 10px; }
+.m-token--lg .m-icon-btn { width: 36px; height: 36px; }
+`,
+  },
+
+  {
+    name: "RuleRow",
+    cls: "m-rule-row",
+    group: "Display",
+    summary:
+      "One rule, read back as a sentence in serif, with whatever it is made of underneath.",
+    variants: { state: ["default", "private", "unavailable"] },
+    notes: [
+      "A COLUMN, not a row: the one rule made of many things carries them in __body under the sentence, indented past the icon. A rule naming eleven people must not print them in the sentence as well.",
+      "Three edges, and the difference between the last two is the whole point. --unavailable is red: the rule cannot run and the editor has to act. --private is gold: the rule uses a tag an elder keeps private, it still applies, and there is nothing to fix. Red on a rule nobody can fix reads as 'delete this', and the editor would be deleting a rule an elder still means.",
+      "The sentence is the product's, not the component's. This draws it; roles-manager.js and recurring-events.html decide what it says.",
+    ],
+    examples: [
+      '<li class="m-rule-row"><div class="m-rule-row__line"><span class="material-symbols-outlined m-rule-row__icon">sell</span><span class="m-rule-row__text">Must be tagged "Sound Trained"</span></div></li>',
+      '<li class="m-rule-row m-rule-row--private"><div class="m-rule-row__line"><span class="material-symbols-outlined m-rule-row__icon">lock</span><span class="m-rule-row__text">This rule uses a tag an elder keeps private. It still applies — ask an elder if it needs changing.</span></div></li>',
+    ],
+    css: `
+.m-rule-row {
+  display: flex; flex-direction: column; gap: var(--space-base);
+  padding: 9px var(--space-sm);
+  border: 1px solid var(--outline-variant); border-radius: var(--radius);
+  background: var(--surface);
+}
+.m-rule-row__line { display: flex; align-items: flex-start; gap: var(--space-base); }
+.m-rule-row__icon { flex: 0 0 auto; margin-top: 1px; font-size: 19px; color: var(--secondary); }
+.m-rule-row__text {
+  flex: 1 1 auto; min-width: 0;
+  font-family: var(--font-serif); font-size: 15.5px; line-height: 1.4;
+  color: var(--on-surface); text-wrap: pretty;
+}
+/* What the rule is made of, under what it says. */
+.m-rule-row__body {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs);
+  padding-left: 27px;
+}
+.m-rule-row--unavailable { border-color: var(--error); }
+.m-rule-row--unavailable .m-rule-row__icon,
+.m-rule-row--unavailable .m-rule-row__text { color: var(--error); }
+/* Still applies, and cannot be read. Not an error — nothing is broken and
+   nothing should be removed. */
+.m-rule-row--private { border-color: var(--gold); }
+.m-rule-row--private .m-rule-row__icon { color: var(--gold); }
+.m-rule-row--private .m-rule-row__text { color: var(--on-surface-variant); }
+`,
+  },
+
+  {
+    name: "LockedRole",
+    cls: "m-locked-role",
+    group: "Display",
+    summary: "A Role that cannot be edited, and the one thing about it that can.",
+    variants: {},
+    notes: [
+      "The lock is on every row, not only on the card. A row lifted out of its explanation still has to say it is not yours to change.",
+      "The name is --on-surface-variant, one step back from an editable Role's. It is being listed, not offered.",
+      "Exactly one control. The moment a second appears, the surface has stopped reading as locked and the decision behind it (ADR-0016) has been reversed by accident.",
+    ],
+    examples: [
+      '<li class="m-locked-role"><span class="material-symbols-outlined m-locked-role__lock">lock</span><span class="m-locked-role__name">Preacher</span><span class="m-unitfield m-unitfield--sm"><input type="number" min="0" step="0.25" value="4" /><span class="m-unitfield__unit">weeks\' rest</span></span></li>',
+    ],
+    css: `
+.m-locked-role {
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: 8px var(--space-sm);
+  border: 1px solid var(--outline-variant); border-radius: var(--radius);
+  background: var(--surface-container-low);
+}
+.m-locked-role__lock { flex: 0 0 auto; font-size: 17px; color: var(--outline); }
+.m-locked-role__name {
+  flex: 1 1 auto; min-width: 0;
+  font-family: var(--font-serif); font-size: 16px; line-height: 1.3;
+  color: var(--on-surface-variant);
+}
 `,
   },
 
@@ -791,10 +977,11 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     group: "Layout",
     summary:
       "One line of a list: an optional leading avatar or medallion, a title, an optional second line, something trailing. The shape the phone already used, adopted whole rather than reinvented.",
-    variants: { variant: ["default", "interactive"], title: ["sans", "serif"] },
+    variants: { variant: ["default", "interactive", "current"], title: ["sans", "serif"] },
     notes: [
       "On a phone the trailing action is always visible — there is no hover on touch.",
       "A serif title is for something a person reads: a hymn, a Role, somebody's name. Sans is for everything operational.",
+      "--current is for a Row that is a DESTINATION: a list where picking one changes a pane beside it, rather than navigating away. Same job as `.m-picklist__item--current`, and it carries the same 3px edge on purpose, so a screen holding both kinds of list says \"you are here\" once rather than twice. A Row that merely leads somewhere never wears it.",
     ],
     examples: [
       '<div class="m-row"><span class="m-avatar m-avatar--sm">SA</span><div class="m-row__main"><div class="m-row__title">Sarah Adams</div><div class="m-row__sub">Elder · Kids Ministry</div></div><span class="m-badge m-badge--secondary">Elder</span></div>',
@@ -809,6 +996,7 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 .m-row:last-child, .m-row--last { border-bottom: 0; }
 .m-row--interactive { cursor: pointer; }
 .m-row--interactive:hover { background: var(--surface-container-low); }
+.m-row--current { background: var(--surface-container-low); box-shadow: inset 3px 0 0 var(--primary); }
 .m-row__main { flex: 1; min-width: 0; }
 .m-row__title {
   font-family: var(--font-sans); font-size: 15.5px; font-weight: 500; color: var(--on-surface);

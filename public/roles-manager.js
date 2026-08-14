@@ -53,6 +53,16 @@ window.RolesManager = () => ({
     draftId: null,
     saveAttempted: false,
 
+    // What the pane is showing (MS-234). Three destinations, one pane: the Role
+    // you have open, the six locked Sunday Roles, or the people no rota offers.
+    //
+    // ⚠ The last two are NOT about the Role you have open, which is why they
+    // stopped being cards stacked under the list. They are church-wide, read
+    // rarely, and each one wants width rather than a 372px column — so they are
+    // two rows under the list and they open here. Only one thing can be open,
+    // which is what lets the phone keep showing exactly one of list-or-pane.
+    pane: 'role',
+
     // The rule being composed, before it is added to the draft. One pair of
     // pickers, not one per kind: the kind decides what the second list offers,
     // so the two read as a sentence — "Cannot serve together if | Marriage".
@@ -117,10 +127,25 @@ window.RolesManager = () => ({
             this.currentUser = user;
             try {
                 await this.loadEverything();
+                this.openFirstRole();
             } finally {
                 this.loading = false;
             }
         });
+    },
+
+    // ⚠ A Role is ALWAYS open (MS-234). What stood here was a 520px dashed box
+    // saying "Choose a Role on the left" — the first impression of the whole
+    // screen, carrying no information, on a page that is half empty until you
+    // click. The only empty pane left is a church with no Servant Roles at all,
+    // and that one says what a serving Role is.
+    //
+    // Runs after loadEverything, never before: `servantRoles` reads
+    // `roleDefinitions`, and seeding from an empty list would open nothing and
+    // then not try again.
+    openFirstRole() {
+        if (this.draft || !this.hasServantRoles) return;
+        this.startEdit(this.servantRoles[0]);
     },
 
     // Kept for any shell header that DOES draw a back arrow. This page's no
@@ -130,8 +155,8 @@ window.RolesManager = () => ({
     listenForShellBack() {
         if (typeof document === 'undefined' || !document.addEventListener) return;
         document.addEventListener('mobile-header:back', () => {
-            if (this.draft) {
-                this.cancelEdit();
+            if (this.paneOpen) {
+                this.backToList();
                 return;
             }
             window.location.href = this.homeHref;
@@ -190,8 +215,19 @@ window.RolesManager = () => ({
             const all = snap.docs.map(doc => Object.assign({ id: doc.id }, doc.data()));
             const takesLiturgicalSlug = def =>
                 RolesCore.LITURGICAL_SLUGS.indexOf(def.slug || RolesCore.slugify(def.name)) !== -1;
+            // ⚠ `clashesWith` is the NAME of the built-in Role, not its slug.
+            // This message used to print the stored id — "clashes with the
+            // built-in Role “prayer”" — on the one screen that must never show
+            // one, and it is the editor's only hint about which Role is meant.
             this.conflictingDefinitions = all.filter(takesLiturgicalSlug)
-                .map(def => Object.assign({}, def, { slug: def.slug || RolesCore.slugify(def.name) }));
+                .map(def => {
+                    const slug = def.slug || RolesCore.slugify(def.name);
+                    const builtIn = RolesCore.LITURGICAL_ROLES.find(role => role.slug === slug);
+                    return Object.assign({}, def, {
+                        slug: slug,
+                        clashesWith: (builtIn && builtIn.name) || slug,
+                    });
+                });
             this.roleDefinitions = all.filter(def => !takesLiturgicalSlug(def))
                 .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         } catch (e) {
@@ -291,6 +327,68 @@ window.RolesManager = () => ({
         return count === 1 ? '1 rule' : `${count} rules`;
     },
 
+    // How much rest the Role owes, on the row. Says the unit, because a bare
+    // number of weeks read as a number of anything is a rota that rests people
+    // for four days — and takes the singular, which the locked card's own
+    // static "weeks' rest" never did.
+    restLabel(role) {
+        const weeks = RolesCore.intensityOf(role);
+        return weeks === 1 ? "1 week's rest" : `${weeks} weeks' rest`;
+    },
+
+    // One mark per place, in the order they are set, so "two women and a man"
+    // is readable without opening the Role. The mark is short enough to fit a
+    // row; `title` carries the words for anyone who needs them.
+    placeMarks(role) {
+        const marks = {
+            [RolesCore.REQUIREMENTS.MALE]: 'M',
+            [RolesCore.REQUIREMENTS.FEMALE]: 'W',
+            [RolesCore.REQUIREMENTS.EITHER]: '•',
+        };
+        return ((role && role.slots) || []).map(slot => ({
+            id: slot.id,
+            mark: marks[slot.requirement] || '•',
+            label: this.requirementLabel(slot.requirement),
+            either: slot.requirement === RolesCore.REQUIREMENTS.EITHER,
+        }));
+    },
+
+    // The one thing on a row that needs acting on: a rule that cannot run.
+    //
+    // ⚠ Asks the model, never the screen. `unavailableRestrictions` has been in
+    // RolesCore since MS-170 with no reader at all — the editor could only find
+    // out by opening every Role in turn and reading the red sentences. The
+    // available set is the same one `isRuleAvailable` uses, so the row and the
+    // opened Role can never disagree about which rules are broken.
+    unavailableRuleLabel(role) {
+        const bad = RolesCore.unavailableRestrictions(role, this.knownRelationshipTypes);
+        if (!bad.length) return '';
+        return bad.length === 1 ? '1 rule needs attention' : `${bad.length} rules need attention`;
+    },
+
+    // ── The three things the pane can be showing ─────────────────────────────
+
+    // Opening a church-wide destination closes whatever Role was open, because
+    // there is one pane. Leaving a Role open behind it would put an unsaved
+    // draft somewhere the editor cannot see it.
+    openPane(name) {
+        if (this.draft) this.cancelEdit();
+        this.pane = name;
+    },
+
+    // Below the split's collapse the list and the pane are one at a time, and
+    // this is the question the page asks to decide which.
+    get paneOpen() {
+        return this.pane !== 'role' || !!this.draft;
+    },
+
+    // The only way back on a narrow screen — out of whatever is open, to the
+    // list. A Role is re-opened on a desktop by the seed, never here.
+    backToList() {
+        if (this.draft) this.cancelEdit();
+        this.pane = 'role';
+    },
+
     // Servant Roles only — the liturgical ones are counted nowhere, because
     // they live in their own locked card and are not part of this list.
     get roleCountLabel() {
@@ -364,6 +462,9 @@ window.RolesManager = () => ({
         });
         this.draftId = role.id;
         this.saveAttempted = false;
+        // One pane: opening a Role takes it back off whichever church-wide
+        // destination was showing.
+        this.pane = 'role';
         this.resetRuleForm();
         // On a narrow screen the editor replaces the list rather than sitting
         // beside it, so the view has to move with it — otherwise opening a Role
@@ -845,6 +946,19 @@ window.RolesManager = () => ({
         return RolesCore.validateRestriction(rule, this.knownRelationshipTypes).valid;
     },
 
+    // ⚠ NOT the same question as availability, and drawing them the same is the
+    // fault this fixes. A rule built on a tag an elder keeps private is
+    // perfectly valid — `validateRestriction` only asks that a tagId is there —
+    // so it used to render identically to a working rule while `ruleSentence`
+    // said something the editor could do nothing about. It gets its own edge,
+    // and the edge is gold: red says "remove this", and removing it would throw
+    // away a rule an elder still means.
+    isRulePrivate(rule) {
+        const kind = rule && rule.kind;
+        if (kind !== RolesCore.RESTRICTIONS.REQUIRE_TAG && kind !== RolesCore.RESTRICTIONS.EXCLUDE_TAG) return false;
+        return this.hiddenTagIds.indexOf(rule.tagId) !== -1;
+    },
+
     // ── Liturgical intensity ─────────────────────────────────────────────────
     //
     // The ONE thing about a liturgical Role an editor may change, and it is not
@@ -859,6 +973,13 @@ window.RolesManager = () => ({
 
     liturgicalIntensity(slug) {
         return EventsCore.roleIntensity(this.series, slug);
+    },
+
+    // The unit beside that box. It was static text — so a Role owed one week
+    // read "1 weeks' rest" — and the UnitField takes it as content precisely so
+    // it can be said properly.
+    liturgicalRestUnit(slug) {
+        return this.liturgicalIntensity(slug) === 1 ? "week's rest" : "weeks' rest";
     },
 
     async setLiturgicalIntensity(slug, raw) {
