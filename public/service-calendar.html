@@ -154,6 +154,105 @@
         tr:hover .sticky-column, tr:hover .sticky-col-left {
             background-color: inherit;
         }
+
+        /* ── Planning view (MS-245) ──────────────────────────────────────────
+           The liturgy columns are always in the markup and hidden by default,
+           so turning the Planning view on is a class rather than a re-render.
+           A re-render would take away the box somebody was mid-way through
+           typing into. */
+        .planning-col { display: none; }
+        .planning-mode .planning-col { display: table-cell; }
+
+        /* Things that appear inside an existing cell in the Planning view, so
+           they cannot use .planning-col — a table-cell inside a td is not a
+           thing. The Assigned badge is the only one so far. */
+        .planning-only { display: none; }
+        .planning-mode .planning-only { display: flex; }
+
+        /* Assigned — who is down to WRITE this Sunday. Sits at the leading edge
+           of the row, before the date. */
+        .assigned-btn {
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            width: 3rem;
+            flex: 0 0 auto;
+            padding: 2px;
+            border-radius: var(--radius-sm);
+            transition: background-color 0.15s ease;
+        }
+        .assigned-btn:hover { background-color: var(--surface-container); }
+
+        /* A cell somebody else is in (MS-246). Faded and not-allowed, so the
+           cell says it is shut before you click it. */
+        .cell-held {
+            cursor: not-allowed !important;
+            opacity: .75;
+        }
+        .held-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        .held-name {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            color: var(--on-surface-variant);
+        }
+        .assigned-name {
+            font-size: 10px;
+            line-height: 1.1;
+            max-width: 3rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--on-surface-variant);
+        }
+
+        /* The Directory folds back to a rail so the table gets the page.
+           Everything here is declared rather than left to competing utility
+           classes: `justify-between` and `justify-center` on one element is
+           settled by stylesheet order, not by which one Alpine wrote last,
+           which is how the compass ended up sitting off to one side. */
+        .planning-rail {
+            width: 3.5rem !important;
+            min-width: 3.5rem;
+            transition: width 0.2s ease;
+        }
+        .planning-rail:not(.rail-open) .rail-hidden { display: none !important; }
+        .planning-rail:not(.rail-open) h2 { justify-content: center !important; }
+        .planning-rail:not(.rail-open) .rail-panel {
+            padding-left: 0.25rem !important;
+            padding-right: 0.25rem !important;
+            align-items: center;
+        }
+
+        /* Opened, the Directory is a drawer LYING OVER the table rather than
+           pushing it aside — so a glance at the dates costs nothing and the
+           columns do not jump about while you read them. */
+        .planning-rail.rail-open {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 20rem !important;
+            min-width: 20rem;
+            z-index: 50;
+        }
+        .planning-rail.rail-open .rail-panel {
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+        }
+        .dark .planning-rail.rail-open .rail-panel {
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+        }
+
+        /* Wide work wants the whole screen, not the reading column. */
+        .planning-wide { max-width: none !important; }
     </style>
     <!-- Firebase SDKs -->
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -175,6 +274,11 @@
     <script src="docx-importer.js"></script>
     <script src="bible-data.js"></script>
     <script src="verse-picker.js"></script>
+    <script src="hymn-registry.js"></script>
+    <script src="mosaic-identity.js"></script>
+    <script src="service-authorship.js"></script>
+    <script src="service-presence.js"></script>
+    <script src="person-photo-core.js"></script>
     <link href="verse-picker.css" rel="stylesheet" />
 </head>
 
@@ -191,7 +295,7 @@
          class="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-primary/20 backdrop-blur-sm"
          x-transition x-cloak>
         <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl max-w-sm w-full p-6"
-             @click.away="showPersonSelector = false">
+             @click.away="closePersonSelector()">
             
             <div class="flex items-center gap-3 mb-6 text-primary">
                 <span class="material-symbols-outlined text-2xl">person_search</span>
@@ -233,7 +337,7 @@
                                 <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
                                 <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
                             </div>
-                            <template x-if="!p.isNew">
+                            <template x-if="!p.isNew && showLastPrayed">
                                 <span class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
                             </template>
                         </button>
@@ -242,7 +346,7 @@
             </div>
 
             <div class="flex justify-end gap-3">
-                <button @click="showPersonSelector = false" 
+                <button @click="closePersonSelector()" 
                         class="px-4 py-2 rounded-full font-label-md text-sm text-secondary hover:bg-surface-container transition-colors">
                     Cancel
                 </button>
@@ -461,24 +565,50 @@
         </div>
     </header>
 
-    <main class="flex-grow flex flex-col md:flex-row gap-margin px-margin pb-md pt-base overflow-hidden max-w-[1600px] w-full mx-auto">
-        <!-- Sidebar Navigation -->
-        <aside class="hidden md:flex md:w-80 flex-shrink-0 flex-col md:overflow-hidden">
-            <div class="flex-grow bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col overflow-hidden">
+    <main :class="planning && view === 'table' ? 'planning-wide px-sm' : 'max-w-[1600px] px-margin'"
+          class="relative flex-grow flex flex-col md:flex-row gap-margin pb-md pt-base overflow-hidden w-full mx-auto transition-all duration-300">
+        <!-- Sidebar Navigation. In the Planning view it folds back to a rail
+             against the left edge so the table gets the width, and the arrow
+             swings it out over the table as a drawer. -->
+        <aside :class="{ 'planning-rail': planning && view === 'table',
+                         'rail-open': planning && view === 'table' && railOpen,
+                         'md:w-80': !(planning && view === 'table') }"
+               class="hidden md:flex flex-shrink-0 flex-col md:overflow-hidden transition-all duration-300">
+            <div class="rail-panel flex-grow bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col overflow-hidden">
                 <h2 class="font-headline-md text-primary mb-sm flex items-center justify-between flex-shrink-0">
                     <div class="flex items-center gap-2">
                         <span class="material-symbols-outlined">explore</span>
-                        Directory
+                        <span :class="isRail && !railOpen ? 'rail-hidden' : ''">Directory</span>
                     </div>
-                    <button onclick="window.jumpToUpcoming()" class="p-1 text-secondary hover:text-primary rounded-full hover:bg-surface-container transition-colors" title="Jump to upcoming service">
+                    <button onclick="window.jumpToUpcoming()"
+                            :class="isRail && !railOpen ? 'rail-hidden' : ''"
+                            class="p-1 text-secondary hover:text-primary rounded-full hover:bg-surface-container transition-colors" title="Jump to upcoming service">
                         <span class="material-symbols-outlined text-[20px]">event_repeat</span>
                     </button>
                 </h2>
-                <nav id="sidebar-nav" class="flex-grow space-y-xs overflow-y-auto pr-2 custom-scrollbar">
+                <!-- A click anywhere in here is a date being chosen, so the
+                     drawer shuts behind it: open, click, gone. -->
+                <nav id="sidebar-nav" class="flex-grow space-y-xs overflow-y-auto pr-2 custom-scrollbar"
+                     @click="if (isRail) railOpen = false"
+                     :class="isRail && !railOpen ? 'rail-hidden' : ''">
                     <!-- Nav links will be injected here -->
                 </nav>
+                <!-- The rail's one control: swing the dates out over the table
+                     and back. It does NOT leave the Planning view — the button
+                     bottom-right does that. -->
+                <button x-show="isRail" x-cloak
+                        @click="railOpen = !railOpen"
+                        :title="railOpen ? 'Close the dates' : 'Open the dates'"
+                        class="mt-sm p-2 self-center text-secondary hover:text-primary rounded-full hover:bg-surface-container transition-colors">
+                        <span class="material-symbols-outlined" x-text="railOpen ? 'chevron_left' : 'chevron_right'"></span>
+                </button>
             </div>
         </aside>
+
+        <!-- Clicking off the drawer shuts it too, so it never sits open over
+             the columns after you have finished with it. -->
+        <div x-show="isRail && railOpen" x-cloak @click="railOpen = false"
+             class="absolute inset-0 z-40"></div>
 
         <!-- Calendar Container -->
         <div class="flex-grow min-w-0 flex flex-col overflow-hidden pr-14 md:pr-0">
@@ -520,13 +650,27 @@
                     </div>
                 </div>
 
-                <div x-show="view === 'table'" x-cloak id="table-view" class="flex-grow overflow-hidden flex flex-col">
+                <div x-show="view === 'table'" x-cloak id="table-view"
+                     :class="planning ? 'planning-mode' : ''"
+                     class="flex-grow overflow-hidden flex flex-col">
                     <div id="calendar-table-container" class="flex-grow overflow-hidden flex flex-col">
                         <!-- Table will be injected here -->
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- The way into the Planning view: the table opened out to every
+             liturgy slot, for writing many Sundays in one sitting. Only
+             offered on the table, which is the only view it changes. -->
+        <button x-show="view === 'table'" x-cloak
+                @click="planning = !planning"
+                :title="planning ? 'Back to the ordinary table' : 'Open every liturgy column'"
+                :class="planning ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-primary'"
+                class="fixed bottom-6 right-6 z-40 flex items-center gap-2 pl-4 pr-5 py-3 rounded-full border border-outline-variant shadow-lg hover:shadow-xl transition-all font-label-md text-sm">
+            <span class="material-symbols-outlined text-[20px]" x-text="planning ? 'close_fullscreen' : 'open_in_full'"></span>
+            <span x-text="planning ? 'Close Planning view' : 'Planning view'"></span>
+        </button>
     </main>
 
     <!-- Mobile Directory Modal -->

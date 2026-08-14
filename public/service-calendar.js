@@ -21,8 +21,32 @@ async function recomputeLastPrayerDate(personId) {
 function calendarPage() {
     return {
         view: localStorage.getItem('calendarView') || 'list',
+        // The Planning view: the table opened out to every liturgy slot, for
+        // writing many Sundays in one sitting (MS-245). Remembered, because
+        // somebody who is planning is planning for the evening, not for one
+        // page load.
+        planning: localStorage.getItem('calendarPlanning') === 'true',
+        // The Directory drawer, swung out over the table. Never remembered —
+        // it is a glance at the dates, not a state you leave a page in.
+        railOpen: false,
         showHistory: false,
         showDirectory: false,
+
+        // The Directory is a rail only in the Planning view, and only on the
+        // table. Written once here because the markup asks four times.
+        get isRail() {
+            return this.planning && this.view === 'table';
+        },
+
+        // "Last prayed for" under each name in the person search.
+        //
+        // It is pastoral-prayer information and it belongs to the question
+        // "who has waited longest to be prayed for". Asking who is down to
+        // WRITE a Sunday is not that question, and the date under every name
+        // is just noise to read past.
+        get showLastPrayed() {
+            return this.selectorField !== ASSIGNED_FIELD;
+        },
         peopleRegistry: [],
         peopleFuse: null,
 
@@ -103,8 +127,51 @@ function calendarPage() {
             this.showPersonSelector = true;
         },
         
+        // One field, one write, nothing else. See the guard in
+        // savePersonSelection for why this does not go through the batch there.
+        async saveAssignedWriter() {
+            this.saving = true;
+            try {
+                const dateKey = this.selectorDateKey;
+                const value = this.selectedPersonRef.id
+                    ? { id: this.selectedPersonRef.id, name: this.selectedPersonRef.name || '' }
+                    : null;
+
+                const ref = db.collection('services').doc(dateKey);
+                const update = {
+                    [ASSIGNED_FIELD]: value,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                try {
+                    await ref.update(update);
+                } catch (e) {
+                    if (e.code !== 'not-found') throw e;
+                    await ref.set(update, { merge: true });
+                }
+
+                if (!serviceDataMap[dateKey]) serviceDataMap[dateKey] = {};
+                serviceDataMap[dateKey][ASSIGNED_FIELD] = value;
+                injectServiceData(serviceDataMap);
+
+                this.closePersonSelector();
+            } catch (err) {
+                console.error('Error saving who is assigned:', err);
+                alert('Failed to save.');
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        // Every way out of the person picker comes through here, so no exit
+        // can leave a box locked behind it (MS-246).
+        closePersonSelector() {
+            this.showPersonSelector = false;
+            PresenceStore.release();
+        },
+
         getRoleName(field) {
             const names = {
+                'assignedWriter': 'Assigned to write this Sunday',
                 'serviceLeader': 'Service Leader',
                 'preacher': 'Preacher',
                 'musicLeader': 'Music Leader',
@@ -118,9 +185,22 @@ function calendarPage() {
         
         async savePersonSelection() {
             if (!this.selectorDateKey || !this.selectorField) return;
-            
+
             if (!this.selectedPersonRef.id && this.selectedPersonRef.name) {
                 alert('Please select a person from the list or add them as a new person.');
+                return;
+            }
+
+            // ⚠ Assigned leaves before any of the machinery below.
+            //
+            // Everything past this point treats a person on a Sunday as a
+            // person who SERVED: it writes an involvement record and moves
+            // their number in the fairness engine. Being down to write an order
+            // of service is not serving, and running it through here would make
+            // whoever volunteers for the most Sundays look over-used and stop
+            // being asked. One field, nothing else touched.
+            if (this.selectorField === ASSIGNED_FIELD) {
+                await this.saveAssignedWriter();
                 return;
             }
 
@@ -264,8 +344,10 @@ function calendarPage() {
                     }
                 }
 
-                this.showPersonSelector = false;
-                // Full reload to ensure everything is perfectly in sync with Firestore
+                this.closePersonSelector();
+                // Redraw from the map the live listener maintains. The write
+                // above will arrive through that listener anyway; this just
+                // puts it on screen without waiting for the round trip.
                 if (window.loadServiceData) await window.loadServiceData();
             } catch (error) {
                 console.error('Error saving person selection:', error);
@@ -326,6 +408,13 @@ function calendarPage() {
                 localStorage.setItem('calendarView', val);
                 if (window.refreshCalendar) window.refreshCalendar(this.showHistory);
             });
+            this.$watch('planning', val => {
+                localStorage.setItem('calendarPlanning', val ? 'true' : 'false');
+                // Leaving the Planning view puts the Directory back where it
+                // belongs; a drawer left open would hang over the ordinary
+                // sidebar.
+                this.railOpen = false;
+            });
             this.$watch('showHistory', val => {
                 if (window.refreshCalendar) window.refreshCalendar(val);
             });
@@ -366,6 +455,12 @@ function calendarPage() {
             try {
                 const snap = await db.collection('people').get();
                 this.peopleRegistry = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                // The Assigned badges are drawn outside this component and need
+                // a photo for a given id. Re-drawn once the faces are here,
+                // since the table is usually on screen before the directory is.
+                peopleById = {};
+                this.peopleRegistry.forEach(p => { peopleById[p.id] = p; });
+                injectServiceData(serviceDataMap);
                 this.peopleFuse = new Fuse(this.peopleRegistry, {
                     keys: ['name'],
                     threshold: 0.4,
@@ -381,6 +476,37 @@ function calendarPage() {
 
 let allSundays = [];
 let serviceDataMap = {};
+
+// The directory keyed by id, so a badge can find a face. Kept at module scope
+// because the rendering happens here rather than inside the Alpine component
+// that fetches it.
+let peopleById = {};
+
+// Who is signed in, as a Person. Null until it resolves, and null for good on
+// an account with no Person attached — in which case an edit records no
+// authorship rather than a stamp nobody can be named from.
+let currentIdentity = null;
+
+// The hymn index behind the Planning view's hymn columns. Shared with the Order
+// of Service so both offer the same hymns for the same typing — see
+// hymn-registry.js.
+let hymnIndex = { hymns: [], fuse: null };
+
+// Fetched alongside the calendar rather than before it: an empty index means
+// the dropdown offers nothing for a moment, not that the page is broken, and
+// you can still type a hymn the index has never heard of.
+async function loadHymnIndex() {
+    if (typeof firebase === 'undefined' || typeof db === 'undefined') return;
+    try {
+        hymnIndex = await HymnRegistry.load({
+            getHymnIndex: firebase.app().functions('us-central1').httpsCallable('getHymnIndex'),
+            db: db,
+            Fuse: typeof Fuse !== 'undefined' ? Fuse : null
+        });
+    } catch (e) {
+        console.error('Could not load the hymn index:', e);
+    }
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     const startDate = new Date(2023, 6, 9); // July 9, 2023 (Month is 0-indexed)
@@ -398,7 +524,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const showHistory = false;
     window.refreshCalendar(showHistory);
-    
+
+    loadHymnIndex();
+
     // Wait for service data to load so layout is final before we scroll
     await loadServiceData();
     
@@ -911,6 +1039,100 @@ function renderList(grouped) {
     });
 }
 
+// The liturgy columns the Planning view adds (MS-245).
+//
+// One list, read three times — the header, the cell, and the editor that opens
+// when the cell is clicked. Adding a slot to the order of service means adding
+// a line here and nothing else; three hand-kept lists is how a column ends up
+// with a heading and no way to type into it.
+//
+// The existing Pastoral Prayer column carries the two PEOPLE prayed for. The
+// one added here is its scripture REFERENCE, which is a different thing and a
+// different field.
+//
+// ⚠ That reference is stored as `liturgy.scriptureReading`. The name is a
+// leftover — the Order of Service labels the very same field "Pastoral Prayer"
+// (service-builder.js `_MOVEMENTS`), and CANONICAL_MAPPING has both 'Scripture
+// Reading' and 'Pastoral Prayer' pointing at it. The heading here follows what
+// the Order of Service calls it, because that is what the room calls it.
+//
+// The hymn names are the ones the code stores (hymnMid1, hymnEnd1 …) rather
+// than the Hymn 3/4/5/6 people say in the room. Jonathan's call — the fields
+// keep their names, so the headings match what is underneath them.
+//
+// In liturgical order, so reading left to right reads the service.
+const PLANNING_COLUMNS = [
+    { label: 'Preparatory',           cell: 'prep-hymn-cell',       field: 'preparatoryHymn',   type: 'hymn'  },
+    { label: 'Hymn 1',                cell: 'hymn1-cell',           field: 'hymn1',             type: 'hymn'  },
+    { label: 'Hymn 2',                cell: 'hymn2-cell',           field: 'hymn2',             type: 'hymn'  },
+    { label: 'Call to Confession',    cell: 'call-confession-cell', field: 'callToConfession',  type: 'verse' },
+    { label: 'Assurance of Pardon',   cell: 'assurance-cell',       field: 'assuranceOfPardon', type: 'verse' },
+    { label: 'Hymn Mid 1',            cell: 'hymn-mid1-cell',       field: 'hymnMid1',          type: 'hymn'  },
+    { label: 'Hymn Mid 2',            cell: 'hymn-mid2-cell',       field: 'hymnMid2',          type: 'hymn'  },
+    { label: 'Pastoral Prayer Ref',   cell: 'prayer-ref-cell',      field: 'scriptureReading',  type: 'verse' },
+    { label: 'Hymn End 1',            cell: 'hymn-end1-cell',       field: 'hymnEnd1',          type: 'hymn'  },
+    { label: 'Hymn End 2',            cell: 'hymn-end2-cell',       field: 'hymnEnd2',          type: 'hymn'  },
+    { label: 'Benediction',           cell: 'benediction-cell',     field: 'benediction',       type: 'verse' },
+];
+
+// Liturgy fields edited with the scripture picker rather than a plain box.
+const LITURGY_VERSE_FIELDS = ['sermon'].concat(
+    PLANNING_COLUMNS.filter(c => c.type === 'verse').map(c => c.field));
+
+const LITURGY_HYMN_FIELDS = PLANNING_COLUMNS
+    .filter(c => c.type === 'hymn').map(c => c.field);
+
+// Who is down to WRITE this Sunday's order of service.
+//
+// ⚠ NOT a Role, and NOT an Involvement. Everywhere else on this page, putting a
+// person on a Sunday means they served: it writes an involvement record and
+// moves their number in the fairness engine. This one deliberately does none of
+// that. It is a note on a planning sheet saying who agreed to fill this row in,
+// and being assigned five Sundays must never make somebody look over-served.
+//
+// Deliberately short-lived. When per-element authorship arrives — who actually
+// chose each hymn — this is what it replaces. The name says "writer" rather
+// than the vaguer "assigned" so that the two can coexist without either being
+// mistaken for the other.
+const ASSIGNED_FIELD = 'assignedWriter';
+
+// A Person's first name, for the label under the badge. The badge is about
+// 3rem wide and a full name does not fit; the whole name is on the tooltip.
+function firstNameOf(name) {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    return parts.length ? parts[0] : '';
+}
+
+// The Assigned badge for one Sunday: a photo with a first name under it, or a
+// faint invitation when nobody is down for it yet.
+//
+// `person` is the directory record, looked up for the photo. A Service stores
+// only {id, name}, so a Person with no record found still shows — as initials.
+// The alternative, hiding somebody because their directory entry has not
+// loaded, would read as "nobody is assigned" and get them assigned twice.
+function assignedBadgeHtml(assigned, person) {
+    const name = (assigned && assigned.name) || '';
+    if (!name) {
+        return '<span class="material-symbols-outlined text-[18px] opacity-40">person_add</span>';
+    }
+
+    const photoUrl = person && person.photoUrl;
+    const face = photoUrl
+        ? `<img src="${escapeHtml(photoUrl)}" alt="" style="${escapeHtml(PersonPhotoCore.frameStyle(person.photoCrop))}">`
+        : escapeHtml(PersonPhotoCore.initialsOf(name));
+
+    return `<span class="m-avatar m-avatar--sm">${face}</span>` +
+           `<span class="assigned-name">${escapeHtml(firstNameOf(name))}</span>`;
+}
+
+// How a hymn slot reads in a cell. A slot holds {id, name}: a chosen hymn has
+// both, one typed in freehand has only a name, and an empty one has neither.
+function hymnCellText(slot) {
+    if (!slot) return '—';
+    if (typeof slot === 'string') return slot || '—';
+    return slot.name || '—';
+}
+
 function renderTable(grouped) {
     const container = document.getElementById('calendar-table-container');
     container.innerHTML = '';
@@ -935,6 +1157,9 @@ function renderTable(grouped) {
             <th class="px-md py-sm border-b border-outline-variant">Music</th>
             <th class="px-md py-sm border-b border-outline-variant">Prayers</th>
             <th class="px-md py-sm border-b border-outline-variant">Pastoral Prayer</th>
+            ${PLANNING_COLUMNS.map(c =>
+                `<th class="px-md py-sm border-b border-outline-variant planning-col whitespace-nowrap">${c.label}</th>`
+            ).join('')}
             <th class="px-md py-sm border-b border-outline-variant text-right sticky-column">Actions</th>
         </tr>
     `;
@@ -955,7 +1180,7 @@ function renderTable(grouped) {
                 separatorRow.id = `table-month-${year}-${month}`;
                 separatorRow.className = 'sticky-month-row bg-surface-container-low/50 scroll-mt-24';
                 separatorRow.innerHTML = `
-                    <td colspan="9" class="px-md py-2 z-25 bg-surface-container-low/90 backdrop-blur-sm">
+                    <td colspan="${10 + PLANNING_COLUMNS.length}" class="px-md py-2 z-25 bg-surface-container-low/90 backdrop-blur-sm">
                         <h3 class="font-headline-md text-sm uppercase tracking-wider text-secondary">${month} ${year}</h3>
                     </td>
                 `;
@@ -971,7 +1196,10 @@ function renderTable(grouped) {
                     
                     row.innerHTML = `
                         <td class="px-md py-md whitespace-nowrap sticky-col-left">
-                            <span class="font-body-md text-on-surface">${date.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                            <div class="flex items-center gap-2">
+                                <button class="assigned-btn planning-only" data-assigned-for="${formattedDate}" title="Assign someone to write this Sunday"></button>
+                                <span class="font-body-md text-on-surface">${date.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                            </div>
                         </td>
                         <td class="px-md py-md min-w-[160px]">
                             <div class="sermon-cell font-body-md text-primary text-sm">—</div>
@@ -997,6 +1225,10 @@ function renderTable(grouped) {
                         <td class="px-md py-md whitespace-nowrap">
                             <div class="pastoral-prayer-cell font-body-md text-on-surface-variant text-xs space-y-0.5">—</div>
                         </td>
+                        ${PLANNING_COLUMNS.map(c => `
+                        <td class="px-md py-md planning-col min-w-[150px] relative">
+                            <div class="${c.cell} font-body-md text-on-surface-variant text-sm">—</div>
+                        </td>`).join('')}
                         <td class="px-md py-md text-right whitespace-nowrap sticky-column">
                             <div class="flex justify-end gap-xs">
                                 <button onclick="window.navigateToGuide('${formattedDate}')" title="Service Guide" class="p-2 text-secondary hover:text-primary hover:bg-surface-container rounded-full transition-colors">
@@ -1023,47 +1255,113 @@ function renderTable(grouped) {
  * Fetch all service documents from Firestore and inject summary info
  * (theme, service leader, preacher) into the matching calendar cards.
  */
+// Older saves used set() with merge and dotted key names like 'liturgy.sermon',
+// which Firestore stores as a literal field name containing a dot rather than
+// as a nested path. Normalize those back into their proper nested structure so
+// the display code (which reads svc.liturgy.sermon) finds the value.
+function normalizeServiceDoc(raw) {
+    const data = {};
+    for (const [key, val] of Object.entries(raw || {})) {
+        if (!key.includes('.')) {
+            data[key] = val;
+        }
+    }
+    for (const [key, val] of Object.entries(raw || {})) {
+        if (key.includes('.')) {
+            const parts = key.split('.');
+            let obj = data;
+            for (let i = 0; i < parts.length - 1; i++) {
+                if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) {
+                    obj[parts[i]] = {};
+                }
+                obj = obj[parts[i]];
+            }
+            const leaf = parts[parts.length - 1];
+            if (!obj[leaf]) obj[leaf] = val;
+        }
+    }
+    return data;
+}
+
+// Is this cell's editor open?
+//
+// Every inline editor on this page works the same way: it hides the cell and
+// puts an input or a picker in its place (see setupInlineEdit). So the cell
+// being hidden IS the signal that somebody is typing into it, and no separate
+// register of who-is-editing-what can drift out of step with the DOM.
+//
+// This is what makes a live calendar safe. A snapshot landing while you are
+// halfway through a hymn must not reach in and rewrite the box under your
+// hands; it updates every other cell and leaves yours alone until you are out
+// of it.
+function isCellBeingEdited(el) {
+    return !!el && el.style && el.style.display === 'none';
+}
+
+// Write a cell's text unless its editor is open. Reports whether it wrote, so
+// a caller can hold back the attributes that belong with the text (a person's
+// id has to travel with their name or the cell starts lying about who it is).
+function setCellText(el, text) {
+    if (!el || isCellBeingEdited(el)) return false;
+    el.textContent = text;
+    return true;
+}
+
+// Is anything inside this container being edited? For cells rebuilt wholesale
+// from innerHTML, where refreshing at the wrong moment does not overwrite the
+// box — it deletes it.
+function hasEditorOpen(container) {
+    if (!container || !container.querySelectorAll) return false;
+    return Array.from(container.querySelectorAll('*')).some(isCellBeingEdited);
+}
+
+let servicesUnsubscribe = null;
+
+// Listen to every Service, for as long as the page is open.
+//
+// This used to be a single get() at load, which meant the calendar showed you
+// the church as it was the moment you arrived and never mentioned that anything
+// had changed since. At a service guide session — a dozen men filling in
+// Sundays in the same room — that is the whole problem: you cannot see the work
+// happening beside you, and two people pick up the same Sunday because neither
+// can tell the other has it.
+//
+// Resolves on the first snapshot so the callers that await it (and then scroll)
+// still behave; every snapshot after that just re-injects.
 async function loadServiceData() {
     if (typeof db === 'undefined') return;
 
-    try {
-        const snapshot = await db.collection('services').get();
-        serviceDataMap = {};
-        snapshot.forEach(doc => {
-            const raw = doc.data();
-
-            // Older saves used set() with merge and dotted key names like 'liturgy.sermon',
-            // which Firestore stores as a literal field name containing a dot rather than
-            // as a nested path. Normalize those back into their proper nested structure so
-            // the display code (which reads svc.liturgy.sermon) finds the value.
-            const data = {};
-            for (const [key, val] of Object.entries(raw)) {
-                if (!key.includes('.')) {
-                    data[key] = val;
-                }
-            }
-            for (const [key, val] of Object.entries(raw)) {
-                if (key.includes('.')) {
-                    const parts = key.split('.');
-                    let obj = data;
-                    for (let i = 0; i < parts.length - 1; i++) {
-                        if (typeof obj[parts[i]] !== 'object' || obj[parts[i]] === null) {
-                            obj[parts[i]] = {};
-                        }
-                        obj = obj[parts[i]];
-                    }
-                    const leaf = parts[parts.length - 1];
-                    if (!obj[leaf]) obj[leaf] = val;
-                }
-            }
-
-            serviceDataMap[doc.id] = data;
-        });
-
+    if (servicesUnsubscribe) {
         injectServiceData(serviceDataMap);
-    } catch (e) {
-        console.error('Error loading service data for calendar:', e);
+        return;
     }
+
+    await new Promise((resolve) => {
+        let settled = false;
+        const settle = () => {
+            if (settled) return;
+            settled = true;
+            resolve();
+        };
+
+        servicesUnsubscribe = db.collection('services').onSnapshot(
+            (snapshot) => {
+                serviceDataMap = {};
+                snapshot.forEach(doc => {
+                    serviceDataMap[doc.id] = normalizeServiceDoc(doc.data());
+                });
+                injectServiceData(serviceDataMap);
+                settle();
+            },
+            (e) => {
+                console.error('Error loading service data for calendar:', e);
+                // A listener that failed is not a listener. Drop it so a later
+                // call can try again rather than sit on a dead subscription.
+                servicesUnsubscribe = null;
+                settle();
+            }
+        );
+    });
 }
 
 function injectServiceData(serviceMap) {
@@ -1078,6 +1376,15 @@ function injectServiceData(serviceMap) {
 
     // Walk through all rendered date cards/rows and inject data if a service exists
     document.querySelectorAll('[data-service-date]').forEach(el => {
+      // ⚠ ONE ROW MUST NOT TAKE THE PAGE WITH IT.
+      //
+      // Everything below runs inside a forEach, so an exception on any single
+      // Sunday abandons the loop and every row after it is left with no edit
+      // handlers at all — a page that is silently, entirely read-only, with
+      // nothing on screen to say why. That is exactly how the presence work
+      // broke both surfaces: one unstarted store, one TypeError, no clue.
+      // A row that fails is now one broken row.
+      try {
         const dateKey = el.dataset.serviceDate;
         const svc = serviceMap[dateKey] || {};
 
@@ -1163,27 +1470,29 @@ function injectServiceData(serviceMap) {
 
         const sermonCell = el.querySelector('.sermon-cell');
         if (sermonCell) {
-            sermonCell.textContent = (svc.liturgy && svc.liturgy.sermon) || '—';
+            setCellText(sermonCell, (svc.liturgy && svc.liturgy.sermon) || '—');
             if (canEdit) setupInlineEdit(sermonCell, dateKey, 'sermon');
         }
 
         const themeCell = el.querySelector('.theme-cell');
         if (themeCell) {
-            themeCell.textContent = svc.theme || '—';
+            setCellText(themeCell, svc.theme || '—');
             if (canEdit) setupInlineEdit(themeCell, dateKey, 'theme');
         }
 
         const leaderCell = el.querySelector('.leader-cell');
         if (leaderCell) {
-            leaderCell.textContent = svc.serviceLeader || '—';
-            leaderCell.setAttribute('data-person-id', svc.serviceLeaderId || '');
+            if (setCellText(leaderCell, svc.serviceLeader || '—')) {
+                leaderCell.setAttribute('data-person-id', svc.serviceLeaderId || '');
+            }
             if (canEdit) setupInlineEdit(leaderCell, dateKey, 'serviceLeader');
         }
 
         const preacherCell = el.querySelector('.preacher-cell');
         if (preacherCell) {
-            preacherCell.textContent = svc.preacher || '—';
-            preacherCell.setAttribute('data-person-id', svc.preacherId || '');
+            if (setCellText(preacherCell, svc.preacher || '—')) {
+                preacherCell.setAttribute('data-person-id', svc.preacherId || '');
+            }
             if (canEdit) setupInlineEdit(preacherCell, dateKey, 'preacher');
         }
 
@@ -1194,13 +1503,14 @@ function injectServiceData(serviceMap) {
             // hasBaptism so a stale candidate left in liturgy.baptism (e.g. after
             // the flag was toggled/derived off) isn't shown as an upcoming
             // baptism here when every other view hides it.
-            baptismCell.textContent = (svc.hasBaptism && baptismCandidateNames(svc)) || '—';
+            setCellText(baptismCell, (svc.hasBaptism && baptismCandidateNames(svc)) || '—');
         }
 
         const musicCell = el.querySelector('.music-cell');
         if (musicCell) {
-            musicCell.textContent = svc.musicLeader || '—';
-            musicCell.setAttribute('data-person-id', svc.musicLeaderId || '');
+            if (setCellText(musicCell, svc.musicLeader || '—')) {
+                musicCell.setAttribute('data-person-id', svc.musicLeaderId || '');
+            }
             if (canEdit) setupInlineEdit(musicCell, dateKey, 'musicLeader');
         }
 
@@ -1208,13 +1518,17 @@ function injectServiceData(serviceMap) {
         if (prayerFemaleCell) {
             const val = (svc.liturgy && svc.liturgy.prayerFemale) ? svc.liturgy.prayerFemale.name : '—';
             const id = (svc.liturgy && svc.liturgy.prayerFemale) ? svc.liturgy.prayerFemale.id : '';
-            prayerFemaleCell.textContent = val || '—';
-            prayerFemaleCell.setAttribute('data-person-id', id || '');
+            if (setCellText(prayerFemaleCell, val || '—')) {
+                prayerFemaleCell.setAttribute('data-person-id', id || '');
+            }
             if (canEdit) setupInlineEdit(prayerFemaleCell, dateKey, 'prayerFemale');
         }
 
+        // These two cells are rebuilt from innerHTML rather than written into,
+        // so a snapshot landing mid-edit would take the box away underneath the
+        // person typing in it. Leave the whole cell alone until they are out.
         const pastoralPrayerCell = el.querySelector('.pastoral-prayer-cell');
-        if (pastoralPrayerCell) {
+        if (pastoralPrayerCell && !hasEditorOpen(pastoralPrayerCell)) {
             pastoralPrayerCell.innerHTML = '';
             
             const maleRow = document.createElement('div');
@@ -1240,8 +1554,51 @@ function injectServiceData(serviceMap) {
             }
         }
 
+        // Who is down to write this Sunday. Shown only in the Planning view,
+        // which is the only place the question is being asked.
+        const assignedBtn = el.querySelector('.assigned-btn');
+        if (assignedBtn) {
+            const assigned = svc[ASSIGNED_FIELD] || null;
+            const person = assigned && assigned.id ? peopleById[assigned.id] : null;
+
+            // Somebody who cannot edit gets the face but not the invitation.
+            // The empty badge is an offer to do something, and an offer that
+            // does nothing when pressed is worse than no offer at all.
+            assignedBtn.innerHTML = (!canEdit && !assigned)
+                ? ''
+                : assignedBadgeHtml(assigned, person);
+            assignedBtn.title = assigned && assigned.name
+                ? `${assigned.name} is writing this Sunday`
+                : (canEdit ? 'Assign someone to write this Sunday' : '');
+
+            if (canEdit) {
+                assignedBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    window.openPersonSelector(dateKey, ASSIGNED_FIELD, {
+                        name: (assigned && assigned.name) || '',
+                        id: (assigned && assigned.id) || null
+                    });
+                };
+            }
+        }
+
+        // The Planning view's liturgy columns (MS-245). Present in the markup
+        // whether or not the Planning view is on, so turning it on is a class
+        // on the table rather than a re-render — a re-render would take away
+        // the box somebody was typing in.
+        const liturgy = svc.liturgy || {};
+        PLANNING_COLUMNS.forEach(col => {
+            const cell = el.querySelector('.' + col.cell);
+            if (!cell) return;
+            const value = col.type === 'hymn'
+                ? hymnCellText(liturgy[col.field])
+                : (liturgy[col.field] || '—');
+            setCellText(cell, value);
+            if (canEdit) setupInlineEdit(cell, dateKey, col.field);
+        });
+
         const prayersCell = el.querySelector('.prayers-cell');
-        if (prayersCell) {
+        if (prayersCell && !hasEditorOpen(prayersCell)) {
             prayersCell.innerHTML = '';
             
             const praiseRow = document.createElement('div');
@@ -1262,18 +1619,215 @@ function injectServiceData(serviceMap) {
                 setupInlineEdit(confRow.querySelector('.conf-name-cell'), dateKey, 'prayerConfessionName');
             }
         }
+      } catch (err) {
+        console.error('Could not draw the service row for', el.dataset.serviceDate, err);
+      }
     });
 }
 
+// Write one liturgy slot, and only that slot.
+//
+// The same rule the Order of Service now follows (MS-243): update() reads
+// 'liturgy.hymn1' as a path to one field, so nothing else on the Sunday is
+// touched and nobody else's slot can be overwritten by a stale copy of it.
+// set(merge) would read that string as a field NAME containing a dot and
+// quietly build a second, parallel liturgy beside the real one.
+async function writeLiturgyField(dateKey, field, value) {
+    const ref = db.collection('services').doc(dateKey);
+    const stamp = firebase.firestore.FieldValue.serverTimestamp();
+
+    // An element decided from the Planning view is just as decided as one
+    // chosen on the Order of Service page, so it is recorded the same way
+    // (MS-246). The tag is only ever SHOWN on the Order of Service page — but
+    // recording it in only one place would make that tag a liar. Clearing a
+    // slot takes the tag off with it.
+    const remove = firebase.firestore.FieldValue.delete();
+    const authorship = ServiceAuthorship.stampFor(field, value, currentIdentity, stamp, remove);
+
+    try {
+        await ref.update(Object.assign(
+            { [`liturgy.${field}`]: value, updatedAt: stamp }, authorship));
+    } catch (e) {
+        if (e.code !== 'not-found') throw e;
+        // No document for this Sunday yet, so the nested shape is written
+        // directly — set() would read 'decidedBy.hymn1' as a field NAME with a
+        // dot in it and build a parallel record beside the real one.
+        const nested = ServiceAuthorship.nestStamps(authorship, remove);
+        await ref.set(Object.assign(
+            { liturgy: { [field]: value }, updatedAt: stamp },
+            nested ? { [ServiceAuthorship.FIELD]: nested } : {}
+        ), { merge: true });
+    }
+
+    if (!serviceDataMap[dateKey]) serviceDataMap[dateKey] = {};
+    if (!serviceDataMap[dateKey].liturgy) serviceDataMap[dateKey].liturgy = {};
+    serviceDataMap[dateKey].liturgy[field] = value;
+}
+
+// Pick a hymn straight from the table.
+//
+// A slot holds {id, name}. Choosing from the list gives both; typing something
+// the index does not know still saves, as a name with no id — the Order of
+// Service has always allowed that ("isLiteral") and the Planning view must not
+// be stricter, or a hymn nobody has catalogued yet cannot be planned.
+function openHymnEditor(el, dateKey, field) {
+    if (el.dataset.editorOpen === 'true') return;
+
+    const slot = (serviceDataMap[dateKey] && serviceDataMap[dateKey].liturgy || {})[field];
+    const original = (slot && typeof slot === 'object') ? slot : { id: null, name: (slot || '') };
+    const originalDisplay = el.style.display;
+
+    el.dataset.editorOpen = 'true';
+    el.style.display = 'none';
+
+    const box = document.createElement('div');
+    box.className = 'hymn-inline-editor relative w-full';
+    box.innerHTML = `
+        <input type="text" class="w-full bg-surface-container-highest border-primary border rounded px-2 py-1 font-body-md text-sm outline-none focus:ring-1 focus:ring-primary shadow-inner" />
+        <div class="hymn-inline-results absolute left-0 right-0 top-full mt-1 z-50 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg overflow-hidden hidden"></div>
+    `;
+    const input = box.querySelector('input');
+    const list = box.querySelector('.hymn-inline-results');
+    input.value = original.name || '';
+
+    el.parentElement.appendChild(box);
+    input.focus();
+    input.select();
+
+    let chosen = null;          // set when a hymn is picked off the list
+    let closed = false;
+
+    const render = () => {
+        const matches = HymnRegistry.search(hymnIndex, input.value);
+        list.innerHTML = '';
+        if (!matches.length) {
+            list.classList.add('hidden');
+            return;
+        }
+        matches.forEach(h => {
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'w-full text-left px-3 py-2 text-sm hover:bg-primary-fixed/40 transition-colors block';
+            row.innerHTML = `<span class="text-on-surface">${escapeHtml(h.hymn_name)}</span>
+                             <span class="text-on-surface-variant/60 text-xs ml-2">${escapeHtml(h.id)}</span>`;
+            // mousedown, not click: blur would close the editor first and the
+            // click would land on nothing.
+            row.onmousedown = (e) => {
+                e.preventDefault();
+                chosen = { id: h.id, name: h.hymn_name };
+                input.value = h.hymn_name;
+                commit();
+            };
+            list.appendChild(row);
+        });
+        list.classList.remove('hidden');
+    };
+
+    const close = () => {
+        if (closed) return;
+        closed = true;
+        box.remove();
+        delete el.dataset.editorOpen;
+        el.style.display = originalDisplay;
+        PresenceStore.release();
+    };
+
+    const commit = async () => {
+        if (closed) return;
+        const typed = input.value.trim();
+        // A hymn off the list keeps its id. Anything else is a literal, and a
+        // literal must drop the old id — otherwise the cell reads one hymn and
+        // the printed guide fetches another.
+        const value = chosen && chosen.name === typed
+            ? chosen
+            : { id: null, name: typed };
+
+        close();
+
+        if (value.id === original.id && value.name === (original.name || '')) return;
+
+        el.textContent = hymnCellText(value);
+        el.classList.add('saving-pulse', 'text-secondary/50');
+        try {
+            await writeLiturgyField(dateKey, field, value);
+            injectServiceData(serviceDataMap);
+        } catch (err) {
+            console.error('Error saving hymn:', err);
+            alert('Failed to save.');
+            el.textContent = hymnCellText(original);
+        } finally {
+            el.classList.remove('saving-pulse', 'text-secondary/50');
+        }
+    };
+
+    input.oninput = () => { chosen = null; render(); };
+    input.onfocus = render;
+    input.onblur = () => commit();
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        if (e.key === 'Escape') { e.preventDefault(); close(); }
+    };
+
+    render();
+}
+
+// The presence key for a cell. Liturgy slots are named the way they are
+// stored, so the Order of Service page and the Planning view claim the SAME
+// box for the same element — a hymn locked on one is locked on the other,
+// which is the entire point of locking it.
+function presenceKeyFor(field) {
+    return LITURGY_HYMN_FIELDS.includes(field) || LITURGY_VERSE_FIELDS.includes(field)
+        ? 'liturgy.' + field
+        : field;
+}
+
+// Mark a cell somebody else is in: a face, a name, and no way in. Drawn on the
+// cell rather than beside it so it cannot be missed, and returns whether the
+// cell is held so the caller can leave the edit handler off entirely.
+function markIfHeld(el, dateKey, field) {
+    const holder = PresenceStore.holder(dateKey, presenceKeyFor(field));
+
+    el.querySelectorAll('.held-badge').forEach(b => b.remove());
+    el.classList.toggle('cell-held', !!holder);
+
+    if (!holder) return null;
+
+    const badge = document.createElement('span');
+    badge.className = 'held-badge';
+    badge.title = ServicePresence.holderTitle(holder);
+    badge.innerHTML =
+        `<span class="m-avatar m-avatar--sm">${
+            holder.photoUrl
+                ? `<img src="${escapeHtml(holder.photoUrl)}" alt="" style="${escapeHtml(PersonPhotoCore.frameStyle(holder.photoCrop))}">`
+                : escapeHtml(PersonPhotoCore.initialsOf(holder.name))
+        }</span><span class="held-name">${escapeHtml(ServicePresence.holderLabel(holder))}</span>`;
+    el.appendChild(badge);
+    return holder;
+}
+
 function setupInlineEdit(el, dateKey, field) {
+    // A cell somebody else is in gets a face instead of an editor. Checked
+    // before the handler is attached, so the cell is not merely refusing
+    // clicks — it has nothing to click (MS-246).
+    if (markIfHeld(el, dateKey, field)) {
+        el.classList.remove('cursor-edit');
+        el.onclick = null;
+        el.title = ServicePresence.holderTitle(PresenceStore.holder(dateKey, presenceKeyFor(field)));
+        return;
+    }
+
     el.classList.add('cursor-edit', 'hover:bg-primary-fixed/30', 'rounded', 'px-1', '-mx-1', 'transition-colors');
     el.title = 'Click to edit';
-    
+
     // Check if it's a Person field
     const personFields = ['serviceLeader', 'musicLeader', 'preacher', 'prayerPraiseName', 'prayerConfessionName', 'prayerMale', 'prayerFemale'];
 
     el.onclick = (e) => {
         e.stopPropagation();
+
+        // One person per box (MS-246). Refused at the door, so two people are
+        // never in the same cell to disagree about whose version wins.
+        if (!PresenceStore.claim(dateKey, presenceKeyFor(field))) return;
 
         if (personFields.includes(field)) {
             let currentVal = el.textContent === '—' ? '' : el.textContent;
@@ -1282,7 +1836,12 @@ function setupInlineEdit(el, dateKey, field) {
             return;
         }
 
-        if (field === 'sermon') {
+        if (LITURGY_HYMN_FIELDS.includes(field)) {
+            openHymnEditor(el, dateKey, field);
+            return;
+        }
+
+        if (LITURGY_VERSE_FIELDS.includes(field)) {
             const currentVal = el.textContent === '—' ? '' : el.textContent;
 
             // Fix flicker by checking if already editing this cell
@@ -1371,31 +1930,14 @@ function setupInlineEdit(el, dateKey, field) {
 
                 pickerEl.remove();
                 el.style.display = originalDisplay;
+                PresenceStore.release();
 
                 if (finalVal !== currentVal) {
                     try {
-                        const ref = db.collection('services').doc(dateKey);
-                        try {
-                            // update() interprets dot notation as a nested field path.
-                            // set() with merge treats 'liturgy.sermon' as a literal key name.
-                            await ref.update({
-                                'liturgy.sermon': finalVal,
-                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                            });
-                        } catch (e) {
-                            if (e.code !== 'not-found') throw e;
-                            // Document doesn't exist yet — create it
-                            await ref.set({
-                                liturgy: { sermon: finalVal },
-                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                            });
-                        }
-                        if (!serviceDataMap[dateKey]) serviceDataMap[dateKey] = {};
-                        if (!serviceDataMap[dateKey].liturgy) serviceDataMap[dateKey].liturgy = {};
-                        serviceDataMap[dateKey].liturgy.sermon = finalVal;
+                        await writeLiturgyField(dateKey, field, finalVal);
                         injectServiceData(serviceDataMap);
                     } catch (err) {
-                        console.error('Error saving sermon reference:', err);
+                        console.error('Error saving scripture reference:', err);
                         alert('Failed to save.');
                     }
                 }
@@ -1501,6 +2043,7 @@ function setupInlineEdit(el, dateKey, field) {
             }
             input.remove();
             el.style.display = originalDisplay;
+            PresenceStore.release();
         };
 
         input.onblur = save;
@@ -1509,6 +2052,7 @@ function setupInlineEdit(el, dateKey, field) {
             if (e.key === 'Escape') {
                 input.remove();
                 el.style.display = originalDisplay;
+                PresenceStore.release();
             }
         };
     };
@@ -1719,8 +2263,37 @@ auth.onAuthStateChanged(async (user) => {
             const userData = await getUserData(user.uid);
             const permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
             window.currentPermissionLevel = permissionLevel;
+            // Needed before the first edit, so an element decided here records
+            // who decided it (MS-246).
+            currentIdentity = await MosaicIdentity.me({ db, getUserData, uid: user.uid });
             if (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
+                // ⚠ EDITING RIGHTS FIRST, ALWAYS.
+                //
+                // This whole block sits inside a try/catch. Anything that
+                // throws above this line is swallowed and `can-edit` never
+                // lands, which does not look like an error — it looks like a
+                // page where nothing can be clicked into. Presence used to run
+                // first and did exactly that.
                 document.body.classList.add('can-edit');
+
+                // Who else is editing, and which cells they hold (MS-246).
+                // After the line above, and cannot throw regardless.
+                PresenceStore.start({
+                    db: db,
+                    uid: user.uid,
+                    identity: currentIdentity,
+                    surface: 'calendar',
+                    // One page covering every Sunday, so it has no page key.
+                    pageKey: null,
+                    stamp: () => firebase.firestore.FieldValue.serverTimestamp(),
+                    onChange: () => injectServiceData(serviceDataMap)
+                });
+                // A courtesy that makes the common case instant. Expiry is
+                // what actually frees a box.
+                // leave(), not release(): release writes a fresh timestamp,
+                // which would leave you looking newly arrived for half a
+                // minute after closing the tab.
+                window.addEventListener('beforeunload', () => PresenceStore.leave());
                 const importBtn = document.getElementById('import-docx-btn');
                 if (importBtn) {
                     importBtn.classList.remove('hidden');
@@ -1745,8 +2318,24 @@ auth.onAuthStateChanged(async (user) => {
     }
 });
 
+// Escapes text for HTML. Done by hand rather than through a detached <div>,
+// because that trick leaves quotes alone — fine for text between tags, wrong
+// the moment the value goes into an attribute, which the Assigned badge does
+// with a name and a photo URL.
 function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    return String(str === null || str === undefined ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+// Expose pure helpers for Node-based unit tests; ignored in the browser.
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        normalizeServiceDoc, isCellBeingEdited, setCellText, hasEditorOpen,
+        PLANNING_COLUMNS, LITURGY_HYMN_FIELDS, LITURGY_VERSE_FIELDS, hymnCellText,
+        ASSIGNED_FIELD, assignedBadgeHtml, firstNameOf, escapeHtml,
+        presenceKeyFor, setupInlineEdit, markIfHeld
+    };
 }

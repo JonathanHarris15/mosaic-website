@@ -61,6 +61,204 @@ function normalizeDottedKeys(raw) {
     return data;
 }
 
+// The liturgy slots and note keys a save descends into one level, so an edit
+// names the slot it touched rather than the whole map. Anything else nested
+// (guide, irregularElements) is written whole — it is rebuilt wholesale by
+// whoever owns it, so a partial write of it would mean less, not more.
+const NESTED_SAVE_MAPS = ['liturgy', 'notes'];
+
+// The editor's nested in-memory model, flattened to the shape the `services`
+// document actually stores (name and id side by side rather than a ref object).
+// Pure, and the same function is run over the loaded snapshot and over the
+// current model, so `changedFieldPaths` gets two things it can compare
+// like-for-like. The parts of a save that are not a function of the model —
+// the timestamp, the guide record, involvementDeferred — are added by save().
+function flattenServiceForSave(service) {
+    const ref = (r) => (r && typeof r === 'object') ? r : { id: null, name: '' };
+    const s = service || {};
+    return {
+        theme: s.theme,
+        keyVerse: s.keyVerse,
+        serviceLeader: ref(s.serviceLeader).name,
+        serviceLeaderId: ref(s.serviceLeader).id,
+        musicLeader: ref(s.musicLeader).name,
+        musicLeaderId: ref(s.musicLeader).id,
+        musicHelpers: (Array.isArray(s.musicHelpers) ? s.musicHelpers : [])
+            .map(h => ({ name: h.name || '', id: h.id || null })),
+        preacher: ref(s.preacher).name,
+        preacherId: ref(s.preacher).id,
+        prayerPraiseName: ref(s.prayerPraise).name,
+        prayerPraiseId: ref(s.prayerPraise).id,
+        prayerConfessionName: ref(s.prayerConfession).name,
+        prayerConfessionId: ref(s.prayerConfession).id,
+        elementsName: ref(s.elements).name,
+        elementsId: ref(s.elements).id,
+        otherName: ref(s.other).name,
+        otherId: ref(s.other).id,
+        hasBaptism: s.hasBaptism,
+        removedHymns: s.removedHymns || [],
+        isIrregular: s.isIrregular,
+        irregularElements: s.irregularElements,
+        notes: s.notes,
+        liturgy: s.liturgy
+    };
+}
+
+// What this editor actually changed, as Firestore dot-path field updates.
+//
+// This is what makes a Sunday safe to edit two-up. A save used to send every
+// field it held, so a slot left blank on this screen overwrote the same slot
+// another editor had just filled — the loser never saw it happen, because a
+// stale blank is an ordinary write. Diffing first means an untouched slot is
+// not in the write at all, and a race it never entered is a race it cannot
+// lose.
+//
+// Descends exactly one level into the maps in NESTED_SAVE_MAPS and no further.
+// A hymn is {id, name} chosen as one act, so the SLOT is the unit; splitting
+// it could leave an id pointing at one hymn and a name reading another. Arrays
+// are compared whole and replaced whole — a list is edited as a list.
+function changedFieldPaths(before, after) {
+    const same = (a, b) => JSON.stringify(a === undefined ? null : a) ===
+                           JSON.stringify(b === undefined ? null : b);
+    const update = {};
+
+    for (const [key, val] of Object.entries(after || {})) {
+        const prev = (before || {})[key];
+
+        const nested = NESTED_SAVE_MAPS.includes(key)
+            && val && typeof val === 'object' && !Array.isArray(val);
+
+        if (!nested) {
+            if (!same(prev, val)) update[key] = val;
+            continue;
+        }
+
+        const prevMap = (prev && typeof prev === 'object') ? prev : {};
+        for (const [slot, slotVal] of Object.entries(val)) {
+            if (!same(prevMap[slot], slotVal)) update[`${key}.${slot}`] = slotVal;
+        }
+    }
+
+    return update;
+}
+
+// A Person is one thing on screen and two fields in the document — the name
+// and the id sit side by side rather than nested. This is the way back:
+// document field -> [model key, leaf].
+const PERSON_REF_PATHS = {
+    serviceLeader:        ['serviceLeader', 'name'],
+    serviceLeaderId:      ['serviceLeader', 'id'],
+    musicLeader:          ['musicLeader', 'name'],
+    musicLeaderId:        ['musicLeader', 'id'],
+    preacher:             ['preacher', 'name'],
+    preacherId:           ['preacher', 'id'],
+    prayerPraiseName:     ['prayerPraise', 'name'],
+    prayerPraiseId:       ['prayerPraise', 'id'],
+    prayerConfessionName: ['prayerConfession', 'name'],
+    prayerConfessionId:   ['prayerConfession', 'id'],
+    elementsName:         ['elements', 'name'],
+    elementsId:           ['elements', 'id'],
+    otherName:            ['other', 'name'],
+    otherId:              ['other', 'id']
+};
+
+// Fields that go into the document as they are.
+const PLAIN_SAVE_FIELDS = [
+    'theme', 'keyVerse', 'musicHelpers', 'hasBaptism', 'removedHymns',
+    'isIrregular', 'irregularElements', 'notes', 'liturgy'
+];
+
+// Writes one dot-path field back into the editor's nested model — the inverse
+// of flattenServiceForSave, and how another editor's change reaches this
+// screen without a reload.
+//
+// A liturgy slot is mutated IN PLACE rather than replaced, because the hymn
+// pickers hold a reference to the very object (see load(): "Preserve reference
+// for components like hymnPicker"). Swapping it would leave the picker bound to
+// an object no longer on the model, and the next thing you typed would go
+// nowhere.
+//
+// Returns whether it recognised the path. An unknown one is ignored rather than
+// guessed at: the document carries fields this editor does not own (guide,
+// updatedAt, involvementDeferred), and inventing a home for them here would put
+// junk on the model.
+function applyFlatFieldPath(service, path, value) {
+    if (!service || !path) return false;
+
+    const dot = path.indexOf('.');
+    if (dot !== -1) {
+        const map = path.slice(0, dot);
+        const slot = path.slice(dot + 1);
+        if (!NESTED_SAVE_MAPS.includes(map)) return false;
+        if (!service[map] || typeof service[map] !== 'object') service[map] = {};
+
+        const current = service[map][slot];
+        const bothPlainObjects =
+            current && typeof current === 'object' && !Array.isArray(current) &&
+            value && typeof value === 'object' && !Array.isArray(value);
+
+        if (bothPlainObjects) {
+            for (const key of Object.keys(current)) delete current[key];
+            Object.assign(current, value);
+        } else {
+            service[map][slot] = value;
+        }
+        return true;
+    }
+
+    const ref = PERSON_REF_PATHS[path];
+    if (ref) {
+        const [key, leaf] = ref;
+        if (!service[key] || typeof service[key] !== 'object') {
+            service[key] = { id: null, name: '' };
+        }
+        service[key][leaf] = value;
+        return true;
+    }
+
+    if (PLAIN_SAVE_FIELDS.includes(path)) {
+        service[path] = value;
+        return true;
+    }
+
+    return false;
+}
+
+// The document, reduced to the fields this editor actually owns. Everything
+// else on a Service — the guide record, updatedAt, involvementDeferred — is
+// written by somebody else and is not this screen's to adopt.
+function pickSaveFields(docData) {
+    const owned = Object.keys(flattenServiceForSave({}));
+    const out = {};
+    for (const key of owned) {
+        if (docData && Object.prototype.hasOwnProperty.call(docData, key)) {
+            out[key] = docData[key];
+        }
+    }
+    return out;
+}
+
+// What this editor should take from a change that arrived while the page was
+// open: every field the document now disagrees with our loaded snapshot about,
+// EXCEPT the ones this editor has itself changed.
+//
+// That exception is the whole rule. A field you have touched is yours until you
+// save it; a field you have not touched is not yours to hold, so somebody
+// else's value simply arrives. Nothing merges and nothing is asked of anybody —
+// the only case that could need a decision, two people in one box, is the case
+// the box lock exists to prevent.
+function remoteAdoptions(originalFlat, currentFlat, remoteDocData) {
+    const mine = changedFieldPaths(originalFlat, currentFlat);
+    const theirs = changedFieldPaths(originalFlat, pickSaveFields(remoteDocData));
+
+    const adoptions = {};
+    for (const [path, value] of Object.entries(theirs)) {
+        if (Object.prototype.hasOwnProperty.call(mine, path)) continue;
+        adoptions[path] = value;
+    }
+    return adoptions;
+}
+
 // Diffs two lists of Person references as SETS keyed by Person id, reporting
 // which ids were added and which were removed. Entries without an id (no
 // selected Person) are ignored, and a Person listed twice counts once.
@@ -157,6 +355,8 @@ function serviceForm() {
         prayerSending: { male: false, female: false },
         user: null,
         originalService: '',
+        // The signed-in user as a Person, for the authorship tags (MS-246).
+        me: null,
         // The liturgy element whose station row is currently expanded (one at a
         // time). null = every row collapsed. Drives the inline picker + note editor.
         openKey: null,
@@ -476,11 +676,25 @@ function serviceForm() {
                         this.currentPermissionLevel = permissionLevel;
                         this.canEdit = (['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel));
                         this.isShepherd = ['elder', 'super_admin'].includes(permissionLevel);
+                        // Who this is, as a Person — stamped onto every element
+                        // they decide (MS-246).
+                        this.me = await MosaicIdentity.me({ db, getUserData, uid: user.uid });
                         this.loadPrayerRequests();
                     } catch (error) {
                         console.error("Error checking user permissions:", error);
                         this.canEdit = false;
                     }
+
+                    // ⚠ OUTSIDE THE TRY, AND LAST.
+                    //
+                    // The catch above turns any failure into "you may not
+                    // edit" — the right answer for a permissions read, and a
+                    // disaster for anything else that happens to be in the same
+                    // block. Presence was in it, and one throw made the whole
+                    // page read-only with nothing on screen to say why. Being
+                    // unable to see who else is here is not a reason to stop
+                    // somebody working.
+                    if (this.canEdit) this.watchPresence();
                 } else {
                     this.canEdit = false;
                 }
@@ -502,6 +716,9 @@ function serviceForm() {
             await this.autoLinkHymns();
             await this.fetchPrayerSuggestions();
             this.watchForChanges();
+            // After watchForChanges, so the snapshot that arrives immediately
+            // on subscribing finds originalService already settled by load().
+            this.watchRemoteChanges();
 
             if (urlParams.get('validate') === 'true') {
                 this.validateForm();
@@ -519,47 +736,17 @@ function serviceForm() {
             }
         },
 
+        // Shared with the Planning view on the Service Calendar (MS-245), so
+        // both screens offer the same hymns for the same typing. See
+        // hymn-registry.js.
         async loadHymnRegistry() {
-            try {
-                const getHymnIndex = firebase.app().functions('us-central1').httpsCallable('getHymnIndex');
-                const result = await getHymnIndex();
-                this.hymnRegistry = result.data;
-            } catch (error) {
-                console.warn("getHymnIndex failed, falling back to direct Firestore fetch:", error);
-                try {
-                    const snap = await db.collection('hymns').get();
-                    this.hymnRegistry = snap.docs.map(doc => {
-                        const data = doc.data();
-                        return {
-                            id: doc.id,
-                            hymn_name: data.hymn_name || "Unknown",
-                            variations: data.versions ? data.versions.length : 0,
-                            music_writer: data.music_writer || "Unknown",
-                            lyrics_writer: data.lyrics_writer || "Unknown",
-                            last_played_date: data.last_played_date || null,
-                            tags: data.tags || [],
-                            database_url: `/hymns/${doc.id}`
-                        };
-                    });
-                } catch (fsError) {
-                    console.error("Error loading hymn registry from Firestore:", fsError);
-                }
-            }
-
-            if (typeof Fuse !== 'undefined' && this.hymnRegistry && this.hymnRegistry.length > 0) {
-                try {
-                    // Initialize Fuse.js for fuzzy searching
-                    this.fuse = new Fuse(this.hymnRegistry, {
-                        keys: ['id', 'hymn_name', 'lyrics_writer', 'music_writer'],
-                        threshold: 0.4, // Lenient threshold for matching prefixes/typos
-                        distance: 100,
-                        minMatchCharLength: 1, // Allow 1-character queries
-                        includeScore: true
-                    });
-                } catch (fuseErr) {
-                    console.error("Error creating Fuse instance for hymns:", fuseErr);
-                }
-            }
+            const index = await HymnRegistry.load({
+                getHymnIndex: firebase.app().functions('us-central1').httpsCallable('getHymnIndex'),
+                db: db,
+                Fuse: typeof Fuse !== 'undefined' ? Fuse : null
+            });
+            this.hymnRegistry = index.hymns;
+            this.fuse = index.fuse;
         },
 
         async loadPeopleRegistry() {
@@ -622,6 +809,12 @@ function serviceForm() {
 
         async load() {
             const doc = await db.collection('services').doc(this.date).get();
+            // A save writes dot-path field updates, which only update() honours —
+            // set(merge) would store 'liturgy.hymn1' as a field name with a dot in
+            // it. update() refuses a document that is not there, so the first save
+            // of a never-saved Sunday writes the whole thing with set() instead.
+            // Nothing can be racing a document that does not exist yet.
+            this._docExists = doc.exists;
             if (doc.exists) {
                 const raw = doc.data();
 
@@ -680,6 +873,10 @@ function serviceForm() {
                 // free-text value (pre-migration) is wrapped as a single literal
                 // candidate so it still displays; the migration resolves it properly.
                 this.service.liturgy.baptism = coerceBaptismCandidates(this.service.liturgy.baptism);
+                // Who decided each element (MS-246). Read-only on this page —
+                // it is written by the save, never edited directly — so it is
+                // kept off flattenServiceForSave and moved by hand.
+                this.service[ServiceAuthorship.FIELD] = data[ServiceAuthorship.FIELD] || {};
                 // Store guide data to preserve/update it during save
                 this.service.guide = data.guide || null;
                 // Which Service Guide system this week is on (ADR-0010): explicit
@@ -1165,39 +1362,37 @@ function serviceForm() {
                     });
                 }
 
-                // Flatten service object for Firestore storage
-                const toSave = {
-                    theme: this.service.theme,
-                    keyVerse: this.service.keyVerse,
-                    serviceLeader: this.service.serviceLeader.name,
-                    serviceLeaderId: this.service.serviceLeader.id,
-                    musicLeader: this.service.musicLeader.name,
-                    musicLeaderId: this.service.musicLeader.id,
-                    musicHelpers: this.service.musicHelpers.map(h => ({ name: h.name || '', id: h.id || null })),
-                    preacher: this.service.preacher.name,
-                    preacherId: this.service.preacher.id,
-                    prayerPraiseName: this.service.prayerPraise.name,
-                    prayerPraiseId: this.service.prayerPraise.id,
-                    prayerConfessionName: this.service.prayerConfession.name,
-                    prayerConfessionId: this.service.prayerConfession.id,
-                    elementsName: this.service.elements.name,
-                    elementsId: this.service.elements.id,
-                    otherName: this.service.other.name,
-                    otherId: this.service.other.id,
-                    hasBaptism: this.service.hasBaptism,
-                    removedHymns: this.service.removedHymns || [],
-                    isIrregular: this.service.isIrregular,
-                    irregularElements: this.service.irregularElements,
-                    notes: this.service.notes,
-                    liturgy: this.service.liturgy,
-                    // Whether this Sunday still owes its serve records. The
-                    // scheduled job converts only Services carrying it, which is
-                    // what stops it re-crediting every Sunday in the archive —
-                    // those were written the old way under auto-generated ids, so
-                    // a second pass would add a duplicate rather than overwrite.
-                    involvementDeferred: !hasHappened,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                };
+                // Write only what THIS editor changed.
+                //
+                // A Sunday is edited by several people at once at a guide-writing
+                // session, so the old whole-document save was a silent clobber:
+                // it sent every slot it held, and a slot left blank on this screen
+                // overwrote the same slot another editor had just filled. Diffing
+                // the flattened model against the flattened snapshot we loaded
+                // leaves an untouched slot out of the write entirely, so it cannot
+                // lose a race it never entered. See changedFieldPaths.
+                const flatNow = flattenServiceForSave(this.service);
+                const toSave = changedFieldPaths(flattenServiceForSave(original), flatNow);
+
+                // Whether this Sunday still owes its serve records. The
+                // scheduled job converts only Services carrying it, which is
+                // what stops it re-crediting every Sunday in the archive —
+                // those were written the old way under auto-generated ids, so
+                // a second pass would add a duplicate rather than overwrite.
+                toSave.involvementDeferred = !hasHappened;
+                toSave.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+
+                // Who decided each element this save is changing (MS-246).
+                // Merged into the SAME update as the values, so an element and
+                // the record of who chose it can never land apart — a half
+                // failure would otherwise leave a hymn nobody appears to have
+                // chosen, or a name against a hymn that never saved.
+                //
+                // Taking an element back out takes your name out with it.
+                const authorRemove = firebase.firestore.FieldValue.delete();
+                Object.assign(toSave, ServiceAuthorship.stampsFor(
+                    toSave, this.me,
+                    firebase.firestore.FieldValue.serverTimestamp(), authorRemove));
                 // Only persist the guide system once the editor has engaged the new
                 // controls, so untouched pre-ADR-0010 weeks are never silently flipped.
                 if (this._guideEngaged) toSave.guideSystem = this.guideSystem;
@@ -1237,11 +1432,31 @@ function serviceForm() {
                 }
 
                 const serviceRef = db.collection('services').doc(this.date);
-                // Use merge: true to preserve other top-level fields (like 'guide' if it wasn't updated here)
-                batch.set(serviceRef, toSave, { merge: true });
+                if (this._docExists) {
+                    // update() reads 'liturgy.hymn1' as a path to one slot.
+                    // set(merge) would read it as a field NAME containing a dot
+                    // and write a second, parallel copy of the liturgy — the same
+                    // trap normalizeDottedKeys exists to clean up after.
+                    batch.update(serviceRef, toSave);
+                } else {
+                    // Nothing to race yet, so the first write lays the whole
+                    // document down at once. Dot paths are meaningless here.
+                    const firstStamps = ServiceAuthorship.nestStamps(toSave, authorRemove);
+                    batch.set(serviceRef, Object.assign({}, flatNow, {
+                        involvementDeferred: toSave.involvementDeferred,
+                        updatedAt: toSave.updatedAt
+                    }, toSave.guide ? { guide: toSave.guide } : {},
+                       toSave.guideSystem ? { guideSystem: toSave.guideSystem } : {},
+                       // Nested, because set() reads a dot as part of a field
+                       // NAME. Without this the first save of a brand-new
+                       // Sunday would be the one save that records nobody.
+                       firstStamps ? { [ServiceAuthorship.FIELD]: firstStamps } : {}
+                    ), { merge: true });
+                }
 
                 await batch.commit();
                 committed = true;
+                this._docExists = true;
                 this.originalService = JSON.stringify(this.service);
                 console.log('Service and involvements saved successfully.');
             } catch (e) {
@@ -1285,6 +1500,74 @@ function serviceForm() {
 
         watchForChanges() {
             this.$watch('service', () => this.scheduleSave());
+        },
+
+        // ── Keeping up with the other editors ───────────────────────────────
+        // This Sunday is one document and, on a guide-writing night, several
+        // people. The page used to read it once on open and never look again,
+        // so you worked all evening against the version you arrived at and
+        // found out what everyone else had done by reloading.
+        //
+        // Now it listens. A field nobody here has touched simply takes the new
+        // value; a field this editor has changed is left alone until it saves.
+        // See remoteAdoptions for why that needs no merge and asks nobody a
+        // question.
+        _remoteUnsubscribe: null,
+
+        watchRemoteChanges() {
+            if (typeof db === 'undefined' || this._remoteUnsubscribe) return;
+
+            this._remoteUnsubscribe = db.collection('services').doc(this.date)
+                .onSnapshot(
+                    (doc) => this.adoptRemoteChanges(doc),
+                    (e) => {
+                        console.error('Lost the live connection to this Sunday:', e);
+                        this._remoteUnsubscribe = null;
+                    }
+                );
+        },
+
+        adoptRemoteChanges(doc) {
+            if (!doc || !doc.exists) return;
+            // Our own write, echoing back before the server has confirmed it.
+            // Adopting it would be answering our own question.
+            if (doc.metadata && doc.metadata.hasPendingWrites) return;
+
+            this._docExists = true;
+
+            const original = JSON.parse(this.originalService);
+            const adoptions = remoteAdoptions(
+                flattenServiceForSave(original),
+                flattenServiceForSave(this.service),
+                normalizeDottedKeys(doc.data())
+            );
+
+            // Who decided each element travels wholesale. Nobody edits it on
+            // this page — it is a by-product of saving — so there is no local
+            // version to protect, and a tag that did not keep up would credit
+            // the wrong person until somebody reloaded. Applied to BOTH copies
+            // for the same reason as everything below.
+            const remoteDecided = doc.data()[ServiceAuthorship.FIELD] || {};
+            let adopted = JSON.stringify(this.service[ServiceAuthorship.FIELD] || {})
+                !== JSON.stringify(remoteDecided) ? 1 : 0;
+            if (adopted) {
+                this.service[ServiceAuthorship.FIELD] = remoteDecided;
+                original[ServiceAuthorship.FIELD] = remoteDecided;
+            }
+
+            for (const [path, value] of Object.entries(adoptions)) {
+                // Applied to BOTH the live model and the loaded snapshot. Miss
+                // the snapshot and the next save reads the adopted value as a
+                // local edit and writes it straight back — turning a value we
+                // merely received into one we claim, and re-opening the race
+                // this was built to end.
+                if (applyFlatFieldPath(this.service, path, value)) {
+                    applyFlatFieldPath(original, path, value);
+                    adopted++;
+                }
+            }
+
+            if (adopted) this.originalService = JSON.stringify(original);
         },
 
         scheduleSave() {
@@ -1388,6 +1671,20 @@ function serviceForm() {
             }));
         },
 
+        // ── Who decided this element (MS-246) ───────────────────────────────
+        // A quiet note under a row, not a column of its own: the row already
+        // carries a label and a value, and the interesting thing is almost
+        // always what was chosen rather than who chose it.
+        decidedTag(key) {
+            return ServiceAuthorship.tagLabel(
+                ServiceAuthorship.decidedBy(this.service, key));
+        },
+
+        decidedTitle(key) {
+            return ServiceAuthorship.tagTitle(
+                ServiceAuthorship.decidedBy(this.service, key));
+        },
+
         // Fields beyond the liturgy grid that a fully-ready service needs: the two
         // header references (Theme, Key Verse) and the core people roles. Person
         // roles count as set once they have an id or a typed-in name. Optional
@@ -1450,10 +1747,80 @@ function serviceForm() {
         // rows commits the current note first, so service.notes stays in sync (and
         // the Service Notes sidebar updates live).
         toggleRow(key) {
-            if (this.openKey === key) { this.commitNote(); this.openKey = null; return; }
+            if (this.openKey === key) { this.closeRow(); return; }
+
+            // One person per box (MS-246). A row somebody else is in does not
+            // open at all — refusing at the door is what removes the whole
+            // question of whose version wins, because two people are never in
+            // the same box to disagree.
+            if (this.heldBy(key)) return;
+            if (!this.takeRow(key)) return;
+
             this.commitNote();
             this.openKey = key;
             this.$nextTick(() => this.mountNote(key));
+        },
+
+        closeRow() {
+            this.commitNote();
+            this.openKey = null;
+            PresenceStore.release();
+        },
+
+        // ── Presence (MS-246) ───────────────────────────────────────────────
+        presenceEntries: [],
+
+        watchPresence() {
+            // Deliberately NOT gated on `me`. An account with no Person record
+            // attached still has a uid, which is all a claim needs — the name
+            // is cosmetic and falls back to "Someone". Gating on the Person was
+            // what stopped presence starting at all for such an account, and a
+            // store that never started used to take every editor on the page
+            // down with it.
+            if (!this.user) return;
+            PresenceStore.start({
+                db: db,
+                uid: this.user.uid,
+                identity: this.me,
+                surface: 'order-of-service',
+                // Which Sunday this page is, so "also here" means here rather
+                // than "signed in somewhere".
+                pageKey: this.date,
+                stamp: () => firebase.firestore.FieldValue.serverTimestamp(),
+                // Alpine redraws from this; the store's own list is the truth.
+                onChange: (entries) => { this.presenceEntries = entries; }
+            });
+
+            // A courtesy, not the mechanism. Expiry is what actually frees a
+            // box — this just makes the common case instant.
+            // leave(), not release(): release writes a fresh timestamp, which
+            // would leave you looking newly arrived for half a minute after
+            // closing the tab.
+            window.addEventListener('beforeunload', () => PresenceStore.leave());
+        },
+
+        takeRow(key) {
+            if (!this.canEdit) return true;
+            return PresenceStore.claim(this.date, 'liturgy.' + key);
+        },
+
+        // Whoever else is in this row, or null. Read off presenceEntries rather
+        // than the store so Alpine re-renders when somebody arrives or leaves.
+        heldBy(key) {
+            if (!this.user) return null;
+            return ServicePresence.holderOf(
+                this.presenceEntries, this.user.uid, this.date, 'liturgy.' + key, Date.now());
+        },
+
+        heldLabel(key) { return ServicePresence.holderLabel(this.heldBy(key)); },
+        heldTitle(key) { return ServicePresence.holderTitle(this.heldBy(key)); },
+
+        // Everybody else on this Sunday right now — the row of faces up top.
+        get othersHere() {
+            if (!this.user) return [];
+            return ServicePresence.peopleHere(
+                this.presenceEntries, this.user.uid,
+                'order-of-service', this.date, Date.now());
         },
 
         // Open a specific row (from the Service Notes sidebar) and scroll to it.
@@ -2096,22 +2463,14 @@ function hymnPicker(hymnRef, parent = null) {
         async search() {
             const hasFuse = !!(this.parent && this.parent.fuse);
             
-            // Use Fuse.js if available (pre-loaded registry)
+            // Use the pre-loaded registry if it has arrived. The ranking is
+            // shared with the Planning view (MS-245) so both screens offer the
+            // same hymns for the same typing — see hymn-registry.js.
             if (hasFuse) {
                 this.hadFuse = true;
-                if (!this.query || this.query.trim().length === 0) {
-                    this.results = this.parent.hymnRegistry.slice(0, 5);
-                } else {
-                    const lowerQuery = this.query.trim().toLowerCase();
-                    // Check for exact/case-insensitive ID match first
-                    const exactIdMatch = this.parent.hymnRegistry.find(h => h.id.toLowerCase() === lowerQuery);
-                    
-                    let fuseResults = this.parent.fuse.search(this.query).map(r => r.item);
-                    if (exactIdMatch) {
-                        fuseResults = [exactIdMatch, ...fuseResults.filter(h => h.id !== exactIdMatch.id)];
-                    }
-                    this.results = fuseResults.slice(0, 5);        
-                }
+                this.results = HymnRegistry.search(
+                    { hymns: this.parent.hymnRegistry, fuse: this.parent.fuse },
+                    this.query);
                 return;
             }
 
@@ -2174,5 +2533,5 @@ function hymnPicker(hymnRef, parent = null) {
 
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates };
+    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions };
 }

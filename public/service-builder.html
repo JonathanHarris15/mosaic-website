@@ -70,6 +70,13 @@
         .station-row { transition: background .15s ease; }
         .station-row:hover { background: var(--surface); }
         .movement-header { font-family: 'Work Sans', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; color: var(--secondary); padding: 15px 20px 6px; background: var(--surface); }
+
+        /* A row somebody else is in (MS-246). Not-allowed rather than
+           pointer, so the row says it is shut before you click it — and
+           slightly faded, so a screen of them reads at a glance as work in
+           progress rather than as something broken. */
+        .station-held { cursor: not-allowed; background: var(--surface-container-low); }
+        .station-held > span:not(.held-badge) { opacity: .55; }
         .station-chevron { transition: transform .2s ease; }
         .note-card { transition: border-color .15s ease; }
         .note-card:hover { border-color: var(--note-border) !important; }
@@ -133,6 +140,10 @@
     <script src="auth.js"></script>
     <script src="bible-data.js"></script>
     <script src="verse-picker.js"></script>
+    <script src="hymn-registry.js"></script>
+    <script src="mosaic-identity.js"></script>
+    <script src="service-authorship.js"></script>
+    <script src="service-presence.js"></script>
     <link href="verse-picker.css" rel="stylesheet" />
     <!-- Quill Rich Text Editor -->
     <link href="vendor/quill-1.3.7.snow.css" rel="stylesheet">
@@ -511,6 +522,24 @@
 
                 <!-- LEFT — Movement-grouped station rows -->
                 <div class="flex-1 min-w-0 w-full">
+                    <!-- Who else is on this Sunday right now (MS-246). Only
+                         appears when somebody is, so an ordinary evening's
+                         editing looks exactly as it always did. -->
+                    <div x-show="othersHere.length" x-cloak
+                         class="flex items-center gap-2 mb-3 px-1">
+                        <span class="font-label-md text-[10px] uppercase tracking-wider text-secondary/60">Also here</span>
+                        <template x-for="p in othersHere" :key="p.uid">
+                            <span class="m-avatar m-avatar--sm" :title="p.name">
+                                <template x-if="p.photoUrl">
+                                    <img :src="p.photoUrl" alt="" :style="PersonPhotoCore.frameStyle(p.photoCrop)">
+                                </template>
+                                <template x-if="!p.photoUrl">
+                                    <span x-text="PersonPhotoCore.initialsOf(p.name)"></span>
+                                </template>
+                            </span>
+                        </template>
+                    </div>
+
                     <div id="regular-service-sections" class="bg-white border border-outline-variant rounded-2xl overflow-hidden">
                         <template x-for="mv in movements" :key="mv.num">
                             <div>
@@ -531,7 +560,8 @@
                                         <!-- Station row -->
                                         <template x-if="!item.removed">
                                             <div>
-                                                <div class="station-row flex items-center gap-3 px-5 py-3 border-t border-cream cursor-pointer"
+                                                <div class="station-row flex items-center gap-3 px-5 py-3 border-t border-cream"
+                                                     :class="heldBy(item.key) ? 'station-held' : 'cursor-pointer'"
                                                      :style="openKey === item.key ? 'background:var(--background)' : ''"
                                                      @click="toggleRow(item.key)">
                                                     <span class="flex-none w-[124px] font-label-md text-[10.5px] font-semibold tracking-[.07em] uppercase text-secondary" x-text="item.label"></span>
@@ -539,8 +569,41 @@
                                                     <span class="flex-1 min-w-0 font-body-md text-[14.5px] text-primary truncate" x-show="item.value" x-text="item.value"></span>
                                                     <span class="flex-1 min-w-0 font-body-md text-[13.5px] italic text-on-primary-container" x-show="!item.value" x-text="item.emptyLabel"></span>
                                                     <span class="material-symbols-outlined text-[16px] text-amber-600" x-show="item.hasNote" title="Has a service note">sticky_note_2</span>
-                                                    <span class="material-symbols-outlined station-chevron text-[18px] text-sand" :style="openKey === item.key ? 'transform:rotate(90deg)' : ''">chevron_right</span>
+
+                                                    <!-- Who is in this box. A face and a name, so
+                                                         "you can't type here" is answered before it
+                                                         is asked. -->
+                                                    <template x-if="heldBy(item.key)">
+                                                        <span class="held-badge flex items-center gap-1.5" :title="heldTitle(item.key)">
+                                                            <span class="m-avatar m-avatar--sm">
+                                                                <template x-if="heldBy(item.key).photoUrl">
+                                                                    <img :src="heldBy(item.key).photoUrl" alt=""
+                                                                         :style="PersonPhotoCore.frameStyle(heldBy(item.key).photoCrop)">
+                                                                </template>
+                                                                <template x-if="!heldBy(item.key).photoUrl">
+                                                                    <span x-text="PersonPhotoCore.initialsOf(heldBy(item.key).name)"></span>
+                                                                </template>
+                                                            </span>
+                                                            <span class="font-label-md text-[10px] uppercase tracking-wider text-secondary/70" x-text="heldLabel(item.key)"></span>
+                                                            <span class="material-symbols-outlined text-[14px] text-secondary/50">lock</span>
+                                                        </span>
+                                                    </template>
+
+                                                    <span class="material-symbols-outlined station-chevron text-[18px] text-sand"
+                                                          x-show="!heldBy(item.key)"
+                                                          :style="openKey === item.key ? 'transform:rotate(90deg)' : ''">chevron_right</span>
                                                 </div>
+
+                                                <!-- Who decided this element. Indented to sit under
+                                                     the value rather than the label, so a column of
+                                                     these reads as a margin note on the choices. -->
+                                                <template x-if="decidedTag(item.key)">
+                                                    <div class="decided-tag flex items-center gap-1 pl-[148px] pr-5 pb-1.5 -mt-1"
+                                                         :title="decidedTitle(item.key)">
+                                                        <span class="material-symbols-outlined text-[11px] text-secondary/40">how_to_reg</span>
+                                                        <span class="text-[10px] font-label-md uppercase tracking-wider text-secondary/50" x-text="decidedTag(item.key)"></span>
+                                                    </div>
+                                                </template>
 
                                                 <!-- Expanded editor (only the open row renders) -->
                                                 <template x-if="openKey === item.key">
