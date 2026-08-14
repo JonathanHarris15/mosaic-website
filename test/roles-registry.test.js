@@ -14,10 +14,13 @@ const kids = Object.assign(Roles.newDefinition('Kids Ministry'), { id: 'r-kids' 
 
 // ── What the liturgical Roles are ─────────────────────────────────────────────
 
-test('the liturgical Roles are the six the app already writes as Involvement', () => {
+test('the liturgical Roles are the five the app already writes as Involvement', () => {
+    // Sermonette left this list when it stopped being part of the liturgy — it
+    // is authored as an Event of its own now, so it is a Servant Role like any
+    // other rather than a locked field on the Service.
     assert.deepEqual(
         Roles.LITURGICAL_ROLES.map(r => r.slug),
-        ['service_leader', 'preacher', 'worship_leader', 'worship_helper', 'sermonette', 'prayer']
+        ['service_leader', 'preacher', 'worship_leader', 'worship_helper', 'prayer']
     );
 });
 
@@ -66,7 +69,7 @@ test('allRoles answers "what Roles exist" across both families', () => {
 test('allRoles puts the liturgical Roles first, in their liturgical order', () => {
     const all = Roles.allRoles([coffee]);
     assert.deepEqual(
-        all.slice(0, 6).map(r => r.slug),
+        all.slice(0, Roles.LITURGICAL_ROLES.length).map(r => r.slug),
         Roles.LITURGICAL_ROLES.map(r => r.slug)
     );
 });

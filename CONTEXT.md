@@ -466,8 +466,9 @@ Code-defined in `RolesCore.LITURGICAL_ROLES`, undeletable and uneditable, and st
 - `preacher`: The person delivering the sermon.
 - `worship_leader`: The person leading the musical worship. Surfaces in the UI as the "Music Leader."
 - `worship_helper`: A person who accompanies the Music Leader (e.g. an accompanist or additional musician). A Service may have several. Surfaces in the UI as a "Music Helper." Distinct from `worship_leader` so helpers are separable in participation history and analytics.
-- `sermonette`: The person delivering a shorter message. In the calendar view, this is displayed as a badge and is editable inline by admins.
 - `prayer`: The person leading a specific prayer (praise or confession).
+
+**`sermonette` used to be one of these and no longer is** ([ADR 0033](docs/adr/0033-a-sermonette-is-an-event-not-a-liturgical-role.md)). A sermonette is a shorter message given at a members meeting — a different gathering on a different day — so modelling it as a field on the Sunday Service meant recording it against a Sunday it did not happen on. It is now an [[Event]] with a [[Servant Role]] like every other non-Sunday serving. Involvement already written under the slug stays; the slug itself is deliberately free, so a Servant Role named "Sermonette" inherits that history rather than starting from nothing.
 
 Related, but not Roles in the registry:
 - `baptism`: A liturgical event marked by `hasBaptism: true`. The people being baptized are the Service's Baptism Candidates. Displayed as a read-only badge in the calendar views.
@@ -726,12 +727,7 @@ The week-by-week view of Sunday **Services** — the Sunday Service series and n
   - **Table View**: A dedicated "Baptism" column showing the Baptism Candidates' names.
   - **Editing**: Read-only in the calendar; Baptism Candidates are managed in the Order of Service editor (linked to Person records). In the legacy system the "Include Baptism?" toggle sets `hasBaptism`; in the new system `hasBaptism` is derived from whether the week's Service Guide Template requests the baptism component (ADR-0010).
 - **Sermon passage**: shown in **both** views — its own column in the Table View, and a `menu_book` line under the theme in the List View. It carries as much of "what is this Sunday" as the theme does, so a view that hides it is answering the question half-way. It reaches the phone's services list and both **Sunday at a Glance** panels for the same reason.
-- **Sermonette Indicator**: 
-  - **List View**: A purple status badge with a `mic` icon.
-  - **Table View**: Displayed within the "Preacher" column as a secondary entry (e.g., "Jane Doe (Sermonette)").
-  - **Editing**: Editable inline by admins, linked to a Person record.
 - **Editing Summary**: 
-  - Sermonette leaders are linked to People and editable from list/table.
   - Baptism Candidates are linked to People and editable from the Order of Service editor (read-only in the calendar).
 
 ### Calendar

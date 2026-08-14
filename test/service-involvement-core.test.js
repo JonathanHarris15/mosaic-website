@@ -25,7 +25,6 @@ function fullService() {
         musicLeader: 'Mia Chen', musicLeaderId: 'p-mia',
         musicHelpers: [{ name: 'Ade Bello', id: 'p-ade' }, { name: 'Ruth Vale', id: 'p-ruth' }],
         preacher: 'Jono Harris', preacherId: 'p-jono',
-        sermonette: 'Tom Reid', sermonetteId: 'p-tom',
         prayerPraiseName: 'Ana Diaz', prayerPraiseId: 'p-ana',
         prayerConfessionName: 'Ben Cole', prayerConfessionId: 'p-ben',
         elementsName: 'Cara Fox', elementsId: 'p-cara',
@@ -44,14 +43,13 @@ test('every filled serving field produces one Involvement record', () => {
     assert.ok(find(records, 'service_leader', 'p-sam'));
     assert.ok(find(records, 'worship_leader', 'p-mia'));
     assert.ok(find(records, 'preacher', 'p-jono'));
-    assert.ok(find(records, 'sermonette', 'p-tom'));
     assert.ok(find(records, 'prayer', 'p-ana'));
     assert.ok(find(records, 'prayer', 'p-ben'));
     assert.ok(find(records, 'elements', 'p-cara'));
     assert.ok(find(records, 'other', 'p-dev'));
     assert.ok(find(records, 'worship_helper', 'p-ade'));
     assert.ok(find(records, 'worship_helper', 'p-ruth'));
-    assert.strictEqual(records.length, 10);
+    assert.strictEqual(records.length, 9);
 });
 
 test('the two prayer roles share the prayer slug and are told apart by metadata', () => {
@@ -160,7 +158,7 @@ test('different dates and different Roles get different ids', () => {
     assert.notStrictEqual(Core.involvementId('2026-10-12', record), Core.involvementId('2026-10-19', record));
     assert.notStrictEqual(
         Core.involvementId('2026-10-12', record),
-        Core.involvementId('2026-10-12', { personId: 'p-jono', type: 'sermonette' }));
+        Core.involvementId('2026-10-12', { personId: 'p-jono', type: 'service_leader' }));
 });
 
 test('a junk date or record has no id rather than a junk one', () => {
@@ -178,7 +176,7 @@ test('a Sunday that has not happened yet produces no records', () => {
 
 test('a Sunday that has passed produces its records', () => {
     const records = Core.involvementAsAt(fullService(), '2026-10-12', '2026-10-13');
-    assert.strictEqual(records.length, 10);
+    assert.strictEqual(records.length, 9);
 });
 
 test('the day itself has not passed yet', () => {
@@ -198,7 +196,7 @@ test('a junk date never counts as passed', () => {
 test('a past Sunday nobody has converted yet writes everything, removes nothing', () => {
     const desired = Core.desiredFor(fullService(), '2026-10-12', '2026-10-13');
     const { write, remove } = Core.reconcile(desired, []);
-    assert.strictEqual(write.length, 10);
+    assert.strictEqual(write.length, 9);
     assert.deepStrictEqual(remove, []);
 });
 

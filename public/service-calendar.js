@@ -107,7 +107,6 @@ function calendarPage() {
             const names = {
                 'serviceLeader': 'Service Leader',
                 'preacher': 'Preacher',
-                'sermonette': 'Sermonette',
                 'musicLeader': 'Music Leader',
                 'prayerPraiseName': 'Prayer Leader (Praise)',
                 'prayerConfessionName': 'Prayer Leader (Confession)',
@@ -136,7 +135,6 @@ function calendarPage() {
                     'serviceLeader': 'serviceLeaderId',
                     'musicLeader': 'musicLeaderId',
                     'preacher': 'preacherId',
-                    'sermonette': 'sermonetteId',
                     'prayerPraiseName': 'prayerPraiseId',
                     'prayerConfessionName': 'prayerConfessionId',
                     'prayerMale': null,
@@ -146,7 +144,6 @@ function calendarPage() {
                     'serviceLeader': 'service_leader',
                     'musicLeader': 'worship_leader',
                     'preacher': 'preacher',
-                    'sermonette': 'sermonette',
                     'prayerPraiseName': 'prayer',
                     'prayerConfessionName': 'prayer',
                     'prayerMale': 'pastoral_prayer',
@@ -986,15 +983,7 @@ function renderTable(grouped) {
                             <div class="leader-cell font-body-md text-on-surface-variant text-sm">—</div>
                         </td>
                         <td class="px-md py-md whitespace-nowrap">
-                            <div class="preacher-column-cell flex flex-col items-start gap-1">
-                                <div class="preacher-cell font-body-md text-on-surface-variant text-sm">—</div>
-                                <div class="sermonette-row flex items-center gap-1 group/sermonette">
-                                    <div class="sermonette-cell font-body-md text-xs text-tertiary hidden"></div>
-                                    <button title="Add Sermonette" class="add-sermonette-btn hidden p-0.5 text-tertiary/50 hover:text-tertiary transition-colors rounded">
-                                        <span class="material-symbols-outlined text-[16px]">add</span>
-                                    </button>
-                                </div>
-                            </div>
+                            <div class="preacher-cell font-body-md text-on-surface-variant text-sm">—</div>
                         </td>
                         <td class="px-md py-md whitespace-nowrap">
                             <div class="baptism-cell font-body-md text-on-surface-variant text-sm">—</div>
@@ -1098,7 +1087,7 @@ function injectServiceData(serviceMap) {
             let html = '';
             
             // Badges Row
-            if (svc.hasBaptism || svc.sermonette || svc.isIrregular || canEdit) {
+            if (svc.hasBaptism || svc.isIrregular) {
                 html += `<div class="flex flex-wrap gap-2 mb-2">`;
                 if (svc.isIrregular) {
                     html += `
@@ -1120,22 +1109,6 @@ function injectServiceData(serviceMap) {
                             </div>
                             ` : ''}
                         </span>`;
-                }
-                if (svc.sermonette) {
-                    html += `
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[10px] font-bold uppercase tracking-wider">
-                            <span class="material-symbols-outlined text-[14px]">mic</span>
-                            Sermonette
-                        </span>`;
-                } else if (canEdit) {
-                    // Hidden "Add Sermonette" ghost button
-                    html += `
-                        <button onclick="window.openPersonSelector('${dateKey}', 'sermonette', { name: '', id: null })" 
-                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary text-[10px] font-bold uppercase tracking-wider transition-colors"
-                                title="Add Sermonette">
-                            <span class="material-symbols-outlined text-[14px]">add</span>
-                            Sermonette
-                        </button>`;
                 }
                 html += `</div>`;
             }
@@ -1164,12 +1137,6 @@ function injectServiceData(serviceMap) {
                 html += `<p class="hidden md:flex text-xs text-on-surface-variant items-center gap-1">
                     <span class="material-symbols-outlined text-[14px]">podium</span>
                     Preacher: ${escapeHtml(svc.preacher)}
-                </p>`;
-            }
-            if (svc.sermonette) {
-                html += `<p class="text-xs text-on-surface-variant flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[14px]">mic</span>
-                    Sermonette: ${escapeHtml(svc.sermonette)}
                 </p>`;
             }
 
@@ -1218,32 +1185,6 @@ function injectServiceData(serviceMap) {
             preacherCell.textContent = svc.preacher || '—';
             preacherCell.setAttribute('data-person-id', svc.preacherId || '');
             if (canEdit) setupInlineEdit(preacherCell, dateKey, 'preacher');
-        }
-
-        const sermonetteCell = el.querySelector('.sermonette-cell');
-        const addSermonetteBtn = el.querySelector('.add-sermonette-btn');
-        if (sermonetteCell) {
-            if (svc.sermonette) {
-                sermonetteCell.textContent = `${svc.sermonette} (Sermonette)`;
-                sermonetteCell.setAttribute('data-person-id', svc.sermonetteId || '');
-                sermonetteCell.classList.remove('hidden');
-                if (addSermonetteBtn) addSermonetteBtn.classList.add('hidden');
-            } else {
-                sermonetteCell.textContent = '';
-                sermonetteCell.setAttribute('data-person-id', '');
-                sermonetteCell.classList.add('hidden');
-                
-                if (canEdit && addSermonetteBtn) {
-                    addSermonetteBtn.classList.remove('hidden');
-                    addSermonetteBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        window.openPersonSelector(dateKey, 'sermonette', { name: '', id: null });
-                    };
-                } else if (addSermonetteBtn) {
-                    addSermonetteBtn.classList.add('hidden');
-                }
-            }
-            if (canEdit && svc.sermonette) setupInlineEdit(sermonetteCell, dateKey, 'sermonette');
         }
 
         const baptismCell = el.querySelector('.baptism-cell');
@@ -1329,14 +1270,13 @@ function setupInlineEdit(el, dateKey, field) {
     el.title = 'Click to edit';
     
     // Check if it's a Person field
-    const personFields = ['serviceLeader', 'musicLeader', 'preacher', 'sermonette', 'prayerPraiseName', 'prayerConfessionName', 'prayerMale', 'prayerFemale'];
+    const personFields = ['serviceLeader', 'musicLeader', 'preacher', 'prayerPraiseName', 'prayerConfessionName', 'prayerMale', 'prayerFemale'];
 
     el.onclick = (e) => {
         e.stopPropagation();
 
         if (personFields.includes(field)) {
-            let currentVal = el.textContent === '—' || el.textContent === '— (Sermonette)' ? '' : el.textContent;
-            if (field === 'sermonette') currentVal = currentVal.replace(' (Sermonette)', '');
+            let currentVal = el.textContent === '—' ? '' : el.textContent;
             const currentId = el.getAttribute('data-person-id');
             window.openPersonSelector(dateKey, field, { name: currentVal, id: currentId });
             return;
@@ -1508,7 +1448,6 @@ function setupInlineEdit(el, dateKey, field) {
                         'serviceLeader': 'serviceLeaderId',
                         'musicLeader': 'musicLeaderId',
                         'preacher': 'preacherId',
-                        'sermonette': 'sermonetteId',
                         'prayerPraiseName': 'prayerPraiseId',
                         'prayerConfessionName': 'prayerConfessionId'
                     };

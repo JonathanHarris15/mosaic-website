@@ -468,7 +468,6 @@
         { field: 'serviceLeaderId', roleSlug: 'service_leader' },
         { field: 'musicLeaderId', roleSlug: 'worship_leader' },
         { field: 'preacherId', roleSlug: 'preacher' },
-        { field: 'sermonetteId', roleSlug: 'sermonette' },
         { field: 'prayerPraiseId', roleSlug: 'prayer' },
         { field: 'prayerConfessionId', roleSlug: 'prayer' },
         // Music helpers are a list of {name, id}, not a single field.

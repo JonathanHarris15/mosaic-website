@@ -261,7 +261,6 @@
       preacher: d.preacher || "",
       serviceLeader: d.serviceLeader || d.leader || "",
       musicLeader: d.musicLeader || "",
-      sermonette: d.sermonette || "",
       hasBaptism: !!d.hasBaptism,
     };
   }

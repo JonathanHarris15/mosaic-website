@@ -39,7 +39,6 @@
         { idField: 'serviceLeaderId', slug: 'service_leader' },
         { idField: 'musicLeaderId', slug: 'worship_leader' },
         { idField: 'preacherId', slug: 'preacher' },
-        { idField: 'sermonetteId', slug: 'sermonette' },
         { idField: 'prayerPraiseId', slug: 'prayer', metadata: { prayer_type: 'praise' } },
         { idField: 'prayerConfessionId', slug: 'prayer', metadata: { prayer_type: 'confession' } },
         { idField: 'elementsId', slug: 'elements' },

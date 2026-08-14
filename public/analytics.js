@@ -210,7 +210,6 @@ export function analyticsPage() {
                 serviceLeader: 'service_leader',
                 preacher: 'preacher',
                 musicLeader: 'worship_leader',
-                sermonette: 'sermonette',
                 // Suffix name fields
                 prayerPraiseName: 'prayer',
                 prayerConfessionName: 'prayer',

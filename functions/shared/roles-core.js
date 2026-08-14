@@ -58,7 +58,7 @@
 
     // ── The locked, code-defined liturgical Roles ─────────────────────────────
     //
-    // These six are the `type` values the app already writes as Involvement.
+    // These five are the `type` values the app already writes as Involvement.
     // They stay locked (ADR-0016 §1, Option A): unifying the CONCEPT of a Role
     // costs nothing, but making these editable data would mean rebuilding the
     // Service entity and the Service Guide component system — destabilising the
@@ -71,7 +71,6 @@
         { slug: 'preacher', name: 'Preacher' },
         { slug: 'worship_leader', name: 'Music Leader' },
         { slug: 'worship_helper', name: 'Music Helper' },
-        { slug: 'sermonette', name: 'Sermonette' },
         { slug: 'prayer', name: 'Prayer' },
     ].map(role => Object.freeze(Object.assign({}, role, {
         family: FAMILIES.LITURGICAL,

@@ -52,7 +52,6 @@ const SERVICE = Object.freeze({
     preacher: 'John Preacher',
     musicLeader: 'Mary Music',
     musicHelpers: ['Hal Helper', 'Nina Notes'],
-    sermonette: 'Sid Sermonette',
     hasBaptism: false,
     removedHymns: [],
     liturgy: {
