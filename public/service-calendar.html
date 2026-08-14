@@ -163,12 +163,42 @@
         .planning-col { display: none; }
         .planning-mode .planning-col { display: table-cell; }
 
-        /* The Directory folds back to a rail so the table gets the page. */
+        /* The Directory folds back to a rail so the table gets the page.
+           Everything here is declared rather than left to competing utility
+           classes: `justify-between` and `justify-center` on one element is
+           settled by stylesheet order, not by which one Alpine wrote last,
+           which is how the compass ended up sitting off to one side. */
         .planning-rail {
             width: 3.5rem !important;
             min-width: 3.5rem;
+            transition: width 0.2s ease;
         }
-        .planning-rail .rail-hidden { display: none; }
+        .planning-rail:not(.rail-open) .rail-hidden { display: none !important; }
+        .planning-rail:not(.rail-open) h2 { justify-content: center !important; }
+        .planning-rail:not(.rail-open) .rail-panel {
+            padding-left: 0.25rem !important;
+            padding-right: 0.25rem !important;
+            align-items: center;
+        }
+
+        /* Opened, the Directory is a drawer LYING OVER the table rather than
+           pushing it aside — so a glance at the dates costs nothing and the
+           columns do not jump about while you read them. */
+        .planning-rail.rail-open {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 20rem !important;
+            min-width: 20rem;
+            z-index: 50;
+        }
+        .planning-rail.rail-open .rail-panel {
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+        }
+        .dark .planning-rail.rail-open .rail-panel {
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+        }
 
         /* Wide work wants the whole screen, not the reading column. */
         .planning-wide { max-width: none !important; }
@@ -481,39 +511,49 @@
     </header>
 
     <main :class="planning && view === 'table' ? 'planning-wide px-sm' : 'max-w-[1600px] px-margin'"
-          class="flex-grow flex flex-col md:flex-row gap-margin pb-md pt-base overflow-hidden w-full mx-auto transition-all duration-300">
+          class="relative flex-grow flex flex-col md:flex-row gap-margin pb-md pt-base overflow-hidden w-full mx-auto transition-all duration-300">
         <!-- Sidebar Navigation. In the Planning view it folds back to a rail
-             against the left edge so the table gets the width. -->
-        <aside :class="planning && view === 'table' ? 'planning-rail' : 'md:w-80'"
+             against the left edge so the table gets the width, and the arrow
+             swings it out over the table as a drawer. -->
+        <aside :class="{ 'planning-rail': planning && view === 'table',
+                         'rail-open': planning && view === 'table' && railOpen,
+                         'md:w-80': !(planning && view === 'table') }"
                class="hidden md:flex flex-shrink-0 flex-col md:overflow-hidden transition-all duration-300">
-            <div class="flex-grow bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col overflow-hidden"
-                 :class="planning && view === 'table' ? 'px-1 items-center' : ''">
-                <h2 class="font-headline-md text-primary mb-sm flex items-center justify-between flex-shrink-0"
-                    :class="planning && view === 'table' ? 'w-full justify-center' : ''">
+            <div class="rail-panel flex-grow bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col overflow-hidden">
+                <h2 class="font-headline-md text-primary mb-sm flex items-center justify-between flex-shrink-0">
                     <div class="flex items-center gap-2">
                         <span class="material-symbols-outlined">explore</span>
-                        <span :class="planning && view === 'table' ? 'rail-hidden' : ''">Directory</span>
+                        <span :class="isRail && !railOpen ? 'rail-hidden' : ''">Directory</span>
                     </div>
                     <button onclick="window.jumpToUpcoming()"
-                            :class="planning && view === 'table' ? 'rail-hidden' : ''"
+                            :class="isRail && !railOpen ? 'rail-hidden' : ''"
                             class="p-1 text-secondary hover:text-primary rounded-full hover:bg-surface-container transition-colors" title="Jump to upcoming service">
                         <span class="material-symbols-outlined text-[20px]">event_repeat</span>
                     </button>
                 </h2>
+                <!-- A click anywhere in here is a date being chosen, so the
+                     drawer shuts behind it: open, click, gone. -->
                 <nav id="sidebar-nav" class="flex-grow space-y-xs overflow-y-auto pr-2 custom-scrollbar"
-                     :class="planning && view === 'table' ? 'rail-hidden' : ''">
+                     @click="if (isRail) railOpen = false"
+                     :class="isRail && !railOpen ? 'rail-hidden' : ''">
                     <!-- Nav links will be injected here -->
                 </nav>
-                <!-- The rail keeps one way back, so the Directory is never
-                     lost behind a view somebody forgot they turned on. -->
-                <button x-show="planning && view === 'table'" x-cloak
-                        @click="planning = false"
-                        class="p-2 text-secondary hover:text-primary rounded-full hover:bg-surface-container transition-colors"
-                        title="Leave the Planning view">
-                    <span class="material-symbols-outlined">chevron_right</span>
+                <!-- The rail's one control: swing the dates out over the table
+                     and back. It does NOT leave the Planning view — the button
+                     bottom-right does that. -->
+                <button x-show="isRail" x-cloak
+                        @click="railOpen = !railOpen"
+                        :title="railOpen ? 'Close the dates' : 'Open the dates'"
+                        class="mt-sm p-2 self-center text-secondary hover:text-primary rounded-full hover:bg-surface-container transition-colors">
+                        <span class="material-symbols-outlined" x-text="railOpen ? 'chevron_left' : 'chevron_right'"></span>
                 </button>
             </div>
         </aside>
+
+        <!-- Clicking off the drawer shuts it too, so it never sits open over
+             the columns after you have finished with it. -->
+        <div x-show="isRail && railOpen" x-cloak @click="railOpen = false"
+             class="absolute inset-0 z-40"></div>
 
         <!-- Calendar Container -->
         <div class="flex-grow min-w-0 flex flex-col overflow-hidden pr-14 md:pr-0">

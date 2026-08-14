@@ -26,8 +26,17 @@ function calendarPage() {
         // somebody who is planning is planning for the evening, not for one
         // page load.
         planning: localStorage.getItem('calendarPlanning') === 'true',
+        // The Directory drawer, swung out over the table. Never remembered —
+        // it is a glance at the dates, not a state you leave a page in.
+        railOpen: false,
         showHistory: false,
         showDirectory: false,
+
+        // The Directory is a rail only in the Planning view, and only on the
+        // table. Written once here because the markup asks four times.
+        get isRail() {
+            return this.planning && this.view === 'table';
+        },
         peopleRegistry: [],
         peopleFuse: null,
 
@@ -335,6 +344,10 @@ function calendarPage() {
             });
             this.$watch('planning', val => {
                 localStorage.setItem('calendarPlanning', val ? 'true' : 'false');
+                // Leaving the Planning view puts the Directory back where it
+                // belongs; a drawer left open would hang over the ordinary
+                // sidebar.
+                this.railOpen = false;
             });
             this.$watch('showHistory', val => {
                 if (window.refreshCalendar) window.refreshCalendar(val);
@@ -951,11 +964,21 @@ function renderList(grouped) {
 // a line here and nothing else; three hand-kept lists is how a column ends up
 // with a heading and no way to type into it.
 //
-// Pastoral Prayer is deliberately absent: the table already carries it.
+// The existing Pastoral Prayer column carries the two PEOPLE prayed for. The
+// one added here is its scripture REFERENCE, which is a different thing and a
+// different field.
 //
-// The names are the ones the code stores (hymnMid1, hymnEnd1 …) rather than the
-// Hymn 3/4/5/6 people say in the room. Jonathan's call — the fields keep their
-// names, so the headings match what is underneath them.
+// ⚠ That reference is stored as `liturgy.scriptureReading`. The name is a
+// leftover — the Order of Service labels the very same field "Pastoral Prayer"
+// (service-builder.js `_MOVEMENTS`), and CANONICAL_MAPPING has both 'Scripture
+// Reading' and 'Pastoral Prayer' pointing at it. The heading here follows what
+// the Order of Service calls it, because that is what the room calls it.
+//
+// The hymn names are the ones the code stores (hymnMid1, hymnEnd1 …) rather
+// than the Hymn 3/4/5/6 people say in the room. Jonathan's call — the fields
+// keep their names, so the headings match what is underneath them.
+//
+// In liturgical order, so reading left to right reads the service.
 const PLANNING_COLUMNS = [
     { label: 'Preparatory',           cell: 'prep-hymn-cell',       field: 'preparatoryHymn',   type: 'hymn'  },
     { label: 'Hymn 1',                cell: 'hymn1-cell',           field: 'hymn1',             type: 'hymn'  },
@@ -964,8 +987,10 @@ const PLANNING_COLUMNS = [
     { label: 'Assurance of Pardon',   cell: 'assurance-cell',       field: 'assuranceOfPardon', type: 'verse' },
     { label: 'Hymn Mid 1',            cell: 'hymn-mid1-cell',       field: 'hymnMid1',          type: 'hymn'  },
     { label: 'Hymn Mid 2',            cell: 'hymn-mid2-cell',       field: 'hymnMid2',          type: 'hymn'  },
+    { label: 'Pastoral Prayer Ref',   cell: 'prayer-ref-cell',      field: 'scriptureReading',  type: 'verse' },
     { label: 'Hymn End 1',            cell: 'hymn-end1-cell',       field: 'hymnEnd1',          type: 'hymn'  },
     { label: 'Hymn End 2',            cell: 'hymn-end2-cell',       field: 'hymnEnd2',          type: 'hymn'  },
+    { label: 'Benediction',           cell: 'benediction-cell',     field: 'benediction',       type: 'verse' },
 ];
 
 // Liturgy fields edited with the scripture picker rather than a plain box.

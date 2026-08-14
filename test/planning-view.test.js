@@ -73,7 +73,36 @@ test('every liturgy slot from the ticket has a column', () => {
         'hymnMid2',
         'hymnEnd1',
         'hymnEnd2',
+        // Added on review: the pastoral prayer's scripture reference and the
+        // benediction's.
+        'scriptureReading',
+        'benediction',
     ].forEach(f => assert.ok(fields.includes(f), `no column for ${f}`));
+});
+
+test('the pastoral prayer reference is its own column, beside the people', () => {
+    // The existing Pastoral Prayer column carries the two people prayed for.
+    // This one is the scripture reference — a different thing, a different
+    // field, and it must not be mistaken for a duplicate and removed.
+    const sb = load();
+    const col = sb.PLANNING_COLUMNS.find(c => c.field === 'scriptureReading');
+    assert.ok(col, 'no column for the pastoral prayer reference');
+    assert.match(col.label, /Pastoral Prayer/);
+    assert.strictEqual(col.type, 'verse', 'a reference is picked, not typed freehand');
+});
+
+test('the columns read left to right in the order the service runs', () => {
+    const sb = load();
+    const order = sb.PLANNING_COLUMNS.map(c => c.field);
+    const pos = f => order.indexOf(f);
+
+    assert.ok(pos('preparatoryHymn') < pos('hymn1'), 'the preparatory hymn opens');
+    assert.ok(pos('hymn1') < pos('callToConfession'), 'praise before confession');
+    assert.ok(pos('callToConfession') < pos('assuranceOfPardon'), 'the call precedes the assurance');
+    assert.ok(pos('assuranceOfPardon') < pos('hymnMid1'));
+    assert.ok(pos('hymnMid2') < pos('scriptureReading'), 'the prayer follows the middle hymns');
+    assert.ok(pos('scriptureReading') < pos('hymnEnd1'), 'the closing hymns come after');
+    assert.ok(pos('benediction') === order.length - 1, 'the benediction sends everyone home');
 });
 
 test('the pastoral prayer is not doubled up', () => {
@@ -170,9 +199,47 @@ test('the Directory folds to a rail and the page gives up its width', () => {
     assert.match(HTML, /\.planning-wide\s*\{\s*max-width:\s*none/);
 });
 
-test('the rail keeps a way back out', () => {
-    // Otherwise the Directory is lost behind a view somebody forgot they left on.
-    assert.match(HTML, /planning = false/);
+// ── The Directory drawer ──────────────────────────────────────────────────
+
+test('the rail arrow opens the dates rather than leaving the Planning view', () => {
+    // It used to drop you out of the view entirely, which is a heavy answer to
+    // "let me glance at the dates".
+    assert.match(HTML, /@click="railOpen = !railOpen"/);
+    assert.ok(!/@click="planning = false"/.test(HTML),
+        'the rail must not carry a leave-the-view button any more');
+});
+
+test('the drawer lies over the table instead of pushing it', () => {
+    // Pushing would shift every column sideways each time somebody checked a
+    // date, which is worse than the problem it solves.
+    assert.match(HTML, /\.planning-rail\.rail-open\s*\{[^}]*position:\s*absolute/);
+    assert.match(HTML, /\.planning-rail\.rail-open\s*\{[^}]*z-index:\s*50/);
+});
+
+test('choosing a date shuts the drawer behind you', () => {
+    assert.match(HTML, /@click="if \(isRail\) railOpen = false"/);
+});
+
+test('clicking away shuts it too', () => {
+    assert.match(HTML, /x-show="isRail && railOpen"[\s\S]{0,120}@click="railOpen = false"/);
+});
+
+test('leaving the Planning view puts the drawer away', () => {
+    assert.match(SRC, /calendarPlanning[\s\S]{0,400}this\.railOpen = false/);
+});
+
+test('the drawer is never remembered across a page load', () => {
+    // A glance at the dates is not a state to leave a page in.
+    const sb = load();
+    assert.ok(/railOpen: false/.test(SRC), 'railOpen should start closed');
+    assert.ok(!/calendarRailOpen/.test(SRC), 'and must not be persisted');
+});
+
+test('the rail centres its compass by rule, not by luck', () => {
+    // justify-between and justify-center on one element is settled by
+    // stylesheet order rather than by which class Alpine wrote last — which is
+    // exactly how the compass ended up sitting off to one side.
+    assert.match(HTML, /\.planning-rail:not\(\.rail-open\) h2 \{ justify-content: center !important; \}/);
 });
 
 test('the month separator still spans the whole row', () => {
