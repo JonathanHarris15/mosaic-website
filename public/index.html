@@ -505,6 +505,15 @@
                             `;
                         }
                         
+                        if (svc.liturgy?.sermon) {
+                            glanceHtml += `
+                                <div class="flex flex-col">
+                                    <span class="text-xs font-label-md text-on-surface-variant uppercase tracking-wider">Sermon</span>
+                                    <span class="text-body-md text-primary font-medium">${svc.liturgy.sermon}</span>
+                                </div>
+                            `;
+                        }
+
                         if (svc.preacher) {
                             glanceHtml += `
                                 <div class="flex flex-col">

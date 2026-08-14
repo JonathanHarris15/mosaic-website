@@ -196,7 +196,7 @@
               : svc ? html`
                 <div style=${{ fontFamily: "var(--font-serif)", fontSize: 20, fontWeight: 600, color: "var(--primary)", lineHeight: 1.2 }}>${svc.theme}</div>
                 <div style=${{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-                  ${[["Preacher", svc.preacher], ["Service Leader", svc.serviceLeader], ["Music Leader", svc.musicLeader]].filter(function (kv) { return kv[1]; }).map(function (kv) {
+                  ${[["Sermon", svc.sermon], ["Preacher", svc.preacher], ["Service Leader", svc.serviceLeader], ["Music Leader", svc.musicLeader]].filter(function (kv) { return kv[1]; }).map(function (kv) {
                     return html`<div key=${kv[0]} style=${{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
                       <span style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)" }}>${kv[0]}</span>
                       <span style=${{ fontFamily: "var(--font-sans)", fontSize: 14.5, fontWeight: 500, color: "var(--on-surface)", textAlign: "right" }}>${kv[1]}</span>

@@ -722,6 +722,7 @@ The week-by-week view of Sunday **Services** — the Sunday Service series and n
   - **List View**: A blue status badge with a `water_drop` icon.
   - **Table View**: A dedicated "Baptism" column showing the Baptism Candidates' names.
   - **Editing**: Read-only in the calendar; Baptism Candidates are managed in the Order of Service editor (linked to Person records). In the legacy system the "Include Baptism?" toggle sets `hasBaptism`; in the new system `hasBaptism` is derived from whether the week's Service Guide Template requests the baptism component (ADR-0010).
+- **Sermon passage**: shown in **both** views — its own column in the Table View, and a `menu_book` line under the theme in the List View. It carries as much of "what is this Sunday" as the theme does, so a view that hides it is answering the question half-way. It reaches the phone's services list and both **Sunday at a Glance** panels for the same reason.
 - **Sermonette Indicator**: 
   - **List View**: A purple status badge with a `mic` icon.
   - **Table View**: Displayed within the "Preacher" column as a secondary entry (e.g., "Jane Doe (Sermonette)").

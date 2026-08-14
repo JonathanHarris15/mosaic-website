@@ -1146,6 +1146,14 @@ function injectServiceData(serviceMap) {
                     ${escapeHtml(svc.theme)}
                 </p>`;
             }
+            // The sermon passage carries as much of "what is this Sunday" as the
+            // theme does, so the list shows it too — not the table only.
+            if (svc.liturgy && svc.liturgy.sermon) {
+                html += `<p class="text-xs font-label-md text-primary flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[14px]">menu_book</span>
+                    ${escapeHtml(svc.liturgy.sermon)}
+                </p>`;
+            }
             if (svc.serviceLeader) {
                 html += `<p class="hidden md:flex text-xs text-on-surface-variant items-center gap-1">
                     <span class="material-symbols-outlined text-[14px]">person</span>

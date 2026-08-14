@@ -457,6 +457,7 @@
             <div style=${{ fontFamily: "var(--font-sans)", fontSize: 14.5, fontWeight: 600, color: "var(--on-surface)" }}>${d.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}</div>
             ${s ? html`<${M.Fragment}>
               <div style=${{ fontFamily: "var(--font-serif)", fontSize: 15, fontWeight: 600, color: "var(--primary)", marginTop: 3, lineHeight: 1.25 }}>${s.theme}</div>
+              ${s.sermon ? html`<div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 500, color: "var(--primary)", marginTop: 3 }}>${s.sermon}</div>` : null}
               <div style=${{ fontFamily: "var(--font-sans)", fontSize: 12.5, color: "var(--on-surface-variant)", marginTop: 3 }}>${s.preacher ? "Preaching · " + s.preacher : "Sunday Service"}</div>
               <div style=${{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
                 ${s.hasBaptism ? html`<${CalChip} icon="droplets" tone="tertiary">Baptism<//>` : null}
