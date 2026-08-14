@@ -310,3 +310,76 @@ test('presence failing does not take the page down', () => {
     assert.deepStrictEqual(latest, []);
     PresenceStore.stop();
 });
+
+// ── Presence must never be the reason a page stops working ────────────────
+//
+// It starts late: it waits on auth, and it used to wait on the signed-in user
+// resolving to a Person. The editors wait for none of that. `state.now` began
+// as null, the first cell to ask "is anyone in this box?" hit state.now(), and
+// the TypeError took out the loop that attaches every edit handler — nothing
+// editable, on both surfaces, with no visible error.
+//
+// The rule these pin: presence may remove a LOCK, never an EDITOR.
+
+test('asking who holds a box before presence starts does not throw', () => {
+    PresenceStore.stop();
+    assert.doesNotThrow(() => PresenceStore.holder('2026-08-16', 'liturgy.hymn1'));
+    assert.strictEqual(PresenceStore.holder('2026-08-16', 'liturgy.hymn1'), null);
+});
+
+test('with presence not running, every box opens', () => {
+    // A claim that cannot be recorded is not a claim that should be denied.
+    // The page simply has no locking — which is how it worked before this
+    // feature, and infinitely better than a screen where nothing opens.
+    PresenceStore.stop();
+    assert.strictEqual(PresenceStore.claim('2026-08-16', 'liturgy.hymn1'), true);
+});
+
+test('letting go before presence starts is harmless', () => {
+    PresenceStore.stop();
+    assert.doesNotThrow(() => PresenceStore.release());
+});
+
+test('the other readers are safe before presence starts too', () => {
+    PresenceStore.stop();
+    assert.deepStrictEqual(PresenceStore.here(), []);
+    assert.deepStrictEqual(PresenceStore.claims(), {});
+});
+
+test('an account with no Person record still gets presence', () => {
+    // Gating the start on a resolved Person is what stopped it running at all
+    // for such an account. A uid is all a claim needs; the name is cosmetic.
+    const writes = [];
+    PresenceStore.start({
+        db: {
+            collection: () => ({
+                doc: () => ({ set(r) { writes.push(r); return Promise.resolve(); } }),
+                onSnapshot: () => () => {},
+            })
+        },
+        uid: ME,
+        identity: null,
+        surface: 'order-of-service',
+        stamp: () => ts(NOW), now: () => NOW,
+        setInterval: () => 1, clearInterval: () => {},
+    });
+
+    assert.strictEqual(writes.length, 1, 'it should still announce itself');
+    assert.strictEqual(writes[0].personId, null);
+    assert.strictEqual(PresenceStore.claim('2026-08-16', 'liturgy.hymn1'), true);
+    assert.strictEqual(ServicePresence.holderLabel(writes[0]), 'Someone',
+        'and read as somebody rather than as blank');
+    PresenceStore.stop();
+});
+
+test('the Order of Service starts presence without waiting for a Person', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const src = fs.readFileSync(
+        path.join(__dirname, '..', 'public', 'service-builder.js'), 'utf8');
+    const body = src.slice(src.indexOf('watchPresence() {'),
+                           src.indexOf('watchPresence() {') + 700);
+
+    assert.ok(!/if \(!this\.me/.test(body),
+        'gating the start on a resolved Person is the bug this file records');
+});

@@ -1762,7 +1762,13 @@ function serviceForm() {
         presenceEntries: [],
 
         watchPresence() {
-            if (!this.me || !this.user) return;
+            // Deliberately NOT gated on `me`. An account with no Person record
+            // attached still has a uid, which is all a claim needs — the name
+            // is cosmetic and falls back to "Someone". Gating on the Person was
+            // what stopped presence starting at all for such an account, and a
+            // store that never started used to take every editor on the page
+            // down with it.
+            if (!this.user) return;
             PresenceStore.start({
                 db: db,
                 uid: this.user.uid,

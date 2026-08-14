@@ -420,3 +420,30 @@ test('the Planning view and the Order of Service claim the same box', () => {
     assert.strictEqual(sb.presenceKeyFor('theme'), 'theme');
     assert.strictEqual(sb.presenceKeyFor('preacher'), 'preacher');
 });
+
+test('one row that fails does not leave the rest of the page read-only', () => {
+    // Everything in the injection runs inside a forEach, so an exception on a
+    // single Sunday used to abandon the loop — every row after it left with no
+    // edit handlers, a page silently and entirely read-only with nothing on
+    // screen to say why. That is exactly how presence broke both surfaces.
+    const good = editableCell();
+    const db = fakeDb();
+    const sb = load({ db });
+    sb.document.body = { classList: { contains: (c) => c === 'can-edit' } };
+
+    const exploding = {
+        dataset: { serviceDate: '2026-08-16' },
+        querySelector() { throw new Error('this row is broken'); },
+    };
+    sb.document.querySelectorAll = () => [
+        exploding,
+        row('2026-08-23', { '.theme-cell': good }),
+    ];
+
+    const pending = sb.loadServiceData();
+    assert.doesNotThrow(() => db.emit({ '2026-08-23': { theme: 'Grace' } }));
+
+    assert.strictEqual(good.textContent, 'Grace',
+        'the rows after a broken one must still be drawn');
+    return pending;
+});

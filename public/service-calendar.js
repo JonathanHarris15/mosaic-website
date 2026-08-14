@@ -1376,6 +1376,15 @@ function injectServiceData(serviceMap) {
 
     // Walk through all rendered date cards/rows and inject data if a service exists
     document.querySelectorAll('[data-service-date]').forEach(el => {
+      // ⚠ ONE ROW MUST NOT TAKE THE PAGE WITH IT.
+      //
+      // Everything below runs inside a forEach, so an exception on any single
+      // Sunday abandons the loop and every row after it is left with no edit
+      // handlers at all — a page that is silently, entirely read-only, with
+      // nothing on screen to say why. That is exactly how the presence work
+      // broke both surfaces: one unstarted store, one TypeError, no clue.
+      // A row that fails is now one broken row.
+      try {
         const dateKey = el.dataset.serviceDate;
         const svc = serviceMap[dateKey] || {};
 
@@ -1610,6 +1619,9 @@ function injectServiceData(serviceMap) {
                 setupInlineEdit(confRow.querySelector('.conf-name-cell'), dateKey, 'prayerConfessionName');
             }
         }
+      } catch (err) {
+        console.error('Could not draw the service row for', el.dataset.serviceDate, err);
+      }
     });
 }
 

@@ -141,11 +141,27 @@ var ServicePresence = (function () {
 // security rules say "you may write your own and nobody else's".
 var PresenceStore = (function () {
 
+    // ⚠ EVERY FIELD HERE HAS TO BE USABLE BEFORE start() RUNS.
+    //
+    // Presence starts late — it waits on auth, and on the Order of Service page
+    // it used to wait on the signed-in user resolving to a Person. The editors
+    // do not wait for any of that. So `now` began as null, the first cell to
+    // ask "is anyone in this box?" hit `state.now()`, and the TypeError took
+    // out the loop that attaches every edit handler on the page: nothing was
+    // editable, on both surfaces, with no visible error.
+    //
+    // The rule this cost us: presence may remove a lock, never an editor. When
+    // it is not running the answer to "who holds this box" is nobody, and every
+    // claim succeeds — which is exactly how the page behaved before any of this
+    // existed.
     var state = {
         db: null, uid: null, identity: null, surface: null,
-        entries: [], unsubscribe: null, heartbeat: null,
+        entries: [], unsubscribe: null, heartbeat: null, started: false,
         dateKey: null, fieldKey: null,
-        onChange: null, stamp: null, now: null, setInterval: null, clearInterval: null
+        onChange: function () {},
+        stamp: function () { return null; },
+        now: function () { return Date.now(); },
+        setInterval: null, clearInterval: null
     };
 
     function start(deps) {
@@ -161,6 +177,7 @@ var PresenceStore = (function () {
         state.clearInterval = deps.clearInterval || clearInterval;
 
         if (!state.db || !state.uid) return;
+        state.started = true;
 
         state.unsubscribe = state.db.collection('presence').onSnapshot(
             function (snap) {
@@ -199,9 +216,14 @@ var PresenceStore = (function () {
             .catch(function (e) { console.warn('Could not record presence:', e); });
     }
 
-    // Take a box. Refused if somebody else already holds it — the caller must
-    // not open its editor.
+    // Take a box. Refused only if somebody else demonstrably holds it.
+    //
+    // With presence not running this ALLOWS the edit. A claim that cannot be
+    // recorded is not a claim that should be denied: the page simply has no
+    // locking, which is how it worked before this feature and is far better
+    // than a screen where nothing opens.
     function claim(dateKey, fieldKey) {
+        if (!state.started) return true;
         if (holder(dateKey, fieldKey)) return false;
         state.dateKey = dateKey;
         state.fieldKey = fieldKey;
@@ -210,21 +232,25 @@ var PresenceStore = (function () {
     }
 
     function release() {
+        if (!state.started) return;
         state.dateKey = null;
         state.fieldKey = null;
         write(null, null);
     }
 
     function holder(dateKey, fieldKey) {
+        if (!state.started) return null;
         return ServicePresence.holderOf(
             state.entries, state.uid, dateKey, fieldKey, state.now());
     }
 
     function claims() {
+        if (!state.started) return {};
         return ServicePresence.claimsByBox(state.entries, state.uid, state.now());
     }
 
     function here() {
+        if (!state.started) return [];
         return ServicePresence.peopleHere(state.entries, state.uid, state.now());
     }
 
@@ -233,6 +259,7 @@ var PresenceStore = (function () {
         if (state.heartbeat && state.clearInterval) state.clearInterval(state.heartbeat);
         state.unsubscribe = null;
         state.heartbeat = null;
+        state.started = false;
         state.entries = [];
         state.dateKey = null;
         state.fieldKey = null;
