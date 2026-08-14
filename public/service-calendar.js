@@ -117,8 +117,44 @@ function calendarPage() {
             this.showPersonSelector = true;
         },
         
+        // One field, one write, nothing else. See the guard in
+        // savePersonSelection for why this does not go through the batch there.
+        async saveAssignedWriter() {
+            this.saving = true;
+            try {
+                const dateKey = this.selectorDateKey;
+                const value = this.selectedPersonRef.id
+                    ? { id: this.selectedPersonRef.id, name: this.selectedPersonRef.name || '' }
+                    : null;
+
+                const ref = db.collection('services').doc(dateKey);
+                const update = {
+                    [ASSIGNED_FIELD]: value,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                try {
+                    await ref.update(update);
+                } catch (e) {
+                    if (e.code !== 'not-found') throw e;
+                    await ref.set(update, { merge: true });
+                }
+
+                if (!serviceDataMap[dateKey]) serviceDataMap[dateKey] = {};
+                serviceDataMap[dateKey][ASSIGNED_FIELD] = value;
+                injectServiceData(serviceDataMap);
+
+                this.showPersonSelector = false;
+            } catch (err) {
+                console.error('Error saving who is assigned:', err);
+                alert('Failed to save.');
+            } finally {
+                this.saving = false;
+            }
+        },
+
         getRoleName(field) {
             const names = {
+                'assignedWriter': 'Assigned to write this Sunday',
                 'serviceLeader': 'Service Leader',
                 'preacher': 'Preacher',
                 'musicLeader': 'Music Leader',
@@ -132,9 +168,22 @@ function calendarPage() {
         
         async savePersonSelection() {
             if (!this.selectorDateKey || !this.selectorField) return;
-            
+
             if (!this.selectedPersonRef.id && this.selectedPersonRef.name) {
                 alert('Please select a person from the list or add them as a new person.');
+                return;
+            }
+
+            // ⚠ Assigned leaves before any of the machinery below.
+            //
+            // Everything past this point treats a person on a Sunday as a
+            // person who SERVED: it writes an involvement record and moves
+            // their number in the fairness engine. Being down to write an order
+            // of service is not serving, and running it through here would make
+            // whoever volunteers for the most Sundays look over-used and stop
+            // being asked. One field, nothing else touched.
+            if (this.selectorField === ASSIGNED_FIELD) {
+                await this.saveAssignedWriter();
                 return;
             }
 
@@ -389,6 +438,12 @@ function calendarPage() {
             try {
                 const snap = await db.collection('people').get();
                 this.peopleRegistry = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                // The Assigned badges are drawn outside this component and need
+                // a photo for a given id. Re-drawn once the faces are here,
+                // since the table is usually on screen before the directory is.
+                peopleById = {};
+                this.peopleRegistry.forEach(p => { peopleById[p.id] = p; });
+                injectServiceData(serviceDataMap);
                 this.peopleFuse = new Fuse(this.peopleRegistry, {
                     keys: ['name'],
                     threshold: 0.4,
@@ -404,6 +459,11 @@ function calendarPage() {
 
 let allSundays = [];
 let serviceDataMap = {};
+
+// The directory keyed by id, so a badge can find a face. Kept at module scope
+// because the rendering happens here rather than inside the Alpine component
+// that fetches it.
+let peopleById = {};
 
 // The hymn index behind the Planning view's hymn columns. Shared with the Order
 // of Service so both offer the same hymns for the same typing — see
@@ -1000,6 +1060,49 @@ const LITURGY_VERSE_FIELDS = ['sermon'].concat(
 const LITURGY_HYMN_FIELDS = PLANNING_COLUMNS
     .filter(c => c.type === 'hymn').map(c => c.field);
 
+// Who is down to WRITE this Sunday's order of service.
+//
+// ⚠ NOT a Role, and NOT an Involvement. Everywhere else on this page, putting a
+// person on a Sunday means they served: it writes an involvement record and
+// moves their number in the fairness engine. This one deliberately does none of
+// that. It is a note on a planning sheet saying who agreed to fill this row in,
+// and being assigned five Sundays must never make somebody look over-served.
+//
+// Deliberately short-lived. When per-element authorship arrives — who actually
+// chose each hymn — this is what it replaces. The name says "writer" rather
+// than the vaguer "assigned" so that the two can coexist without either being
+// mistaken for the other.
+const ASSIGNED_FIELD = 'assignedWriter';
+
+// A Person's first name, for the label under the badge. The badge is about
+// 3rem wide and a full name does not fit; the whole name is on the tooltip.
+function firstNameOf(name) {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    return parts.length ? parts[0] : '';
+}
+
+// The Assigned badge for one Sunday: a photo with a first name under it, or a
+// faint invitation when nobody is down for it yet.
+//
+// `person` is the directory record, looked up for the photo. A Service stores
+// only {id, name}, so a Person with no record found still shows — as initials.
+// The alternative, hiding somebody because their directory entry has not
+// loaded, would read as "nobody is assigned" and get them assigned twice.
+function assignedBadgeHtml(assigned, person) {
+    const name = (assigned && assigned.name) || '';
+    if (!name) {
+        return '<span class="material-symbols-outlined text-[18px] opacity-40">person_add</span>';
+    }
+
+    const photoUrl = person && person.photoUrl;
+    const face = photoUrl
+        ? `<img src="${escapeHtml(photoUrl)}" alt="" style="${escapeHtml(PersonPhotoCore.frameStyle(person.photoCrop))}">`
+        : escapeHtml(PersonPhotoCore.initialsOf(name));
+
+    return `<span class="m-avatar m-avatar--sm">${face}</span>` +
+           `<span class="assigned-name">${escapeHtml(firstNameOf(name))}</span>`;
+}
+
 // How a hymn slot reads in a cell. A slot holds {id, name}: a chosen hymn has
 // both, one typed in freehand has only a name, and an empty one has neither.
 function hymnCellText(slot) {
@@ -1071,7 +1174,10 @@ function renderTable(grouped) {
                     
                     row.innerHTML = `
                         <td class="px-md py-md whitespace-nowrap sticky-col-left">
-                            <span class="font-body-md text-on-surface">${date.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                            <div class="flex items-center gap-2">
+                                <button class="assigned-btn planning-only" data-assigned-for="${formattedDate}" title="Assign someone to write this Sunday"></button>
+                                <span class="font-body-md text-on-surface">${date.toLocaleDateString('default', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                            </div>
                         </td>
                         <td class="px-md py-md min-w-[160px]">
                             <div class="sermon-cell font-body-md text-primary text-sm">—</div>
@@ -1414,6 +1520,27 @@ function injectServiceData(serviceMap) {
             if (canEdit) {
                 setupInlineEdit(maleRow.querySelector('.male-name-cell'), dateKey, 'prayerMale');
                 setupInlineEdit(femaleRow.querySelector('.female-name-cell'), dateKey, 'prayerFemale');
+            }
+        }
+
+        // Who is down to write this Sunday. Shown only in the Planning view,
+        // which is the only place the question is being asked.
+        const assignedBtn = el.querySelector('.assigned-btn');
+        if (assignedBtn) {
+            const assigned = svc[ASSIGNED_FIELD] || null;
+            const person = assigned && assigned.id ? peopleById[assigned.id] : null;
+            assignedBtn.innerHTML = assignedBadgeHtml(assigned, person);
+            assignedBtn.title = assigned && assigned.name
+                ? `${assigned.name} is writing this Sunday`
+                : 'Assign someone to write this Sunday';
+            if (canEdit) {
+                assignedBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    window.openPersonSelector(dateKey, ASSIGNED_FIELD, {
+                        name: (assigned && assigned.name) || '',
+                        id: (assigned && assigned.id) || null
+                    });
+                };
             }
         }
 
@@ -2055,15 +2182,23 @@ auth.onAuthStateChanged(async (user) => {
     }
 });
 
+// Escapes text for HTML. Done by hand rather than through a detached <div>,
+// because that trick leaves quotes alone — fine for text between tags, wrong
+// the moment the value goes into an attribute, which the Assigned badge does
+// with a name and a photo URL.
 function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    return String(str === null || str === undefined ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         normalizeServiceDoc, isCellBeingEdited, setCellText, hasEditorOpen,
-        PLANNING_COLUMNS, LITURGY_HYMN_FIELDS, LITURGY_VERSE_FIELDS, hymnCellText
+        PLANNING_COLUMNS, LITURGY_HYMN_FIELDS, LITURGY_VERSE_FIELDS, hymnCellText,
+        ASSIGNED_FIELD, assignedBadgeHtml, firstNameOf, escapeHtml
     };
 }

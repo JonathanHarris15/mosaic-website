@@ -163,6 +163,36 @@
         .planning-col { display: none; }
         .planning-mode .planning-col { display: table-cell; }
 
+        /* Things that appear inside an existing cell in the Planning view, so
+           they cannot use .planning-col — a table-cell inside a td is not a
+           thing. The Assigned badge is the only one so far. */
+        .planning-only { display: none; }
+        .planning-mode .planning-only { display: flex; }
+
+        /* Assigned — who is down to WRITE this Sunday. Sits at the leading edge
+           of the row, before the date. */
+        .assigned-btn {
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            width: 3rem;
+            flex: 0 0 auto;
+            padding: 2px;
+            border-radius: var(--radius-sm);
+            transition: background-color 0.15s ease;
+        }
+        .assigned-btn:hover { background-color: var(--surface-container); }
+        .assigned-name {
+            font-size: 10px;
+            line-height: 1.1;
+            max-width: 3rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--on-surface-variant);
+        }
+
         /* The Directory folds back to a rail so the table gets the page.
            Everything here is declared rather than left to competing utility
            classes: `justify-between` and `justify-center` on one element is
@@ -224,6 +254,7 @@
     <script src="bible-data.js"></script>
     <script src="verse-picker.js"></script>
     <script src="hymn-registry.js"></script>
+    <script src="person-photo-core.js"></script>
     <link href="verse-picker.css" rel="stylesheet" />
 </head>
 
