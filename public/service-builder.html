@@ -309,14 +309,12 @@
                         <span class="material-symbols-outlined text-[15px] text-secondary/70">menu_book</span>
                         <span class="font-label-md text-[11px] text-secondary">Key Verse ·</span>
                         <div x-data="versePicker(service.keyVerse)" x-modelable="value" x-model="service.keyVerse" class="relative">
-                            <div class="flex items-center gap-1">
-                                <input type="text" id="key-verse-search" name="key-verse" x-model="query" @input="value = query; $dispatch('input', value)" @focus="open = true"
-                                    class="bg-transparent border-none p-0 focus:ring-0 text-[12px] font-semibold text-graph-ink w-28 placeholder:font-normal placeholder:text-secondary/60" placeholder="e.g. John 3:16" :disabled="!canEdit">
-                                <button @click="toggle()" class="text-secondary hover:text-primary transition-colors cursor-pointer flex items-center" :disabled="!canEdit">
-                                    <span class="material-symbols-outlined text-[16px]">expand_more</span>
-                                </button>
-                            </div>
-                            <div x-show="open" @click.away="open = false" x-transition class="absolute z-50 mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden max-h-[min(75vh,400px)] flex flex-col left-0">
+                            <button type="button" id="key-verse-search" @click="toggle()" :disabled="!canEdit"
+                                class="flex items-center gap-1 text-[12px] font-semibold text-graph-ink cursor-pointer disabled:cursor-not-allowed disabled:opacity-60">
+                                <span :class="value ? '' : 'font-normal text-secondary/60'" x-text="value || 'e.g. John 3:16'"></span>
+                                <span class="material-symbols-outlined text-[16px] text-secondary">expand_more</span>
+                            </button>
+                            <div x-show="open" @click.away="open = false" x-transition class="absolute z-50 mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden overflow-x-hidden max-h-[min(75vh,400px)] flex flex-col left-0">
                                 <div class="bg-surface-container-low px-4 py-2 border-b border-outline-variant flex items-center justify-between sticky top-0">
                                     <div class="flex flex-row items-center gap-2 text-[10px] font-label-md uppercase tracking-wider text-secondary">
                                         <button @click="step = 'book'; if(selectingRangeEnd){rangeBook=''}else{selectedBook=''}" class="hover:text-primary transition-colors cursor-pointer" x-text="breadcrumbBook"></button>
@@ -346,30 +344,28 @@
                                     <span class="w-2.5 h-2.5 rounded-[2px] bg-blue-700"></span>
                                     <span class="w-2.5 h-2.5 rounded-[2px] bg-blue-900"></span>
                                 </div>
-                                <div class="p-2 grid grid-cols-4 gap-1 overflow-y-auto max-h-56" x-show="step === 'book'">
+                                <div class="p-2 grid grid-cols-4 gap-1 overflow-y-auto overflow-x-hidden max-h-56" x-show="step === 'book'">
                                     <template x-for="book in filteredBooks" :key="book">
-                                        <button @click="selectBook(book)" class="px-2 py-2 rounded-lg text-xs font-label-md transition-all text-center cursor-pointer hover:ring-2 hover:ring-primary/50"
-                                            :class="[bookColor(book), bookColor(book) === 'bg-surface-container' ? 'text-on-surface' : 'text-white', activeBook === book ? 'ring-2 ring-primary ring-offset-1' : '']"
-                                            :title="bookTitle(book)"
+                                        <button @click="selectBook(book)" @mouseenter="hoverBook(book)" @mouseleave="clearHover()"
+                                            class="px-1.5 py-2.5 rounded-lg text-xs font-label-md transition-all text-center leading-tight cursor-pointer hover:ring-2 hover:ring-primary/50"
+                                            :class="bookClasses(book)"
                                             x-text="book"></button>
                                     </template>
                                 </div>
-                                <div class="p-2 grid grid-cols-6 gap-1 overflow-y-auto max-h-56" x-show="step === 'chapter'">
+                                <div class="p-2 grid grid-cols-6 gap-1 overflow-y-auto overflow-x-hidden max-h-56" x-show="step === 'chapter'">
                                     <template x-for="chapter in chapters" :key="chapter">
-                                        <button @click="selectChapter(chapter)" class="px-2 py-2 rounded-lg text-sm font-label-md transition-all text-center cursor-pointer hover:ring-2 hover:ring-primary/50"
-                                            :class="[chapterColor(chapter), chapterColor(chapter) === 'bg-surface-container' ? 'text-on-surface' : 'text-white', activeChapter === chapter ? 'ring-2 ring-primary ring-offset-1' : '']"
-                                            :title="chapterTitle(chapter)"
+                                        <button @click="selectChapter(chapter)" @mouseenter="hoverChapter(chapter)" @mouseleave="clearHover()"
+                                            class="px-1.5 py-2.5 rounded-lg text-sm font-label-md transition-all text-center cursor-pointer hover:ring-2 hover:ring-primary/50"
+                                            :class="chapterClasses(chapter)"
                                             x-text="chapter"></button>
                                     </template>
                                 </div>
                                 <div class="p-2 flex flex-col" x-show="step === 'verse'">
-                                    <div class="grid grid-cols-6 gap-1 overflow-y-auto max-h-56">
+                                    <div class="grid grid-cols-6 gap-1 overflow-y-auto overflow-x-hidden max-h-56">
                                         <template x-for="verse in verses" :key="verse">
-                                            <button @click="selectVerse(verse)" class="px-2 py-2 rounded-lg text-sm font-label-md transition-all text-center cursor-pointer hover:ring-2 hover:ring-primary/50"
-                                                :class="[verseColor(verse), verseColor(verse) === 'bg-surface-container' ? 'text-on-surface' : 'text-white',
-                                                    (!selectingRangeEnd && selectedVerse === verse) || (selectingRangeEnd && rangeVerse === verse) ? 'ring-2 ring-primary ring-offset-1' : '',
-                                                    selectingRangeEnd && verse === selectedVerse && rangeBook === selectedBook && rangeChapter === selectedChapter && rangeVerse !== verse ? 'ring-1 ring-primary/50' : '']"
-                                                :title="verseTitle(verse)"
+                                            <button @click="selectVerse(verse)" @mouseenter="hoverVerse(verse)" @mouseleave="clearHover()"
+                                                class="px-1.5 py-2.5 rounded-lg text-sm font-label-md transition-all text-center cursor-pointer hover:ring-2 hover:ring-primary/50"
+                                                :class="verseClasses(verse)"
                                                 x-text="verse"></button>
                                         </template>
                                     </div>
@@ -386,6 +382,7 @@
                                         <span x-text="rangeVerse ? (rangeBook === selectedBook && rangeChapter === selectedChapter ? rangeChapter + ':' + rangeVerse : (rangeBook === selectedBook ? rangeBook + ' ' + rangeChapter + ':' + rangeVerse : rangeBook + ' ' + rangeChapter + ':' + rangeVerse)) : '...'" class="opacity-60"></span>
                                     </div>
                                 </div>
+                                <div class="shrink-0 px-3 py-1.5 border-t border-outline-variant bg-surface-container-low text-[10px] text-secondary min-h-[26px] flex items-center" x-text="footerText"></div>
                             </div>
                         </div>
                     </div>
@@ -721,13 +718,12 @@
                                                             <div>
                                                                 <div class="font-label-md text-[10px] font-semibold tracking-[.1em] uppercase text-outline mb-2">Scripture Reference</div>
                                                                 <div x-data="versePicker(service.liturgy[item.key])" x-modelable="value" x-model="service.liturgy[item.key]" class="relative">
-                                                                    <div class="flex items-center bg-white rounded-lg border border-outline-variant px-3 py-2">
-                                                                        <input type="text" :aria-label="item.label" x-model="query" @input="value = query; $dispatch('input', value)" @focus="open = true" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" placeholder="e.g. Psalm 100" :disabled="!canEdit">
-                                                                        <button @click="toggle()" class="text-secondary hover:text-primary transition-colors cursor-pointer flex items-center" :disabled="!canEdit">
-                                                                            <span class="material-symbols-outlined text-[20px]">menu_book</span>
-                                                                        </button>
-                                                                    </div>
-                                                                    <div x-show="open" @click.away="open = false" x-transition class="absolute z-50 mt-1 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden max-h-[min(75vh,400px)] flex flex-col">
+                                                                    <button type="button" :aria-label="item.label" @click="toggle()" :disabled="!canEdit"
+                                                                        class="w-full flex items-center justify-between gap-2 bg-white rounded-lg border border-outline-variant px-3 py-2 text-left cursor-pointer hover:border-primary transition-colors disabled:cursor-not-allowed disabled:opacity-60">
+                                                                        <span class="text-sm truncate" :class="value ? 'text-graph-ink' : 'text-secondary/60'" x-text="value || 'e.g. Psalm 100'"></span>
+                                                                        <span class="material-symbols-outlined text-[20px] text-secondary shrink-0">menu_book</span>
+                                                                    </button>
+                                                                    <div x-show="open" @click.away="open = false" x-transition class="absolute z-50 mt-1 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden overflow-x-hidden max-h-[min(75vh,400px)] flex flex-col">
                                                                         <div class="bg-surface-container-low px-4 py-2 border-b border-outline-variant flex items-center justify-between sticky top-0">
                                                                             <div class="flex flex-row items-center gap-2 text-[10px] font-label-md uppercase tracking-wider text-secondary">
                                                                                 <button @click="step = 'book'; if(selectingRangeEnd){rangeBook=''}else{selectedBook=''}" class="hover:text-primary transition-colors cursor-pointer" x-text="breadcrumbBook"></button>
@@ -757,30 +753,28 @@
                                                                             <span class="w-2.5 h-2.5 rounded-[2px] bg-blue-700"></span>
                                                                             <span class="w-2.5 h-2.5 rounded-[2px] bg-blue-900"></span>
                                                                         </div>
-                                                                        <div class="p-2 grid grid-cols-4 gap-1 overflow-y-auto max-h-56" x-show="step === 'book'">
+                                                                        <div class="p-2 grid grid-cols-4 gap-1 overflow-y-auto overflow-x-hidden max-h-56" x-show="step === 'book'">
                                                                             <template x-for="book in filteredBooks" :key="book">
-                                                                                <button @click="selectBook(book)" class="px-2 py-2 rounded-lg text-xs font-label-md transition-all text-center cursor-pointer hover:ring-2 hover:ring-primary/50"
-                                                                                    :class="[bookColor(book), bookColor(book) === 'bg-surface-container' ? 'text-on-surface' : 'text-white', activeBook === book ? 'ring-2 ring-primary ring-offset-1' : '']"
-                                                                                    :title="bookTitle(book)"
+                                                                                <button @click="selectBook(book)" @mouseenter="hoverBook(book)" @mouseleave="clearHover()"
+                                                                                    class="px-1.5 py-2.5 rounded-lg text-xs font-label-md transition-all text-center leading-tight cursor-pointer hover:ring-2 hover:ring-primary/50"
+                                                                                    :class="bookClasses(book)"
                                                                                     x-text="book"></button>
                                                                             </template>
                                                                         </div>
-                                                                        <div class="p-2 grid grid-cols-6 gap-1 overflow-y-auto max-h-56" x-show="step === 'chapter'">
+                                                                        <div class="p-2 grid grid-cols-6 gap-1 overflow-y-auto overflow-x-hidden max-h-56" x-show="step === 'chapter'">
                                                                             <template x-for="chapter in chapters" :key="chapter">
-                                                                                <button @click="selectChapter(chapter)" class="px-2 py-2 rounded-lg text-sm font-label-md transition-all text-center cursor-pointer hover:ring-2 hover:ring-primary/50"
-                                                                                    :class="[chapterColor(chapter), chapterColor(chapter) === 'bg-surface-container' ? 'text-on-surface' : 'text-white', activeChapter === chapter ? 'ring-2 ring-primary ring-offset-1' : '']"
-                                                                                    :title="chapterTitle(chapter)"
+                                                                                <button @click="selectChapter(chapter)" @mouseenter="hoverChapter(chapter)" @mouseleave="clearHover()"
+                                                                                    class="px-1.5 py-2.5 rounded-lg text-sm font-label-md transition-all text-center cursor-pointer hover:ring-2 hover:ring-primary/50"
+                                                                                    :class="chapterClasses(chapter)"
                                                                                     x-text="chapter"></button>
                                                                             </template>
                                                                         </div>
                                                                         <div class="p-2 flex flex-col" x-show="step === 'verse'">
-                                                                            <div class="grid grid-cols-6 gap-1 overflow-y-auto max-h-56">
+                                                                            <div class="grid grid-cols-6 gap-1 overflow-y-auto overflow-x-hidden max-h-56">
                                                                                 <template x-for="verse in verses" :key="verse">
-                                                                                    <button @click="selectVerse(verse)" class="px-2 py-2 rounded-lg text-sm font-label-md transition-all text-center cursor-pointer hover:ring-2 hover:ring-primary/50"
-                                                                                        :class="[verseColor(verse), verseColor(verse) === 'bg-surface-container' ? 'text-on-surface' : 'text-white',
-                                                                                            (!selectingRangeEnd && selectedVerse === verse) || (selectingRangeEnd && rangeVerse === verse) ? 'ring-2 ring-primary ring-offset-1' : '',
-                                                                                            selectingRangeEnd && verse === selectedVerse && rangeBook === selectedBook && rangeChapter === selectedChapter && rangeVerse !== verse ? 'ring-1 ring-primary/50' : '']"
-                                                                                        :title="verseTitle(verse)"
+                                                                                    <button @click="selectVerse(verse)" @mouseenter="hoverVerse(verse)" @mouseleave="clearHover()"
+                                                                                        class="px-1.5 py-2.5 rounded-lg text-sm font-label-md transition-all text-center cursor-pointer hover:ring-2 hover:ring-primary/50"
+                                                                                        :class="verseClasses(verse)"
                                                                                         x-text="verse"></button>
                                                                                 </template>
                                                                             </div>
@@ -797,6 +791,7 @@
                                                                                 <span x-text="rangeVerse ? (rangeBook === selectedBook && rangeChapter === selectedChapter ? rangeChapter + ':' + rangeVerse : (rangeBook === selectedBook ? rangeBook + ' ' + rangeChapter + ':' + rangeVerse : rangeBook + ' ' + rangeChapter + ':' + rangeVerse)) : '...'" class="opacity-60"></span>
                                                                             </div>
                                                                         </div>
+                                                                        <div class="shrink-0 px-3 py-1.5 border-t border-outline-variant bg-surface-container-low text-[10px] text-secondary min-h-[26px] flex items-center" x-text="footerText"></div>
                                                                     </div>
                                                                 </div>
 

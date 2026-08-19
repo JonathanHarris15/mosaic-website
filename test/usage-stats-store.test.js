@@ -114,3 +114,14 @@ test('heatColorFor buckets 0 to the empty color and scales the rest across the 1
 test('heatColorFor never divides by zero when nothing has been used yet', () => {
     assert.strictEqual(UsageStats.heatColorFor(0, 0), 'bg-surface-container');
 });
+
+test('heatTextColorFor stays dark on the light half of the palette and turns white only once the background is dark enough to need it', () => {
+    // Buckets 1-4 (light blues) — dark text.
+    assert.strictEqual(UsageStats.heatTextColorFor(1, 10), 'text-on-surface');
+    assert.strictEqual(UsageStats.heatTextColorFor(4, 10), 'text-on-surface');
+    // Buckets 5-9 (mid-to-dark blues) — white text.
+    assert.strictEqual(UsageStats.heatTextColorFor(5, 10), 'text-white');
+    assert.strictEqual(UsageStats.heatTextColorFor(10, 10), 'text-white');
+    // Unused cell — dark text, same as light buckets.
+    assert.strictEqual(UsageStats.heatTextColorFor(0, 10), 'text-on-surface');
+});

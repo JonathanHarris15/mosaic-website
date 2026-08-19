@@ -57,7 +57,8 @@
 }
 
 .verse-picker-btn {
-    padding: 8px;
+    padding: 10px 6px;
+    line-height: 1.15;
     border-radius: 8px;
     text-align: center;
     border: 1px solid transparent;
@@ -71,9 +72,16 @@
        resets a <button> to transparent), not on this rule. */
 }
 
+/* An outline, not a fill — a hover that swaps the background would hide the
+   heat color underneath it, which is the one thing a hover here must not
+   do. Matches the ring-2 ring-primary/50 the two Tailwind-built verse
+   pickers use for the same hover. outline (not box-shadow) so it can use
+   the CSS variable directly — box-shadow would need an rgba() triplet,
+   which var(--primary) (a hex string) can't feed without hardcoding a
+   second, driftable copy of the color. */
 .verse-picker-btn:hover {
-    background-color: var(--primary-fixed); /* primary-fixed */
-    color: var(--primary); /* primary */
+    outline: 2px solid var(--primary);
+    outline-offset: -1px;
 }
 
 .verse-picker-btn-book {

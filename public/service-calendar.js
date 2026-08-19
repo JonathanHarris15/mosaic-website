@@ -1856,14 +1856,13 @@ function setupInlineEdit(el, dateKey, field) {
 
             const originalDisplay = el.style.display;
             const pickerHtml = `
-                <div x-data="versePicker('${currentVal}')"
+                <div x-data="versePicker('${currentVal}')" x-init="toggle()"
                      class="verse-picker-inline relative w-full">
-                    <div class="flex items-center bg-surface-container-low rounded border border-primary px-2 py-1">
-                        <input type="text" x-model="query" @input="value = query" @focus="open = true" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" placeholder="e.g. Romans 8:28-39">
-                        <button @click="toggle()" class="text-secondary hover:text-primary transition-colors cursor-pointer">
-                            <span class="material-symbols-outlined text-[18px]">menu_book</span>
-                        </button>
-                    </div>
+                    <button type="button" @click="toggle()"
+                        class="w-full flex items-center justify-between gap-2 bg-surface-container-low rounded border border-primary px-2 py-1 text-left cursor-pointer">
+                        <span class="text-sm truncate" :class="value ? '' : 'text-secondary/60'" x-text="value || 'e.g. Romans 8:28-39'"></span>
+                        <span class="material-symbols-outlined text-[18px] text-secondary shrink-0">menu_book</span>
+                    </button>
                     <div x-show="open" x-transition class="verse-picker-dropdown">
                         <div class="verse-picker-header">
                             <div class="verse-picker-breadcrumbs">
@@ -1896,32 +1895,30 @@ function setupInlineEdit(el, dateKey, field) {
                             <span class="w-2.5 h-2.5 rounded-[2px] bg-blue-900"></span>
                         </div>
 
-                        <div class="verse-picker-grid max-h-56" style="grid-template-columns: repeat(4, minmax(0, 1fr))" x-show="step === 'book'">
+                        <div class="verse-picker-grid max-h-56 overflow-x-hidden" style="grid-template-columns: repeat(4, minmax(0, 1fr))" x-show="step === 'book'">
                             <template x-for="book in filteredBooks" :key="book">
-                                <button @click="selectBook(book)" class="verse-picker-btn verse-picker-btn-book"
-                                    :class="[bookColor(book), bookColor(book) === 'bg-surface-container' ? 'text-on-surface' : 'text-white', activeBook === book ? 'ring-2 ring-primary ring-offset-1' : '']"
-                                    :title="bookTitle(book)"
+                                <button @click="selectBook(book)" @mouseenter="hoverBook(book)" @mouseleave="clearHover()"
+                                    class="verse-picker-btn verse-picker-btn-book leading-tight"
+                                    :class="bookClasses(book)"
                                     x-text="book"></button>
                             </template>
                         </div>
 
-                        <div class="verse-picker-grid max-h-56" style="grid-template-columns: repeat(6, minmax(0, 1fr))" x-show="step === 'chapter'">
+                        <div class="verse-picker-grid max-h-56 overflow-x-hidden" style="grid-template-columns: repeat(6, minmax(0, 1fr))" x-show="step === 'chapter'">
                             <template x-for="chapter in chapters" :key="chapter">
-                                <button @click="selectChapter(chapter)" class="verse-picker-btn verse-picker-btn-chapter"
-                                    :class="[chapterColor(chapter), chapterColor(chapter) === 'bg-surface-container' ? 'text-on-surface' : 'text-white', activeChapter === chapter ? 'ring-2 ring-primary ring-offset-1' : '']"
-                                    :title="chapterTitle(chapter)"
+                                <button @click="selectChapter(chapter)" @mouseenter="hoverChapter(chapter)" @mouseleave="clearHover()"
+                                    class="verse-picker-btn verse-picker-btn-chapter"
+                                    :class="chapterClasses(chapter)"
                                     x-text="chapter"></button>
                             </template>
                         </div>
 
                         <div class="p-2 flex flex-col" x-show="step === 'verse'">
-                            <div class="verse-picker-grid max-h-56" style="grid-template-columns: repeat(6, minmax(0, 1fr))">
+                            <div class="verse-picker-grid max-h-56 overflow-x-hidden" style="grid-template-columns: repeat(6, minmax(0, 1fr))">
                                 <template x-for="verse in verses" :key="verse">
-                                    <button @click="selectVerse(verse)" class="verse-picker-btn verse-picker-btn-verse"
-                                        :class="[verseColor(verse), verseColor(verse) === 'bg-surface-container' ? 'text-on-surface' : 'text-white',
-                                            (!selectingRangeEnd && selectedVerse === verse) || (selectingRangeEnd && rangeVerse === verse) ? 'ring-2 ring-primary ring-offset-1' : '',
-                                            selectingRangeEnd && verse === selectedVerse && rangeBook === selectedBook && rangeChapter === selectedChapter && rangeVerse !== verse ? 'ring-1 ring-primary/50' : '']"
-                                        :title="verseTitle(verse)"
+                                    <button @click="selectVerse(verse)" @mouseenter="hoverVerse(verse)" @mouseleave="clearHover()"
+                                        class="verse-picker-btn verse-picker-btn-verse"
+                                        :class="verseClasses(verse)"
                                         x-text="verse"></button>
                                 </template>
                             </div>
@@ -1932,6 +1929,8 @@ function setupInlineEdit(el, dateKey, field) {
                                 </button>
                             </template>
                         </div>
+
+                        <div class="shrink-0 px-3 py-1.5 border-t border-outline-variant bg-surface-container-low text-[10px] text-secondary min-h-[26px] flex items-center" x-text="footerText"></div>
                     </div>
                 </div>
             `;
@@ -1949,7 +1948,7 @@ function setupInlineEdit(el, dateKey, field) {
 
                 // Read the current value from Alpine before removing the element
                 const alpineData = window.Alpine ? Alpine.$data(pickerEl) : null;
-                const finalVal = (alpineData ? alpineData.query : '').trim();
+                const finalVal = (alpineData ? alpineData.value : '').trim();
 
                 pickerEl.remove();
                 el.style.display = originalDisplay;
@@ -1966,13 +1965,12 @@ function setupInlineEdit(el, dateKey, field) {
                 }
             };
 
-            // Initialize Alpine on the new element
+            // Initialize Alpine on the new element. x-init="open = true" on the
+            // component itself opens the dropdown immediately — there's no more
+            // input to focus into (the picker is button-triggered, not typed
+            // into), so nothing else needs doing here.
             if (window.Alpine) {
                 Alpine.initTree(pickerEl);
-                setTimeout(() => {
-                    const input = pickerEl.querySelector('input');
-                    if (input) input.focus();
-                }, 10);
             }
 
             // Dismiss picker when clicking outside — use capture so it runs before Alpine

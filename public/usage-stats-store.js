@@ -171,10 +171,26 @@
         'bg-blue-800', 'bg-blue-900',
     ]);
 
+    // 0–9, how far into the palette `count` falls relative to `max`. Shared
+    // by heatColorFor and heatTextColorFor so a cell's background and its
+    // text-contrast decision can never read a different bucket for the same
+    // count — they call this once each, not re-derive a threshold apart.
+    function heatIntensity(count, max) {
+        if (!count) return 0;
+        return Math.min(Math.ceil((count / (max || 1)) * 9), 9);
+    }
+
     function heatColorFor(count, max) {
         if (!count) return 'bg-surface-container';
-        const intensity = Math.min(Math.ceil((count / (max || 1)) * 9), 9);
-        return HEAT_COLORS[intensity];
+        return HEAT_COLORS[heatIntensity(count, max)];
+    }
+
+    // Buckets 0–4 (bg-blue-50 through bg-blue-400) are light enough that
+    // white text is hard to read; 5–9 (bg-blue-500 and up) need it. An
+    // unused cell (bg-surface-container) reads with the ordinary body text
+    // color, not this scale at all.
+    function heatTextColorFor(count, max) {
+        return heatIntensity(count, max) >= 5 ? 'text-white' : 'text-on-surface';
     }
 
     const UsageStats = {
@@ -184,6 +200,7 @@
         loadScriptureIndex,
         buildScriptureHeatMap,
         heatColorFor,
+        heatTextColorFor,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

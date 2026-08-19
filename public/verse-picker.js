@@ -9,24 +9,24 @@ document.addEventListener('alpine:init', () => {
         rangeChapter: null,
         rangeVerse: null,
         value: initialValue,
-        query: initialValue,
         selectingRangeEnd: false,
-        
+        // Whatever book/chapter/verse the pointer is currently over —
+        // {label, stat} | null — read by the footer instead of a native
+        // title tooltip, which is inconsistently styled and easy to miss.
+        hovered: null,
+
         books: Object.keys(BIBLE_DATA),
-        
+
         init() {
             // Watch for external changes (via x-model or manual updates)
             this.$watch('value', (val) => {
-                if (val !== this.query) {
-                    this.query = val || '';
-                    if (val) {
-                        this.parseValue(val);
-                    } else {
-                        this.reset();
-                    }
+                if (val) {
+                    this.parseValue(val);
+                } else {
+                    this.reset();
                 }
             });
-            
+
             // Also parse initial value
             if (this.value) {
                 this.parseValue(this.value);
@@ -53,9 +53,19 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        // Opens back to wherever the current value already points — not a
+        // blank book grid — since picking is now the only way in (no text
+        // field to fall back on for a small adjustment).
         toggle() {
             this.open = !this.open;
-            if (this.open) {
+            if (!this.open) return;
+            this.clearHover();
+            this.selectingRangeEnd = false;
+            if (this.value) {
+                this.parseValue(this.value);
+                this.step = this.selectedVerse !== null ? 'verse'
+                    : this.selectedChapter !== null ? 'chapter' : 'book';
+            } else {
                 this.reset();
             }
         },
@@ -72,48 +82,71 @@ document.addEventListener('alpine:init', () => {
             return (typeof UsageStats !== 'undefined' && UsageStats.scriptureHeatMap) || null;
         },
 
-        // Book-step button color/tooltip.
-        bookColor(book) {
-            if (!this.heatMap) return 'bg-surface-container';
-            return UsageStats.heatColorFor(this.heatMap.bookCounts[book] || 0, this.heatMap.maxBookCount);
-        },
-        bookTitle(book) {
+        // Each level's button classes as one array — [background, text,
+        // ring] — so a template applies them with a single :class binding
+        // rather than recomputing the same bucket three times over.
+        bookClasses(book) {
             const count = this.heatMap ? (this.heatMap.bookCounts[book] || 0) : 0;
-            return count ? `${book} — ${UsageStats.formatLabel({ count, lastUsed: null })}` : book;
+            return this._heatClasses(count, this.heatMap && this.heatMap.maxBookCount,
+                this.activeBook === book);
+        },
+        chapterClasses(chapter) {
+            const stat = this.chapterStat(chapter);
+            return this._heatClasses(stat ? stat.count : 0, this.heatMap && this.heatMap.maxChapterCount,
+                this.activeChapter === chapter);
+        },
+        verseClasses(verse) {
+            const stat = this.verseStat(verse);
+            const selected = (!this.selectingRangeEnd && this.selectedVerse === verse) ||
+                (this.selectingRangeEnd && this.rangeVerse === verse);
+            return this._heatClasses(stat ? stat.count : 0, this.heatMap && this.heatMap.maxVerseCount, selected);
+        },
+        _heatClasses(count, max, selected) {
+            const ring = selected ? 'ring-2 ring-primary ring-offset-1' : '';
+            if (typeof UsageStats === 'undefined') return [ring];
+            return [UsageStats.heatColorFor(count, max), UsageStats.heatTextColorFor(count, max), ring];
         },
 
-        // Chapter-step button color/tooltip, within whichever book is
-        // active for this step (selectedBook, or rangeBook while picking a
-        // range's end).
+        // Book-step hover → footer.
+        hoverBook(book) {
+            const count = this.heatMap ? (this.heatMap.bookCounts[book] || 0) : 0;
+            this.hovered = { label: book, stat: { count, lastUsed: null } };
+        },
+
+        // Chapter-step stat/hover, within whichever book is active for this
+        // step (selectedBook, or rangeBook while picking a range's end).
         chapterStat(chapter) {
             if (!this.heatMap || !this.activeBook) return null;
             return this.heatMap.chapterStats[`${this.activeBook}-${chapter}`] || null;
         },
-        chapterColor(chapter) {
-            if (!this.heatMap) return 'bg-surface-container';
-            const stat = this.chapterStat(chapter);
-            return UsageStats.heatColorFor(stat ? stat.count : 0, this.heatMap.maxChapterCount);
-        },
-        chapterTitle(chapter) {
-            const stat = this.chapterStat(chapter);
-            const label = `${this.activeBook} ${chapter}`;
-            return stat ? `${label} — ${UsageStats.formatLabel(stat)}` : label;
+        hoverChapter(chapter) {
+            this.hovered = {
+                label: `${this.activeBook} ${chapter}`,
+                stat: this.chapterStat(chapter) || { count: 0, lastUsed: null },
+            };
         },
 
-        // Verse-step button color/tooltip, within whichever chapter is active.
+        // Verse-step stat/hover, within whichever chapter is active.
         verseStat(verse) {
             if (!this.heatMap || !this.activeBook || this.activeChapter === null) return null;
             return this.heatMap.verseStats[`${this.activeBook}-${this.activeChapter}-${verse}`] || null;
         },
-        verseColor(verse) {
-            if (!this.heatMap) return 'bg-surface-container';
-            const stat = this.verseStat(verse);
-            return UsageStats.heatColorFor(stat ? stat.count : 0, this.heatMap.maxVerseCount);
+        hoverVerse(verse) {
+            this.hovered = {
+                label: `${this.activeBook} ${this.activeChapter}:${verse}`,
+                stat: this.verseStat(verse) || { count: 0, lastUsed: null },
+            };
         },
-        verseTitle(verse) {
-            const stat = this.verseStat(verse);
-            const label = `${this.activeBook} ${this.activeChapter}:${verse}`;
-            return stat ? `${label} — ${UsageStats.formatLabel(stat)}` : label;
+
+        clearHover() {
+            this.hovered = null;
+        },
+
+        get footerText() {
+            if (!this.hovered) return 'Hover a book, chapter, or verse to see how often it’s been used';
+            const label = typeof UsageStats !== 'undefined'
+                ? UsageStats.formatLabel(this.hovered.stat) : '';
+            return `${this.hovered.label} — ${label}`;
         },
 
         reset() {
@@ -184,7 +217,7 @@ document.addEventListener('alpine:init', () => {
             if (!this.selectedBook || !this.selectedChapter || !this.selectedVerse) return;
 
             let val = `${this.selectedBook} ${this.selectedChapter}:${this.selectedVerse}`;
-            
+
             if (this.rangeBook && this.rangeChapter && this.rangeVerse) {
                 if (this.rangeBook === this.selectedBook && this.rangeChapter === this.selectedChapter) {
                     if (this.rangeVerse !== this.selectedVerse) val += `-${this.rangeVerse}`;
@@ -196,7 +229,6 @@ document.addEventListener('alpine:init', () => {
             }
 
             this.value = val;
-            this.query = val;
             this.$el.dispatchEvent(new CustomEvent('input', { detail: val, bubbles: true }));
         },
 
