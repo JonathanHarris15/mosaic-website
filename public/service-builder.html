@@ -430,7 +430,7 @@
                                 <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
                             </div>
                         </div>
-                        <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                        <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
                             <template x-for="p in results" :key="p.id">
                                 <button @click="select(p)" :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'" class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
                                     <div class="flex items-center justify-between">
@@ -457,7 +457,7 @@
                                 <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
                             </div>
                         </div>
-                        <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                        <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
                             <template x-for="p in results" :key="p.id">
                                 <button @click="select(p)" :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'" class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
                                     <div class="flex items-center justify-between">
@@ -482,7 +482,7 @@
                                         </button>
                                     </div>
                                 </div>
-                                <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                                <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
                                     <template x-for="p in results" :key="p.id">
                                         <button @click="select(p)" :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'" class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
                                             <div class="flex items-center justify-between">
@@ -514,7 +514,7 @@
                                 <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
                             </div>
                         </div>
-                        <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                        <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
                             <template x-for="p in results" :key="p.id">
                                 <button @click="select(p)" :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'" class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
                                     <div class="flex items-center justify-between">
@@ -694,7 +694,7 @@
                                                                             </template>
                                                                         </div>
                                                                     </div>
-                                                                    <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                                                                    <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
                                                                         <template x-for="h in results" :key="h.id">
                                                                             <button @click="select(h)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
                                                                                 <div class="flex items-baseline justify-between gap-2">
@@ -720,7 +720,7 @@
                                                                             <span class="material-symbols-outlined text-[20px]">menu_book</span>
                                                                         </button>
                                                                     </div>
-                                                                    <div x-show="open" @click.away="open = false" x-transition class="absolute z-50 mt-1 w-full max-w-[calc(100vw-1.5rem)] bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden max-h-[min(75vh,400px)] flex flex-col">
+                                                                    <div x-show="open" @click.away="open = false" x-transition class="absolute z-50 mt-1 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden max-h-[min(75vh,400px)] flex flex-col">
                                                                         <div class="bg-surface-container-low px-4 py-2 border-b border-outline-variant flex items-center justify-between sticky top-0">
                                                                             <div class="flex flex-row items-center gap-2 text-[10px] font-label-md uppercase tracking-wider text-secondary">
                                                                                 <button @click="step = 'book'; if(selectingRangeEnd){rangeBook=''}else{selectedBook=''}" class="hover:text-primary transition-colors cursor-pointer" x-text="breadcrumbBook"></button>
@@ -801,7 +801,7 @@
                                                                                         <span class="material-symbols-outlined text-[16px] text-secondary">person</span>
                                                                                     </div>
                                                                                 </div>
-                                                                                <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                                                                                <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
                                                                                     <template x-for="p in results" :key="p.id">
                                                                                         <button @click="select(p)" :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'" class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
                                                                                             <div class="flex items-center justify-between">
@@ -835,7 +835,7 @@
                                                                                         <span class="material-symbols-outlined text-[16px] text-secondary">person</span>
                                                                                     </div>
                                                                                 </div>
-                                                                                <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                                                                                <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
                                                                                     <template x-for="p in results" :key="p.id">
                                                                                         <button @click="select(p)" :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'" class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
                                                                                             <div class="flex items-center justify-between">
@@ -874,7 +874,7 @@
                                                                                             <span class="material-symbols-outlined text-[18px]">close</span>
                                                                                         </button>
                                                                                     </div>
-                                                                                    <div x-show="open && (suggestions.length > 0 || results.length > 0 || query.length >= 2)" x-transition class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto custom-scrollbar">
+                                                                                    <div x-show="open && (suggestions.length > 0 || results.length > 0 || query.length >= 2)" x-transition class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto custom-scrollbar">
                                                                                         <template x-if="suggestions.length > 0 && (query.length < 2 || query === personRef.name)">
                                                                                             <div>
                                                                                                 <div class="px-3 py-1.5 bg-surface-container-low text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant/30">Suggestions (Longest Wait)</div>
@@ -914,7 +914,7 @@
                                                                                             <span class="material-symbols-outlined text-[18px]">close</span>
                                                                                         </button>
                                                                                     </div>
-                                                                                    <div x-show="open && (suggestions.length > 0 || results.length > 0 || query.length >= 2)" x-transition class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto custom-scrollbar">
+                                                                                    <div x-show="open && (suggestions.length > 0 || results.length > 0 || query.length >= 2)" x-transition class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden max-h-60 overflow-y-auto custom-scrollbar">
                                                                                         <template x-if="suggestions.length > 0 && (query.length < 2 || query === personRef.name)">
                                                                                             <div>
                                                                                                 <div class="px-3 py-1.5 bg-surface-container-low text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant/30">Suggestions (Longest Wait)</div>
@@ -994,7 +994,7 @@
                                                                                     </button>
                                                                                 </div>
                                                                             </div>
-                                                                            <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                                                                            <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
                                                                                 <template x-for="p in results" :key="p.id">
                                                                                     <button @click="select(p)" :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'" class="w-full text-left px-4 py-2 transition-colors border-b last:border-0">
                                                                                         <div class="flex items-center justify-between">
@@ -1130,7 +1130,7 @@
                                                 <input type="text" :id="'custom-person-' + index" :name="'custom-person-' + index" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" aria-label="Search people" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
                                                 <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
                                             </div>
-                                            <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                                            <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
                                                 <template x-for="p in results" :key="p.id">
                                                     <button @click="select(p)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0 text-sm" x-text="p.name"></button>
                                                 </template>
@@ -1153,7 +1153,7 @@
                                                     </template>
                                                 </div>
                                             </div>
-                                            <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
+                                            <div x-show="open && results.length > 0" class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
                                                 <template x-for="h in results" :key="h.id">
                                                     <button @click="select(h)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
                                                         <div class="flex items-baseline justify-between gap-2">

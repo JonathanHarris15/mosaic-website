@@ -314,7 +314,7 @@
                         <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
                     </div>
                 </div>
-                <div x-show="open && (suggestions.length > 0 || results.length > 0 || query.length >= 2)" class="absolute z-[90] w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-60 overflow-y-auto left-0 custom-scrollbar">
+                <div x-show="open && (suggestions.length > 0 || results.length > 0 || query.length >= 2)" class="absolute z-[90] w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-60 overflow-y-auto left-0 custom-scrollbar">
                     <!-- Suggestions -->
                     <template x-if="suggestions.length > 0 && (query.length < 2 || query === selectedPersonRef.name)">
                         <div>
