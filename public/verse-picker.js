@@ -160,6 +160,16 @@ document.addEventListener('alpine:init', () => {
             this.selectingRangeEnd = false;
         },
 
+        // Takes the field back to empty and closes the picker — the button
+        // never had a text field to backspace through, so this is the only
+        // way to clear an already-set reference.
+        clear() {
+            this.value = '';
+            this.reset();
+            this.$el.dispatchEvent(new CustomEvent('input', { detail: '', bubbles: true }));
+            this.open = false;
+        },
+
         selectBook(book) {
             if (this.selectingRangeEnd) {
                 this.rangeBook = book;

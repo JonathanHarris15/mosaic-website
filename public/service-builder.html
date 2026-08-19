@@ -331,9 +331,15 @@
                                             </div>
                                         </template>
                                     </div>
-                                    <button @click="open = false" class="text-secondary hover:text-primary cursor-pointer flex items-center">
-                                        <span class="material-symbols-outlined text-sm">close</span>
-                                    </button>
+                                    <div class="flex items-center gap-2">
+                                        <button x-show="value" @click="clear()" class="text-[10px] font-label-md uppercase tracking-wider text-secondary hover:text-red-600 transition-colors cursor-pointer flex items-center gap-0.5">
+                                            <span class="material-symbols-outlined text-[14px]">backspace</span>
+                                            Clear
+                                        </button>
+                                        <button @click="open = false" class="text-secondary hover:text-primary cursor-pointer flex items-center">
+                                            <span class="material-symbols-outlined text-sm">close</span>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="flex items-center justify-end gap-1.5 px-3 py-1.5 border-b border-outline-variant">
                                     <span class="text-[9px] font-label-md uppercase tracking-wider text-secondary/70 mr-1">Usage:</span>
@@ -740,9 +746,15 @@
                                                                                     </div>
                                                                                 </template>
                                                                             </div>
-                                                                            <button @click="open = false" class="text-secondary hover:text-primary cursor-pointer flex items-center">
-                                                                                <span class="material-symbols-outlined text-sm">close</span>
-                                                                            </button>
+                                                                            <div class="flex items-center gap-2">
+                                                                                <button x-show="value" @click="clear()" class="text-[10px] font-label-md uppercase tracking-wider text-secondary hover:text-red-600 transition-colors cursor-pointer flex items-center gap-0.5">
+                                                                                    <span class="material-symbols-outlined text-[14px]">backspace</span>
+                                                                                    Clear
+                                                                                </button>
+                                                                                <button @click="open = false" class="text-secondary hover:text-primary cursor-pointer flex items-center">
+                                                                                    <span class="material-symbols-outlined text-sm">close</span>
+                                                                                </button>
+                                                                            </div>
                                                                         </div>
                                                                         <div class="flex items-center justify-end gap-1.5 px-3 py-1.5 border-b border-outline-variant">
                                                                             <span class="text-[9px] font-label-md uppercase tracking-wider text-secondary/70 mr-1">Usage:</span>
