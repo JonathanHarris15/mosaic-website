@@ -1362,9 +1362,18 @@ exports.onServiceThemeWritten = onDocumentWritten(
         const oldRef = db.collection("themes").doc(oldKey);
         const oldSnap = await oldRef.get();
         if (oldSnap.exists) {
-          await oldRef.update({
-            usedOn: admin.firestore.FieldValue.arrayRemove(dateKey),
-          });
+          const remaining = (oldSnap.data().usedOn || [])
+              .filter((d) => d !== dateKey);
+          if (remaining.length) {
+            await oldRef.update({
+              usedOn: admin.firestore.FieldValue.arrayRemove(dateKey),
+            });
+          } else {
+            // Nothing uses this theme anymore — drop it from the corpus
+            // rather than leave an empty-usedOn doc that still turns up
+            // as a similarity match for something nobody's preached.
+            await oldRef.delete();
+          }
         }
       }
 
