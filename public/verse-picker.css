@@ -63,7 +63,12 @@
     border: 1px solid transparent;
     cursor: pointer;
     transition: all 0.2s;
-    background: transparent;
+    /* No background here on purpose: this file loads after mosaic.css, so a
+       background set here would beat a heat-map bg-blue-* utility class at
+       equal specificity (public/service-calendar.js's inline verse picker
+       applies both). The breadcrumb buttons that also use this class were
+       already relying on the browser's default (Tailwind's own preflight
+       resets a <button> to transparent), not on this rule. */
 }
 
 .verse-picker-btn:hover {
@@ -79,12 +84,6 @@
 .verse-picker-btn-chapter, .verse-picker-btn-verse {
     font-size: 14px;
     font-weight: 600;
-}
-
-.verse-picker-btn-active {
-    background-color: var(--primary) !important; /* primary */
-    color: var(--on-primary) !important;
-    border-color: var(--primary) !important;
 }
 
 .verse-picker-range-btn {

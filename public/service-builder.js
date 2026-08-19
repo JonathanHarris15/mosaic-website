@@ -716,6 +716,10 @@ function serviceForm() {
             }
             this.initThemeSimilarity();
             await this.load();
+            // Score whatever theme this Sunday already has, so returning to
+            // a drafted service shows the readout immediately rather than
+            // only after the next keystroke.
+            if (this.service.theme) this.onThemeInput();
             await this.loadGuideCatalog();
             await this.loadHymnRegistry();
             await this.loadScriptureIndex();
@@ -757,14 +761,16 @@ function serviceForm() {
             this.fuse = index.fuse;
         },
 
-        // Every scripture reference ever used, for the picker's typeahead
+        // Every scripture reference ever used, folded into the book/chapter/
+        // verse heat map the picker colors its buttons with
         // (usage-stats-store.js). Read off the shared UsageStats global
         // rather than kept on this component — verse-picker.js's inline
         // instances on the Service Calendar have no Alpine parent to thread
         // it through, so both pages populate the same one place.
         async loadScriptureIndex() {
             try {
-                UsageStats.scriptureIndex = await UsageStats.loadScriptureIndex(db);
+                const references = await UsageStats.loadScriptureIndex(db);
+                UsageStats.scriptureHeatMap = UsageStats.buildScriptureHeatMap(references);
             } catch (err) {
                 console.error('Error loading scripture usage index:', err);
             }

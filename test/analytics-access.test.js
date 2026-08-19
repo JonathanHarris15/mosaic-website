@@ -49,6 +49,9 @@ function fakeDb(reads) {
 
 // Open the page as somebody, and run the auth callback its init() registers.
 async function open(permissionLevel) {
+    // Read at module-evaluation time (top-level `const { parseBibleReference }
+    // = AnalyticsUtils`), so this has to be set before the import, not after.
+    global.AnalyticsUtils = require('../public/analytics-utils.js');
     const { analyticsPage } = await import('../public/analytics.js');
 
     const reads = [];

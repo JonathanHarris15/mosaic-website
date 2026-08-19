@@ -499,14 +499,16 @@ async function loadHymnIndex() {
     }
 }
 
-// Every scripture reference ever used, for the verse picker's typeahead
-// (usage-stats-store.js). Read off the shared UsageStats global — the
-// inline verse picker below (setupInlineEdit) is injected outside the page's
-// Alpine component tree, so it has no `parent` to thread this through.
+// Every scripture reference ever used, folded into the book/chapter/verse
+// heat map the verse picker colors its buttons with (usage-stats-store.js).
+// Read off the shared UsageStats global — the inline verse picker below
+// (setupInlineEdit) is injected outside the page's Alpine component tree,
+// so it has no `parent` to thread this through.
 async function loadScriptureIndex() {
     if (typeof db === 'undefined') return;
     try {
-        UsageStats.scriptureIndex = await UsageStats.loadScriptureIndex(db);
+        const references = await UsageStats.loadScriptureIndex(db);
+        UsageStats.scriptureHeatMap = UsageStats.buildScriptureHeatMap(references);
     } catch (e) {
         console.error('Could not load the scripture usage index:', e);
     }
@@ -1887,35 +1889,42 @@ function setupInlineEdit(el, dateKey, field) {
                             </button>
                         </div>
 
-                        <div x-show="scriptureMatches.length" class="border-b border-outline-variant overflow-y-auto max-h-40">
-                            <template x-for="ref in scriptureMatches" :key="ref.reference">
-                                <button @click="selectReference(ref)" class="w-full text-left px-3 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0 flex items-center justify-between gap-3">
-                                    <span class="text-sm font-label-md" x-text="ref.reference"></span>
-                                    <span class="text-[10px] text-on-surface-variant/60 shrink-0" x-text="UsageStats.formatLabel(ref)"></span>
-                                </button>
-                            </template>
+                        <div class="flex items-center justify-end gap-1.5 px-3 py-1.5 border-b border-outline-variant">
+                            <span class="text-[9px] font-label-md uppercase tracking-wider text-secondary/70 mr-1">Usage:</span>
+                            <span class="w-2.5 h-2.5 rounded-[2px] bg-surface-container"></span>
+                            <span class="w-2.5 h-2.5 rounded-[2px] bg-blue-100"></span>
+                            <span class="w-2.5 h-2.5 rounded-[2px] bg-blue-300"></span>
+                            <span class="w-2.5 h-2.5 rounded-[2px] bg-blue-500"></span>
+                            <span class="w-2.5 h-2.5 rounded-[2px] bg-blue-700"></span>
+                            <span class="w-2.5 h-2.5 rounded-[2px] bg-blue-900"></span>
                         </div>
 
                         <div class="verse-picker-grid max-h-56" style="grid-template-columns: repeat(4, minmax(0, 1fr))" x-show="step === 'book'">
                             <template x-for="book in filteredBooks" :key="book">
-                                <button @click="selectBook(book)" class="verse-picker-btn verse-picker-btn-book" :class="activeBook === book ? 'verse-picker-btn-active' : ''" x-text="book"></button>
+                                <button @click="selectBook(book)" class="verse-picker-btn verse-picker-btn-book"
+                                    :class="[bookColor(book), bookColor(book) === 'bg-surface-container' ? 'text-on-surface' : 'text-white', activeBook === book ? 'ring-2 ring-primary ring-offset-1' : '']"
+                                    :title="bookTitle(book)"
+                                    x-text="book"></button>
                             </template>
                         </div>
 
                         <div class="verse-picker-grid max-h-56" style="grid-template-columns: repeat(6, minmax(0, 1fr))" x-show="step === 'chapter'">
                             <template x-for="chapter in chapters" :key="chapter">
-                                <button @click="selectChapter(chapter)" class="verse-picker-btn verse-picker-btn-chapter" :class="activeChapter === chapter ? 'verse-picker-btn-active' : ''" x-text="chapter"></button>
+                                <button @click="selectChapter(chapter)" class="verse-picker-btn verse-picker-btn-chapter"
+                                    :class="[chapterColor(chapter), chapterColor(chapter) === 'bg-surface-container' ? 'text-on-surface' : 'text-white', activeChapter === chapter ? 'ring-2 ring-primary ring-offset-1' : '']"
+                                    :title="chapterTitle(chapter)"
+                                    x-text="chapter"></button>
                             </template>
                         </div>
 
                         <div class="p-2 flex flex-col" x-show="step === 'verse'">
                             <div class="verse-picker-grid max-h-56" style="grid-template-columns: repeat(6, minmax(0, 1fr))">
                                 <template x-for="verse in verses" :key="verse">
-                                    <button @click="selectVerse(verse)" class="verse-picker-btn verse-picker-btn-verse" 
-                                        :class="{
-                                            'verse-picker-btn-active': (!selectingRangeEnd && selectedVerse === verse) || (selectingRangeEnd && rangeVerse === verse),
-                                            'border-primary/50 text-primary/60': selectingRangeEnd && verse === selectedVerse && rangeBook === selectedBook && rangeChapter === selectedChapter && rangeVerse !== verse
-                                        }" 
+                                    <button @click="selectVerse(verse)" class="verse-picker-btn verse-picker-btn-verse"
+                                        :class="[verseColor(verse), verseColor(verse) === 'bg-surface-container' ? 'text-on-surface' : 'text-white',
+                                            (!selectingRangeEnd && selectedVerse === verse) || (selectingRangeEnd && rangeVerse === verse) ? 'ring-2 ring-primary ring-offset-1' : '',
+                                            selectingRangeEnd && verse === selectedVerse && rangeBook === selectedBook && rangeChapter === selectedChapter && rangeVerse !== verse ? 'ring-1 ring-primary/50' : '']"
+                                        :title="verseTitle(verse)"
                                         x-text="verse"></button>
                                 </template>
                             </div>

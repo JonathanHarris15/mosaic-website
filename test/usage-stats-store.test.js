@@ -61,19 +61,56 @@ test('isTrackedField tells "not a serving role" apart from "never filled it"', (
     assert.strictEqual(UsageStats.isTrackedField(''), false);
 });
 
-test('searchScriptureIndex with an empty query returns the most-used references first', () => {
-    const index = {
-        fuse: null,
-        references: [
-            { reference: 'Romans 8:28', count: 2 },
-            { reference: 'John 3:16', count: 9 },
-            { reference: 'Psalm 23:1', count: 5 },
-        ],
-    };
-    const results = UsageStats.searchScriptureIndex(index, '', 2);
-    assert.deepStrictEqual(results.map(r => r.reference), ['John 3:16', 'Psalm 23:1']);
+test('buildScriptureHeatMap folds a single-verse reference into its book, chapter, and verse', () => {
+    const heatMap = UsageStats.buildScriptureHeatMap([
+        { reference: 'John 3:16', count: 4, lastUsed: '2026-01-04' },
+    ]);
+    assert.strictEqual(heatMap.bookCounts['John'], 4);
+    assert.deepStrictEqual(heatMap.chapterStats['John-3'], { count: 4, lastUsed: '2026-01-04' });
+    assert.deepStrictEqual(heatMap.verseStats['John-3-16'], { count: 4, lastUsed: '2026-01-04' });
 });
 
-test('searchScriptureIndex with no index loaded returns nothing', () => {
-    assert.deepStrictEqual(UsageStats.searchScriptureIndex(null, 'John'), []);
+test('a verse range lights up every verse it spans, not just the endpoints', () => {
+    const heatMap = UsageStats.buildScriptureHeatMap([
+        { reference: 'Romans 8:28-30', count: 2, lastUsed: '2026-02-01' },
+    ]);
+    assert.strictEqual(heatMap.verseStats['Romans-8-28'].count, 2);
+    assert.strictEqual(heatMap.verseStats['Romans-8-29'].count, 2);
+    assert.strictEqual(heatMap.verseStats['Romans-8-30'].count, 2);
+    // The chapter is credited once per reference, not once per verse in it —
+    // otherwise a 12-verse range would outweigh twelve single-verse uses.
+    assert.strictEqual(heatMap.chapterStats['Romans-8'].count, 2);
+});
+
+test('two references in the same chapter accumulate rather than overwrite', () => {
+    const heatMap = UsageStats.buildScriptureHeatMap([
+        { reference: 'John 3:16', count: 3, lastUsed: '2025-01-01' },
+        { reference: 'John 3:1-5', count: 1, lastUsed: '2026-06-01' },
+    ]);
+    assert.strictEqual(heatMap.chapterStats['John-3'].count, 4);
+    assert.strictEqual(heatMap.chapterStats['John-3'].lastUsed, '2026-06-01');
+    assert.strictEqual(heatMap.bookCounts['John'], 4);
+});
+
+test('maxBookCount/maxChapterCount/maxVerseCount are the true maxima, never zero', () => {
+    const empty = UsageStats.buildScriptureHeatMap([]);
+    assert.strictEqual(empty.maxBookCount, 1);
+    assert.strictEqual(empty.maxChapterCount, 1);
+    assert.strictEqual(empty.maxVerseCount, 1);
+
+    const heatMap = UsageStats.buildScriptureHeatMap([
+        { reference: 'John 3:16', count: 5, lastUsed: '2026-01-01' },
+        { reference: 'Psalm 23:1', count: 2, lastUsed: '2026-01-01' },
+    ]);
+    assert.strictEqual(heatMap.maxChapterCount, 5);
+});
+
+test('heatColorFor buckets 0 to the empty color and scales the rest across the 10-step palette', () => {
+    assert.strictEqual(UsageStats.heatColorFor(0, 10), 'bg-surface-container');
+    assert.strictEqual(UsageStats.heatColorFor(10, 10), 'bg-blue-900');
+    assert.strictEqual(UsageStats.heatColorFor(1, 10), 'bg-blue-100');
+});
+
+test('heatColorFor never divides by zero when nothing has been used yet', () => {
+    assert.strictEqual(UsageStats.heatColorFor(0, 0), 'bg-surface-container');
 });

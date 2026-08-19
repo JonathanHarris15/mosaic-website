@@ -1,4 +1,8 @@
-import { parseBibleReference } from './analytics-utils.js';
+// AnalyticsUtils is a classic-script global (public/analytics-utils.js),
+// not an ES import — this file is the one sanctioned ES-module exception
+// in the codebase (CLAUDE.md), but its dependency isn't, so the verse
+// picker's heat-map coloring (public/verse-picker.js) can share it too.
+const { parseBibleReference } = AnalyticsUtils;
 
 export function analyticsPage() {
     return {

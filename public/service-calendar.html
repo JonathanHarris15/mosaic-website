@@ -746,6 +746,10 @@
     <script src="date-utils.js"></script>
     <!-- "Last used / times used" on the hymn, scripture, and person pickers. -->
     <script src="usage-stats-core.js"></script>
+    <!-- Bible-reference parsing for the scripture heat map — shared with
+         analytics.js's own Bible heat map (CLAUDE.md's one ES-module
+         exception), which reads this same global instead of importing it. -->
+    <script src="analytics-utils.js"></script>
     <script src="usage-stats-store.js"></script>
     <script src="pastoral-prayer-core.js"></script>
     <script src="prayer-suggestions.js"></script>

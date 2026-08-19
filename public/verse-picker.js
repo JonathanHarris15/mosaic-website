@@ -60,26 +60,60 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // References matching what's typed so far — the regulars, most-used
-        // first, when the box is empty. Read from UsageStats.scriptureIndex,
-        // which whichever page this picker lives on loads once at startup
-        // (service-builder.js / service-calendar.js) — a global rather than
+        // How often each book/chapter/verse has actually been used, read
+        // from UsageStats.scriptureHeatMap — which whichever page this
+        // picker lives on builds once at startup (service-builder.js /
+        // service-calendar.js's loadScriptureIndex()). A global rather than
         // an argument threaded through every x-data="versePicker(...)" call
         // site, because the inline picker service-calendar.js injects on a
         // table-view cell click has no enclosing Alpine scope to pass one
         // through.
-        get scriptureMatches() {
-            if (typeof UsageStats === 'undefined') return [];
-            return UsageStats.searchScriptureIndex(UsageStats.scriptureIndex, this.query);
+        get heatMap() {
+            return (typeof UsageStats !== 'undefined' && UsageStats.scriptureHeatMap) || null;
         },
 
-        // Picking a past reference straight off the typeahead list, skipping
-        // the book/chapter/verse wheel entirely.
-        selectReference(ref) {
-            this.value = ref.reference;
-            this.query = ref.reference;
-            this.$el.dispatchEvent(new CustomEvent('input', { detail: ref.reference, bubbles: true }));
-            this.open = false;
+        // Book-step button color/tooltip.
+        bookColor(book) {
+            if (!this.heatMap) return 'bg-surface-container';
+            return UsageStats.heatColorFor(this.heatMap.bookCounts[book] || 0, this.heatMap.maxBookCount);
+        },
+        bookTitle(book) {
+            const count = this.heatMap ? (this.heatMap.bookCounts[book] || 0) : 0;
+            return count ? `${book} — ${UsageStats.formatLabel({ count, lastUsed: null })}` : book;
+        },
+
+        // Chapter-step button color/tooltip, within whichever book is
+        // active for this step (selectedBook, or rangeBook while picking a
+        // range's end).
+        chapterStat(chapter) {
+            if (!this.heatMap || !this.activeBook) return null;
+            return this.heatMap.chapterStats[`${this.activeBook}-${chapter}`] || null;
+        },
+        chapterColor(chapter) {
+            if (!this.heatMap) return 'bg-surface-container';
+            const stat = this.chapterStat(chapter);
+            return UsageStats.heatColorFor(stat ? stat.count : 0, this.heatMap.maxChapterCount);
+        },
+        chapterTitle(chapter) {
+            const stat = this.chapterStat(chapter);
+            const label = `${this.activeBook} ${chapter}`;
+            return stat ? `${label} — ${UsageStats.formatLabel(stat)}` : label;
+        },
+
+        // Verse-step button color/tooltip, within whichever chapter is active.
+        verseStat(verse) {
+            if (!this.heatMap || !this.activeBook || this.activeChapter === null) return null;
+            return this.heatMap.verseStats[`${this.activeBook}-${this.activeChapter}-${verse}`] || null;
+        },
+        verseColor(verse) {
+            if (!this.heatMap) return 'bg-surface-container';
+            const stat = this.verseStat(verse);
+            return UsageStats.heatColorFor(stat ? stat.count : 0, this.heatMap.maxVerseCount);
+        },
+        verseTitle(verse) {
+            const stat = this.verseStat(verse);
+            const label = `${this.activeBook} ${this.activeChapter}:${verse}`;
+            return stat ? `${label} — ${UsageStats.formatLabel(stat)}` : label;
         },
 
         reset() {
