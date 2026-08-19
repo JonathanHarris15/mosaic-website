@@ -1233,6 +1233,15 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   select {
     font-size: 16px;
   }
+
+  /* Stops Chrome's trackpad swipe-navigation (the "back arrow" overlay on a
+     two-finger left/right swipe) from firing over the app. Table views and
+     rich text editors scroll horizontally on their own content; without
+     this, swiping to scroll one of those instead navigates the browser
+     away mid-edit. */
+  html, body {
+    overscroll-behavior-x: none;
+  }
 }
 @layer utilities {
   input.text-xs, textarea.text-xs, select.text-xs,
