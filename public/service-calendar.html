@@ -302,7 +302,7 @@
                 <h2 id="person-selector-title" class="font-headline-md text-lg" x-text="'Select ' + selectorRoleName"></h2>
             </div>
 
-            <div x-data="personPicker(selectedPersonRef, $data, 'activeSuggestionsKey')" 
+            <div x-data="personPicker(selectedPersonRef, $data, 'activeSuggestionsKey')"
                  @click.away="open = false"
                  class="relative mb-8">
                 <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
@@ -323,6 +323,7 @@
                                 <button @click="select(p)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed/30 flex flex-col transition-colors border-b last:border-0">
                                     <span class="font-label-md text-sm text-primary" x-text="p.name"></span>
                                     <span class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
+                                    <span x-show="prayerCountFor(p)" class="text-[9px] text-on-surface-variant/70 font-medium uppercase" x-text="'(' + prayerCountFor(p) + ')'"></span>
                                 </button>
                             </template>
                         </div>
@@ -337,8 +338,14 @@
                                 <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
                                 <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
                             </div>
-                            <template x-if="!p.isNew && showLastPrayed">
-                                <span class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
+                            <template x-if="!p.isNew && isPastoralPrayerField">
+                                <div class="flex items-baseline gap-1">
+                                    <span class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
+                                    <span x-show="prayerCountFor(p)" class="text-[9px] text-on-surface-variant/70 font-medium uppercase" x-text="'(' + prayerCountFor(p) + ')'"></span>
+                                </div>
+                            </template>
+                            <template x-if="!p.isNew && !isPastoralPrayerField && usageLabelFor(p)">
+                                <span class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="usageLabelFor(p)"></span>
                             </template>
                         </button>
                     </template>
@@ -737,6 +744,9 @@
     </div>
 
     <script src="date-utils.js"></script>
+    <!-- "Last used / times used" on the hymn, scripture, and person pickers. -->
+    <script src="usage-stats-core.js"></script>
+    <script src="usage-stats-store.js"></script>
     <script src="pastoral-prayer-core.js"></script>
     <script src="prayer-suggestions.js"></script>
     <!-- Guide engine + store: lets navigateToGuide compute v2 completeness from

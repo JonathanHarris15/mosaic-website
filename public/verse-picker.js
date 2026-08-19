@@ -60,6 +60,28 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        // References matching what's typed so far — the regulars, most-used
+        // first, when the box is empty. Read from UsageStats.scriptureIndex,
+        // which whichever page this picker lives on loads once at startup
+        // (service-builder.js / service-calendar.js) — a global rather than
+        // an argument threaded through every x-data="versePicker(...)" call
+        // site, because the inline picker service-calendar.js injects on a
+        // table-view cell click has no enclosing Alpine scope to pass one
+        // through.
+        get scriptureMatches() {
+            if (typeof UsageStats === 'undefined') return [];
+            return UsageStats.searchScriptureIndex(UsageStats.scriptureIndex, this.query);
+        },
+
+        // Picking a past reference straight off the typeahead list, skipping
+        // the book/chapter/verse wheel entirely.
+        selectReference(ref) {
+            this.value = ref.reference;
+            this.query = ref.reference;
+            this.$el.dispatchEvent(new CustomEvent('input', { detail: ref.reference, bubbles: true }));
+            this.open = false;
+        },
+
         reset() {
             this.step = 'book';
             this.selectedBook = '';

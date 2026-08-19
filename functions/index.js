@@ -31,6 +31,16 @@ const aw = require("./assignment-writes");
 // shared/trade-core.js, pure; this takes a db so the transactions can be
 // exercised.
 const tw = require("./trade-writes");
+// What changed on a Service save, in hymn/scripture-usage terms. Pure, and
+// copied from public/ the same way shared/cover-core.js is — the picker on
+// the client and the trigger below have to agree on what counts as "this
+// hymn just became used."
+const usc = require("./shared/usage-stats-core.js");
+// The pure maths behind Service Theme similarity scoring (docs/plans/
+// theme-similarity.md) — normalization, centering, calibrated uniqueness.
+// Copied from public/ the same way; scoreTheme below is what actually calls
+// out to Firestore and the embedding API.
+const tsc = require("./shared/theme-similarity-core.js");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -38,6 +48,13 @@ const tw = require("./trade-writes");
  * Functions that send or check SMS declare this in their `secrets` option.
  */
 const TEXTBELT_KEY = defineSecret("TEXTBELT_KEY");
+
+/**
+ * Google Gemini API key for Service Theme embeddings (docs/plans/
+ * theme-similarity.md). Set or rotate it with:
+ *   firebase functions:secrets:set GEMINI_KEY
+ */
+const GEMINI_KEY = defineSecret("GEMINI_KEY");
 
 /**
  * Public URL of the smsInbound HTTP function. Textbelt POSTs reply webhooks
@@ -99,6 +116,7 @@ const CACHE_TTL_MS = 1000 * 60 * 5; // 5 minutes
  * @property {string} music_writer - The composer of the music.
  * @property {string} lyrics_writer - The author of the lyrics.
  * @property {string|null} last_played_date - The last date the hymn was played.
+ * @property {number} times_played - How many services currently schedule this hymn.
  * @property {Array<string>} tags - Descriptive tags for the hymn.
  * @property {string} database_url - Relative URL to the hymn details page.
  */
@@ -125,6 +143,7 @@ exports.getHymnIndex = onCall({cors: true, region: "us-central1"}, async (reques
       music_writer: data.music_writer || "Unknown",
       lyrics_writer: data.lyrics_writer || "Unknown",
       last_played_date: data.last_played_date || null,
+      times_played: data.times_played || 0,
       tags: data.tags || [],
       database_url: `/hymns/${doc.id}`,
     };
@@ -1058,6 +1077,312 @@ exports.endTradesOnFilledPlace = onDocumentWritten(
             `${row.roleSlug} ended ${closed.length} — ` +
             closed.map((c) => c.because).join(", "));
       }
+    },
+);
+
+/**
+ * Order of Service usage stats — hymns & scripture.
+ *
+ * Lets a picker say "used 4×, last Jul 14" instead of nothing. Reacts to
+ * every services/{date} write, diffs the liturgy's hymn and scripture slots
+ * with UsageStatsCore.diffLiturgyUsage, and applies the resulting +1/-1
+ * deltas to hymns/{hymnId}.times_played / .last_played_date and
+ * scripture_usage/{reference}.count / .lastUsed.
+ */
+exports.updateOrderOfServiceUsageStats = onDocumentWritten(
+    {
+      document: "services/{dateKey}",
+      region: "us-central1",
+    },
+    async (event) => {
+      const dateKey = event.params.dateKey;
+      const snap = event.data || {};
+      const before = snap.before && snap.before.exists ?
+        snap.before.data() : null;
+      const after = snap.after && snap.after.exists ?
+        snap.after.data() : null;
+
+      const {hymnDeltas, scriptureDeltas} =
+        usc.diffLiturgyUsage(before, after, dateKey);
+      if (!hymnDeltas.length && !scriptureDeltas.length) return;
+
+      const db = admin.firestore();
+      await Promise.all([
+        ...hymnDeltas.map((d) => applyUsageDelta(
+            db.collection("hymns").doc(d.hymnId), d,
+            "times_played", "last_played_date")),
+        ...scriptureDeltas.map((d) => applyUsageDelta(
+            db.collection("scripture_usage").doc(d.reference), d,
+            "count", "lastUsed", {reference: d.reference})),
+      ]);
+    },
+);
+
+/**
+ * Applies one usage delta to an aggregate doc, inside a transaction — "last
+ * used" is a max, and Firestore has no atomic max, only atomic increment. A
+ * service edited out of chronological order must not drag a hymn's
+ * last-used date backwards just because it was touched.
+ *
+ * `createFields` are written only the first time the doc is created —
+ * `scripture_usage` needs its own `reference` field stamped on; `hymns`
+ * docs already exist, so nothing extra is needed there.
+ * @param {FirebaseFirestore.DocumentReference} ref
+ * @param {{countDelta: number, date: string}} delta
+ * @param {string} countField
+ * @param {string} dateField
+ * @param {?Object} createFields
+ */
+async function applyUsageDelta(
+    ref, delta, countField, dateField, createFields) {
+  await ref.firestore.runTransaction(async (tx) => {
+    const doc = await tx.get(ref);
+    const data = doc.exists ? doc.data() : {};
+    const nextCount =
+      Math.max(0, (data[countField] || 0) + delta.countDelta);
+    const existingDate = data[dateField] || null;
+    const movesForward = delta.countDelta > 0 &&
+      (!existingDate || delta.date > existingDate);
+    const nextDate = movesForward ? delta.date : existingDate;
+
+    const payload = {[countField]: nextCount, [dateField]: nextDate};
+    if (!doc.exists && createFields) Object.assign(payload, createFields);
+    tx.set(ref, payload, {merge: true});
+  });
+}
+
+/**
+ * A named person's cached serving-role stats — how many times, and when
+ * last, they've filled each Order of Service "who" field. Recomputes the
+ * WHOLE roleStats map from people/{personId}/involvement on every write to
+ * that subcollection, rather than incrementing — the subcollection is small
+ * per person, and a full recompute can't drift from what's actually there
+ * the way an increment could if a write were ever missed or retried.
+ *
+ * Pastoral prayer (prayerMale/prayerFemale) is NOT here — it isn't a
+ * serving role (service-involvement-core.js excludes it deliberately) and
+ * is tracked by updatePastoralPrayerUsageStats below instead.
+ */
+exports.updateRoleUsageStats = onDocumentWritten(
+    {
+      document: "people/{personId}/involvement/{involvementId}",
+      region: "us-central1",
+    },
+    async (event) => {
+      const personId = event.params.personId;
+      const db = admin.firestore();
+      const involvementSnap = await db.collection("people").doc(personId)
+          .collection("involvement").get();
+
+      const stats = {};
+      involvementSnap.forEach((doc) => {
+        const record = doc.data();
+        const key = usc.roleStatKey(record.type,
+            record.metadata && record.metadata.prayer_type);
+        if (!key) return;
+        const bucket = stats[key] || (stats[key] = {count: 0, lastUsed: null});
+        bucket.count += 1;
+        if (record.serviceDate &&
+            (!bucket.lastUsed || record.serviceDate > bucket.lastUsed)) {
+          bucket.lastUsed = record.serviceDate;
+        }
+      });
+
+      await db.collection("people").doc(personId).update({roleStats: stats});
+    },
+);
+
+/**
+ * A named person's cached "prayed for" count, alongside the existing
+ * lastPastoralPrayerDate cache (pastoral-prayer-core.js) — that cache
+ * already tracks the newest date correctly, written in the same batch as
+ * the history record itself, so this only adds the count and reads the
+ * date rather than recomputing it.
+ */
+exports.updatePastoralPrayerUsageStats = onDocumentWritten(
+    {
+      document: "people/{personId}/pastoral_prayer_history/{historyId}",
+      region: "us-central1",
+    },
+    async (event) => {
+      const personId = event.params.personId;
+      const db = admin.firestore();
+      const personRef = db.collection("people").doc(personId);
+
+      const [historySnap, personSnap] = await Promise.all([
+        personRef.collection("pastoral_prayer_history").get(),
+        personRef.get(),
+      ]);
+      if (!personSnap.exists) return;
+
+      const lastUsed = personSnap.data().lastPastoralPrayerDate || null;
+      await personRef.update({
+        pastoralPrayerStats: {count: historySnap.size, lastUsed: lastUsed},
+      });
+    },
+);
+
+// Service Theme similarity (docs/plans/theme-similarity.md). Vectors from
+// different models or dimensionalities are not comparable — changing either
+// constant means re-embedding the whole `themes` collection first.
+const THEME_EMBEDDING_MODEL = "gemini-embedding-001";
+const THEME_EMBEDDING_DIMS = 768;
+
+/**
+ * Embeds one piece of text with the Gemini embedding API. `taskType:
+ * SEMANTIC_SIMILARITY` matters — see the plan for why. Ported from the
+ * spike's `embedOne` (scripts/spike/analyze-themes.js).
+ * @param {string} text
+ * @param {string} apiKey
+ * @return {Promise<Array<number>>}
+ */
+async function embedThemeText(text, apiKey) {
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/" +
+      THEME_EMBEDDING_MODEL + ":embedContent?key=" + apiKey;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      model: "models/" + THEME_EMBEDDING_MODEL,
+      content: {parts: [{text: text}]},
+      taskType: "SEMANTIC_SIMILARITY",
+      outputDimensionality: THEME_EMBEDDING_DIMS,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Gemini embed failed: ${res.status} ${await res.text()}`);
+  }
+  const data = await res.json();
+  return data.embedding.values;
+}
+
+/**
+ * How close a Service Theme an editor is typing is to one already preached,
+ * and how unique it is overall. Advisory only — nothing here blocks or
+ * changes a save. Editor+ only: this spends money per call.
+ *
+ * Scoring runs here rather than on the client because the alternative is
+ * downloading every theme's vector to the browser on every page load —
+ * several MB in the phone WebView, on mobile data, for a feature that only
+ * needs a few hundred bytes back.
+ */
+exports.scoreTheme = onCall(
+    {cors: true, region: "us-central1", secrets: [GEMINI_KEY]},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Sign in to score a theme.");
+      }
+
+      const db = admin.firestore();
+      const callerSnap =
+        await db.collection("users").doc(request.auth.uid).get();
+      const level = callerSnap.exists &&
+          (callerSnap.data().permissionLevel || callerSnap.data().role);
+      if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
+        throw new HttpsError("permission-denied",
+            "Editors only — scoring a theme calls a paid API.");
+      }
+
+      const text = ((request.data && request.data.text) || "").trim();
+      if (!text) {
+        throw new HttpsError("invalid-argument", "No theme text given.");
+      }
+
+      const [candidateVector, corpusSnap] = await Promise.all([
+        embedThemeText(text, GEMINI_KEY.value()),
+        db.collection("themes").get(),
+      ]);
+
+      const corpus = [];
+      corpusSnap.forEach((doc) => {
+        const data = doc.data();
+        if (data.model !== THEME_EMBEDDING_MODEL ||
+            data.dims !== THEME_EMBEDDING_DIMS) {
+          throw new HttpsError("failed-precondition",
+              `themes/${doc.id} was embedded with a different model/size — ` +
+              "run scripts/backfill-theme-vectors.js before scoring again.");
+        }
+        corpus.push({
+          text: data.text, dates: data.usedOn || [], vector: data.vector,
+        });
+      });
+
+      const {uniqueness, matches} = tsc.scoreCandidate(candidateVector, corpus);
+
+      return {
+        uniqueness: uniqueness,
+        // Centered cosine, clamped to 0 at "no relation or opposite" — a
+        // negative centered similarity carries no useful "how close" meaning
+        // to show an editor, only "not this one".
+        matches: matches.map((m) => ({
+          text: m.text,
+          dates: m.dates,
+          closenessPercent: Math.round(Math.max(0, m.similarity) * 100),
+        })),
+      };
+    },
+);
+
+/**
+ * Keeps the `themes` collection current as Services are saved (docs/plans/
+ * theme-similarity.md). Each distinct theme is embedded exactly once, ever
+ * — repeat and edited-elsewhere-first saves just add/remove a date from
+ * `usedOn`.
+ */
+exports.onServiceThemeWritten = onDocumentWritten(
+    {
+      document: "services/{dateKey}",
+      region: "us-central1",
+      secrets: [GEMINI_KEY],
+    },
+    async (event) => {
+      const dateKey = event.params.dateKey;
+      const snap = event.data || {};
+      const before = snap.before && snap.before.exists ?
+        snap.before.data() : null;
+      const after = snap.after && snap.after.exists ?
+        snap.after.data() : null;
+
+      const oldText = before ? before.theme : null;
+      const newText = after ? after.theme : null;
+      if ((oldText || "") === (newText || "")) return;
+
+      const db = admin.firestore();
+      const oldKey = tsc.themeKey(oldText);
+      const newKey = tsc.themeKey(newText);
+
+      if (oldKey && oldKey !== newKey) {
+        const oldRef = db.collection("themes").doc(oldKey);
+        const oldSnap = await oldRef.get();
+        if (oldSnap.exists) {
+          await oldRef.update({
+            usedOn: admin.firestore.FieldValue.arrayRemove(dateKey),
+          });
+        }
+      }
+
+      if (!newKey) return;
+
+      const newRef = db.collection("themes").doc(newKey);
+      const newSnap = await newRef.get();
+
+      if (newSnap.exists) {
+        await newRef.update({
+          usedOn: admin.firestore.FieldValue.arrayUnion(dateKey),
+        });
+        return;
+      }
+
+      const displayText = tsc.normalizeThemeText(newText);
+      const vector = await embedThemeText(displayText, GEMINI_KEY.value());
+      await newRef.set({
+        text: displayText,
+        vector: vector,
+        model: THEME_EMBEDDING_MODEL,
+        dims: THEME_EMBEDDING_DIMS,
+        usedOn: [dateKey],
+        embeddedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
     },
 );
 

@@ -45,3 +45,8 @@ cmdline-tools.zip
 
 # macOS Finder metadata (icon positions — nothing to do with the project)
 .DS_Store
+
+# Throwaway spike outputs (vectors + generated reports)
+scripts/spike/vectors-*.json
+scripts/spike/report-*.md
+scripts/spike/themes.json

@@ -317,6 +317,28 @@ service cloud.firestore {
       allow create, update, delete: if isEditor();
     }
 
+    // How many times each scripture reference has been used in an Order of
+    // Service, and when last — maintained by updateOrderOfServiceUsageStats
+    // (functions/index.js) reacting to services/{date} writes. Same
+    // server-write-only shape as cover/trades above: a client recomputing
+    // its own count from a partial view of history would drift from the
+    // real one, so there is no client write path at all.
+    match /scripture_usage/{referenceId} {
+      allow read: if true;
+      allow create, update, delete: if false;
+    }
+
+    // Every distinct Service Theme, its embedding vector, and the dates it
+    // was used (docs/plans/theme-similarity.md) — maintained by
+    // onServiceThemeWritten reacting to services/{date} writes. Member+ read
+    // (same rung as the rest of the service data); no client write path —
+    // embedding is a paid API call and vectors from a client-chosen model
+    // would silently break comparability with the rest of the corpus.
+    match /themes/{themeKey} {
+      allow read: if isMember();
+      allow create, update, delete: if false;
+    }
+
     // Service Guide Template System (ADR-0008). The Page Library, Style Presets,
     // and Service Guide Templates are global, editor-authored content — public
     // read (the booklet is congregant-facing), editor+ write (same as weekly

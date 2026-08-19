@@ -40,6 +40,8 @@ const MODULES = [
     'cover-core.js',
     'away-core.js',
     'trade-core.js',
+    'usage-stats-core.js',
+    'theme-similarity-core.js',
 ];
 
 const BANNER = [

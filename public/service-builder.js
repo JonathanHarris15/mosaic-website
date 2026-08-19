@@ -368,6 +368,12 @@ function serviceForm() {
         fuse: null,
         peopleRegistry: [],
         peopleFuse: null,
+        // Service Theme similarity (docs/plans/theme-similarity.md).
+        // Advisory only — nothing here blocks or changes a save.
+        themeSimilaritySession: null,
+        themeScore: null,        // { uniqueness, matches } | null
+        themeScoreLoading: false,
+        themeScoreError: null,
         service: {
             theme: '',
             keyVerse: '',
@@ -708,9 +714,11 @@ function serviceForm() {
                 window.location.href = this.shell === 'mobile' ? 'mobile.html#/calendar' : 'service-calendar.html';
                 return;
             }
+            this.initThemeSimilarity();
             await this.load();
             await this.loadGuideCatalog();
             await this.loadHymnRegistry();
+            await this.loadScriptureIndex();
             await this.loadPeopleRegistry();
             await this.loadPrayerRequests();
             await this.autoLinkHymns();
@@ -747,6 +755,48 @@ function serviceForm() {
             });
             this.hymnRegistry = index.hymns;
             this.fuse = index.fuse;
+        },
+
+        // Every scripture reference ever used, for the picker's typeahead
+        // (usage-stats-store.js). Read off the shared UsageStats global
+        // rather than kept on this component — verse-picker.js's inline
+        // instances on the Service Calendar have no Alpine parent to thread
+        // it through, so both pages populate the same one place.
+        async loadScriptureIndex() {
+            try {
+                UsageStats.scriptureIndex = await UsageStats.loadScriptureIndex(db);
+            } catch (err) {
+                console.error('Error loading scripture usage index:', err);
+            }
+        },
+
+        // One debounced/memoized session for the lifetime of the page — see
+        // theme-similarity-store.js. Synchronous: it only wires up the
+        // Cloud Function callable, nothing is fetched until typing starts.
+        initThemeSimilarity() {
+            this.themeSimilaritySession = ThemeSimilarity.createSession({
+                scoreThemeCallable: firebase.app().functions('us-central1').httpsCallable('scoreTheme'),
+            });
+        },
+
+        // Bound to the Theme field's input event. Debounced network call —
+        // advisory only, never blocks typing or saving.
+        onThemeInput() {
+            this.themeScoreError = null;
+            this.themeScoreLoading = true;
+            this.themeSimilaritySession.scoreDebounced(
+                this.service.theme,
+                (data) => {
+                    this.themeScore = data;
+                    this.themeScoreLoading = false;
+                },
+                (err) => {
+                    console.error('Error scoring theme:', err);
+                    this.themeScore = null;
+                    this.themeScoreError = 'Could not check this theme right now.';
+                    this.themeScoreLoading = false;
+                },
+            );
         },
 
         async loadPeopleRegistry() {
@@ -2253,12 +2303,29 @@ function serviceForm() {
     };
 }
 
-function personPicker(personRef, parent = null, suggestionsKey = null) {
+// `field` is the Order of Service "who" slot this picker fills —
+// 'preacher', 'serviceLeader', 'prayerMale', etc. — used only to look up
+// each candidate's cached usage stat (usage-stats-store.js). null for a
+// picker this feature doesn't track (baptism candidates, irregular
+// elements), which just shows no stat.
+function personPicker(personRef, parent = null, suggestionsKey = null, field = null) {
     if (!personRef) personRef = { name: '', id: null };
     return {
         personRef: personRef,
         parent: parent,
         suggestionsKey: suggestionsKey,
+        field: field,
+        usageLabelFor(candidate) {
+            if (!UsageStats.isTrackedField(this.field)) return '';
+            return UsageStats.formatLabel(UsageStats.personStatFor(candidate, this.field));
+        },
+        // prayerMale/prayerFemale already show PastoralPrayerCore.lastPrayedLabel
+        // (the one date label every surface uses) — this only adds the count
+        // beside it, rather than replacing that wording with usageLabelFor's.
+        prayerCountFor(candidate) {
+            const stat = this.field && UsageStats.personStatFor(candidate, this.field);
+            return stat && stat.count ? `${stat.count}×` : '';
+        },
         get suggestions() {
             if (typeof this.suggestionsKey === 'string' && this.parent && this.parent.prayerSuggestions) {
                 return this.parent.prayerSuggestions[this.suggestionsKey] || [];

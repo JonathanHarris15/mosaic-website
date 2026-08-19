@@ -49,6 +49,7 @@ function load() {
     sandbox.DateUtils = require('../public/date-utils.js');
     sandbox.HymnRegistry = require('../public/hymn-registry.js');
     sandbox.PersonPhotoCore = require('../public/person-photo-core.js');
+    sandbox.UsageStats = require('../public/usage-stats-store.js');
 
     vm.createContext(sandbox);
     vm.runInContext(SRC, sandbox, { filename: 'service-calendar.js' });
@@ -201,19 +202,26 @@ test('the faces are drawn again once the directory arrives', () => {
 test('the Assigned picker does not report when people were last prayed for', () => {
     // That line answers "who has waited longest to be prayed for". Asking who
     // is down to WRITE a Sunday is a different question, and a date under
-    // every name is noise to read past.
-    assert.match(HTML, /x-if="!p\.isNew && showLastPrayed"/);
-    assert.match(SRC, /get showLastPrayed\(\)[\s\S]{0,120}selectorField !== ASSIGNED_FIELD/);
+    // every name is noise to read past. isPastoralPrayerField is what tells
+    // the two apart now (usage-stats-store.js), and it is false for
+    // assignedWriter — not a serving role, so usageLabelFor reads it as
+    // untracked and shows nothing either.
+    assert.match(HTML, /x-if="!p\.isNew && isPastoralPrayerField"/);
+    const sb = load();
+    const picker = sb.personPicker({ name: '', id: null }, { selectorField: sb.ASSIGNED_FIELD });
+    assert.strictEqual(picker.isPastoralPrayerField, false);
+    assert.strictEqual(picker.usageLabelFor({ id: 'p-1' }), '');
 });
 
 test('the pastoral prayer pickers keep it, because there it is the point', () => {
     const sb = load();
-    sb.selectorField = 'prayerMale';
-    const page = sb.calendarPage();
-    page.selectorField = 'prayerMale';
-    assert.strictEqual(page.showLastPrayed, true);
-    page.selectorField = sb.ASSIGNED_FIELD;
-    assert.strictEqual(page.showLastPrayed, false);
+    const parent = { selectorField: 'prayerMale' };
+    const picker = sb.personPicker({ name: '', id: null }, parent);
+    assert.strictEqual(picker.isPastoralPrayerField, true);
+    parent.selectorField = 'prayerFemale';
+    assert.strictEqual(picker.isPastoralPrayerField, true);
+    parent.selectorField = sb.ASSIGNED_FIELD;
+    assert.strictEqual(picker.isPastoralPrayerField, false);
 });
 
 test('a viewer sees who is assigned but is not invited to change it', () => {

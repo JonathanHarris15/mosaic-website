@@ -269,8 +269,40 @@
                     <!-- Service Theme (inline editable) -->
                     <div class="mt-2.5 max-w-md" data-field-key="theme">
                         <input type="text" id="service-theme" name="theme" x-model="service.theme"
-                            placeholder="Add a service theme…"
+                            placeholder="Add a service theme…" @input="onThemeInput()"
                             class="theme-input font-body-md text-base font-medium text-graph-ink" :disabled="!canEdit">
+                    </div>
+
+                    <!-- Theme similarity readout (docs/plans/theme-similarity.md).
+                         Advisory only — it never blocks typing or saving, only
+                         flags themes close to ones already preached. -->
+                    <div class="mt-1.5 max-w-md" x-show="themeScoreLoading || themeScore || themeScoreError" x-cloak>
+                        <div x-show="themeScoreLoading" class="flex items-center gap-1.5 text-[11px] text-secondary">
+                            <span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                            <span>Checking against past themes…</span>
+                        </div>
+                        <div x-show="!themeScoreLoading && themeScoreError" class="text-[11px] text-secondary/70" x-text="themeScoreError"></div>
+                        <template x-if="!themeScoreLoading && themeScore">
+                            <div class="space-y-1.5">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-label-md text-[10px] uppercase tracking-wider text-secondary">Uniqueness</span>
+                                    <template x-if="themeScore.uniqueness !== null">
+                                        <span class="font-label-md text-[11px] font-semibold px-1.5 py-0.5 rounded-full"
+                                            :class="themeScore.uniqueness >= 60 ? 'bg-green-100 text-green-700' : (themeScore.uniqueness >= 30 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700')"
+                                            x-text="themeScore.uniqueness + '%'"></span>
+                                    </template>
+                                    <span x-show="themeScore.uniqueness === null" class="text-[11px] text-secondary/60 italic">not enough history yet</span>
+                                </div>
+                                <ul class="space-y-1" x-show="themeScore.matches.length">
+                                    <template x-for="m in themeScore.matches" :key="m.text">
+                                        <li class="flex items-center justify-between gap-2 text-[11px] text-secondary bg-surface-container-low rounded-lg px-2 py-1">
+                                            <span class="truncate" x-text="m.text"></span>
+                                            <span class="shrink-0 text-secondary/70" x-text="ThemeSimilarity.formatMatch(m)"></span>
+                                        </li>
+                                    </template>
+                                </ul>
+                            </div>
+                        </template>
                     </div>
                     <!-- Key Verse chip with verse picker -->
                     <div class="mt-3 inline-flex items-center gap-2 bg-surface-container-low border border-outline-variant rounded-full pl-3 pr-2 py-1" data-field-key="keyVerse">
@@ -304,6 +336,14 @@
                                     <button @click="open = false" class="text-secondary hover:text-primary cursor-pointer flex items-center">
                                         <span class="material-symbols-outlined text-sm">close</span>
                                     </button>
+                                </div>
+                                <div x-show="scriptureMatches.length" class="border-b border-outline-variant overflow-y-auto max-h-40">
+                                    <template x-for="ref in scriptureMatches" :key="ref.reference">
+                                        <button @click="selectReference(ref)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0 flex items-center justify-between gap-3">
+                                            <span class="text-sm font-label-md" x-text="ref.reference"></span>
+                                            <span class="text-[10px] text-on-surface-variant/60 shrink-0" x-text="UsageStats.formatLabel(ref)"></span>
+                                        </button>
+                                    </template>
                                 </div>
                                 <div class="p-2 grid grid-cols-4 gap-1 overflow-y-auto max-h-56" x-show="step === 'book'">
                                     <template x-for="book in filteredBooks" :key="book">
@@ -380,7 +420,7 @@
                 <!-- Service Leader -->
                 <div class="min-w-[210px]" data-field-key="serviceLeader">
                     <div class="field-label mb-1.5">Service Leader</div>
-                    <div x-data="personPicker(service.serviceLeader, $data)" @click.away="open = false" class="relative w-full max-w-[230px]">
+                    <div x-data="personPicker(service.serviceLeader, $data, null, 'serviceLeader')" @click.away="open = false" class="relative w-full max-w-[230px]">
                         <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <input type="text" id="service-leader-search" name="service-leader" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
                             <div class="flex items-center gap-1">
@@ -397,6 +437,7 @@
                                         <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
                                         <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
                                     </div>
+                                    <p x-show="!p.isNew" class="text-[10px] text-on-surface-variant/60" x-text="usageLabelFor(p)"></p>
                                 </button>
                             </template>
                         </div>
@@ -406,7 +447,7 @@
                 <!-- Music Leader (+ helpers) -->
                 <div class="min-w-[210px]" data-field-key="musicLeader">
                     <div class="field-label mb-1.5">Music Leader</div>
-                    <div x-data="personPicker(service.musicLeader, $data)" @click.away="open = false" class="relative w-full max-w-[230px]">
+                    <div x-data="personPicker(service.musicLeader, $data, null, 'musicLeader')" @click.away="open = false" class="relative w-full max-w-[230px]">
                         <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <input type="text" id="music-leader-search" name="music-leader" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
                             <div class="flex items-center gap-1">
@@ -423,6 +464,7 @@
                                         <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
                                         <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
                                     </div>
+                                    <p x-show="!p.isNew" class="text-[10px] text-on-surface-variant/60" x-text="usageLabelFor(p)"></p>
                                 </button>
                             </template>
                         </div>
@@ -430,7 +472,7 @@
                     <!-- Music Helpers -->
                     <template x-for="(hlp, idx) in service.musicHelpers" :key="idx">
                         <div class="mt-2 pl-3 border-l-2 border-outline-variant/40 max-w-[230px]">
-                            <div x-data="personPicker(hlp, $data)" @click.away="open = false" class="relative">
+                            <div x-data="personPicker(hlp, $data, null, 'musicHelpers')" @click.away="open = false" class="relative">
                                 <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-1.5">
                                     <span class="font-label-md text-[9px] uppercase tracking-wider text-secondary/70 mr-2 whitespace-nowrap">with</span>
                                     <input type="text" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-xs" :disabled="!canEdit">
@@ -447,6 +489,7 @@
                                                 <p class="font-label-md text-xs" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
                                                 <span x-show="p.isNew" class="material-symbols-outlined text-[14px] text-primary">person_add</span>
                                             </div>
+                                            <p x-show="!p.isNew" class="text-[10px] text-on-surface-variant/60" x-text="usageLabelFor(p)"></p>
                                         </button>
                                     </template>
                                 </div>
@@ -461,7 +504,7 @@
                 <!-- Preacher -->
                 <div class="min-w-[210px]" data-field-key="preacher">
                     <div class="field-label mb-1.5">Preacher</div>
-                    <div x-data="personPicker(service.preacher, $data)" @click.away="open = false" class="relative w-full max-w-[230px]">
+                    <div x-data="personPicker(service.preacher, $data, null, 'preacher')" @click.away="open = false" class="relative w-full max-w-[230px]">
                         <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
                             <input type="text" id="preacher-search" name="preacher" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
                             <div class="flex items-center gap-1">
@@ -478,6 +521,7 @@
                                         <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
                                         <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
                                     </div>
+                                    <p x-show="!p.isNew" class="text-[10px] text-on-surface-variant/60" x-text="usageLabelFor(p)"></p>
                                 </button>
                             </template>
                         </div>
@@ -653,8 +697,11 @@
                                                                     <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
                                                                         <template x-for="h in results" :key="h.id">
                                                                             <button @click="select(h)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
-                                                                                <p class="font-label-md text-sm" x-text="h.hymn_name"></p>
-                                                                                <p class="text-[10px] text-secondary" x-text="h.lyrics_writer"></p>
+                                                                                <div class="flex items-baseline justify-between gap-2">
+                                                                                    <p class="font-label-md text-sm" x-text="h.hymn_name"></p>
+                                                                                    <p class="text-[10px] text-secondary" x-text="h.lyrics_writer"></p>
+                                                                                </div>
+                                                                                <p class="text-[10px] text-on-surface-variant/60" x-text="UsageStats.formatLabel({ count: h.times_played, lastUsed: h.last_played_date })"></p>
                                                                             </button>
                                                                         </template>
                                                                     </div>
@@ -693,6 +740,14 @@
                                                                             <button @click="open = false" class="text-secondary hover:text-primary cursor-pointer flex items-center">
                                                                                 <span class="material-symbols-outlined text-sm">close</span>
                                                                             </button>
+                                                                        </div>
+                                                                        <div x-show="scriptureMatches.length" class="border-b border-outline-variant overflow-y-auto max-h-40">
+                                                                            <template x-for="ref in scriptureMatches" :key="ref.reference">
+                                                                                <button @click="selectReference(ref)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0 flex items-center justify-between gap-3">
+                                                                                    <span class="text-sm font-label-md" x-text="ref.reference"></span>
+                                                                                    <span class="text-[10px] text-on-surface-variant/60 shrink-0" x-text="UsageStats.formatLabel(ref)"></span>
+                                                                                </button>
+                                                                            </template>
                                                                         </div>
                                                                         <div class="p-2 grid grid-cols-4 gap-1 overflow-y-auto max-h-56" x-show="step === 'book'">
                                                                             <template x-for="book in filteredBooks" :key="book">
@@ -736,7 +791,7 @@
                                                                     <div class="mt-3 pt-3 border-t border-dashed border-outline-variant">
                                                                         <div x-show="showPrayerPraise || service.prayerPraise.id">
                                                                             <div class="field-label !text-[10px] mb-1.5">Prayer Leader (Praise)</div>
-                                                                            <div x-data="personPicker(service.prayerPraise, $data)" @click.away="open = false" class="relative max-w-md">
+                                                                            <div x-data="personPicker(service.prayerPraise, $data, null, 'prayerPraise')" @click.away="open = false" class="relative max-w-md">
                                                                                 <div class="flex items-center bg-white rounded-lg border border-outline-variant px-3 py-1.5">
                                                                                     <input type="text" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-xs" :disabled="!canEdit">
                                                                                     <div class="flex items-center gap-1">
@@ -753,6 +808,7 @@
                                                                                                 <p class="font-label-md text-xs" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
                                                                                                 <span x-show="p.isNew" class="material-symbols-outlined text-[14px] text-primary">person_add</span>
                                                                                             </div>
+                                                                                            <p x-show="!p.isNew" class="text-[10px] text-on-surface-variant/60" x-text="usageLabelFor(p)"></p>
                                                                                         </button>
                                                                                     </template>
                                                                                 </div>
@@ -769,7 +825,7 @@
                                                                     <div class="mt-3 pt-3 border-t border-dashed border-outline-variant">
                                                                         <div x-show="showPrayerConfession || service.prayerConfession.id">
                                                                             <div class="field-label !text-[10px] mb-1.5">Prayer Leader (Confession)</div>
-                                                                            <div x-data="personPicker(service.prayerConfession, $data)" @click.away="open = false" class="relative max-w-md">
+                                                                            <div x-data="personPicker(service.prayerConfession, $data, null, 'prayerConfession')" @click.away="open = false" class="relative max-w-md">
                                                                                 <div class="flex items-center bg-white rounded-lg border border-outline-variant px-3 py-1.5">
                                                                                     <input type="text" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-xs" :disabled="!canEdit">
                                                                                     <div class="flex items-center gap-1">
@@ -786,6 +842,7 @@
                                                                                                 <p class="font-label-md text-xs" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
                                                                                                 <span x-show="p.isNew" class="material-symbols-outlined text-[14px] text-primary">person_add</span>
                                                                                             </div>
+                                                                                            <p x-show="!p.isNew" class="text-[10px] text-on-surface-variant/60" x-text="usageLabelFor(p)"></p>
                                                                                         </button>
                                                                                     </template>
                                                                                 </div>
@@ -810,7 +867,7 @@
                                                                             </div>
                                                                             <div x-show="showPrayerSubjects && service.liturgy.prayerLabel !== 'Congregational Prayer'" class="flex items-center justify-between gap-4">
                                                                                 <label class="field-label !text-[10px]" for="prayer-male-search">Male Being Prayed For</label>
-                                                                                <div x-data="personPicker(service.liturgy.prayerMale, $data, 'males')" @click.away="open = false" class="relative w-full max-w-xs transition-all" :class="open ? 'z-[60]' : 'z-10'">
+                                                                                <div x-data="personPicker(service.liturgy.prayerMale, $data, 'males', 'prayerMale')" @click.away="open = false" class="relative w-full max-w-xs transition-all" :class="open ? 'z-[60]' : 'z-10'">
                                                                                     <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-1.5 shadow-sm">
                                                                                         <input type="text" id="prayer-male-search" name="prayer-male" x-model="query" @input.debounce="onInput($el)" @focus="onFocus($el)" @click="onFocus($el)" @mousedown.stop placeholder="Search male member..." class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
                                                                                         <button x-show="query || personRef.id" @click="clear()" class="text-secondary hover:text-error transition-colors" :disabled="!canEdit">
@@ -825,6 +882,7 @@
                                                                                                     <button @click="select(p)" class="w-full text-left px-3 py-2 hover:bg-primary-container/20 flex flex-col transition-colors border-b border-outline-variant/10">
                                                                                                         <span class="text-sm font-bold text-primary" x-text="p.name"></span>
                                                                                                         <span class="text-[9px] text-secondary font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
+                                                                                                        <span x-show="prayerCountFor(p)" class="text-[9px] text-secondary/70 font-medium uppercase" x-text="'(' + prayerCountFor(p) + ')'"></span>
                                                                                                     </button>
                                                                                                 </template>
                                                                                             </div>
@@ -839,6 +897,7 @@
                                                                                                 </div>
                                                                                                 <template x-if="!p.isNew">
                                                                                                     <span class="text-[9px] text-secondary font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
+                                                                                                    <span x-show="prayerCountFor(p)" class="text-[9px] text-secondary/70 font-medium uppercase" x-text="'(' + prayerCountFor(p) + ')'"></span>
                                                                                                 </template>
                                                                                             </button>
                                                                                         </template>
@@ -848,7 +907,7 @@
                                                                             </div>
                                                                             <div x-show="showPrayerSubjects && service.liturgy.prayerLabel !== 'Congregational Prayer'" class="flex items-center justify-between gap-4">
                                                                                 <label class="field-label !text-[10px]" for="prayer-female-search">Female Being Prayed For</label>
-                                                                                <div x-data="personPicker(service.liturgy.prayerFemale, $data, 'females')" @click.away="open = false" class="relative w-full max-w-xs transition-all" :class="open ? 'z-[60]' : 'z-10'">
+                                                                                <div x-data="personPicker(service.liturgy.prayerFemale, $data, 'females', 'prayerFemale')" @click.away="open = false" class="relative w-full max-w-xs transition-all" :class="open ? 'z-[60]' : 'z-10'">
                                                                                     <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-1.5 shadow-sm">
                                                                                         <input type="text" id="prayer-female-search" name="prayer-female" x-model="query" @input.debounce="onInput($el)" @focus="onFocus($el)" @click="onFocus($el)" placeholder="Search female member..." class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
                                                                                         <button x-show="query || personRef.id" @click="clear()" class="text-secondary hover:text-error transition-colors" :disabled="!canEdit">
@@ -863,6 +922,7 @@
                                                                                                     <button @click="select(p)" class="w-full text-left px-3 py-2 hover:bg-primary-container/20 flex flex-col transition-colors border-b border-outline-variant/10">
                                                                                                         <span class="text-sm font-bold text-primary" x-text="p.name"></span>
                                                                                                         <span class="text-[9px] text-secondary font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
+                                                                                                        <span x-show="prayerCountFor(p)" class="text-[9px] text-secondary/70 font-medium uppercase" x-text="'(' + prayerCountFor(p) + ')'"></span>
                                                                                                     </button>
                                                                                                 </template>
                                                                                             </div>
@@ -877,6 +937,7 @@
                                                                                                 </div>
                                                                                                 <template x-if="!p.isNew">
                                                                                                     <span class="text-[9px] text-secondary font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
+                                                                                                    <span x-show="prayerCountFor(p)" class="text-[9px] text-secondary/70 font-medium uppercase" x-text="'(' + prayerCountFor(p) + ')'"></span>
                                                                                                 </template>
                                                                                             </button>
                                                                                         </template>
@@ -940,6 +1001,7 @@
                                                                                             <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
                                                                                             <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
                                                                                         </div>
+                                                                                        <p x-show="!p.isNew" class="text-[10px] text-on-surface-variant/60" x-text="usageLabelFor(p)"></p>
                                                                                     </button>
                                                                                 </template>
                                                                             </div>
@@ -1094,8 +1156,11 @@
                                             <div x-show="open && results.length > 0" class="absolute z-50 w-full mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-48 overflow-y-auto left-0">
                                                 <template x-for="h in results" :key="h.id">
                                                     <button @click="select(h)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0">
-                                                        <p class="font-label-md text-sm" x-text="h.hymn_name"></p>
-                                                        <p class="text-[10px] text-secondary" x-text="h.lyrics_writer"></p>
+                                                        <div class="flex items-baseline justify-between gap-2">
+                                                            <p class="font-label-md text-sm" x-text="h.hymn_name"></p>
+                                                            <p class="text-[10px] text-secondary" x-text="h.lyrics_writer"></p>
+                                                        </div>
+                                                        <p class="text-[10px] text-on-surface-variant/60" x-text="UsageStats.formatLabel({ count: h.times_played, lastUsed: h.last_played_date })"></p>
                                                     </button>
                                                 </template>
                                             </div>
@@ -1277,6 +1342,14 @@
     </div>
 
     <script src="date-utils.js"></script>
+    <!-- "Last used / times used" on the hymn, scripture, and person pickers. -->
+    <script src="usage-stats-core.js"></script>
+    <script src="usage-stats-store.js"></script>
+    <!-- Service Theme similarity readout (docs/plans/theme-similarity.md).
+         theme-similarity-core.js is NOT loaded here — scoring runs
+         server-side precisely so the browser never downloads every theme's
+         vector; the store only debounces/calls/caches. -->
+    <script src="theme-similarity-store.js"></script>
     <!-- Who serves at a Sunday, and when that becomes a serve record (MS-16). -->
     <script src="service-involvement-core.js"></script>
     <script src="pastoral-prayer-core.js"></script>

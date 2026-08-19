@@ -38,15 +38,6 @@ function calendarPage() {
             return this.planning && this.view === 'table';
         },
 
-        // "Last prayed for" under each name in the person search.
-        //
-        // It is pastoral-prayer information and it belongs to the question
-        // "who has waited longest to be prayed for". Asking who is down to
-        // WRITE a Sunday is not that question, and the date under every name
-        // is just noise to read past.
-        get showLastPrayed() {
-            return this.selectorField !== ASSIGNED_FIELD;
-        },
         peopleRegistry: [],
         peopleFuse: null,
 
@@ -508,6 +499,19 @@ async function loadHymnIndex() {
     }
 }
 
+// Every scripture reference ever used, for the verse picker's typeahead
+// (usage-stats-store.js). Read off the shared UsageStats global — the
+// inline verse picker below (setupInlineEdit) is injected outside the page's
+// Alpine component tree, so it has no `parent` to thread this through.
+async function loadScriptureIndex() {
+    if (typeof db === 'undefined') return;
+    try {
+        UsageStats.scriptureIndex = await UsageStats.loadScriptureIndex(db);
+    } catch (e) {
+        console.error('Could not load the scripture usage index:', e);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     const startDate = new Date(2023, 6, 9); // July 9, 2023 (Month is 0-indexed)
     const endDate = new Date();
@@ -526,6 +530,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.refreshCalendar(showHistory);
 
     loadHymnIndex();
+    loadScriptureIndex();
 
     // Wait for service data to load so layout is final before we scroll
     await loadServiceData();
@@ -1708,8 +1713,11 @@ function openHymnEditor(el, dateKey, field) {
             const row = document.createElement('button');
             row.type = 'button';
             row.className = 'w-full text-left px-3 py-2 text-sm hover:bg-primary-fixed/40 transition-colors block';
-            row.innerHTML = `<span class="text-on-surface">${escapeHtml(h.hymn_name)}</span>
-                             <span class="text-on-surface-variant/60 text-xs ml-2">${escapeHtml(h.id)}</span>`;
+            row.innerHTML = `<div class="flex items-baseline justify-between gap-2">
+                                <span class="text-on-surface">${escapeHtml(h.hymn_name)}</span>
+                                <span class="text-on-surface-variant/60 text-xs ml-2">${escapeHtml(h.id)}</span>
+                              </div>
+                              <div class="text-on-surface-variant/50 text-[11px]">${escapeHtml(UsageStats.formatLabel({ count: h.times_played, lastUsed: h.last_played_date }))}</div>`;
             // mousedown, not click: blur would close the editor first and the
             // click would land on nothing.
             row.onmousedown = (e) => {
@@ -1878,7 +1886,16 @@ function setupInlineEdit(el, dateKey, field) {
                                 <span class="material-symbols-outlined text-sm">close</span>
                             </button>
                         </div>
-                        
+
+                        <div x-show="scriptureMatches.length" class="border-b border-outline-variant overflow-y-auto max-h-40">
+                            <template x-for="ref in scriptureMatches" :key="ref.reference">
+                                <button @click="selectReference(ref)" class="w-full text-left px-3 py-2 hover:bg-primary-fixed transition-colors border-b last:border-0 flex items-center justify-between gap-3">
+                                    <span class="text-sm font-label-md" x-text="ref.reference"></span>
+                                    <span class="text-[10px] text-on-surface-variant/60 shrink-0" x-text="UsageStats.formatLabel(ref)"></span>
+                                </button>
+                            </template>
+                        </div>
+
                         <div class="verse-picker-grid max-h-56" style="grid-template-columns: repeat(4, minmax(0, 1fr))" x-show="step === 'book'">
                             <template x-for="book in filteredBooks" :key="book">
                                 <button @click="selectBook(book)" class="verse-picker-btn verse-picker-btn-book" :class="activeBook === book ? 'verse-picker-btn-active' : ''" x-text="book"></button>
@@ -2087,6 +2104,29 @@ function personPicker(personRef, parent = null, suggestionsKey = null) {
         personRef: personRef,
         parent: parent,
         suggestionsKey: suggestionsKey,
+        // This one component instance is reused for every field the modal
+        // opens on (MS-246's shared-modal shape), so — like `suggestions`
+        // below already does for `activeSuggestionsKey` — the field has to
+        // be read fresh off the parent each time rather than captured once
+        // at construction, or every field after the first would still show
+        // the previous field's usage stat.
+        get field() {
+            return this.parent && this.parent.selectorField;
+        },
+        usageLabelFor(candidate) {
+            if (!UsageStats.isTrackedField(this.field)) return '';
+            return UsageStats.formatLabel(UsageStats.personStatFor(candidate, this.field));
+        },
+        get isPastoralPrayerField() {
+            return this.field === 'prayerMale' || this.field === 'prayerFemale';
+        },
+        // prayerMale/prayerFemale keep showing PastoralPrayerCore's own
+        // wording (the one label every surface uses) — this only adds the
+        // count beside it, rather than replacing it with usageLabelFor's.
+        prayerCountFor(candidate) {
+            const stat = this.field && UsageStats.personStatFor(candidate, this.field);
+            return stat && stat.count ? `${stat.count}×` : '';
+        },
         get suggestions() {
             let key = this.suggestionsKey;
             if (key === 'activeSuggestionsKey' && this.parent) {

@@ -21,6 +21,7 @@ var HymnRegistry = (function () {
             music_writer: (data && data.music_writer) || 'Unknown',
             lyrics_writer: (data && data.lyrics_writer) || 'Unknown',
             last_played_date: (data && data.last_played_date) || null,
+            times_played: (data && data.times_played) || 0,
             tags: (data && data.tags) || [],
             database_url: '/hymns/' + id
         };
