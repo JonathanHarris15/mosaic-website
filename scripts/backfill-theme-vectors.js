@@ -21,7 +21,10 @@ const admin = require('firebase-admin');
 const ThemeSimilarityCore = require('../public/theme-similarity-core.js');
 
 const FIREBASE_PROJECT_ID = 'mosaic-hymn-database';
-const BATCH_SIZE = 400;
+// Small, unlike the other backfill scripts' 400 — each doc here carries a
+// 768-float embedding vector (~6-8KB), and 400 of those in one batch blows
+// past Firestore's 10MB write-batch limit ("Transaction too big").
+const BATCH_SIZE = 50;
 const EMBED_WINDOW = 5; // small concurrency window, same as the spike
 
 // Must match functions/index.js's THEME_EMBEDDING_MODEL/DIMS exactly — a
