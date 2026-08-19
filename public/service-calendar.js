@@ -2027,8 +2027,17 @@ function setupInlineEdit(el, dateKey, field) {
         if (field === 'theme' && themeSimilaritySession) {
             originalParent.style.position = 'relative';
             themeReadout = document.createElement('div');
-            themeReadout.className = 'absolute left-0 top-full mt-1 z-50 min-w-[280px] max-w-[calc(100vw-1.5rem)] bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg text-xs hidden';
+            themeReadout.className = 'absolute left-0 top-full mt-1 z-50 min-w-[320px] max-w-[calc(100vw-1.5rem)] bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg text-sm hidden';
             originalParent.appendChild(themeReadout);
+
+            const renderThemeLoading = () => {
+                themeReadout.innerHTML = `
+                    <div class="px-3.5 py-3 flex items-center gap-2 text-on-surface-variant">
+                        <span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                        <span>Checking against past themes…</span>
+                    </div>`;
+                themeReadout.classList.remove('hidden');
+            };
 
             const renderThemeReadout = (data) => {
                 if (!data) {
@@ -2042,22 +2051,23 @@ function setupInlineEdit(el, dateKey, field) {
                     ? '<span class="text-on-surface-variant/60 italic">not enough history yet</span>'
                     : `<span class="font-semibold px-1.5 py-0.5 rounded-full ${uniquenessClass}">${data.uniqueness}%</span>`;
                 const matchesHtml = (data.matches || []).map(m => `
-                    <li class="flex items-center justify-between gap-2 text-on-surface-variant bg-surface-container-low rounded px-2 py-1">
-                        <span class="truncate">${escapeHtml(m.text)}</span>
-                        <span class="shrink-0 text-on-surface-variant/70">${escapeHtml(ThemeSimilarity.formatMatch(m))}</span>
+                    <li class="text-on-surface-variant bg-surface-container-low rounded-lg px-3 py-2 space-y-0.5">
+                        <div class="text-on-surface">${escapeHtml(m.text)}</div>
+                        <div class="text-[11px] text-on-surface-variant/70">${escapeHtml(ThemeSimilarity.formatMatch(m))}</div>
                     </li>`).join('');
                 themeReadout.innerHTML = `
-                    <div class="px-3 py-2 space-y-1.5">
+                    <div class="px-3.5 py-3 space-y-2">
                         <div class="flex items-center gap-1.5">
                             <span class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant">Uniqueness</span>
                             ${uniquenessHtml}
                         </div>
-                        ${matchesHtml ? `<ul class="space-y-1">${matchesHtml}</ul>` : ''}
+                        ${matchesHtml ? `<ul class="space-y-1.5">${matchesHtml}</ul>` : ''}
                     </div>`;
                 themeReadout.classList.remove('hidden');
             };
 
             const scoreNow = () => {
+                if (input.value.trim()) renderThemeLoading();
                 themeSimilaritySession.scoreDebounced(input.value, dateKey, renderThemeReadout, (err) => {
                     console.error('Error scoring theme:', err);
                 });

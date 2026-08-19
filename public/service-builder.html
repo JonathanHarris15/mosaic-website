@@ -283,13 +283,13 @@
                          once shown it stays visible rather than vanishing
                          the moment you click elsewhere to read it. -->
                     <div class="mt-1.5 max-w-md" x-show="themeFieldFocused && (themeScoreLoading || themeScore || themeScoreError)" x-cloak>
-                        <div x-show="themeScoreLoading" class="flex items-center gap-1.5 text-[11px] text-secondary">
-                            <span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                        <div x-show="themeScoreLoading" class="flex items-center gap-1.5 text-[12px] text-secondary">
+                            <span class="material-symbols-outlined text-[15px] animate-spin">progress_activity</span>
                             <span>Checking against past themes…</span>
                         </div>
-                        <div x-show="!themeScoreLoading && themeScoreError" class="text-[11px] text-secondary/70" x-text="themeScoreError"></div>
+                        <div x-show="!themeScoreLoading && themeScoreError" class="text-[12px] text-secondary/70" x-text="themeScoreError"></div>
                         <template x-if="!themeScoreLoading && themeScore">
-                            <div class="space-y-1.5">
+                            <div class="space-y-2">
                                 <div class="flex items-center gap-1.5">
                                     <span class="font-label-md text-[10px] uppercase tracking-wider text-secondary">Uniqueness</span>
                                     <template x-if="themeScore.uniqueness !== null">
@@ -299,11 +299,11 @@
                                     </template>
                                     <span x-show="themeScore.uniqueness === null" class="text-[11px] text-secondary/60 italic">not enough history yet</span>
                                 </div>
-                                <ul class="space-y-1" x-show="themeScore.matches.length">
+                                <ul class="space-y-1.5" x-show="themeScore.matches.length">
                                     <template x-for="m in themeScore.matches" :key="m.text">
-                                        <li class="flex items-center justify-between gap-2 text-[11px] text-secondary bg-surface-container-low rounded-lg px-2 py-1">
-                                            <span class="truncate" x-text="m.text"></span>
-                                            <span class="shrink-0 text-secondary/70" x-text="ThemeSimilarity.formatMatch(m)"></span>
+                                        <li class="text-[12px] text-secondary bg-surface-container-low rounded-lg px-3 py-2 space-y-0.5">
+                                            <div class="text-graph-ink" x-text="m.text"></div>
+                                            <div class="text-[11px] text-secondary/70" x-text="ThemeSimilarity.formatMatch(m)"></div>
                                         </li>
                                     </template>
                                 </ul>
