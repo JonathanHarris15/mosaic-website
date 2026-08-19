@@ -1294,6 +1294,12 @@ exports.scoreTheme = onCall(
       if (!text) {
         throw new HttpsError("invalid-argument", "No theme text given.");
       }
+      // The service currently being edited — excluded from the corpus below
+      // so a theme reads as "compared against everyone else's history," not
+      // against the very draft that's typing it. Without this, saving a
+      // theme embeds it immediately (onServiceThemeWritten), and the next
+      // keystroke's score would match 100% against itself.
+      const excludeDate = (request.data && request.data.excludeDate) || null;
 
       const [candidateVector, corpusSnap] = await Promise.all([
         embedThemeText(text, GEMINI_KEY.value()),
@@ -1309,15 +1315,17 @@ exports.scoreTheme = onCall(
               `themes/${doc.id} was embedded with a different model/size — ` +
               "run scripts/backfill-theme-vectors.js before scoring again.");
         }
-        corpus.push({
-          text: data.text, dates: data.usedOn || [], vector: data.vector,
-        });
+        const dates = (data.usedOn || []).filter((d) => d !== excludeDate);
+        // Used only on the date being edited right now — that IS this
+        // draft, not a piece of history to compare it against.
+        if (!dates.length) return;
+        corpus.push({text: data.text, dates, vector: data.vector});
       });
 
       const {uniqueness, matches} = tsc.scoreCandidate(candidateVector, corpus);
 
       return {
-        uniqueness: uniqueness,
+        uniqueness: uniqueness === null ? null : Math.round(uniqueness),
         // Centered cosine, clamped to 0 at "no relation or opposite" — a
         // negative centered similarity carries no useful "how close" meaning
         // to show an editor, only "not this one".

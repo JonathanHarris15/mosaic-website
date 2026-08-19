@@ -54,7 +54,10 @@
         let timer = null;
         let token = 0;
 
-        const cacheKey = text => text.trim().toLowerCase();
+        // Keyed by excludeDate too, not just text — the same phrase can
+        // legitimately score differently depending on which service's own
+        // draft is being excluded from the corpus (see scoreTheme).
+        const cacheKey = (text, excludeDate) => `${excludeDate || ''}::${text.trim().toLowerCase()}`;
 
         // Invalidates whatever is in flight — the field was cleared, or a
         // newer keystroke superseded it. Cheap to call unconditionally.
@@ -63,15 +66,20 @@
             token += 1;
         }
 
-        // Debounced score for `text`. Calls `onResult(null)` synchronously
-        // (no debounce, no network) for text shorter than `minLength` — a
-        // caller can use that to clear its readout immediately rather than
-        // waiting out a debounce window for a field that just got cleared.
-        // Calls `onResult(data)` for a cache hit, synchronously too.
-        // Otherwise debounces, then calls `onResult(data)` or `onError(err)`
-        // — never both, and never for a call `cancel()` (or a newer
-        // `scoreDebounced`) has since superseded.
-        function scoreDebounced(text, onResult, onError) {
+        // Debounced score for `text`, as scored for the service dated
+        // `excludeDate` — that date is left out of the corpus server-side
+        // (scoreTheme) so a theme never matches 100% against the very
+        // draft that's typing it. Pass null/undefined if there's no
+        // specific service to exclude.
+        //
+        // Calls `onResult(null)` synchronously (no debounce, no network) for
+        // text shorter than `minLength` — a caller can use that to clear its
+        // readout immediately rather than waiting out a debounce window for
+        // a field that just got cleared. Calls `onResult(data)` for a cache
+        // hit, synchronously too. Otherwise debounces, then calls
+        // `onResult(data)` or `onError(err)` — never both, and never for a
+        // call `cancel()` (or a newer `scoreDebounced`) has since superseded.
+        function scoreDebounced(text, excludeDate, onResult, onError) {
             cancel();
             const trimmed = (text || '').trim();
             if (trimmed.length < minLength) {
@@ -79,7 +87,7 @@
                 return;
             }
 
-            const key = cacheKey(trimmed);
+            const key = cacheKey(trimmed, excludeDate);
             if (cache.has(key)) {
                 onResult(cache.get(key));
                 return;
@@ -88,7 +96,7 @@
             const myToken = token;
             timer = setTimeout(async () => {
                 try {
-                    const result = await scoreThemeCallable({ text: trimmed });
+                    const result = await scoreThemeCallable({ text: trimmed, excludeDate: excludeDate || null });
                     cache.set(key, result.data);
                     if (myToken === token) onResult(result.data);
                 } catch (err) {

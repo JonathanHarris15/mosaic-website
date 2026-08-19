@@ -33,27 +33,39 @@ test('text shorter than the minimum resolves immediately, with no call and no ti
     const session = ThemeSimilarity.createSession({ scoreThemeCallable: callable });
 
     let result = 'not called';
-    session.scoreDebounced('Ab', (r) => { result = r; }, () => assert.fail('onError'));
+    session.scoreDebounced('Ab', '2026-08-30', (r) => { result = r; }, () => assert.fail('onError'));
 
     assert.strictEqual(result, null);
     assert.strictEqual(callable.calls.length, 0);
 });
 
-test('a debounced call fires the callable once, after the delay, and reports the result', async (t) => {
+test('a debounced call fires the callable once, after the delay, and reports the result — passing excludeDate through', async (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const callable = fakeCallable(async ({ text }) => ({ uniqueness: 42, matches: [{ text }] }));
     const session = ThemeSimilarity.createSession({ scoreThemeCallable: callable, debounceMs: 600 });
 
     let result;
-    session.scoreDebounced('The God Who Rescues', (r) => { result = r; }, () => assert.fail('onError'));
+    session.scoreDebounced('The God Who Rescues', '2026-08-30', (r) => { result = r; }, () => assert.fail('onError'));
 
     assert.strictEqual(callable.calls.length, 0, 'not called before the debounce elapses');
     t.mock.timers.tick(600);
     await flush();
 
     assert.strictEqual(callable.calls.length, 1);
-    assert.deepStrictEqual(callable.calls[0], { text: 'The God Who Rescues' });
+    assert.deepStrictEqual(callable.calls[0], { text: 'The God Who Rescues', excludeDate: '2026-08-30' });
     assert.strictEqual(result.uniqueness, 42);
+});
+
+test('no excludeDate is sent as null, not undefined or omitted', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const callable = fakeCallable(async () => ({ uniqueness: 1, matches: [] }));
+    const session = ThemeSimilarity.createSession({ scoreThemeCallable: callable, debounceMs: 600 });
+
+    session.scoreDebounced('The God Who Rescues', null, () => {}, () => assert.fail('onError'));
+    t.mock.timers.tick(600);
+    await flush();
+
+    assert.strictEqual(callable.calls[0].excludeDate, null);
 });
 
 test('typing again before the debounce elapses restarts it and only the last keystroke calls out', async (t) => {
@@ -61,16 +73,16 @@ test('typing again before the debounce elapses restarts it and only the last key
     const callable = fakeCallable(async ({ text }) => ({ uniqueness: 1, matches: [{ text }] }));
     const session = ThemeSimilarity.createSession({ scoreThemeCallable: callable, debounceMs: 600 });
 
-    session.scoreDebounced('The God Who Res', () => assert.fail('stale result delivered'), () => {});
+    session.scoreDebounced('The God Who Res', '2026-08-30', () => assert.fail('stale result delivered'), () => {});
     t.mock.timers.tick(300);
     await flush(); // not yet elapsed
     let result;
-    session.scoreDebounced('The God Who Rescues', (r) => { result = r; }, () => assert.fail('onError'));
+    session.scoreDebounced('The God Who Rescues', '2026-08-30', (r) => { result = r; }, () => assert.fail('onError'));
     t.mock.timers.tick(600);
     await flush();
 
     assert.strictEqual(callable.calls.length, 1, 'only the final keystroke should reach the network');
-    assert.deepStrictEqual(callable.calls[0], { text: 'The God Who Rescues' });
+    assert.strictEqual(callable.calls[0].text, 'The God Who Rescues');
     assert.strictEqual(result.matches[0].text, 'The God Who Rescues');
 });
 
@@ -79,7 +91,7 @@ test('cancel() silences a call already in flight', async (t) => {
     const callable = fakeCallable(async ({ text }) => ({ uniqueness: 1, matches: [{ text }] }));
     const session = ThemeSimilarity.createSession({ scoreThemeCallable: callable, debounceMs: 600 });
 
-    session.scoreDebounced('The God Who Rescues', () => assert.fail('should have been cancelled'), () => {});
+    session.scoreDebounced('The God Who Rescues', '2026-08-30', () => assert.fail('should have been cancelled'), () => {});
     session.cancel(); // e.g. the field was cleared before the debounce elapsed
     t.mock.timers.tick(600);
     await flush();
@@ -92,15 +104,33 @@ test('the same text within a session is served from cache, without a second call
     const callable = fakeCallable(async ({ text }) => ({ uniqueness: 7, matches: [{ text }] }));
     const session = ThemeSimilarity.createSession({ scoreThemeCallable: callable, debounceMs: 600 });
 
-    session.scoreDebounced('The God Who Rescues', () => {}, () => assert.fail('onError'));
+    session.scoreDebounced('The God Who Rescues', '2026-08-30', () => {}, () => assert.fail('onError'));
     t.mock.timers.tick(600);
     await flush();
     assert.strictEqual(callable.calls.length, 1);
 
     let secondResult;
-    session.scoreDebounced('  the god who rescues  ', (r) => { secondResult = r; }, () => assert.fail('onError'));
+    session.scoreDebounced('  the god who rescues  ', '2026-08-30', (r) => { secondResult = r; }, () => assert.fail('onError'));
     assert.strictEqual(callable.calls.length, 1, 'a cache hit should not call out again');
     assert.strictEqual(secondResult.uniqueness, 7);
+});
+
+test('the same text scored for a different service is not served from the first one\'s cache', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const callable = fakeCallable(async ({ excludeDate }) => ({ uniqueness: excludeDate === '2026-08-30' ? 7 : 90, matches: [] }));
+    const session = ThemeSimilarity.createSession({ scoreThemeCallable: callable, debounceMs: 600 });
+
+    session.scoreDebounced('The God Who Rescues', '2026-08-30', () => {}, () => assert.fail('onError'));
+    t.mock.timers.tick(600);
+    await flush();
+
+    let result;
+    session.scoreDebounced('The God Who Rescues', '2020-01-05', (r) => { result = r; }, () => assert.fail('onError'));
+    t.mock.timers.tick(600);
+    await flush();
+
+    assert.strictEqual(callable.calls.length, 2, 'a different excludeDate is a cache miss, not a hit');
+    assert.strictEqual(result.uniqueness, 90);
 });
 
 test('formatMatch shows closeness and the most recent use', () => {
@@ -124,7 +154,7 @@ test('an error reaches onError, not onResult, and only for the call that produce
     const session = ThemeSimilarity.createSession({ scoreThemeCallable: callable, debounceMs: 600 });
 
     let error;
-    session.scoreDebounced('The God Who Rescues', () => assert.fail('onResult'), (e) => { error = e; });
+    session.scoreDebounced('The God Who Rescues', '2026-08-30', () => assert.fail('onResult'), (e) => { error = e; });
     t.mock.timers.tick(600);
     await flush();
 

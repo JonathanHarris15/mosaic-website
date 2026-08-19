@@ -514,6 +514,17 @@ async function loadScriptureIndex() {
     }
 }
 
+// One debounced/memoized session for the lifetime of the page — see
+// theme-similarity-store.js. Synchronous: it only wires up the Cloud
+// Function callable, nothing is fetched until the Theme cell is edited.
+let themeSimilaritySession = null;
+function initThemeSimilarity() {
+    if (typeof firebase === 'undefined' || typeof ThemeSimilarity === 'undefined') return;
+    themeSimilaritySession = ThemeSimilarity.createSession({
+        scoreThemeCallable: firebase.app().functions('us-central1').httpsCallable('scoreTheme'),
+    });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     const startDate = new Date(2023, 6, 9); // July 9, 2023 (Month is 0-indexed)
     const endDate = new Date();
@@ -533,6 +544,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     loadHymnIndex();
     loadScriptureIndex();
+    initThemeSimilarity();
 
     // Wait for service data to load so layout is final before we scroll
     await loadServiceData();
@@ -2004,6 +2016,56 @@ function setupInlineEdit(el, dateKey, field) {
         originalParent.appendChild(input);
         input.focus();
 
+        // Service Theme similarity readout (docs/plans/theme-similarity.md)
+        // — only for this field; every other plain-text field here has
+        // nothing to show alongside it. Scoring runs as you type; the
+        // readout itself is just this dropdown existing, so there's no
+        // separate "click to reveal" state to manage the way the Order of
+        // Service page needs (that page's field stays on screen whether or
+        // not you're editing it; this one only exists while you are).
+        let themeReadout = null;
+        if (field === 'theme' && themeSimilaritySession) {
+            originalParent.style.position = 'relative';
+            themeReadout = document.createElement('div');
+            themeReadout.className = 'absolute left-0 top-full mt-1 z-50 min-w-[280px] max-w-[calc(100vw-1.5rem)] bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg text-xs hidden';
+            originalParent.appendChild(themeReadout);
+
+            const renderThemeReadout = (data) => {
+                if (!data) {
+                    themeReadout.classList.add('hidden');
+                    return;
+                }
+                const uniquenessClass = data.uniqueness === null ? ''
+                    : data.uniqueness >= 60 ? 'bg-green-100 text-green-700'
+                    : data.uniqueness >= 30 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700';
+                const uniquenessHtml = data.uniqueness === null
+                    ? '<span class="text-on-surface-variant/60 italic">not enough history yet</span>'
+                    : `<span class="font-semibold px-1.5 py-0.5 rounded-full ${uniquenessClass}">${data.uniqueness}%</span>`;
+                const matchesHtml = (data.matches || []).map(m => `
+                    <li class="flex items-center justify-between gap-2 text-on-surface-variant bg-surface-container-low rounded px-2 py-1">
+                        <span class="truncate">${escapeHtml(m.text)}</span>
+                        <span class="shrink-0 text-on-surface-variant/70">${escapeHtml(ThemeSimilarity.formatMatch(m))}</span>
+                    </li>`).join('');
+                themeReadout.innerHTML = `
+                    <div class="px-3 py-2 space-y-1.5">
+                        <div class="flex items-center gap-1.5">
+                            <span class="font-label-md text-[10px] uppercase tracking-wider text-on-surface-variant">Uniqueness</span>
+                            ${uniquenessHtml}
+                        </div>
+                        ${matchesHtml ? `<ul class="space-y-1">${matchesHtml}</ul>` : ''}
+                    </div>`;
+                themeReadout.classList.remove('hidden');
+            };
+
+            const scoreNow = () => {
+                themeSimilaritySession.scoreDebounced(input.value, dateKey, renderThemeReadout, (err) => {
+                    console.error('Error scoring theme:', err);
+                });
+            };
+            input.addEventListener('input', scoreNow);
+            if (currentVal) scoreNow();
+        }
+
         const save = async () => {
             const newVal = input.value.trim();
             if (newVal !== currentVal) {
@@ -2069,6 +2131,7 @@ function setupInlineEdit(el, dateKey, field) {
                 }
             }
             input.remove();
+            if (themeReadout) themeReadout.remove();
             el.style.display = originalDisplay;
             PresenceStore.release();
         };
@@ -2078,6 +2141,7 @@ function setupInlineEdit(el, dateKey, field) {
             if (e.key === 'Enter') save();
             if (e.key === 'Escape') {
                 input.remove();
+                if (themeReadout) themeReadout.remove();
                 el.style.display = originalDisplay;
                 PresenceStore.release();
             }

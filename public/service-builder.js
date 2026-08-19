@@ -374,6 +374,11 @@ function serviceForm() {
         themeScore: null,        // { uniqueness, matches } | null
         themeScoreLoading: false,
         themeScoreError: null,
+        // Scoring can start as soon as the service loads (so it's ready the
+        // moment you look), but the readout only DISPLAYS once you've
+        // actually focused the field — otherwise every visit to the page
+        // opens with a uniqueness readout nobody asked to see yet.
+        themeFieldFocused: false,
         service: {
             theme: '',
             keyVerse: '',
@@ -792,6 +797,7 @@ function serviceForm() {
             this.themeScoreLoading = true;
             this.themeSimilaritySession.scoreDebounced(
                 this.service.theme,
+                this.date,
                 (data) => {
                     this.themeScore = data;
                     this.themeScoreLoading = false;

@@ -269,14 +269,20 @@
                     <!-- Service Theme (inline editable) -->
                     <div class="mt-2.5 max-w-md" data-field-key="theme">
                         <input type="text" id="service-theme" name="theme" x-model="service.theme"
-                            placeholder="Add a service theme…" @input="onThemeInput()"
+                            placeholder="Add a service theme…" @input="onThemeInput()" @focus="themeFieldFocused = true"
                             class="theme-input font-body-md text-base font-medium text-graph-ink" :disabled="!canEdit">
                     </div>
 
                     <!-- Theme similarity readout (docs/plans/theme-similarity.md).
                          Advisory only — it never blocks typing or saving, only
-                         flags themes close to ones already preached. -->
-                    <div class="mt-1.5 max-w-md" x-show="themeScoreLoading || themeScore || themeScoreError" x-cloak>
+                         flags themes close to ones already preached. Scoring
+                         can start as soon as the service loads (see
+                         init()'s onThemeInput() call), but stays hidden
+                         until the field has actually been focused at least
+                         once — themeFieldFocused only ever turns true, so
+                         once shown it stays visible rather than vanishing
+                         the moment you click elsewhere to read it. -->
+                    <div class="mt-1.5 max-w-md" x-show="themeFieldFocused && (themeScoreLoading || themeScore || themeScoreError)" x-cloak>
                         <div x-show="themeScoreLoading" class="flex items-center gap-1.5 text-[11px] text-secondary">
                             <span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
                             <span>Checking against past themes…</span>
