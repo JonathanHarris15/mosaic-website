@@ -1171,8 +1171,15 @@ exports.updateRoleUsageStats = onDocumentWritten(
     async (event) => {
       const personId = event.params.personId;
       const db = admin.firestore();
-      const involvementSnap = await db.collection("people").doc(personId)
-          .collection("involvement").get();
+      const personRef = db.collection("people").doc(personId);
+      const [involvementSnap, personSnap] = await Promise.all([
+        personRef.collection("involvement").get(),
+        personRef.get(),
+      ]);
+      // A person can be deleted while their involvement subcollection
+      // survives underneath them (subcollections don't cascade-delete) —
+      // nothing left to cache the stats on.
+      if (!personSnap.exists) return;
 
       const stats = {};
       involvementSnap.forEach((doc) => {
@@ -1188,7 +1195,7 @@ exports.updateRoleUsageStats = onDocumentWritten(
         }
       });
 
-      await db.collection("people").doc(personId).update({roleStats: stats});
+      await personRef.update({roleStats: stats});
     },
 );
 

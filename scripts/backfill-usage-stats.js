@@ -148,9 +148,19 @@ async function run() {
     console.log('Writing people usage...');
     const personRefs = Array.from(personIds).map(id => db.collection('people').doc(id));
     const personDocs = await Promise.all(personRefs.map(ref => ref.get()));
-    const entries = personDocs.map(snap => ({
+    // A person can be deleted while their involvement/pastoral_prayer_history
+    // subcollection records survive underneath them (subcollections don't
+    // cascade-delete) — update() on a doc that no longer exists fails the
+    // whole batch it's in, atomically, so this has to filter them out rather
+    // than let one deleted person sink everyone batched alongside them.
+    const missing = personDocs.filter(snap => !snap.exists);
+    if (missing.length) {
+        console.log(`  skipping ${missing.length} deleted people with orphaned history: ` +
+            missing.map(s => s.id).join(', '));
+    }
+    const entries = personDocs.filter(snap => snap.exists).map(snap => ({
         id: snap.id,
-        lastPastoralPrayerDate: snap.exists ? snap.data().lastPastoralPrayerDate || null : null,
+        lastPastoralPrayerDate: snap.data().lastPastoralPrayerDate || null,
     }));
     await writeInBatches(entries, (batch, entry) => {
         const prayerCount = prayerCountByPerson[entry.id] || 0;
