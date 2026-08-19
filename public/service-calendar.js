@@ -1715,10 +1715,7 @@ function openHymnEditor(el, dateKey, field) {
             const row = document.createElement('button');
             row.type = 'button';
             row.className = 'w-full text-left px-3 py-2 text-sm hover:bg-primary-fixed/40 transition-colors block';
-            row.innerHTML = `<div class="flex items-baseline justify-between gap-2">
-                                <span class="text-on-surface">${escapeHtml(h.hymn_name)}</span>
-                                <span class="text-on-surface-variant/60 text-xs ml-2">${escapeHtml(h.id)}</span>
-                              </div>
+            row.innerHTML = `<div class="text-on-surface">${escapeHtml(h.hymn_name)}</div>
                               <div class="text-on-surface-variant/50 text-[11px]">${escapeHtml(UsageStats.formatLabel({ count: h.times_played, lastUsed: h.last_played_date }))}</div>`;
             // mousedown, not click: blur would close the editor first and the
             // click would land on nothing.
