@@ -1689,7 +1689,7 @@ function openHymnEditor(el, dateKey, field) {
     box.className = 'hymn-inline-editor relative w-full';
     box.innerHTML = `
         <input type="text" class="w-full bg-surface-container-highest border-primary border rounded px-2 py-1 font-body-md text-sm outline-none focus:ring-1 focus:ring-primary shadow-inner" />
-        <div class="hymn-inline-results absolute left-0 top-full mt-1 z-50 min-w-[320px] max-w-[calc(100vw-1.5rem)] bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg overflow-hidden hidden"></div>
+        <div class="hymn-inline-results absolute left-0 top-full mt-1 z-50 min-w-[320px] max-w-[calc(100vw-1.5rem)] max-h-64 overflow-y-auto bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg hidden"></div>
     `;
     const input = box.querySelector('input');
     const list = box.querySelector('.hymn-inline-results');
