@@ -58,7 +58,7 @@
         .latex-h1 { display: block; font-size: 1.1rem; font-weight: 400; }
         .latex-hr { margin-top: 0.25rem; margin-bottom: 0.25rem; width: 100%; border-top-width: 1px; --tw-border-opacity: 1; border-color: rgb(0 0 0 / var(--tw-border-opacity, 1)); }
         .latex-spacing-2 { line-height: 2.2; }
-        .preview-page ul, .preview-page ol { list-style-type: disc !important; padding-left: 2rem; }
+        :where(.preview-page) ul, :where(.preview-page) ol { list-style-type: disc; padding-left: 2rem; }
 
         .toc-item { margin-bottom: 0.25rem; display: flex; cursor: pointer; align-items: center; gap: 0.5rem; border-radius: 10px; border-width: 1px; --tw-border-opacity: 1; border-color: rgb(218 208 192 / var(--tw-border-opacity, 1)); --tw-bg-opacity: 1; background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1)); padding: 0.5rem; transition-property: color, background-color, border-color, text-decoration-color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
 
@@ -153,12 +153,19 @@
         <aside class="no-print w-64 bg-white border-r border-outline-variant flex flex-col shadow-sm">
             <div class="p-4 border-b border-outline-variant bg-surface">
                 <label class="font-semibold text-secondary uppercase tracking-wider text-[10px]">Service Guide Template</label>
-                <select :value="selectedTemplateId" @change="changeTemplate($event.target.value, $event.target)" :disabled="!canEdit"
-                        class="mt-1 w-full text-xs rounded border-outline-variant px-2 py-1.5">
-                    <template x-for="t in templates" :key="t.id">
-                        <option :value="t.id" x-text="t.name + (t.isDefault ? ' (default)' : '')"></option>
-                    </template>
-                </select>
+                <div class="mt-1 flex items-center gap-1">
+                    <select :value="selectedTemplateId" @change="changeTemplate($event.target.value, $event.target)" :disabled="!canEdit"
+                            class="flex-1 min-w-0 text-xs rounded border-outline-variant px-2 py-1.5">
+                        <template x-for="t in templates" :key="t.id">
+                            <option :value="t.id" x-text="t.name + (t.isDefault ? ' (default)' : '')"></option>
+                        </template>
+                    </select>
+                    <button type="button" title="Reload the latest Service Guide Template edits into this week"
+                            @click="reloadTemplate()" :disabled="!canEdit || reloadingTemplate"
+                            class="shrink-0 text-secondary hover:text-primary disabled:opacity-50 transition-colors">
+                        <span class="material-symbols-outlined text-base" :class="reloadingTemplate && 'animate-spin'">refresh</span>
+                    </button>
+                </div>
             </div>
             <div class="flex-1 overflow-y-auto p-3 custom-scrollbar">
                 <div class="text-[10px] font-bold uppercase text-gray-400 mb-2 px-1">Pages</div>

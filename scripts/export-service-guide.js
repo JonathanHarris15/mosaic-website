@@ -234,7 +234,7 @@ const PAGE_FRAME_CSS = `
 .latex-h1 { display: block; font-size: 1.1rem; font-weight: 400; }
 .latex-hr { margin-top: .25rem; margin-bottom: .25rem; width: 100%; border-top: 1px solid #000; }
 .latex-spacing-2 { line-height: 2.2; }
-.preview-page ul, .preview-page ol { list-style-type: disc !important; padding-left: 2rem; }
+:where(.preview-page) ul, :where(.preview-page) ol { list-style-type: disc; padding-left: 2rem; }
 `;
 
 const SHELL_CSS = `

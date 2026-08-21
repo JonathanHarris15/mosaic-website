@@ -320,7 +320,7 @@
                                 <span :class="value ? '' : 'font-normal text-secondary/60'" x-text="value || 'e.g. John 3:16'"></span>
                                 <span class="material-symbols-outlined text-[16px] text-secondary">expand_more</span>
                             </button>
-                            <div x-show="open" @click.away="open = false" x-transition class="absolute z-50 mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden overflow-x-hidden max-h-[min(75vh,400px)] flex flex-col left-0">
+                            <div x-show="open" @click.away="open = false" x-transition :style="panelStyle" class="max-w-[calc(100vw-1.5rem)] bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden overflow-x-hidden max-h-[min(75vh,400px)] flex flex-col">
                                 <div class="bg-surface-container-low px-4 py-2 border-b border-outline-variant flex items-center justify-between sticky top-0">
                                     <div class="flex flex-row items-center gap-2 text-[10px] font-label-md uppercase tracking-wider text-secondary">
                                         <button @click="step = 'book'; if(selectingRangeEnd){rangeBook=''}else{selectedBook=''}" class="hover:text-primary transition-colors cursor-pointer" x-text="breadcrumbBook"></button>
@@ -356,7 +356,7 @@
                                     <span class="w-2.5 h-2.5 rounded-[2px] bg-blue-700"></span>
                                     <span class="w-2.5 h-2.5 rounded-[2px] bg-blue-900"></span>
                                 </div>
-                                <div class="p-2 grid grid-cols-4 gap-1 overflow-y-auto overflow-x-hidden max-h-56" x-show="step === 'book'">
+                                <div class="p-2 grid grid-cols-4 gap-1 overflow-y-auto overflow-x-hidden flex-1 min-h-0" x-show="step === 'book'">
                                     <template x-for="book in filteredBooks" :key="book">
                                         <button @click="selectBook(book)" @mouseenter="hoverBook(book)" @mouseleave="clearHover()"
                                             class="px-1.5 py-2.5 rounded-lg text-xs font-label-md transition-all text-center leading-tight cursor-pointer hover:ring-2 hover:ring-primary/50"
@@ -364,7 +364,7 @@
                                             x-text="book"></button>
                                     </template>
                                 </div>
-                                <div class="p-2 grid grid-cols-6 gap-1 overflow-y-auto overflow-x-hidden max-h-56" x-show="step === 'chapter'">
+                                <div class="p-2 grid grid-cols-6 gap-1 overflow-y-auto overflow-x-hidden flex-1 min-h-0" x-show="step === 'chapter'">
                                     <template x-for="chapter in chapters" :key="chapter">
                                         <button @click="selectChapter(chapter)" @mouseenter="hoverChapter(chapter)" @mouseleave="clearHover()"
                                             class="px-1.5 py-2.5 rounded-lg text-sm font-label-md transition-all text-center cursor-pointer hover:ring-2 hover:ring-primary/50"
@@ -372,8 +372,14 @@
                                             x-text="chapter"></button>
                                     </template>
                                 </div>
-                                <div class="p-2 flex flex-col" x-show="step === 'verse'">
-                                    <div class="grid grid-cols-6 gap-1 overflow-y-auto overflow-x-hidden max-h-56">
+                                <div class="p-2 flex flex-col flex-1 min-h-0" x-show="step === 'verse'">
+                                    <template x-if="!selectingRangeEnd">
+                                        <button @click="selectWholeChapter()" class="mb-2 w-full text-center text-[10px] font-label-md uppercase tracking-wider text-secondary hover:text-primary border border-outline-variant rounded-lg py-1.5 transition-colors cursor-pointer hover:border-primary hover:bg-primary-fixed/20">
+                                            <span class="material-symbols-outlined text-[14px] align-middle mr-1">menu_book</span>
+                                            Use the whole chapter
+                                        </button>
+                                    </template>
+                                    <div class="grid grid-cols-6 gap-1 overflow-y-auto overflow-x-hidden flex-1 min-h-0">
                                         <template x-for="verse in verses" :key="verse">
                                             <button @click="selectVerse(verse)" @mouseenter="hoverVerse(verse)" @mouseleave="clearHover()"
                                                 class="px-1.5 py-2.5 rounded-lg text-sm font-label-md transition-all text-center cursor-pointer hover:ring-2 hover:ring-primary/50"
@@ -735,7 +741,7 @@
                                                                         <span class="text-sm truncate" :class="value ? 'text-graph-ink' : 'text-secondary/60'" x-text="value || 'e.g. Psalm 100'"></span>
                                                                         <span class="material-symbols-outlined text-[20px] text-secondary shrink-0">menu_book</span>
                                                                     </button>
-                                                                    <div x-show="open" @click.away="open = false" x-transition class="absolute z-50 mt-1 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden overflow-x-hidden max-h-[min(75vh,400px)] flex flex-col">
+                                                                    <div x-show="open" @click.away="open = false" x-transition :style="panelStyle" class="min-w-[320px] max-w-[calc(100vw-1.5rem)] bg-white border border-outline-variant rounded-xl shadow-2xl overflow-hidden overflow-x-hidden max-h-[min(75vh,400px)] flex flex-col">
                                                                         <div class="bg-surface-container-low px-4 py-2 border-b border-outline-variant flex items-center justify-between sticky top-0">
                                                                             <div class="flex flex-row items-center gap-2 text-[10px] font-label-md uppercase tracking-wider text-secondary">
                                                                                 <button @click="step = 'book'; if(selectingRangeEnd){rangeBook=''}else{selectedBook=''}" class="hover:text-primary transition-colors cursor-pointer" x-text="breadcrumbBook"></button>
@@ -771,7 +777,7 @@
                                                                             <span class="w-2.5 h-2.5 rounded-[2px] bg-blue-700"></span>
                                                                             <span class="w-2.5 h-2.5 rounded-[2px] bg-blue-900"></span>
                                                                         </div>
-                                                                        <div class="p-2 grid grid-cols-4 gap-1 overflow-y-auto overflow-x-hidden max-h-56" x-show="step === 'book'">
+                                                                        <div class="p-2 grid grid-cols-4 gap-1 overflow-y-auto overflow-x-hidden flex-1 min-h-0" x-show="step === 'book'">
                                                                             <template x-for="book in filteredBooks" :key="book">
                                                                                 <button @click="selectBook(book)" @mouseenter="hoverBook(book)" @mouseleave="clearHover()"
                                                                                     class="px-1.5 py-2.5 rounded-lg text-xs font-label-md transition-all text-center leading-tight cursor-pointer hover:ring-2 hover:ring-primary/50"
@@ -779,7 +785,7 @@
                                                                                     x-text="book"></button>
                                                                             </template>
                                                                         </div>
-                                                                        <div class="p-2 grid grid-cols-6 gap-1 overflow-y-auto overflow-x-hidden max-h-56" x-show="step === 'chapter'">
+                                                                        <div class="p-2 grid grid-cols-6 gap-1 overflow-y-auto overflow-x-hidden flex-1 min-h-0" x-show="step === 'chapter'">
                                                                             <template x-for="chapter in chapters" :key="chapter">
                                                                                 <button @click="selectChapter(chapter)" @mouseenter="hoverChapter(chapter)" @mouseleave="clearHover()"
                                                                                     class="px-1.5 py-2.5 rounded-lg text-sm font-label-md transition-all text-center cursor-pointer hover:ring-2 hover:ring-primary/50"
@@ -787,8 +793,14 @@
                                                                                     x-text="chapter"></button>
                                                                             </template>
                                                                         </div>
-                                                                        <div class="p-2 flex flex-col" x-show="step === 'verse'">
-                                                                            <div class="grid grid-cols-6 gap-1 overflow-y-auto overflow-x-hidden max-h-56">
+                                                                        <div class="p-2 flex flex-col flex-1 min-h-0" x-show="step === 'verse'">
+                                                                            <template x-if="!selectingRangeEnd">
+                                                                                <button @click="selectWholeChapter()" class="mb-2 w-full text-center text-[10px] font-label-md uppercase tracking-wider text-secondary hover:text-primary border border-outline-variant rounded-lg py-1.5 transition-colors cursor-pointer hover:border-primary hover:bg-primary-fixed/20">
+                                                                                    <span class="material-symbols-outlined text-[14px] align-middle mr-1">menu_book</span>
+                                                                                    Use the whole chapter
+                                                                                </button>
+                                                                            </template>
+                                                                            <div class="grid grid-cols-6 gap-1 overflow-y-auto overflow-x-hidden flex-1 min-h-0">
                                                                                 <template x-for="verse in verses" :key="verse">
                                                                                     <button @click="selectVerse(verse)" @mouseenter="hoverVerse(verse)" @mouseleave="clearHover()"
                                                                                         class="px-1.5 py-2.5 rounded-lg text-sm font-label-md transition-all text-center cursor-pointer hover:ring-2 hover:ring-primary/50"

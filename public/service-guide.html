@@ -105,8 +105,8 @@
         .latex-spacing-2 { line-height: 2.2; }
 
         /* Force all lists to be bulleted in preview */
-        .preview-page ul, .preview-page ol {
-            list-style-type: disc !important;
+        :where(.preview-page) ul, :where(.preview-page) ol {
+            list-style-type: disc;
             padding-left: 2rem;
         }
         

@@ -290,83 +290,6 @@
     @close-directory.window="showDirectory = false"
     @prompt-add-person.window="promptAddPerson($event.detail.name, $event.detail.callback)">
 
-    <!-- Person Selector Modal -->
-    <div x-show="showPersonSelector" 
-         class="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-primary/20 backdrop-blur-sm"
-         x-transition x-cloak>
-        <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl max-w-sm w-full p-6"
-             @click.away="closePersonSelector()">
-            
-            <div class="flex items-center gap-3 mb-6 text-primary">
-                <span class="material-symbols-outlined text-2xl">person_search</span>
-                <h2 id="person-selector-title" class="font-headline-md text-lg" x-text="'Select ' + selectorRoleName"></h2>
-            </div>
-
-            <div x-data="personPicker(selectedPersonRef, $data, 'activeSuggestionsKey')"
-                 @click.away="open = false"
-                 class="relative mb-8">
-                <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
-                    <input type="text" id="person-selector-input" name="person-selector-search" aria-labelledby="person-selector-title" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @mousedown.stop @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
-                    <div class="flex items-center gap-1">
-                        <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer">
-                            <span class="material-symbols-outlined text-[18px]">close</span>
-                        </button>
-                        <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
-                    </div>
-                </div>
-                <div x-show="open && (suggestions.length > 0 || results.length > 0 || query.length >= 2)" class="absolute z-[90] w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-60 overflow-y-auto left-0 custom-scrollbar">
-                    <!-- Suggestions -->
-                    <template x-if="suggestions.length > 0 && (query.length < 2 || query === selectedPersonRef.name)">
-                        <div>
-                            <div class="px-4 py-2 bg-surface-container-low text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant/30">Suggestions (Longest Wait)</div>
-                            <template x-for="p in suggestions" :key="p.id">
-                                <button @click="select(p)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed/30 flex flex-col transition-colors border-b last:border-0">
-                                    <span class="font-label-md text-sm text-primary" x-text="p.name"></span>
-                                    <span class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
-                                    <span x-show="prayerCountFor(p)" class="text-[9px] text-on-surface-variant/70 font-medium uppercase" x-text="'(' + prayerCountFor(p) + ')'"></span>
-                                </button>
-                            </template>
-                        </div>
-                    </template>
-
-                    <!-- Search Results -->
-                    <template x-for="p in results" :key="p.id">
-                        <button @click="select(p)" 
-                                :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'"
-                                class="w-full text-left px-4 py-2 transition-colors border-b last:border-0 flex flex-col">
-                            <div class="flex items-center justify-between">
-                                <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
-                                <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
-                            </div>
-                            <template x-if="!p.isNew && isPastoralPrayerField">
-                                <div class="flex items-baseline gap-1">
-                                    <span class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
-                                    <span x-show="prayerCountFor(p)" class="text-[9px] text-on-surface-variant/70 font-medium uppercase" x-text="'(' + prayerCountFor(p) + ')'"></span>
-                                </div>
-                            </template>
-                            <template x-if="!p.isNew && !isPastoralPrayerField && usageLabelFor(p)">
-                                <span class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="usageLabelFor(p)"></span>
-                            </template>
-                        </button>
-                    </template>
-                </div>
-            </div>
-
-            <div class="flex justify-end gap-3">
-                <button @click="closePersonSelector()" 
-                        class="px-4 py-2 rounded-full font-label-md text-sm text-secondary hover:bg-surface-container transition-colors">
-                    Cancel
-                </button>
-                <button @click="savePersonSelection()" 
-                        :disabled="saving"
-                        class="px-6 py-2 rounded-full font-label-md text-sm bg-primary text-on-primary hover:bg-primary-container transition-colors flex items-center gap-2">
-                    <span x-show="saving" class="w-4 h-4 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin"></span>
-                    <span x-text="saving ? 'Saving...' : 'Save Selection'"></span>
-                </button>
-            </div>
-        </div>
-    </div>
-
     <!-- Person Add Modal -->
     <div x-show="showPersonAddModal" 
          class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-primary/20 backdrop-blur-sm"
@@ -505,6 +428,114 @@
         </div>
     </div>
 
+    <!-- Remove Service Modal -->
+    <div x-data="removeServiceModal()"
+         @open-remove-modal.window="openModal()"
+         x-show="show"
+         class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-primary/20 backdrop-blur-sm"
+         x-transition x-cloak>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl max-w-md w-full p-6"
+             @click.away="close()">
+
+            <div class="flex items-center gap-3 mb-4 text-primary">
+                <span class="material-symbols-outlined text-2xl">playlist_remove</span>
+                <h2 class="font-headline-md text-lg">Remove a Service</h2>
+            </div>
+
+            <!-- Step: choose -->
+            <template x-if="step === 'choose'">
+                <div>
+                    <p class="font-body-md text-on-surface-variant mb-4 text-sm">
+                        Pick the Sunday to remove. That Sunday is deleted outright, and every
+                        service after it moves one week earlier to close the gap.
+                    </p>
+
+                    <label for="remove-date-select" class="block text-xs font-label-md uppercase tracking-wider text-on-surface-variant mb-1">Remove</label>
+                    <select id="remove-date-select" name="remove-date" x-model="selectedDate" @change="updateCount()"
+                            class="w-full bg-surface-container border border-outline-variant rounded-xl px-3 py-2 font-body-md text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-primary mb-4">
+                        <template x-for="s in sundays" :key="s.value">
+                            <option :value="s.value" x-text="s.label"></option>
+                        </template>
+                    </select>
+
+                    <div class="p-4 rounded-xl bg-error-container/40 text-sm text-on-surface-variant flex items-start gap-3 mb-6">
+                        <span class="material-symbols-outlined text-[20px] shrink-0 text-secondary">move_up</span>
+                        <p x-show="shiftCount > 0">
+                            This Sunday's service is deleted, and
+                            <strong class="text-on-surface" x-text="shiftCount"></strong>
+                            later service<span x-show="shiftCount !== 1">s</span> will shift up one week.
+                            Linked roles and pastoral-prayer records move with them. This cannot be undone.
+                        </p>
+                        <p x-show="shiftCount === 0">
+                            This Sunday's service is deleted — no later services to shift. This cannot be undone.
+                        </p>
+                    </div>
+
+                    <div class="flex justify-end gap-3">
+                        <button @click="close()" class="px-4 py-2 rounded-full font-label-md text-sm text-secondary hover:bg-surface-container transition-colors">Cancel</button>
+                        <button @click="confirm()" :disabled="!selectedDate"
+                                class="px-6 py-2 rounded-full font-label-md text-sm bg-primary text-on-primary hover:bg-primary-container transition-colors disabled:opacity-40">
+                            Remove &amp; Shift
+                        </button>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Step: working -->
+            <template x-if="step === 'working'">
+                <div class="py-6 flex flex-col items-center text-center gap-3">
+                    <span class="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
+                    <p class="font-body-md text-on-surface-variant text-sm">Removing and shifting services… please don't close this window.</p>
+                </div>
+            </template>
+
+            <!-- Step: done -->
+            <template x-if="step === 'done'">
+                <div>
+                    <div class="mb-6 p-4 bg-primary-fixed/30 text-on-surface rounded-xl flex items-start gap-3">
+                        <span class="material-symbols-outlined text-[20px] shrink-0 text-primary">check_circle</span>
+                        <div class="text-sm">
+                            <p class="font-bold mb-1 text-on-surface">Done.</p>
+                            <p x-show="result && result.shifted > 0">
+                                Shifted <strong x-text="result.shifted"></strong> service<span x-show="result.shifted !== 1">s</span> up a week<span
+                                    x-show="result && (result.involvements > 0 || result.prayers > 0)">, along with
+                                    <strong x-text="result.involvements"></strong> role assignment<span x-show="result.involvements !== 1">s</span>
+                                    and <strong x-text="result.prayers"></strong> pastoral-prayer record<span x-show="result.prayers !== 1">s</span></span>.
+                            </p>
+                            <p x-show="result && result.shifted === 0">No later services to shift.</p>
+                            <p x-show="result && result.occurrences > 0">
+                                Also moved <strong x-text="result.occurrences"></strong> other event<span x-show="result.occurrences !== 1">s</span>
+                                <span x-show="result.assignments > 0">, with <strong x-text="result.assignments"></strong> assignment<span x-show="result.assignments !== 1">s</span> intact</span>.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex justify-end">
+                        <button @click="finish()" class="px-6 py-2 rounded-full font-label-md text-sm bg-primary text-on-primary hover:bg-primary-container transition-colors">Refresh Calendar</button>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Step: error -->
+            <template x-if="step === 'error'">
+                <div>
+                    <div class="mb-6 p-4 bg-error-container text-on-error-container rounded-xl flex items-start gap-3">
+                        <span class="material-symbols-outlined text-[20px] shrink-0">error</span>
+                        <div class="text-sm">
+                            <p class="font-bold mb-1">Removal failed</p>
+                            <p x-text="errorMsg"></p>
+                            <p class="mt-1 opacity-80">Some changes may have been applied — refresh and check the calendar before retrying.</p>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-3">
+                        <button @click="show = false" class="px-4 py-2 rounded-full font-label-md text-sm text-secondary hover:bg-surface-container transition-colors">Close</button>
+                        <button @click="finish()" class="px-6 py-2 rounded-full font-label-md text-sm bg-primary text-on-primary hover:bg-primary-container transition-colors">Refresh</button>
+                    </div>
+                </div>
+            </template>
+
+        </div>
+    </div>
+
     <!-- Hidden File Input -->
     <input type="file" id="docx-file-input" accept=".docx" multiple class="hidden" />
 
@@ -531,6 +562,12 @@
                 <button id="inject-service-btn" onclick="window.openInjectModal()" class="hidden m-btn m-btn--secondary m-btn--sm" title="Insert a service on a Sunday and shift later services down a week">
                     <span class="material-symbols-outlined">playlist_add</span>
                     <span class="m-btn__label">Inject</span>
+                </button>
+
+                <!-- Remove Service — deletes an upcoming Sunday and shifts later services up -->
+                <button id="remove-service-btn" onclick="window.openRemoveModal()" class="hidden m-btn m-btn--secondary m-btn--sm" title="Delete an upcoming Sunday and shift later services up a week">
+                    <span class="material-symbols-outlined">playlist_remove</span>
+                    <span class="m-btn__label">Remove</span>
                 </button>
 
             <!-- Persistent Controls -->

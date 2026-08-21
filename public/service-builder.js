@@ -1480,14 +1480,14 @@ function serviceForm() {
                 // In the new system the Order of Service editor applies the chosen
                 // Service Guide Template first (ADR-0010), freezing the per-week v2
                 // guide record so the Service Guide generator opens on that template.
-                // Existing generator-surface values are preserved (and, on a template
-                // switch, pruned to the surviving Entry Field keys).
+                // Existing generator-surface values are preserved, pruned to the keys
+                // that survive into the (possibly just-refreshed, see
+                // reloadGuideTemplate) snapshot — same rule whether this is an actual
+                // template switch or a same-template reload after the template's own
+                // pages/style changed underneath it.
                 if (this._guideEngaged && this.guideSystem === 'v2' && this.guideSnapshot && window.GuideStore) {
                     const existing = (this.service.guide && this.service.guide.format === 'v2') ? this.service.guide : null;
-                    let values = (existing && existing.values) || {};
-                    if (existing && existing.guideTemplateId !== this.selectedTemplateId) {
-                        values = GuideStore.preserveValues(values, this.guideSnapshot);
-                    }
+                    const values = GuideStore.preserveValues((existing && existing.values) || {}, this.guideSnapshot);
                     const gt = this.guideTemplates.find(t => t.id === this.selectedTemplateId) || { id: this.selectedTemplateId };
                     toSave.guide = GuideStore.buildGuideRecord(gt, this.guideSnapshot, values);
                     this.service.guide = toSave.guide;

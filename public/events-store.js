@@ -1413,6 +1413,11 @@
     async function shiftOccurrences(db, fromDate, days, options) {
         const step = days == null ? 7 : days;
         const rank = (options || {}).rank;
+        // Removing a week: its own occurrence is read (so its roster is
+        // accounted for) but never re-written anywhere — the general
+        // "nothing moved into this slot" rule below then deletes it, the
+        // same way a plain forward shift frees the slot it vacates.
+        const discardDate = (options || {}).discardDate || null;
 
         // Refuse BEFORE writing anything. An editor cannot read elder-level
         // Events, so their query would either error outright or — worse — move
@@ -1458,6 +1463,8 @@
         let rehomed = 0;
 
         moving.forEach(item => {
+            if (discardDate && item.data.date === discardDate) return;
+
             const newDate = shiftDays(item.data.date, step);
             const newId = item.data.seriesId ? Core.occurrenceId(item.data.seriesId, newDate) : item.id;
             newIds.add(newId);

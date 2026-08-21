@@ -42,6 +42,11 @@
         return addDays(dateStr, 7);
     }
 
+    // The inverse — one week earlier.
+    function subtractWeek(dateStr) {
+        return addDays(dateStr, -7);
+    }
+
     // 'YYYY-MM-DD' → a long human label, e.g. 'Sunday, June 14, 2026'.
     function formatDateLong(dateStr, locale) {
         if (!dateStr) return '';
@@ -69,7 +74,7 @@
             }));
     }
 
-    const DateUtils = { toDateStr, todayStr, parseDateStr, addDays, addWeek, formatDateLong, upcomingSundays };
+    const DateUtils = { toDateStr, todayStr, parseDateStr, addDays, addWeek, subtractWeek, formatDateLong, upcomingSundays };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = DateUtils;

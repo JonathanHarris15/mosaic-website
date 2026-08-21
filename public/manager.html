@@ -201,8 +201,14 @@
              x-transition:leave-start="opacity-100"
              x-transition:leave-end="opacity-0">
             
+            <!-- The crop modal is a sibling of this card, not a child (the card
+                 is overflow-hidden and could not contain it), so a click inside
+                 the cropper reads as a click AWAY from the card. Without the
+                 cropModal.open guard the first drag on the crop box closes the
+                 hymn form underneath and resets formData, leaving the cropper
+                 holding indexes into versions[] that no longer exist. -->
             <div id="mgr-modal-card" class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden relative"
-                 @click.away="!isSubmitting && closeForm()">
+                 @click.away="!isSubmitting && !cropModal.open && closeForm()">
 
                 <div id="mgr-modal-head" class="flex items-center justify-between p-md border-b border-outline-variant/20 bg-surface-container-low/50">
                     <div class="flex items-center gap-3">
@@ -296,7 +302,12 @@
                                                         </div>
                                                     </div>
                                                 </template>
-                                                
+
+                                                <button type="button" x-show="page.url" @click="openCropper(vIndex, pIndex)"
+                                                        class="flex items-center justify-center gap-1 border border-outline-variant/30 rounded-sm py-1 text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors">
+                                                    <span class="material-symbols-outlined text-sm">crop</span> Crop
+                                                </button>
+
                                                 <div class="flex flex-col gap-1">
                                                     <label class="font-label-md text-[9px] uppercase tracking-widest text-on-surface-variant" x-text="page.url ? 'Replace Sheet' : 'Upload Sheet'"></label>
                                                     <input type="file" class="text-[11px] file:mr-4 file:py-1 file:px-3 file:rounded-sm file:border-0 file:text-[10px] file:font-label-md file:bg-surface-container file:text-on-surface-variant hover:file:bg-surface-container-high cursor-pointer transition-all" accept="image/*" @change="handleFileChange($event, vIndex, pIndex)" :required="!page.url">
@@ -323,6 +334,62 @@
                     <button type="button" @click="handleSubmit()" :disabled="isSubmitting" class="bg-primary text-on-primary font-label-md text-label-md px-lg py-3 rounded-lg hover:bg-primary-container transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
                         <span x-show="isSubmitting" class="w-4 h-4 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin"></span>
                         <span x-text="isSubmitting ? (isEditing ? 'Syncing Changes...' : 'Creating Hymn...') : (isEditing ? 'Update Hymn' : 'Register Hymn')"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Crop modal: a box starting over the whole image, dragged inward
+             by its corner handles (or moved by its middle) to select what to
+             keep. Everything outside it is darkened to show what will be cut. -->
+        <div x-show="cropModal.open" x-cloak @click.stop @mousedown.stop
+             class="fixed inset-0 bg-primary/20 backdrop-blur-sm z-[110] flex items-center justify-center p-md">
+            <div class="bg-surface-container-lowest rounded-xl shadow-2xl p-md flex flex-col gap-md max-w-[90vw]">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-headline-md text-primary text-lg">Crop Sheet Page</h3>
+                    <button type="button" @click="cancelCrop()" class="text-on-surface-variant hover:text-error transition-colors">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <p class="font-body-sm text-on-surface-variant text-xs">Drag a handle to trim an edge, or drag inside the box to move it.</p>
+                <div class="relative inline-block select-none" @mousemove.window="cropDragMove($event)" @mouseup.window="cropDragEnd()">
+                    <img id="crop-target-img" :src="cropModal.imgSrc" @load="cropImageLoaded($event)"
+                         draggable="false" class="block max-w-[80vw] max-h-[65vh]">
+                    <template x-if="cropModal.rect">
+                        <div class="absolute inset-0">
+                            <!-- darkened mask outside the box, in four strips -->
+                            <div class="absolute bg-black/60 pointer-events-none"
+                                 :style="`left:0; top:0; right:0; height:${cropModal.rect.y}px;`"></div>
+                            <div class="absolute bg-black/60 pointer-events-none"
+                                 :style="`left:0; right:0; bottom:0; top:${cropModal.rect.y + cropModal.rect.h}px;`"></div>
+                            <div class="absolute bg-black/60 pointer-events-none"
+                                 :style="`left:0; top:${cropModal.rect.y}px; width:${cropModal.rect.x}px; height:${cropModal.rect.h}px;`"></div>
+                            <div class="absolute bg-black/60 pointer-events-none"
+                                 :style="`left:${cropModal.rect.x + cropModal.rect.w}px; top:${cropModal.rect.y}px; right:0; height:${cropModal.rect.h}px;`"></div>
+
+                            <!-- the box: draggable to move, bordered so the kept area reads clearly -->
+                            <div class="absolute border-2 border-white cursor-move"
+                                 :style="`left:${cropModal.rect.x}px; top:${cropModal.rect.y}px; width:${cropModal.rect.w}px; height:${cropModal.rect.h}px;`"
+                                 @mousedown="cropDragStart('move', $event)"></div>
+
+                            <!-- corner handles -->
+                            <template x-for="corner in ['nw', 'ne', 'sw', 'se']" :key="corner">
+                                <div class="absolute w-3 h-3 rounded-full bg-white border-2 border-primary"
+                                     :class="(corner === 'nw' || corner === 'se') ? 'cursor-nwse-resize' : 'cursor-nesw-resize'"
+                                     :style="`left:${cropModal.rect.x + (corner.indexOf('e') !== -1 ? cropModal.rect.w : 0) - 6}px;
+                                              top:${cropModal.rect.y + (corner.indexOf('s') !== -1 ? cropModal.rect.h : 0) - 6}px;`"
+                                     @mousedown.stop="cropDragStart(corner, $event)"></div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+                <div class="flex justify-end gap-md">
+                    <button type="button" @click="cancelCrop()" class="text-secondary hover:text-error font-label-md text-xs uppercase tracking-widest transition-colors">
+                        Cancel
+                    </button>
+                    <button type="button" @click="applyCrop()" :disabled="!cropModal.rect || cropModal.rect.w < 4"
+                            class="bg-primary text-on-primary font-label-md text-label-md px-lg py-2 rounded-lg hover:bg-primary-container transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                        Apply Crop
                     </button>
                 </div>
             </div>

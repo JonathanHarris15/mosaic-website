@@ -178,7 +178,7 @@ test('it sits at the leading edge of the row, before the date', () => {
 });
 
 test('the badge opens the ordinary person search', () => {
-    assert.match(SRC, /window\.openPersonSelector\(dateKey, ASSIGNED_FIELD/);
+    assert.match(SRC, /openPersonCellEditor\(assignedBtn, dateKey, ASSIGNED_FIELD/);
 });
 
 test('the picker says what it is asking for', () => {
@@ -206,7 +206,7 @@ test('the Assigned picker does not report when people were last prayed for', () 
     // the two apart now (usage-stats-store.js), and it is false for
     // assignedWriter — not a serving role, so usageLabelFor reads it as
     // untracked and shows nothing either.
-    assert.match(HTML, /x-if="!p\.isNew && isPastoralPrayerField"/);
+    assert.match(SRC, /x-if="!p\.isNew && isPastoralPrayerField"/);
     const sb = load();
     const picker = sb.personPicker({ name: '', id: null }, { selectorField: sb.ASSIGNED_FIELD });
     assert.strictEqual(picker.isPastoralPrayerField, false);

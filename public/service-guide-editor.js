@@ -39,6 +39,7 @@ function guideEditorV2() {
         pageTemplatesById: {},
 
         selectedTemplateId: '',
+        reloadingTemplate: false,
         snapshot: null,
         values: {},
         resolved: { pages: [], total: 0, realCount: 0, fillerCount: 0, overflow: false, target: 16 },
@@ -186,6 +187,36 @@ function guideEditorV2() {
             this.primeRequiredLists();
             this.applyPreviewStyles();
             this.resolve();
+        },
+
+        // This week's guide snapshot is frozen at fill time (ADR-0008 §3.5) —
+        // an edit made afterward to the Page Templates / Style Presets it uses
+        // never reaches an already-saved week on its own. This re-fetches the
+        // catalog (so a template change made in another tab after this one
+        // loaded is picked up too, not just what was true at bootstrap) and
+        // re-snapshots the SAME template, same as changeTemplate but without
+        // switching which template is selected — so it also prunes values
+        // whose Entry Field the refreshed template no longer has.
+        async reloadTemplate() {
+            if (!this.canEdit || !this.selectedTemplateId) return;
+            this.reloadingTemplate = true;
+            try {
+                await this.loadCatalog();
+                const newSnap = this.buildSnapshotFor(this.selectedTemplateId);
+                this.values = GuideStore.preserveValues(this.values, newSnap);
+                this.snapshot = newSnap;
+                this.selectedPageIndex = null;
+                this.primeRequiredLists();
+                this.applyPreviewStyles();
+                this.resolve();
+                this.scheduleSave();
+                alert('Guide template refreshed to the latest version.');
+            } catch (e) {
+                console.error('Failed to reload the Service Guide template:', e);
+                alert('Could not reload the template. Check the console for details.');
+            } finally {
+                this.reloadingTemplate = false;
+            }
         },
 
         // Rebuild a legacy week on the template system (discards the old elements

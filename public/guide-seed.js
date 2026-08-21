@@ -24,7 +24,7 @@
     const BOOKLET_CSS = `.latex-h1 { font-size: 1.1rem; font-weight: 400; display: block; }
 .latex-hr { border-top: 1px solid #000; margin-top: 0.25rem; margin-bottom: 0.25rem; width: 100%; }
 .latex-spacing-2 { line-height: 2.2; }
-.preview-page ul, .preview-page ol { list-style-type: disc; padding-left: 2rem; }`;
+:where(.preview-page) ul, :where(.preview-page) ol { list-style-type: disc; padding-left: 2rem; }`;
 
     // ── Style Preset: the designed booklet (Claude Design import) ──────────────
     // Brand tokens (color / type / layout) + the page-frame reset + the reusable

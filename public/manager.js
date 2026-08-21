@@ -25,7 +25,16 @@ document.addEventListener('alpine:init', () => {
         tagInput: '',
         suggestions: [],
         originalPageUrls: [],
-        
+
+        // Handle-based crop modal for a sheet-music page. `rect` is in the
+        // displayed <img>'s own pixels, starting at the full image and
+        // dragged inward; mapped to the source image's natural pixels only
+        // at Apply time.
+        cropModal: {
+            open: false, vIndex: null, pIndex: null, imgSrc: null,
+            naturalW: 0, naturalH: 0, rect: null, drag: null,
+        },
+
         formData: {
             hymn_name: '',
             music_writer: '',
@@ -339,7 +348,172 @@ document.addEventListener('alpine:init', () => {
          */
         handleFileChange(event, vIndex, pIndex) {
             const file = event.target.files[0];
-            this.formData.versions[vIndex].pages[pIndex].file = file;
+            if (!file) return;
+            const page = this.formData.versions[vIndex].pages[pIndex];
+            page.file = file;
+            // A local preview so the thumbnail (and the cropper) has something
+            // to show before this page is ever uploaded.
+            if (page.url && page.url.startsWith('blob:')) URL.revokeObjectURL(page.url);
+            page.url = URL.createObjectURL(file);
+        },
+
+        /**
+         * Opens the crop modal against a page's preview — a local blob: URL
+         * for a just-chosen file, or the live Storage download URL for an
+         * already-saved page. The box starts covering the whole image;
+         * cropImageLoaded (fired once the <img> has actually laid out) sets
+         * it to the image's full displayed size.
+         */
+        openCropper(vIndex, pIndex) {
+            const page = this.formData.versions[vIndex].pages[pIndex];
+            const src = page.url;
+            if (!src) return;
+            this.cropModal = {
+                open: true, vIndex, pIndex, imgSrc: src,
+                naturalW: 0, naturalH: 0, rect: null, drag: null,
+            };
+        },
+
+        cropImageLoaded(e) {
+            const el = e.target;
+            this.cropModal.naturalW = el.naturalWidth;
+            this.cropModal.naturalH = el.naturalHeight;
+            this.cropModal.rect = { x: 0, y: 0, w: el.clientWidth, h: el.clientHeight };
+        },
+
+        // `mode` is 'move' (drag the box itself) or a corner ('nw'/'ne'/'sw'/'se',
+        // dragged via its handle) — the only two gestures a bounded crop box needs.
+        cropDragStart(mode, e) {
+            e.preventDefault();
+            const el = document.getElementById('crop-target-img');
+            if (!el || !this.cropModal.rect) return;
+            const box = el.getBoundingClientRect();
+            this.cropModal.drag = {
+                mode, boxW: box.width, boxH: box.height,
+                startX: e.clientX - box.left, startY: e.clientY - box.top,
+                startRect: Object.assign({}, this.cropModal.rect),
+            };
+        },
+
+        cropDragMove(e) {
+            const d = this.cropModal.drag;
+            if (!d) return;
+            const el = document.getElementById('crop-target-img');
+            if (!el) return;
+            const box = el.getBoundingClientRect();
+            const x = Math.min(Math.max(e.clientX - box.left, 0), d.boxW);
+            const y = Math.min(Math.max(e.clientY - box.top, 0), d.boxH);
+            const dx = x - d.startX;
+            const dy = y - d.startY;
+            const MIN = 24; // smallest edge a crop box may shrink to, in displayed px
+
+            if (d.mode === 'move') {
+                this.cropModal.rect = {
+                    x: Math.min(Math.max(d.startRect.x + dx, 0), d.boxW - d.startRect.w),
+                    y: Math.min(Math.max(d.startRect.y + dy, 0), d.boxH - d.startRect.h),
+                    w: d.startRect.w, h: d.startRect.h,
+                };
+                return;
+            }
+
+            let left = d.startRect.x, top = d.startRect.y;
+            let right = d.startRect.x + d.startRect.w, bottom = d.startRect.y + d.startRect.h;
+            if (d.mode.indexOf('w') !== -1) left = Math.min(Math.max(d.startRect.x + dx, 0), right - MIN);
+            if (d.mode.indexOf('e') !== -1) right = Math.max(Math.min(right + dx, d.boxW), left + MIN);
+            if (d.mode.indexOf('n') !== -1) top = Math.min(Math.max(d.startRect.y + dy, 0), bottom - MIN);
+            if (d.mode.indexOf('s') !== -1) bottom = Math.max(Math.min(bottom + dy, d.boxH), top + MIN);
+            this.cropModal.rect = { x: left, y: top, w: right - left, h: bottom - top };
+        },
+
+        cropDragEnd() {
+            this.cropModal.drag = null;
+        },
+
+        cancelCrop() {
+            this.cropModal.open = false;
+        },
+
+        /**
+         * Fetches the source image as bytes and decodes it with
+         * createImageBitmap rather than drawing a same-URL <img>/Image into
+         * the canvas. A plain <img src> elsewhere on this page (the page
+         * thumbnail) may already have cached this exact URL as an opaque,
+         * non-CORS-validated response; a later same-URL load done in
+         * crossOrigin="anonymous" mode can end up reusing that cache entry in
+         * some browsers and tainting the canvas even though the server sends
+         * Access-Control-Allow-Origin. A fetch() we make ourselves has no such
+         * ambiguity — if it resolves, the bytes are ours to draw.
+         */
+        async _loadCropSource(src) {
+            const res = await fetch(src);
+            if (!res.ok) throw new Error('Could not read that image.');
+            const blob = await res.blob();
+            return createImageBitmap(blob);
+        },
+
+        /**
+         * Draws the crop box (scaled from displayed to natural pixels) onto a
+         * fresh canvas and replaces the page's file/preview with the result.
+         * Nothing is uploaded yet — Save still does that, same as any other
+         * page.
+         */
+        async applyCrop() {
+            const m = this.cropModal;
+            if (!m.rect || m.rect.w < 4 || m.rect.h < 4) { this.cancelCrop(); return; }
+
+            // The page this crop belongs to must still be in the form. If the
+            // form was reset underneath the cropper there is nothing to write
+            // the result back to, and pressing on would throw on undefined.
+            const version = this.formData.versions[m.vIndex];
+            const target = version && version.pages[m.pIndex];
+            if (!target) {
+                alert('That sheet page is no longer open for editing. Reopen the hymn and crop again.');
+                this.cancelCrop();
+                return;
+            }
+
+            const displayedEl = document.getElementById('crop-target-img');
+            if (!displayedEl || !displayedEl.clientWidth || !displayedEl.clientHeight) {
+                alert('Could not read the crop area. Reopen the cropper and try again.');
+                this.cancelCrop();
+                return;
+            }
+            const scaleX = m.naturalW / displayedEl.clientWidth;
+            const scaleY = m.naturalH / displayedEl.clientHeight;
+            const sx = Math.round(m.rect.x * scaleX);
+            const sy = Math.round(m.rect.y * scaleY);
+            const sw = Math.max(1, Math.round(m.rect.w * scaleX));
+            const sh = Math.max(1, Math.round(m.rect.h * scaleY));
+
+            let blob;
+            try {
+                const bitmap = await this._loadCropSource(m.imgSrc);
+                const canvas = document.createElement('canvas');
+                canvas.width = sw;
+                canvas.height = sh;
+                canvas.getContext('2d').drawImage(bitmap, sx, sy, sw, sh, 0, 0, sw, sh);
+                bitmap.close();
+                blob = await new Promise((resolve, reject) => canvas.toBlob(
+                    b => b ? resolve(b) : reject(new Error('The browser would not export the cropped image.')),
+                    'image/jpeg', 0.92));
+            } catch (e) {
+                console.error('Error cropping image:', e);
+                alert('Could not crop that image: ' + (e && e.message ? e.message : e));
+                return;
+            }
+
+            const page = target;
+            // Always a fresh, page-unique name — never the original filename.
+            // Re-cropping an already-uploaded page uploads to the same Storage
+            // path as anything else named after it; reusing the original name
+            // would collide with it, and Save's orphan cleanup (which deletes
+            // any pre-edit URL no longer referenced) would then delete the
+            // crop it just uploaded, since both resolve to the same path.
+            if (page.url && page.url.startsWith('blob:')) URL.revokeObjectURL(page.url);
+            page.file = new File([blob], `cropped-${page.id}.jpg`, { type: 'image/jpeg' });
+            page.url = URL.createObjectURL(blob);
+
+            this.cropModal.open = false;
         },
 
         /**
@@ -381,8 +555,15 @@ document.addEventListener('alpine:init', () => {
                     for (const page of version.pages) {
                         if (page.file) {
                             const pageRef = hymnFolderRef.child(page.file.name);
-                            const uploadSnap = await pageRef.put(page.file);
-                            const url = await uploadSnap.ref.getDownloadURL();
+                            let url;
+                            try {
+                                const uploadSnap = await pageRef.put(page.file);
+                                url = await uploadSnap.ref.getDownloadURL();
+                            } catch (uploadErr) {
+                                throw new Error(
+                                    `Could not upload "${page.file.name}" (${version.name || 'unnamed version'}): ` +
+                                    (uploadErr && uploadErr.message ? uploadErr.message : uploadErr));
+                            }
                             finalPages.push(url);
                             newPageUrls.push(url);
                         } else if (page.url) {
@@ -429,7 +610,7 @@ document.addEventListener('alpine:init', () => {
 
             } catch (err) {
                 console.error(err);
-                this.showToast('Error saving hymn', 'error');
+                this.showToast((err && err.message) ? err.message : 'Error saving hymn', 'error');
             } finally {
                 this.isSubmitting = false;
             }

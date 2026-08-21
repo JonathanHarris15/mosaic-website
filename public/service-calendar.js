@@ -41,13 +41,17 @@ function calendarPage() {
         peopleRegistry: [],
         peopleFuse: null,
 
-        // --- Person Selector Modal ---
-        showPersonSelector: false,
+        // --- Person Selector (anchored dropdown, one cell at a time) ---
         selectorDateKey: '',
         selectorField: '',
         selectorRoleName: '',
         selectedPersonRef: { id: null, name: '' },
         activeSuggestionsKey: null,
+        // Set by openPersonCellEditor while its dropdown is open — the one
+        // way back to the DOM cleanup for whichever cell is currently being
+        // edited, so closePersonSelector() stays the single exit for every
+        // path out (save, Escape, click-away).
+        activePersonCellCleanup: null,
         saving: false,
 
         async saveVerseSelection(dateKey, field, val) {
@@ -114,8 +118,6 @@ function calendarPage() {
             else this.activeSuggestionsKey = null;
 
             if (this.activeSuggestionsKey) this.fetchPrayerSuggestions();
-            
-            this.showPersonSelector = true;
         },
         
         // One field, one write, nothing else. See the guard in
@@ -156,8 +158,10 @@ function calendarPage() {
         // Every way out of the person picker comes through here, so no exit
         // can leave a box locked behind it (MS-246).
         closePersonSelector() {
-            this.showPersonSelector = false;
             PresenceStore.release();
+            const cleanup = this.activePersonCellCleanup;
+            this.activePersonCellCleanup = null;
+            if (cleanup) cleanup();
         },
 
         getRoleName(field) {
@@ -679,6 +683,9 @@ function dateToStr(dt) { return DateUtils.toDateStr(dt); }
 // Add one week to a YYYY-MM-DD string, returning the same format.
 function addWeek(dateStr) { return DateUtils.addWeek(dateStr); }
 
+// Subtract one week from a YYYY-MM-DD string, returning the same format.
+function subtractWeek(dateStr) { return DateUtils.subtractWeek(dateStr); }
+
 // Upcoming Sundays (today or later) as { value: 'YYYY-MM-DD', label: 'June 14, 2026' }.
 window.getUpcomingSundays = function () {
     return DateUtils.upcomingSundays(allSundays);
@@ -815,6 +822,155 @@ window.injectServiceAtDate = async function (fromDate) {
     };
 };
 
+// The inverse of injectServiceAtDate: remove one Sunday outright and pull
+// every service after it back a week to close the gap. fromDate's own
+// records are discarded rather than shifted — shifting them back would
+// silently merge this Sunday's roster into the (already-happened) week
+// before it. Returns the same shape injectServiceAtDate does.
+window.removeServiceAtDate = async function (fromDate) {
+    if (typeof db === 'undefined') throw new Error('Database is not available.');
+    if (!fromDate) throw new Error('No date selected.');
+
+    // Only a Sunday that has not happened yet — matches the picker, which is
+    // built from getUpcomingSundays(), but checked again here since this is
+    // the point nothing can be undone past.
+    if (fromDate < DateUtils.todayStr()) {
+        throw new Error('Only a Sunday that has not happened yet can be removed.');
+    }
+
+    // Same refusal as injectServiceAtDate, and for the same reason: moving
+    // only the Events an editor can see would leave the restricted ones
+    // sitting on a week that no longer exists.
+    if (window.EventsStore && !window.EventsStore.seesEveryRung(window.currentPermissionLevel)) {
+        throw new Error(
+            'Shifting the schedule has to be done by an elder or an admin. ' +
+            'There may be Events you are not able to see, and moving only some ' +
+            'of them would leave the schedule inconsistent.'
+        );
+    }
+
+    // --- Gather everything that needs to move or go ------------------------
+    const svcSnap = await db.collection('services').get();
+    const affectedServices = [];
+    svcSnap.forEach(doc => {
+        if (doc.id >= fromDate) affectedServices.push({ id: doc.id, data: doc.data() });
+    });
+
+    const invSnap = await db.collectionGroup('involvement').get();
+    const affectedInv = [];
+    invSnap.forEach(doc => {
+        const sd = doc.data().serviceDate;
+        if (sd && sd >= fromDate) affectedInv.push(doc);
+    });
+
+    const prayerSnap = await db.collectionGroup(PastoralPrayerCore.HISTORY_COLLECTION).get();
+    const affectedPrayers = [];
+    prayerSnap.forEach(doc => {
+        const sd = doc.data().serviceDate || doc.id;
+        if (sd && sd >= fromDate) affectedPrayers.push(doc);
+    });
+
+    // --- Build write operations -------------------------------------------
+    const setsAndUpdates = [];
+    const deletes = [];
+
+    // Services: only docs strictly AFTER fromDate get copied back a week.
+    // fromDate's own doc is never copied anywhere — the general "nothing
+    // moved into this slot" rule below then deletes it, exactly like a
+    // vacated slot after a forward shift, UNLESS fromDate+7 exists and
+    // shifts back onto it, which is exactly the point: it closes the gap.
+    const svcNewIds = new Set(
+        affectedServices.filter(s => s.id > fromDate).map(s => subtractWeek(s.id))
+    );
+    affectedServices.forEach(s => {
+        if (s.id > fromDate) {
+            setsAndUpdates.push({ kind: 'set', ref: db.collection('services').doc(subtractWeek(s.id)), data: s.data });
+        }
+    });
+    affectedServices.forEach(s => {
+        if (!svcNewIds.has(s.id)) deletes.push({ kind: 'delete', ref: db.collection('services').doc(s.id) });
+    });
+
+    // Involvement: fromDate's own records are gone along with the week —
+    // that credit is deleted, not moved, and totalInvolvements comes down
+    // with it (the same pairing savePersonSelection uses when a person is
+    // cleared off a slot). Everything after just re-stamps its serviceDate.
+    const peopleDecrements = new Map();
+    affectedInv.forEach(doc => {
+        const sd = doc.data().serviceDate;
+        if (sd === fromDate) {
+            deletes.push({ kind: 'delete', ref: doc.ref });
+            const personId = doc.ref.parent.parent.id;
+            peopleDecrements.set(personId, (peopleDecrements.get(personId) || 0) + 1);
+        } else {
+            setsAndUpdates.push({ kind: 'update', ref: doc.ref, data: { serviceDate: subtractWeek(sd) } });
+        }
+    });
+    peopleDecrements.forEach((n, personId) => {
+        setsAndUpdates.push({
+            kind: 'update',
+            ref: db.collection('people').doc(personId),
+            data: { totalInvolvements: firebase.firestore.FieldValue.increment(-n) }
+        });
+    });
+
+    // Pastoral prayer history: fromDate's own entry is deleted outright;
+    // everything after copies back a week, freeing any slot nothing lands
+    // on — the same pattern injectServiceAtDate uses, run in reverse.
+    const prayerDate = doc => doc.data().serviceDate || doc.id;
+    const prayerNewPaths = new Set();
+    affectedPrayers.forEach(doc => {
+        const sd = prayerDate(doc);
+        if (sd === fromDate) return;
+        const newDate = subtractWeek(sd);
+        const newRef = doc.ref.parent.doc(PastoralPrayerCore.historyDocId(newDate));
+        prayerNewPaths.add(newRef.path);
+        setsAndUpdates.push({ kind: 'set', ref: newRef, data: { ...doc.data(), serviceDate: newDate } });
+    });
+    affectedPrayers.forEach(doc => {
+        if (prayerDate(doc) === fromDate || !prayerNewPaths.has(doc.ref.path)) {
+            deletes.push({ kind: 'delete', ref: doc.ref });
+        }
+    });
+
+    // --- Commit in <=450-op batches (Firestore caps at 500) ----------------
+    const writes = [...setsAndUpdates, ...deletes];
+    for (let i = 0; i < writes.length; i += 450) {
+        const batch = db.batch();
+        writes.slice(i, i + 450).forEach(w => {
+            if (w.kind === 'set') batch.set(w.ref, w.data);
+            else if (w.kind === 'update') batch.update(w.ref, w.data);
+            else if (w.kind === 'delete') batch.delete(w.ref);
+        });
+        await batch.commit();
+    }
+
+    // --- Event occurrences and their rosters (MS-152) -----------------------
+    let occurrenceResult = { occurrences: 0, assignments: 0 };
+    if (window.EventsStore) {
+        occurrenceResult = await window.EventsStore.shiftOccurrences(db, fromDate, -7, {
+            rank: window.currentPermissionLevel,
+            discardDate: fromDate,
+        });
+    }
+
+    // --- Recompute lastPastoralPrayerDate for affected people ---------------
+    const affectedPeopleIds = new Set(affectedPrayers.map(doc => doc.ref.parent.parent.id));
+    for (const pid of affectedPeopleIds) {
+        await recomputeLastPrayerDate(pid);
+    }
+
+    return {
+        services: affectedServices.length,
+        shifted: affectedServices.filter(s => s.id > fromDate).length,
+        involvements: affectedInv.length,
+        prayers: affectedPrayers.length,
+        people: new Set([...affectedPeopleIds, ...peopleDecrements.keys()]).size,
+        occurrences: occurrenceResult.occurrences,
+        assignments: occurrenceResult.assignments
+    };
+};
+
 window.openInjectModal = function () {
     window.dispatchEvent(new CustomEvent('open-inject-modal'));
 };
@@ -869,6 +1025,68 @@ function injectServiceModal() {
         finish() {
             // Full reload guarantees every view is in sync with Firestore,
             // matching the docx-import flow.
+            location.reload();
+        }
+    };
+}
+
+window.openRemoveModal = function () {
+    window.dispatchEvent(new CustomEvent('open-remove-modal'));
+};
+
+// Alpine component backing the removal modal — the inverse of
+// injectServiceModal, sharing its shape almost exactly.
+function removeServiceModal() {
+    return {
+        show: false,
+        step: 'choose', // 'choose' | 'working' | 'done' | 'error'
+        selectedDate: '',
+        sundays: [],
+        shiftCount: 0,
+        result: null,
+        errorMsg: '',
+
+        openModal() {
+            this.sundays = window.getUpcomingSundays();
+            this.selectedDate = this.sundays.length ? this.sundays[0].value : '';
+            this.step = 'choose';
+            this.result = null;
+            this.errorMsg = '';
+            this.updateCount();
+            this.show = true;
+        },
+
+        updateCount() {
+            // Everything strictly after the chosen Sunday shifts back — the
+            // Sunday itself is not part of that count, it is simply gone.
+            this.shiftCount = this.selectedDate
+                ? Math.max(0, window.countServicesFromDate(this.selectedDate) - 1)
+                : 0;
+        },
+
+        get selectedLabel() {
+            const s = this.sundays.find(x => x.value === this.selectedDate);
+            return s ? s.label : '';
+        },
+
+        close() {
+            if (this.step !== 'working') this.show = false;
+        },
+
+        async confirm() {
+            if (!this.selectedDate) return;
+            this.step = 'working';
+            try {
+                this.result = await window.removeServiceAtDate(this.selectedDate);
+                this.step = 'done';
+            } catch (e) {
+                console.error('Service removal failed:', e);
+                this.errorMsg = (e && e.message) || 'Something went wrong.';
+                this.step = 'error';
+            }
+        },
+
+        finish() {
             location.reload();
         }
     };
@@ -1082,6 +1300,7 @@ function renderList(grouped) {
 // In liturgical order, so reading left to right reads the service.
 const PLANNING_COLUMNS = [
     { label: 'Preparatory',           cell: 'prep-hymn-cell',       field: 'preparatoryHymn',   type: 'hymn'  },
+    { label: 'Call to Worship',       cell: 'call-worship-cell',    field: 'callToWorship',     type: 'verse' },
     { label: 'Hymn 1',                cell: 'hymn1-cell',           field: 'hymn1',             type: 'hymn'  },
     { label: 'Hymn 2',                cell: 'hymn2-cell',           field: 'hymn2',             type: 'hymn'  },
     { label: 'Call to Confession',    cell: 'call-confession-cell', field: 'callToConfession',  type: 'verse' },
@@ -1593,7 +1812,7 @@ function injectServiceData(serviceMap) {
             if (canEdit) {
                 assignedBtn.onclick = (e) => {
                     e.stopPropagation();
-                    window.openPersonSelector(dateKey, ASSIGNED_FIELD, {
+                    openPersonCellEditor(assignedBtn, dateKey, ASSIGNED_FIELD, {
                         name: (assigned && assigned.name) || '',
                         id: (assigned && assigned.id) || null
                     });
@@ -1790,6 +2009,120 @@ function openHymnEditor(el, dateKey, field) {
     render();
 }
 
+// Anchors the shared person picker to the cell that was clicked, in place of
+// the old centered modal — a real dropdown, the way the Order of Service
+// page's person fields already work. Selecting a result commits immediately
+// (through the calendar's existing savePersonSelection/saveAssignedWriter),
+// so there is nothing left to confirm once you've picked someone.
+//
+// Fixed-positioned and appended to <body> rather than dropped in next to the
+// cell: the Assigned badge lives in the sticky left column, and a dropdown
+// anchored *inside* it was clipped by every sticky cell below (each one is
+// its own opaque stacking layer). Escaping the table entirely sidesteps that
+// for every field, not just the ones sticky positioning happens to spare.
+function openPersonCellEditor(el, dateKey, field, current) {
+    if (el.dataset.editorOpen === 'true') return;
+
+    const alpineData = window.Alpine ? Alpine.$data(document.body) : null;
+    if (!alpineData) return;
+
+    alpineData.openPersonSelector(dateKey, field, current);
+
+    const rect = el.getBoundingClientRect();
+    const width = Math.max(rect.width, 220);
+
+    const originalDisplay = el.style.display;
+    el.dataset.editorOpen = 'true';
+    el.style.display = 'none';
+
+    const box = document.createElement('div');
+    box.innerHTML = `
+        <div x-data="personPicker(selectedPersonRef, $data, 'activeSuggestionsKey')"
+             x-init="$nextTick(() => { $refs.input.focus(); $refs.input.select(); })"
+             class="person-picker-inline"
+             style="position: fixed; z-index: 90; top: ${rect.bottom + 4}px; left: ${rect.left}px; width: ${width}px;">
+            <div class="flex items-center bg-surface-container-highest border border-primary rounded-lg px-3 py-2 shadow-inner">
+                <input x-ref="input" type="text" :aria-label="'Search for ' + parent.selectorRoleName" placeholder="Search people..." x-model="query"
+                       @focus="onFocus($el)" @click="onFocus($el)" @mousedown.stop
+                       @input.debounce="onInput($el)"
+                       @keydown.escape="parent.closePersonSelector()"
+                       class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm">
+                <div class="flex items-center gap-1">
+                    <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer">
+                        <span class="material-symbols-outlined text-[18px]">close</span>
+                    </button>
+                    <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
+                </div>
+            </div>
+            <div x-show="open && (suggestions.length > 0 || results.length > 0 || query.length >= 2)" x-transition
+                 class="absolute z-50 w-full min-w-[320px] max-w-[calc(100vw-1.5rem)] mt-1 bg-white border border-outline-variant rounded-xl shadow-2xl max-h-60 overflow-y-auto left-0 custom-scrollbar">
+                <template x-if="suggestions.length > 0 && (query.length < 2 || query === personRef.name)">
+                    <div>
+                        <div class="px-4 py-2 bg-surface-container-low text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant/30">Suggestions (Longest Wait)</div>
+                        <template x-for="p in suggestions" :key="p.id">
+                            <button @click="select(p)" class="w-full text-left px-4 py-2 hover:bg-primary-fixed/30 flex flex-col transition-colors border-b last:border-0">
+                                <span class="font-label-md text-sm text-primary" x-text="p.name"></span>
+                                <span class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
+                                <span x-show="prayerCountFor(p)" class="text-[9px] text-on-surface-variant/70 font-medium uppercase" x-text="'(' + prayerCountFor(p) + ')'"></span>
+                            </button>
+                        </template>
+                    </div>
+                </template>
+                <template x-for="p in results" :key="p.id">
+                    <button @click="select(p)"
+                            :class="p.isNew ? 'bg-primary-fixed/30 hover:bg-primary-fixed' : 'hover:bg-primary-fixed'"
+                            class="w-full text-left px-4 py-2 transition-colors border-b last:border-0 flex flex-col">
+                        <div class="flex items-center justify-between">
+                            <p class="font-label-md text-sm" :class="p.isNew ? 'text-primary' : 'text-on-surface'" x-text="p.isNew ? '+ Add &quot;' + p.name + '&quot; as new person' : p.name"></p>
+                            <span x-show="p.isNew" class="material-symbols-outlined text-[16px] text-primary">person_add</span>
+                        </div>
+                        <template x-if="!p.isNew && isPastoralPrayerField">
+                            <div class="flex items-baseline gap-1">
+                                <span class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="PastoralPrayerCore.lastPrayedLabel(p.lastPastoralPrayerDate)"></span>
+                                <span x-show="prayerCountFor(p)" class="text-[9px] text-on-surface-variant/70 font-medium uppercase" x-text="'(' + prayerCountFor(p) + ')'"></span>
+                            </div>
+                        </template>
+                        <template x-if="!p.isNew && !isPastoralPrayerField && usageLabelFor(p)">
+                            <span class="text-[9px] text-on-surface-variant font-medium uppercase" x-text="usageLabelFor(p)"></span>
+                        </template>
+                    </button>
+                </template>
+            </div>
+        </div>
+    `;
+    const pickerEl = box.firstElementChild;
+    document.body.appendChild(pickerEl);
+
+    if (window.Alpine) Alpine.initTree(pickerEl);
+
+    const outsideClickHandler = (e) => {
+        if (!pickerEl.contains(e.target)) alpineData.closePersonSelector();
+    };
+    // Deferred so the opening click doesn't immediately close what it opened.
+    setTimeout(() => document.addEventListener('click', outsideClickHandler, true), 50);
+
+    // Fixed to a screen position computed once, so a scroll OUTSIDE it (the
+    // table's own scroll container, in capture phase, since `scroll` does
+    // not bubble) closes it rather than leaving it pinned over the wrong
+    // row — but the results list scrolls internally too, and that must not
+    // close the picker out from under the finger scrolling it.
+    const scrollCloseHandler = (e) => {
+        if (!pickerEl.contains(e.target)) alpineData.closePersonSelector();
+    };
+    const resizeCloseHandler = () => alpineData.closePersonSelector();
+    window.addEventListener('scroll', scrollCloseHandler, true);
+    window.addEventListener('resize', resizeCloseHandler);
+
+    alpineData.activePersonCellCleanup = () => {
+        document.removeEventListener('click', outsideClickHandler, true);
+        window.removeEventListener('scroll', scrollCloseHandler, true);
+        window.removeEventListener('resize', resizeCloseHandler);
+        if (pickerEl.isConnected) pickerEl.remove();
+        delete el.dataset.editorOpen;
+        el.style.display = originalDisplay;
+    };
+}
+
 // The presence key for a cell. Liturgy slots are named the way they are
 // stored, so the Order of Service page and the Planning view claim the SAME
 // box for the same element — a hymn locked on one is locked on the other,
@@ -1851,7 +2184,7 @@ function setupInlineEdit(el, dateKey, field) {
         if (personFields.includes(field)) {
             let currentVal = el.textContent === '—' ? '' : el.textContent;
             const currentId = el.getAttribute('data-person-id');
-            window.openPersonSelector(dateKey, field, { name: currentVal, id: currentId });
+            openPersonCellEditor(el, dateKey, field, { name: currentVal, id: currentId });
             return;
         }
 
@@ -1875,7 +2208,7 @@ function setupInlineEdit(el, dateKey, field) {
                         <span class="text-sm truncate" :class="value ? '' : 'text-secondary/60'" x-text="value || 'e.g. Romans 8:28-39'"></span>
                         <span class="material-symbols-outlined text-[18px] text-secondary shrink-0">menu_book</span>
                     </button>
-                    <div x-show="open" x-transition class="verse-picker-dropdown">
+                    <div x-show="open" x-transition :style="panelStyle" class="verse-picker-dropdown">
                         <div class="verse-picker-header">
                             <div class="verse-picker-breadcrumbs">
                                 <button @click="step = 'book'; if(selectingRangeEnd){rangeBook=''}else{selectedBook=''}" class="verse-picker-btn verse-picker-btn-book" style="padding: 2px 4px; font-size: 10px;" x-text="breadcrumbBook"></button>
@@ -1913,7 +2246,7 @@ function setupInlineEdit(el, dateKey, field) {
                             <span class="w-2.5 h-2.5 rounded-[2px] bg-blue-900"></span>
                         </div>
 
-                        <div class="verse-picker-grid max-h-56 overflow-x-hidden" style="grid-template-columns: repeat(4, minmax(0, 1fr))" x-show="step === 'book'">
+                        <div class="verse-picker-grid flex-1 min-h-0 overflow-x-hidden" style="grid-template-columns: repeat(4, minmax(0, 1fr))" x-show="step === 'book'">
                             <template x-for="book in filteredBooks" :key="book">
                                 <button @click="selectBook(book)" @mouseenter="hoverBook(book)" @mouseleave="clearHover()"
                                     class="verse-picker-btn verse-picker-btn-book leading-tight"
@@ -1922,7 +2255,7 @@ function setupInlineEdit(el, dateKey, field) {
                             </template>
                         </div>
 
-                        <div class="verse-picker-grid max-h-56 overflow-x-hidden" style="grid-template-columns: repeat(6, minmax(0, 1fr))" x-show="step === 'chapter'">
+                        <div class="verse-picker-grid flex-1 min-h-0 overflow-x-hidden" style="grid-template-columns: repeat(6, minmax(0, 1fr))" x-show="step === 'chapter'">
                             <template x-for="chapter in chapters" :key="chapter">
                                 <button @click="selectChapter(chapter)" @mouseenter="hoverChapter(chapter)" @mouseleave="clearHover()"
                                     class="verse-picker-btn verse-picker-btn-chapter"
@@ -1931,8 +2264,14 @@ function setupInlineEdit(el, dateKey, field) {
                             </template>
                         </div>
 
-                        <div class="p-2 flex flex-col" x-show="step === 'verse'">
-                            <div class="verse-picker-grid max-h-56 overflow-x-hidden" style="grid-template-columns: repeat(6, minmax(0, 1fr))">
+                        <div class="p-2 flex flex-col flex-1 min-h-0" x-show="step === 'verse'">
+                            <template x-if="!selectingRangeEnd">
+                                <button @click="selectWholeChapter()" class="verse-picker-range-btn mb-2">
+                                    <span class="material-symbols-outlined text-[14px] align-middle mr-1">menu_book</span>
+                                    Use the whole chapter
+                                </button>
+                            </template>
+                            <div class="verse-picker-grid flex-1 min-h-0 overflow-x-hidden" style="grid-template-columns: repeat(6, minmax(0, 1fr))">
                                 <template x-for="verse in verses" :key="verse">
                                     <button @click="selectVerse(verse)" @mouseenter="hoverVerse(verse)" @mouseleave="clearHover()"
                                         class="verse-picker-btn verse-picker-btn-verse"
@@ -2168,18 +2507,6 @@ window.openVersePicker = (dateKey, field, current) => {
 };
 
 /**
- * Global bridge to Alpine person selector modal
- */
-window.openPersonSelector = (dateKey, field, current) => {
-    // Find Alpine data on body
-    const body = document.querySelector('body');
-    const alpineData = Alpine.$data(body);
-    if (alpineData && alpineData.openPersonSelector) {
-        alpineData.openPersonSelector(dateKey, field, current);
-    }
-};
-
-/**
  * Shared Person Picker component logic (Alpine.js)
  */
 function personPicker(personRef, parent = null, suggestionsKey = null) {
@@ -2232,14 +2559,6 @@ function personPicker(personRef, parent = null, suggestionsKey = null) {
         init() {
             this.$watch('personRef.name', (val) => {
                 this.query = val || '';
-            });
-            // Auto-open suggestions when modal is shown (watch parent prop proxied via this)
-            this.$watch('showPersonSelector', (val) => {
-                if (val && this.suggestionsKey) {
-                    // Try to grab the input element inside the selector modal
-                    const inputEl = document.getElementById('person-selector-input');
-                    this.onFocus(inputEl);
-                }
             });
         },
 
@@ -2334,13 +2653,14 @@ function personPicker(personRef, parent = null, suggestionsKey = null) {
                 this.keepOpenInterval = null;
             }
             if (p.isNew) {
-                this.$dispatch('prompt-add-person', { 
-                    name: p.name, 
+                this.$dispatch('prompt-add-person', {
+                    name: p.name,
                     callback: (newPerson) => {
                         this.personRef.id = newPerson.id;
                         this.personRef.name = newPerson.name;
                         this.query = newPerson.name;
-                    } 
+                        this.commit();
+                    }
                 });
                 this.results = [];
                 this.open = false;
@@ -2355,6 +2675,7 @@ function personPicker(personRef, parent = null, suggestionsKey = null) {
             this.open = false;
             this.lastFirestoreQuery = '';
             this.hadFuse = false;
+            this.commit();
         },
 
         clear() {
@@ -2369,6 +2690,16 @@ function personPicker(personRef, parent = null, suggestionsKey = null) {
             this.open = false;
             this.lastFirestoreQuery = '';
             this.hadFuse = false;
+            this.commit();
+        },
+
+        // Picking a result (or clearing one) commits immediately — this
+        // component's only caller now is the calendar's anchored dropdown,
+        // which has no separate Save step.
+        commit() {
+            if (this.parent && typeof this.parent.savePersonSelection === 'function') {
+                this.parent.savePersonSelection();
+            }
         },
 
         onInput(el) {
@@ -2429,6 +2760,8 @@ auth.onAuthStateChanged(async (user) => {
                 }
                 const injectBtn = document.getElementById('inject-service-btn');
                 if (injectBtn) injectBtn.classList.remove('hidden');
+                const removeBtn = document.getElementById('remove-service-btn');
+                if (removeBtn) removeBtn.classList.remove('hidden');
                 // Re-inject data to enable edit handlers
                 if (Object.keys(serviceDataMap).length > 0) {
                     injectServiceData(serviceDataMap);

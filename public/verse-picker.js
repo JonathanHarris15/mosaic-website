@@ -17,6 +17,13 @@ document.addEventListener('alpine:init', () => {
 
         books: Object.keys(BIBLE_DATA),
 
+        // Fixed-positioned and computed fresh on open (positionPanel below),
+        // so a clipping ancestor — an overflow-hidden list box, a sticky
+        // column — can never cut the picker off the way `position: absolute`
+        // anchored to a `relative` parent could. Bound via :style on the
+        // panel in place of the old absolute/left-0 utility classes.
+        panelStyle: '',
+
         init() {
             // Watch for external changes (via x-model or manual updates)
             this.$watch('value', (val) => {
@@ -31,6 +38,48 @@ document.addEventListener('alpine:init', () => {
             if (this.value) {
                 this.parseValue(this.value);
             }
+
+            // The panel's position is computed once, on open — a scroll
+            // OUTSIDE it afterwards would leave it pinned over the wrong
+            // spot, so close it instead of letting it drift. `scroll` does
+            // not bubble, hence capture phase, so this also catches an
+            // outer scrolling container, not just the window — but the
+            // book/chapter/verse grids scroll internally too, and that must
+            // NOT close the picker out from under the finger scrolling it.
+            this._closeOnScroll = (e) => {
+                if (!this.open) return;
+                if (this.$el.contains(e.target)) return;
+                this.open = false;
+            };
+            this._closeOnResize = () => { if (this.open) this.open = false; };
+            window.addEventListener('scroll', this._closeOnScroll, true);
+            window.addEventListener('resize', this._closeOnResize);
+        },
+
+        destroy() {
+            window.removeEventListener('scroll', this._closeOnScroll, true);
+            window.removeEventListener('resize', this._closeOnResize);
+        },
+
+        // Flips above the field when there isn't room below (the Benediction
+        // field, last in a long list, rarely has 400px of viewport under
+        // it), and caps the panel's own height to whichever side it lands
+        // on — so it fits the space rather than running off the screen the
+        // fixed positioning no longer clips it against.
+        positionPanel() {
+            const rect = this.$el.getBoundingClientRect();
+            const width = Math.max(rect.width, 288);
+            const margin = 8;
+            const spaceBelow = window.innerHeight - rect.bottom - margin;
+            const spaceAbove = rect.top - margin;
+            const below = spaceBelow >= 200 || spaceBelow >= spaceAbove;
+            const maxHeight = Math.max(160, Math.min(400, below ? spaceBelow : spaceAbove));
+            const vertical = below
+                ? `top: ${rect.bottom + 4}px;`
+                : `bottom: ${window.innerHeight - rect.top + 4}px;`;
+            // margin: 0 neutralizes verse-picker-dropdown's own margin-top —
+            // the inline style already accounts for that gap via top/bottom.
+            this.panelStyle = `position: fixed; margin: 0; z-index: 90; ${vertical} left: ${rect.left}px; width: ${width}px; max-height: ${maxHeight}px;`;
         },
 
         parseValue(val) {
@@ -50,6 +99,14 @@ document.addEventListener('alpine:init', () => {
                         this.rangeVerse = parseInt(match[4]);
                     }
                 }
+                return;
+            }
+            // A whole chapter, no verse: "Romans 8".
+            const chapterOnly = val.match(/^(.+?)\s+(\d+)$/);
+            if (chapterOnly && BIBLE_DATA[chapterOnly[1]]) {
+                this.selectedBook = chapterOnly[1];
+                this.selectedChapter = parseInt(chapterOnly[2]);
+                this.selectedVerse = null;
             }
         },
 
@@ -68,6 +125,7 @@ document.addEventListener('alpine:init', () => {
             } else {
                 this.reset();
             }
+            this.positionPanel();
         },
 
         // How often each book/chapter/verse has actually been used, read
@@ -223,8 +281,27 @@ document.addEventListener('alpine:init', () => {
             this.step = 'verse';
         },
 
+        // No verse — the whole chapter is the reference. A range doesn't mean
+        // anything against that, so this always closes the picker rather than
+        // offering "Select range end point" the way a single verse does.
+        selectWholeChapter() {
+            this.selectedVerse = null;
+            this.rangeBook = '';
+            this.rangeChapter = null;
+            this.rangeVerse = null;
+            this.updateValue();
+            this.open = false;
+        },
+
         updateValue() {
-            if (!this.selectedBook || !this.selectedChapter || !this.selectedVerse) return;
+            if (!this.selectedBook || !this.selectedChapter) return;
+
+            if (this.selectedVerse === null) {
+                const val = `${this.selectedBook} ${this.selectedChapter}`;
+                this.value = val;
+                this.$el.dispatchEvent(new CustomEvent('input', { detail: val, bubbles: true }));
+                return;
+            }
 
             let val = `${this.selectedBook} ${this.selectedChapter}:${this.selectedVerse}`;
 
