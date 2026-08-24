@@ -111,7 +111,18 @@ suite('the MCP front door', () => {
             'https://client.example.test/callback');
         assert.ok(url.searchParams.get('code'));
         assert.strictEqual(url.searchParams.get('state'), 'state-xyz');
-        assert.strictEqual(url.searchParams.get('iss'), ISSUER);
+
+        // ⚠ EXACTLY WHAT THE METADATA DOCUMENT SAYS, TRAILING SLASH AND ALL.
+        // The client compares these two by simple string comparison and is
+        // forbidden from normalising the slash away first, so `.../mcp` and
+        // `.../mcp/` are two different issuers and the mismatch aborts the
+        // whole sign-in. Shipped once with the un-slashed form; the tests all
+        // passed and no client could connect.
+        assert.strictEqual(url.searchParams.get('iss'),
+            new URL(ISSUER).href);
+        assert.ok(url.searchParams.get('iss').endsWith('/'),
+            'a bare origin renders with a trailing slash — matching the ' +
+            'metadata is the whole point');
     });
 
     test('a member is refused, told why, and gets no code at all', async () => {

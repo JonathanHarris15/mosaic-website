@@ -50,3 +50,12 @@ cmdline-tools.zip
 scripts/spike/vectors-*.json
 scripts/spike/report-*.md
 scripts/spike/themes.json
+
+# Firebase param values written by `firebase deploy` (functions/.env.<project>).
+# This one only ever held MCP_ISSUER_URL, which is a public address — but a
+# param file is exactly where a secret would land next, and a deploy writes it
+# without being asked. Ignored so that cannot happen quietly. The values that
+# matter have defaults in functions/index.js, and test/mcp-hosting.test.js
+# pins the issuer to the hosting site, so a clean checkout needs no secrets
+# to deploy correctly.
+functions/.env.*

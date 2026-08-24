@@ -129,7 +129,16 @@ class FirebaseOAuthProvider {
   constructor({db, auth, issuerUrl, webConfig}) {
     this.db = db;
     this.auth = auth;
-    this.issuerUrl = issuerUrl;
+    // ⚠ NORMALISED THROUGH URL, AND THAT MATTERS. The issuer we hand back in
+    // an authorization response is compared by the client against the one in
+    // our own metadata document using SIMPLE STRING COMPARISON — the spec
+    // explicitly forbids clients from normalising away a trailing slash
+    // before comparing. The SDK builds the metadata from `new URL(...)`,
+    // which renders a bare origin WITH a trailing slash, so emitting the raw
+    // configured string here (without one) makes every conformant client
+    // reject the sign-in. It presents as the assistant failing, not as this.
+    // Found the only way it could be: against the deployed server.
+    this.issuerUrl = new URL(issuerUrl).href;
     this.webConfig = webConfig;
     this._clientsStore = new FirebaseClientsStore(db);
   }
