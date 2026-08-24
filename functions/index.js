@@ -47,6 +47,13 @@ const tsc = require("./shared/theme-similarity-core.js");
 const lw = require("./liturgy-writes");
 // oos_get_scripture_heatmap's read (MS-262).
 const sh = require("./scripture-heatmap");
+// The hymn index read, shared by the getHymnIndex callable and the MCP
+// server's oos_get_hymn_history tool (MS-262).
+const hi = require("./hymn-index");
+// Theme similarity scoring + the Gemini embedding call, shared by the
+// scoreTheme callable, onServiceThemeWritten, and the MCP server's
+// oos_score_theme tool (MS-262).
+const ts = require("./theme-scoring");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -89,23 +96,9 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-/**
- * Cache for the hymn index to reduce Firestore read costs.
- * @type {Array<Object>|null}
- */
-let cachedIndex = null;
-
-/**
- * Timestamp of the last cache update in milliseconds.
- * @type {number}
- */
-let lastCacheTime = 0;
-
-/**
- * Cache Time-To-Live (TTL) in milliseconds.
- * @type {number}
- */
-const CACHE_TTL_MS = 1000 * 60 * 5; // 5 minutes
+// The hymn index cache moved to hymn-index.js with the read it belongs to
+// (MS-262), so the callable and the MCP server share one cache rather than
+// warming two.
 
 /**
  * A Callable Cloud Function that fetches the entire hymn index from Firestore.
@@ -126,41 +119,12 @@ const CACHE_TTL_MS = 1000 * 60 * 5; // 5 minutes
  * @property {Array<string>} tags - Descriptive tags for the hymn.
  * @property {string} database_url - Relative URL to the hymn details page.
  */
-exports.getHymnIndex = onCall({cors: true, region: "us-central1"}, async (request) => {
-  if (cachedIndex && (Date.now() - lastCacheTime < CACHE_TTL_MS)) {
-    log("Returning index from memory cache.");
-    return cachedIndex;
-  }
-
-  log("Function 'getHymnIndex' called. Fetching data from Firestore...");
-
-  const db = admin.firestore();
-
-  // 1. Query the entire 'hymns' collection
-  const hymnsSnapshot = await db.collection("hymns").orderBy("hymn_name").get();
-
-  // 2. Map the documents to the simpler index structure
-  const hymnIndexData = hymnsSnapshot.docs.map((doc) => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      hymn_name: data.hymn_name || "Unknown",
-      variations: data.versions ? data.versions.length : 0,
-      music_writer: data.music_writer || "Unknown",
-      lyrics_writer: data.lyrics_writer || "Unknown",
-      last_played_date: data.last_played_date || null,
-      times_played: data.times_played || 0,
-      tags: data.tags || [],
-      database_url: `/hymns/${doc.id}`,
-    };
-  });
-
-  log(`Returning index with ${hymnIndexData.length} hymns.`);
-  
-  cachedIndex = hymnIndexData;
-  lastCacheTime = Date.now();
-
-  return hymnIndexData;
+exports.getHymnIndex = onCall({cors: true, region: "us-central1"}, async () => {
+  // The read itself lives in hymn-index.js (MS-262) so the MCP server can
+  // serve the same list from the same code. Same query, same mapping, same
+  // 5-minute cache — moved, not rewritten.
+  log("Function 'getHymnIndex' called.");
+  return hi.getHymnIndex(admin.firestore(), log);
 });
 
 /**
@@ -1235,39 +1199,17 @@ exports.updatePastoralPrayerUsageStats = onDocumentWritten(
     },
 );
 
-// Service Theme similarity (docs/plans/theme-similarity.md). Vectors from
-// different models or dimensionalities are not comparable — changing either
-// constant means re-embedding the whole `themes` collection first.
-const THEME_EMBEDDING_MODEL = "gemini-embedding-001";
-const THEME_EMBEDDING_DIMS = 768;
-
-/**
- * Embeds one piece of text with the Gemini embedding API. `taskType:
- * SEMANTIC_SIMILARITY` matters — see the plan for why. Ported from the
- * spike's `embedOne` (scripts/spike/analyze-themes.js).
- * @param {string} text
- * @param {string} apiKey
- * @return {Promise<Array<number>>}
- */
-async function embedThemeText(text, apiKey) {
-  const url = "https://generativelanguage.googleapis.com/v1beta/models/" +
-      THEME_EMBEDDING_MODEL + ":embedContent?key=" + apiKey;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      model: "models/" + THEME_EMBEDDING_MODEL,
-      content: {parts: [{text: text}]},
-      taskType: "SEMANTIC_SIMILARITY",
-      outputDimensionality: THEME_EMBEDDING_DIMS,
-    }),
-  });
-  if (!res.ok) {
-    throw new Error(`Gemini embed failed: ${res.status} ${await res.text()}`);
-  }
-  const data = await res.json();
-  return data.embedding.values;
-}
+// Service Theme similarity (docs/plans/theme-similarity.md). The scoring, the
+// embedding call and the two constants that pin them live in
+// theme-scoring.js (MS-262) so the MCP server scores a theme through the very
+// same code this page does. Vectors from different models or dimensionalities
+// are not comparable — changing either constant means re-embedding the whole
+// `themes` collection first.
+const {
+  embedThemeText,
+  THEME_EMBEDDING_MODEL,
+  THEME_EMBEDDING_DIMS,
+} = ts;
 
 /**
  * How close a Service Theme an editor is typing is to one already preached,
@@ -1307,40 +1249,18 @@ exports.scoreTheme = onCall(
       // keystroke's score would match 100% against itself.
       const excludeDate = (request.data && request.data.excludeDate) || null;
 
-      const [candidateVector, corpusSnap] = await Promise.all([
-        embedThemeText(text, GEMINI_KEY.value()),
-        db.collection("themes").get(),
-      ]);
-
-      const corpus = [];
-      corpusSnap.forEach((doc) => {
-        const data = doc.data();
-        if (data.model !== THEME_EMBEDDING_MODEL ||
-            data.dims !== THEME_EMBEDDING_DIMS) {
-          throw new HttpsError("failed-precondition",
-              `themes/${doc.id} was embedded with a different model/size — ` +
-              "run scripts/backfill-theme-vectors.js before scoring again.");
+      try {
+        return await ts.scoreTheme(db, {
+          text,
+          excludeDate,
+          apiKey: GEMINI_KEY.value(),
+        });
+      } catch (e) {
+        if (e && e.reason === "stale-corpus") {
+          throw new HttpsError("failed-precondition", e.message);
         }
-        const dates = (data.usedOn || []).filter((d) => d !== excludeDate);
-        // Used only on the date being edited right now — that IS this
-        // draft, not a piece of history to compare it against.
-        if (!dates.length) return;
-        corpus.push({text: data.text, dates, vector: data.vector});
-      });
-
-      const {uniqueness, matches} = tsc.scoreCandidate(candidateVector, corpus);
-
-      return {
-        uniqueness: uniqueness === null ? null : Math.round(uniqueness),
-        // Centered cosine, clamped to 0 at "no relation or opposite" — a
-        // negative centered similarity carries no useful "how close" meaning
-        // to show an editor, only "not this one".
-        matches: matches.map((m) => ({
-          text: m.text,
-          dates: m.dates,
-          closenessPercent: Math.round(Math.max(0, m.similarity) * 100),
-        })),
-      };
+        throw e;
+      }
     },
 );
 
