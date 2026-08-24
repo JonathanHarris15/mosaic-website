@@ -643,5 +643,34 @@ service cloud.firestore {
       allow read: if isEditor();
       allow write, delete: if isEditor() && request.auth.uid == uid;
     }
+
+    // ── The MCP server's front door (MS-262, ADR-0038) ──────────────────
+    //
+    // ⚠ NO CLIENT MAY TOUCH ANY OF THESE, EVER — not even an admin, and not
+    // even to read. They hold the machinery that decides who may edit the
+    // Order of Service from outside the website: registered assistants,
+    // in-flight sign-ins, single-use authorization codes, and the hashed
+    // record of every live pass.
+    //
+    // The Admin SDK ignores these rules, which is precisely the point: only
+    // functions/mcp-auth.js can reach this data, and it is the only thing
+    // that should. A read path here would be a way to enumerate live
+    // sessions; a write path would be a way to mint yourself a pass.
+    //
+    // `mcp_tokens` is keyed by the SHA-256 of a token and never contains the
+    // token itself, so even a copy of it grants nothing — but that is a
+    // second line of defence, not a reason to soften the first.
+    match /mcp_clients/{clientId} {
+      allow read, write: if false;
+    }
+    match /mcp_auth_requests/{requestId} {
+      allow read, write: if false;
+    }
+    match /mcp_auth_codes/{code} {
+      allow read, write: if false;
+    }
+    match /mcp_tokens/{tokenHash} {
+      allow read, write: if false;
+    }
   }
 }

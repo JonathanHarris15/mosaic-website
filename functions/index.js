@@ -1,7 +1,7 @@
 const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
 const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
-const {defineSecret} = require("firebase-functions/params");
+const {defineSecret, defineString} = require("firebase-functions/params");
 const {log} = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const {
@@ -54,6 +54,9 @@ const hi = require("./hymn-index");
 // scoreTheme callable, onServiceThemeWritten, and the MCP server's
 // oos_score_theme tool (MS-262).
 const ts = require("./theme-scoring");
+// The MCP server's HTTP app: the four oos_* tools behind an OAuth front
+// door (MS-262, ADR-0038).
+const mcpApp = require("./mcp-app");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -1328,6 +1331,61 @@ exports.oosUpdateLiturgy = onCall(
 exports.oosGetScriptureHeatmap = onCall(
     {cors: true, region: "us-central1"},
     async () => sh.getScriptureHeatmap(admin.firestore()),
+);
+
+/**
+ * The Order of Service MCP server (MS-262, ADR-0038) — the door an AI
+ * assistant knocks on, and the OAuth front door in front of it.
+ *
+ * ⚠ THE PUBLIC URL IS PART OF THE SECURITY, not just configuration. It is
+ * the issuer clients pin to and the audience every pass is minted for, so a
+ * mismatch between MCP_ISSUER_URL and the URL clients actually reach means
+ * either nothing connects or — worse — passes are accepted that were minted
+ * for somewhere else. Set it to the exact origin serving this, no trailing
+ * slash, and change it only alongside the hosting rewrites.
+ *
+ * ⚠ SERVE THIS FROM ITS OWN HOSTING SITE. The OAuth discovery specs put
+ * /authorize, /token, /register and /revoke at the root of whatever origin
+ * hosts them — that is not a choice this code can make differently. Pointing
+ * the church's main domain at this would claim all four.
+ *
+ * The app is built once per instance and reused; it holds no per-caller
+ * state (the MCP server inside it is rebuilt per request — see
+ * mcp-server.js).
+ */
+const MCP_ISSUER_URL = defineString("MCP_ISSUER_URL", {
+  default: "https://mosaic-hymn-database.web.app",
+});
+
+// The same public config already served in public/auth.js. It identifies the
+// project to Firebase Auth; it is not a secret and never has been.
+const MCP_WEB_CONFIG = {
+  apiKey: "AIzaSyCJLgZP27CWayqFoqYoqg9mVdkhgCWqgbg",
+  authDomain: "mosaic-hymn-database.firebaseapp.com",
+  projectId: "mosaic-hymn-database",
+};
+
+let mcpAppPromise = null;
+
+exports.mcp = onRequest(
+    {cors: false, region: "us-central1", secrets: [GEMINI_KEY]},
+    async (req, res) => {
+      if (!mcpAppPromise) {
+        mcpAppPromise = mcpApp.buildApp({
+          db: admin.firestore(),
+          auth: admin.auth(),
+          issuerUrl: MCP_ISSUER_URL.value(),
+          webConfig: MCP_WEB_CONFIG,
+          geminiKey: () => GEMINI_KEY.value(),
+          fieldValues: {
+            serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
+            deleteField: () => admin.firestore.FieldValue.delete(),
+          },
+        });
+      }
+      const app = await mcpAppPromise;
+      return app(req, res);
+    },
 );
 
 /**
