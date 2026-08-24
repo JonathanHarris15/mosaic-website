@@ -1,7 +1,7 @@
 // MS-262 — the MCP server's tool surface, driven through a real MCP client.
 //
 // ⚠ WHAT THIS PROVES. Not that Firestore works (the emulator suites cover
-// that) — but that the four tools are actually reachable over the protocol,
+// that) — but that every tool is actually reachable over the protocol,
 // named correctly, described, and that the permission and allowlist refusals
 // come back as refusals the assistant can read rather than as crashes.
 //
@@ -26,6 +26,10 @@ const stubs = {
     scriptureHeatmap: () => [{reference: 'John 3:16', count: 2, lastUsed: '2026-01-04'}],
     scoreTheme: () => ({uniqueness: 72, matches: []}),
     updateLiturgy: () => ({ok: true, updated: {}}),
+    hymnLookup: () => ({hymns: [{hymn_name: 'Holy Holy Holy', times_played: 4}], notFound: []}),
+    scriptureLookup: () => ({scripture: [{reference: 'John 3:16', count: 2}], neverUsed: []}),
+    getService: (d) => ({date: d, exists: true, theme: 'The God Who Rescues', liturgy: [], people: {}}),
+    getServiceRange: (f, t) => ({services: [{date: f, exists: true}], truncated: false, limit: 26}),
 };
 
 // Swap the four data modules for recorders before mcp-server.js requires
@@ -41,15 +45,33 @@ function installStubs() {
     };
 
     set('hymn-index.js', {
-        getHymnIndex: async (db) => {
-            calls.push(['hymn-index', db]);
+        getHymnIndex: async (db, log, opts) => {
+            calls.push(['hymn-index', opts]);
             return stubs.hymnIndex();
+        },
+        lookupHymns: async (db, args) => {
+            calls.push(['hymn-lookup', args]);
+            return stubs.hymnLookup(args);
+        },
+    });
+    set('service-read.js', {
+        getService: async (db, dateKey) => {
+            calls.push(['service-read', dateKey]);
+            return stubs.getService(dateKey);
+        },
+        getServiceRange: async (db, from, through) => {
+            calls.push(['service-range', {from, through}]);
+            return stubs.getServiceRange(from, through);
         },
     });
     set('scripture-heatmap.js', {
         getScriptureHeatmap: async (db) => {
             calls.push(['scripture-heatmap', db]);
             return stubs.scriptureHeatmap();
+        },
+        lookupScripture: async (db, args) => {
+            calls.push(['scripture-lookup', args]);
+            return stubs.scriptureLookup(args);
         },
     });
     set('theme-scoring.js', {
@@ -70,6 +92,9 @@ const DB = {__isFakeDb: true};
 const FIELD_VALUES = {
     serverTimestamp: () => '<<server-timestamp>>',
     deleteField: () => '<<delete>>',
+    // Real code passes admin.firestore.FieldPath.documentId() here; the range
+    // read is stubbed out, so a marker is enough to prove it was threaded.
+    documentId: () => '<<document-id>>',
 };
 
 /** Connects a real MCP client to the server, as the given caller. */
@@ -106,11 +131,12 @@ describe('the Order of Service MCP server', () => {
     beforeEach(() => {
         calls.length = 0;
         stubs.updateLiturgy = () => ({ok: true, updated: {}});
+        stubs.getServiceRange = (f, t) => ({services: [{date: f, exists: true}], truncated: false, limit: 26});
     });
 
     // ── The surface ──────────────────────────────────────────────────────
 
-    test('offers exactly the four oos_ tools, and every name is prefixed', async () => {
+    test('offers exactly the expected oos_ tools, and every name is prefixed', async () => {
         const {client} = await connectAs('editor');
         const {tools} = await client.listTools();
         const names = tools.map((t) => t.name).sort();
@@ -118,6 +144,9 @@ describe('the Order of Service MCP server', () => {
         assert.deepStrictEqual(names, [
             'oos_get_hymn_history',
             'oos_get_scripture_heatmap',
+            'oos_get_service',
+            'oos_lookup_hymns',
+            'oos_lookup_scripture',
             'oos_score_theme',
             'oos_update_liturgy',
         ]);
@@ -283,5 +312,158 @@ describe('the Order of Service MCP server', () => {
         });
         assert.strictEqual(result.isError, true);
         assert.strictEqual(calls.length, 0);
+    });
+
+    // -- Reading a Sunday back -------------------------------------------
+
+    test('one date reads a single Sunday', async () => {
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_get_service', arguments: {date: '2026-08-17'},
+        });
+        assert.ok(textOf(result).includes('The God Who Rescues'));
+        assert.deepStrictEqual(calls[0], ['service-read', '2026-08-17']);
+    });
+
+    test('a through date reads a span instead', async () => {
+        const {client} = await connectAs('editor');
+        await client.callTool({
+            name: 'oos_get_service',
+            arguments: {date: '2026-08-17', through: '2026-09-14'},
+        });
+        assert.strictEqual(calls[0][0], 'service-range');
+        assert.deepStrictEqual(calls[0][1],
+            {from: '2026-08-17', through: '2026-09-14'});
+    });
+
+    test('a through equal to the date is just the one Sunday, not a range', async () => {
+        const {client} = await connectAs('editor');
+        await client.callTool({
+            name: 'oos_get_service',
+            arguments: {date: '2026-08-17', through: '2026-08-17'},
+        });
+        assert.strictEqual(calls[0][0], 'service-read');
+    });
+
+    test('a backwards range is refused rather than silently returning nothing', async () => {
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_get_service',
+            arguments: {date: '2026-09-14', through: '2026-08-17'},
+        });
+        assert.strictEqual(result.isError, true);
+        assert.strictEqual(calls.length, 0);
+    });
+
+    test('a truncated range SAYS it was truncated', async () => {
+        // A silently short list reads as "that is all there is", which is the
+        // one wrong impression a planning conversation must not be given.
+        stubs.getServiceRange = () => ({services: [], truncated: true, limit: 26});
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_get_service',
+            arguments: {date: '2026-01-01', through: '2026-12-31'},
+        });
+        assert.match(textOf(result), /narrow the range/i);
+    });
+
+    test('a Sunday with nothing planned is an answer, not an error', async () => {
+        stubs.getService = (d) => ({date: d, exists: false, liturgy: [], people: {}});
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_get_service', arguments: {date: '2030-01-06'},
+        });
+        assert.notStrictEqual(result.isError, true);
+        assert.match(textOf(result), /"exists": false/);
+        stubs.getService = (d) => ({
+            date: d, exists: true, theme: 'The God Who Rescues',
+            liturgy: [], people: {},
+        });
+    });
+
+    test('a malformed service date never reaches the reader', async () => {
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_get_service', arguments: {date: '8/17'},
+        });
+        assert.strictEqual(result.isError, true);
+        assert.strictEqual(calls.length, 0);
+    });
+
+    // -- Asking for only what you need -----------------------------------
+
+    test('hymn history asks for a FRESH read, never the cached one', async () => {
+        // An assistant may have written a hymn moments ago; planning against
+        // counts that predate its own write is the staleness that bites.
+        const {client} = await connectAs('editor');
+        await client.callTool({name: 'oos_get_hymn_history', arguments: {}});
+        assert.deepStrictEqual(calls[0][1], {fresh: true});
+    });
+
+    test('named hymns go through to the targeted lookup', async () => {
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_lookup_hymns',
+            arguments: {names: ['Holy Holy Holy', 'Be Thou My Vision']},
+        });
+        assert.ok(textOf(result).includes('Holy Holy Holy'));
+        assert.strictEqual(calls[0][0], 'hymn-lookup');
+        assert.deepStrictEqual(calls[0][1].names,
+            ['Holy Holy Holy', 'Be Thou My Vision']);
+    });
+
+    test('a hymn search prefix goes through too', async () => {
+        const {client} = await connectAs('editor');
+        await client.callTool({
+            name: 'oos_lookup_hymns', arguments: {search: 'Holy'},
+        });
+        assert.strictEqual(calls[0][1].search, 'Holy');
+    });
+
+    test('a hymn lookup with neither names nor search is refused', async () => {
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_lookup_hymns', arguments: {},
+        });
+        assert.strictEqual(result.isError, true);
+        assert.strictEqual(calls.length, 0);
+    });
+
+    test('named scripture references go through to the targeted lookup', async () => {
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_lookup_scripture', arguments: {references: ['John 3:16']},
+        });
+        assert.ok(textOf(result).includes('John 3:16'));
+        assert.deepStrictEqual(calls[0][1].references, ['John 3:16']);
+    });
+
+    test('a book name goes through as a prefix', async () => {
+        const {client} = await connectAs('editor');
+        await client.callTool({
+            name: 'oos_lookup_scripture', arguments: {book: 'Romans'},
+        });
+        assert.strictEqual(calls[0][1].book, 'Romans');
+    });
+
+    test('a scripture lookup with neither references nor book is refused', async () => {
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_lookup_scripture', arguments: {},
+        });
+        assert.strictEqual(result.isError, true);
+        assert.strictEqual(calls.length, 0);
+    });
+
+    test('the whole-history tools point the assistant at the targeted ones first', async () => {
+        // The steer lives in the description; without it an assistant reaches
+        // for the full dump every time, which is what this change was for.
+        const {client} = await connectAs('editor');
+        const {tools} = await client.listTools();
+        const hymns = tools.find((t) => t.name === 'oos_get_hymn_history');
+        const scripture = tools.find(
+            (t) => t.name === 'oos_get_scripture_heatmap');
+        assert.match(hymns.description, /oos_lookup_hymns/);
+        assert.match(scripture.description, /oos_lookup_scripture/);
     });
 });

@@ -1382,6 +1382,8 @@ exports.mcp = onRequest(
           fieldValues: {
             serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
             deleteField: () => admin.firestore.FieldValue.delete(),
+            // Passed in rather than reached for — see service-read.js.
+            documentId: () => admin.firestore.FieldPath.documentId(),
           },
         });
       }

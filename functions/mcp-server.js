@@ -32,6 +32,7 @@ const hi = require("./hymn-index");
 const ts = require("./theme-scoring");
 const sh = require("./scripture-heatmap");
 const lw = require("./liturgy-writes");
+const sr = require("./service-read");
 const LiturgySaveCore = require("./shared/liturgy-save-core.js");
 
 const SERVER_NAME = "mosaic-order-of-service";
@@ -118,7 +119,7 @@ function liturgyFieldsShape() {
  * @param {object} deps.db the Firestore handle
  * @param {object} deps.auth who is calling: {uid, permissionLevel}
  * @param {function(): string} deps.geminiKey reads the Gemini secret
- * @param {object} deps.fieldValues {serverTimestamp, deleteField} factories
+ * @param {object} deps.fieldValues {serverTimestamp, deleteField, documentId}
  * @return {Promise<object>} an McpServer with tools registered
  */
 async function buildServer({db, auth, geminiKey, fieldValues}) {
@@ -130,20 +131,26 @@ async function buildServer({db, auth, geminiKey, fieldValues}) {
   server.registerTool("oos_get_hymn_history", {
     title: "Hymn history",
     description:
-      "Every hymn in the church's registry, with how many times it has been " +
-      "sung and when it was last sung. Use this to suggest hymns that fit a " +
-      "theme and have not been sung recently. Returns the whole list — " +
-      "filter it yourself rather than asking for a subset.",
+      "THE ENTIRE hymn registry, with times sung and last-sung date for " +
+      "each. This is a lot of data. Prefer oos_lookup_hymns when you have " +
+      "particular hymns in mind; reach for this only when you genuinely need " +
+      "to survey everything — finding candidates you could not have named up " +
+      "front, for instance.",
     inputSchema: {},
     annotations: {readOnlyHint: true},
-  }, async () => jsonResult(await hi.getHymnIndex(db)));
+    // Fresh, not cached. An assistant may have written a hymn onto a Sunday
+    // moments ago, and planning against counts that predate its own write is
+    // the one staleness that does not merely mislead — it causes a bad pick.
+  }, async () => jsonResult(await hi.getHymnIndex(db, null, {fresh: true})));
 
   server.registerTool("oos_get_scripture_heatmap", {
     title: "Scripture usage",
     description:
-      "How often each scripture reference has been used across every Sunday " +
-      "on record, and when it was last used. Use this to notice passages " +
-      "the church leans on heavily, and ones it has not touched.",
+      "EVERY scripture reference the church has used, with counts and " +
+      "last-used dates. This is a lot of data. Prefer oos_lookup_scripture " +
+      "when you have passages or a book in mind; reach for this only when " +
+      "you need the whole picture — spotting which parts of scripture are " +
+      "neglected overall, for instance.",
     inputSchema: {},
     annotations: {readOnlyHint: true},
   }, async () => jsonResult(await sh.getScriptureHeatmap(db)));
@@ -180,6 +187,113 @@ async function buildServer({db, auth, geminiKey, fieldValues}) {
       }
       throw e;
     }
+  });
+
+  server.registerTool("oos_get_service", {
+    title: "Read a Sunday's Order of Service",
+    description:
+      "What is currently planned for a Sunday: theme, key verse, every " +
+      "liturgy slot in the order the service actually runs, who chose each " +
+      "one, and who is preaching, leading and on music. Read this BEFORE " +
+      "proposing changes, so you know what is already there and do not " +
+      "offer to replace something that was deliberately chosen. Give one " +
+      "date, or add 'through' to read a span of Sundays at once. Dates are " +
+      "YYYY-MM-DD — resolve anything vaguer yourself and say which date you " +
+      "settled on, because guessing a year silently is worse than asking. " +
+      "A Sunday with nothing planned comes back as exists: false, which is " +
+      "an answer, not a failure. People here are READ-ONLY: oos_update_liturgy " +
+      "cannot change who is preaching.",
+    inputSchema: {
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+          .describe("The Sunday, YYYY-MM-DD"),
+      through: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional()
+          .describe(
+              "Optional end date, YYYY-MM-DD inclusive. With this, every " +
+              "Sunday from 'date' to here that has something planned comes " +
+              "back; Sundays with nothing planned are simply absent."),
+    },
+    annotations: {readOnlyHint: true},
+  }, async ({date, through}) => {
+    if (!through || through === date) {
+      return jsonResult(await sr.getService(db, date));
+    }
+    if (through < date) {
+      return refuse("The end date is before the start date.");
+    }
+    const range = await sr.getServiceRange(db, date, through,
+        {documentId: fieldValues.documentId()});
+    if (range.truncated) {
+      // Said out loud rather than quietly returning a prefix — a silently
+      // short list reads as "that is all there is".
+      return jsonResult(Object.assign({}, range, {
+        note: "More Sundays match than the limit of " + range.limit +
+          "; narrow the range to see the rest.",
+      }));
+    }
+    return jsonResult(range);
+  });
+
+  server.registerTool("oos_lookup_hymns", {
+    title: "Look up particular hymns",
+    description:
+      "How often specific hymns have been sung, and when last. Use this " +
+      "rather than oos_get_hymn_history whenever you have hymns in mind — " +
+      "it answers the same question without pulling the whole registry " +
+      "through the conversation. 'names' must match exactly. 'search' " +
+      "matches the START of a name and is case-sensitive, so 'Holy' finds " +
+      "'Holy Holy Holy' but not 'O Holy Night'. Names that do not match " +
+      "come back under notFound — read that as 'not in the registry under " +
+      "that spelling', NOT as 'never sung', and fall back to " +
+      "oos_get_hymn_history if you need to be certain.",
+    inputSchema: {
+      names: z.array(z.string()).nullable().optional()
+          .describe("Exact hymn names to look up"),
+      search: z.string().nullable().optional()
+          .describe("A name prefix, case-sensitive"),
+      limit: z.number().int().positive().nullable().optional()
+          .describe("Most rows to return (default 50, max 200)"),
+    },
+    annotations: {readOnlyHint: true},
+  }, async ({names, search, limit}) => {
+    if (!(names && names.length) && !(search && String(search).trim())) {
+      return refuse("Give either some hymn names or a search prefix.");
+    }
+    return jsonResult(await hi.lookupHymns(db, {
+      names: names || [],
+      search: search || "",
+      limit: limit || undefined,
+    }));
+  });
+
+  server.registerTool("oos_lookup_scripture", {
+    title: "Look up particular scripture",
+    description:
+      "How often specific scripture references have been used, and when " +
+      "last. Use this rather than oos_get_scripture_heatmap whenever you " +
+      "have passages or a book in mind. 'references' must match exactly as " +
+      "stored, punctuation included, e.g. 'John 3:16'. 'book' matches the " +
+      "START of a reference, so 'John' catches John but not 1 John — ask " +
+      "for '1 John' separately. References that have never been used come " +
+      "back under neverUsed, which is a useful answer in itself: it means " +
+      "the church has not preached that passage, not that the lookup failed.",
+    inputSchema: {
+      references: z.array(z.string()).nullable().optional()
+          .describe("Exact references, e.g. ['John 3:16']"),
+      book: z.string().nullable().optional()
+          .describe("A reference prefix, usually a book name"),
+      limit: z.number().int().positive().nullable().optional()
+          .describe("Most rows to return (default 50, max 200)"),
+    },
+    annotations: {readOnlyHint: true},
+  }, async ({references, book, limit}) => {
+    if (!(references && references.length) && !(book && String(book).trim())) {
+      return refuse("Give either some references or a book name.");
+    }
+    return jsonResult(await sh.lookupScripture(db, {
+      references: references || [],
+      book: book || "",
+      limit: limit || undefined,
+    }));
   });
 
   server.registerTool("oos_update_liturgy", {
