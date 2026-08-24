@@ -41,6 +41,12 @@ const usc = require("./shared/usage-stats-core.js");
 // Copied from public/ the same way; scoreTheme below is what actually calls
 // out to Firestore and the embedding API.
 const tsc = require("./shared/theme-similarity-core.js");
+// The Firestore half of oos_update_liturgy (MS-262) — takes a `db` for the
+// same reason as assignment-writes.js and trade-writes.js above. The
+// allowlist/shape decisions stay in shared/liturgy-save-core.js, pure.
+const lw = require("./liturgy-writes");
+// oos_get_scripture_heatmap's read (MS-262).
+const sh = require("./scripture-heatmap");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -1336,6 +1342,72 @@ exports.scoreTheme = onCall(
         })),
       };
     },
+);
+
+/**
+ * MS-262 — merges a partial set of liturgy fields (theme, keyVerse, the 7
+ * hymn slots, the 6 scripture/text slots) into one Sunday's
+ * `services/{dateKey}` document, for the oos_update_liturgy MCP tool.
+ *
+ * Editor+ only, same floor as scoreTheme and every other liturgy write.
+ * Explicitly refuses any field outside that allowlist — see
+ * shared/liturgy-save-core.js — so a person-assignment field (Preacher,
+ * Service Leader, …) can never be set through this door; that needs a
+ * find-this-person tool this ticket does not build.
+ */
+exports.oosUpdateLiturgy = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Sign in to update an Order of Service.");
+      }
+
+      const db = admin.firestore();
+      const callerSnap = await db.collection("users").doc(request.auth.uid).get();
+      const level = callerSnap.exists &&
+          (callerSnap.data().permissionLevel || callerSnap.data().role);
+      if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
+        throw new HttpsError("permission-denied",
+            "Editors only — this changes the live Order of Service.");
+      }
+
+      const dateKey = (request.data && request.data.dateKey) || "";
+      const fields = (request.data && request.data.fields) || null;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+        throw new HttpsError("invalid-argument", "dateKey must be YYYY-MM-DD.");
+      }
+      if (!fields || typeof fields !== "object" || Array.isArray(fields) ||
+          !Object.keys(fields).length) {
+        throw new HttpsError("invalid-argument", "No liturgy fields given.");
+      }
+
+      const result = await lw.updateLiturgy(db, {
+        dateKey,
+        fields,
+        uid: request.auth.uid,
+        serverTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+        deleteField: admin.firestore.FieldValue.delete(),
+      });
+
+      if (!result.ok) {
+        throw new HttpsError("invalid-argument",
+            "Fields not allowed: " +
+            result.rejectedFields.concat(result.invalidFields).join(", "));
+      }
+
+      return {updated: Object.keys(fields)};
+    },
+);
+
+/**
+ * MS-262 — scripture usage across every Sunday on record, for the
+ * oos_get_scripture_heatmap MCP tool. Same shape and pattern as
+ * getHymnIndex; today `scripture_usage` is only read client-side, on the
+ * Analytics page (public/usage-stats-store.js).
+ */
+exports.oosGetScriptureHeatmap = onCall(
+    {cors: true, region: "us-central1"},
+    async () => sh.getScriptureHeatmap(admin.firestore()),
 );
 
 /**

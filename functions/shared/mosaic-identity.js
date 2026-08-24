@@ -1,3 +1,11 @@
+// ⚠ GENERATED FILE — DO NOT EDIT.
+//
+// Copied from public/mosaic-identity.js by scripts/sync-shared-to-functions.js, because
+// functions/ deploys as its own bundle and cannot require across into
+// public/. Edit the original; run the script; commit both.
+//
+// test/functions-shared-sync.test.js fails if this copy is stale.
+
 // Who the signed-in user is AS A PERSON.
 //
 // Firebase knows a uid; the church knows a Person. `users/{uid}.personId` is the
