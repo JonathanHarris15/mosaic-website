@@ -23,7 +23,15 @@ const path = require('node:path');
 
 const config = JSON.parse(
     fs.readFileSync(path.join(__dirname, '..', 'firebase.json'), 'utf8'));
-const headers = config.hosting.headers;
+
+// `hosting` became a LIST when the MCP server got its own site (MS-262).
+// These rules are about the church website, so pick that site by name rather
+// than by position — a third site added above it must not quietly point this
+// whole file at the wrong config and pass.
+const site = config.hosting.find(h => h.site === 'mosaic-hymn-database');
+assert.ok(site, 'the church website is no longer in firebase.json under the ' +
+    'site id these cache rules were written for');
+const headers = site.headers;
 
 const cacheControlOf = block =>
     (block.headers.find(h => h.key === 'Cache-Control') || {}).value;

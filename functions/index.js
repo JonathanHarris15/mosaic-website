@@ -1344,17 +1344,19 @@ exports.oosGetScriptureHeatmap = onCall(
  * for somewhere else. Set it to the exact origin serving this, no trailing
  * slash, and change it only alongside the hosting rewrites.
  *
- * ⚠ SERVE THIS FROM ITS OWN HOSTING SITE. The OAuth discovery specs put
+ * ⚠ THIS HAS ITS OWN HOSTING SITE, AND MUST. The OAuth discovery specs put
  * /authorize, /token, /register and /revoke at the root of whatever origin
  * hosts them — that is not a choice this code can make differently. Pointing
- * the church's main domain at this would claim all four.
+ * the church's main domain at this would claim all four there, so it lives
+ * at mosaic-hymn-mcp.web.app instead (see the hosting block in
+ * firebase.json, which rewrites those paths plus /mcp and /.well-known here).
  *
  * The app is built once per instance and reused; it holds no per-caller
  * state (the MCP server inside it is rebuilt per request — see
  * mcp-server.js).
  */
 const MCP_ISSUER_URL = defineString("MCP_ISSUER_URL", {
-  default: "https://mosaic-hymn-database.web.app",
+  default: "https://mosaic-hymn-mcp.web.app",
 });
 
 // The same public config already served in public/auth.js. It identifies the
