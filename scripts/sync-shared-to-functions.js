@@ -42,6 +42,10 @@ const MODULES = [
     'trade-core.js',
     'usage-stats-core.js',
     'theme-similarity-core.js',
+    'liturgy-save-core.js',
+    'service-read-core.js',
+    'mosaic-identity.js',
+    'service-authorship.js',
 ];
 
 const BANNER = [

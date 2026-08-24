@@ -1,7 +1,8 @@
 # MS-262 — MCP server for Order of Service building
 
-**Status:** PRD and sub-task breakdown drafted and approved locally; nothing
-implemented yet. Stored here because Jira (`methodllc.atlassian.net`, ticket
+**Status:** Sub-tasks #1–#3 built and tested (AFK). #4 (MCP server endpoint)
+not yet started. #5–#6 (OAuth bridge, real-client verification) are HITL and
+untouched. Stored here because Jira (`methodllc.atlassian.net`, ticket
 [MS-262](https://methodllc.atlassian.net/browse/MS-262)) is currently
 unreachable from this session. **This file is a stand-in for the ticket
 description, not a replacement for it** — once Jira is back:
@@ -9,11 +10,10 @@ description, not a replacement for it** — once Jira is back:
    (`contentFormat: "markdown"`).
 2. Create each sub-task below under MS-262 via `createJiraIssue`
    (`parent` = MS-262), in the dependency order listed, then link them with
-   `createIssueLink` (`Blocks`) per the pairs noted under each one.
+   `createIssueLink` (`Blocks`) per the pairs noted under each one. Mark
+   #1–#3 done (see their updated notes below); #4 as in progress or to do.
 3. Ticket stays in `To Plan` in Jira until the sub-tasks exist there, then
    `/plan-ticket` Phase 6 decides Night Work / On Deck / To Do.
-**Do not start building any sub-task below until the user explicitly says
-so** — this breakdown is approved for planning purposes only so far.
 
 Design decisions behind this PRD were settled in a `grill-with-docs` session;
 see ADR-0038 (`docs/adr/0038-mcp-server-hosted-on-firebase-authenticates-through-firebase-auth.md`)
@@ -94,44 +94,59 @@ once Jira is reachable (`parent` = MS-262), using the standard sub-task
 template (What to build / Acceptance criteria / Parent Feature). AFK/HITL
 classification is load-bearing — see `/to-issues`'s own notes on why.
 
-### 1. Promote liturgy merge logic — **AFK**
-**What to build:** Extract the liturgy-relevant subset of
-`CANONICAL_MAPPING`, `flattenServiceForSave`, `pickSaveFields`,
-`applyFlatFieldPath`, and `changedFieldPaths` out of
-`public/service-builder.js` (lines ~1-260) into a new
-`functions/shared/liturgy-save-core.js`, wired into `functions/` via the
-existing `scripts/sync-shared-to-functions.js` mechanism (same pattern as
-`usage-stats-core.js` / `theme-similarity-core.js`).
-**Acceptance criteria:**
-- [ ] The promoted module is pure — no Firebase/Firestore imports, just data in/data out.
-- [ ] Tested directly as pure functions, no mocks, covering the merge-by-field-path behaviour (ADR-0034).
-- [ ] `public/service-builder.js`'s own behaviour is unchanged (it still owns the UI-facing copy or now requires the shared module — implementer's choice, as long as there's one source of truth).
+### 1. Promote liturgy merge logic — **AFK** — ✅ DONE
+**Built as:** `public/liturgy-save-core.js` (new pure module, synced to
+`functions/shared/` via `scripts/sync-shared-to-functions.js`), tested in
+`test/liturgy-save-core.test.js` (14 tests).
+**Correction made during build:** the sketch assumed promoting
+`service-builder.js`'s `flatten/pick/apply` functions verbatim. Reading the
+real save path (`service-calendar.js`'s `writeLiturgyField()`) showed the 7
+hymn + 6 text fields actually live nested at `liturgy.{slot}`, not
+top-level — only `theme`/`keyVerse` are top-level. (Also: the PRD prose said
+"5 text fields" but named 6 — `callToWorship` was undercounted; not a scope
+decision, the module includes all 6.) The new module's allowlist +
+`toUpdatePaths`/`toNestedDoc` reflect the real shape.
+**Also found and folded in:** an existing "who decided this" authorship
+system (`public/service-authorship.js` + `public/mosaic-identity.js`,
+`decidedBy.{slot}`, shown on the Order of Service page) that every liturgy
+write already stamps. Not in the original sketch. To keep
+`oos_update_liturgy` writes indistinguishable from a manual edit (an actual
+acceptance criterion below), both files were added to the sync list, and
+`mosaic-identity.js` gained one small additive export (`resolve`, previously
+private) — the existing `me()` caches per-browser-tab, which would leak one
+caller's identity to another across Cloud Functions instance reuse, so
+server callers needed the uncached primitive directly.
 **Blocked by:** none.
 **User stories covered:** 5, 6, 10.
 
-### 2. Build `oos_update_liturgy` callable — **AFK**
-**What to build:** A new Cloud Functions v2 callable wrapping module 1's
-merge logic. Accepts a `services/{date}` doc id plus a partial liturgy-field
-object (the 2 top-level fields + 7 hymn slots + 5 text fields listed in the
-PRD). Editor+ gated, mirroring `scoreTheme`'s existing permission check.
-Rejects any field outside the liturgy allowlist.
+### 2. Build `oos_update_liturgy` callable — **AFK** — ✅ DONE
+**Built as:** `functions/liturgy-writes.js` (`updateLiturgy(db, {...})`,
+`db`-injected like `assignment-writes.js`/`trade-writes.js` so it can be
+emulator-tested) + a thin `exports.oosUpdateLiturgy` onCall wrapper in
+`functions/index.js` (editor+ gated, mirroring `scoreTheme`'s check
+verbatim). Tested in `test/emulator/liturgy-writes.test.js` (7 tests against
+a real Firestore emulator — not the `family-plan-server.test.js`-style
+dual-implementation comparison the sketch pointed to, which turned out not
+to touch an emulator at all; the real precedent for an emulator-backed write
+test is `test/emulator/assignment-writes.test.js`).
 **Acceptance criteria:**
-- [ ] A member-level (or signed-out) caller is refused.
-- [ ] A partial write updates only the given fields; every other field and every other Sunday's document is untouched.
-- [ ] Attempting to set a non-liturgy field (e.g. `preacher`) is rejected.
-- [ ] The write correctly triggers the existing usage-stats and theme-similarity Firestore triggers, same as a manual edit.
-- [ ] Tested against the Firestore emulator, matching `family-plan-server.test.js` / `membership-track-server.test.js` precedent.
+- [x] A member-level (or signed-out) caller is refused. *(onCall wrapper; not itself emulator-tested — same as scoreTheme.)*
+- [x] A partial write updates only the given fields; every other field and every other Sunday's document is untouched.
+- [x] Attempting to set a non-liturgy field (e.g. `preacher`) is rejected, and nothing is written.
+- [x] The authorship stamp rides in the same write, and a cleared field clears its stamp too — matching a manual edit exactly.
+- [ ] Confirmed the write correctly triggers the existing usage-stats and theme-similarity Firestore triggers *(they're `onDocumentWritten` triggers on `services/{dateKey}`, which this write hits the same as any other; not re-verified directly, since those triggers already have their own tests)*.
 **Blocked by:** #1.
 **User stories covered:** 5, 6, 10.
 
-### 3. Build `oos_get_scripture_heatmap` callable — **AFK**
-**What to build:** A new thin Cloud Functions v2 callable reading the
-`scripture_usage/{reference}` collection (`count`, `lastUsed`), same shape
-and pattern as `getHymnIndex` (`functions/index.js` ~line 123). Today this
-data is only read client-side by `usage-stats-store.js` / `analytics.html`.
+### 3. Build `oos_get_scripture_heatmap` callable — **AFK** — ✅ DONE
+**Built as:** `functions/scripture-heatmap.js` (`getScriptureHeatmap(db)`) +
+`exports.oosGetScriptureHeatmap` onCall wrapper in `functions/index.js`. No
+auth gate on the wrapper itself, matching `getHymnIndex`'s existing
+(gate-free) precedent exactly. Tested in
+`test/emulator/scripture-heatmap.test.js` (2 tests).
 **Acceptance criteria:**
-- [ ] Returns usage count and last-used date for every scripture reference on record.
-- [ ] Tested against the Firestore emulator.
+- [x] Returns usage count and last-used date for every scripture reference on record.
+- [x] Tested against the Firestore emulator.
 **Blocked by:** none.
 **User stories covered:** 4.
 

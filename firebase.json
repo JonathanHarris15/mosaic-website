@@ -1,44 +1,87 @@
 {
-  "hosting": {
-    "public": "public",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "headers": [
-      {
-        "//": "Firebase's default is an hour's cache on everything. Nothing here is content-hashed — calendar.js is always calendar.js — so for an hour after a deploy a browser can run the NEW page against the OLD script. Alpine swallows a binding to a member the old script never had, so the symptom is a screen that renders blank rather than an error: exactly the bug that hid this. ⚠ THIS COSTS A FULL RE-DOWNLOAD PER FILE, NOT A 304 — see the vendor block below. It is still right for these files, which genuinely can go stale; the way out is giving them a name that changes when they do, and then they can be cached like everything else.",
-        "source": "**/*.@(html|js|css)",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache"
-          }
-        ]
-      },
-      {
-        "//": "⚠ no-cache DOES NOT COST ONE 304 PER FILE ON THIS HOST. That is what the block above assumed, and it is wrong: asked about a no-cache file the browser already holds, Firebase Hosting sends the whole body back rather than 'nothing changed'. Measured against the live site — firebase-firestore-compat.js answers a conditional request with 200 and 84KB, while a font on max-age answers the same question with 304 and nothing. So every page visit re-downloaded ~200KB the browser was already holding, which on a phone was most of the wait before the page could even ask for its data. Third-party code is exempted here because it has the property the block above is missing: it changes name when it changes. alpine-3.15.12.min.js carries its version, and the Firebase files only move when somebody vendors a new SDK. That is ~128KB of the ~200. ⚠ IT MUST STAY BELOW THE no-cache BLOCK. The LAST matching block wins, not the first — put this above it and vendor/ silently keeps no-cache. Verified against the hosting emulator, not assumed.",
-        "source": "vendor/**",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=604800"
-          }
-        ]
-      },
-      {
-        "//": "Fonts and images ARE stable — a woff2 that changes gets a new name.",
-        "source": "**/*.@(woff|woff2|ttf|otf|png|jpg|jpeg|svg|webp|ico)",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=604800"
-          }
-        ]
-      }
-    ]
-  },
+  "hosting": [
+    {
+      "site": "mosaic-hymn-database",
+      "public": "public",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "headers": [
+        {
+          "//": "Firebase's default is an hour's cache on everything. Nothing here is content-hashed — calendar.js is always calendar.js — so for an hour after a deploy a browser can run the NEW page against the OLD script. Alpine swallows a binding to a member the old script never had, so the symptom is a screen that renders blank rather than an error: exactly the bug that hid this. ⚠ THIS COSTS A FULL RE-DOWNLOAD PER FILE, NOT A 304 — see the vendor block below. It is still right for these files, which genuinely can go stale; the way out is giving them a name that changes when they do, and then they can be cached like everything else.",
+          "source": "**/*.@(html|js|css)",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
+        },
+        {
+          "//": "⚠ no-cache DOES NOT COST ONE 304 PER FILE ON THIS HOST. That is what the block above assumed, and it is wrong: asked about a no-cache file the browser already holds, Firebase Hosting sends the whole body back rather than 'nothing changed'. Measured against the live site — firebase-firestore-compat.js answers a conditional request with 200 and 84KB, while a font on max-age answers the same question with 304 and nothing. So every page visit re-downloaded ~200KB the browser was already holding, which on a phone was most of the wait before the page could even ask for its data. Third-party code is exempted here because it has the property the block above is missing: it changes name when it changes. alpine-3.15.12.min.js carries its version, and the Firebase files only move when somebody vendors a new SDK. That is ~128KB of the ~200. ⚠ IT MUST STAY BELOW THE no-cache BLOCK. The LAST matching block wins, not the first — put this above it and vendor/ silently keeps no-cache. Verified against the hosting emulator, not assumed.",
+          "source": "vendor/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=604800"
+            }
+          ]
+        },
+        {
+          "//": "Fonts and images ARE stable — a woff2 that changes gets a new name.",
+          "source": "**/*.@(woff|woff2|ttf|otf|png|jpg|jpeg|svg|webp|ico)",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=604800"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "//": "The Order of Service MCP server (MS-262, ADR-0038) gets its OWN hosting site, and that is not tidiness — it is required. The OAuth discovery specs put /authorize, /token, /register and /revoke at the ROOT of whatever origin serves them, so hosting this on the church domain would claim all four there. Everything below is a rewrite to the single `mcp` function; mcp-site/ holds only a placeholder page for anyone who visits the bare domain. ⚠ The origin here must match MCP_ISSUER_URL in functions/index.js exactly — it is the issuer clients pin to and the audience every access token is minted for, so a mismatch means either nothing connects or passes minted elsewhere are accepted.",
+      "site": "mosaic-hymn-mcp",
+      "public": "mcp-site",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        {
+          "source": "/mcp",
+          "function": "mcp"
+        },
+        {
+          "source": "/authorize",
+          "function": "mcp"
+        },
+        {
+          "source": "/token",
+          "function": "mcp"
+        },
+        {
+          "source": "/register",
+          "function": "mcp"
+        },
+        {
+          "source": "/revoke",
+          "function": "mcp"
+        },
+        {
+          "source": "/oauth/**",
+          "function": "mcp"
+        },
+        {
+          "source": "/.well-known/**",
+          "function": "mcp"
+        }
+      ]
+    }
+  ],
   "functions": [
     {
       "//": "predeploy copies the pure domain modules the server shares with the browser into functions/shared. functions/ deploys as its own bundle and cannot require across into public/, and MS-20 needs RolesCore server-side to refuse an ineligible member (ADR-0030). One authored copy lives in public/; test/functions-shared-sync.test.js fails if the copy here is stale, so this hook is a safety net rather than the only thing keeping them in step.",

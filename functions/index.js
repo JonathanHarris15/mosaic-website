@@ -1,7 +1,7 @@
 const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
 const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
-const {defineSecret} = require("firebase-functions/params");
+const {defineSecret, defineString} = require("firebase-functions/params");
 const {log} = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const {
@@ -41,6 +41,22 @@ const usc = require("./shared/usage-stats-core.js");
 // Copied from public/ the same way; scoreTheme below is what actually calls
 // out to Firestore and the embedding API.
 const tsc = require("./shared/theme-similarity-core.js");
+// The Firestore half of oos_update_liturgy (MS-262) — takes a `db` for the
+// same reason as assignment-writes.js and trade-writes.js above. The
+// allowlist/shape decisions stay in shared/liturgy-save-core.js, pure.
+const lw = require("./liturgy-writes");
+// oos_get_scripture_heatmap's read (MS-262).
+const sh = require("./scripture-heatmap");
+// The hymn index read, shared by the getHymnIndex callable and the MCP
+// server's oos_get_hymn_history tool (MS-262).
+const hi = require("./hymn-index");
+// Theme similarity scoring + the Gemini embedding call, shared by the
+// scoreTheme callable, onServiceThemeWritten, and the MCP server's
+// oos_score_theme tool (MS-262).
+const ts = require("./theme-scoring");
+// The MCP server's HTTP app: the four oos_* tools behind an OAuth front
+// door (MS-262, ADR-0038).
+const mcpApp = require("./mcp-app");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -83,23 +99,9 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-/**
- * Cache for the hymn index to reduce Firestore read costs.
- * @type {Array<Object>|null}
- */
-let cachedIndex = null;
-
-/**
- * Timestamp of the last cache update in milliseconds.
- * @type {number}
- */
-let lastCacheTime = 0;
-
-/**
- * Cache Time-To-Live (TTL) in milliseconds.
- * @type {number}
- */
-const CACHE_TTL_MS = 1000 * 60 * 5; // 5 minutes
+// The hymn index cache moved to hymn-index.js with the read it belongs to
+// (MS-262), so the callable and the MCP server share one cache rather than
+// warming two.
 
 /**
  * A Callable Cloud Function that fetches the entire hymn index from Firestore.
@@ -120,41 +122,12 @@ const CACHE_TTL_MS = 1000 * 60 * 5; // 5 minutes
  * @property {Array<string>} tags - Descriptive tags for the hymn.
  * @property {string} database_url - Relative URL to the hymn details page.
  */
-exports.getHymnIndex = onCall({cors: true, region: "us-central1"}, async (request) => {
-  if (cachedIndex && (Date.now() - lastCacheTime < CACHE_TTL_MS)) {
-    log("Returning index from memory cache.");
-    return cachedIndex;
-  }
-
-  log("Function 'getHymnIndex' called. Fetching data from Firestore...");
-
-  const db = admin.firestore();
-
-  // 1. Query the entire 'hymns' collection
-  const hymnsSnapshot = await db.collection("hymns").orderBy("hymn_name").get();
-
-  // 2. Map the documents to the simpler index structure
-  const hymnIndexData = hymnsSnapshot.docs.map((doc) => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      hymn_name: data.hymn_name || "Unknown",
-      variations: data.versions ? data.versions.length : 0,
-      music_writer: data.music_writer || "Unknown",
-      lyrics_writer: data.lyrics_writer || "Unknown",
-      last_played_date: data.last_played_date || null,
-      times_played: data.times_played || 0,
-      tags: data.tags || [],
-      database_url: `/hymns/${doc.id}`,
-    };
-  });
-
-  log(`Returning index with ${hymnIndexData.length} hymns.`);
-  
-  cachedIndex = hymnIndexData;
-  lastCacheTime = Date.now();
-
-  return hymnIndexData;
+exports.getHymnIndex = onCall({cors: true, region: "us-central1"}, async () => {
+  // The read itself lives in hymn-index.js (MS-262) so the MCP server can
+  // serve the same list from the same code. Same query, same mapping, same
+  // 5-minute cache — moved, not rewritten.
+  log("Function 'getHymnIndex' called.");
+  return hi.getHymnIndex(admin.firestore(), log);
 });
 
 /**
@@ -1229,39 +1202,17 @@ exports.updatePastoralPrayerUsageStats = onDocumentWritten(
     },
 );
 
-// Service Theme similarity (docs/plans/theme-similarity.md). Vectors from
-// different models or dimensionalities are not comparable — changing either
-// constant means re-embedding the whole `themes` collection first.
-const THEME_EMBEDDING_MODEL = "gemini-embedding-001";
-const THEME_EMBEDDING_DIMS = 768;
-
-/**
- * Embeds one piece of text with the Gemini embedding API. `taskType:
- * SEMANTIC_SIMILARITY` matters — see the plan for why. Ported from the
- * spike's `embedOne` (scripts/spike/analyze-themes.js).
- * @param {string} text
- * @param {string} apiKey
- * @return {Promise<Array<number>>}
- */
-async function embedThemeText(text, apiKey) {
-  const url = "https://generativelanguage.googleapis.com/v1beta/models/" +
-      THEME_EMBEDDING_MODEL + ":embedContent?key=" + apiKey;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      model: "models/" + THEME_EMBEDDING_MODEL,
-      content: {parts: [{text: text}]},
-      taskType: "SEMANTIC_SIMILARITY",
-      outputDimensionality: THEME_EMBEDDING_DIMS,
-    }),
-  });
-  if (!res.ok) {
-    throw new Error(`Gemini embed failed: ${res.status} ${await res.text()}`);
-  }
-  const data = await res.json();
-  return data.embedding.values;
-}
+// Service Theme similarity (docs/plans/theme-similarity.md). The scoring, the
+// embedding call and the two constants that pin them live in
+// theme-scoring.js (MS-262) so the MCP server scores a theme through the very
+// same code this page does. Vectors from different models or dimensionalities
+// are not comparable — changing either constant means re-embedding the whole
+// `themes` collection first.
+const {
+  embedThemeText,
+  THEME_EMBEDDING_MODEL,
+  THEME_EMBEDDING_DIMS,
+} = ts;
 
 /**
  * How close a Service Theme an editor is typing is to one already preached,
@@ -1301,40 +1252,143 @@ exports.scoreTheme = onCall(
       // keystroke's score would match 100% against itself.
       const excludeDate = (request.data && request.data.excludeDate) || null;
 
-      const [candidateVector, corpusSnap] = await Promise.all([
-        embedThemeText(text, GEMINI_KEY.value()),
-        db.collection("themes").get(),
-      ]);
-
-      const corpus = [];
-      corpusSnap.forEach((doc) => {
-        const data = doc.data();
-        if (data.model !== THEME_EMBEDDING_MODEL ||
-            data.dims !== THEME_EMBEDDING_DIMS) {
-          throw new HttpsError("failed-precondition",
-              `themes/${doc.id} was embedded with a different model/size — ` +
-              "run scripts/backfill-theme-vectors.js before scoring again.");
+      try {
+        return await ts.scoreTheme(db, {
+          text,
+          excludeDate,
+          apiKey: GEMINI_KEY.value(),
+        });
+      } catch (e) {
+        if (e && e.reason === "stale-corpus") {
+          throw new HttpsError("failed-precondition", e.message);
         }
-        const dates = (data.usedOn || []).filter((d) => d !== excludeDate);
-        // Used only on the date being edited right now — that IS this
-        // draft, not a piece of history to compare it against.
-        if (!dates.length) return;
-        corpus.push({text: data.text, dates, vector: data.vector});
+        throw e;
+      }
+    },
+);
+
+/**
+ * MS-262 — merges a partial set of liturgy fields (theme, keyVerse, the 7
+ * hymn slots, the 6 scripture/text slots) into one Sunday's
+ * `services/{dateKey}` document, for the oos_update_liturgy MCP tool.
+ *
+ * Editor+ only, same floor as scoreTheme and every other liturgy write.
+ * Explicitly refuses any field outside that allowlist — see
+ * shared/liturgy-save-core.js — so a person-assignment field (Preacher,
+ * Service Leader, …) can never be set through this door; that needs a
+ * find-this-person tool this ticket does not build.
+ */
+exports.oosUpdateLiturgy = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Sign in to update an Order of Service.");
+      }
+
+      const db = admin.firestore();
+      const callerSnap = await db.collection("users").doc(request.auth.uid).get();
+      const level = callerSnap.exists &&
+          (callerSnap.data().permissionLevel || callerSnap.data().role);
+      if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
+        throw new HttpsError("permission-denied",
+            "Editors only — this changes the live Order of Service.");
+      }
+
+      const dateKey = (request.data && request.data.dateKey) || "";
+      const fields = (request.data && request.data.fields) || null;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+        throw new HttpsError("invalid-argument", "dateKey must be YYYY-MM-DD.");
+      }
+      if (!fields || typeof fields !== "object" || Array.isArray(fields) ||
+          !Object.keys(fields).length) {
+        throw new HttpsError("invalid-argument", "No liturgy fields given.");
+      }
+
+      const result = await lw.updateLiturgy(db, {
+        dateKey,
+        fields,
+        uid: request.auth.uid,
+        serverTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+        deleteField: admin.firestore.FieldValue.delete(),
       });
 
-      const {uniqueness, matches} = tsc.scoreCandidate(candidateVector, corpus);
+      if (!result.ok) {
+        throw new HttpsError("invalid-argument",
+            "Fields not allowed: " +
+            result.rejectedFields.concat(result.invalidFields).join(", "));
+      }
 
-      return {
-        uniqueness: uniqueness === null ? null : Math.round(uniqueness),
-        // Centered cosine, clamped to 0 at "no relation or opposite" — a
-        // negative centered similarity carries no useful "how close" meaning
-        // to show an editor, only "not this one".
-        matches: matches.map((m) => ({
-          text: m.text,
-          dates: m.dates,
-          closenessPercent: Math.round(Math.max(0, m.similarity) * 100),
-        })),
-      };
+      return {updated: Object.keys(fields)};
+    },
+);
+
+/**
+ * MS-262 — scripture usage across every Sunday on record, for the
+ * oos_get_scripture_heatmap MCP tool. Same shape and pattern as
+ * getHymnIndex; today `scripture_usage` is only read client-side, on the
+ * Analytics page (public/usage-stats-store.js).
+ */
+exports.oosGetScriptureHeatmap = onCall(
+    {cors: true, region: "us-central1"},
+    async () => sh.getScriptureHeatmap(admin.firestore()),
+);
+
+/**
+ * The Order of Service MCP server (MS-262, ADR-0038) — the door an AI
+ * assistant knocks on, and the OAuth front door in front of it.
+ *
+ * ⚠ THE PUBLIC URL IS PART OF THE SECURITY, not just configuration. It is
+ * the issuer clients pin to and the audience every pass is minted for, so a
+ * mismatch between MCP_ISSUER_URL and the URL clients actually reach means
+ * either nothing connects or — worse — passes are accepted that were minted
+ * for somewhere else. Set it to the exact origin serving this, no trailing
+ * slash, and change it only alongside the hosting rewrites.
+ *
+ * ⚠ THIS HAS ITS OWN HOSTING SITE, AND MUST. The OAuth discovery specs put
+ * /authorize, /token, /register and /revoke at the root of whatever origin
+ * hosts them — that is not a choice this code can make differently. Pointing
+ * the church's main domain at this would claim all four there, so it lives
+ * at mosaic-hymn-mcp.web.app instead (see the hosting block in
+ * firebase.json, which rewrites those paths plus /mcp and /.well-known here).
+ *
+ * The app is built once per instance and reused; it holds no per-caller
+ * state (the MCP server inside it is rebuilt per request — see
+ * mcp-server.js).
+ */
+const MCP_ISSUER_URL = defineString("MCP_ISSUER_URL", {
+  default: "https://mosaic-hymn-mcp.web.app",
+});
+
+// The same public config already served in public/auth.js. It identifies the
+// project to Firebase Auth; it is not a secret and never has been.
+const MCP_WEB_CONFIG = {
+  apiKey: "AIzaSyCJLgZP27CWayqFoqYoqg9mVdkhgCWqgbg",
+  authDomain: "mosaic-hymn-database.firebaseapp.com",
+  projectId: "mosaic-hymn-database",
+};
+
+let mcpAppPromise = null;
+
+exports.mcp = onRequest(
+    {cors: false, region: "us-central1", secrets: [GEMINI_KEY]},
+    async (req, res) => {
+      if (!mcpAppPromise) {
+        mcpAppPromise = mcpApp.buildApp({
+          db: admin.firestore(),
+          auth: admin.auth(),
+          issuerUrl: MCP_ISSUER_URL.value(),
+          webConfig: MCP_WEB_CONFIG,
+          geminiKey: () => GEMINI_KEY.value(),
+          fieldValues: {
+            serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
+            deleteField: () => admin.firestore.FieldValue.delete(),
+            // Passed in rather than reached for — see service-read.js.
+            documentId: () => admin.firestore.FieldPath.documentId(),
+          },
+        });
+      }
+      const app = await mcpAppPromise;
+      return app(req, res);
     },
 );
 

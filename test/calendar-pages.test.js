@@ -3204,7 +3204,13 @@ test('a deployed page is never left running against yesterday\'s script', () => 
     // swallows a binding to a member the old script never had, so the symptom is
     // a blank screen rather than an error: this cost an hour to find once.
     const config = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'firebase.json'), 'utf8'));
-    const headers = (config.hosting && config.hosting.headers) || [];
+    // `hosting` became a LIST when the MCP server got its own site (MS-262).
+    // These pages are the church website's, so find that site by name — not
+    // by position, which a third site could quietly change.
+    const site = (config.hosting || []).find(h => h.site === 'mosaic-hymn-database');
+    assert.ok(site, 'the church website is no longer in firebase.json under ' +
+        'the site id this cache rule was written for');
+    const headers = site.headers || [];
 
     const code = headers.find(h => /html\|js\|css|js\|css/.test(h.source || ''));
     assert.ok(code, 'nothing tells hosting to revalidate the pages and scripts');
