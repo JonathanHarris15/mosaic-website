@@ -104,8 +104,16 @@
 
         /* The guidance itself is written, not filled in — it wants the room,
            and the monospace makes its line breaks visible, which matter to
-           whoever reads it next. */
-        .mcp-body-input {
+           whoever reads it next.
+
+           ⚠ COMPOUNDED WITH `.m-input` ON PURPOSE, AND IT MUST STAY THAT WAY.
+           The component sets `textarea.m-input { min-height: 96px }`, which is
+           an element AND a class — so a bare `.mcp-body-input` loses to it no
+           matter how far down the file it sits, and the box silently stayed
+           nine lines tall while every rule below looked right. `.m-input` plus
+           this class outranks it. test/mcp-manager-page.test.js compares the
+           two for real rather than trusting the shape of the selector. */
+        .m-input.mcp-body-input {
             min-height: 300px;
             font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
             font-size: 13px; line-height: 1.65; tab-size: 2;
@@ -126,9 +134,9 @@
            it — a bigger one is left alone, and a smaller one is what this is
            lifting off anyway. Capped in px as well as vh so a tall monitor
            does not open a field longer than the screen it sits on. */
-        .mcp-body-input--tall { min-height: min(62vh, 620px); }
+        .m-input.mcp-body-input--tall { min-height: min(72vh, 760px); }
         @media (prefers-reduced-motion: reduce) {
-            .mcp-body-input { transition: none; }
+            .m-input.mcp-body-input { transition: none; }
         }
 
         .mcp-switchrow {
