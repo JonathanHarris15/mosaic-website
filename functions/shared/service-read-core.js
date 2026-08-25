@@ -30,6 +30,13 @@
 (function (global) {
     'use strict';
 
+    // The note helpers. Loaded the same way the other shared modules are:
+    // a global in the browser, a require under Node and in functions/.
+    const noteCore = (typeof require !== 'undefined' &&
+            typeof module !== 'undefined' && module.exports) ?
+        require('./service-note-core.js') :
+        (global && global.ServiceNoteCore);
+
     // The order the service runs in. An Order of Service read back
     // alphabetically is not an order of service — the sequence is the
     // meaning, so it is pinned here rather than left to object key order.
@@ -150,15 +157,23 @@
         const liturgy = doc.liturgy || {};
         const decidedBy = doc.decidedBy || {};
 
+        const notes = doc.notes || {};
         const rows = LITURGY_ORDER.map((field) => {
             const value = slotValue(liturgy[field]);
             const who = decidedBy[field];
+            // The note comes back as TEXT, not as the markup it is stored as.
+            // An assistant reading `<p>Bill is away</p>` would sooner or
+            // later echo the tags back into something, and it has no use for
+            // them either way.
+            const noteHtml = notes[field];
+            const noteText = noteHtml ? noteCore.noteHtmlToText(noteHtml) : '';
             return {
                 field,
                 label: LITURGY_LABELS[field] || field,
                 value,
                 filled: value !== null,
                 decidedBy: (who && who.name) || null,
+                note: noteText || null,
             };
         });
 
@@ -187,7 +202,6 @@
             // half-truth.
             irregularElements: doc.isIrregular ?
                 (doc.irregularElements || null) : null,
-            notes: doc.notes || null,
         };
     }
 

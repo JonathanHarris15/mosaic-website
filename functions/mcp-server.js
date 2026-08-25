@@ -33,6 +33,8 @@ const ts = require("./theme-scoring");
 const sh = require("./scripture-heatmap");
 const lw = require("./liturgy-writes");
 const sr = require("./service-read");
+const nw = require("./note-writes");
+const NoteCore = require("./shared/service-note-core.js");
 const LiturgySaveCore = require("./shared/liturgy-save-core.js");
 
 const SERVER_NAME = "mosaic-order-of-service";
@@ -294,6 +296,53 @@ async function buildServer({db, auth, geminiKey, fieldValues}) {
       book: book || "",
       limit: limit || undefined,
     }));
+  });
+
+  server.registerTool("oos_update_note", {
+    title: "Write the note on an element",
+    description:
+      "Sets the note attached to one element of a Sunday's Order of Service " +
+      "— the comment bubble the service leader reads: context, reminders, " +
+      "the reasoning behind a choice. This is separate from the element's " +
+      "value: writing a note about Hymn 1 does not change which hymn it is. " +
+      "Send plain text; send nothing (or an empty string) to remove the " +
+      "note. Blank lines start new paragraphs, lines beginning '- ' become " +
+      "bullets, and **text** and *text* become bold and italic. Do NOT send " +
+      "HTML — it is not accepted and will appear as literal characters. " +
+      "Read the Sunday first with oos_get_service: a note you overwrite is " +
+      "gone, and it may be somebody's reasoning rather than a stray remark.",
+    inputSchema: {
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+          .describe("The Sunday, YYYY-MM-DD"),
+      element: z.enum(NoteCore.NOTE_KEYS)
+          .describe("Which element the note belongs to"),
+      note: z.string().nullable().optional().describe(
+          "The note as plain text. Omit, or send an empty string, to " +
+          "remove the note entirely."),
+    },
+    annotations: {readOnlyHint: false, destructiveHint: false},
+  }, async ({date, element, note}) => {
+    if (!isEditor) {
+      return refuse("Editors only — this changes the live Order of Service.");
+    }
+    const result = await nw.updateNote(db, {
+      dateKey: date,
+      element,
+      text: note == null ? "" : note,
+      serverTimestamp: fieldValues.serverTimestamp(),
+      deleteField: fieldValues.deleteField(),
+    });
+    if (!result.ok) {
+      return refuse(
+          `"${result.element}" is not an element that carries a note. ` +
+          `Notes can go on: ${NoteCore.NOTE_KEYS.join(", ")}.`);
+    }
+    return jsonResult({
+      element: result.element,
+      action: result.action,
+      date,
+      note: result.html ? NoteCore.noteHtmlToText(result.html) : null,
+    });
   });
 
   server.registerTool("oos_update_liturgy", {

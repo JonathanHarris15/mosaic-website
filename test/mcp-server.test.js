@@ -30,6 +30,8 @@ const stubs = {
     scriptureLookup: () => ({scripture: [{reference: 'John 3:16', count: 2}], neverUsed: []}),
     getService: (d) => ({date: d, exists: true, theme: 'The God Who Rescues', liturgy: [], people: {}}),
     getServiceRange: (f, t) => ({services: [{date: f, exists: true}], truncated: false, limit: 26}),
+    updateNote: (a) => ({ok: true, action: a.text ? 'written' : 'cleared',
+        element: a.element, html: a.text ? '<p>' + a.text + '</p>' : null}),
 };
 
 // Swap the four data modules for recorders before mcp-server.js requires
@@ -78,6 +80,12 @@ function installStubs() {
         scoreTheme: async (db, args) => {
             calls.push(['theme-scoring', args]);
             return stubs.scoreTheme(args);
+        },
+    });
+    set('note-writes.js', {
+        updateNote: async (db, args) => {
+            calls.push(['note-writes', args]);
+            return stubs.updateNote(args);
         },
     });
     set('liturgy-writes.js', {
@@ -149,6 +157,7 @@ describe('the Order of Service MCP server', () => {
             'oos_lookup_scripture',
             'oos_score_theme',
             'oos_update_liturgy',
+            'oos_update_note',
         ]);
         names.forEach((n) => assert.ok(n.startsWith('oos_'), n));
     });
@@ -465,5 +474,73 @@ describe('the Order of Service MCP server', () => {
             (t) => t.name === 'oos_get_scripture_heatmap');
         assert.match(hymns.description, /oos_lookup_hymns/);
         assert.match(scripture.description, /oos_lookup_scripture/);
+    });
+
+    // -- The comment bubble ----------------------------------------------
+
+    test('a note reaches the note writer as plain text', async () => {
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_update_note',
+            arguments: {date: '2026-08-17', element: 'hymn1', note: 'Bill is away'},
+        });
+        assert.notStrictEqual(result.isError, true);
+        assert.strictEqual(calls[0][0], 'note-writes');
+        assert.strictEqual(calls[0][1].element, 'hymn1');
+        assert.strictEqual(calls[0][1].text, 'Bill is away');
+    });
+
+    test('omitting the note clears it rather than failing', async () => {
+        const {client} = await connectAs('editor');
+        await client.callTool({
+            name: 'oos_update_note',
+            arguments: {date: '2026-08-17', element: 'hymn1'},
+        });
+        assert.strictEqual(calls[0][1].text, '');
+    });
+
+    test('a member cannot write a note, and nothing reaches the writer', async () => {
+        const {client} = await connectAs('member');
+        const result = await client.callTool({
+            name: 'oos_update_note',
+            arguments: {date: '2026-08-17', element: 'hymn1', note: 'nope'},
+        });
+        assert.strictEqual(result.isError, true);
+        assert.strictEqual(calls.length, 0);
+    });
+
+    test('an element that carries no note is rejected by the schema', async () => {
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_update_note',
+            arguments: {date: '2026-08-17', element: 'preacher', note: 'x'},
+        });
+        assert.strictEqual(result.isError, true);
+        assert.strictEqual(calls.length, 0);
+    });
+
+    test('the note tool advertises which elements can carry one', async () => {
+        const {client} = await connectAs('editor');
+        const {tools} = await client.listTools();
+        const noteTool = tools.find((t) => t.name === 'oos_update_note');
+        const allowed = noteTool.inputSchema.properties.element.enum;
+        assert.ok(allowed.includes('hymn1'));
+        assert.ok(allowed.includes('baptism'));
+        assert.ok(!allowed.includes('preacher'));
+    });
+
+    test('the note tool tells the assistant not to send HTML', async () => {
+        // The steer is the first line of defence; the escaping is the second.
+        const {client} = await connectAs('editor');
+        const {tools} = await client.listTools();
+        const noteTool = tools.find((t) => t.name === 'oos_update_note');
+        assert.match(noteTool.description, /do not send html/i);
+    });
+
+    test('the note tool says a note is separate from the element value', async () => {
+        const {client} = await connectAs('editor');
+        const {tools} = await client.listTools();
+        const noteTool = tools.find((t) => t.name === 'oos_update_note');
+        assert.match(noteTool.description, /does not change which hymn/i);
     });
 });
