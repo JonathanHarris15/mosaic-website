@@ -45,6 +45,12 @@ function mcpManager() {
         endpoint: '',
         copied: false,
 
+        // The guidance box opens out the first time it is written in, and
+        // stays open until another file is picked. Not tied to focus — see the
+        // note on .mcp-body-input--tall for why losing focus must not shrink
+        // it while somebody is reaching for Save.
+        bodyOpen: false,
+
         // Which half is showing.
         tab: 'guidance',
 
@@ -117,6 +123,7 @@ function mcpManager() {
             this.showHistory = false;
             this.tab = 'guidance';
             this.phonePane = true;
+            this.bodyOpen = false;
         },
 
         select(file) {
@@ -132,6 +139,9 @@ function mcpManager() {
             };
             this.problems = [];
             this.dirty = false;
+            // A different file is a different piece of writing — it gets read
+            // before it gets edited, so the box starts closed again.
+            this.bodyOpen = false;
             this.loadHistory();
         },
 

@@ -109,6 +109,26 @@
             min-height: 300px;
             font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
             font-size: 13px; line-height: 1.65; tab-size: 2;
+            transition: min-height var(--duration) var(--ease-standard);
+        }
+        /* Clicking in is a decision to WRITE rather than to glance, so the box
+           takes the room for it. 300px is about nine lines: enough to see what
+           a file says, and not enough to work in.
+
+           ⚠ NOT `:focus`, AND THE REASON IS THE SAVE BUTTON. Blur fires on
+           mousedown, before the click completes — so a box that shrank when it
+           lost focus would pull the action bar up out from under the pointer
+           between pressing and releasing, and the press would land on nothing.
+           Once it is open it stays open, and picking another file resets it.
+
+           ⚠ min-height, NOT height. `textarea.m-input` leaves the drag handle
+           on, and someone who has pulled the box to their own size must keep
+           it — a bigger one is left alone, and a smaller one is what this is
+           lifting off anyway. Capped in px as well as vh so a tall monitor
+           does not open a field longer than the screen it sits on. */
+        .mcp-body-input--tall { min-height: min(62vh, 620px); }
+        @media (prefers-reduced-motion: reduce) {
+            .mcp-body-input { transition: none; }
         }
 
         .mcp-switchrow {
@@ -372,8 +392,10 @@
                                 <span class="mcp-count" x-text="wordCount"></span>
                             </div>
                             <textarea x-model="draft.body" @input="markDirty()"
+                                      @focus="bodyOpen = true"
                                       placeholder="Write it as instructions to a helpful person who is new to your church."
-                                      class="m-input mcp-body-input"></textarea>
+                                      class="m-input mcp-body-input"
+                                      :class="bodyOpen ? 'mcp-body-input--tall' : ''"></textarea>
                         </div>
 
                         <div class="mcp-switchrow">
