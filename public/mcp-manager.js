@@ -36,8 +36,22 @@ function mcpManager() {
         capabilitiesError: '',
         loadingCapabilities: false,
 
-        // Which half is showing on a narrow screen.
+        // ⚠ THE SERVER'S ADDRESS IS ASKED FOR, NEVER WRITTEN DOWN HERE. It is
+        // what an editor pastes into their assistant, and the origin it lives
+        // at is decided once, in functions/index.js. A copy kept in this file
+        // would be a second place for it to be right — and the failure of a
+        // wrong one is silent: the editor pastes it, the assistant cannot
+        // connect, and nothing on this page looks broken.
+        endpoint: '',
+        copied: false,
+
+        // Which half is showing.
         tab: 'guidance',
+
+        // On a phone the pane REPLACES the list rather than sitting under it,
+        // so the page has to know which of the two you are looking at. `.m-split`
+        // deliberately has no opinion about that.
+        phonePane: false,
 
         // ── Setup ────────────────────────────────────────────────────────
         async init() {
@@ -102,10 +116,12 @@ function mcpManager() {
             this.history = [];
             this.showHistory = false;
             this.tab = 'guidance';
+            this.phonePane = true;
         },
 
         select(file) {
             if (!this.confirmDiscard()) return;
+            this.phonePane = true;
             this.selectedId = file.id;
             this.draft = {
                 title: file.title || '',
@@ -124,8 +140,38 @@ function mcpManager() {
             return confirm('You have unsaved changes. Discard them?');
         },
 
+        // Back to the list on a phone. The unsaved check is the same one
+        // picking another file gets — leaving by the arrow loses just as much.
+        backToList() {
+            if (!this.confirmDiscard()) return;
+            this.dirty = false;
+            this.phonePane = false;
+        },
+
         markDirty() {
             this.dirty = true;
+        },
+
+        // Not a limit, a sense of length. Guidance that has grown past a
+        // screenful is usually two files.
+        get wordCount() {
+            const words = ((this.draft && this.draft.body) || '')
+                .trim().split(/\s+/).filter(Boolean).length;
+            return words + (words === 1 ? ' word' : ' words');
+        },
+
+        async copyAddress() {
+            if (!this.endpoint) return;
+            try {
+                await navigator.clipboard.writeText(this.endpoint);
+                this.copied = true;
+                clearTimeout(this._copyTimer);
+                this._copyTimer = setTimeout(() => { this.copied = false; }, 2000);
+            } catch (e) {
+                // Clipboard access can simply be refused. Saying so beats a
+                // button that looks like it worked.
+                alert('Could not copy it. The address is:\n\n' + this.endpoint);
+            }
         },
 
         // The address is derived from the title while a file is NEW, and left
@@ -200,26 +246,6 @@ function mcpManager() {
             }
         },
 
-        async toggleEnabled(file) {
-            const turningOff = file.enabled !== false;
-            if (turningOff && !confirm(
-                `Switch off "${file.title}"?\n\nThe assistant will stop being ` +
-                'able to read it — including by its address, not just in the list.')) {
-                return;
-            }
-            try {
-                await db.collection('mcp_guidance').doc(file.id)
-                    .update({enabled: !turningOff});
-                await this.loadFiles();
-                if (this.selectedId === file.id && this.draft) {
-                    this.draft.enabled = !turningOff;
-                }
-            } catch (e) {
-                console.error('Could not change that:', e);
-                alert('Could not change that.');
-            }
-        },
-
         async remove(file) {
             if (!confirm(
                 `Delete "${file.title}"?\n\nThis cannot be undone. If you only ` +
@@ -232,16 +258,15 @@ function mcpManager() {
                     this.selectedId = null;
                     this.draft = null;
                     this.dirty = false;
+                    // On a phone the pane was the whole screen; with nothing
+                    // open there is nothing to look at but the list.
+                    this.phonePane = false;
                 }
                 await this.loadFiles();
             } catch (e) {
                 console.error('Could not delete:', e);
                 alert('Could not delete that.');
             }
-        },
-
-        get enabledCount() {
-            return this.files.filter(f => f.enabled !== false).length;
         },
 
         // ── History ──────────────────────────────────────────────────────
@@ -328,6 +353,11 @@ The current wording is not lost — ` +
                 const call = firebase.functions().httpsCallable('mcpCapabilities');
                 const res = await call({});
                 this.capabilities = res.data;
+                // Empty rather than a guess if the server did not say. A
+                // "Copy address" button that copies the wrong address is worse
+                // than no button.
+                this.endpoint = (res.data && res.data.server &&
+                    res.data.server.endpoint) || '';
             } catch (e) {
                 console.error('Could not read what the MCP offers:', e);
                 // Said plainly rather than drawn as an empty list: "the server

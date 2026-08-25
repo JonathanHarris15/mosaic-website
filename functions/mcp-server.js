@@ -62,6 +62,17 @@ const SERVER_TITLE = "Mosaic Order of Service";
 const SEAL_PATH = "/mosaic-seal.png";
 const SEAL_SIZE = "328x328";
 
+/**
+ * The path an assistant is pointed at.
+ *
+ * ⚠ MOUNTED IN mcp-app.js, NAMED HERE. The MCP Manager page shows editors the
+ * address to paste into their assistant, and it asks for it rather than
+ * keeping its own copy — an address written down twice is an address that can
+ * be wrong in one of the places. test/mcp-hosting.test.js pins this against
+ * what the app actually mounts and what the hosting rewrites route.
+ */
+const MCP_ENDPOINT_PATH = "/mcp";
+
 const EDITOR_LEVELS = ["editor", "elder", "admin", "super_admin"];
 
 // One import, reused on a warm instance. Holds no per-caller state.
@@ -693,6 +704,7 @@ async function describeCapabilities(deps) {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   const client = new Client({name: "mcp-manager", version: SERVER_VERSION});
 
+
   try {
     await Promise.all([
       server.connect(serverSide),
@@ -704,7 +716,20 @@ async function describeCapabilities(deps) {
       client.listResources().catch(() => ({resources: []})),
     ]);
 
+    // Who the server says it is, asked through the handshake like everything
+    // else here — so the address the page shows an editor is the origin the
+    // server genuinely announces, not a second copy kept in the browser.
+    const identity = client.getServerVersion() || {};
+    const site = identity.websiteUrl || null;
+
     return {
+      server: {
+        name: identity.name || SERVER_NAME,
+        title: identity.title || identity.name || SERVER_NAME,
+        version: identity.version || SERVER_VERSION,
+        websiteUrl: site,
+        endpoint: site ? site + MCP_ENDPOINT_PATH : null,
+      },
       tools: (toolsResult.tools || []).map((t) => ({
         name: t.name,
         title: (t.annotations && t.annotations.title) || t.title || t.name,
@@ -733,6 +758,7 @@ module.exports = {
   buildServer,
   serverInfo,
   describeCapabilities,
+  MCP_ENDPOINT_PATH,
   liturgyFieldsShape,
   SERVER_NAME,
   SERVER_VERSION,

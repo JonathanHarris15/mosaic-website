@@ -25,10 +25,19 @@ const PUBLIC = path.join(__dirname, '..', 'public');
 // on purpose, which is the whole job of a specimen sheet.
 const NOT_A_PAGE = ['components-demo.html'];
 
-const desktopPages = () => fs.readdirSync(PUBLIC)
+// ⚠ ATTRIBUTES CAN COME BEFORE `class`. Matching only `<header class="m-header`
+// quietly excluded service-guide-manager.html, whose header opens with an
+// `x-show` — so the page was never covered by any of the guards below and
+// nobody could tell from a green run.
+const HEADER_OPEN = '<header[^>]*class="[^"]*m-header';
+const hasHeader = html => new RegExp(HEADER_OPEN).test(html);
+const countHeaders = html => (html.match(new RegExp(HEADER_OPEN, 'g')) || []).length;
+
+const allPages = () => fs.readdirSync(PUBLIC)
     .filter(f => f.endsWith('.html') && NOT_A_PAGE.indexOf(f) === -1)
-    .map(f => ({ name: f, html: fs.readFileSync(path.join(PUBLIC, f), 'utf8') }))
-    .filter(p => /<header class="m-header/.test(p.html));
+    .map(f => ({ name: f, html: fs.readFileSync(path.join(PUBLIC, f), 'utf8') }));
+
+const desktopPages = () => allPages().filter(p => hasHeader(p.html));
 
 test('no page sets a width on the header', () => {
     const guilty = desktopPages()
@@ -93,9 +102,54 @@ test('every other desktop page still has exactly one header', () => {
     // The sweep that stripped the widths edited sixteen files with a regex.
     // This is the guard that it took the attribute and nothing else.
     desktopPages().forEach(p => {
-        const opens = (p.html.match(/<header class="m-header/g) || []).length;
+        const opens = countHeaders(p.html);
         assert.strictEqual(opens, 1, p.name + ' has ' + opens + ' headers');
         assert.ok(/<div class="m-header__inner">/.test(p.html),
             p.name + ' lost its header inner');
     });
+});
+
+// ⚠ EVERY PAGE HAS THE BAR, AND THE EXCEPTIONS ARE NAMED HERE OR THEY ARE NOT
+// EXCEPTIONS. Every guard above only looks at pages that already have a
+// header, so a page built without one was invisible to all of them — which is
+// exactly how the MCP Manager shipped with a hand-rolled title row and no way
+// back, no account, and none of the phone metrics the shared bar carries. A
+// missing bar is not a missing style; it is a page you cannot leave.
+const NO_BAR_ON_PURPOSE = {
+    '404.html':
+        'not a page of the app — there is no Home to go back to from a URL ' +
+        'that does not exist, and no account to show somebody who may not ' +
+        'be signed in',
+    'mobile.html':
+        'the phone app own shell. It draws M.ui.TopBar, which is the thing ' +
+        '.m-header--compact was matched to rather than the other way round',
+    'relations-viewer.html':
+        'MS-233. A tool of its own rather than a page of the app; its bar ' +
+        'carries a search and the counts, and the account was moved into it',
+};
+
+test('every page of the app carries the shared bar', () => {
+    const bare = allPages()
+        .filter(p => !hasHeader(p.html))
+        .map(p => p.name);
+
+    const unexplained = bare.filter(name => !NO_BAR_ON_PURPOSE[name]);
+    assert.deepStrictEqual(unexplained, [],
+        'these pages have no `.m-header`, and no reason recorded for it: ' +
+        unexplained.join(', ') + '. A page without the bar has no way back, ' +
+        'no account, and none of the phone metrics — add the header, or add ' +
+        'the page to NO_BAR_ON_PURPOSE with the reason.');
+});
+
+test('an exception that has quietly grown a header stops being an exception', () => {
+    // The other half of the rule. A named exception that now has the bar is a
+    // note that has stopped being true, and a stale exception list is how the
+    // next page slips through.
+    const stale = Object.keys(NO_BAR_ON_PURPOSE)
+        .filter(name => fs.existsSync(path.join(PUBLIC, name)))
+        .filter(name => hasHeader(fs.readFileSync(path.join(PUBLIC, name), 'utf8')));
+
+    assert.deepStrictEqual(stale, [],
+        'these are listed as having no bar on purpose, but do have one now: ' +
+        stale.join(', '));
 });

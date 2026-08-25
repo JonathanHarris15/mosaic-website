@@ -25,6 +25,9 @@ const DEPS = (db) => ({
     db,
     auth: {uid: 'uid-1', permissionLevel: 'editor'},
     geminiKey: () => '',
+    // The origin the live server is given. Only the seal and the address the
+    // MCP Manager shows are built from it.
+    siteUrl: 'https://mosaic-hymn-mcp.web.app',
     fieldValues: {
         serverTimestamp: () => null,
         deleteField: () => null,

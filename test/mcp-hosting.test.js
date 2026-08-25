@@ -134,3 +134,24 @@ test('the sign-in page shows the seal and claims it as its icon', () => {
     assert.match(authSource, /<link rel="icon" href="\/mosaic-seal\.png"/);
     assert.match(authSource, /<img class="seal" src="\/mosaic-seal\.png"/);
 });
+
+test('the address the page hands out is the one that is actually mounted', () => {
+    // ⚠ THREE PLACES SAY WHERE /mcp IS, AND THEY HAVE TO AGREE. mcp-server.js
+    // names it so the MCP Manager can show an editor what to paste;
+    // mcp-app.js mounts the handler there; firebase.json routes the origin's
+    // path to the function. Break any one and the page confidently hands out
+    // an address that answers nothing.
+    const match = mcpServerSource.match(/const MCP_ENDPOINT_PATH = "([^"]+)"/);
+    assert.ok(match, 'MCP_ENDPOINT_PATH is gone from mcp-server.js');
+    const endpoint = match[1];
+
+    const appSource = fs.readFileSync(
+        path.join(ROOT, 'functions', 'mcp-app.js'), 'utf8');
+    assert.ok(appSource.includes(`app.post("${endpoint}"`),
+        `the app does not mount POST ${endpoint}`);
+    assert.ok(appSource.includes(`base + "${endpoint}"`),
+        `the resource URL every token is minted for is not ${endpoint}`);
+
+    assert.ok(sourcesOf().includes(endpoint),
+        `${endpoint} is not routed to the MCP function in firebase.json`);
+});

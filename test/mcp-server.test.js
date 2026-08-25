@@ -797,3 +797,52 @@ describe('the server\'s own identity', () => {
         assert.match(info.icons[0].src, /\/mosaic-seal\.png$/);
     });
 });
+
+// ── The manifest the MCP Manager page draws ──────────────────────────────
+//
+// ⚠ THE PAGE ASKS; IT DOES NOT KNOW. The address an editor pastes into their
+// assistant comes back through this, rather than being written down a second
+// time in the browser — because the failure of a wrong copy is silent. The
+// editor pastes it, nothing connects, and the page still looks fine.
+
+describe('what the MCP Manager is told', () => {
+    const describeCapabilities = (deps) =>
+        require(path.join(FUNCTIONS, 'mcp-server.js')).describeCapabilities(deps);
+
+    const deps = (siteUrl) => ({
+        db: DB,
+        auth: {uid: 'uid-1', permissionLevel: 'editor'},
+        geminiKey: () => 'fake-key',
+        fieldValues: FIELD_VALUES,
+        siteUrl,
+    });
+
+    test('the address an editor pastes is the origin the server announces', async () => {
+        const caps = await describeCapabilities(deps(SITE_URL));
+        assert.strictEqual(caps.server.endpoint,
+            'https://mosaic-hymn-mcp.web.app/mcp');
+        assert.strictEqual(caps.server.websiteUrl, SITE_URL);
+    });
+
+    test('the server names itself for a person as well as for a client', async () => {
+        const caps = await describeCapabilities(deps(SITE_URL));
+        assert.strictEqual(caps.server.name, 'mosaic-order-of-service');
+        assert.strictEqual(caps.server.title, 'Mosaic Order of Service');
+    });
+
+    test('⚠ with no origin the page is told nothing, not half an address', async () => {
+        // '/mcp' on its own would be copied and pasted, and would resolve
+        // against whatever the editor's assistant thinks is current.
+        const caps = await describeCapabilities(deps(undefined));
+        assert.strictEqual(caps.server.endpoint, null);
+        assert.strictEqual(caps.server.websiteUrl, null);
+        assert.ok(caps.tools.length, 'the tools should still be listed');
+    });
+
+    test('the tools still come back, still split by whether they can write', async () => {
+        const caps = await describeCapabilities(deps(SITE_URL));
+        const writes = caps.tools.filter(t => t.writes).map(t => t.name);
+        assert.ok(writes.includes('oos_update_liturgy'));
+        assert.ok(!writes.includes('oos_get_service'));
+    });
+});
