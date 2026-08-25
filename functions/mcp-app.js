@@ -96,6 +96,10 @@ async function buildApp({db, auth, issuerUrl, webConfig, geminiKey, fieldValues}
       auth: {uid: extra.uid, permissionLevel: extra.permissionLevel},
       geminiKey,
       fieldValues,
+      // The server announces its seal at this origin. Threaded from the one
+      // place that decides the origin rather than written down a second
+      // time, so a move cannot leave a dead image behind.
+      siteUrl: base,
     });
   });
 
@@ -129,6 +133,7 @@ function errorPage(message) {
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Could not connect</title>
+<link rel="icon" href="/mosaic-seal.png" type="image/png">
 <style>
   :root { color-scheme: light dark; }
   body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -140,10 +145,13 @@ function errorPage(message) {
   }
   .card { background: #fff; border: 1px solid #e2e5ea; border-radius: 12px;
           padding: 28px; width: min(380px, calc(100vw - 32px)); }
-  h1 { font-size: 1.1rem; margin: 0 0 8px; }
+  .seal { display: block; width: 48px; height: 48px; margin: 0 auto 12px; }
+  h1 { font-size: 1.1rem; margin: 0 0 8px; text-align: center; }
   p { margin: 0; font-size: .92rem; line-height: 1.5; opacity: .85; }
 </style></head>
-<body><div class="card"><h1>Could not connect</h1><p>${safe}</p></div></body></html>`;
+<body><div class="card">
+<img class="seal" src="/mosaic-seal.png" width="48" height="48" alt="">
+<h1>Could not connect</h1><p>${safe}</p></div></body></html>`;
 }
 
 module.exports = {buildApp, errorPage};

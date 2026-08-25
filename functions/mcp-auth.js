@@ -466,6 +466,7 @@ class FirebaseOAuthProvider {
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Connect to Mosaic</title>
+<link rel="icon" href="/mosaic-seal.png" type="image/png">
 <style>
   :root { color-scheme: light dark; }
   body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -480,8 +481,13 @@ class FirebaseOAuthProvider {
   .card { background: #fff; border: 1px solid #e2e5ea; border-radius: 12px;
           padding: 28px; width: min(380px, calc(100vw - 32px));
           box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-  h1 { font-size: 1.15rem; margin: 0 0 4px; }
-  p.sub { margin: 0 0 20px; font-size: .9rem; opacity: .75; line-height: 1.45; }
+  /* The seal is a static file on this same origin, not inlined: it is ~25KB
+     that would otherwise be base64'd into every render of this page. Sized
+     in CSS as well as in the tag so a slow image does not reflow the card. */
+  .seal { display: block; width: 60px; height: 60px; margin: 0 auto 14px; }
+  h1 { font-size: 1.15rem; margin: 0 0 4px; text-align: center; }
+  p.sub { margin: 0 0 20px; font-size: .9rem; opacity: .75; line-height: 1.45;
+          text-align: center; }
   label { display: block; font-size: .8rem; font-weight: 600; margin: 12px 0 5px; }
   input { width: 100%; box-sizing: border-box; padding: 9px 11px; font-size: .95rem;
           border: 1px solid #d3d7de; border-radius: 7px; }
@@ -494,6 +500,7 @@ class FirebaseOAuthProvider {
 </style>
 </head><body>
 <div class="card">
+  <img class="seal" src="/mosaic-seal.png" width="60" height="60" alt="">
   <h1>Connect to Mosaic</h1>
   <p class="sub"><strong>${safeName}</strong> is asking to read and edit your
      church's Order of Service. Sign in with your usual Mosaic account to allow it.</p>

@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Mosaic — Order of Service assistant</title>
 <meta name="robots" content="noindex">
+<link rel="icon" href="/mosaic-seal.png" type="image/png">
+<link rel="apple-touch-icon" href="/mosaic-seal.png">
 <style>
   :root { color-scheme: light dark; }
   body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -17,7 +19,8 @@
   }
   .card { background: #fff; border: 1px solid #e2e5ea; border-radius: 12px;
           padding: 30px; width: min(460px, calc(100vw - 32px)); line-height: 1.55; }
-  h1 { font-size: 1.15rem; margin: 0 0 10px; }
+  .seal { display: block; width: 64px; height: 64px; margin: 0 auto 16px; }
+  h1 { font-size: 1.15rem; margin: 0 0 10px; text-align: center; }
   p { margin: 0 0 12px; font-size: .93rem; opacity: .85; }
   p:last-child { margin-bottom: 0; }
   code { background: #f1f3f6; padding: 2px 6px; border-radius: 5px;
@@ -26,6 +29,7 @@
 </head>
 <body>
   <div class="card">
+    <img class="seal" src="/mosaic-seal.png" width="64" height="64" alt="">
     <h1>Order of Service assistant</h1>
     <p>There is no website here. This address exists so an AI assistant, such
        as Claude, can connect to Mosaic and help plan a Sunday's Order of

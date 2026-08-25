@@ -127,6 +127,10 @@ const FIELD_VALUES = {
     documentId: () => '<<document-id>>',
 };
 
+// The origin the fake server is told it lives at. Only the seal's URL is
+// built from it, so any absolute https URL will do here.
+const SITE_URL = 'https://mosaic-hymn-mcp.web.app';
+
 /** Connects a real MCP client to the server, as the given caller. */
 async function connectAs(permissionLevel) {
     const {Client} = await import(
@@ -140,6 +144,7 @@ async function connectAs(permissionLevel) {
         auth: {uid: 'uid-1', permissionLevel},
         geminiKey: () => 'fake-key',
         fieldValues: FIELD_VALUES,
+        siteUrl: SITE_URL,
     });
 
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
@@ -725,5 +730,70 @@ describe('the Order of Service MCP server', () => {
             arguments: {address: 'hymn-selection', body: 'Changed.'},
         });
         assert.match(textOf(result), /history/i);
+    });
+});
+
+// ── How the server introduces itself ─────────────────────────────────────
+//
+// ⚠ THE ONE PART OF THIS SERVER A PERSON SEES BEFORE ANYTHING WORKS. The
+// name, title and seal are drawn in a connector list, and the seal's URL is
+// fetched by that client from wherever it points — so a wrong URL here is a
+// broken picture on somebody else's machine and an exception nowhere.
+
+describe('the server\'s own identity', () => {
+    // ⚠ REQUIRED LAZILY, LIKE connectAs DOES. Requiring mcp-server.js while
+    // this file is still being read would load it before installStubs() has
+    // swapped the data modules out, and it would hold the real ones for the
+    // whole run — which surfaces as unrelated suites failing on a fake db.
+    const serverInfo = (url) =>
+        require(path.join(FUNCTIONS, 'mcp-server.js')).serverInfo(url);
+
+    test('the name a client keys off is stable, and the title is for people', () => {
+        const info = serverInfo(SITE_URL);
+        // Renaming this orphans every client already configured against it.
+        assert.strictEqual(info.name, 'mosaic-order-of-service');
+        assert.strictEqual(info.title, 'Mosaic Order of Service');
+    });
+
+    test('the seal is announced as an absolute URL on this server\'s origin', () => {
+        const info = serverInfo(SITE_URL);
+        assert.deepStrictEqual(info.icons, [{
+            src: 'https://mosaic-hymn-mcp.web.app/mosaic-seal.png',
+            mimeType: 'image/png',
+            sizes: ['328x328'],
+        }]);
+    });
+
+    test('a trailing slash on the origin does not become a doubled one', () => {
+        const info = serverInfo('https://mosaic-hymn-mcp.web.app/');
+        assert.strictEqual(info.icons[0].src,
+            'https://mosaic-hymn-mcp.web.app/mosaic-seal.png');
+    });
+
+    test('⚠ no origin means no icon, rather than a relative one', () => {
+        // A relative src resolves against the CLIENT, not this server, so it
+        // would fetch the seal from Claude's own domain and fail. Saying
+        // nothing is the honest answer.
+        [undefined, '', null, 'not-a-url', '/mosaic-seal.png'].forEach((bad) => {
+            const info = serverInfo(bad);
+            assert.strictEqual(info.icons, undefined, String(bad));
+            assert.strictEqual(info.websiteUrl, undefined, String(bad));
+            assert.strictEqual(info.name, 'mosaic-order-of-service',
+                'the server must still introduce itself without a seal');
+        });
+    });
+
+    test('a non-web origin is refused, so no client is sent to fetch a file:// path', () => {
+        assert.strictEqual(serverInfo('file:///seal.png').icons, undefined);
+        assert.strictEqual(serverInfo('javascript:alert(1)').icons, undefined);
+    });
+
+    test('a real connected client is handed the seal', async () => {
+        // Through the actual handshake rather than the helper, because the
+        // identity travels in the initialize response and nowhere else.
+        const {client} = await connectAs('editor');
+        const info = client.getServerVersion();
+        assert.strictEqual(info.title, 'Mosaic Order of Service');
+        assert.match(info.icons[0].src, /\/mosaic-seal\.png$/);
     });
 });

@@ -42,6 +42,25 @@ const LiturgySaveCore = require("./shared/liturgy-save-core.js");
 
 const SERVER_NAME = "mosaic-order-of-service";
 const SERVER_VERSION = "1.0.0";
+const SERVER_TITLE = "Mosaic Order of Service";
+
+/**
+ * The church seal, as a connected assistant may draw it.
+ *
+ * ⚠ IT MUST BE FETCHABLE WITHOUT SIGNING IN. A connector draws this in a
+ * list, long before anyone has a token — and in some clients before the
+ * server has ever been connected to. So it is a plain static file on the
+ * MCP's own hosting site (mcp-site/), not something behind /mcp.
+ *
+ * The wordless seal is used rather than the full logo on purpose: this is
+ * displayed at around 24-32px, where "MOSAIC CHURCH COLLEGE STATION" around
+ * the rim is an unreadable grey smudge. It is one copy of
+ * public/assets/mosaic-icon.png — test/mcp-hosting.test.js fails if the two
+ * drift apart, because the MCP site is a separate hosting target and cannot
+ * reach into the church site's files.
+ */
+const SEAL_PATH = "/mosaic-seal.png";
+const SEAL_SIZE = "328x328";
 
 const EDITOR_LEVELS = ["editor", "elder", "admin", "super_admin"];
 
@@ -118,6 +137,50 @@ function liturgyFieldsShape() {
 }
 
 /**
+ * How this server introduces itself: the name a client keys off, and the
+ * title and seal it shows a person.
+ *
+ * ⚠ NO ORIGIN MEANS NO ICON, RATHER THAN A GUESSED ONE. An icon `src` is
+ * fetched by the client from wherever it points, so a relative path or a
+ * hard-coded origin that has since moved gives a broken image in somebody's
+ * connector list — which looks like a broken server. Announcing no icon at
+ * all is the honest failure, and the only caller that omits the origin is a
+ * test.
+ *
+ * @param {string} [siteUrl] the MCP's own public base URL
+ * @return {object} the Implementation this server announces
+ */
+function serverInfo(siteUrl) {
+  const info = {
+    name: SERVER_NAME,
+    version: SERVER_VERSION,
+    title: SERVER_TITLE,
+  };
+
+  let origin = null;
+  try {
+    const parsed = new URL(String(siteUrl));
+    if (/^https?:$/.test(parsed.protocol)) {
+      origin = parsed.href.replace(/\/+$/, "");
+    }
+  } catch (e) {
+    origin = null;
+  }
+  if (!origin) return info;
+
+  info.websiteUrl = origin;
+  info.icons = [{
+    src: origin + SEAL_PATH,
+    mimeType: "image/png",
+    sizes: [SEAL_SIZE],
+    // No `theme`: the seal is a full-colour disc, legible on light and dark
+    // alike, so pinning it to one would only stop a client using it on the
+    // other.
+  }];
+  return info;
+}
+
+/**
  * Builds the server for ONE request, with the four tools bound to this
  * caller's identity.
  *
@@ -126,11 +189,12 @@ function liturgyFieldsShape() {
  * @param {object} deps.auth who is calling: {uid, permissionLevel}
  * @param {function(): string} deps.geminiKey reads the Gemini secret
  * @param {object} deps.fieldValues {serverTimestamp, deleteField, documentId}
+ * @param {string} [deps.siteUrl] the MCP's public base URL, for the seal
  * @return {Promise<object>} an McpServer with tools registered
  */
-async function buildServer({db, auth, geminiKey, fieldValues}) {
+async function buildServer({db, auth, geminiKey, fieldValues, siteUrl}) {
   const {McpServer, ResourceTemplate} = await loadSdk();
-  const server = new McpServer({name: SERVER_NAME, version: SERVER_VERSION});
+  const server = new McpServer(serverInfo(siteUrl));
 
   const isEditor = EDITOR_LEVELS.includes(auth && auth.permissionLevel);
 
@@ -667,6 +731,7 @@ async function describeCapabilities(deps) {
 module.exports = {
   handleMcpRequest,
   buildServer,
+  serverInfo,
   describeCapabilities,
   liturgyFieldsShape,
   SERVER_NAME,

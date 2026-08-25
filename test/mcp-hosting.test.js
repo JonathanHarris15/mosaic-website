@@ -78,3 +78,59 @@ test('the church website is still its own separate site', () => {
         r => ['/authorize', '/token', '/register', '/revoke'].includes(r.source)),
     'the OAuth root paths have leaked onto the church domain');
 });
+
+// ── The seal ─────────────────────────────────────────────────────────────
+//
+// ⚠ THE ICON URL IS FETCHED BY SOMEBODY ELSE'S CLIENT, BEFORE ANY SIGN-IN.
+// The server announces a `src` in its identity, and a connector goes and
+// gets it — unauthenticated, sometimes before it has ever connected. So the
+// failure mode for getting this wrong is not an exception anywhere in this
+// codebase: it is a broken image in a list on somebody's machine, which
+// reads as a broken server. Nothing else would catch it.
+
+const SEAL_FILE = 'mosaic-seal.png';
+const CHURCH_COPY = path.join(ROOT, 'public', 'assets', 'mosaic-icon.png');
+const MCP_COPY = path.join(ROOT, site.public, SEAL_FILE);
+
+const mcpServerSource = fs.readFileSync(
+    path.join(ROOT, 'functions', 'mcp-server.js'), 'utf8');
+
+test('the seal the server announces is a file that actually exists', () => {
+    const match = mcpServerSource.match(/const SEAL_PATH = "([^"]+)"/);
+    assert.ok(match, 'SEAL_PATH is gone from mcp-server.js — if the icon is ' +
+        'named some other way now, this guard needs to follow it there');
+
+    assert.strictEqual(match[1], `/${SEAL_FILE}`);
+    assert.ok(fs.existsSync(MCP_COPY),
+        `the server tells clients to fetch ${match[1]}, but ${site.public}/` +
+        `${SEAL_FILE} is not there — every connector would show a broken icon`);
+});
+
+test('the seal is served as a static file, not routed to the function', () => {
+    // It has to be reachable without a token. Anything the rewrites claim
+    // goes to the MCP function, which answers a bare GET with a 405.
+    sourcesOf().forEach(source => {
+        assert.notStrictEqual(source, `/${SEAL_FILE}`);
+        assert.ok(!(source.endsWith('/**') &&
+                    `/${SEAL_FILE}`.startsWith(source.slice(0, -2))),
+        `${source} swallows the seal, so it would need a sign-in to load`);
+    });
+});
+
+test('⚠ the MCP\'s copy of the seal has not drifted from the church site\'s', () => {
+    // The MCP is a separate hosting target and cannot reach into public/, so
+    // this is a real duplicate rather than a link. Two seals that quietly
+    // stop matching is the cost of that, and this is what stops it.
+    assert.ok(fs.readFileSync(CHURCH_COPY).equals(fs.readFileSync(MCP_COPY)),
+        `${site.public}/${SEAL_FILE} no longer matches public/assets/` +
+        'mosaic-icon.png — copy it across again');
+});
+
+test('the sign-in page shows the seal and claims it as its icon', () => {
+    // The one page a person looks at during the handshake. If it is bare,
+    // signing in reads like handing a password to an unbranded stranger.
+    const authSource = fs.readFileSync(
+        path.join(ROOT, 'functions', 'mcp-auth.js'), 'utf8');
+    assert.match(authSource, /<link rel="icon" href="\/mosaic-seal\.png"/);
+    assert.match(authSource, /<img class="seal" src="\/mosaic-seal\.png"/);
+});

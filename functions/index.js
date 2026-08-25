@@ -1421,6 +1421,10 @@ exports.mcpCapabilities = onCall(
 
       return mcpServer.describeCapabilities({
         db,
+        // Same origin the live server is given, so the throwaway server this
+        // builds is identical to the one an assistant talks to — which is
+        // the whole basis of this page's claim to be truthful.
+        siteUrl: MCP_ISSUER_URL.value(),
         // The manifest is the same whoever asks; this caller is only used
         // to decide which tools would be offered, and an editor sees all.
         auth: {uid: request.auth.uid, permissionLevel: level},
