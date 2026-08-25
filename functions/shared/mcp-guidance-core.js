@@ -122,6 +122,44 @@
         return problems;
     }
 
+    // Where a change came from. Worth recording separately from WHO, because
+    // "Jonathan, via the assistant" and "Jonathan, on the page" are different
+    // events even though the same person is answerable for both.
+    const SOURCES = Object.freeze(['page', 'assistant', 'restore']);
+
+    // The fields a version captures. A version is a FULL SNAPSHOT rather than
+    // a diff: restoring is then just writing it back, with no chain of
+    // patches to replay and no way for the chain to be wrong. These
+    // documents are small enough that storing them whole costs nothing worth
+    // saving.
+    const VERSIONED_FIELDS = Object.freeze(
+        ['title', 'slug', 'summary', 'body', 'enabled']);
+
+    // Did the writing actually change?
+    //
+    // ⚠ WHAT STOPS THE HISTORY FILLING WITH NOTHING. A save that changed no
+    // words still writes the document (the timestamp moves), and versioning
+    // every write would bury the three real edits under two hundred
+    // identical ones — which is the same as having no history.
+    function sameContent(a, b) {
+        if (!a || !b) return false;
+        return VERSIONED_FIELDS.every((f) => {
+            const left = f === 'enabled' ? (a[f] !== false) : String(a[f] || '');
+            const right = f === 'enabled' ? (b[f] !== false) : String(b[f] || '');
+            return left === right;
+        });
+    }
+
+    // The snapshot to file away, given the document as it now stands.
+    function snapshotOf(file) {
+        const f = file || {};
+        const out = {};
+        VERSIONED_FIELDS.forEach((k) => {
+            out[k] = k === 'enabled' ? (f[k] !== false) : (f[k] || '');
+        });
+        return out;
+    }
+
     /** The stored shape, cleaned up. Assumes validate() passed. */
     function normalize(file) {
         const f = file || {};
@@ -135,6 +173,10 @@
     }
 
     const McpGuidanceCore = {
+        SOURCES,
+        VERSIONED_FIELDS,
+        sameContent,
+        snapshotOf,
         URI_SCHEME,
         URI_PREFIX,
         SLUG_PATTERN,

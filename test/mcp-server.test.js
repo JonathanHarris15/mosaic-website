@@ -30,6 +30,7 @@ const stubs = {
     scriptureLookup: () => ({scripture: [{reference: 'John 3:16', count: 2}], neverUsed: []}),
     getService: (d) => ({date: d, exists: true, theme: 'The God Who Rescues', liturgy: [], people: {}}),
     getServiceRange: (f, t) => ({services: [{date: f, exists: true}], truncated: false, limit: 26}),
+    updateGuidance: (a) => ({ok: true, action: 'updated', slug: a.slug}),
     listGuidance: () => ([{slug: 'hymn-selection', title: 'Choosing hymns',
         summary: 'How we pick hymns.'}]),
     getGuidance: (slug) => (slug === 'hymn-selection' ?
@@ -85,6 +86,12 @@ function installStubs() {
         scoreTheme: async (db, args) => {
             calls.push(['theme-scoring', args]);
             return stubs.scoreTheme(args);
+        },
+    });
+    set('guidance-writes.js', {
+        updateGuidance: async (db, args) => {
+            calls.push(['guidance-write', args]);
+            return stubs.updateGuidance(args);
         },
     });
     set('guidance-store.js', {
@@ -173,6 +180,7 @@ describe('the Order of Service MCP server', () => {
             'oos_lookup_hymns',
             'oos_lookup_scripture',
             'oos_score_theme',
+            'oos_update_guidance',
             'oos_update_liturgy',
             'oos_update_note',
         ]);
@@ -635,5 +643,87 @@ describe('the Order of Service MCP server', () => {
         const res = await client.readResource(
             {uri: 'oos://guidance/hymn-selection'});
         assert.match(res.contents[0].text, /eight weeks/);
+    });
+
+    // -- The assistant editing its own instructions ----------------------
+
+    test('a guidance edit reaches the writer, stamped as coming from the assistant', async () => {
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_update_guidance',
+            arguments: {address: 'hymn-selection', body: 'Six weeks, not eight.'},
+        });
+        assert.notStrictEqual(result.isError, true);
+
+        const [, args] = calls[0];
+        assert.strictEqual(args.slug, 'hymn-selection');
+        assert.deepStrictEqual(args.fields, {body: 'Six weeks, not eight.'});
+        assert.strictEqual(args.source, 'assistant',
+            'a machine edit attributed to the page would corrupt the history');
+    });
+
+    test('only the fields sent are passed through, so the rest can stand', async () => {
+        const {client} = await connectAs('editor');
+        await client.callTool({
+            name: 'oos_update_guidance',
+            arguments: {address: 'hymn-selection', title: 'New title'},
+        });
+        assert.deepStrictEqual(calls[0][1].fields, {title: 'New title'});
+    });
+
+    test('a member cannot rewrite the guidance', async () => {
+        const {client} = await connectAs('member');
+        const result = await client.callTool({
+            name: 'oos_update_guidance',
+            arguments: {address: 'hymn-selection', body: 'nope'},
+        });
+        assert.strictEqual(result.isError, true);
+        assert.strictEqual(calls.length, 0);
+    });
+
+    test('an unusable address is refused with an example', async () => {
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_update_guidance',
+            arguments: {address: 'Not A Slug', body: 'x'},
+        });
+        assert.strictEqual(result.isError, true);
+        assert.match(textOf(result), /hymn-selection/);
+        assert.strictEqual(calls.length, 0);
+    });
+
+    test('sending nothing to change is refused rather than written as a no-op', async () => {
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_update_guidance', arguments: {address: 'hymn-selection'},
+        });
+        assert.strictEqual(result.isError, true);
+        assert.strictEqual(calls.length, 0);
+    });
+
+    test('⚠ the tool warns against writing down what it merely READ', async () => {
+        // The escalation this guards: wording planted in a note becoming a
+        // standing instruction the assistant follows for ever.
+        const {client} = await connectAs('editor');
+        const {tools} = await client.listTools();
+        const t = tools.find((x) => x.name === 'oos_update_guidance');
+        assert.match(t.description, /read rather than from the editor/i);
+        assert.match(t.description, /do not write it here/i);
+    });
+
+    test('the tool says a guidance edit outlasts the Sunday being planned', async () => {
+        const {client} = await connectAs('editor');
+        const {tools} = await client.listTools();
+        const t = tools.find((x) => x.name === 'oos_update_guidance');
+        assert.match(t.description, /every Sunday from now on/i);
+    });
+
+    test('the assistant is told the change is recorded and reversible', async () => {
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_update_guidance',
+            arguments: {address: 'hymn-selection', body: 'Changed.'},
+        });
+        assert.match(textOf(result), /history/i);
     });
 });

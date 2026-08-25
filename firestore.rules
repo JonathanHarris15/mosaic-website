@@ -691,6 +691,22 @@ service cloud.firestore {
     match /mcp_guidance/{fileId} {
       allow read: if isEditor();
       allow create, update, delete: if isEditor();
+
+      // The edit history. Editors READ it — that is the whole point, since
+      // it is what lets a bad change be spotted and rewound — but nobody
+      // writes it from a browser.
+      //
+      // ⚠ WRITTEN ONLY BY THE onGuidanceWritten TRIGGER, which the Admin
+      // SDK runs past these rules. A client write path here would let
+      // somebody edit the record of what they changed, which is the one
+      // thing a history must not allow: an account that can be edited by
+      // the person it is accounting for is not a history, it is a claim.
+      // Restoring an old version does NOT write here either — it writes the
+      // parent document, and the trigger files the restore as a new entry.
+      match /versions/{versionId} {
+        allow read: if isEditor();
+        allow write: if false;
+      }
     }
   }
 }

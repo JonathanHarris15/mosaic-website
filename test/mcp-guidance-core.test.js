@@ -138,3 +138,65 @@ test('enabled defaults to on, and only an explicit false turns it off', () => {
     assert.strictEqual(Core.normalize({enabled: undefined}).enabled, true);
     assert.strictEqual(Core.normalize({enabled: false}).enabled, false);
 });
+
+// ── Versioning: what the history trigger decides ─────────────────────────
+//
+// ⚠ THIS IS WHAT KEEPS THE HISTORY WORTH READING. A save that changed no
+// words still writes the document, and filing a version for every write
+// would bury three real edits under two hundred identical ones — which is
+// the same as having no history at all.
+
+test('identical content files no new version', () => {
+    const a = {title: 'T', slug: 's', summary: 'x', body: 'b', enabled: true};
+    assert.strictEqual(Core.sameContent(a, Object.assign({}, a)), true);
+});
+
+test('a change to any versioned field is a change', () => {
+    const base = {title: 'T', slug: 's', summary: 'x', body: 'b', enabled: true};
+    Core.VERSIONED_FIELDS.forEach((field) => {
+        const changed = Object.assign({}, base);
+        changed[field] = field === 'enabled' ? false : 'different';
+        assert.strictEqual(Core.sameContent(base, changed), false, field);
+    });
+});
+
+test('a moved timestamp alone is not a change', () => {
+    // The exact case: saving without editing anything.
+    const a = {title: 'T', slug: 's', summary: 'x', body: 'b', enabled: true,
+        updatedAt: 1, updatedByName: 'Alice'};
+    const b = {title: 'T', slug: 's', summary: 'x', body: 'b', enabled: true,
+        updatedAt: 2, updatedByName: 'Bob'};
+    assert.strictEqual(Core.sameContent(a, b), true);
+});
+
+test('a first write has nothing to compare against, so it always files', () => {
+    assert.strictEqual(Core.sameContent(null, {title: 'T'}), false);
+});
+
+test('enabled compares as a real toggle, not as whatever was stored', () => {
+    const on = {enabled: true}, missing = {}, off = {enabled: false};
+    assert.strictEqual(Core.sameContent(on, missing), true, 'absent means on');
+    assert.strictEqual(Core.sameContent(on, off), false);
+});
+
+test('a snapshot captures every versioned field and nothing else', () => {
+    const snap = Core.snapshotOf({
+        title: 'T', slug: 's', summary: 'x', body: 'b', enabled: true,
+        updatedByUid: 'uid-1', secret: 'should not travel',
+    });
+    assert.deepStrictEqual(Object.keys(snap).sort(),
+        Core.VERSIONED_FIELDS.slice().sort());
+    assert.strictEqual(snap.secret, undefined);
+});
+
+test('a snapshot round-trips, so restoring returns exactly what was filed', () => {
+    const original = {title: 'T', slug: 's', summary: 'x', body: 'b\n\nc',
+        enabled: false};
+    const snap = Core.snapshotOf(original);
+    assert.strictEqual(Core.sameContent(snap, original), true);
+});
+
+test('the sources are the three doors a change can come through', () => {
+    assert.deepStrictEqual(Core.SOURCES.slice().sort(),
+        ['assistant', 'page', 'restore']);
+});

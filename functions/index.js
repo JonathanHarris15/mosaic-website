@@ -59,6 +59,9 @@ const ts = require("./theme-scoring");
 const mcpApp = require("./mcp-app");
 // The tool/resource manifest behind the MCP Manager page (MS-262).
 const mcpServer = require("./mcp-server");
+// Guidance file writes, restores, and the shape of a version (MS-262).
+const gw = require("./guidance-writes");
+const guidanceCore = require("./shared/mcp-guidance-core.js");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -1336,6 +1339,60 @@ exports.oosGetScriptureHeatmap = onCall(
 );
 
 /**
+ * Keeps the edit history of every guidance file (MS-262).
+ *
+ * ⚠ A TRIGGER, NOT A LINE IN THE SAVE CODE. Guidance can be written from the
+ * MCP Manager page, from the assistant through oos_update_guidance, by a
+ * restore, and by whatever door gets added next. Recording the history at
+ * each of those means the first one somebody forgets goes unrecorded — and a
+ * history that covers some writers is worse than no history at all, because
+ * it reads as a complete account while quietly omitting half the edits.
+ * Hanging it off the write itself makes "every change is in the history" a
+ * property of the database rather than a promise each caller keeps.
+ *
+ * ⚠ A DELETED FILE KEEPS ITS HISTORY. The subcollection is deliberately not
+ * cleaned up: "what did that file say before somebody deleted it" is exactly
+ * the question this exists to answer.
+ *
+ * Versions are full snapshots rather than diffs, so restoring is just
+ * writing one back — no chain of patches to replay, and no way for the chain
+ * to be wrong.
+ */
+exports.onGuidanceWritten = onDocumentWritten(
+    {
+      document: "mcp_guidance/{fileId}",
+      region: "us-central1",
+    },
+    async (event) => {
+      const snap = event.data || {};
+      const after = snap.after && snap.after.exists ? snap.after.data() : null;
+      const before = snap.before && snap.before.exists ?
+        snap.before.data() : null;
+
+      // A delete leaves the history standing; there is no new state to file.
+      if (!after) return;
+
+      // ⚠ Nothing filed when the words did not move. A save that changed no
+      // content still writes the document, and versioning every write would
+      // bury three real edits under two hundred identical ones.
+      if (before && guidanceCore.sameContent(before, after)) return;
+
+      await admin.firestore()
+          .collection("mcp_guidance").doc(event.params.fileId)
+          .collection("versions")
+          .add(Object.assign(guidanceCore.snapshotOf(after), {
+            savedAt: admin.firestore.FieldValue.serverTimestamp(),
+            savedByUid: after.updatedByUid || null,
+            savedByName: after.updatedByName || null,
+            // "Jonathan, via the assistant" and "Jonathan, on the page" are
+            // different events even though the same person answers for both.
+            savedVia: after.updatedVia || "page",
+            firstVersion: !before,
+          }));
+    },
+);
+
+/**
  * What the MCP server actually offers, for the read-only half of the MCP
  * Manager page (MS-262).
  *
@@ -1374,6 +1431,52 @@ exports.mcpCapabilities = onCall(
           documentId: () => admin.firestore.FieldPath.documentId(),
         },
       });
+    },
+);
+
+/**
+ * Put an older version of a guidance file back (MS-262).
+ *
+ * A callable rather than a browser write, because a restore has to land as a
+ * NEW change with its own history entry, and getting that wrong from the
+ * client would quietly erase the evidence of whatever went wrong. Editor+,
+ * the same rung that can write guidance in the first place.
+ */
+exports.restoreGuidanceVersion = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Sign in first.");
+      }
+      const db = admin.firestore();
+      const callerSnap = await db.collection("users").doc(request.auth.uid).get();
+      const level = callerSnap.exists &&
+          (callerSnap.data().permissionLevel || callerSnap.data().role);
+      if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
+        throw new HttpsError("permission-denied", "Editors only.");
+      }
+
+      const {fileId, versionId} = request.data || {};
+      if (!fileId || !versionId) {
+        throw new HttpsError("invalid-argument", "Name the file and the version.");
+      }
+
+      const identity = await lw.resolveIdentity(db, request.auth.uid);
+      const result = await gw.restoreVersion(db, {
+        id: String(fileId),
+        versionId: String(versionId),
+        uid: request.auth.uid,
+        name: (identity && identity.name) || null,
+        serverTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      if (!result.ok) {
+        throw new HttpsError("not-found",
+            result.reason === "no-such-version" ?
+              "That version no longer exists." :
+              "That guidance file no longer exists.");
+      }
+      return result;
     },
 );
 

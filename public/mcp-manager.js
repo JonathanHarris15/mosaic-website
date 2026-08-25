@@ -28,6 +28,10 @@ function mcpManager() {
         saving: false,
         dirty: false,
 
+        history: [],
+        loadingHistory: false,
+        showHistory: false,
+
         capabilities: null,
         capabilitiesError: '',
         loadingCapabilities: false,
@@ -95,6 +99,8 @@ function mcpManager() {
             };
             this.problems = [];
             this.dirty = false;
+            this.history = [];
+            this.showHistory = false;
             this.tab = 'guidance';
         },
 
@@ -110,6 +116,7 @@ function mcpManager() {
             };
             this.problems = [];
             this.dirty = false;
+            this.loadHistory();
         },
 
         confirmDiscard() {
@@ -167,6 +174,10 @@ function mcpManager() {
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                     updatedByUid: user ? user.uid : null,
                     updatedByName: (this.currentPersonName || (user && user.email)) || null,
+                    // Stamped explicitly rather than left to the trigger's
+                    // default: "who" and "through which door" are different
+                    // questions, and the history answers both.
+                    updatedVia: 'page',
                 });
 
                 if (this.selectedId) {
@@ -177,6 +188,10 @@ function mcpManager() {
                 }
                 this.dirty = false;
                 await this.loadFiles();
+                // The trigger files the version a moment after the write, so
+                // this can race it. A refresh button below covers that rather
+                // than a guessed delay.
+                await this.loadHistory();
             } catch (e) {
                 console.error('Could not save:', e);
                 this.problems = ['Could not save. ' + (e.message || '')];
@@ -227,6 +242,82 @@ function mcpManager() {
 
         get enabledCount() {
             return this.files.filter(f => f.enabled !== false).length;
+        },
+
+        // ── History ──────────────────────────────────────────────────────
+        //
+        // ⚠ THIS IS WHAT MAKES LETTING THE ASSISTANT WRITE GUIDANCE SAFE.
+        // A guidance edit changes how the assistant behaves on every Sunday
+        // from then on, and nobody reads this page weekly. The protection is
+        // not that a bad edit cannot happen — it is that it cannot happen
+        // quietly or permanently.
+        async loadHistory() {
+            if (!this.selectedId) {
+                this.history = [];
+                return;
+            }
+            this.loadingHistory = true;
+            try {
+                const snap = await db.collection('mcp_guidance')
+                    .doc(this.selectedId)
+                    .collection('versions')
+                    .orderBy('savedAt', 'desc')
+                    .limit(50)
+                    .get();
+                this.history = snap.docs.map(d => Object.assign({id: d.id}, d.data()));
+            } catch (e) {
+                console.error('Could not load the history:', e);
+                this.history = [];
+            } finally {
+                this.loadingHistory = false;
+            }
+        },
+
+        whenSaved(version) {
+            const at = version && version.savedAt;
+            if (!at || !at.toDate) return 'just now';
+            return at.toDate().toLocaleString();
+        },
+
+        // Who, and through which door. The same person editing on the page
+        // and steering the assistant are different events worth telling apart.
+        whoSaved(version) {
+            const who = (version && version.savedByName) || 'Someone';
+            const via = version && version.savedVia;
+            if (via === 'assistant') return `${who}, via the assistant`;
+            if (via === 'restore') return `${who} put an older version back`;
+            return who;
+        },
+
+        // A version differing from what is on screen is the interesting kind.
+        isCurrent(version) {
+            return this.draft ? McpGuidanceCore.sameContent(version, this.draft) : false;
+        },
+
+        async restore(version) {
+            if (!confirm(
+                `Put this version back?
+
+Saved ${this.whenSaved(version)} by ` +
+                `${this.whoSaved(version)}.
+
+The current wording is not lost — ` +
+                'it stays in the history, so you can undo this too.')) {
+                return;
+            }
+            try {
+                const call = firebase.functions().httpsCallable('restoreGuidanceVersion');
+                await call({fileId: this.selectedId, versionId: version.id});
+                await this.loadFiles();
+                const file = this.files.find(f => f.id === this.selectedId);
+                if (file) {
+                    this.dirty = false;
+                    this.select(file);
+                }
+            } catch (e) {
+                console.error('Could not restore:', e);
+                alert('Could not put that version back. ' + (e.message || ''));
+            }
         },
 
         // ── What the server offers ───────────────────────────────────────

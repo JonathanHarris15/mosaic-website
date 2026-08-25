@@ -220,6 +220,68 @@
                                 Delete
                             </button>
                         </div>
+
+                        <!-- ── History ──────────────────────────────────────
+                             What makes letting the assistant write guidance
+                             safe. A bad edit changes every future Sunday and
+                             nobody reads this page weekly, so the protection
+                             is not that it cannot happen — it is that it
+                             cannot happen quietly or permanently. -->
+                        <div x-show="selectedId" class="mt-lg pt-md border-t border-outline-variant">
+                            <button @click="showHistory = !showHistory; if (showHistory) loadHistory()"
+                                    class="flex items-center gap-1 font-label-md text-label-md text-on-surface-variant hover:text-primary">
+                                <span class="material-symbols-outlined text-[18px]"
+                                      x-text="showHistory ? 'expand_less' : 'expand_more'"></span>
+                                <span>Edit history</span>
+                                <span x-show="history.length" class="text-on-surface-variant/70"
+                                      x-text="'(' + history.length + ')'"></span>
+                            </button>
+
+                            <div x-show="showHistory" x-cloak class="mt-sm">
+                                <div class="flex items-center gap-sm mb-xs">
+                                    <p class="font-body-sm text-body-sm text-on-surface-variant flex-1">
+                                        Every change, whoever made it. Putting an older version
+                                        back is itself recorded, so you can undo an undo.
+                                    </p>
+                                    <button @click="loadHistory()"
+                                            class="font-label-md text-label-md text-primary hover:underline shrink-0">
+                                        Refresh
+                                    </button>
+                                </div>
+
+                                <p x-show="loadingHistory"
+                                   class="font-body-sm text-body-sm text-on-surface-variant py-sm">Loading…</p>
+
+                                <p x-show="!loadingHistory && !history.length"
+                                   class="font-body-sm text-body-sm text-on-surface-variant py-sm">
+                                    No history yet. It starts from the next change.
+                                </p>
+
+                                <template x-for="v in history" :key="v.id">
+                                    <div class="border-t border-outline-variant/50 py-sm flex items-start gap-sm">
+                                        <span class="material-symbols-outlined text-[18px] mt-0.5 shrink-0"
+                                              :class="v.savedVia === 'assistant' ? 'text-secondary' : 'text-on-surface-variant'"
+                                              x-text="v.savedVia === 'assistant' ? 'smart_toy' : (v.savedVia === 'restore' ? 'history' : 'person')"></span>
+                                        <div class="min-w-0 flex-1">
+                                            <div class="font-label-md text-label-md text-on-surface"
+                                                 x-text="whoSaved(v)"></div>
+                                            <div class="font-body-sm text-body-sm text-on-surface-variant"
+                                                 x-text="whenSaved(v) + (v.firstVersion ? ' — created' : '')"></div>
+                                            <div class="font-body-sm text-body-sm text-on-surface-variant/80 mt-1 line-clamp-2"
+                                                 x-text="v.body"></div>
+                                        </div>
+                                        <button x-show="!isCurrent(v)" @click="restore(v)"
+                                                class="font-label-md text-label-md text-primary hover:underline shrink-0">
+                                            Put back
+                                        </button>
+                                        <span x-show="isCurrent(v)"
+                                              class="font-body-sm text-body-sm text-on-surface-variant/70 shrink-0">
+                                            current
+                                        </span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
