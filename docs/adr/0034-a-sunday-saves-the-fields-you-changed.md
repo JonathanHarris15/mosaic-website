@@ -3,7 +3,8 @@
 **Status:** Accepted
 **Date:** 2026-08-14
 **Extends:** [ADR 0032](0032-a-page-saves-itself-a-dialog-does-not.md) (the Order of Service autosaves, 3s after the last edit).
-**Leads to:** [ADR 0035](0035-one-person-per-box.md) (which decides what happens when two people want the same field).
+**Leads to:** [ADR 0035](0035-one-person-per-box.md) (which decides what happens when two people want the same field)
+and [ADR 0039](0039-a-list-is-the-field-a-diff-cannot-split.md) (the one field this diff cannot split — a list).
 
 ## Context
 

@@ -28,6 +28,7 @@ const {
     applyFlatFieldPath,
     pickSaveFields,
     remoteAdoptions,
+    serviceSnapshot,
 } = require('../public/service-builder.js');
 
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -320,4 +321,67 @@ test('the page subscribes to its own Sunday', () => {
     page.watchRemoteChanges();   // twice must not mean two listeners
 
     assert.deepStrictEqual(calls, [['services', '2026-08-16']]);
+});
+
+// ── The music helpers survive somebody else's change (MS-277) ──────────────
+//
+// The list was the one thing the live listener swapped out rather than brought
+// in line. Every helper box on screen was left holding an object that was no
+// longer on the model, so the next name typed into one went nowhere and the
+// boxes went on showing whoever used to be in them.
+
+test("another editor's helper arrives without unhooking my helper boxes", () => {
+    const page = loadPage();
+    page.service.musicHelpers = [{ id: 'p-1', name: 'Ann Lee', _rowId: 'row-1' }];
+    page.originalService = JSON.stringify(page.service);
+
+    // What the box on screen is holding — personPicker takes this object once
+    // and mutates it from then on.
+    const annsBox = page.service.musicHelpers[0];
+
+    page.adoptRemoteChanges(snapshot({
+        musicHelpers: [{ id: 'p-1', name: 'Ann Lee' }, { id: 'p-2', name: 'Ben Ross' }]
+    }));
+
+    assert.deepStrictEqual(page.service.musicHelpers.map(h => h.name), ['Ann Lee', 'Ben Ross']);
+    assert.strictEqual(page.service.musicHelpers[0], annsBox,
+        "Ann's box is holding an object that is no longer on the model");
+    assert.ok(page.service.musicHelpers[1]._rowId, 'the new helper has no row to be drawn on');
+});
+
+test('a helper picked after a remote change is the one that gets saved', () => {
+    const page = loadPage();
+    page.service.musicHelpers = [{ id: 'p-1', name: 'Ann Lee', _rowId: 'row-1' }];
+    page.originalService = JSON.stringify(page.service);
+    const annsBox = page.service.musicHelpers[0];
+
+    page.adoptRemoteChanges(snapshot({
+        musicHelpers: [{ id: 'p-1', name: 'Ann Lee' }, { id: 'p-2', name: 'Ben Ross' }]
+    }));
+
+    // personPicker.select() on the first box.
+    annsBox.id = 'p-9';
+    annsBox.name = 'Nina Voss';
+
+    const flat = flattenServiceForSave(page.service);
+    assert.deepStrictEqual(flat.musicHelpers, [
+        { name: 'Nina Voss', id: 'p-9' },
+        { name: 'Ben Ross', id: 'p-2' },
+    ]);
+});
+
+test('adopting a change nobody made leaves the Sunday looking saved', () => {
+    // Row handles are minted while adopting. If they reached the snapshot the
+    // page compares against, every remote change would leave the Sunday
+    // permanently "unsaved" and the 3s autosave would write it back.
+    const page = loadPage();
+    page.service.musicHelpers = [{ id: 'p-1', name: 'Ann Lee', _rowId: 'row-1' }];
+    page.originalService = serviceSnapshot(page.service);
+
+    page.adoptRemoteChanges(snapshot({
+        musicHelpers: [{ id: 'p-1', name: 'Ann Lee' }, { id: 'p-2', name: 'Ben Ross' }]
+    }));
+
+    assert.strictEqual(page.isDirty, false,
+        'a change I merely received reads as work of mine that has not saved');
 });

@@ -567,3 +567,71 @@ test('both pages clear their claim on the way out, not refresh it', () => {
             `${file} should leave, not release, on unload`);
     });
 });
+
+// ── The music box (MS-277) ────────────────────────────────────────────────
+//
+// Every other field on a Sunday is safe to edit two-up because ADR-0034 writes
+// only the fields you changed, and two editors on different fields therefore
+// produce disjoint writes. `musicHelpers` is the exception: it is a LIST, and a
+// list is compared whole and written whole. Two men each adding a helper is not
+// a disjoint write — whoever's timer lands second writes his whole list over
+// the other's, and a helper vanishes with nothing to show he was ever there.
+//
+// ADR-0035 already decided what to do with the conflict field-level saves
+// cannot make disjoint: refuse it at the door. So the music box is claimed the
+// way a liturgy row is.
+
+test('the music box is claimed, so two men cannot write the helper list at once', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const src = fs.readFileSync(
+        path.join(__dirname, '..', 'public', 'service-builder.js'), 'utf8');
+
+    assert.match(src, /takeMusicBox\(\)\s*\{[\s\S]{0,220}PresenceStore\.claim\(/,
+        'the music box takes no claim, so the helper list is still last-write-wins');
+    assert.match(src, /get heldByMusic\(\)[\s\S]{0,220}ServicePresence\.holderOf\(/,
+        'nothing reads who is holding the music box');
+});
+
+test('a music box somebody else holds does not open', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const html = fs.readFileSync(
+        path.join(__dirname, '..', 'public', 'service-builder.html'), 'utf8');
+
+    // Every control in the box: the leader, each helper, add and remove.
+    const musicBox = html.slice(
+        html.indexOf('data-field-key="musicLeader"'),
+        html.indexOf('data-field-key="preacher"'));
+
+    assert.ok(musicBox.length > 0, 'the music box was not found in the markup');
+    assert.ok(/Add Music Helper/.test(musicBox), 'sliced the wrong region');
+
+    const disablers = musicBox.match(/:disabled="[^"]*"/g) || [];
+    assert.ok(disablers.length >= 4, 'expected the leader, helper, remove and add controls');
+    disablers.forEach(d => {
+        assert.match(d, /heldByMusic/,
+            'a control in the music box stays live while somebody else holds it: ' + d);
+    });
+
+    assert.match(musicBox, /x-if="heldByMusic"/,
+        'a held box must carry the holder\'s face and name — "you cannot type here" '
+        + 'has to be answered before it is asked');
+});
+
+test('claiming the box comes before editing it, never after', () => {
+    // ADR-0035 §3, learned the hard way: presence may remove a lock, never an
+    // editor. A focus that edits without claiming is the clobber back again.
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const html = fs.readFileSync(
+        path.join(__dirname, '..', 'public', 'service-builder.html'), 'utf8');
+    const musicBox = html.slice(
+        html.indexOf('data-field-key="musicLeader"'),
+        html.indexOf('data-field-key="preacher"'));
+
+    (musicBox.match(/@focus="[^"]*"/g) || []).forEach(handler => {
+        assert.match(handler, /takeMusicBox\(\)\s*&&/,
+            'a box that is typed into without being claimed first: ' + handler);
+    });
+});

@@ -67,6 +67,140 @@ function normalizeDottedKeys(raw) {
 // whoever owns it, so a partial write of it would mean less, not more.
 const NESTED_SAVE_MAPS = ['liturgy', 'notes'];
 
+// ── Row identity for the lists a person is picked into (MS-277) ─────────────
+//
+// Music Helpers, Baptism Candidates and the irregular elements are LISTS, and
+// each row of one mounts its own picker. A picker takes the entry OBJECT once,
+// when its row is first drawn, and mutates that object forever after — see
+// personPicker.
+//
+// Alpine reuses a row when its `:key` is unchanged: it refreshes the loop
+// variable and leaves the row's x-data alone. So a list keyed by POSITION hands
+// row 0 the second helper's data while row 0's picker is still wired to the
+// first helper's object. Take Ann out of [Ann, Ben] and the row reads "Ann"
+// while the document says "Ben", and the next name typed into it goes into an
+// object no longer on the model — saved nowhere, with nothing on screen to say
+// so. That is the whole "music assignments switch around" bug.
+//
+// So a row is keyed by the ENTRY, not by where the entry sits. `_rowId` is that
+// key: a handle for the screen, minted when an entry appears and carried for as
+// long as it lives.
+//
+// It is deliberately NOT part of the Sunday. flattenServiceForSave strips it,
+// so it never reaches Firestore, and serviceSnapshot strips it, so it never
+// makes a Sunday look edited.
+const ROW_ID = '_rowId';
+let _rowIdSeq = 0;
+
+// A locally-created row: nothing else can be holding this id.
+function newRowId() {
+    _rowIdSeq += 1;
+    return 'row-' + _rowIdSeq;
+}
+
+// A row that arrived from the document rather than from this screen. Derived
+// from the entry rather than from a counter because applyFlatFieldPath runs
+// over BOTH the live model and the loaded snapshot, and two counter values
+// would leave those two disagreeing about a Sunday nobody had edited — which
+// reads as permanently unsaved and autosaves in a loop.
+function derivedRowId(entry, index) {
+    const id = entry && entry.id;
+    return id ? 'p:' + id : 'n:' + index;
+}
+
+// Deep copy with every `_rowId` left behind.
+function withoutRowIds(value) {
+    if (value === undefined) return value;
+    return JSON.parse(JSON.stringify(value, (k, v) => (k === ROW_ID ? undefined : v)));
+}
+
+// The editor's model as a string to compare against — what `isDirty` asks and
+// what a save records as "this is now what is stored". Row ids are screen state,
+// so a Sunday whose rows were merely re-keyed is not a Sunday with unsaved work.
+function serviceSnapshot(service) {
+    return JSON.stringify(service, (k, v) => (k === ROW_ID ? undefined : v));
+}
+
+// A list of Person references, brought in line with `incoming` WITHOUT
+// replacing the objects the pickers hold.
+//
+// The same care liturgy slots already get (see applyFlatFieldPath: "Preserve
+// reference for components like hymnPicker"), for the lists that were missing
+// it. An entry that is still in the list keeps its object and its row; one that
+// has gone takes its row with it; a new one gets a new object and a new row.
+//
+// Matched by Person id first, so somebody who merely moved up the list keeps
+// the row they are in. Unlinked entries — a half-typed name with no Person yet
+// — are matched in the order they are left in, which is the only order they
+// have.
+function reconcilePersonList(current, incoming) {
+    const list = Array.isArray(current) ? current : [];
+    const next = Array.isArray(incoming) ? incoming : [];
+
+    const byId = new Map();
+    const unlinked = [];
+    for (const entry of list) {
+        if (entry && entry.id) {
+            if (!byId.has(entry.id)) byId.set(entry.id, entry);
+        } else if (entry) {
+            unlinked.push(entry);
+        }
+    }
+
+    const out = [];
+    next.forEach((raw, index) => {
+        const wanted = raw || {};
+        let kept = null;
+        if (wanted.id && byId.has(wanted.id)) {
+            kept = byId.get(wanted.id);
+            byId.delete(wanted.id);
+        } else if (!wanted.id && unlinked.length) {
+            kept = unlinked.shift();
+        }
+
+        if (kept) {
+            kept.id = wanted.id || null;
+            kept.name = wanted.name || '';
+            out.push(kept);
+            return;
+        }
+
+        const made = { name: wanted.name || '', id: wanted.id || null };
+        made[ROW_ID] = derivedRowId(wanted, index);
+        out.push(made);
+    });
+
+    // In place: the array itself is bound to the x-for, so a fresh one would
+    // leave every row on screen looking at a list the model no longer has.
+    list.length = 0;
+    list.push(...out);
+    return list;
+}
+
+// Stamp row ids onto a list of Person references read out of the document.
+function withRowIds(entries) {
+    return (Array.isArray(entries) ? entries : []).map(entry => {
+        const row = { name: (entry && entry.name) || '', id: (entry && entry.id) || null };
+        row[ROW_ID] = newRowId();
+        return row;
+    });
+}
+
+// The same, for a list whose entries are not Person references — the irregular
+// elements, which are {key, type, value} and carry a picker of their own. Kept
+// whole rather than rebuilt to a known shape, because an element's `value` is
+// whatever its type says it is.
+//
+// `derived` mints ids from position for the adoption path, where this runs over
+// both the live model and the loaded snapshot and the two must not diverge.
+function stampRowIds(entries, derived) {
+    return (Array.isArray(entries) ? entries : []).map((entry, index) => {
+        const row = Object.assign({}, entry);
+        if (!row[ROW_ID]) row[ROW_ID] = derived ? 'e:' + index : newRowId();
+        return row;
+    });
+}
+
 // The editor's nested in-memory model, flattened to the shape the `services`
 // document actually stores (name and id side by side rather than a ref object).
 // Pure, and the same function is run over the loaded snapshot and over the
@@ -98,9 +232,14 @@ function flattenServiceForSave(service) {
         hasBaptism: s.hasBaptism,
         removedHymns: s.removedHymns || [],
         isIrregular: s.isIrregular,
-        irregularElements: s.irregularElements,
+        // Both carry lists whose rows are keyed by `_rowId` (irregular elements
+        // directly, liturgy through its Baptism Candidates). The id is a handle
+        // for the screen, so it is left behind on the way to the document — and
+        // on the way into changedFieldPaths, or re-keying a row would read as a
+        // changed field and write a Sunday nobody edited.
+        irregularElements: withoutRowIds(s.irregularElements),
         notes: s.notes,
-        liturgy: s.liturgy
+        liturgy: withoutRowIds(s.liturgy)
     };
 }
 
@@ -200,6 +339,12 @@ function applyFlatFieldPath(service, path, value) {
         if (bothPlainObjects) {
             for (const key of Object.keys(current)) delete current[key];
             Object.assign(current, value);
+        } else if (map === 'liturgy' && slot === 'baptism') {
+            // Baptism Candidates are a list of Person references with a picker
+            // per row, so they are brought in line rather than swapped out —
+            // same reason as the slot above, and see reconcilePersonList.
+            if (!Array.isArray(service[map][slot])) service[map][slot] = [];
+            reconcilePersonList(service[map][slot], value);
         } else {
             service[map][slot] = value;
         }
@@ -213,6 +358,25 @@ function applyFlatFieldPath(service, path, value) {
             service[key] = { id: null, name: '' };
         }
         service[key][leaf] = value;
+        return true;
+    }
+
+    if (path === 'musicHelpers') {
+        // A list of Person references with a picker per row. Replacing the
+        // array — which is what this used to do — left every helper box on
+        // screen holding an object that was no longer on the model, so the next
+        // name typed into one went nowhere. The hymn slots above have always
+        // been careful about this; the helper list was not.
+        if (!Array.isArray(service.musicHelpers)) service.musicHelpers = [];
+        reconcilePersonList(service.musicHelpers, value);
+        return true;
+    }
+
+    if (path === 'irregularElements') {
+        // Rebuilt wholesale by whoever owns it (see NESTED_SAVE_MAPS), so the
+        // rows are rebuilt with it — but they still need ids, or the x-for has
+        // nothing to key on.
+        service.irregularElements = stampRowIds(value, true);
         return true;
     }
 
@@ -635,7 +799,7 @@ function serviceForm() {
         },
 
         get isDirty() {
-            return this.originalService !== JSON.stringify(this.service);
+            return this.originalService !== serviceSnapshot(this.service);
         },
 
         // This Sunday as an Event occurrence, which is what the Roles tab mounts
@@ -887,15 +1051,17 @@ function serviceForm() {
                 this.service.theme = data.theme || '';
                 this.service.keyVerse = data.keyVerse || '';
                 this.service.isIrregular = data.isIrregular || false;
-                this.service.irregularElements = data.irregularElements || [];
+                // Row ids so a drag, or somebody else's change, cannot leave a
+                // row's picker wired to the element that used to be in it.
+                this.service.irregularElements = stampRowIds(data.irregularElements);
                 
                 this.service.serviceLeader.name = data.serviceLeader || '';
                 this.service.serviceLeader.id = data.serviceLeaderId || null;
                 this.service.musicLeader.name = data.musicLeader || '';
                 this.service.musicLeader.id = data.musicLeaderId || null;
-                this.service.musicHelpers = Array.isArray(data.musicHelpers)
-                    ? data.musicHelpers.map(h => ({ name: h.name || '', id: h.id || null }))
-                    : [];
+                // Row ids so each helper box is drawn against the helper it is
+                // wired to, rather than against whatever is in that position.
+                this.service.musicHelpers = withRowIds(data.musicHelpers);
                 this.service.preacher.name = data.preacher || '';
                 this.service.preacher.id = data.preacherId || null;
                 
@@ -934,7 +1100,8 @@ function serviceForm() {
                 // Normalize Baptism Candidates to an array of Person refs. A legacy
                 // free-text value (pre-migration) is wrapped as a single literal
                 // candidate so it still displays; the migration resolves it properly.
-                this.service.liturgy.baptism = coerceBaptismCandidates(this.service.liturgy.baptism);
+                this.service.liturgy.baptism = withRowIds(
+                    coerceBaptismCandidates(this.service.liturgy.baptism));
                 // Who decided each element (MS-246). Read-only on this page —
                 // it is written by the save, never edited directly — so it is
                 // kept off flattenServiceForSave and moved by hand.
@@ -952,7 +1119,7 @@ function serviceForm() {
                     this._guideEngaged = (typeof data.guideSystem === 'string') || GuideStore.isV2Guide(data.guide);
                 }
             }
-            this.originalService = JSON.stringify(this.service);
+            this.originalService = serviceSnapshot(this.service);
         },
 
         // ── Prayer Requests (pastoral-prayer subjects) ─────────────────────────
@@ -1128,7 +1295,7 @@ function serviceForm() {
                         });
                     }
                 }
-                this.service.irregularElements = elements;
+                this.service.irregularElements = stampRowIds(elements);
                 this.service.isIrregular = true;
                 this.$nextTick(() => this.initSortable());
             } else {
@@ -1150,7 +1317,7 @@ function serviceForm() {
         },
 
         addBlankElement() {
-            this.service.irregularElements.push({ key: '', value: '', type: 'text' });
+            this.service.irregularElements.push({ key: '', value: '', type: 'text', [ROW_ID]: newRowId() });
         },
 
         removeElement(index) {
@@ -1519,7 +1686,7 @@ function serviceForm() {
                 await batch.commit();
                 committed = true;
                 this._docExists = true;
-                this.originalService = JSON.stringify(this.service);
+                this.originalService = serviceSnapshot(this.service);
                 console.log('Service and involvements saved successfully.');
             } catch (e) {
                 // An autosave that fails stays quiet — the "Unsaved changes"
@@ -1629,7 +1796,7 @@ function serviceForm() {
                 }
             }
 
-            if (adopted) this.originalService = JSON.stringify(original);
+            if (adopted) this.originalService = serviceSnapshot(original);
         },
 
         scheduleSave() {
@@ -1866,6 +2033,44 @@ function serviceForm() {
             return PresenceStore.claim(this.date, 'liturgy.' + key);
         },
 
+        // ── The music box (MS-277) ──────────────────────────────────────────
+        //
+        // The Music Leader and the Music Helpers under him are ONE box, because
+        // the helpers are one FIELD: `musicHelpers` is a list, and ADR-0034
+        // compares a list whole and writes it whole ("a list is edited as a
+        // list"). So two men each adding a helper is not the disjoint write
+        // that saves every other slot — whoever's timer lands second writes his
+        // whole list over the other's, and a helper disappears with nothing to
+        // show it ever arrived.
+        //
+        // That is the last of the clobber ADR-0034 removed everywhere else, and
+        // ADR-0035 already decided what to do with a conflict that field-level
+        // saves cannot make disjoint: prevent it at the door rather than
+        // resolve it afterwards. So the music box is claimed like a liturgy
+        // row, and one man at a time writes it.
+        //
+        // Leader and helpers together rather than a box each: they are one box
+        // on screen already, and it is the same act — settling who is on music
+        // this Sunday.
+        MUSIC_BOX: 'musicLeader',
+
+        takeMusicBox() {
+            if (!this.canEdit) return true;
+            if (this.heldByMusic) return false;
+            return PresenceStore.claim(this.date, this.MUSIC_BOX);
+        },
+
+        // Whoever else is in the music box, or null. Read off presenceEntries
+        // rather than the store so Alpine redraws when they arrive or go.
+        get heldByMusic() {
+            if (!this.user) return null;
+            return ServicePresence.holderOf(
+                this.presenceEntries, this.user.uid, this.date, this.MUSIC_BOX, Date.now());
+        },
+
+        get musicHeldLabel() { return ServicePresence.holderLabel(this.heldByMusic); },
+        get musicHeldTitle() { return ServicePresence.holderTitle(this.heldByMusic); },
+
         // Whoever else is in this row, or null. Read off presenceEntries rather
         // than the store so Alpine re-renders when somebody arrives or leaves.
         heldBy(key) {
@@ -1942,7 +2147,7 @@ function serviceForm() {
 
         // ── Music Helpers ────────────────────────────────────────────────────
         addMusicHelper() {
-            this.service.musicHelpers.push({ name: '', id: null });
+            this.service.musicHelpers.push({ name: '', id: null, [ROW_ID]: newRowId() });
         },
 
         removeMusicHelper(index) {
@@ -1972,7 +2177,7 @@ function serviceForm() {
         // ── Baptism Candidates ───────────────────────────────────────────────
         addBaptismCandidate() {
             if (!Array.isArray(this.service.liturgy.baptism)) this.service.liturgy.baptism = [];
-            this.service.liturgy.baptism.push({ name: '', id: null });
+            this.service.liturgy.baptism.push({ name: '', id: null, [ROW_ID]: newRowId() });
         },
 
         removeBaptismCandidate(index) {
@@ -2612,5 +2817,5 @@ function hymnPicker(hymnRef, parent = null) {
 
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions };
+    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions, ROW_ID, newRowId, withRowIds, stampRowIds, reconcilePersonList, serviceSnapshot };
 }

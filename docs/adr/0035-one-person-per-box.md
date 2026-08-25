@@ -3,6 +3,8 @@
 **Status:** Accepted
 **Date:** 2026-08-14
 **Follows:** [ADR 0034](0034-a-sunday-saves-the-fields-you-changed.md), which removed every conflict except this one.
+**Leads to:** [ADR 0039](0039-a-list-is-the-field-a-diff-cannot-split.md), which applies this decision to the field
+ADR-0034's diff could not make disjoint.
 
 ## Context
 
