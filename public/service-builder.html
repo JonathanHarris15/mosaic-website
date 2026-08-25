@@ -77,6 +77,12 @@
            progress rather than as something broken. */
         .station-held { cursor: not-allowed; background: var(--surface-container-low); }
         .station-held > span:not(.held-badge) { opacity: .55; }
+        /* Same idea for the music box (MS-277), which is a column of pickers
+           rather than a row of spans, so it fades its boxes and leaves the
+           label and the holder's face at full strength. */
+        .music-held { cursor: not-allowed; }
+        .music-held > div:not(.field-label) { opacity: .55; }
+        .music-held button { cursor: not-allowed; }
         .station-chevron { transition: transform .2s ease; }
         .note-card { transition: border-color .15s ease; }
         .note-card:hover { border-color: var(--note-border) !important; }
@@ -466,14 +472,36 @@
                     </div>
                 </div>
 
-                <!-- Music Leader (+ helpers) -->
-                <div class="min-w-[210px]" data-field-key="musicLeader">
-                    <div class="field-label mb-1.5">Music Leader</div>
+                <!-- Music Leader (+ helpers) — ONE box (MS-277). The helpers are
+                     a list, and a list is written whole, so two editors in here
+                     at once is the one conflict field-level saves cannot make
+                     disjoint. ADR-0035: refuse it at the door. -->
+                <div class="min-w-[210px]" data-field-key="musicLeader" :class="heldByMusic ? 'music-held' : ''">
+                    <div class="field-label mb-1.5 flex items-center gap-2">
+                        <span>Music Leader</span>
+                        <!-- Who is in this box. A face and a name, so "you can't
+                             type here" is answered before it is asked. -->
+                        <template x-if="heldByMusic">
+                            <span class="held-badge flex items-center gap-1.5" :title="musicHeldTitle">
+                                <span class="m-avatar m-avatar--sm">
+                                    <template x-if="heldByMusic.photoUrl">
+                                        <img :src="heldByMusic.photoUrl" alt=""
+                                             :style="PersonPhotoCore.frameStyle(heldByMusic.photoCrop)">
+                                    </template>
+                                    <template x-if="!heldByMusic.photoUrl">
+                                        <span x-text="PersonPhotoCore.initialsOf(heldByMusic.name)"></span>
+                                    </template>
+                                </span>
+                                <span class="font-label-md text-[10px] uppercase tracking-wider text-secondary/70" x-text="musicHeldLabel"></span>
+                                <span class="material-symbols-outlined text-[14px] text-secondary/50">lock</span>
+                            </span>
+                        </template>
+                    </div>
                     <div x-data="personPicker(service.musicLeader, $data, null, 'musicLeader')" @click.away="open = false" class="relative w-full max-w-[230px]">
                         <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-2">
-                            <input type="text" id="music-leader-search" name="music-leader" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit">
+                            <input type="text" id="music-leader-search" name="music-leader" placeholder="Search people..." x-model="query" @focus="takeMusicBox() && onFocus($el)" @click="takeMusicBox() && onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-sm" :disabled="!canEdit || !!heldByMusic">
                             <div class="flex items-center gap-1">
-                                <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit">
+                                <button x-show="query" @click="clear()" class="text-secondary hover:text-primary transition-colors cursor-pointer" :disabled="!canEdit || !!heldByMusic">
                                     <span class="material-symbols-outlined text-[18px]">close</span>
                                 </button>
                                 <span class="material-symbols-outlined text-[18px] text-secondary">person</span>
@@ -491,15 +519,20 @@
                             </template>
                         </div>
                     </div>
-                    <!-- Music Helpers -->
-                    <template x-for="(hlp, idx) in service.musicHelpers" :key="idx">
+                    <!-- Music Helpers.
+                         KEYED BY THE HELPER, NOT BY THE ROW. Keyed by position,
+                         Alpine reused a row and left its picker wired to the
+                         helper that used to be there — so taking one out left
+                         the boxes showing the wrong people and typing into them
+                         wrote nowhere. See ROW_ID in service-builder.js. -->
+                    <template x-for="(hlp, idx) in service.musicHelpers" :key="hlp._rowId || 'i' + idx">
                         <div class="mt-2 pl-3 border-l-2 border-outline-variant/40 max-w-[230px]">
                             <div x-data="personPicker(hlp, $data, null, 'musicHelpers')" @click.away="open = false" class="relative">
                                 <div class="flex items-center bg-surface-container-low rounded-lg border border-outline-variant px-3 py-1.5">
                                     <span class="font-label-md text-[9px] uppercase tracking-wider text-secondary/70 mr-2 whitespace-nowrap">with</span>
-                                    <input type="text" placeholder="Search people..." x-model="query" @focus="onFocus($el)" @click="onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-xs" :disabled="!canEdit">
+                                    <input type="text" placeholder="Search people..." x-model="query" @focus="takeMusicBox() && onFocus($el)" @click="takeMusicBox() && onFocus($el)" @input.debounce="onInput($el)" class="bg-transparent border-none p-0 w-full focus:ring-0 text-xs" :disabled="!canEdit || !!heldByMusic">
                                     <div class="flex items-center gap-1">
-                                        <button @click="removeMusicHelper(idx)" class="text-secondary hover:text-red-500 transition-colors cursor-pointer" :disabled="!canEdit" title="Remove helper">
+                                        <button @click="takeMusicBox() && removeMusicHelper(idx)" class="text-secondary hover:text-red-500 transition-colors cursor-pointer" :disabled="!canEdit || !!heldByMusic" title="Remove helper">
                                             <span class="material-symbols-outlined text-[16px]">close</span>
                                         </button>
                                     </div>
@@ -518,7 +551,7 @@
                             </div>
                         </div>
                     </template>
-                    <button x-show="canEdit" @click="addMusicHelper()" class="mt-2 text-[10px] font-label-md uppercase tracking-wider text-secondary/50 hover:text-primary transition-colors flex items-center gap-1">
+                    <button x-show="canEdit" @click="takeMusicBox() && addMusicHelper()" :disabled="!!heldByMusic" class="mt-2 text-[10px] font-label-md uppercase tracking-wider text-secondary/50 hover:text-primary transition-colors flex items-center gap-1">
                         <span class="material-symbols-outlined text-[14px]">add</span> Add Music Helper
                     </button>
                 </div>
@@ -1021,7 +1054,9 @@
                                                         <template x-if="item.type === 'baptism'">
                                                             <div>
                                                                 <div class="font-label-md text-[10px] font-semibold tracking-[.1em] uppercase text-primary mb-2">Baptism Candidates</div>
-                                                                <template x-for="(cand, idx) in service.liturgy.baptism" :key="idx">
+                                                                <!-- Keyed by the candidate, not the row — same
+                                                                     reason as the Music Helpers above. -->
+                                                                <template x-for="(cand, idx) in service.liturgy.baptism" :key="cand._rowId || 'i' + idx">
                                                                     <div class="mb-2">
                                                                         <div x-data="personPicker(cand, $data)" @click.away="open = false" class="relative">
                                                                             <div class="flex items-center bg-white rounded-lg border border-outline-variant px-3 py-2">
@@ -1137,7 +1172,10 @@
         <template x-if="service.isIrregular">
             <div class="max-w-3xl mx-auto space-y-4">
                 <div id="irregular-elements-list" class="space-y-2">
-                    <template x-for="(el, index) in service.irregularElements" :key="index">
+                    <!-- Keyed by the element, not the row. These are DRAGGABLE,
+                         so keying by position meant a reorder left every picker
+                         on screen editing somebody else's element. -->
+                    <template x-for="(el, index) in service.irregularElements" :key="el._rowId || 'i' + index">
                         <div class="bg-white border border-outline-variant rounded-xl p-4 shadow-sm flex items-start gap-4 group">
                             <!-- Drag Handle -->
                             <div class="drag-handle cursor-grab active:cursor-grabbing text-secondary/30 hover:text-primary transition-colors py-2" x-show="canEdit">
