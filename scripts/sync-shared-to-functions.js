@@ -43,6 +43,7 @@ const MODULES = [
     'usage-stats-core.js',
     'theme-similarity-core.js',
     'liturgy-save-core.js',
+    'mcp-guidance-core.js',
     'service-note-core.js',
     'service-read-core.js',
     'mosaic-identity.js',

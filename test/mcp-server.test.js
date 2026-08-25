@@ -30,6 +30,11 @@ const stubs = {
     scriptureLookup: () => ({scripture: [{reference: 'John 3:16', count: 2}], neverUsed: []}),
     getService: (d) => ({date: d, exists: true, theme: 'The God Who Rescues', liturgy: [], people: {}}),
     getServiceRange: (f, t) => ({services: [{date: f, exists: true}], truncated: false, limit: 26}),
+    listGuidance: () => ([{slug: 'hymn-selection', title: 'Choosing hymns',
+        summary: 'How we pick hymns.'}]),
+    getGuidance: (slug) => (slug === 'hymn-selection' ?
+        {slug, title: 'Choosing hymns', summary: 'How we pick hymns.',
+            body: 'Prefer something not sung in eight weeks.'} : null),
     updateNote: (a) => ({ok: true, action: a.text ? 'written' : 'cleared',
         element: a.element, html: a.text ? '<p>' + a.text + '</p>' : null}),
 };
@@ -80,6 +85,16 @@ function installStubs() {
         scoreTheme: async (db, args) => {
             calls.push(['theme-scoring', args]);
             return stubs.scoreTheme(args);
+        },
+    });
+    set('guidance-store.js', {
+        listGuidance: async (db) => {
+            calls.push(['guidance-list', db]);
+            return stubs.listGuidance();
+        },
+        getGuidance: async (db, slug) => {
+            calls.push(['guidance-get', slug]);
+            return stubs.getGuidance(slug);
         },
     });
     set('note-writes.js', {
@@ -150,9 +165,11 @@ describe('the Order of Service MCP server', () => {
         const names = tools.map((t) => t.name).sort();
 
         assert.deepStrictEqual(names, [
+            'oos_get_guidance',
             'oos_get_hymn_history',
             'oos_get_scripture_heatmap',
             'oos_get_service',
+            'oos_list_guidance',
             'oos_lookup_hymns',
             'oos_lookup_scripture',
             'oos_score_theme',
@@ -542,5 +559,81 @@ describe('the Order of Service MCP server', () => {
         const {tools} = await client.listTools();
         const noteTool = tools.find((t) => t.name === 'oos_update_note');
         assert.match(noteTool.description, /does not change which hymn/i);
+    });
+
+    // -- Guidance --------------------------------------------------------
+
+    test('the guidance list reaches the guidance store', async () => {
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_list_guidance', arguments: {},
+        });
+        assert.ok(textOf(result).includes('hymn-selection'));
+        assert.strictEqual(calls[0][0], 'guidance-list');
+    });
+
+    test('an empty library says so rather than looking like a failure', async () => {
+        const previous = stubs.listGuidance;
+        stubs.listGuidance = () => [];
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_list_guidance', arguments: {},
+        });
+        assert.notStrictEqual(result.isError, true);
+        assert.match(textOf(result), /No guidance has been written yet/i);
+        stubs.listGuidance = previous;
+    });
+
+    test('a guidance file is fetched by its address', async () => {
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_get_guidance', arguments: {address: 'hymn-selection'},
+        });
+        assert.ok(textOf(result).includes('eight weeks'));
+        assert.deepStrictEqual(calls[0], ['guidance-get', 'hymn-selection']);
+    });
+
+    test('a full URI works as an address too', async () => {
+        const {client} = await connectAs('editor');
+        await client.callTool({
+            name: 'oos_get_guidance',
+            arguments: {address: 'oos://guidance/hymn-selection'},
+        });
+        assert.deepStrictEqual(calls[0], ['guidance-get', 'hymn-selection']);
+    });
+
+    test('⚠ a missing guidance file is named, not returned as an empty one', async () => {
+        // An assistant handed nothing would follow no guidance and never say so.
+        const {client} = await connectAs('editor');
+        const result = await client.callTool({
+            name: 'oos_get_guidance', arguments: {address: 'never-written'},
+        });
+        assert.strictEqual(result.isError, true);
+        assert.match(textOf(result), /no guidance file/i);
+        assert.match(textOf(result), /oos_list_guidance/);
+    });
+
+    test('the guidance tools tell the assistant to prefer them over its own instincts', async () => {
+        const {client} = await connectAs('editor');
+        const {tools} = await client.listTools();
+        const list = tools.find((t) => t.name === 'oos_list_guidance');
+        assert.match(list.description, /before proposing/i);
+        assert.match(list.description, /instincts/i);
+    });
+
+    test('guidance is offered as a resource as well as a tool', async () => {
+        // Client support for resources varies; the tool is what makes it
+        // reliable, the resource is what makes it discoverable.
+        const {client} = await connectAs('editor');
+        const {resources} = await client.listResources();
+        assert.ok(resources.some((r) => r.uri === 'oos://guidance/hymn-selection'),
+            JSON.stringify(resources));
+    });
+
+    test('reading the guidance resource returns the file body', async () => {
+        const {client} = await connectAs('editor');
+        const res = await client.readResource(
+            {uri: 'oos://guidance/hymn-selection'});
+        assert.match(res.contents[0].text, /eight weeks/);
     });
 });

@@ -387,6 +387,33 @@
                     grid.appendChild(card);
                 }
 
+                // MCP Manager — editors and above (MS-262). Where the guidance
+                // an AI assistant reads is written, and where you can see what
+                // that assistant is actually able to do. Editor+ because a
+                // guidance file steers the assistant: whoever can write one can
+                // change how it behaves on every Sunday it touches. The page
+                // gates itself and the rules gate the data — a hidden card is
+                // not a lock.
+                if (grid && !document.getElementById('mcp-manager-card') &&
+                    ['editor', 'elder', 'admin', 'super_admin'].includes(permissionLevel)) {
+                    const card = document.createElement('a');
+                    card.id = 'mcp-manager-card';
+                    // ⚠ The STORED key behind every user's saved card order.
+                    // Renaming it drops this card to the end of every dashboard
+                    // that has ever been arranged.
+                    card.dataset.cardKey = 'mcp-manager';
+                    card.href = 'mcp-manager.html';
+                    card.className = cardClass;
+                    card.innerHTML = `
+                        <div class="w-14 h-14 rounded-full bg-surface-container flex items-center justify-center mb-xs group-hover:bg-primary-fixed transition-colors duration-300">
+                            <span class="material-symbols-outlined text-[32px] text-primary" style='font-variation-settings: "FILL" 1;'>smart_toy</span>
+                        </div>
+                        <h2 class="font-headline-md text-headline-md text-on-surface mb-base">MCP Manager</h2>
+                        <p class="font-body-md text-body-md text-on-surface-variant">Guide the AI assistant, and see what it can do.</p>
+                    `;
+                    grid.appendChild(card);
+                }
+
                 // Roles Manager — editors and above (author the serving Roles).
                 // ADR-0016: one roles list, liturgical and servant together. The
                 // page gates itself too — a card can be hidden, a URL can't.

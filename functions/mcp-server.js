@@ -34,7 +34,9 @@ const sh = require("./scripture-heatmap");
 const lw = require("./liturgy-writes");
 const sr = require("./service-read");
 const nw = require("./note-writes");
+const gs = require("./guidance-store");
 const NoteCore = require("./shared/service-note-core.js");
+const GuidanceCore = require("./shared/mcp-guidance-core.js");
 const LiturgySaveCore = require("./shared/liturgy-save-core.js");
 
 const SERVER_NAME = "mosaic-order-of-service";
@@ -49,11 +51,12 @@ let sdkPromise = null;
 function loadSdk() {
   if (!sdkPromise) {
     sdkPromise = (async () => {
-      const [{McpServer}, {StreamableHTTPServerTransport}] = await Promise.all([
-        import("@modelcontextprotocol/sdk/server/mcp.js"),
-        import("@modelcontextprotocol/sdk/server/streamableHttp.js"),
-      ]);
-      return {McpServer, StreamableHTTPServerTransport};
+      const [{McpServer, ResourceTemplate}, {StreamableHTTPServerTransport}] =
+        await Promise.all([
+          import("@modelcontextprotocol/sdk/server/mcp.js"),
+          import("@modelcontextprotocol/sdk/server/streamableHttp.js"),
+        ]);
+      return {McpServer, ResourceTemplate, StreamableHTTPServerTransport};
     })();
   }
   return sdkPromise;
@@ -125,7 +128,7 @@ function liturgyFieldsShape() {
  * @return {Promise<object>} an McpServer with tools registered
  */
 async function buildServer({db, auth, geminiKey, fieldValues}) {
-  const {McpServer} = await loadSdk();
+  const {McpServer, ResourceTemplate} = await loadSdk();
   const server = new McpServer({name: SERVER_NAME, version: SERVER_VERSION});
 
   const isEditor = EDITOR_LEVELS.includes(auth && auth.permissionLevel);
@@ -189,6 +192,113 @@ async function buildServer({db, auth, geminiKey, fieldValues}) {
       }
       throw e;
     }
+  });
+
+  // ── Guidance ─────────────────────────────────────────────────────────
+  //
+  // ⚠ EXPOSED BOTH AS RESOURCES AND AS TOOLS, DELIBERATELY. Resources are
+  // the right shape — a document to read is exactly what they are for, and
+  // the earlier "tools, not resources" decision was about DATA, where the
+  // value is filtering rather than browsing. But client support for
+  // resources varies: some attach them automatically, some wait for the
+  // person to pick one, some ignore them. A tool the model can always reach
+  // for is the difference between guidance that is usually read and
+  // guidance that is reliably read.
+  // ⚠ A TEMPLATE WITH A LIST CALLBACK, NOT ONE RESOURCE PER FILE. Listing
+  // the files here to register them individually would put a Firestore read
+  // in front of EVERY request — this function runs per call, and most calls
+  // are tool calls that never touch guidance at all. The template defers the
+  // read to the moment a client actually lists or reads a resource.
+  server.registerResource(
+      "guidance",
+      new ResourceTemplate(GuidanceCore.URI_PREFIX + "{slug}", {
+        list: async () => {
+          const files = await gs.listGuidance(db);
+          return {
+            resources: files.map((f) => ({
+              uri: GuidanceCore.uriFor(f.slug),
+              name: f.slug,
+              title: f.title,
+              description: f.summary,
+              mimeType: "text/markdown",
+            })),
+          };
+        },
+      }),
+      {
+        title: "Order of Service guidance",
+        description:
+          "This church's written guidance for building an Order of Service.",
+        mimeType: "text/markdown",
+      },
+      async (uri, variables) => {
+        const slug = GuidanceCore.slugFromUri(uri.href) ||
+          String((variables && variables.slug) || "");
+        const file = await gs.getGuidance(db, slug);
+        return {
+          contents: [{
+            uri: uri.href,
+            mimeType: "text/markdown",
+            // A file that is missing or switched off says so, rather than
+            // returning an empty document an assistant would silently
+            // follow as "no guidance".
+            text: file ? file.body :
+              `There is no guidance file at "${slug}". It may have been ` +
+              "renamed or switched off.",
+          }],
+        };
+      });
+
+  server.registerTool("oos_list_guidance", {
+    title: "What guidance is available",
+    description:
+      "Lists the written guidance this church keeps for building an Order " +
+      "of Service — its conventions, and how it wants choices reasoned " +
+      "about. Each entry has an address and a one-line summary. Read the " +
+      "ones that apply with oos_get_guidance BEFORE proposing anything, " +
+      "and prefer what they say over your own general instincts: they are " +
+      "this church's decisions, not suggestions.",
+    inputSchema: {},
+    annotations: {readOnlyHint: true},
+  }, async () => {
+    const files = await gs.listGuidance(db);
+    if (!files.length) {
+      return jsonResult({
+        guidance: [],
+        note: "No guidance has been written yet. Editors add it on the " +
+          "MCP Manager page.",
+      });
+    }
+    return jsonResult({guidance: files});
+  });
+
+  server.registerTool("oos_get_guidance", {
+    title: "Read one guidance file",
+    description:
+      "The full text of one guidance file, by the address given in " +
+      "oos_list_guidance. Treat what it says as this church's settled " +
+      "preference.",
+    inputSchema: {
+      address: z.string().min(1)
+          .describe("The file's address, e.g. 'hymn-selection'"),
+    },
+    annotations: {readOnlyHint: true},
+  }, async ({address}) => {
+    const slug = GuidanceCore.slugFromUri(address) || String(address).trim();
+    const file = await gs.getGuidance(db, slug);
+    if (!file) {
+      // Named plainly rather than returned as an empty body: an assistant
+      // handed nothing would follow no guidance and never say so.
+      return refuse(
+          `There is no guidance file at "${slug}". Call oos_list_guidance ` +
+          "to see what exists — it may have been renamed or switched off.");
+    }
+    return jsonResult({
+      address: file.slug,
+      title: file.title,
+      summary: file.summary,
+      guidance: file.body,
+    });
   });
 
   server.registerTool("oos_get_service", {
@@ -424,9 +534,73 @@ async function handleMcpRequest(req, res, deps) {
   await transport.handleRequest(req, res, req.body);
 }
 
+/**
+ * What this server actually offers, for the read-only half of the MCP
+ * Manager page.
+ *
+ * ⚠ IT ASKS THE REAL SERVER RATHER THAN DESCRIBING IT. The obvious way to
+ * build this screen is a hand-written list of tools, and that list is wrong
+ * the first time somebody adds a tool and forgets it — leaving a page that
+ * confidently tells an editor the server does something it does not, or
+ * hides something it does. So a genuine server is built and a genuine client
+ * asks it, over an in-memory transport: exactly the handshake an assistant
+ * performs. Whatever comes back is, by construction, what an assistant sees.
+ *
+ * The cost is one throwaway server per call. This is an admin screen opened
+ * occasionally, not a hot path.
+ *
+ * @param {object} deps the same deps buildServer takes
+ * @return {Promise<{tools: Array<object>, resources: Array<object>}>}
+ */
+async function describeCapabilities(deps) {
+  const [{Client}, {InMemoryTransport}] = await Promise.all([
+    import("@modelcontextprotocol/sdk/client/index.js"),
+    import("@modelcontextprotocol/sdk/inMemory.js"),
+  ]);
+
+  const server = await buildServer(deps);
+  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+  const client = new Client({name: "mcp-manager", version: SERVER_VERSION});
+
+  try {
+    await Promise.all([
+      server.connect(serverSide),
+      client.connect(clientSide),
+    ]);
+
+    const [toolsResult, resourcesResult] = await Promise.all([
+      client.listTools(),
+      client.listResources().catch(() => ({resources: []})),
+    ]);
+
+    return {
+      tools: (toolsResult.tools || []).map((t) => ({
+        name: t.name,
+        title: (t.annotations && t.annotations.title) || t.title || t.name,
+        description: t.description || "",
+        // What an editor most wants to know at a glance: can this thing
+        // change a Sunday, or only look at one?
+        writes: !(t.annotations && t.annotations.readOnlyHint),
+        inputs: Object.keys(
+            (t.inputSchema && t.inputSchema.properties) || {}),
+      })).sort((a, b) => a.name.localeCompare(b.name)),
+      resources: (resourcesResult.resources || []).map((r) => ({
+        uri: r.uri,
+        name: r.name,
+        title: r.title || r.name,
+        description: r.description || "",
+      })).sort((a, b) => String(a.uri).localeCompare(String(b.uri))),
+    };
+  } finally {
+    await client.close().catch(() => {});
+    await server.close().catch(() => {});
+  }
+}
+
 module.exports = {
   handleMcpRequest,
   buildServer,
+  describeCapabilities,
   liturgyFieldsShape,
   SERVER_NAME,
   SERVER_VERSION,

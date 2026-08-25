@@ -57,6 +57,8 @@ const ts = require("./theme-scoring");
 // The MCP server's HTTP app: the four oos_* tools behind an OAuth front
 // door (MS-262, ADR-0038).
 const mcpApp = require("./mcp-app");
+// The tool/resource manifest behind the MCP Manager page (MS-262).
+const mcpServer = require("./mcp-server");
 
 /**
  * Prepaid Textbelt API key, held as a Firebase secret. Set or rotate it with:
@@ -1331,6 +1333,48 @@ exports.oosUpdateLiturgy = onCall(
 exports.oosGetScriptureHeatmap = onCall(
     {cors: true, region: "us-central1"},
     async () => sh.getScriptureHeatmap(admin.firestore()),
+);
+
+/**
+ * What the MCP server actually offers, for the read-only half of the MCP
+ * Manager page (MS-262).
+ *
+ * ⚠ IT ASKS THE REAL SERVER rather than describing it — see
+ * describeCapabilities in mcp-server.js. A hand-written list on the page
+ * would be wrong the first time somebody added a tool and forgot it, and a
+ * screen that confidently lists the wrong capabilities is worse than no
+ * screen.
+ *
+ * Editor+ because that is who the page is for; it exposes no church data,
+ * only the shape of the server.
+ */
+exports.mcpCapabilities = onCall(
+    {cors: true, region: "us-central1"},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Sign in first.");
+      }
+      const db = admin.firestore();
+      const callerSnap = await db.collection("users").doc(request.auth.uid).get();
+      const level = callerSnap.exists &&
+          (callerSnap.data().permissionLevel || callerSnap.data().role);
+      if (!["editor", "elder", "admin", "super_admin"].includes(level)) {
+        throw new HttpsError("permission-denied", "Editors only.");
+      }
+
+      return mcpServer.describeCapabilities({
+        db,
+        // The manifest is the same whoever asks; this caller is only used
+        // to decide which tools would be offered, and an editor sees all.
+        auth: {uid: request.auth.uid, permissionLevel: level},
+        geminiKey: () => "",
+        fieldValues: {
+          serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
+          deleteField: () => admin.firestore.FieldValue.delete(),
+          documentId: () => admin.firestore.FieldPath.documentId(),
+        },
+      });
+    },
 );
 
 /**

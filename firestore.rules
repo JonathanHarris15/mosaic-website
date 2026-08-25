@@ -672,5 +672,25 @@ service cloud.firestore {
     match /mcp_tokens/{tokenHash} {
       allow read, write: if false;
     }
+
+    // The guidance files an assistant pulls down through the MCP — the
+    // church's standing instructions for building an Order of Service
+    // (MS-262). Authored by editors on the MCP Manager page.
+    //
+    // ⚠ UNLIKE THE mcp_* COLLECTIONS ABOVE, THIS IS CONTENT, NOT MACHINERY.
+    // Those hold passes and codes and are sealed from every client. This
+    // holds writing that editors are meant to change, so it is editor+ read
+    // and write — the same rung as everything else they author.
+    //
+    // ⚠ WHOEVER CAN WRITE HERE CAN STEER THE ASSISTANT. A guidance file is
+    // read as instruction, so this is not merely another content collection:
+    // it is the one place where changing a document changes what the
+    // assistant does. Editor+ is deliberate — the same people already
+    // trusted to rewrite a Sunday directly — and it must not be widened to
+    // members on the grounds that "it is only text".
+    match /mcp_guidance/{fileId} {
+      allow read: if isEditor();
+      allow create, update, delete: if isEditor();
+    }
   }
 }

@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>MCP Manager | Mosaic</title>
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <script src="mobile/destinations.js"></script>
+    <script>window.MOBILE_HEADER = { title: 'MCP Manager', menu: true, route: 'mcpManager' };</script>
+    <script src="mobile-shell-header.js"></script>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-functions-compat.js"></script>
+    <script src="auth.js"></script>
+    <script src="mcp-guidance-core.js"></script>
+    <script src="mcp-manager.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+
+    <style>
+        [x-cloak] { display: none !important; }
+
+        /* Two panes above 1000px, one at a time below — the same breakpoint
+           the rest of the manager screens collapse at. */
+        .mcp-split { display: flex; flex-direction: column; gap: 1rem; }
+        @media (min-width: 1000px) {
+            .mcp-split { flex-direction: row; align-items: flex-start; }
+            .mcp-list { width: 320px; flex: 0 0 320px; }
+            .mcp-pane { flex: 1 1 auto; min-width: 0; }
+            .mcp-tabs { display: none; }
+        }
+        @media (max-width: 999px) {
+            .mcp-half[data-half="guidance"][data-tab="capabilities"],
+            .mcp-half[data-half="capabilities"][data-tab="guidance"] { display: none; }
+        }
+
+        .mcp-body-input {
+            min-height: 320px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            tab-size: 2;
+        }
+    </style>
+</head>
+
+<body class="bg-surface font-sans antialiased text-on-surface min-h-screen"
+      x-data="mcpManager()" x-init="init()">
+
+<div class="max-w-[1400px] mx-auto p-md">
+
+    <!-- Header -->
+    <div class="flex items-center gap-sm mb-md">
+        <a href="index.html" class="m-back text-on-surface-variant hover:text-primary shrink-0">
+            <span class="material-symbols-outlined">arrow_back</span>
+        </a>
+        <div class="min-w-0">
+            <h1 class="font-headline-lg text-headline-lg text-primary truncate">MCP Manager</h1>
+            <p class="font-body-md text-body-md text-on-surface-variant">
+                What an AI assistant reads before it helps plan a Sunday, and what it is able to do.
+            </p>
+        </div>
+    </div>
+
+    <!-- Refused -->
+    <div x-cloak x-show="refused"
+         class="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg text-center">
+        <span class="material-symbols-outlined text-[40px] text-on-surface-variant mb-xs">lock</span>
+        <h2 class="font-headline-md text-headline-md mb-base">Editors only</h2>
+        <p class="font-body-md text-body-md text-on-surface-variant">
+            Guidance files change how the assistant behaves, so they are kept to
+            the people who can already edit a Sunday.
+        </p>
+    </div>
+
+    <!-- Loading -->
+    <div x-cloak x-show="!ready && !refused"
+         class="font-body-md text-body-md text-on-surface-variant p-lg text-center">
+        Loading…
+    </div>
+
+    <div x-cloak x-show="ready && !refused">
+
+        <!-- Narrow-screen tabs -->
+        <div class="mcp-tabs flex gap-xs mb-md">
+            <button @click="tab = 'guidance'"
+                    :class="tab === 'guidance' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'"
+                    class="flex-1 font-label-md text-label-md rounded-lg px-sm py-2">
+                Guidance
+            </button>
+            <button @click="tab = 'capabilities'"
+                    :class="tab === 'capabilities' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'"
+                    class="flex-1 font-label-md text-label-md rounded-lg px-sm py-2">
+                What it can do
+            </button>
+        </div>
+
+        <!-- ══ GUIDANCE ══════════════════════════════════════════════════ -->
+        <section class="mcp-half mb-lg" data-half="guidance" :data-tab="tab">
+            <div class="flex items-baseline justify-between mb-sm gap-sm flex-wrap">
+                <div>
+                    <h2 class="font-headline-md text-headline-md text-on-surface">Guidance files</h2>
+                    <p class="font-body-md text-body-md text-on-surface-variant">
+                        Written instructions the assistant pulls down and follows — your
+                        conventions, and how you want choices reasoned about.
+                    </p>
+                </div>
+                <button @click="newFile()"
+                        class="bg-primary text-on-primary font-label-md text-label-md rounded-lg px-md py-2 flex items-center gap-1 shrink-0">
+                    <span class="material-symbols-outlined text-[18px]">add</span>
+                    New file
+                </button>
+            </div>
+
+            <div class="mcp-split">
+                <!-- List -->
+                <div class="mcp-list bg-surface-container-lowest border border-outline-variant rounded-xl p-sm">
+                    <p x-show="!files.length"
+                       class="font-body-md text-body-md text-on-surface-variant p-sm text-center">
+                        No guidance yet. The assistant will work from its own general
+                        instincts until you write some.
+                    </p>
+
+                    <template x-for="file in files" :key="file.id">
+                        <div @click="select(file)"
+                             :class="selectedId === file.id ? 'bg-primary-fixed' : 'hover:bg-surface-container'"
+                             class="rounded-lg p-sm cursor-pointer mb-1 transition-colors">
+                            <div class="flex items-start gap-xs">
+                                <span class="material-symbols-outlined text-[18px] mt-0.5 shrink-0"
+                                      :class="file.enabled !== false ? 'text-primary' : 'text-outline-variant'"
+                                      x-text="file.enabled !== false ? 'description' : 'visibility_off'"></span>
+                                <div class="min-w-0 flex-1">
+                                    <div class="font-label-lg text-label-lg truncate"
+                                         :class="file.enabled === false ? 'text-on-surface-variant line-through' : 'text-on-surface'"
+                                         x-text="file.title || 'Untitled'"></div>
+                                    <div class="font-body-sm text-body-sm text-on-surface-variant truncate"
+                                         x-text="file.summary"></div>
+                                    <code class="font-body-sm text-[11px] text-on-surface-variant/70"
+                                          x-text="file.slug"></code>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Editor -->
+                <div class="mcp-pane bg-surface-container-lowest border border-outline-variant rounded-xl p-md">
+                    <p x-show="!draft"
+                       class="font-body-md text-body-md text-on-surface-variant text-center py-lg">
+                        Pick a file, or make a new one.
+                    </p>
+
+                    <div x-show="draft" x-cloak>
+                        <!-- Problems -->
+                        <div x-show="problems.length"
+                             class="bg-error-container text-on-error-container rounded-lg p-sm mb-sm">
+                            <template x-for="p in problems" :key="p">
+                                <div class="font-body-md text-body-md" x-text="p"></div>
+                            </template>
+                        </div>
+
+                        <label class="font-label-md text-label-md text-on-surface-variant block mb-1">Title</label>
+                        <input x-model="draft.title" @input="onTitleInput()"
+                               placeholder="Choosing hymns"
+                               class="w-full bg-surface border border-outline-variant rounded-lg px-sm py-2 mb-sm font-body-md text-body-md" />
+
+                        <label class="font-label-md text-label-md text-on-surface-variant block mb-1">
+                            Address
+                            <span class="text-on-surface-variant/70" x-show="slugLocked">— fixed once saved</span>
+                        </label>
+                        <input x-model="draft.slug" @input="markDirty()" :disabled="slugLocked"
+                               placeholder="hymn-selection"
+                               class="w-full bg-surface border border-outline-variant rounded-lg px-sm py-2 font-body-md text-body-md disabled:opacity-60" />
+                        <p class="font-body-sm text-body-sm text-on-surface-variant mb-sm mt-1">
+                            How the assistant refers to this file.
+                            <span x-show="uriPreview">It reads it at <code x-text="uriPreview"></code>.</span>
+                            <span x-show="slugLocked">Changing it would break anything already told to read the old one.</span>
+                        </p>
+
+                        <label class="font-label-md text-label-md text-on-surface-variant block mb-1">Summary</label>
+                        <input x-model="draft.summary" @input="markDirty()"
+                               placeholder="How we pick hymns for a Sunday."
+                               class="w-full bg-surface border border-outline-variant rounded-lg px-sm py-2 font-body-md text-body-md" />
+                        <p class="font-body-sm text-body-sm text-on-surface-variant mb-sm mt-1">
+                            One line. This is how the assistant decides whether it needs
+                            this file at all, so make it say what is inside.
+                        </p>
+
+                        <label class="font-label-md text-label-md text-on-surface-variant block mb-1">Guidance</label>
+                        <textarea x-model="draft.body" @input="markDirty()"
+                                  placeholder="Write it as instructions to a helpful person who is new to your church."
+                                  class="mcp-body-input w-full bg-surface border border-outline-variant rounded-lg px-sm py-2 mb-sm"></textarea>
+
+                        <label class="flex items-center gap-xs mb-md cursor-pointer">
+                            <input type="checkbox" x-model="draft.enabled" @change="markDirty()"
+                                   class="w-4 h-4" />
+                            <span class="font-body-md text-body-md">
+                                The assistant can read this
+                                <span class="text-on-surface-variant">— switch off to retire it without deleting it</span>
+                            </span>
+                        </label>
+
+                        <div class="flex items-center gap-sm flex-wrap">
+                            <button @click="save()" :disabled="saving"
+                                    class="bg-primary text-on-primary font-label-md text-label-md rounded-lg px-md py-2 disabled:opacity-60">
+                                <span x-text="saving ? 'Saving…' : 'Save'"></span>
+                            </button>
+                            <span x-show="dirty" class="font-body-sm text-body-sm text-on-surface-variant">
+                                Unsaved changes
+                            </span>
+                            <button x-show="selectedId"
+                                    @click="remove(files.find(f => f.id === selectedId))"
+                                    class="ml-auto font-label-md text-label-md text-error hover:underline">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══ CAPABILITIES (read-only) ══════════════════════════════════ -->
+        <section class="mcp-half" data-half="capabilities" :data-tab="tab">
+            <div class="mb-sm">
+                <h2 class="font-headline-md text-headline-md text-on-surface">What the assistant can do</h2>
+                <p class="font-body-md text-body-md text-on-surface-variant">
+                    Read-only. This is fetched from the server itself, so it is what an
+                    assistant genuinely sees — not a list kept by hand that could drift.
+                </p>
+            </div>
+
+            <div x-show="loadingCapabilities"
+                 class="font-body-md text-body-md text-on-surface-variant p-md">Asking the server…</div>
+
+            <div x-show="capabilitiesError" x-cloak
+                 class="bg-error-container text-on-error-container rounded-lg p-sm mb-sm font-body-md text-body-md"
+                 x-text="capabilitiesError"></div>
+
+            <div x-show="capabilities" x-cloak class="grid grid-cols-1 lg:grid-cols-2 gap-md">
+
+                <!-- Can change a Sunday -->
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md">
+                    <h3 class="font-label-lg text-label-lg text-on-surface mb-xs flex items-center gap-1">
+                        <span class="material-symbols-outlined text-[18px] text-error">edit</span>
+                        Can change a Sunday
+                        <span class="font-body-sm text-body-sm text-on-surface-variant"
+                              x-text="'(' + writeTools.length + ')'"></span>
+                    </h3>
+                    <p class="font-body-sm text-body-sm text-on-surface-variant mb-sm">
+                        Your assistant asks before using these.
+                    </p>
+                    <template x-for="t in writeTools" :key="t.name">
+                        <div class="border-t border-outline-variant/50 py-sm">
+                            <div class="font-label-md text-label-md text-on-surface"
+                                 x-text="prettyToolName(t.name)"></div>
+                            <code class="font-body-sm text-[11px] text-on-surface-variant/70"
+                                  x-text="t.name"></code>
+                            <p class="font-body-sm text-body-sm text-on-surface-variant mt-1"
+                               x-text="t.description"></p>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Can only look -->
+                <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md">
+                    <h3 class="font-label-lg text-label-lg text-on-surface mb-xs flex items-center gap-1">
+                        <span class="material-symbols-outlined text-[18px] text-primary">visibility</span>
+                        Can only look
+                        <span class="font-body-sm text-body-sm text-on-surface-variant"
+                              x-text="'(' + readTools.length + ')'"></span>
+                    </h3>
+                    <p class="font-body-sm text-body-sm text-on-surface-variant mb-sm">
+                        These read data. They cannot change anything.
+                    </p>
+                    <template x-for="t in readTools" :key="t.name">
+                        <div class="border-t border-outline-variant/50 py-sm">
+                            <div class="font-label-md text-label-md text-on-surface"
+                                 x-text="prettyToolName(t.name)"></div>
+                            <code class="font-body-sm text-[11px] text-on-surface-variant/70"
+                                  x-text="t.name"></code>
+                            <p class="font-body-sm text-body-sm text-on-surface-variant mt-1"
+                               x-text="t.description"></p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Guidance the server is publishing, as the assistant sees it -->
+            <div x-show="capabilities && capabilities.resources && capabilities.resources.length"
+                 x-cloak
+                 class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md mt-md">
+                <h3 class="font-label-lg text-label-lg text-on-surface mb-xs">
+                    Guidance the assistant can see
+                </h3>
+                <p class="font-body-sm text-body-sm text-on-surface-variant mb-sm">
+                    Straight from the server. A file you wrote that is missing here is
+                    switched off.
+                </p>
+                <template x-for="r in capabilities.resources" :key="r.uri">
+                    <div class="border-t border-outline-variant/50 py-sm">
+                        <div class="font-label-md text-label-md text-on-surface" x-text="r.title"></div>
+                        <code class="font-body-sm text-[11px] text-on-surface-variant/70" x-text="r.uri"></code>
+                    </div>
+                </template>
+            </div>
+        </section>
+    </div>
+</div>
+
+</body>
+</html>
