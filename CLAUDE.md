@@ -22,14 +22,17 @@ is further along than `To Do`, not to one side of it. So the columns read straig
 through: everything specced waits in `To Do`, the next one or two move to `On Deck`, and
 one at a time they go `In Progress`.
 
-⚠ The shared `BOARD.md` in the skills config defines `On Deck` the other way — "ready,
-but the next step needs your judgment." **This project does not use it that way**, and
-where the two disagree, this file wins. A ticket here is never parked in `On Deck`
-because it needs a decision; a ticket needing a decision stays in `To Do` with the
-decision named in the sub-task that carries it.
+⚠ The shared `BOARD.md` in the skills config (`skills/plan-ticket/BOARD.md`)
+defines `On Deck` the other way — "ready, but the next step in it needs you."
+**This project does not use it that way**, and where the two disagree, this file
+wins. A ticket here is never parked in `On Deck` because it needs a decision; a
+ticket needing a decision stays in `To Do` with the decision named in the sub-task
+that carries it.
 
 - New idea, however rough → file it in **To Plan**.
 - Plan it → `/plan-ticket <KEY>`, or `/plan-ticket ALL` for the whole To Plan column.
 - Build it → `/implement <KEY>`.
-- Board looking wrong → `/jira-doctor`.
+- Board looking wrong → fix it by hand. Nothing sweeps the board; the integrity
+  rule is upheld at the two doors (`/plan-ticket` won't land a ticket right of
+  `To Plan` without a PRD, `/implement` won't build one that has no PRD).
 <!-- /jira-config -->
