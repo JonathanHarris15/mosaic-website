@@ -64,6 +64,22 @@ service cloud.firestore {
       return request.auth != null && permissionLevel() in ['elder', 'super_admin'];
     }
 
+    // ⚠ NO USER DOCUMENT MAY CARRY A PASSWORD (MS-241, ADR-0040).
+    //
+    // Sign-up used to write the password here in plain text, and three other
+    // paths copied that line. Firebase Authentication holds the hashed copy and
+    // is the only party that should ever hold one; a readable second copy is a
+    // list of this congregation's passwords, which is a list of their email
+    // accounts and their banking.
+    //
+    // The code no longer writes it, but code is deployed and browsers are cached.
+    // This is what stops a stale tab, or the next person to copy the old sign-up
+    // block, putting it back. Cloud Functions use the Admin SDK and bypass rules
+    // entirely, so the legitimate admin.auth() calls are unaffected.
+    function noStoredPassword() {
+      return !('password' in request.resource.data);
+    }
+
     match /users/{userId} {
       // Allow users to read their own document
       allow read: if request.auth != null && request.auth.uid == userId;
@@ -71,6 +87,7 @@ service cloud.firestore {
       // During the MS-119 migration the client writes both permissionLevel and the
       // legacy role; accept whichever the new doc carries.
       allow create: if request.auth != null && request.auth.uid == userId
+        && noStoredPassword()
         && (('permissionLevel' in request.resource.data)
             ? request.resource.data.permissionLevel == 'viewer'
             : request.resource.data.role == 'viewer');
@@ -79,8 +96,14 @@ service cloud.firestore {
       // with any other field (email, personId, etc.).
       allow update: if request.auth != null && request.auth.uid == userId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dashboardCardOrder']);
-      // Allow admins to read and write any user document
-      allow read, write: if isAdmin();
+      // Admins read and write any user document — but the password bar binds
+      // them too. It is split off `write` deliberately: `allow read, write` would
+      // grant a create carrying a password and undo the rule above, since one
+      // allow statement granting a request is enough. Delete is separate because
+      // a delete has no request.resource to inspect.
+      allow read: if isAdmin();
+      allow create, update: if isAdmin() && noStoredPassword();
+      allow delete: if isAdmin();
     }
 
     // Directory Requests (ADR-0025, ADR-0027): anything a person asks the church
