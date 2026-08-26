@@ -952,23 +952,49 @@ if (changePasswordForm) {
         const oldPassword = document.getElementById('old-password').value;
         const newPassword = document.getElementById('new-password').value;
 
+        // Say so rather than doing nothing. A silent return here leaves the
+        // button looking dead — the account-deletion form below always reports,
+        // and so should this.
+        const user = auth.currentUser;
+        if (!user) {
+            changePasswordStatus.textContent = 'You are signed out. Sign in again to change your password.';
+            changePasswordStatus.className = 'text-[10px] font-body-md text-error';
+            return;
+        }
+
         changePasswordStatus.textContent = 'Updating password...';
         changePasswordStatus.className = 'text-[10px] font-body-md text-primary animate-pulse';
 
+        // ⚠ THE CURRENT PASSWORD IS PROVED TO FIREBASE, NOT TO US (MS-241).
+        //
+        // This used to call updateUserPasswordSelf, which fetched the user's
+        // document and did `userData.password !== oldPassword`. That worked only
+        // because a plaintext copy of everybody's password was being kept in
+        // Firestore, and it was the single reason the copy could not just be
+        // deleted. Firebase Auth has held the hashed one all along.
+        //
+        // Same shape as the account-deletion form further up, deliberately.
+        let errorCode = null;
         try {
-            const updateSelfPasswordFunc = firebase.functions().httpsCallable('updateUserPasswordSelf');
-            await updateSelfPasswordFunc({ oldPassword, newPassword });
-            
-            changePasswordStatus.textContent = 'Password updated successfully.';
-            changePasswordStatus.className = 'text-[10px] font-body-md text-green-600';
+            const credential = firebase.auth.EmailAuthProvider.credential(user.email, oldPassword);
+            await user.reauthenticateWithCredential(credential);
+            await user.updatePassword(newPassword);
+        } catch (error) {
+            console.error('Password change failed:', error);
+            errorCode = (error && error.code) ? error.code : 'unknown';
+        }
+
+        const outcome = AccountRecoveryCore.passwordChangeOutcome(errorCode);
+        changePasswordStatus.textContent = outcome.message;
+        changePasswordStatus.className = outcome.ok
+            ? 'text-[10px] font-body-md text-green-600'
+            : 'text-[10px] font-body-md text-error';
+
+        if (outcome.ok) {
             changePasswordForm.reset();
             setTimeout(() => {
                 changePasswordStatus.textContent = '';
             }, 5000);
-        } catch (error) {
-            console.error(error);
-            changePasswordStatus.textContent = 'Update failed: ' + error.message;
-            changePasswordStatus.className = 'text-[10px] font-body-md text-error';
         }
     });
 }
@@ -1139,18 +1165,6 @@ async function loadUsersList() {
                             <span class="text-[11px] font-body-md ${linkedPerson ? 'text-on-surface' : 'text-on-surface-variant italic'}">${linkedLabel}</span>
                             <button onclick="openLinkModal('${doc.id}', '${safeEmail}')" class="bg-primary/10 text-primary hover:bg-primary hover:text-on-primary text-[9px] font-label-md uppercase tracking-widest px-2 py-1.5 rounded transition-all">${linkedPerson ? 'Change' : 'Link'}</button>
                             ${linkedPerson ? `<button onclick="unlinkPerson('${doc.id}')" class="text-error/70 hover:text-error text-[9px] font-label-md uppercase tracking-widest px-2 py-1.5 rounded transition-all" title="Unlink">Unlink</button>` : ''}
-                        </div>
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <span class="text-[9px] font-label-md text-on-surface-variant uppercase tracking-widest">Password Visibility</span>
-                        <div class="flex items-center gap-2">
-                            <input type="password" readonly value="${data.password || ''}" id="pass-${doc.id}" class="text-[11px] font-mono bg-surface-container border-none py-1 px-2 rounded w-32 focus:ring-0" placeholder="••••••••" />
-                            <button onclick="togglePasswordVisibility('pass-${doc.id}', this)" class="text-outline hover:text-primary transition-colors" title="Toggle Visibility">
-                                <span class="material-symbols-outlined text-xs">visibility</span>
-                            </button>
-                            <button onclick="copyToClipboard('pass-${doc.id}')" class="text-outline hover:text-primary transition-colors">
-                                <span class="material-symbols-outlined text-xs">content_copy</span>
-                            </button>
                         </div>
                     </div>
                     <div class="flex flex-col gap-1 flex-grow">
@@ -1333,25 +1347,12 @@ async function updateUserPasswordAdmin(uid) {
 }
 
 // --- UTILITIES ---
-function copyToClipboard(elementId) {
-    const copyText = document.getElementById(elementId);
-    copyText.select();
-    copyText.setSelectionRange(0, 99999);
-    navigator.clipboard.writeText(copyText.value);
-}
-
-function togglePasswordVisibility(elementId, btn) {
-    const input = document.getElementById(elementId);
-    const icon = btn.querySelector('.material-symbols-outlined');
-    
-    if (input.type === 'password') {
-        input.type = 'text';
-        icon.textContent = 'visibility_off';
-    } else {
-        input.type = 'password';
-        icon.textContent = 'visibility';
-    }
-}
+//
+// copyToClipboard and togglePasswordVisibility used to live here. They existed
+// solely for the "Password Visibility" panel on the admin user list — an eye
+// icon that revealed any user's password in cleartext and a button that
+// copied it. Both went with the stored password (MS-241). Nothing else called
+// either of them; hymn-details.js has its own copy helper.
 
 // Global scope for handlers
 window.updateUserRole = updateUserRole;
@@ -1362,8 +1363,6 @@ window.selectPersonForLink = selectPersonForLink;
 window.unlinkPerson = unlinkPerson;
 window.deleteUser = deleteUser;
 window.updateUserPasswordAdmin = updateUserPasswordAdmin;
-window.copyToClipboard = copyToClipboard;
-window.togglePasswordVisibility = togglePasswordVisibility;
 window.chooseLinkPerson = chooseLinkPerson;
 window.askFamilyChange = askFamilyChange;
 window.askFamilyChangeFromPicker = askFamilyChangeFromPicker;
