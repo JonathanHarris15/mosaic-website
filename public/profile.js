@@ -1160,18 +1160,6 @@ async function loadUsersList() {
                             ${linkedPerson ? `<button onclick="unlinkPerson('${doc.id}')" class="text-error/70 hover:text-error text-[9px] font-label-md uppercase tracking-widest px-2 py-1.5 rounded transition-all" title="Unlink">Unlink</button>` : ''}
                         </div>
                     </div>
-                    <div class="flex flex-col gap-1">
-                        <span class="text-[9px] font-label-md text-on-surface-variant uppercase tracking-widest">Password Visibility</span>
-                        <div class="flex items-center gap-2">
-                            <input type="password" readonly value="${data.password || ''}" id="pass-${doc.id}" class="text-[11px] font-mono bg-surface-container border-none py-1 px-2 rounded w-32 focus:ring-0" placeholder="••••••••" />
-                            <button onclick="togglePasswordVisibility('pass-${doc.id}', this)" class="text-outline hover:text-primary transition-colors" title="Toggle Visibility">
-                                <span class="material-symbols-outlined text-xs">visibility</span>
-                            </button>
-                            <button onclick="copyToClipboard('pass-${doc.id}')" class="text-outline hover:text-primary transition-colors">
-                                <span class="material-symbols-outlined text-xs">content_copy</span>
-                            </button>
-                        </div>
-                    </div>
                     <div class="flex flex-col gap-1 flex-grow">
                         <span class="text-[9px] font-label-md text-on-surface-variant uppercase tracking-widest">Change Password</span>
                         <div class="flex items-center gap-2">
@@ -1352,25 +1340,12 @@ async function updateUserPasswordAdmin(uid) {
 }
 
 // --- UTILITIES ---
-function copyToClipboard(elementId) {
-    const copyText = document.getElementById(elementId);
-    copyText.select();
-    copyText.setSelectionRange(0, 99999);
-    navigator.clipboard.writeText(copyText.value);
-}
-
-function togglePasswordVisibility(elementId, btn) {
-    const input = document.getElementById(elementId);
-    const icon = btn.querySelector('.material-symbols-outlined');
-    
-    if (input.type === 'password') {
-        input.type = 'text';
-        icon.textContent = 'visibility_off';
-    } else {
-        input.type = 'password';
-        icon.textContent = 'visibility';
-    }
-}
+//
+// copyToClipboard and togglePasswordVisibility used to live here. They existed
+// solely for the "Password Visibility" panel on the admin user list — an eye
+// icon that revealed any member's password in cleartext and a button that
+// copied it. Both went with the stored password (MS-241). Nothing else called
+// either of them; hymn-details.js has its own copy helper.
 
 // Global scope for handlers
 window.updateUserRole = updateUserRole;
@@ -1381,8 +1356,6 @@ window.selectPersonForLink = selectPersonForLink;
 window.unlinkPerson = unlinkPerson;
 window.deleteUser = deleteUser;
 window.updateUserPasswordAdmin = updateUserPasswordAdmin;
-window.copyToClipboard = copyToClipboard;
-window.togglePasswordVisibility = togglePasswordVisibility;
 window.chooseLinkPerson = chooseLinkPerson;
 window.askFamilyChange = askFamilyChange;
 window.askFamilyChangeFromPicker = askFamilyChangeFromPicker;

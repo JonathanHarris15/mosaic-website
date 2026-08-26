@@ -204,12 +204,17 @@
                             const userCredential = await auth.createUserWithEmailAndPassword(this.email, this.password);
                             const user = userCredential.user;
                             
-                            // Create user document with default 'viewer' role
+                            // Create user document with default 'viewer' role.
+                            //
+                            // The password is NOT among these fields, and must
+                            // never be again (MS-241). Firebase Auth holds a
+                            // hashed copy — that is the one every sign-in uses.
+                            // A second readable copy here was a list of the
+                            // congregation's passwords, and people reuse them.
                             await db.collection('users').doc(user.uid).set({
                                 email: user.email,
                                 permissionLevel: 'viewer',
                                 role: 'viewer',
-                                password: this.password, // Storing for admin visibility
                                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
                             });
                         }

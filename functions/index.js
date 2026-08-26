@@ -166,14 +166,19 @@ exports.createUser = onCall({cors: true, region: "us-central1"}, async (request)
       password: password,
     });
 
-    // 3. Store the user's permission level and password in Firestore. Write both
+    // 3. Store the user's permission level in Firestore. Write both
     // permissionLevel and the legacy role during the MS-119 migration (MS-127
     // drops the old role field afterwards).
+    //
+    // The password is NOT stored here (MS-241). It went to Firebase Auth in
+    // step 2, which hashes it; a readable second copy existed only so an admin
+    // could read somebody their password when they were locked out, and the
+    // reset link on the login page does that job now without anyone reading
+    // anything.
     await db.collection("users").doc(userRecord.uid).set({
       email: email,
       permissionLevel: level,
       role: level,
-      password: password, // Storing for admin visibility as requested
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -316,12 +321,10 @@ exports.updateUserPasswordAdmin = onCall({cors: true, region: "us-central1"}, as
   }
 
   try {
-    // Update Auth
+    // Firebase Auth is the only party that holds a password, hashed. Nothing is
+    // written to Firestore alongside it (MS-241) — an admin may SET somebody's
+    // password, and can no longer read one.
     await admin.auth().updateUser(uid, {
-      password: newPassword,
-    });
-    // Update Firestore
-    await db.collection("users").doc(uid).update({
       password: newPassword,
     });
 
