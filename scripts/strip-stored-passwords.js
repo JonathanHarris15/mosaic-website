@@ -1,7 +1,7 @@
 /**
  * @fileoverview MS-300 (MS-241) — remove every stored plaintext password.
  *
- * Mosaic used to write each member's password, in plain text, into their own
+ * Mosaic used to write each user's password, in plain text, into their own
  * `users/{uid}` document. Four places did it — sign-up, the admin create-user
  * callable, and both password changes — and an admin screen displayed it with a
  * reveal button and a copy button. MS-297 through MS-299 stopped all of that.
@@ -12,7 +12,7 @@
  *
  * Firebase Authentication holds the real, hashed copy and always did — that is
  * the one every sign-in uses. Nothing reads this field any more, so deleting it
- * breaks no sign-in. A member who cannot remember their password uses the reset
+ * breaks no sign-in. Somebody who cannot remember their password uses the reset
  * link on the login page (MS-297), which did not exist when the field was added
  * and is the reason it could finally go.
  *

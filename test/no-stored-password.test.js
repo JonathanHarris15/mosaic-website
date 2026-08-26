@@ -5,7 +5,7 @@ const path = require('node:path');
 
 // ── The contract this file keeps (MS-241) ────────────────────────────────────
 //
-// Mosaic used to write every member's password, in plain text, into their own
+// Mosaic used to write every user's password, in plain text, into their own
 // `users/{uid}` document — on sign-up, when an admin created them, and both
 // times a password was changed. An admin screen then displayed it with a reveal
 // button and a copy button.
@@ -25,7 +25,6 @@ const path = require('node:path');
 // breaches the database.
 
 const ROOT = path.join(__dirname, '..');
-const PUBLIC = path.join(ROOT, 'public');
 
 const read = (...p) => fs.readFileSync(path.join(ROOT, ...p), 'utf8');
 
@@ -51,6 +50,7 @@ function sourceFiles() {
     };
     walk(path.join(ROOT, 'public'), 'public');
     walk(path.join(ROOT, 'functions'), 'functions');
+    walk(path.join(ROOT, 'scripts'), 'scripts');
     return out;
 }
 
@@ -128,111 +128,167 @@ test('no cloud function authenticates anybody by comparing a stored password', (
 //
 // ⚠ THE MOST VALUABLE TEST IN THIS FILE.
 //
-// The field was written in four places, and three of them were added by
-// somebody copying the first. This is what stops the fourth copy being made a
-// year from now, when the reason it was removed has been forgotten and
-// `password: password` looks like an ordinary field on an ordinary document.
-
-const WRITES_PASSWORD_FIELD = /(^|[\s{,[(])password\s*:/m;
-
-// The object literal a Firestore write is handed, read by matching braces so a
-// nested object cannot end the match early.
-function objectLiteralAt(src, openBrace) {
-    let depth = 0;
-    for (let i = openBrace; i < src.length; i++) {
-        if (src[i] === '{') depth++;
-        else if (src[i] === '}') {
-            depth--;
-            if (depth === 0) return src.slice(openBrace, i + 1);
-        }
-    }
-    return src.slice(openBrace);
-}
-
-// Every object handed to a Firestore .set() / .update() / .add() in this source.
+// The field was written in four places, and three of them were added by somebody
+// copying the first. This is what stops the fourth copy being made a year from
+// now, when the reason it was removed has been forgotten and `password: password`
+// looks like an ordinary field on an ordinary document.
 //
-// ⚠ Deliberately NOT "does the word password appear near the word users". That
-// version flagged an Alpine field called `password`, the string 'Error updating
-// password: ', and the two `admin.auth().updateUser({password})` calls that are
-// the whole point of having Firebase Auth. A test that cries wolf about the
-// correct code gets deleted by the next person, which is worse than no test.
-function firestoreWritePayloads(code) {
-    const payloads = [];
-    for (const m of code.matchAll(/\.(set|update|add)\s*\(\s*\{/g)) {
-        payloads.push(objectLiteralAt(code, m.index + m[0].length - 1));
-    }
-    return payloads;
+// Deliberately NOT scoped to Firestore calls. An earlier version of this test
+// read the object literal handed to each .set()/.update(), and review found three
+// holes in it: brace counting a `}` inside a string could fool, quoted keys
+// (`"password":` — exactly the style functions/ is written in), and `.set(payload)`
+// where the object is built on an earlier line, which is the shape a relapse would
+// most likely actually take.
+//
+// So this does not try to be clever about dataflow. It finds EVERY password key
+// in the source and checks it against a list of the ones that are meant to be
+// there. A new one fails until somebody adds it with a reason — which is the
+// point: putting this field back should be a conscious act, not a copy-paste.
+
+const PASSWORD_KEY = /(^|[\s{,[(])["']?password["']?\s*:/;
+
+// Blank out the CONTENTS of string literals, so prose like
+// `alert('Error updating password: ' + e)` is not read as a field named
+// password. A quoted string immediately followed by a colon is left alone,
+// because that is a quoted KEY — `{ "password": pw }` is the exact relapse
+// shape this has to keep catching, and stripping it would hide it.
+function stripStringValues(line) {
+    return line.replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1(?!\s*:)/g, '$1$1');
 }
 
-test('nothing in the app writes a password field to Firestore', () => {
-    const offenders = [];
+// The occurrences that are legitimate, and why. Keep this list short — every
+// entry is a place somebody must think about if this ticket regresses.
+const ALLOWED = [
+    {
+        file: 'public/login.html',
+        line: "password: ''",
+        why: 'Alpine component state — the login form field, never written to Firestore',
+    },
+    {
+        file: 'functions/index.js',
+        line: 'password: password,',
+        why: 'handed to admin.auth().createUser — Firebase Auth is what a password is FOR',
+    },
+    {
+        file: 'functions/index.js',
+        line: 'password: newPassword,',
+        why: 'handed to admin.auth().updateUser — an admin setting a password, which they may still do',
+    },
+    {
+        file: 'scripts/strip-stored-passwords.js',
+        line: 'return { password: deleteSentinel };',
+        why: 'the cleanup patch that DELETES the field',
+    },
+];
 
+function passwordKeyOccurrences() {
+    const found = [];
     for (const file of sourceFiles()) {
         const code = codeOnly(fs.readFileSync(file.abs, 'utf8'));
-
-        for (const payload of firestoreWritePayloads(code)) {
-            if (WRITES_PASSWORD_FIELD.test(payload)) {
-                offenders.push(file.path);
-                break;
+        code.split('\n').forEach((text, i) => {
+            if (PASSWORD_KEY.test(stripStringValues(text))) {
+                found.push({ file: file.path, line: i + 1, text: text.trim() });
             }
-        }
+        });
     }
+    return found;
+}
 
-    assert.deepStrictEqual(offenders, [],
-        `these files write a password field into Firestore:\n  ${offenders.join('\n  ')}\n` +
-        'Firebase Auth already holds a hashed copy. A second readable one is the whole of MS-241: ' +
-        'people reuse passwords, so a readable list of this congregation\'s passwords is a readable ' +
-        'list of their email accounts and their banking.');
+test('every password key in the source is one somebody justified', () => {
+    const unexplained = passwordKeyOccurrences().filter(occurrence =>
+        !ALLOWED.some(a => a.file === occurrence.file && occurrence.text.includes(a.line)));
+
+    const listed = unexplained.map(o => `  ${o.file}:${o.line}  ${o.text}`).join('\n');
+
+    assert.deepStrictEqual(unexplained, [],
+        'a password key appeared somewhere nobody has vouched for:\n' + listed +
+        '\n\nIf it is handed to Firebase Auth, that is fine — add it to ALLOWED with a reason.\n' +
+        'If it is written to Firestore, that is MS-241 coming back: Firebase Auth already holds\n' +
+        'a hashed copy, and a readable second one is a list of this congregation\'s passwords,\n' +
+        'which is a list of their email accounts and their banking.');
 });
 
-// The sweep above is generic. This one names the exact line the bug lived on,
-// so a failure points straight at it.
+// The guard is only worth having if it catches the thing coming back in every
+// shape it could come back in. Each of these fooled the previous version.
+test('the guard catches a relapse however it is written', () => {
+    const relapses = [
+        "db.collection('users').doc(uid).set({ email: e, password: this.password });",
+        'db.collection("users").doc(uid).set({ "password": password });',
+        "await ref.update({ 'password': newPassword });",
+        '    password: password,',
+        'const payload = { email, password: pw };',
+        "ref.set({ note: 'a } brace in a string', password: p });",
+    ];
+
+    for (const relapse of relapses) {
+        assert.ok(PASSWORD_KEY.test(stripStringValues(relapse)),
+            `this relapse would slip past the guard: ${relapse}`);
+    }
+});
+
+// ...and does not fire on code that merely mentions the word. A test that cries
+// wolf about correct code gets deleted by the next person, which is worse than
+// no test at all.
+test('the guard stays quiet on things that are not a password key', () => {
+    const innocent = [
+        "alert('Error updating password: ' + error.message);",
+        "case 'auth/wrong-password':",
+        'log(`Error updating user password: ${error.message}`);',
+        'await auth.signInWithEmailAndPassword(email, password);',
+        'const credential = firebase.auth.EmailAuthProvider.credential(user.email, oldPassword);',
+        '<input type="password" id="password" x-model="password" />',
+    ];
+
+    for (const line of innocent) {
+        assert.ok(!PASSWORD_KEY.test(stripStringValues(line)), `the guard cries wolf on: ${line}`);
+    }
+});
+
+// The list has to stay honest too — an entry left behind after its line is gone
+// would quietly re-permit that shape elsewhere in the same file.
+test('every allowed exception still exists', () => {
+    const occurrences = passwordKeyOccurrences();
+
+    for (const allowed of ALLOWED) {
+        const still = occurrences.some(o => o.file === allowed.file && o.text.includes(allowed.line));
+        assert.ok(still,
+            `ALLOWED lists ${allowed.file} "${allowed.line}" (${allowed.why}) but it is no longer ` +
+            'there — remove the entry rather than leaving it to permit something else');
+    }
+});
+
+// The sweep above is generic. This one names the exact line the bug lived on, so
+// a failure points straight at it.
 test('sign-up creates an account without filing the password', () => {
     const code = codeOnly(read('public', 'login.html'));
 
     const write = code.match(/collection\(['"]users['"]\)[\s\S]{0,600}?\.set\s*\(\s*\{/);
-    assert.ok(write, 'could not find the sign-up write to the users collection');
+    assert.ok(write,
+        'could not find the sign-up write to the users collection. If sign-up was restructured, ' +
+        'this test needs updating — do not read this as "the field is gone", check by hand.');
 
-    const payload = objectLiteralAt(code, write.index + write[0].length - 1);
-    assert.ok(!WRITES_PASSWORD_FIELD.test(payload),
+    const payload = code.slice(write.index + write[0].length - 1, write.index + write[0].length + 400);
+    assert.ok(!PASSWORD_KEY.test(payload),
         `sign-up still writes the password into the user document:\n${payload}`);
     assert.match(payload, /email/, 'sanity: this should be the user document write');
 });
 
-// The guard is only worth having if it would actually catch the thing coming
-// back. This proves it does.
-test('the sweep catches a password field if one is reintroduced', () => {
-    const relapse = `db.collection('users').doc(uid).set({
-        email: user.email,
-        password: this.password,
-        createdAt: now
-    });`;
+// The admin path deserves naming rather than riding on the generic sweep.
+test('an admin setting a password writes it to Firebase Auth and nowhere else', () => {
+    const code = codeOnly(read('functions', 'index.js'));
 
-    const payloads = firestoreWritePayloads(relapse);
-    assert.equal(payloads.length, 1);
-    assert.ok(WRITES_PASSWORD_FIELD.test(payloads[0]),
-        'the sweep would not notice the field being added back — it is not guarding anything');
-});
+    const fn = code.match(/exports\.updateUserPasswordAdmin[\s\S]*?\n\}\);/);
+    assert.ok(fn, 'updateUserPasswordAdmin is gone — an admin must still be able to SET a password');
 
-// ...and does not fire on the calls that are supposed to handle a password.
-test('the sweep leaves Firebase Auth calls alone', () => {
-    const legitimate = `
-        await admin.auth().createUser({ email: email, password: password });
-        await admin.auth().updateUser(uid, { password: newPassword });
-        await auth.createUserWithEmailAndPassword(this.email, this.password);
-        const cred = firebase.auth.EmailAuthProvider.credential(user.email, oldPassword);
-        alert('Error updating password: ' + error.message);
-    `;
-
-    const offending = firestoreWritePayloads(legitimate).filter(p => WRITES_PASSWORD_FIELD.test(p));
-    assert.deepStrictEqual(offending, [],
-        'the sweep flags handing a password to Firebase Auth, which is the correct thing to do ' +
-        'with one — a test that cries wolf about correct code gets deleted');
+    assert.match(fn[0], /admin\.auth\(\)\.updateUser/,
+        'the admin password change no longer reaches Firebase Auth, so it sets nothing');
+    assert.ok(!/collection\(["']users["']\)[\s\S]*?\.update\s*\(/.test(fn[0]),
+        'the admin password change still writes to the users document alongside Firebase Auth');
 });
 
 // ── And nothing shows it ─────────────────────────────────────────────────────
 
-test('no admin screen offers to reveal or copy a member password', () => {
+test('no admin screen offers to reveal or copy a stored password', () => {
     const code = codeOnly(read('public', 'profile.js'));
 
     assert.ok(!/Password Visibility/i.test(code),

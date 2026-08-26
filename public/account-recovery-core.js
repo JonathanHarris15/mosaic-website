@@ -2,7 +2,7 @@
  * What we say when somebody is trying to get into, or change, their own account.
  *
  * MS-241. Until this existed, the only way back into a locked-out account was an
- * admin reading the member's password off the Password Visibility panel — which
+ * admin reading them their password off the Password Visibility panel — which
  * is why the password was being stored in plain text at all. Removing the stored
  * copy without building this would have left people with no route back in.
  *
@@ -24,6 +24,11 @@
 
     // The one answer we give whether or not the address belongs to anybody.
     const RESET_SENT = 'If that address has an account, a reset link is on its way. Check your email.';
+
+    // Two failures mean the same thing to a reader whichever flow they are in,
+    // so they are said the same way in both rather than written out twice.
+    const RATE_LIMITED = 'Too many attempts just now. Please wait a few minutes and try again.';
+    const OFFLINE = 'Could not reach the server. Check your connection and try again.';
 
     /**
      * What to tell somebody who asked for a password-reset link.
@@ -52,9 +57,9 @@
             case 'auth/invalid-email':
                 return { ok: false, message: 'That does not look like an email address.' };
             case 'auth/too-many-requests':
-                return { ok: false, message: 'Too many attempts just now. Please wait a few minutes and try again.' };
+                return { ok: false, message: RATE_LIMITED };
             case 'auth/network-request-failed':
-                return { ok: false, message: 'Could not reach the server. Check your connection and try again.' };
+                return { ok: false, message: OFFLINE };
             default:
                 return { ok: false, message: 'Could not send a reset link just now. Please try again.' };
         }
@@ -83,9 +88,9 @@
             case 'auth/requires-recent-login':
                 return { ok: false, message: 'For your security, please sign in again before changing your password.' };
             case 'auth/too-many-requests':
-                return { ok: false, message: 'Too many attempts just now. Please wait a few minutes and try again.' };
+                return { ok: false, message: RATE_LIMITED };
             case 'auth/network-request-failed':
-                return { ok: false, message: 'Could not reach the server. Check your connection and try again.' };
+                return { ok: false, message: OFFLINE };
             default:
                 return { ok: false, message: 'Could not update your password just now. Please try again.' };
         }
@@ -93,6 +98,8 @@
 
     const AccountRecoveryCore = {
         RESET_SENT,
+        RATE_LIMITED,
+        OFFLINE,
         validateEmail,
         resetOutcome,
         passwordChangeOutcome,

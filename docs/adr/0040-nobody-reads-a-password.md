@@ -6,7 +6,7 @@
 
 ## Context
 
-Mosaic wrote every member's password, **in plain text**, into their own
+Mosaic wrote every user's password, **in plain text**, into their own
 `users/{uid}` document. The line carried its own explanation:
 
 ```js
@@ -28,7 +28,7 @@ purpose.
 a readable list of this congregation's passwords is a readable list of their
 email accounts and their banking. It is also the one field here nobody could
 consent to: a person typing a password into a login box is entitled to assume it
-is not being filed. `public/privacy.html` promised members "a securely hashed
+is not being filed. `public/privacy.html` promised account holders "a securely hashed
 password", which was false.
 
 ### Why it had not simply been deleted
@@ -51,7 +51,7 @@ verify it here too."* Deleting the field broke changing your own password.
 reset anywhere in the application: no "Forgot password?" link, no reset email,
 not on the web login, not on mobile, not on the MCP sign-in page. An admin
 reading somebody their password off that panel was the *whole* of how a
-locked-out member got back in.
+locked-out user got back in.
 
 So the field was not carelessness. It was a real answer to a real problem, in an
 app that had no other answer. That is exactly why deleting it alone would have
@@ -66,7 +66,7 @@ Three commitments, and the order between them is part of the decision.
 ### 1. Recovery ships before removal, never after
 
 A "Forgot password?" link that sends a Firebase reset email lands **first**. At
-no point may the application be in a state where a locked-out member has no way
+no point may the application be in a state where a locked-out user has no way
 back in.
 
 This is a sequencing constraint, not a preference. Removing a bad solution

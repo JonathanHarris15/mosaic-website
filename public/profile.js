@@ -952,8 +952,15 @@ if (changePasswordForm) {
         const oldPassword = document.getElementById('old-password').value;
         const newPassword = document.getElementById('new-password').value;
 
+        // Say so rather than doing nothing. A silent return here leaves the
+        // button looking dead — the account-deletion form below always reports,
+        // and so should this.
         const user = auth.currentUser;
-        if (!user) return;
+        if (!user) {
+            changePasswordStatus.textContent = 'You are signed out. Sign in again to change your password.';
+            changePasswordStatus.className = 'text-[10px] font-body-md text-error';
+            return;
+        }
 
         changePasswordStatus.textContent = 'Updating password...';
         changePasswordStatus.className = 'text-[10px] font-body-md text-primary animate-pulse';
@@ -967,17 +974,17 @@ if (changePasswordForm) {
         // deleted. Firebase Auth has held the hashed one all along.
         //
         // Same shape as the account-deletion form further up, deliberately.
-        let code = null;
+        let errorCode = null;
         try {
             const credential = firebase.auth.EmailAuthProvider.credential(user.email, oldPassword);
             await user.reauthenticateWithCredential(credential);
             await user.updatePassword(newPassword);
         } catch (error) {
             console.error('Password change failed:', error);
-            code = (error && error.code) ? error.code : 'unknown';
+            errorCode = (error && error.code) ? error.code : 'unknown';
         }
 
-        const outcome = AccountRecoveryCore.passwordChangeOutcome(code);
+        const outcome = AccountRecoveryCore.passwordChangeOutcome(errorCode);
         changePasswordStatus.textContent = outcome.message;
         changePasswordStatus.className = outcome.ok
             ? 'text-[10px] font-body-md text-green-600'
@@ -1343,7 +1350,7 @@ async function updateUserPasswordAdmin(uid) {
 //
 // copyToClipboard and togglePasswordVisibility used to live here. They existed
 // solely for the "Password Visibility" panel on the admin user list — an eye
-// icon that revealed any member's password in cleartext and a button that
+// icon that revealed any user's password in cleartext and a button that
 // copied it. Both went with the stored password (MS-241). Nothing else called
 // either of them; hymn-details.js has its own copy helper.
 

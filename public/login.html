@@ -138,15 +138,11 @@
                     this.notice = '';
                 },
 
-                validateEmail(email) {
-                    return AccountRecoveryCore.validateEmail(email);
-                },
-
                 /**
                  * Send a password-reset link to whatever is in the email box.
                  *
                  * This is the only way back into a locked-out account (MS-241).
-                 * Before it existed, an admin read the member's password off a
+                 * Before it existed, an admin read somebody their password off a
                  * screen — which is why one was being stored in plain text.
                  *
                  * ⚠ The answer is deliberately the same whether or not that
@@ -157,21 +153,21 @@
                     this.error = '';
                     this.notice = '';
 
-                    if (!this.validateEmail(this.email)) {
+                    if (!AccountRecoveryCore.validateEmail(this.email)) {
                         this.error = 'Enter your email address above, then press Forgot password.';
                         return;
                     }
 
                     this.loading = true;
-                    let code = null;
+                    let errorCode = null;
                     try {
                         await auth.sendPasswordResetEmail(this.email);
                     } catch (err) {
-                        code = err && err.code ? err.code : 'unknown';
+                        errorCode = (err && err.code) ? err.code : 'unknown';
                     }
                     this.loading = false;
 
-                    const outcome = AccountRecoveryCore.resetOutcome(code);
+                    const outcome = AccountRecoveryCore.resetOutcome(errorCode);
                     if (outcome.ok) this.notice = outcome.message;
                     else this.error = outcome.message;
                 },
@@ -180,7 +176,7 @@
                     this.error = '';
                     this.notice = '';
 
-                    if (!this.validateEmail(this.email)) {
+                    if (!AccountRecoveryCore.validateEmail(this.email)) {
                         this.error = 'Please enter a valid email address.';
                         return;
                     }
