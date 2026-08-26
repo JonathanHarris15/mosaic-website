@@ -14,6 +14,7 @@
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
     <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="account-recovery-core.js"></script>
     <script src="auth.js"></script>
 
     <!-- Alpine JS -->
@@ -71,6 +72,14 @@
                 <span x-text="error"></span>
             </div>
 
+            <!-- A reset link went out. Not an error, so it does not wear the
+                 error colours — and it says the same thing whether or not the
+                 address has an account (see account-recovery-core.js). -->
+            <div x-show="notice" x-cloak class="text-primary font-body-md text-sm flex items-center gap-1 bg-surface-container p-3 rounded-lg border border-outline-variant/40">
+                <span class="material-symbols-outlined text-sm">mark_email_read</span>
+                <span x-text="notice"></span>
+            </div>
+
             <button type="submit" :disabled="loading" class="bg-primary text-on-primary font-label-md text-label-md py-3 rounded-lg hover:bg-primary-container transition-all duration-200 mt-md shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
                 <span x-show="!loading" x-text="mode === 'login' ? 'Access Portal' : 'Create Account'">Access Portal</span>
                 <span x-show="loading" class="flex items-center justify-center gap-2">
@@ -84,6 +93,13 @@
         </form>
         
         <div class="mt-lg text-center flex flex-col gap-4">
+            <!-- The way back in. Only on the login side — there is nothing to
+                 reset while you are creating an account. -->
+            <button x-show="mode === 'login'" x-cloak @click="sendReset" :disabled="loading" type="button"
+                    class="text-secondary hover:text-primary font-label-md text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+                Forgot password?
+            </button>
+
             <button @click="toggleMode" class="text-secondary hover:text-primary font-label-md text-xs uppercase tracking-widest transition-colors">
                 <span x-text="mode === 'login' ? 'Don\'t have an account? Sign Up' : 'Already have an account? Log In'"></span>
             </button>
@@ -104,6 +120,7 @@
                 password: '',
                 confirmPassword: '',
                 error: '',
+                notice: '',
                 loading: false,
 
                 init() {
@@ -118,16 +135,51 @@
                 toggleMode() {
                     this.mode = this.mode === 'login' ? 'signup' : 'login';
                     this.error = '';
+                    this.notice = '';
                 },
 
                 validateEmail(email) {
-                    // Requirement: contains '@' and '.'
-                    return email.includes('@') && email.includes('.');
+                    return AccountRecoveryCore.validateEmail(email);
+                },
+
+                /**
+                 * Send a password-reset link to whatever is in the email box.
+                 *
+                 * This is the only way back into a locked-out account (MS-241).
+                 * Before it existed, an admin read the member's password off a
+                 * screen — which is why one was being stored in plain text.
+                 *
+                 * ⚠ The answer is deliberately the same whether or not that
+                 * address has an account. account-recovery-core.js explains why
+                 * and pins it with a test; do not "improve" it here.
+                 */
+                async sendReset() {
+                    this.error = '';
+                    this.notice = '';
+
+                    if (!this.validateEmail(this.email)) {
+                        this.error = 'Enter your email address above, then press Forgot password.';
+                        return;
+                    }
+
+                    this.loading = true;
+                    let code = null;
+                    try {
+                        await auth.sendPasswordResetEmail(this.email);
+                    } catch (err) {
+                        code = err && err.code ? err.code : 'unknown';
+                    }
+                    this.loading = false;
+
+                    const outcome = AccountRecoveryCore.resetOutcome(code);
+                    if (outcome.ok) this.notice = outcome.message;
+                    else this.error = outcome.message;
                 },
 
                 async submit() {
                     this.error = '';
-                    
+                    this.notice = '';
+
                     if (!this.validateEmail(this.email)) {
                         this.error = 'Please enter a valid email address.';
                         return;
