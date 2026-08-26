@@ -952,23 +952,42 @@ if (changePasswordForm) {
         const oldPassword = document.getElementById('old-password').value;
         const newPassword = document.getElementById('new-password').value;
 
+        const user = auth.currentUser;
+        if (!user) return;
+
         changePasswordStatus.textContent = 'Updating password...';
         changePasswordStatus.className = 'text-[10px] font-body-md text-primary animate-pulse';
 
+        // ⚠ THE CURRENT PASSWORD IS PROVED TO FIREBASE, NOT TO US (MS-241).
+        //
+        // This used to call updateUserPasswordSelf, which fetched the user's
+        // document and did `userData.password !== oldPassword`. That worked only
+        // because a plaintext copy of everybody's password was being kept in
+        // Firestore, and it was the single reason the copy could not just be
+        // deleted. Firebase Auth has held the hashed one all along.
+        //
+        // Same shape as the account-deletion form further up, deliberately.
+        let code = null;
         try {
-            const updateSelfPasswordFunc = firebase.functions().httpsCallable('updateUserPasswordSelf');
-            await updateSelfPasswordFunc({ oldPassword, newPassword });
-            
-            changePasswordStatus.textContent = 'Password updated successfully.';
-            changePasswordStatus.className = 'text-[10px] font-body-md text-green-600';
+            const credential = firebase.auth.EmailAuthProvider.credential(user.email, oldPassword);
+            await user.reauthenticateWithCredential(credential);
+            await user.updatePassword(newPassword);
+        } catch (error) {
+            console.error('Password change failed:', error);
+            code = (error && error.code) ? error.code : 'unknown';
+        }
+
+        const outcome = AccountRecoveryCore.passwordChangeOutcome(code);
+        changePasswordStatus.textContent = outcome.message;
+        changePasswordStatus.className = outcome.ok
+            ? 'text-[10px] font-body-md text-green-600'
+            : 'text-[10px] font-body-md text-error';
+
+        if (outcome.ok) {
             changePasswordForm.reset();
             setTimeout(() => {
                 changePasswordStatus.textContent = '';
             }, 5000);
-        } catch (error) {
-            console.error(error);
-            changePasswordStatus.textContent = 'Update failed: ' + error.message;
-            changePasswordStatus.className = 'text-[10px] font-body-md text-error';
         }
     });
 }

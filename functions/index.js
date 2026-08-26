@@ -333,52 +333,30 @@ exports.updateUserPasswordAdmin = onCall({cors: true, region: "us-central1"}, as
   }
 });
 
-/**
- * A Callable Cloud Function that allows users to update their own password.
- * Note: Frontend handles the 're-auth' requirement by asking for old password,
- * but since we store it in Firestore, we can verify it here too.
+/*
+ * CHANGING YOUR OWN PASSWORD HAS NO CLOUD FUNCTION, ON PURPOSE (MS-241).
+ *
+ * There used to be an `updateUserPasswordSelf` here. It checked your current
+ * password like this:
+ *
+ *     if (userData.password !== oldPassword) throw ...
+ *
+ * — a string comparison against a plaintext copy of your password kept in your
+ * `users` document. Its own doc comment said the quiet part: "since we store it
+ * in Firestore, we can verify it here too." That comparison was the only thing
+ * in the whole app that genuinely needed the stored copy, and therefore the only
+ * thing standing between us and deleting it.
+ *
+ * The browser now re-authenticates against Firebase Auth and calls
+ * updatePassword itself (see the change-password form in public/profile.js), so
+ * the server has no reason to know the plaintext and no longer does. A member
+ * who cannot remember their current password uses the reset link on the login
+ * page instead, which did not exist when this function was written.
+ *
+ * Admins keep updateUserPasswordAdmin above: setting somebody's password is a
+ * privileged act that has to happen server-side, and it never needed to read
+ * one.
  */
-exports.updateUserPasswordSelf = onCall({cors: true, region: "us-central1"}, async (request) => {
-  if (!request.auth) {
-    throw new Error("The function must be called while authenticated.");
-  }
-
-  const uid = request.auth.uid;
-  const {oldPassword, newPassword} = request.data;
-
-  if (!oldPassword || !newPassword) {
-    throw new Error("Missing required fields: oldPassword or newPassword.");
-  }
-
-  const db = admin.firestore();
-  const userDoc = await db.collection("users").doc(uid).get();
-
-  if (!userDoc.exists) {
-    throw new Error("User record not found.");
-  }
-
-  const userData = userDoc.data();
-  if (userData.password !== oldPassword) {
-    throw new Error("Incorrect current password.");
-  }
-
-  try {
-    // Update Auth
-    await admin.auth().updateUser(uid, {
-      password: newPassword,
-    });
-    // Update Firestore
-    await db.collection("users").doc(uid).update({
-      password: newPassword,
-    });
-
-    log(`User ${uid} successfully updated their own password.`);
-    return {success: true};
-  } catch (error) {
-    log(`Error updating self password: ${error.message}`);
-    throw new Error(error.message);
-  }
-});
 
 /* ------------------------------------------------------------------
  * Directory Requests (ADR-0025, ADR-0027)

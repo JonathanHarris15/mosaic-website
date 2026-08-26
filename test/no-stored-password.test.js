@@ -85,3 +85,41 @@ test('the login page does not branch its own message on whether an account exist
         'login.html mentions user-not-found — a distinct answer for an unregistered address ' +
         'turns the login page into a way to find out who attends this church');
 });
+
+// ── Proving your current password ────────────────────────────────────────────
+
+test('changing your own password proves it to Firebase, not to Firestore', () => {
+    const code = codeOnly(read('public', 'profile.js'));
+
+    assert.match(code, /reauthenticateWithCredential/,
+        'the self password change does not re-authenticate — the only other way to check a ' +
+        'current password is to compare it against a stored copy, which is the bug');
+    assert.match(code, /updatePassword/,
+        'nothing calls updatePassword, so the change is still going through a server that ' +
+        'needs to know the plaintext');
+    assert.ok(!/updateUserPasswordSelf/.test(code),
+        'profile.js still calls updateUserPasswordSelf, the callable that authenticates by ' +
+        'string-comparing a stored plaintext password');
+});
+
+test('profile.html loads the core its script reaches for', () => {
+    const html = read('public', 'profile.html');
+    const code = codeOnly(read('public', 'profile.js'));
+
+    if (/AccountRecoveryCore/.test(code)) {
+        assert.match(html, /<script[^>]+src="account-recovery-core\.js"/,
+            'profile.js uses AccountRecoveryCore but profile.html never loads it — the browser ' +
+            'would get undefined and the page would throw on first use');
+    }
+});
+
+// The server-side half of the same thing.
+test('no cloud function authenticates anybody by comparing a stored password', () => {
+    const code = codeOnly(read('functions', 'index.js'));
+
+    assert.ok(!/userData\.password/.test(code),
+        'a cloud function still reads a stored password off the user document to check it');
+    assert.ok(!/exports\.updateUserPasswordSelf/.test(code),
+        'updateUserPasswordSelf is still deployed — it exists only to compare a stored ' +
+        'plaintext password, and its own comment says so');
+});
