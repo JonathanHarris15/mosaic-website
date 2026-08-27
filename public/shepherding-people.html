@@ -223,15 +223,17 @@
                                 :class="tagFilters.includes(tag.id)
                                     ? 'bg-primary text-on-primary ring-2 ring-primary-fixed shadow-sm pb-5'
                                     : 'bg-surface-container text-on-surface hover:bg-surface-container-high border border-outline-variant/30'"
-                                :style="tagFilters.includes(tag.id) ? 'min-width: 74px' : ''"
+                                :style="tagFilters.includes(tag.id) ? 'min-width: 116px' : ''"
                                 class="px-3 py-1 font-label-md text-xs rounded-2xl transition-all duration-300 ease-out active:scale-95 flex items-center gap-1">
                                 <span x-text="tag.name"></span>
                                 <span x-show="tagFilters.includes(tag.id)"
                                       class="inline-flex items-center gap-0.5 text-[10px] font-bold">
+                                    <!-- Direction, in words. Fixed width so the chip does not
+                                         resize as older / recent are toggled. -->
                                     <span @click.stop="toggleHoldCmp(tag.id)" role="button"
-                                          :title="tagHoldCmp[tag.id] === 'lt' ? 'Held less than — click for at least' : 'Held at least — click for less than'"
-                                          class="px-1 rounded bg-on-primary/25 hover:bg-on-primary/40 transition-colors leading-none cursor-pointer"
-                                          x-text="holdCmpSymbol(tag.id)"></span>
+                                          :title="holdDirectionHint(tag.id)"
+                                          class="px-1 rounded bg-on-primary/25 hover:bg-on-primary/40 transition-colors leading-none cursor-pointer inline-block min-w-[42px] text-center"
+                                          x-text="holdDirectionWord(tag.id)"></span>
                                     <span class="opacity-80 inline-block min-w-[24px] text-left" x-text="holdShort(tag.id) || 'any'"></span>
                                 </span>
                             </button>
@@ -244,12 +246,12 @@
                                    :value="tagHoldStopIndex(tag.id)"
                                    @input="setTagHoldStop(tag.id, $event.target.value)"
                                    @click.stop @mousedown.stop
-                                   :title="(tagHoldFilters[tag.id] || 0) > 0 ? 'Held at least ' + holdShort(tag.id) : 'Held for any length — slide right to require longer'"
+                                   :title="holdScrubberLabel(tag.id)"
                                    class="tag-hold-slider text-on-primary" />
                         </div>
                     </template>
                 </div>
-                <p x-show="tagFilters.length > 0" class="text-[10px] text-on-surface-variant italic">Slide the dot under a selected tag to require a minimum time held.</p>
+                <p x-show="tagFilters.length > 0" class="text-[10px] text-on-surface-variant italic">Slide the dot under a selected tag to set a time held. Tap <span class="not-italic font-bold">older</span> to keep the longest holds, or <span class="not-italic font-bold">recent</span> to keep people tagged inside that time.</p>
             </div>
 
             <!-- Filter by Status -->

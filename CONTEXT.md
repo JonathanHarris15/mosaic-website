@@ -310,8 +310,12 @@ The span of time a Person has continuously carried a Shepherding Tag: from the T
 _Avoid_: Tag age, tag duration, held-since
 
 **Hold Duration**:
-The length of a Tag Hold, expressed as a human-readable span (e.g. "3 months", "12 days"). The basis of the Hold-Duration filter, which narrows a Filtered View or the People list to Persons who have held a tag long enough. Each selected filter tag carries its own minimum, set by a slider on the tag chip — a dot on the chip's lower edge that slides from 0 (anyone carrying the tag) up to a year.
+The length of a Tag Hold, expressed as a human-readable span (e.g. "3 months", "12 days"). The basis of the Hold-Duration filter, which narrows a Filtered View or the People list by how long each Person has held a tag. Each selected filter tag carries its own threshold, set by a slider on the tag chip — a dot on the chip's lower edge that slides from 0 (anyone carrying the tag) up to a year — and its own Hold Direction, which says which side of that threshold to keep.
 _Avoid_: Tenure, elapsed time
+
+**Hold Direction**:
+Which side of a Hold-Duration threshold the filter keeps: **older** (held at least that long — the default) or **recent** (held less than that long). Set per selected filter tag by tapping the word on the tag chip. Stored as `gte` / `lt`; the words are always derived from the stored value, never saved alongside it, so a Filtered View saved before the words existed still reads as older. A Filtered View that stores no direction means older.
+_Avoid_: At-least / less-than as the name of the concept — that is the scrubber tooltip's phrasing, not what the thing is called. (The stored field is `tagHoldCmp` and older code calls the value a `comparator`. Those are identifiers predating this term, not a second name for it.)
 
 **Prayer Request**:
 The specific thing a pastoral-prayer subject asks the church to pray about for a given Sunday. Captured against that Sunday's Pastoral Prayer (i.e. attached to the order of service) and, once captured, also recorded as a Shepherding Note of Note Type "Prayer Request" on the subject's Shepherding Profile (generated once, then independent). May be typed in by an Elder or super admin, or supplied by the subject themselves by replying to an automated text message. Visible only to Elders and super admins.

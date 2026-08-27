@@ -204,6 +204,14 @@ document.addEventListener('alpine:init', () => {
             return (view.tagHoldCmp && view.tagHoldCmp[tagId]) || 'gte';
         },
 
+        // How a saved view's card summarises one tag's Hold-Duration filter, e.g.
+        // ' · older 3mo'. Reads its direction word from the same helper the editor
+        // uses, so the card and the dialog behind it cannot say different things.
+        viewTagHoldSummary(view, tagId) {
+            return ' · ' + ShepherdingCore.holdDirectionWord(this.viewTagCmp(view, tagId))
+                + ' ' + ShepherdingCore.formatHoldShort(this.viewTagHoldDays(view, tagId));
+        },
+
         // Drop zero entries so a view stores only the tags that actually constrain.
         cleanHoldFilters() {
             const out = {};
@@ -397,7 +405,14 @@ document.addEventListener('alpine:init', () => {
             this.newView.tagHoldFilters = { ...this.newView.tagHoldFilters, [tagId]: days };
         },
         viewTagHoldShort(tagId) { return ShepherdingCore.formatHoldShort(this.newView.tagHoldFilters[tagId] || 0); },
-        viewNewCmpSymbol(tagId) { return this.newView.tagHoldCmp[tagId] === 'lt' ? '<' : '>'; },
+        // Direction, in words — the same wording the People list filter shows,
+        // decided in one place so the two copies of this widget cannot drift
+        // apart again (MS-279).
+        viewNewDirectionWord(tagId) { return ShepherdingCore.holdDirectionWord(this.newView.tagHoldCmp[tagId]); },
+        viewNewDirectionHint(tagId) { return ShepherdingCore.holdDirectionHint(this.newView.tagHoldCmp[tagId]); },
+        viewNewScrubberLabel(tagId) {
+            return ShepherdingCore.holdScrubberLabel(this.newView.tagHoldCmp[tagId], this.viewTagHoldShort(tagId));
+        },
         toggleViewNewCmp(tagId) {
             const next = this.newView.tagHoldCmp[tagId] === 'lt' ? 'gte' : 'lt';
             this.newView.tagHoldCmp = { ...this.newView.tagHoldCmp, [tagId]: next };

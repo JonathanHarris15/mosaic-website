@@ -260,6 +260,44 @@
         return comparator === 'lt' ? durationMs < threshold : durationMs >= threshold;
     }
 
+    // ── Hold Direction wording ───────────────────────────────────────────────
+    // The direction is stored as 'gte' (held at least) or 'lt' (held less than)
+    // and nothing else is persisted — the words below are always derived, so a
+    // saved Filtered View needs no migration. One place decides them because the
+    // widget is drawn twice (the People list filter and the Filtered View
+    // editor); when each template wrote its own wording, one copy stopped
+    // tracking the direction and started lying about it (MS-279).
+
+    // Anything we don't recognise — including nothing at all — is the default.
+    // Not exported: it exists so the three below cannot disagree about what an
+    // absent direction means.
+    function holdDirection(direction) {
+        return direction === 'lt' ? 'lt' : 'gte';
+    }
+
+    // The word shown on a selected tag chip, in place of the old > / < glyph.
+    function holdDirectionWord(direction) {
+        return holdDirection(direction) === 'lt' ? 'recent' : 'older';
+    }
+
+    // Tooltip for the direction word itself: which way it runs now, and what a
+    // click will do.
+    function holdDirectionHint(direction) {
+        return holdDirection(direction) === 'lt'
+            ? 'Held less than — click for held at least'
+            : 'Held at least — click for held less than';
+    }
+
+    // Tooltip for the Hold-Duration scrubber. `shortLabel` is the threshold's
+    // compact caption from formatHoldShort, empty when the dot sits at 0 — and
+    // with no threshold set the scrubber claims no direction, it names both.
+    function holdScrubberLabel(direction, shortLabel) {
+        if (!shortLabel) return 'Held for any length — slide right to set a time, then pick older or recent';
+        return holdDirection(direction) === 'lt'
+            ? `Held less than ${shortLabel}`
+            : `Held at least ${shortLabel}`;
+    }
+
     // Discrete stops (in days) for the per-tag Hold-Duration slider: 0 (anyone
     // carrying the tag) up to a year, in widening increments. Each selected tag
     // filter chip carries its own stop.
@@ -673,6 +711,9 @@
         formatHoldDuration,
         holdMeetsMinimum,
         holdSatisfies,
+        holdDirectionWord,
+        holdDirectionHint,
+        holdScrubberLabel,
         HOLD_FILTER_STOPS,
         holdStopIndex,
         formatHoldShort,
