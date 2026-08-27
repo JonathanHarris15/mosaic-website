@@ -466,6 +466,43 @@
         };
     }
 
+    // Is there a document on this date yet?
+    //
+    // A MISSING DOCUMENT IS DENIED, NOT ABSENT — the rule reads `resource.data`
+    // and `resource` is null for a document that is not there. Sparse dates are
+    // the ordinary case, so a refusal here means "nothing has landed on this
+    // date yet", not "you may not". An editor who may write it may read it.
+    //
+    // Returns the snapshot, or null when there is nothing there.
+    async function occurrenceDocumentAt(db, id) {
+        const doc = await occurrenceRef(db, id).get().catch(e => {
+            if (e && e.code === 'permission-denied') return null;
+            throw e;
+        });
+        return doc && doc.exists ? doc : null;
+    }
+
+    // Everything a date of a series must carry THE FIRST TIME something lands on
+    // it — the fields that make the write a real occurrence rather than a
+    // fragment nobody can find.
+    //
+    // This exists because `stampFor`'s warning had to be re-read at every call
+    // site, and three writers had each remembered it separately. A fourth would
+    // have had to remember unaided, which is how `acceptDraft` shipped the bug
+    // in the first place: it wrote the seats and nothing else, and every date it
+    // touched went unreadable and showed as needing people.
+    //
+    // `seriesId` and `date` are here for the same reason the stamp is. The
+    // Calendar reads `visibility + date` and "what am I on" reads
+    // `visibility + participantIds + date`, so a document missing either is one
+    // no query can return, however readable the rule finds it.
+    //
+    // ONLY when creating. On a date that already has a document, re-stamping
+    // from the series would overwrite answers that date was deliberately given.
+    function newOccurrenceFields(series, seriesId, date) {
+        return Object.assign({ seriesId: seriesId, date: date }, stampFor(series, seriesId));
+    }
+
     // An occurrence reconstructed from its id and its series. Returns null unless
     // the series' rule ACTUALLY PRODUCES that date — otherwise any id typed into
     // the address bar would render a page for an event that does not happen.
@@ -581,31 +618,21 @@
         const id = Core.occurrenceId(seriesId, date);
         if (!id) throw new Error('Only a date of a series can be cancelled.');
 
-        // A MISSING DOCUMENT IS DENIED, NOT ABSENT — the rule reads
-        // `resource.data` and `resource` is null for a document that is not
-        // there. Sparse dates are the ordinary case, so a refusal here means
-        // "nothing has landed on this date yet", not "you may not".
-        const doc = await occurrenceRef(db, id).get().catch(e => {
-            if (e && e.code === 'permission-denied') return null;
-            throw e;
-        });
+        const doc = await occurrenceDocumentAt(db, id);
 
         const patch = { cancelled: cancelled !== false };
 
-        // Only when creating. On a date that already has a document, re-stamping
-        // from the series would overwrite whatever that date carries, and
-        // `participantIds: []` would wipe the very list the rule uses to let the
-        // people on the roster see they have been stood down.
-        if (!doc || !doc.exists) {
+        // Only when creating. On a date that already has a document, the empty
+        // `participantIds` below would wipe the very list the rule uses to let
+        // the people on the roster see they have been stood down.
+        if (!doc) {
             const series = (options && options.series)
                 || await loadSeries(db, seriesId);
             Object.assign(patch, {
-                seriesId: seriesId,
-                date: date,
                 participantIds: [],
                 needsAttention: false,
                 outForCover: false,
-            }, stampFor(series, seriesId));
+            }, newOccurrenceFields(series, seriesId, date));
         }
 
         await occurrenceRef(db, id).set(patch, { merge: true });
@@ -874,11 +901,15 @@
         return payload;
     }
 
-    // ── Editing a one-off Event ──────────────────────────────────────────────
+    // ── Editing one date ─────────────────────────────────────────────────────
     //
     // A one-off has no series, so everything true of it is true of its single
     // occurrence — and nothing could edit any of it. It was creatable and then
     // frozen: wrong time, wrong hall, wrong name, no way back.
+    //
+    // ONE DATE OF A SERIES comes through here too, for its description (MS-288)
+    // and nothing else — the screen only offers that one box, and `date` is
+    // refused outright below.
     //
     // A PATCH, for the same reason the series one is. The roster and the derived
     // participant list are not in `OCCURRENCE_DETAIL_FIELDS`, so a screen that
@@ -942,6 +973,34 @@
         if ('rosterShared' in d) payload.rosterShared = d.rosterShared === true;
 
         if (!Object.keys(payload).length) return payload;
+
+        // MOST DATES OF A SERIES HAVE NO DOCUMENT — they are computed from the
+        // rule, and one is written the first time something lands on the date.
+        // Saying something about one date (MS-288) is now such a first time, so
+        // this write can CREATE the document and owes it everything a new
+        // occurrence carries.
+        //
+        // An EXISTING document is left alone: its stamp is already somebody's
+        // deliberate answer, and re-stamping from the series would quietly undo
+        // a per-date visibility change.
+        //
+        // The `date` written here is NOT the one refused forty lines above, and
+        // the difference is the whole reason for the refusal. That one came from
+        // a caller trying to move the event; this one is read back OFF THE ID,
+        // so it can only ever agree with it.
+        const parsedId = Core.parseOccurrenceId(id);
+        if (parsedId && !await occurrenceDocumentAt(db, id)) {
+            const series = await loadSeries(db, parsedId.seriesId);
+            const fresh = newOccurrenceFields(series, parsedId.seriesId, parsedId.date);
+            // The caller's own answer wins where it gave one. No screen sends a
+            // visibility down a series-occurrence id today — that ladder is the
+            // one-off panel's — but this function's contract accepts one and
+            // validates it, and silently overwriting an argument it advertises
+            // is worse than the line it costs to honour.
+            Object.keys(fresh).forEach(field => {
+                if (!(field in payload)) payload[field] = fresh[field];
+            });
+        }
 
         await occurrenceRef(db, id).set(payload, { merge: true });
         return payload;
@@ -1210,12 +1269,10 @@
             // — clearing a roster is a real change and has to land.
             if (!roster.length && !existing.docs.length) continue;
 
-            await saveOccurrence(db, Object.assign({
-                id: id,
-                seriesId: o.seriesId,
-                date: day.date,
-                assignments: roster,
-            }, stamp));
+            await saveOccurrence(db, Object.assign(
+                { id: id, assignments: roster },
+                newOccurrenceFields(series, o.seriesId, day.date)
+            ));
 
             assignments += drafted.length;
             written.push(day.date);
