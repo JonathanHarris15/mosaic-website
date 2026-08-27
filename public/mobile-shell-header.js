@@ -13,6 +13,10 @@
        onBack: true,                        // (alt) fire a "mobile-header:back" event
        hideSelector: "body > header",       // page header(s) to hide (default)
      };
+
+   One element inside the hidden header may carry [data-mobile-header-nav]. It
+   is moved in beside the title rather than out at the right edge — for controls
+   that read as part of the title, not as actions on it.
    Load this in <head> right after mobile-shell.js. It no-ops off the shell.
 
    The header sits sticky at the top of normal flow (no body padding, so it
@@ -260,10 +264,19 @@
     // Adopted, not copied: one node moves, so nothing can drift and no listener
     // is rebound. .m-header--compact on this bar is what collapses them to
     // 44px glyphs, which is the size the shell's own row already draws.
+    //
+    // A page may also mark ONE group as [data-mobile-header-nav] — controls
+    // that belong beside the title rather than out at the right edge. The
+    // Order of Service's Sunday arrows are the case this exists for: they read
+    // as part of the date, not as an action on it. Adopted the same way, so
+    // the phone presses the same buttons the desktop does and there is no
+    // second copy to keep honest.
     var adopted = null;
+    var adoptedNav = null;
     try {
       document.querySelectorAll(cfg.hideSelector || "body > header").forEach(function (el) {
         if (!adopted) adopted = el.querySelector(".m-header__actions");
+        if (!adoptedNav) adoptedNav = el.querySelector("[data-mobile-header-nav]");
         el.style.display = "none";
       });
     } catch (e) {}
@@ -309,6 +322,19 @@
 
     row.appendChild(btn);
     row.appendChild(title);
+    // Sized here rather than in a stylesheet: the group is the page's own
+    // markup wearing the page's own classes, and this bar is the only place it
+    // has to be 40px. Any smaller and it stops being a touch target; any
+    // bigger and the title starts losing words.
+    if (adoptedNav) {
+      adoptedNav.style.flexShrink = "0";
+      adoptedNav.querySelectorAll("button").forEach(function (b) {
+        b.style.width = "40px";
+        b.style.height = "40px";
+        b.style.padding = "0";
+      });
+      row.appendChild(adoptedNav);
+    }
     if (adopted) row.appendChild(adopted);
     header.appendChild(row);
     document.body.insertBefore(header, document.body.firstChild);

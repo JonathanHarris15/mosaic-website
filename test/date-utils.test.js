@@ -73,3 +73,11 @@ test('upcomingSundays tolerates an empty list', () => {
     assert.deepStrictEqual(D.upcomingSundays([], new Date(2026, 0, 1)), []);
     assert.deepStrictEqual(D.upcomingSundays(null, new Date(2026, 0, 1)), []);
 });
+
+// The phone header's date. Short because it shares a 46px row with a back arrow
+// and two chevrons — see formatDateMedium's own note.
+test('a medium date is short enough for a phone header and still says which day', () => {
+    assert.strictEqual(D.formatDateMedium('2026-08-30', 'en-US'), 'Sun, Aug 30, 2026');
+    assert.strictEqual(D.formatDateMedium(''), '');
+    assert.strictEqual(D.formatDateMedium(null), '');
+});

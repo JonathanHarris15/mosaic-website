@@ -223,6 +223,37 @@
                 <div class="m-header__titles">
                     <h1 class="m-header__title m-header__title--serif" x-text="formatDate(date)"></h1>
                 </div>
+
+                <!-- Step Sunday to Sunday without going back to Services (MS-303).
+                     Distinct from the back link on the left, which is the way
+                     OUT of this Sunday and stays that. Disabled rather than
+                     hidden at the ends of the range, so the header does not
+                     shuffle as you reach them. -->
+                <!-- The title sits on the wrapper, not the button. A disabled
+                     button shows no tooltip in Chrome or Firefox, so the end of
+                     the range — the one case where the hint matters most — would
+                     have said nothing at all. -->
+                <div class="flex items-center gap-1 shrink-0" x-show="date"
+                     data-mobile-header-nav>
+                    <span :title="previousServiceDate ? formatDate(previousServiceDate) : 'No earlier Sunday'"
+                          class="inline-flex">
+                        <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost"
+                                @click="stepService(-1)"
+                                :disabled="!previousServiceDate || stepping"
+                                :aria-label="previousServiceDate ? 'Previous Sunday, ' + formatDate(previousServiceDate) : 'No earlier Sunday'">
+                            <span class="material-symbols-outlined">chevron_left</span>
+                        </button>
+                    </span>
+                    <span :title="nextServiceDate ? formatDate(nextServiceDate) : 'No later Sunday'"
+                          class="inline-flex">
+                        <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost"
+                                @click="stepService(1)"
+                                :disabled="!nextServiceDate || stepping"
+                                :aria-label="nextServiceDate ? 'Next Sunday, ' + formatDate(nextServiceDate) : 'No later Sunday'">
+                            <span class="material-symbols-outlined">chevron_right</span>
+                        </button>
+                    </span>
+                </div>
             </div>
             <div class="m-header__actions">
                 <span id="header-dirty-pill" x-show="canEdit && isDirty && !saving" x-transition
@@ -1419,6 +1450,7 @@
     </div>
 
     <script src="date-utils.js"></script>
+    <script src="service-dates-core.js"></script>
     <!-- "Last used / times used" on the hymn, scripture, and person pickers. -->
     <script src="usage-stats-core.js"></script>
     <!-- Bible-reference parsing for the scripture heat map — shared with
