@@ -6,6 +6,9 @@
 // Library) or `documentLibrary({ ...scope })` when embedded in a profile.
 const Docs = (typeof ShepherdingDocsCore !== 'undefined') ? ShepherdingDocsCore : require('./shepherding-documents-core.js');
 
+// Firestore's code for a write the security rules turned down.
+const PERMISSION_DENIED = 'permission-denied';
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('documentLibrary', (config = {}) => ({
         // ── Scope (MS-98) ─────────────────────────────────────────────────────
@@ -17,9 +20,29 @@ document.addEventListener('alpine:init', () => {
         embedded: !!config.embedded, // mounted inside an already-authenticated page
 
         loading: true,
-        currentUser: null,
-        currentPermissionLevel: null,
-        currentUserName: '',
+
+        // ── Identity, read live (MS-283) ──────────────────────────────────────
+        // An embedded directory is handed a *reader* for its host page's identity,
+        // never a copy. The host resolves the signed-in Elder asynchronously, but
+        // this component mounts as soon as the Person id is known — that comes off
+        // the URL, so instantly — and a copy taken in that gap stayed null for the
+        // life of the page. Nothing re-mounted it. Reading through means identity
+        // that arrives late is still seen, and it cannot break that way again.
+        //
+        // All three fields move together. Only `user` announced itself, because the
+        // other two had fallbacks: every document made here would have been authored
+        // by the literal string "Elder", silently.
+        readHostIdentity: typeof config.identity === 'function' ? config.identity : null,
+        // The standalone Library page has no host, so it fills this in itself, in
+        // one assignment from the auth gate below.
+        ownIdentity: { user: null, name: '', permissionLevel: null },
+
+        get identity() {
+            return (this.readHostIdentity ? this.readHostIdentity() : this.ownIdentity) || {};
+        },
+        get currentUser() { return this.identity.user || null; },
+        get currentUserName() { return this.identity.name || ''; },
+        get currentPermissionLevel() { return this.identity.permissionLevel || null; },
 
         structure: { children: [] },
         allDocs: {},
@@ -81,10 +104,8 @@ document.addEventListener('alpine:init', () => {
         async init() {
             if (this.embedded) {
                 // Mounted inside an already-authenticated page (the Shepherding
-                // Profile). The host passes identity in; no auth gate here.
-                this.currentUser = config.currentUser || null;
-                this.currentUserName = config.currentUserName || 'Elder';
-                this.currentPermissionLevel = config.currentPermissionLevel || 'elder';
+                // Profile). The host owns identity and we read it live; no auth
+                // gate and, deliberately, no copy taken here.
                 await this.loadData();
                 this.loading = false;
                 return;
@@ -93,14 +114,16 @@ document.addEventListener('alpine:init', () => {
             auth.onAuthStateChanged(async (user) => {
                 if (!user) { window.location.href = 'login.html'; return; }
                 const userData = await getUserData(user.uid);
-                this.currentPermissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
-                if (!['elder', 'super_admin'].includes(this.currentPermissionLevel)) {
+                const permissionLevel = (userData && (userData.permissionLevel || userData.role)) || 'viewer';
+                if (!['elder', 'super_admin'].includes(permissionLevel)) {
                     window.location.href = 'index.html';
                     return;
                 }
-                this.currentUser = user;
-                this.currentUserName = (userData && userData.email)
-                    ? userData.email.split('@')[0] : 'Elder';
+                this.ownIdentity = {
+                    user: user,
+                    name: (userData && userData.email) ? userData.email.split('@')[0] : 'Elder',
+                    permissionLevel: permissionLevel,
+                };
 
                 // Dev-only privacy screen (shepherding-blur.js).
                 ShepherdingBlur.configure({
@@ -271,41 +294,36 @@ document.addEventListener('alpine:init', () => {
             this.showCreateModal = true;
         },
 
+        // Who is writing, resolved at the moment of use rather than trusted from
+        // mount time — with the live auth session as a last resort, which is what
+        // the mobile port does (MS-283). Belt and braces on top of the live identity
+        // read. Both halves fall back together: a uid rescued on its own is no use,
+        // because the builder refuses a document with no author name just as firmly.
+        get author() {
+            return Docs.resolveAuthor(
+                this.identity,
+                typeof auth !== 'undefined' ? auth.currentUser : null);
+        },
+
         async createDocument() {
             this.showCreateModal = false;
             const type = this.isProfileScope ? 'note' : this.createDocType;
             const title = type === 'care-list' ? 'New Care List' : 'New Document';
             try {
-                const docData = {
+                const preset = this.createFilterMode === 'preset';
+                const docData = Docs.buildElderDocument({
                     title: title,
                     docType: type,
-                    authorName: this.currentUserName,
-                    authorUid: this.currentUser.uid,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    updatedByName: this.currentUserName,
-                };
-                // MS-98: a profile document is owned by its Person and hidden from
-                // shared surfaces until opted into the Library.
-                if (this.ownerPersonId) {
-                    docData.ownerPersonId = this.ownerPersonId;
-                    docData.inLibrary = false;
-                }
-
-                if (type === 'care-list') {
-                    if (this.createFilterMode === 'preset') {
-                        docData.filterId = this.selectedViewId;
-                    } else {
-                        docData.filterConfig = { ...this.customFilter };
-                    }
-                    docData.careListData = {}; // Map of personId -> TipTap JSON
-                } else {
-                    docData.contentJson = null;
-                }
+                    author: this.author,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    ownerPersonId: this.ownerPersonId,
+                    filterId: preset ? this.selectedViewId : null,
+                    filterConfig: preset ? null : this.customFilter, // the builder copies it
+                });
 
                 const docRef = await db.collection('elder_documents').add(docData);
                 this.allDocs[docRef.id] = {
-                    id: docRef.id, title: title, docType: type, authorName: this.currentUserName,
+                    id: docRef.id, title: title, docType: type, authorName: docData.authorName,
                     ownerPersonId: this.ownerPersonId || null, inLibrary: false,
                 };
 
@@ -322,8 +340,22 @@ document.addEventListener('alpine:init', () => {
                 });
             } catch (e) {
                 console.error('Error creating document:', e);
-                this.showToast('Error creating document', 'error');
+                this.showToast(this.createFailureMessage(e), 'error');
             }
+        },
+
+        // What an Elder is told when a create fails. "Error creating document" was
+        // the same six words for every cause, and the real error only ever reached
+        // the console — which is how a ten-second bug became an undiagnosable demo
+        // failure (MS-283). The underlying error is still logged in every case.
+        createFailureMessage(e) {
+            if (e && e.code === Docs.MISSING_AUTHOR) {
+                return 'Could not tell who is signed in, so nothing was created. Reload the page and try again.';
+            }
+            if (e && e.code === PERMISSION_DENIED) {
+                return 'You do not have permission to create a document here.';
+            }
+            return 'Something went wrong creating the document. The details are in the browser console.';
         },
 
         async createFolder() {
@@ -366,7 +398,7 @@ document.addEventListener('alpine:init', () => {
                     await db.collection('elder_documents').doc(item.id).update({
                         title: newName,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        updatedByName: this.currentUserName,
+                        updatedByName: this.author.name,
                     });
                 }
             } catch (e) {

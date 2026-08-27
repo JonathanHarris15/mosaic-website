@@ -123,6 +123,96 @@
         return options;
     }
 
+    // ── The Elder Document record (MS-283) ───────────────────────────────────
+    //
+    // Assembling the record used to happen inline in the create handler, which is
+    // why nothing could test it and why two identity faults hid there for months.
+    // ADR-0015 put the tree logic in this module for the same reason; the record
+    // is the same kind of thing — pure, and worth being able to test.
+
+    const MISSING_AUTHOR = 'missing-author';
+
+    // The message is for the console and for a developer reading a stack; the
+    // component turns the code into something an Elder should read (MS-283).
+    function refuseUnauthored(what) {
+        const err = new Error(
+            'An Elder Document cannot be created without an ' + what + '.');
+        err.code = MISSING_AUTHOR;
+        throw err;
+    }
+
+    function requiredText(value, what) {
+        const text = typeof value === 'string' ? value.trim() : '';
+        if (!text) refuseUnauthored(what);
+        return text;
+    }
+
+    // Who is writing, from what the host page currently knows plus the live auth
+    // session as a last resort — the same defensive resolve the mobile port does.
+    //
+    // Both halves fall back together, deliberately. Rescuing the uid on its own
+    // buys nothing, because `buildElderDocument` refuses a document with no author
+    // name just as firmly as one with no uid.
+    function resolveAuthor(hostIdentity, session) {
+        const known = hostIdentity || {};
+        const signedIn = known.user || session || null;
+        const email = (signedIn && signedIn.email) || '';
+        return {
+            uid: (signedIn && signedIn.uid) || '',
+            name: known.name || email.split('@')[0],
+        };
+    }
+
+    // The record written to `elder_documents` when an Elder creates a document.
+    // Pure: the caller supplies the server-timestamp sentinel, so this is testable
+    // without Firebase.
+    //
+    //   title          what the document is called
+    //   docType        'note' (blank Word-style document) or 'care-list'
+    //   author         { uid, name } of the Elder writing it — both required
+    //   timestamp      the value to stamp created/updated with
+    //   ownerPersonId  the Person this belongs to, in profile scope; null in the Library
+    //   filterId       care-list only: the preset Shepherding View it reads
+    //   filterConfig   care-list only: a bespoke filter, used when there is no preset
+    //
+    // Refuses an unauthored document rather than emitting one. An Elder Document
+    // with a missing author is worse than a create that failed: the record exists,
+    // it stands in the Pastoral Record, and nothing surfaces the problem.
+    function buildElderDocument({
+        title, docType, author, timestamp,
+        ownerPersonId = null, filterId = null, filterConfig = null,
+    } = {}) {
+        const authorUid = requiredText(author && author.uid, 'author id');
+        const authorName = requiredText(author && author.name, 'author name');
+
+        const record = {
+            title: title,
+            docType: docType,
+            authorName: authorName,
+            authorUid: authorUid,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            updatedByName: authorName,
+        };
+
+        // A profile document belongs to its Person and is hidden from shared
+        // surfaces until explicitly opted into the Library (ADR-0015).
+        if (ownerPersonId) {
+            record.ownerPersonId = ownerPersonId;
+            record.inLibrary = false;
+        }
+
+        if (docType === 'care-list') {
+            if (filterConfig) record.filterConfig = { ...filterConfig };
+            else record.filterId = filterId;
+            record.careListData = {}; // Person id -> TipTap JSON
+        } else {
+            record.contentJson = null;
+        }
+
+        return record;
+    }
+
     const ROOT = '__root__';
 
     // Move `item` (a {type,id[,...]} descriptor) to `targetFolderId` (ROOT for the
@@ -143,6 +233,9 @@
 
     const ShepherdingDocsCore = {
         ROOT,
+        MISSING_AUTHOR,
+        buildElderDocument,
+        resolveAuthor,
         newId,
         getFolderById,
         findParent,
