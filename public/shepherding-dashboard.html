@@ -149,7 +149,7 @@
                                     <span class="font-label-md text-label-md text-on-surface-variant">Tags:</span>
                                     <template x-for="tagId in view.filterTags" :key="tagId">
                                         <span class="px-xs py-[2px] bg-secondary-container text-on-secondary-container rounded font-label-md text-label-md">
-                                            <span x-text="getTagName(tagId)"></span><span x-show="viewTagHoldDays(view, tagId) > 0" class="opacity-70" x-text="' · ' + (viewTagCmp(view, tagId) === 'lt' ? '<' : '>') + ShepherdingCore.formatHoldShort(viewTagHoldDays(view, tagId))"></span>
+                                            <span x-text="getTagName(tagId)"></span><span x-show="viewTagHoldDays(view, tagId) > 0" class="opacity-70" x-text="viewTagHoldSummary(view, tagId)"></span>
                                         </span>
                                     </template>
                                     <span class="font-label-md text-label-md text-on-surface-variant"
@@ -301,7 +301,7 @@
                 <!-- Filter by Tags -->
                 <div class="flex flex-col gap-xs">
                     <span class="font-label-md text-label-md text-on-surface-variant">Filter by tags</span>
-                    <p class="text-xs text-on-surface-variant">Leave empty to show all active members. Slide the dot under a selected tag to require a minimum time held.</p>
+                    <p class="text-xs text-on-surface-variant">Leave empty to show all active members. Slide the dot under a selected tag to set a time held. Tap <span class="font-bold">older</span> to keep the longest holds, or <span class="font-bold">recent</span> to keep people tagged inside that time.</p>
                     <div class="flex flex-wrap gap-x-xs gap-y-3 mt-xs">
                         <template x-for="tag in shepherdingTags" :key="tag.id">
                             <div class="relative">
@@ -309,15 +309,17 @@
                                     :class="newView.filterTags.includes(tag.id)
                                         ? 'bg-primary text-on-primary pb-5'
                                         : 'bg-surface-container text-on-surface hover:bg-surface-container-high'"
-                                    :style="newView.filterTags.includes(tag.id) ? 'min-width: 74px' : ''"
+                                    :style="newView.filterTags.includes(tag.id) ? 'min-width: 116px' : ''"
                                     class="px-sm py-xs font-label-md text-label-md rounded-2xl transition-all duration-300 ease-out flex items-center gap-1">
                                     <span x-text="tag.name"></span>
                                     <span x-show="newView.filterTags.includes(tag.id)"
                                           class="inline-flex items-center gap-0.5 text-[10px] font-bold">
+                                        <!-- Direction, in words. Fixed width so the chip does not
+                                             resize as older / recent are toggled. -->
                                         <span @click.stop="toggleViewNewCmp(tag.id)" role="button"
-                                              :title="newView.tagHoldCmp[tag.id] === 'lt' ? 'Held less than — click for at least' : 'Held at least — click for less than'"
-                                              class="px-1 rounded bg-on-primary/25 hover:bg-on-primary/40 transition-colors leading-none cursor-pointer"
-                                              x-text="viewNewCmpSymbol(tag.id)"></span>
+                                              :title="viewNewDirectionHint(tag.id)"
+                                              class="px-1 rounded bg-on-primary/25 hover:bg-on-primary/40 transition-colors leading-none cursor-pointer inline-block min-w-[42px] text-center"
+                                              x-text="viewNewDirectionWord(tag.id)"></span>
                                         <span class="opacity-80 inline-block min-w-[24px] text-left" x-text="viewTagHoldShort(tag.id) || 'any'"></span>
                                     </span>
                                 </button>
@@ -330,7 +332,7 @@
                                        :value="viewTagHoldStopIndex(tag.id)"
                                        @input="setViewTagHoldStop(tag.id, $event.target.value)"
                                        @click.stop @mousedown.stop
-                                       :title="(newView.tagHoldFilters[tag.id] || 0) > 0 ? 'Held at least ' + viewTagHoldShort(tag.id) : 'Held for any length — slide right to require longer'"
+                                       :title="viewNewScrubberLabel(tag.id)"
                                        class="tag-hold-slider text-on-primary" />
                             </div>
                         </template>

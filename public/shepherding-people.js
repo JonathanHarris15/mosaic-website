@@ -281,8 +281,14 @@ document.addEventListener('alpine:init', () => {
                 || this.statusZoneFilters.length > 0
                 || this.anyHoldActive();
         },
-        // Direction: '<' (held less than) or '>' (held at least, the default).
-        holdCmpSymbol(tagId) { return this.tagHoldCmp[tagId] === 'lt' ? '<' : '>'; },
+        // Direction, in words: 'recent' (held less than) or 'older' (held at
+        // least, the default). The core owns the wording so this panel and the
+        // Filtered View editor cannot drift apart again (MS-279).
+        holdDirectionWord(tagId) { return ShepherdingCore.holdDirectionWord(this.tagHoldCmp[tagId]); },
+        holdDirectionHint(tagId) { return ShepherdingCore.holdDirectionHint(this.tagHoldCmp[tagId]); },
+        holdScrubberLabel(tagId) {
+            return ShepherdingCore.holdScrubberLabel(this.tagHoldCmp[tagId], this.holdShort(tagId));
+        },
         toggleHoldCmp(tagId) {
             const next = this.tagHoldCmp[tagId] === 'lt' ? 'gte' : 'lt';
             this.tagHoldCmp = { ...this.tagHoldCmp, [tagId]: next };
