@@ -50,6 +50,19 @@
         });
     }
 
+    // 'YYYY-MM-DD' → a short human label, e.g. 'Sun, Jun 14, 2026'.
+    //
+    // For the phone header, which is one 46px row already carrying a back arrow
+    // and two chevrons. The long form does not fit beside them, and a date that
+    // truncates to 'Sunday, August…' has told you the least useful half of
+    // itself — the weekday is the one word you already know on a Sunday page.
+    function formatDateMedium(dateStr, locale) {
+        if (!dateStr) return '';
+        return parseDateStr(dateStr).toLocaleDateString(locale, {
+            weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+        });
+    }
+
     // From a list of Sunday Dates, the ones falling today-or-later, as
     // { value: 'YYYY-MM-DD', label: 'June 14, 2026' }. Comparison is by local
     // calendar day (time-of-day ignored); fromDate defaults to now. Drives the
@@ -69,7 +82,7 @@
             }));
     }
 
-    const DateUtils = { toDateStr, todayStr, parseDateStr, addDays, addWeek, formatDateLong, upcomingSundays };
+    const DateUtils = { toDateStr, todayStr, parseDateStr, addDays, addWeek, formatDateLong, formatDateMedium, upcomingSundays };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = DateUtils;

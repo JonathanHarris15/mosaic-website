@@ -227,7 +227,8 @@
                      button shows no tooltip in Chrome or Firefox, so the end of
                      the range — the one case where the hint matters most — would
                      have said nothing at all. -->
-                <div class="flex items-center gap-1 shrink-0" x-show="date">
+                <div class="flex items-center gap-1 shrink-0" x-show="date"
+                     data-mobile-header-nav>
                     <span :title="previousServiceDate ? formatDate(previousServiceDate) : 'No earlier Sunday'"
                           class="inline-flex">
                         <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost"

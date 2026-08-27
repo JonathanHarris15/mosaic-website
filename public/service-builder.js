@@ -803,6 +803,13 @@ function serviceForm() {
                 return;
             }
             await this.load();
+            // On a phone this page's own header is hidden and the app shell
+            // draws one instead — which said "Service Editor" and named no
+            // Sunday at all (MS-310). After load(), which is safely past the
+            // DOMContentLoaded the shell builds its header on.
+            if (this.shell === 'mobile' && typeof window.setMobileHeaderTitle === 'function') {
+                window.setMobileHeaderTitle(DateUtils.formatDateMedium(this.date));
+            }
             await this.loadGuideCatalog();
             await this.loadHymnRegistry();
             await this.loadPeopleRegistry();
