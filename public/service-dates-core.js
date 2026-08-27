@@ -112,7 +112,7 @@
         return sundays;
     }
 
-    const ServiceDatesCore = { FIRST_SUNDAY, YEARS_AHEAD, horizon, contains, next, previous, all };
+    const ServiceDatesCore = { FIRST_SUNDAY, horizon, contains, next, previous, all };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = ServiceDatesCore;

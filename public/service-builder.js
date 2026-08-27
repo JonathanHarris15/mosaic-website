@@ -39,13 +39,13 @@ function stepHref(date, options) {
 // `go` is handed the target rather than returning it, because the caller
 // replaces the current history entry rather than stacking one — back means
 // "out to Services", never "undo my last arrow".
-async function stepToService(step) {
-    if (!step || !step.target) return false;
-    if (step.canEdit && step.isDirty) {
-        const saved = await step.save();
+async function stepToService(move) {
+    if (!move || !move.target) return false;
+    if (move.canEdit && move.isDirty) {
+        const saved = await move.save();
         if (!saved) return false;
     }
-    step.go(step.target);
+    move.go(move.target);
     return true;
 }
 const CANONICAL_MAPPING = {
@@ -711,17 +711,25 @@ function serviceForm() {
             if (!target) return false;
 
             this.stepping = true;
-            const moved = await stepToService({
-                target: target,
-                canEdit: this.canEdit,
-                isDirty: this.isDirty,
-                // Manual, so a failure is answered rather than swallowed: you
-                // asked to leave, so you are owed the reason you cannot.
-                save: () => this.save(true),
-                go: (date) => window.location.replace(
-                    stepHref(date, { shell: this.shell, tab: this.tab })),
-            });
-            if (!moved) this.stepping = false;
+            let moved = false;
+            try {
+                moved = await stepToService({
+                    target: target,
+                    canEdit: this.canEdit,
+                    isDirty: this.isDirty,
+                    // Manual, so a failure is answered rather than swallowed:
+                    // you asked to leave, so you are owed the reason you cannot.
+                    save: () => this.save(true),
+                    go: (date) => window.location.replace(
+                        stepHref(date, { shell: this.shell, tab: this.tab })),
+                });
+            } finally {
+                // Released only when the move was refused — otherwise this page
+                // is on its way out and the flag goes with it. In `finally` so a
+                // save that THROWS gives the arrows back too, rather than
+                // leaving both dead until reload.
+                if (!moved) this.stepping = false;
+            }
             return moved;
         },
 
@@ -795,13 +803,18 @@ function serviceForm() {
                 return;
             }
             await this.load();
-            // Carried across a step so staffing several Sundays in a row does
-            // not mean re-opening Roles each time (MS-303). After load(), so
-            // the panel builds against a Sunday that has arrived.
-            if (urlParams.get('tab') === 'roles') this.openTab('roles');
             await this.loadGuideCatalog();
             await this.loadHymnRegistry();
             await this.loadPeopleRegistry();
+            // Carried across a step so staffing several Sundays in a row does
+            // not mean re-opening Roles each time (MS-303).
+            //
+            // After loadPeopleRegistry, not just after load(). The Roles panel
+            // is handed `people: peopleRegistry` once, when Alpine first builds
+            // it, and loadPeopleRegistry REPLACES that array rather than filling
+            // it. Latch the tab any earlier and the panel keeps the empty list
+            // it was born with: a Roles tab you cannot put anybody into.
+            if (urlParams.get('tab') === 'roles') this.openTab('roles');
             await this.loadPrayerRequests();
             await this.autoLinkHymns();
             await this.fetchPrayerSuggestions();
@@ -815,6 +828,11 @@ function serviceForm() {
             }
 
             window.addEventListener('beforeunload', (e) => {
+                // Not while stepping. The arrow has already flushed the save and
+                // is on its way to the next Sunday; a keystroke landing in that
+                // gap would otherwise raise the browser box this page exists to
+                // avoid (ADR-0032).
+                if (this.stepping) return;
                 if (this.canEdit && this.isDirty) {
                     e.preventDefault();
                     e.returnValue = '';
@@ -2627,5 +2645,5 @@ function hymnPicker(hymnRef, parent = null) {
 
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions, stepHref, stepToService };
+    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions, stepHref, stepToService, serviceForm };
 }

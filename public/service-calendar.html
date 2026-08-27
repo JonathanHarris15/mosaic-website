@@ -271,6 +271,11 @@
          auth.js, which builds the Firestore handle persistence attaches to. -->
     <script src="local-cache.js"></script>
     <script src="auth.js"></script>
+    <!-- Before docx-importer.js, which reads ServiceDatesCore.FIRST_SUNDAY
+         and DateUtils to reject an order of service dated before the
+         church existed (MS-303). -->
+    <script src="date-utils.js"></script>
+    <script src="service-dates-core.js"></script>
     <script src="docx-importer.js"></script>
     <script src="bible-data.js"></script>
     <script src="verse-picker.js"></script>
@@ -736,8 +741,6 @@
         </button>
     </div>
 
-    <script src="date-utils.js"></script>
-    <script src="service-dates-core.js"></script>
     <script src="pastoral-prayer-core.js"></script>
     <script src="prayer-suggestions.js"></script>
     <!-- Guide engine + store: lets navigateToGuide compute v2 completeness from
