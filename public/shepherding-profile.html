@@ -1028,10 +1028,17 @@
 
         <!-- Documents tab (MS-98): a per-person directory, reusing the Document
              Library engine scoped to this Person. Created lazily once personId is
-             known so the nested component captures a valid scope. -->
+             known so the nested component captures a valid scope.
+
+             MS-283: `identity` is a reader, not three copied values. personId comes
+             off the URL and is there at once, so this mounts before the auth
+             callback has run — passing `currentUser` by value handed the tab a null
+             user it kept forever, and creating a document threw on it every time.
+             The function is evaluated on each read, so late identity is still seen.
+             Do not flatten it back into plain values. -->
         <div x-show="activeTab === 'documents'" x-cloak>
             <template x-if="personId">
-                <div x-data="documentLibrary({ structureDocId: 'person_' + personId, ownerPersonId: personId, embedded: true, currentUser: currentUser, currentUserName: currentUserName, currentPermissionLevel: currentPermissionLevel })">
+                <div x-data="documentLibrary({ structureDocId: 'person_' + personId, ownerPersonId: personId, embedded: true, identity: () => ({ user: currentUser, name: currentUserName, permissionLevel: currentPermissionLevel }) })">
 
                     <div x-show="loading" class="flex items-center justify-center py-xl">
                         <span class="material-symbols-outlined text-[36px] text-outline animate-spin">progress_activity</span>

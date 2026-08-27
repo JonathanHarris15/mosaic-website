@@ -649,9 +649,12 @@ Who may see an [[Event occurrence]]. One of five rungs, set on the series or the
 ## Shepherding System
 
 ### Elder Document
-A standalone text document created and managed by elders, stored in the `elder_documents` collection. Not attached to any Person. Replaces and generalises the former `elder_meetings` concept.
-- **Fields**: `title`, `contentJson`, `authorName`, `authorUid`, `createdAt`, `updatedAt`, `updatedByName`, `docType` (optional, defaults to 'note'), `filterId` (for care-list type).
+A text document created and managed by elders, stored in the `elder_documents` collection. Replaces and generalises the former `elder_meetings` concept. Created either in the Document Library, where it belongs to no Person, or on a Person's Shepherding Profile, where it does (ADR-0015).
+- **Fields**: `title`, `contentJson`, `authorName`, `authorUid`, `createdAt`, `updatedAt`, `updatedByName`, `docType` (optional, defaults to 'note'), `filterId` / `filterConfig` and `careListData` (for care-list type), `ownerPersonId` and `inLibrary` (profile scope only).
 - `docType`: Can be `'note'` (standard TipTap document) or `'care-list'`.
+
+### Author
+The Elder an Elder Document is written by, recorded as `authorUid` and `authorName`. **Every Elder Document has one**: a document whose author cannot be resolved is refused rather than written, because an untraceable pastoral record is worse than a create that failed — it exists, it stands in the Pastoral Record, and nothing surfaces the problem. Distinct from `updatedByName`, which is whoever touched it last.
 
 ### Care List
 A type of Elder Document that displays a filtered list of people. The first column shows the person's name (sticky); additional elder-defined columns scroll horizontally and allow editing person attributes inline — including applying or removing Shepherding Tags (`#` / `-#` triggers) and setting the Shepherding Status (`$$` trigger, which spawns the status matrix inline). Status changes made via `$$` generate a Status Change on the person's Pastoral Record. Unlike Shepherding Notes, Care List cell content is private to the Care List document and does not sync to the person's Shepherding Profile.

@@ -35,6 +35,21 @@ it loads and saves `root`.
    reproduce the global Library exactly; a profile tab passes
    `structureDocId: 'person_<personId>'` and `ownerPersonId: <personId>`.
 
+   *Amended (MS-283).* The config takes a fourth key, **`identity`**, and it is a
+   **function, not three values**. An embedded directory has no auth gate of its own,
+   so the host must tell it who is signed in — but scope and identity do not arrive
+   together. The Person's id comes off the URL and is there at once; the signed-in
+   Elder arrives later from the auth callback. The tab mounts on the first, and an
+   Alpine `x-data` expression is evaluated exactly once, so identity passed by value
+   was captured as null and stayed null for the life of the page. Every create on the
+   tab threw before Firestore was contacted.
+
+   A reader — `identity: () => ({ user, name, permissionLevel })` — is read afresh
+   each time, so the ordering stops mattering. Gating the mount on identity instead
+   was considered and rejected: it works, but it leaves the embedded component
+   permanently dependent on the host resolving auth before it renders, which is the
+   assumption that broke. A reader cannot break that way.
+
 3. **Per-person folder tree.** Each Person's tree is its own structure document
    `elder_document_structure/person_<personId>`. The existing `isElder()` rule
    already governs every doc id under `elder_document_structure`, so no rule change.
@@ -59,6 +74,14 @@ it loads and saves `root`.
    profile** deletes the record and prunes it from `root` if it was opted in.
    Removing from the **Library** keeps the record (it stays on the profile) — an
    opt-out — and clears `inLibrary`.
+
+8. **An Elder Document is refused without an author (MS-283).** `buildElderDocument`
+   in the core assembles the record and throws `MISSING_AUTHOR` rather than emitting
+   one with a missing `authorUid` or `authorName`. An untraceable pastoral record is
+   worse than a create that failed: it exists, it stands in the Pastoral Record, and
+   nothing surfaces the problem. Assembling the record in the core rather than in the
+   click handler is what makes that rule testable at all — the same reason decision 1
+   moved the tree logic here.
 
 ## Consequences
 
