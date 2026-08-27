@@ -33,6 +33,7 @@
     const SERIES = 'events';
     const OCCURRENCES = 'event_occurrences';
     const ROSTER = 'roster';
+    const ATTENDANCE = 'attendance';
 
     // Firestore caps a batch at 500 operations. The rest of this codebase commits
     // in 450s (see the week-shift tool), leaving room rather than riding the edge.
@@ -97,6 +98,37 @@
         return Core.mergeVisibleOccurrences(sets[0], sets[1] || [])
             .filter(o => Core.overlapsRange(o, opts.from, opts.to))
             .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    }
+
+    // A Kiosk sees every Event, ignoring the visibility ladder (MS-318). The
+    // rule names isKiosk() on the collection, so this query is legal only for
+    // that account — unconstrained for anyone else would error the way every
+    // other read here is written to avoid.
+    async function loadKioskOccurrences(db) {
+        const snap = await db.collection(OCCURRENCES).get();
+        return snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+    }
+
+    async function loadKioskSeries(db) {
+        const snap = await db.collection(SERIES).get();
+        return snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+    }
+
+    async function loadAttendance(db, occurrenceId) {
+        const snap = await db.collection(OCCURRENCES).doc(occurrenceId).collection(ATTENDANCE).get();
+        return snap.docs.map(d => Object.assign({ personId: d.id }, d.data()));
+    }
+
+    async function markPresent(db, occurrenceId, personIds, markedAt) {
+        const batch = db.batch();
+        const col = db.collection(OCCURRENCES).doc(occurrenceId).collection(ATTENDANCE);
+        const seen = {};
+        (personIds || []).forEach(function (id) {
+            if (!id || seen[id]) return;
+            seen[id] = true;
+            batch.set(col.doc(id), { markedAt: markedAt });
+        });
+        await batch.commit();
     }
 
     // The series a viewer can see. Same constraint, same reason — the series
@@ -1518,11 +1550,16 @@
         SERIES,
         OCCURRENCES,
         ROSTER,
+        ATTENDANCE,
         shiftOccurrences,
         shiftDays,
         seesEveryRung,
         // reading
         loadVisibleOccurrences,
+        loadKioskOccurrences,
+        loadKioskSeries,
+        loadAttendance,
+        markPresent,
         loadVisibleSeries,
         loadCalendar,
         loadSeriesWindow,

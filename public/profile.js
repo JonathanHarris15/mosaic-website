@@ -80,7 +80,8 @@ async function initProfile() {
                 'elder': 'Elder',
                 'editor': 'Editor',
                 'member': 'Member',
-                'viewer': 'Viewer'
+                'viewer': 'Viewer',
+                'kiosk': 'Kiosk'
             };
             const permissionLevelText = roleLabels[permissionLevel] || permissionLevel.charAt(0).toUpperCase() + permissionLevel.slice(1);
             document.getElementById('user-role-badge').textContent = `${permissionLevelText} Access`;
@@ -1109,7 +1110,8 @@ async function loadUsersList() {
                 'elder': 'Elder',
                 'editor': 'Editor',
                 'member': 'Member',
-                'viewer': 'Viewer'
+                'viewer': 'Viewer',
+                'kiosk': 'Kiosk'
             };
             const roleLabel = roleLabels[permissionLevel] || permissionLevel.charAt(0).toUpperCase() + permissionLevel.slice(1);
             const isSelf = doc.id === currentUserUid;
@@ -1147,6 +1149,7 @@ async function loadUsersList() {
                                 <option value="elder" ${permissionLevel === 'elder' ? 'selected' : ''}>Elder</option>
                                 <option value="admin" ${permissionLevel === 'admin' ? 'selected' : ''}>Admin</option>
                                 <option value="super_admin" ${permissionLevel === 'super_admin' ? 'selected' : ''}>Super Admin</option>
+                                <option value="kiosk" ${permissionLevel === 'kiosk' ? 'selected' : ''}>Kiosk</option>
                             </select>
                             <span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-xs pointer-events-none text-outline">expand_more</span>
                         </div>

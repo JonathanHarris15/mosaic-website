@@ -64,6 +64,12 @@ service cloud.firestore {
       return request.auth != null && permissionLevel() in ['elder', 'super_admin'];
     }
 
+    // A Kiosk is its own permissionLevel, not a rung on the ladder (MS-318,
+    // ADR-0041). Parallel to isElder()/isAdmin(): an allowlist of one value.
+    function isKiosk() {
+      return request.auth != null && permissionLevel() == 'kiosk';
+    }
+
     // ⚠ NO USER DOCUMENT MAY CARRY A PASSWORD (MS-241, ADR-0040).
     //
     // Sign-up used to write the password here in plain text, and three other
@@ -242,7 +248,9 @@ service cloud.firestore {
     // HAS an occurrence document (that is where their assignment lives), and the
     // occurrence carries everything the Calendar renders.
     match /events/{eventId} {
-      allow read: if eventId == 'sunday_service' || rankCanSee(stampedVisibility());
+      allow read: if isKiosk()
+        || eventId == 'sunday_service'
+        || rankCanSee(stampedVisibility());
       allow create, update, delete: if isEditor();
     }
 
@@ -250,9 +258,25 @@ service cloud.firestore {
     // exists only once something lands on the date, so an untouched date still
     // appears in the Calendar, computed from the series' recurrence rule.
     match /event_occurrences/{occurrenceId} {
-      allow read: if rankCanSee(stampedVisibility())
+      allow read: if isKiosk()
+        || rankCanSee(stampedVisibility())
         || (stampedVisibility() == 'participant' && isEventParticipant());
       allow create, update, delete: if isEditor();
+
+      // Attendance (MS-318, ADR-0042): who was physically here. Written live
+      // by a Kiosk; document id is the Person id, so a second mark overwrites.
+      // Readable by the same floors that can already read the roster, plus the
+      // Kiosk that writes it.
+      match /attendance/{personId} {
+        allow read: if isKiosk()
+          || isEditor()
+          || (request.auth != null && personId == myPersonId())
+          || (request.auth != null
+              && get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.rosterShared == true
+              && myPersonId() in get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.participantIds);
+        allow create, update: if isKiosk();
+        allow delete: if isKiosk() || isEditor();
+      }
 
       // The roster — who else is serving. Firestore cannot hide a FIELD from
       // someone allowed to read a document, so "participants can't see who else
@@ -406,7 +430,9 @@ service cloud.firestore {
     // an email address rather than nothing. That is the gate in front of this
     // lock and it is filed as MS-240.
     match /people/{personId} {
-      allow read: if isSignedIn();
+      // Kiosk is signed in (ADR-0041). isKiosk() is named so a later tightening
+      // cannot drop the foyer machine without noticing the helper sitting here.
+      allow read: if isSignedIn() || isKiosk();
       allow create, delete: if isEditor();
       allow update: if isEditor();
 
@@ -514,7 +540,7 @@ service cloud.firestore {
     // Person id — closing the names while leaving the household graph open
     // would have been a half fix.
     match /families/{familyId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() || isKiosk();
       allow create, update, delete: if isEditor();
     }
 

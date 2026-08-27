@@ -107,6 +107,7 @@
             occurrence: null,
             series: null,
             assignments: [],
+            attendance: [],
             people: [],
             roleDefinitions: [],
             relationships: [],
@@ -425,6 +426,13 @@
                     this.occurrence = loaded;
                     this.assignments = loaded.assignments || [];
                     this.startOccurrenceDraft();
+                    if (this.isEditor) {
+                        try {
+                            this.attendance = await Store.loadAttendance(db, loaded.id);
+                        } catch (e) {
+                            this.attendance = [];
+                        }
+                    }
 
                     // The rest in one wave. None of these three needs anything
                     // from the others — they were only sequential because they

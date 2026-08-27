@@ -88,6 +88,24 @@
 `;
 
     const ROLES = `
+                    <!-- Who was present — Attendance, marked at the kiosk.
+                         Distinct from who's serving: a Person can have either,
+                         both, or neither. Lives here so Event detail and the
+                         Sunday Roles tab show the same list. -->
+                    <section x-show="isEditor && attendance.length"
+                             class="m-card mb-md">
+                        <h2 class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant
+                                   pb-sm border-b border-outline-variant">Who was present</h2>
+                        <div class="flex flex-col">
+                            <template x-for="row in attendance" :key="row.personId">
+                                <div class="flex items-center gap-sm py-2.5 border-b border-outline-variant last:border-b-0">
+                                    <span class="text-[14.5px] flex-grow min-w-0 truncate"
+                                          x-text="personName(row.personId)"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </section>
+
                     <!-- ── Roles ──────────────────────────────────────────── -->
                     <!-- A Sunday gets this too. It only ever draws NON-liturgical
                          Roles — the liturgical ones are filled in the order of

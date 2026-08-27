@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Attendance — Mosaic Church</title>
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+
+    <script src="auth.js"></script>
+    <script src="date-utils.js"></script>
+    <script src="events-core.js"></script>
+    <script src="events-occurrence-core.js"></script>
+    <script src="kiosk-core.js"></script>
+    <script src="household-core.js"></script>
+    <script src="events-store.js"></script>
+    <script src="kiosk.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+
+    <style>
+        [x-cloak] { display: none !important; }
+        body { font-family: 'Work Sans', sans-serif; }
+        h1, h2, h3 { font-family: 'Noto Serif', serif; }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col"
+      x-data="kioskPage()" x-cloak>
+    <header class="m-header m-header--sticky">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <div class="m-header__titles">
+                    <h1 class="m-header__title">Attendance</h1>
+                    <p class="m-header__sub" x-show="view !== 'events'" x-text="eventTitle"></p>
+                </div>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
+        </div>
+    </header>
+
+    <div x-show="loading" class="m-loading">
+        <span class="m-spinner material-symbols-outlined">progress_activity</span>
+    </div>
+
+    <main x-show="!loading" class="flex-grow w-full max-w-[720px] mx-auto px-margin pb-lg pt-md">
+        <div x-show="error"
+             class="mb-md bg-error-container text-on-error-container border border-outline-variant rounded-lg p-md flex items-start gap-sm">
+            <span class="material-symbols-outlined text-[20px]">error</span>
+            <p x-text="error"></p>
+        </div>
+
+        <!-- Event list -->
+        <section x-show="view === 'events'">
+            <p class="text-on-surface-variant mb-md">Pick the gathering people are arriving for.</p>
+            <div class="flex flex-col gap-sm">
+                <template x-for="o in occurrences" :key="o.id">
+                    <article class="m-card flex items-center justify-between gap-md">
+                        <div class="min-w-0">
+                            <h2 class="font-headline-md text-primary truncate" x-text="titleOf(o)"></h2>
+                            <p class="text-sm text-on-surface-variant" x-text="dateOf(o)"></p>
+                        </div>
+                        <button type="button" class="m-btn m-btn--primary m-btn--sm shrink-0"
+                                @click="startAttendance(o)">Start Attendance</button>
+                    </article>
+                </template>
+            </div>
+            <p x-show="!occurrences.length" class="text-on-surface-variant italic">No events yet.</p>
+        </section>
+
+        <!-- Household search -->
+        <section x-show="view === 'search'">
+            <button type="button" class="m-back mb-md" @click="view = 'events'; query = ''; matches = [];">
+                <span class="material-symbols-outlined">chevron_left</span>
+                <span class="m-back__label">Events</span>
+            </button>
+            <label class="block mb-md">
+                <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">Search by name</span>
+                <input type="search" x-model="query" @input="runSearch()"
+                       placeholder="Type a surname or a full name"
+                       class="mt-1 w-full py-2.5 px-4 bg-surface border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary outline-none font-body-md"
+                       autofocus>
+            </label>
+            <div class="flex flex-col gap-sm">
+                <template x-for="h in matches" :key="h.id">
+                    <button type="button"
+                            class="m-card text-left w-full hover:bg-surface-container-low transition-colors"
+                            @click="openHousehold(h)">
+                        <h2 class="font-headline-md text-primary" x-text="h.name"></h2>
+                        <p class="text-sm text-on-surface-variant" x-text="memberNames(h)"></p>
+                    </button>
+                </template>
+            </div>
+            <div x-show="query.trim() && !matches.length"
+                 class="mt-md p-md border border-dashed border-outline-variant rounded-lg">
+                <p class="text-on-surface">No matches for “<span x-text="query.trim()"></span>”.</p>
+                <p class="text-sm text-on-surface-variant mt-1">Create household — coming next. An editor can add them in the directory for now.</p>
+                <button type="button" class="m-btn m-btn--secondary m-btn--sm mt-sm" disabled>Create household</button>
+            </div>
+        </section>
+
+        <!-- Mark present -->
+        <section x-show="view === 'present'">
+            <button type="button" class="m-back mb-md" @click="view = 'search'; checked = {}; marked = false;">
+                <span class="material-symbols-outlined">chevron_left</span>
+                <span class="m-back__label">Search</span>
+            </button>
+            <h2 class="font-headline-md text-primary mb-sm" x-text="selected && selected.name"></h2>
+            <div class="m-card">
+                <template x-for="m in (selected && selected.members) || []" :key="m.personId">
+                    <label class="flex items-center gap-sm py-2.5 border-b border-outline-variant last:border-b-0 cursor-pointer">
+                        <input type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary"
+                               :checked="!!checked[m.personId]"
+                               @change="toggle(m.personId)">
+                        <span class="text-[15px]" x-text="m.name"></span>
+                    </label>
+                </template>
+            </div>
+            <p x-show="marked" class="mt-sm text-sm text-primary">Marked present.</p>
+            <div class="sticky bottom-0 mt-md py-md bg-background">
+                <button type="button" class="m-btn m-btn--primary w-full"
+                        :disabled="!checkedCount || marking"
+                        @click="submitPresent()"
+                        x-text="footerLabel"></button>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

@@ -49,15 +49,59 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
 }
 
 /**
- * Logs the user out and redirects to the landing page.
+ * Kiosk gate (MS-318). Lives here because every page already loads auth.js —
+ * one check, no per-page edits. Prefers KioskCore when that script is present.
  */
+function isKioskAccount(data) {
+    const Core = (typeof window !== 'undefined' && window.KioskCore) || (typeof KioskCore !== 'undefined' ? KioskCore : null);
+    if (Core) return Core.isKioskAccount(data);
+    return !!(data && (data.permissionLevel || data.role) === 'kiosk');
+}
+
+function landingPageFor(data) {
+    const Core = (typeof window !== 'undefined' && window.KioskCore) || (typeof KioskCore !== 'undefined' ? KioskCore : null);
+    if (Core) return Core.landingPageFor(data);
+    return isKioskAccount(data) ? 'kiosk.html' : 'index.html';
+}
+
+function kioskGateDestination(data, pathname) {
+    const Core = (typeof window !== 'undefined' && window.KioskCore) || (typeof KioskCore !== 'undefined' ? KioskCore : null);
+    if (Core) return Core.kioskGateDestination(data, pathname);
+    if (!data) return null;
+    const page = String(pathname || '').split('?')[0].split('#')[0].split(/[/\\]/).pop() || '';
+    if (isKioskAccount(data)) {
+        if (page === 'kiosk.html' || page === 'login.html') return null;
+        return 'kiosk.html';
+    }
+    if (page === 'kiosk.html') return 'index.html';
+    return null;
+}
+
+function applyKioskGate(data) {
+    const dest = kioskGateDestination(data, (typeof location !== 'undefined' && location.pathname) || '');
+    if (dest && typeof location !== 'undefined') location.replace(dest);
+}
+
 function logout() {
+    const known = lastKnownUser && !lastKnownUser.isAnonymous
+        ? rememberedUserDoc(lastKnownUser.uid)
+        : null;
+    const wasKiosk = isKioskAccount(known);
     forgetUserDoc();
     if (window.MosaicLocalCache) window.MosaicLocalCache.clearIdentity();
     auth.signOut().then(() => {
-        // In the mobile shell, return to the shell's login rather than the
-        // desktop app (which would bounce the user out of the WebView).
-        window.location.href = (window.MOSAIC_SHELL === 'mobile') ? 'mobile.html#/login' : 'index.html';
+        const go = () => {
+            window.location.href = (window.MOSAIC_SHELL === 'mobile') ? 'mobile.html#/login' : 'index.html';
+        };
+        // A kiosk machine must not leave directory data in the browser for the
+        // next person. terminate + clearPersistence is a no-op when persistence
+        // was never on (the desktop default); it is the whole of the hygiene
+        // when it was.
+        if (!wasKiosk) { go(); return; }
+        const cleared = (db && typeof db.terminate === 'function')
+            ? db.terminate().then(() => db.clearPersistence && db.clearPersistence()).catch(() => {})
+            : Promise.resolve();
+        cleared.then(go, go);
     });
 }
 
@@ -95,13 +139,15 @@ function updateAuthUI(user) {
     waitingForTheHeader = false;
 
     if (user && !user.isAnonymous) {
-        // User is signed in with a real account
-        authContainer.innerHTML = `
-            <div class="flex items-center gap-2 md:gap-4">
+        // A kiosk has no User Page — the gate would bounce it straight back.
+        const kiosk = isKioskAccount(rememberedUserDoc(user.uid));
+        const userPage = kiosk ? '' : `
                 <a href="profile.html" class="p-2 md:px-md md:py-xs font-label-md text-label-md text-primary hover:bg-surface-container rounded-lg transition-colors duration-200 flex items-center gap-1" title="User Page">
                     <span class="material-symbols-outlined text-[20px] md:text-[18px]">account_circle</span>
                     <span class="hidden md:inline">User Page</span>
-                </a>
+                </a>`;
+        authContainer.innerHTML = `
+            <div class="flex items-center gap-2 md:gap-4">${userPage}
                 <button onclick="logout()" class="p-2 md:px-md md:py-xs font-label-md text-label-md text-error hover:bg-error-container rounded-lg transition-colors duration-200 flex items-center gap-1" title="Log Out">
                     <span class="material-symbols-outlined text-[20px] md:text-[18px]">logout</span>
                     <span class="hidden md:inline">Log Out</span>
@@ -256,6 +302,7 @@ async function getUserData(uid) {
     if (!known) {
         const fresh = await fetchUserData(uid);
         rememberUserDoc(uid, fresh);
+        applyKioskGate(fresh);
         return fresh;
     }
 
@@ -276,6 +323,7 @@ async function getUserData(uid) {
         });
     }
 
+    applyKioskGate(known);
     return known;
 }
 

@@ -61,6 +61,7 @@
         editor: 'Editor',
         member: 'Member',
         viewer: 'Member',
+        kiosk: 'Kiosk',
     };
 
     function roleLabel(permissionLevel) {
