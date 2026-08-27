@@ -439,6 +439,31 @@
         return o.location || (series && series.location) || null;
     }
 
+    // ── What a date says about itself ────────────────────────────────────────
+    //
+    // Exactly `locationOf`, for exactly the same reason. A REPEATING EVENT'S
+    // DESCRIPTION LIVES ON THE SERIES — "prayer and a cup of tea" is a fact
+    // about the Midweek Gathering, not about the fifteenth of July — so a date
+    // with nothing of its own reads the series' rather than showing nothing.
+    // Which is what the Event screen did: the description typed on the series
+    // was invisible on every date it produced.
+    //
+    // A date's own description WINS, and unlike a place it is expected to
+    // differ: "bring the trestle tables, we're eating after" is true of one
+    // week and wrong for the rest. That is the per-date box MS-288 added.
+    //
+    // Empty is not an answer. The box stores `null` when the editor clears it,
+    // and `''` would too if a screen ever sent one, so both fall through to the
+    // series — "I have nothing of my own to say" rather than "say nothing".
+    //
+    // Read through, never stamped on. Copied onto the occurrence it would ride
+    // into the document on the next save and freeze that one date at the old
+    // words — the trap `seriesColour` and `time` were pulled out of.
+    function descriptionOf(occurrence, series) {
+        const o = occurrence || {};
+        return o.description || (series && series.description) || null;
+    }
+
     // Says WHERE it went, not just that it went. "Not happening" on the first
     // Sunday, with nothing about the fifteenth, is how somebody turns up to an
     // empty hall.
@@ -952,6 +977,7 @@
         notHappening,
         timeOf,
         locationOf,
+        descriptionOf,
         movedNote,
         dayMonth,
         mergeOccurrences,

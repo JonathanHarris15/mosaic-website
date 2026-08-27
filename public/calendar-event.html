@@ -399,9 +399,9 @@
                         </p>
                     </section>
 
-                    <section x-show="occurrence.description"
+                    <section x-show="eventDescription"
                              class="m-card">
-                        <p class="font-headline-lg text-[17px] leading-[1.55] text-on-surface" x-text="occurrence.description"></p>
+                        <p class="font-headline-lg text-[17px] leading-[1.55] text-on-surface" x-text="eventDescription"></p>
                     </section>
 
                     <!-- ── Sunday: settled, not disabled ──────────────────── -->
@@ -577,6 +577,52 @@
                                            disabled:opacity-40">
                                 Delete this event
                             </button>
+                        </div>
+                    </section>
+
+                    <!-- ── Just this date, on a REPEATING Event (MS-288) ─────
+                         The panel above is a one-off's whole Event, so it can
+                         edit everything. This one is the opposite: ONE box, for
+                         the one fact that is genuinely about a single date.
+                         "Bring the trestle tables, we're eating after" is true
+                         of one week and wrong for the rest, and there was
+                         nowhere to put it.
+
+                         Everything else stays on the Event. The name, the
+                         place, the time and the pattern are true of every
+                         date, and editing them from a screen about the
+                         fifteenth of July would change them all. The date
+                         itself is refused outright by the store — its id is
+                         derived from it, so "Move this one" is the operation
+                         for that. -->
+                    <section x-show="isEditor && isDateOfSeries"
+                             class="m-card">
+                        <h3 class="font-display text-[17px] text-primary">Just this date</h3>
+                        <p class="text-[12.5px] text-on-surface-variant mt-1">
+                            Anything true of every one of these belongs on the event itself.
+                        </p>
+
+                        <div class="mt-sm flex flex-col gap-md">
+                            <label class="block">
+                                <span class="m-label">What's different about this one</span>
+                                <textarea x-model="occurrenceDraft.description" rows="3"
+                                          placeholder="Bring the trestle tables — we're eating after."
+                                          class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                                 text-[15px] text-on-surface placeholder:text-outline cal-focus"></textarea>
+                                <span class="mt-1 block text-[11.5px] text-on-surface-variant">
+                                    Leave it empty and this date says what the event says.
+                                </span>
+                            </label>
+
+                            <div class="flex items-center justify-end gap-sm" x-show="occurrenceDetailsChanged">
+                                <button @click="startOccurrenceDraft()"
+                                        class="px-3 py-1.5 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
+                                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Undo</button>
+                                <button @click="saveOccurrenceDetails()" :disabled="!occurrenceDetailsValid || saving"
+                                        class="bg-primary text-on-primary px-3 py-1.5 rounded-lg shadow-xs font-label-md
+                                               text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus
+                                               disabled:opacity-40">Save</button>
+                            </div>
                         </div>
                     </section>
 

@@ -1746,6 +1746,103 @@ test('the details panel is a one-off\'s, not every Event\'s', () => {
     assert.strictEqual(page.isOneOff, false);
 });
 
+// ── Saying something about ONE date of a repeating Event (MS-288) ────────────
+
+test('a repeating Event shows the description typed on the Event itself', () => {
+    // It did not. The page read the date's own document and nothing else, so a
+    // description typed on the Midweek Gathering was invisible on every date of
+    // it — with the words plainly filled in one screen away.
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.occurrence = { id: 'midweek_2026-08-05', seriesId: 'midweek', date: '2026-08-05' };
+    page.series = { id: 'midweek', description: 'Prayer and a cup of tea.' };
+
+    assert.strictEqual(page.eventDescription, 'Prayer and a cup of tea.');
+});
+
+test('a date with something of its own says that instead', () => {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.occurrence = {
+        id: 'midweek_2026-08-05', seriesId: 'midweek', date: '2026-08-05',
+        description: 'Bring trestle tables — eating after.',
+    };
+    page.series = { id: 'midweek', description: 'Prayer and a cup of tea.' };
+
+    assert.strictEqual(page.eventDescription, 'Bring trestle tables — eating after.');
+});
+
+test('the description section is bound to the read-through, not the raw field', () => {
+    const html = readPage('calendar-event.html');
+    assert.strictEqual(html.indexOf('x-text="occurrence.description"'), -1,
+        'the page reads the date\'s own description again, so a series\' is invisible');
+    assert.ok(html.indexOf('x-text="eventDescription"') !== -1);
+});
+
+test('one date of a repeating Event has a box of its own', () => {
+    const html = readPage('calendar-event.html');
+    const flat = html.replace(/\s+/g, ' ');
+    assert.ok(flat.indexOf('x-show="isEditor && isDateOfSeries"') !== -1,
+        'a date of a series still has nowhere to say anything about itself');
+    assert.ok(flat.indexOf('Just this date') !== -1);
+    assert.ok(flat.indexOf('Leave it empty and this date says what the event says.') !== -1,
+        'the box does not say what emptying it does');
+});
+
+test('that box edits the description and NOTHING else', () => {
+    // The one-off panel edits the whole Event because a one-off IS its one
+    // date. A date of a series must not: its name, place and time are true of
+    // every date, and its date the store refuses outright.
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.occurrence = { id: 'midweek_2026-08-05', seriesId: 'midweek', date: '2026-08-05', name: 'Midweek' };
+
+    assert.strictEqual(page.occurrenceOwnFields.join(','), 'description');
+
+    page.startOccurrenceDraft();
+    assert.strictEqual(page.occurrenceDetailsChanged, false);
+    // Changing something it does not own is not a change it will save.
+    page.occurrenceDraft.name = 'Something else';
+    assert.strictEqual(page.occurrenceDetailsChanged, false);
+    page.occurrenceDraft.description = 'Eating after.';
+    assert.strictEqual(page.occurrenceDetailsChanged, true);
+});
+
+test('typing spaces into an empty box is not a change worth a document', () => {
+    // A date of a series has no document until something lands on it. Saving
+    // whitespace would write a whole one — stamp, series, date — to store a
+    // description of null, and put an event on the Calendar that says nothing.
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.occurrence = { id: 'midweek_2026-08-05', seriesId: 'midweek', date: '2026-08-05' };
+    page.startOccurrenceDraft();
+
+    page.occurrenceDraft.description = '   ';
+    assert.strictEqual(page.occurrenceDetailsChanged, false);
+
+    page.occurrenceDraft.description = '  Eating after.  ';
+    assert.strictEqual(page.occurrenceDetailsChanged, true);
+});
+
+test('a page with nothing loaded yet is neither kind of Event', () => {
+    // `!isOneOff` answers true before anything has loaded, which would hand an
+    // empty page a date-of-a-series' rules and show it the wrong panel.
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.occurrence = null;
+
+    assert.strictEqual(page.isOneOff, false);
+    assert.strictEqual(page.isDateOfSeries, false);
+    assert.strictEqual(page.occurrenceOwnFields.join(',').indexOf('name'), 0,
+        'an unloaded page was given a date-of-a-series\' field list');
+});
+
+test('a date of a series needs no name or date of its own to be saveable', () => {
+    // It borrows both from the Event, so the one-off's validity check would
+    // hold the Save button down forever.
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.occurrence = { id: 'midweek_2026-08-05', seriesId: 'midweek', date: '2026-08-05' };
+    page.startOccurrenceDraft();
+    page.occurrenceDraft.description = 'Eating after.';
+
+    assert.strictEqual(page.occurrenceDetailsValid, true);
+});
+
 test('a one-off holds its edits in a draft and can undo them', () => {
     const page = loadComponent('calendar-event.js', 'eventDetailPage');
     page.occurrence = { id: 'harvest', seriesId: null, date: '2026-09-20', name: 'Harvest', time: '' };

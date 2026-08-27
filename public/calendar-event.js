@@ -580,6 +580,15 @@
                 return Core.locationOf(this.occurrence, this.series);
             },
 
+            // What this date is for. Read through for the same reason as the
+            // place: a repeating Event's description is typed on the EVENT, and
+            // reading the document alone showed nothing on every date of it
+            // while the Event page one screen away had the words filled in.
+            // A date that HAS said something of its own says it instead.
+            get eventDescription() {
+                return Core.descriptionOf(this.occurrence, this.series);
+            },
+
             // "to Friday 27 November · 5 days" — empty for a single-day Event,
             // so the header shows nothing rather than a range of one.
             get eventSpan() {
@@ -1571,14 +1580,40 @@
                 };
             },
 
+            // WHICH FIELDS THIS DATE ACTUALLY OWNS.
+            //
+            // A one-off's occurrence IS the whole Event, so the panel edits all
+            // of it. ONE DATE OF A SERIES owns its description and nothing else
+            // (MS-288): the name, place and time are true of every date and are
+            // typed once on the Event, and the date itself the store refuses
+            // outright — its id is derived from it, so sending one back would
+            // throw "use Move this one" every time somebody saved a note.
+            get occurrenceOwnFields() {
+                return this.isDateOfSeries
+                    ? ['description']
+                    : ['name', 'date', 'endDate', 'time', 'location', 'description'];
+            },
+
+            // NOT `!isOneOff`. Nothing loaded yet is neither, and answering
+            // "date of a series" for an empty page would hand it the wrong
+            // rules before it knows what it is showing.
+            get isDateOfSeries() { return !!(this.occurrence && this.occurrence.seriesId); },
+
             get occurrenceDetailsChanged() {
                 const o = this.occurrence || {};
-                return ['name', 'date', 'endDate', 'time', 'location', 'description'].some(
-                    f => String(this.occurrenceDraft[f] || '') !== String(o[f] || '')
+                // Trimmed on both sides, because the store trims before it
+                // writes. Three spaces typed into an empty box is not a change,
+                // and treating it as one would write a whole document — stamp,
+                // date and all — to store a description of null.
+                return this.occurrenceOwnFields.some(
+                    f => String(this.occurrenceDraft[f] || '').trim() !== String(o[f] || '').trim()
                 );
             },
 
             get occurrenceDetailsValid() {
+                // A date of a series has no name or date of its own to be
+                // missing — it borrows both from the Event.
+                if (this.isDateOfSeries) return true;
                 return !!String(this.occurrenceDraft.name || '').trim()
                     && !!this.occurrenceDraft.date
                     && !this.occurrenceSpanError;
@@ -1604,8 +1639,14 @@
                 this.saving = true;
                 this.error = '';
                 try {
+                    // Only what this date owns. A patch carrying fields the
+                    // panel never showed is how a screen clears something it
+                    // does not know about.
+                    const patch = {};
+                    this.occurrenceOwnFields.forEach(f => { patch[f] = this.occurrenceDraft[f]; });
+
                     const saved = await Store.saveOccurrenceDetails(
-                        db, this.occurrence.id, this.occurrenceDraft
+                        db, this.occurrence.id, patch
                     );
                     Object.keys(saved).forEach(f => { this.occurrence[f] = saved[f]; });
                     this.startOccurrenceDraft();

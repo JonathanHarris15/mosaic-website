@@ -1746,6 +1746,97 @@ test('a one-off can change who sees it, with no series to restamp', async () => 
     assert.strictEqual(written.rosterShared, true);
 });
 
+// ── Saying something about ONE date of a repeating Event (MS-288) ────────────
+//
+// Most dates of a series have no document — they are computed from the rule,
+// and one is written the first time something lands on the date. So writing a
+// description to one CREATES it, and a created occurrence with no visibility
+// stamp is readable by nobody: it would go invisible to everyone including the
+// editor who just typed on it. `acceptDraft` learned this the hard way.
+
+test('a description on a bare date of a series creates a READABLE document', async () => {
+    const db = fakeDb({
+        events: { midweek: { name: 'Midweek', visibility: 'member', rosterShared: true } },
+        event_occurrences: {},
+    }, { rank: 'editor' });
+
+    await Store.saveOccurrenceDetails(db, 'midweek_2026-08-05', {
+        description: 'Bring trestle tables — eating after.',
+    });
+
+    const written = db._flatWrites()[0];
+    assert.strictEqual(written.path, 'event_occurrences/midweek_2026-08-05');
+    assert.strictEqual(written.data.description, 'Bring trestle tables — eating after.');
+    // The stamp, without which the rule denies every reader.
+    assert.strictEqual(written.data.visibility, 'member');
+    assert.strictEqual(written.data.rosterShared, true);
+    // And the two fields every query that could find it reads: the Calendar
+    // filters `visibility + date`, and "what am I on" adds `participantIds`.
+    assert.strictEqual(written.data.seriesId, 'midweek');
+    assert.strictEqual(written.data.date, '2026-08-05');
+
+    // THE POINT OF ALL THAT: an ordinary member, who is not an editor and holds
+    // no place on the date, can read the document back. Asserting the stamp
+    // alone would pass on a document nobody could see.
+    const stored = Object.assign({ id: 'midweek_2026-08-05' }, written.data);
+    assert.ok(Core.canSee('member', stored, 'p1'),
+        'the date was written unreadable — the bug acceptDraft already shipped once');
+});
+
+test('a bare Sunday gets the public stamp the series need not carry', async () => {
+    // The Sunday Service is permanently public by id, not by a stored field, so
+    // its series document may have no visibility of its own to copy.
+    const db = fakeDb({
+        events: { 'sunday_service': { name: 'Sunday Service' } },
+        event_occurrences: {},
+    }, { rank: 'editor' });
+
+    await Store.saveOccurrenceDetails(db, 'sunday_service_2026-08-09', {
+        description: 'Baptism during the service.',
+    });
+
+    assert.strictEqual(db._flatWrites()[0].data.visibility, 'public');
+});
+
+test('a date that already has a document keeps its own stamp', async () => {
+    // Re-stamping from the series would quietly undo a per-date visibility
+    // change somebody made on purpose.
+    const stored = {
+        'midweek_2026-08-05': {
+            seriesId: 'midweek', date: '2026-08-05', visibility: 'participant', participantIds: ['ann'],
+        },
+    };
+    const db = fakeDb({
+        events: { midweek: { name: 'Midweek', visibility: 'member' } },
+        event_occurrences: stored,
+    }, { rank: 'editor' });
+
+    await Store.saveOccurrenceDetails(db, 'midweek_2026-08-05', { description: 'Eating after.' });
+
+    const written = db._flatWrites()[0].data;
+    assert.strictEqual(written.description, 'Eating after.');
+    assert.strictEqual('visibility' in written, false, 'restamped a date that had its own answer');
+    assert.strictEqual('participantIds' in written, false);
+});
+
+test('clearing one date\'s description stores null, so the series shows through', async () => {
+    // `null` is "I have nothing of my own to say", which `descriptionOf` reads
+    // as fall back to the Event. Storing '' would be indistinguishable.
+    const stored = {
+        'midweek_2026-08-05': {
+            seriesId: 'midweek', date: '2026-08-05', visibility: 'member', description: 'Eating after.',
+        },
+    };
+    const db = fakeDb({
+        events: { midweek: { name: 'Midweek', visibility: 'member' } },
+        event_occurrences: stored,
+    }, { rank: 'editor' });
+
+    await Store.saveOccurrenceDetails(db, 'midweek_2026-08-05', { description: '   ' });
+
+    assert.strictEqual(db._flatWrites()[0].data.description, null);
+});
+
 test('a visibility nobody recognises is refused rather than stored', async () => {
     // An unrecognised stamp is readable by NOBODY once the rule reads it, so a
     // typo here would make the Event vanish for everyone including its editor.

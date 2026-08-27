@@ -668,6 +668,57 @@ test('every liturgical Role the model has is one the Service can be read for', (
     });
 });
 
+// ── What a date says about itself (MS-288) ───────────────────────────────────
+//
+// Same shape as `locationOf`, and for the same reason: a repeating Event's
+// description is typed once on the series, so a date with nothing of its own
+// has to read through to it rather than showing nothing. A date CAN have its
+// own — "bring the trestle tables, we're eating after" is true of one week and
+// not the others — and when it does, it wins.
+
+test('a date with no description of its own reads the series', () => {
+    const series = { description: 'Midweek prayer and a cup of tea.' };
+    assert.strictEqual(
+        Core.descriptionOf({ seriesId: 'midweek', date: '2026-07-15' }, series),
+        'Midweek prayer and a cup of tea.'
+    );
+});
+
+test("a date's own description wins over the series", () => {
+    const series = { description: 'Midweek prayer and a cup of tea.' };
+    const occurrence = { seriesId: 'midweek', description: 'Bring trestle tables — eating after.' };
+    assert.strictEqual(
+        Core.descriptionOf(occurrence, series),
+        'Bring trestle tables — eating after.'
+    );
+});
+
+test('a one-off with only its own description keeps it', () => {
+    assert.strictEqual(
+        Core.descriptionOf({ description: 'Harvest Supper in the hall.' }, null),
+        'Harvest Supper in the hall.'
+    );
+});
+
+test('nothing anywhere is nothing, not an empty string', () => {
+    assert.strictEqual(Core.descriptionOf({}, {}), null);
+    assert.strictEqual(Core.descriptionOf(null, null), null);
+});
+
+test('a cleared date description falls back to the series, it does not blank it', () => {
+    // This is the whole point of storing `null` when the editor empties the box:
+    // "I have no answer of my own" has to be distinguishable from "say nothing".
+    const series = { description: 'Midweek prayer and a cup of tea.' };
+    assert.strictEqual(
+        Core.descriptionOf({ seriesId: 'midweek', description: null }, series),
+        'Midweek prayer and a cup of tea.'
+    );
+    assert.strictEqual(
+        Core.descriptionOf({ seriesId: 'midweek', description: '' }, series),
+        'Midweek prayer and a cup of tea.'
+    );
+});
+
 // ── A date that is not happening ──────────────────────────────────────────────
 //
 // Two ways an instance stops happening on its own date: it was skipped, or it
