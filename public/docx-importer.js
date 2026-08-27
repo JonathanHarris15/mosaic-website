@@ -135,10 +135,13 @@ window.initDocxImporter = function(onSuccess) {
             return { success: false, error: 'Could not find or parse "Date" field.' };
         }
 
-        // Project Start Date Check: July 9, 2023
-        const projectStartDate = new Date(2023, 6, 9); // Month is 0-indexed
-        if (new Date(dateId) < projectStartDate) {
-            return { success: false, error: `Date (${dateId}) is before the project start date of July 9, 2023.` };
+        // Nothing exists before the church's first Sunday, so an order of
+        // service dated earlier has nowhere to land. Both dates are YYYY-MM-DD,
+        // which compares correctly as a string and avoids a UTC parse turning
+        // the first Sunday into the Saturday before it.
+        const firstSunday = ServiceDatesCore.FIRST_SUNDAY;
+        if (dateId < firstSunday) {
+            return { success: false, error: `Date (${dateId}) is before the project start date of ${DateUtils.formatDateLong(firstSunday)}.` };
         }
 
         // Hymn Collection

@@ -217,6 +217,28 @@
                 <div class="m-header__titles">
                     <h1 class="m-header__title m-header__title--serif" x-text="formatDate(date)"></h1>
                 </div>
+
+                <!-- Step Sunday to Sunday without going back to Services (MS-303).
+                     Distinct from the back link on the left, which is the way
+                     OUT of this Sunday and stays that. Disabled rather than
+                     hidden at the ends of the range, so the header does not
+                     shuffle as you reach them. -->
+                <div class="flex items-center gap-1 shrink-0" x-show="date">
+                    <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost"
+                            @click="stepService(-1)"
+                            :disabled="!previousServiceDate || stepping"
+                            :title="previousServiceDate ? formatDate(previousServiceDate) : 'No earlier Sunday'"
+                            :aria-label="previousServiceDate ? 'Previous Sunday, ' + formatDate(previousServiceDate) : 'No earlier Sunday'">
+                        <span class="material-symbols-outlined">chevron_left</span>
+                    </button>
+                    <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost"
+                            @click="stepService(1)"
+                            :disabled="!nextServiceDate || stepping"
+                            :title="nextServiceDate ? formatDate(nextServiceDate) : 'No later Sunday'"
+                            :aria-label="nextServiceDate ? 'Next Sunday, ' + formatDate(nextServiceDate) : 'No later Sunday'">
+                        <span class="material-symbols-outlined">chevron_right</span>
+                    </button>
+                </div>
             </div>
             <div class="m-header__actions">
                 <span id="header-dirty-pill" x-show="canEdit && isDirty && !saving" x-transition
@@ -1277,6 +1299,7 @@
     </div>
 
     <script src="date-utils.js"></script>
+    <script src="service-dates-core.js"></script>
     <!-- Who serves at a Sunday, and when that becomes a serve record (MS-16). -->
     <script src="service-involvement-core.js"></script>
     <script src="pastoral-prayer-core.js"></script>

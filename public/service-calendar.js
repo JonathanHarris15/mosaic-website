@@ -509,18 +509,12 @@ async function loadHymnIndex() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const startDate = new Date(2023, 6, 9); // July 9, 2023 (Month is 0-indexed)
-    const endDate = new Date();
-    endDate.setFullYear(endDate.getFullYear() + 2);
-
-    allSundays = [];
-    let current = new Date(startDate);
-    
-    // Ensure we start on a Sunday
-    while (current <= endDate) {
-        allSundays.push(new Date(current));
-        current.setDate(current.getDate() + 7);
-    }
+    // Which Sundays this page draws a row for is not this page's decision — the
+    // Order of Service arrows step through the same range, and two copies of
+    // that answer is two chances to disagree. ServiceDatesCore owns it.
+    // Kept as Dates because everything downstream here (grouping, the upcoming
+    // picker, the rendered rows) already works in Dates.
+    allSundays = ServiceDatesCore.all(DateUtils.todayStr()).map(DateUtils.parseDateStr);
 
     const showHistory = false;
     window.refreshCalendar(showHistory);

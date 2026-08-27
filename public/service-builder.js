@@ -5,6 +5,49 @@
 // minute old silently drops whoever was added in that minute. Ignored on the
 // web, where reads were always live.
 var FRESH_READ = { source: 'server' };
+
+// ── Stepping Sunday to Sunday (MS-303) ──────────────────────────────────────
+//
+// The order of service is written one Sunday at a time, and at the service
+// guide party it is written for eight Sundays in a row. Going back to the
+// Services list between each one is the tax this removes.
+//
+// Both helpers below are pure so they can be tested without a browser: one
+// decides whether the move may happen, the other says where it goes.
+
+// Where the arrow points. The tab rides in the address bar because the step is
+// a page load, and landing on the order of service when you were staffing Roles
+// would undo the reason you pressed the arrow. 'order' is the default, so it is
+// left out rather than written down.
+function stepHref(date, options) {
+    const opts = options || {};
+    const params = new URLSearchParams({ date: date });
+    if (opts.shell) params.set('shell', opts.shell);
+    if (opts.tab && opts.tab !== 'order') params.set('tab', opts.tab);
+    return 'service-builder.html?' + params.toString();
+}
+
+// Save, then move — or do not move.
+//
+// A page saves itself rather than asking (ADR-0032), so an arrow pressed
+// mid-edit flushes the pending write instead of raising the browser's
+// "leave site?" box. But a save that FAILED must not be walked away from: the
+// work is still only in this tab, and the next screen would show no sign of it.
+// So a failed save leaves you exactly where you were, with the error the page
+// already raises.
+//
+// `go` is handed the target rather than returning it, because the caller
+// replaces the current history entry rather than stacking one — back means
+// "out to Services", never "undo my last arrow".
+async function stepToService(step) {
+    if (!step || !step.target) return false;
+    if (step.canEdit && step.isDirty) {
+        const saved = await step.save();
+        if (!saved) return false;
+    }
+    step.go(step.target);
+    return true;
+}
 const CANONICAL_MAPPING = {
     'Theme': { field: 'theme', type: 'text' },
     'Key Verse': { field: 'keyVerse', type: 'text' },
@@ -639,6 +682,49 @@ function serviceForm() {
                 : null;
         },
 
+        // ── The arrows beside the date (MS-303) ─────────────────────────────
+        //
+        // Which Sunday is next is not this page's opinion — ServiceDatesCore
+        // owns the range, and the Services list draws its rows from the same
+        // answer. Null at either end, which is what greys the arrow out.
+        get previousServiceDate() {
+            return window.ServiceDatesCore
+                ? ServiceDatesCore.previous(this.date, DateUtils.todayStr())
+                : null;
+        },
+
+        get nextServiceDate() {
+            return window.ServiceDatesCore
+                ? ServiceDatesCore.next(this.date, DateUtils.todayStr())
+                : null;
+        },
+
+        // `stepping` is held from the press until the page actually leaves, so
+        // a slow save cannot be double-clicked into two navigations. It is only
+        // released when the move was refused — otherwise this page is on its
+        // way out and the flag goes with it.
+        stepping: false,
+
+        async stepService(direction) {
+            if (this.stepping) return false;
+            const target = direction < 0 ? this.previousServiceDate : this.nextServiceDate;
+            if (!target) return false;
+
+            this.stepping = true;
+            const moved = await stepToService({
+                target: target,
+                canEdit: this.canEdit,
+                isDirty: this.isDirty,
+                // Manual, so a failure is answered rather than swallowed: you
+                // asked to leave, so you are owed the reason you cannot.
+                save: () => this.save(true),
+                go: (date) => window.location.replace(
+                    stepHref(date, { shell: this.shell, tab: this.tab })),
+            });
+            if (!moved) this.stepping = false;
+            return moved;
+        },
+
         openTab(key) {
             this.tab = key;
             // Latch on the way in, not on a watcher, so the panel is built by
@@ -709,6 +795,10 @@ function serviceForm() {
                 return;
             }
             await this.load();
+            // Carried across a step so staffing several Sundays in a row does
+            // not mean re-opening Roles each time (MS-303). After load(), so
+            // the panel builds against a Sunday that has arrived.
+            if (urlParams.get('tab') === 'roles') this.openTab('roles');
             await this.loadGuideCatalog();
             await this.loadHymnRegistry();
             await this.loadPeopleRegistry();
@@ -1483,6 +1573,10 @@ function serviceForm() {
                 // leaves the marker up and waits for you to do something.
                 if (committed && this.isDirty) this.scheduleSave();
             }
+            // Whether the write landed. An autosave ignores this — it is quiet
+            // by design — but stepping to another Sunday must not leave one
+            // behind if its save failed, so it needs to be told (MS-303).
+            return committed;
         },
 
         // ── Autosave ────────────────────────────────────────────────────────────
@@ -2533,5 +2627,5 @@ function hymnPicker(hymnRef, parent = null) {
 
 // Expose pure helpers for Node-based unit tests; ignored in the browser.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions };
+    module.exports = { CANONICAL_MAPPING, worshipHelperInvolvementChanges, personRefSetChanges, parseBaptismNames, normalizeDottedKeys, coerceBaptismCandidates, flattenServiceForSave, changedFieldPaths, applyFlatFieldPath, pickSaveFields, remoteAdoptions, stepHref, stepToService };
 }
