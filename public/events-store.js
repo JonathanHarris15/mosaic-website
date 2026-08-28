@@ -680,6 +680,27 @@
     // rather than making this read it again — and an editor may be refused an
     // elder-level series, which would otherwise turn a skip into an error.
     async function cancelOccurrence(db, seriesId, date, cancelled, options) {
+        // A Sunday is always on. Its order of service lives in services/{date},
+        // under the DATE and not under the Event, so marking the Event off would
+        // leave that order of service standing and one Sunday would say two
+        // things — the same reason `moveOccurrence` refuses it below.
+        //
+        // Both directions, deliberately. A Sunday can never be marked off, so
+        // "put it back" has nothing to undo, and a one-way guard would leave a
+        // record that arrived from outside the app stuck that way.
+        //
+        // Nothing in the app can reach this: the "Skip this one" button sits
+        // inside a section gated on `patternEditable`, which excludes a Sunday.
+        // The rule lives here anyway, because it is a fact about the Sunday
+        // Service and not about one page's markup (MS-311).
+        if (seriesId === Core.SUNDAY_SERVICE_ID) {
+            throw new Error(
+                'The Sunday Service cannot be skipped: its order of service lives under its ' +
+                'own date, and marking the Event off would leave that order of service ' +
+                'standing, so one Sunday would say two things.'
+            );
+        }
+
         const id = Core.occurrenceId(seriesId, date);
         if (!id) throw new Error('Only a date of a series can be cancelled.');
 
