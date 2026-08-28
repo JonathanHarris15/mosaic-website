@@ -590,6 +590,70 @@ test('a cancelled date can be put back', async () => {
     assert.strictEqual(db._flatWrites()[0].data.cancelled, false);
 });
 
+
+// ── MS-311: a Sunday Service is always on ─────────────────────────────────────
+//
+// `moveOccurrence` has refused the Sunday Service for as long as it has existed,
+// for a reason that applies just as hard here: a Sunday's order of service lives
+// in services/{date}, under the date, not under the Event. Marking the Event off
+// would leave that order of service standing, so one Sunday would say two things.
+//
+// Nothing in the app can reach this — the "Skip this one" button sits inside a
+// section gated on `patternEditable`, which excludes a Sunday — but the rule is a
+// fact about the Sunday Service, not about one page's markup, and the page is the
+// wrong place for it to live alone.
+
+test('the Sunday Service is never skipped', async () => {
+    const db = fakeDb({ events: { sunday_service: { name: 'Sunday Service' } }, event_occurrences: {} },
+        { rank: 'elder' });
+
+    await assert.rejects(
+        () => Store.cancelOccurrence(db, Core.SUNDAY_SERVICE_ID, '2026-08-02', true),
+        /Sunday Service/i
+    );
+    assert.deepStrictEqual(db._flatWrites(), [], 'a refusal that still wrote would be no refusal');
+});
+
+test('putting a Sunday back is refused too, because it was never taken away', async () => {
+    // Both directions, deliberately. A one-way guard would leave a stuck record
+    // unrecoverable if one ever appeared from outside the app.
+    const db = fakeDb({ events: { sunday_service: { name: 'Sunday Service' } }, event_occurrences: {} },
+        { rank: 'elder' });
+
+    await assert.rejects(
+        () => Store.cancelOccurrence(db, Core.SUNDAY_SERVICE_ID, '2026-08-02', false),
+        /Sunday Service/i
+    );
+    assert.deepStrictEqual(db._flatWrites(), []);
+});
+
+// The id is defined once, in the occurrence core, precisely so two modules cannot
+// drift apart on what a Sunday is. A guard that hardcodes the string passes every
+// test above and then stops guarding the day somebody renames the series.
+test('every Sunday guard asks the core what a Sunday is', () => {
+    const src = require('node:fs')
+        .readFileSync(require('node:path').join(__dirname, '..', 'public', 'events-store.js'), 'utf8');
+
+    // The body of one function, from its declaration to the next one.
+    const bodyOf = name => {
+        const from = src.indexOf('async function ' + name + '(');
+        assert.notStrictEqual(from, -1, name + ' is gone — this test needs rewriting, not deleting');
+        const next = src.indexOf('async function ', from + 1);
+        return src.slice(from, next === -1 ? src.length : next);
+    };
+
+    // Both operations that change one date of a series refuse a Sunday, and both
+    // ask the core rather than restating the id.
+    for (const fn of ['cancelOccurrence', 'moveOccurrence']) {
+        assert.match(bodyOf(fn), /seriesId === Core\.SUNDAY_SERVICE_ID/,
+            fn + ' must refuse the Sunday Service');
+    }
+
+    // And nowhere in the file is the id spelled out by hand.
+    assert.doesNotMatch(src.replace(/SUNDAY_SERVICE_ID = '[^']*'/g, ''), /'sunday_service'/,
+        'compare against the core constant, never a hardcoded id');
+});
+
 // ── Deleting a one-off ────────────────────────────────────────────────────────
 
 test('deleting a one-off takes its roster with it, roster first', async () => {
