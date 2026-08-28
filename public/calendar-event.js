@@ -108,6 +108,9 @@
             series: null,
             assignments: [],
             attendance: [],
+            // Which pane of the Event page is open. Editors get a second one —
+            // who was actually here — so it starts on the Event either way.
+            tab: 'event',
             people: [],
             roleDefinitions: [],
             relationships: [],
@@ -1705,6 +1708,25 @@
 
             initials(name) { return View.initials(name); },
             formatTime(t) { return View.formatTime(t); },
+
+            // Attendance, in the order a person reads a list of names. The row
+            // carries its own name and time so the shared panel stays dumb.
+            get attendanceRows() {
+                return (this.attendance || []).map(row => ({
+                    personId: row.personId,
+                    name: this.personName(row.personId),
+                    pickupCode: row.pickupCode || '',
+                    markedAtLabel: this.markedAtLabel(row.markedAt),
+                })).sort((a, b) => a.name.localeCompare(b.name));
+            },
+            // The clock time they were marked. The date is the Event's own, so
+            // repeating it on every row would say nothing.
+            markedAtLabel(markedAt) {
+                if (!markedAt) return '';
+                const at = new Date(markedAt);
+                if (isNaN(at.getTime())) return '';
+                return at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            },
             stateLabel(a) { return Core.stateLabel(a); },
             stateTone(a) { return Core.stateTone(a); },
             visibilityLabel(l) { return View.visibilityLabel(l); },

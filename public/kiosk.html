@@ -31,24 +31,24 @@
 </head>
 <body class="bg-background text-on-background font-body-md min-h-screen flex flex-col"
       x-data="kioskPage()" x-cloak>
-    <header class="m-header m-header--sticky">
-        <div class="m-header__inner">
-            <div class="m-header__lead">
-                <div class="m-header__titles">
-                    <h1 class="m-header__title">Attendance</h1>
-                    <p class="m-header__sub" x-show="view !== 'events'" x-text="eventTitle"></p>
-                </div>
-            </div>
-            <div class="m-header__rule"></div>
-            <div class="m-header__auth" id="auth-container"></div>
-        </div>
+    <!-- ⚠ NO `.m-header` HERE, AND NO `#auth-container`, ON PURPOSE.
+         This screen is a desk in a foyer, not a page of the app. The one thing
+         it should say to somebody walking up to it is that they are welcome, so
+         the seal is the crown of the page and the app's chrome — title, nav,
+         account — is not on it at all. auth.js copes with the missing container
+         (it marks the header as owed and moves on); Log Out is the faint button
+         at the foot of the page, calling the same global. -->
+    <header class="w-full flex flex-col items-center pt-lg pb-md">
+        <img src="assets/mosaic-logo.png" alt="Mosaic Church"
+             class="w-[104px] h-[104px] object-contain">
+        <h1 class="font-display text-headline-lg text-primary mt-sm">Welcome!</h1>
     </header>
 
     <div x-show="loading" class="m-loading">
         <span class="m-spinner material-symbols-outlined">progress_activity</span>
     </div>
 
-    <main x-show="!loading" class="flex-grow w-full max-w-[720px] mx-auto px-margin pb-lg pt-md">
+    <main x-show="!loading" class="flex-grow w-full max-w-[720px] mx-auto px-margin pb-xl pt-md">
         <div x-show="error"
              class="mb-md bg-error-container text-on-error-container border border-outline-variant rounded-lg p-md flex items-start gap-sm">
             <span class="material-symbols-outlined text-[20px]">error</span>
@@ -70,28 +70,49 @@
                     </article>
                 </template>
             </div>
-            <p x-show="!occurrences.length" class="text-on-surface-variant italic">No events yet.</p>
+            <p x-show="!occurrences.length" class="text-on-surface-variant italic">Nothing on today, and nothing coming up.</p>
         </section>
 
         <!-- Household search -->
         <section x-show="view === 'search'">
-            <button type="button" class="m-back mb-md" @click="view = 'events'; query = ''; matches = [];">
-                <span class="material-symbols-outlined">chevron_left</span>
-                <span class="m-back__label">Events</span>
-            </button>
-            <label class="block mb-md">
-                <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">Search by name</span>
-                <input type="search" x-model="query" @input="runSearch()"
-                       placeholder="Type a surname or a full name"
-                       class="mt-1 w-full py-2.5 px-4 bg-surface border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary outline-none font-body-md"
-                       autofocus>
-            </label>
+            <!-- The one thing this screen is for. A greeter is standing at a
+                 desk with a queue in front of them, so the field is the size of
+                 the job: full width, thumb-height, and the only thing on the
+                 page carrying weight until they have typed something. -->
+            <div class="mb-md">
+                <div class="relative">
+                    <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2
+                                 text-[26px] text-primary/50 pointer-events-none">search</span>
+                    <!-- ⚠ autocomplete off, on purpose. A shared foyer screen must not
+                         offer the last family's surname to the next person in the
+                         queue, and Chrome's history dropdown covers the results. -->
+                    <input type="search" x-model="query" @input="runSearch()"
+                           placeholder="Search by name"
+                           aria-label="Search by name"
+                           autocomplete="off" autocorrect="off" autocapitalize="off"
+                           spellcheck="false" name="household-search-noautofill"
+                           class="w-full h-[68px] pl-[56px] pr-4 bg-surface rounded-xl
+                                  border-2 border-primary/30 shadow-sm
+                                  text-[22px] font-body-md text-on-surface
+                                  placeholder:text-on-surface-variant/60
+                                  focus:border-primary focus:ring-4 focus:ring-primary/15
+                                  outline-none transition-colors"
+                           autofocus>
+                </div>
+            </div>
             <div class="flex flex-col gap-sm">
                 <template x-for="h in matches" :key="h.id">
                     <button type="button"
                             class="m-card text-left w-full hover:bg-surface-container-low transition-colors"
                             @click="openHousehold(h)">
-                        <h2 class="font-headline-md text-primary" x-text="h.name"></h2>
+                        <div class="flex items-start justify-between gap-sm">
+                            <h2 class="font-headline-md text-primary" x-text="h.name"></h2>
+                            <span x-show="presentCount(h)"
+                                  class="shrink-0 inline-flex items-center rounded-md bg-secondary-container
+                                         text-on-secondary-container px-2 py-1
+                                         text-[10.5px] font-label-md uppercase tracking-wider"
+                                  x-text="presentCount(h) + ' of ' + h.members.length + ' here'"></span>
+                        </div>
                         <p class="text-sm text-on-surface-variant" x-text="memberNames(h)"></p>
                     </button>
                 </template>
@@ -101,34 +122,56 @@
                 <p class="text-on-surface">No matches for “<span x-text="query.trim()"></span>”.</p>
                 <p class="text-sm text-on-surface-variant mt-1">They may be new. Create a household and mark them present in this visit.</p>
             </div>
-            <button type="button" class="m-btn m-btn--secondary m-btn--sm mt-md"
-                    @click="startCreate()">Create household</button>
+            <!-- The way out, not the way in. A greeter searches; creating a
+                 household is the rarer answer, so it sits quietly at the foot
+                 of the page rather than competing with the results. -->
+            <div class="mt-lg flex justify-center">
+                <button type="button"
+                        class="text-[11.5px] font-label-md uppercase tracking-wider text-on-surface-variant
+                               underline underline-offset-4 decoration-outline-variant
+                               px-sm py-2 rounded-lg hover:text-primary transition-colors"
+                        @click="startCreate()">Create household</button>
+            </div>
         </section>
 
-        <!-- Create household -->
+        <!-- Create a household, or add people to one -->
         <section x-show="view === 'create'">
-            <button type="button" class="m-back mb-md" @click="view = 'search'">
-                <span class="material-symbols-outlined">chevron_left</span>
-                <span class="m-back__label">Search</span>
-            </button>
-            <h2 class="font-headline-md text-primary mb-sm">Create household</h2>
+            <h2 class="font-headline-md text-primary mb-sm" x-text="draftTitle"></h2>
             <p class="text-sm text-on-surface-variant mb-md">Name, phone, adult or kid, male or female. Nothing else — they fill the rest in later.</p>
-            <label class="block mb-md">
+
+            <label class="block mb-md" x-show="!addingToHousehold">
                 <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">Household name</span>
-                <input type="text" x-model="draft.name"
+                <input type="text" x-model="draft.name" autocomplete="off"
                        class="mt-1 w-full py-2.5 px-4 bg-surface border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary outline-none font-body-md">
             </label>
+
+            <!-- The duplicate a busy Sunday makes: the same household typed a
+                 second time. Named, and offered, rather than silently allowed. -->
+            <div x-show="twinHousehold"
+                 class="mb-md p-md border border-outline-variant rounded-lg bg-surface-container-low">
+                <p class="text-sm text-on-surface">There is already a household called
+                    “<span x-text="twinHousehold && twinHousehold.name"></span>”.</p>
+                <p class="text-xs text-on-surface-variant mt-1" x-text="twinHousehold && memberNames(twinHousehold)"></p>
+                <button type="button" class="m-btn m-btn--secondary m-btn--sm mt-sm"
+                        @click="openTwin()">Open it instead</button>
+            </div>
+            <div x-show="repeatedNames.length"
+                 class="mb-md p-md border border-outline-variant rounded-lg bg-surface-container-low">
+                <p class="text-sm text-on-surface">Already in this household:
+                    <span x-text="repeatedNames.join(', ')"></span>. Adding them again makes a second record.</p>
+            </div>
+
             <div class="flex flex-col gap-sm">
                 <template x-for="(p, i) in draft.people" :key="i">
                     <div class="m-card grid grid-cols-1 md:grid-cols-12 gap-sm items-end">
                         <label class="md:col-span-4">
                             <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">Name</span>
-                            <input type="text" x-model="p.name"
+                            <input type="text" x-model="p.name" autocomplete="off"
                                    class="mt-1 w-full py-2 px-3 bg-surface border border-outline-variant/50 rounded-lg outline-none">
                         </label>
                         <label class="md:col-span-3">
                             <span class="text-[10px] font-label-md uppercase tracking-widest text-on-surface-variant">Phone</span>
-                            <input type="tel" x-model="p.phone"
+                            <input type="tel" x-model="p.phone" autocomplete="off"
                                    class="mt-1 w-full py-2 px-3 bg-surface border border-outline-variant/50 rounded-lg outline-none">
                         </label>
                         <label class="md:col-span-2">
@@ -144,49 +187,112 @@
                             <input type="checkbox" x-model="p.kid" class="rounded border-outline-variant text-primary">
                             <span class="text-sm">Kid</span>
                         </label>
-                        <button type="button" class="md:col-span-1 m-btn m-btn--secondary m-btn--sm"
-                                @click="removeDraftPerson(i)">Remove</button>
+                        <!-- An icon, not the word. "Remove" never fit one column of
+                             twelve and spilled out of its own button. -->
+                        <div class="md:col-span-1 flex md:justify-end">
+                            <button type="button" class="m-icon-btn" title="Remove this person"
+                                    aria-label="Remove this person"
+                                    @click="removeDraftPerson(i)">
+                                <span class="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
                     </div>
                 </template>
             </div>
             <div class="flex gap-sm mt-md">
                 <button type="button" class="m-btn m-btn--secondary" @click="addDraftPerson()">Add a person</button>
-                <button type="button" class="m-btn m-btn--primary" :disabled="creating" @click="submitCreate()">
-                    Save household
-                </button>
+                <button type="button" class="m-btn m-btn--primary" :disabled="saving" @click="submitDraft()"
+                        x-text="addingToHousehold ? 'Add to household' : 'Save household'"></button>
             </div>
         </section>
 
         <!-- Mark present -->
         <section x-show="view === 'present'">
-            <button type="button" class="m-back mb-md" @click="view = 'search'; checked = {}; marked = false;">
-                <span class="material-symbols-outlined">chevron_left</span>
-                <span class="m-back__label">Search</span>
-            </button>
-            <h2 class="font-headline-md text-primary mb-sm" x-text="selected && selected.name"></h2>
+            <div class="flex items-start justify-between gap-sm mb-sm">
+                <h2 class="font-headline-md text-primary" x-text="selected && selected.name"></h2>
+                <button type="button" class="m-btn m-btn--secondary m-btn--sm shrink-0"
+                        @click="startAddPeople()">Add someone</button>
+            </div>
             <div class="m-card">
+                <!-- Everyone, in one tap. Only the people not already here move,
+                     so it can never re-tag somebody who has their tag. -->
+                <label x-show="arrivalsHere().length > 1"
+                       class="flex items-center gap-sm py-2.5 border-b border-outline-variant cursor-pointer">
+                    <input type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary"
+                           :checked="allChecked" @change="toggleAll()">
+                    <span class="text-[15px] font-label-md">Everyone</span>
+                    <span class="text-[11px] uppercase tracking-wider text-on-surface-variant"
+                          x-text="arrivalsHere().length + ' not here yet'"></span>
+                </label>
                 <template x-for="m in (selected && selected.members) || []" :key="m.personId">
-                    <label class="flex items-center gap-sm py-2.5 border-b border-outline-variant last:border-b-0 cursor-pointer">
-                        <input type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary"
-                               :checked="!!checked[m.personId]"
-                               @change="toggle(m.personId)">
-                        <span class="text-[15px]" x-text="m.name"></span>
-                        <span x-show="m.kid" class="text-[11px] uppercase tracking-wider text-on-surface-variant">Kid</span>
-                    </label>
+                    <div class="flex items-center gap-sm py-2.5 border-b border-outline-variant last:border-b-0">
+                        <label class="flex items-center gap-sm flex-1 min-w-0"
+                               :class="isPresent(m.personId) ? 'cursor-default' : 'cursor-pointer'">
+                            <input type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary"
+                                   :checked="isPresent(m.personId) || !!checked[m.personId]"
+                                   :disabled="isPresent(m.personId)"
+                                   @change="toggle(m.personId)">
+                            <span class="text-[15px] truncate" x-text="m.name"></span>
+                            <span x-show="m.kid" class="text-[11px] uppercase tracking-wider text-on-surface-variant">Kid</span>
+                        </label>
+                        <!-- Already here. Their tag came out the first time, so
+                             nothing prints again unless a greeter asks here. -->
+                        <span x-show="isPresent(m.personId)"
+                              class="text-[11px] uppercase tracking-wider text-primary shrink-0">Already here</span>
+                        <button type="button" class="m-btn m-btn--secondary m-btn--sm shrink-0"
+                                x-show="isPresent(m.personId) && needsNameTags"
+                                @click="reprint(m)"
+                                x-text="m.kid ? 'Reprint tag &amp; stub' : 'Reprint tag'"></button>
+                        <!-- The wrong row, tapped. Takes them straight back off. -->
+                        <button type="button" class="m-icon-btn shrink-0"
+                                x-show="isPresent(m.personId)"
+                                title="Take them back off the list"
+                                aria-label="Take them back off the list"
+                                @click="unmark(m)">
+                            <span class="material-symbols-outlined">undo</span>
+                        </button>
+                    </div>
                 </template>
             </div>
-            <p x-show="marked" class="mt-sm text-sm text-primary">Marked present.</p>
+            <p x-show="everyoneHere" class="mt-sm text-sm text-on-surface-variant">
+                Everyone in this household is already here.
+            </p>
             <p x-show="printNote" class="mt-sm text-sm text-on-surface-variant" x-text="printNote"></p>
             <div class="sticky bottom-0 mt-md py-md bg-background flex flex-col gap-sm">
                 <button type="button" class="m-btn m-btn--primary w-full"
                         :disabled="!checkedCount || marking"
                         @click="submitPresent()"
                         x-text="footerLabel"></button>
-                <button type="button" class="m-btn m-btn--secondary w-full"
-                        x-show="needsNameTags && lastLabels.length"
-                        @click="printNow()">Print tags again</button>
             </div>
         </section>
     </main>
+
+    <!-- Getting out, and getting back. Both are for the volunteer running the
+         desk rather than the person standing at it, so they sit quietly in the
+         corner and only come up to full strength under the pointer. The event's
+         name rides along with them: on a kiosk carrying fifty gatherings, "back
+         to Events" does not tell you which one you are in. -->
+    <div x-show="!loading"
+         class="fixed bottom-4 right-4 z-40 flex items-center gap-sm">
+        <span x-show="view !== 'events'"
+              class="text-[11px] font-label-md uppercase tracking-wider text-on-surface-variant/50"
+              x-text="eventTitle"></span>
+        <button type="button" x-show="view !== 'events'" @click="goBack()"
+                class="flex items-center gap-1 px-2 py-1.5 rounded-lg
+                       text-[11px] font-label-md uppercase tracking-wider
+                       text-on-surface-variant/50 hover:text-primary hover:bg-surface-container
+                       transition-colors">
+            <span class="material-symbols-outlined text-[16px]">chevron_left</span>
+            <span x-text="backLabel"></span>
+        </button>
+        <button type="button" onclick="logout()"
+                class="flex items-center gap-1 px-2 py-1.5 rounded-lg
+                       text-[11px] font-label-md uppercase tracking-wider
+                       text-on-surface-variant/50 hover:text-error hover:bg-surface-container
+                       transition-colors">
+            <span class="material-symbols-outlined text-[16px]">logout</span>
+            <span>Log Out</span>
+        </button>
+    </div>
 </body>
 </html>

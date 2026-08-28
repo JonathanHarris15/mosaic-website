@@ -56,5 +56,17 @@ test('a kiosk may create a Person and a Household, and cannot delete either', ()
     assert.doesNotMatch(person, /allow delete: if isKiosk\(\)/);
     const households = blockFor(/match \/households\/\{householdId\}\s*\{([\s\S]*?)\n    \}/);
     assert.match(households, /allow create: if isKiosk\(\)/);
-    assert.match(households, /allow update, delete: if isEditor\(\)/);
+    assert.match(households, /allow delete: if isEditor\(\)/);
+    assert.doesNotMatch(households, /allow delete: if isKiosk\(\)/);
+});
+
+test('a kiosk may add to a Household but never rename or empty one', () => {
+    const households = blockFor(/match \/households\/\{householdId\}\s*\{([\s\S]*?)\n    \}/);
+    const update = households.match(/allow update: if([\s\S]*?);/);
+    assert.ok(update, 'no update rule on households');
+    assert.match(update[1], /isKiosk\(\)/);
+    // The name may not move and nobody may be dropped — that is the whole
+    // difference between a greeter growing a household and editing one.
+    assert.match(update[1], /request\.resource\.data\.name == resource\.data\.name/);
+    assert.match(update[1], /memberIds\.hasAll\(resource\.data\.memberIds\)/);
 });

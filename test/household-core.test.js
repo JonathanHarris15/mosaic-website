@@ -92,3 +92,51 @@ test('a new Person from the kiosk starts as a Visitor', () => {
     assert.strictEqual(doc.kid, true);
     assert.strictEqual(doc.contact.phone, '555');
 });
+
+// ── Minting, and the duplicates it exists to stop (ADR-0044) ────────────────
+
+test('minting a projection keeps the projection id, so minting twice is one doc', () => {
+    const households = Household.householdsFromDirectory(people, families);
+    const harris = households.find(h => h.id === 'family:harrises');
+    const first = Household.mintWrite(harris, [], 't1');
+    const second = Household.mintWrite(harris, [], 't2');
+    assert.strictEqual(Household.isProjectionId(harris.id), true);
+    assert.strictEqual(first.doc.mintedFrom, 'family:harrises');
+    assert.deepStrictEqual(first.doc.memberIds, second.doc.memberIds);
+    assert.strictEqual(first.doc.name, 'The Harris Household');
+});
+
+test('minting appends new people without disturbing the ones already there', () => {
+    const households = Household.householdsFromDirectory(people, families);
+    const harris = households.find(h => h.id === 'family:harrises');
+    const plan = Household.mintWrite(harris, [{ personId: 'brother', name: 'Rory Harris', kid: false }], 't');
+    assert.deepStrictEqual(plan.doc.memberIds, ['bob', 'alice', 'kid', 'brother']);
+    assert.strictEqual(plan.members[3].name, 'Rory Harris');
+});
+
+test('minting the same person twice seats them once', () => {
+    const one = { id: 'hh', name: 'The Cole Household', members: [{ personId: 'a', name: 'Ada', kid: false }] };
+    const plan = Household.mintWrite(one, [{ personId: 'a', name: 'Ada', kid: true }], 't');
+    assert.deepStrictEqual(plan.doc.memberIds, ['a']);
+});
+
+test('a Household already called that is found, whatever the spacing or case', () => {
+    const stored = [{ id: 'hh1', name: 'The Harris Household', members: [{ personId: 'bob' }] }];
+    const households = Household.householdsFromDirectory(people, families, stored);
+    const twin = Household.duplicateOf(households, '  the   harris household ', null);
+    assert.ok(twin);
+    assert.strictEqual(twin.id, 'hh1');
+    assert.strictEqual(Household.duplicateOf(households, 'The Okafor Household', null), null);
+    assert.strictEqual(Household.duplicateOf(households, '', null), null);
+});
+
+test('a Household is not its own duplicate', () => {
+    const list = [{ id: 'hh1', name: 'The Harris Household' }];
+    assert.strictEqual(Household.duplicateOf(list, 'The Harris Household', 'hh1'), null);
+});
+
+test('adding somebody already in the household is named, not silently allowed', () => {
+    const household = { id: 'hh', name: 'The Harris Household', members: [{ personId: 'bob', name: 'Bob Harris' }] };
+    assert.deepStrictEqual(Household.repeatedNames(household, [{ name: 'bob harris' }]), ['Bob Harris']);
+    assert.deepStrictEqual(Household.repeatedNames(household, [{ name: 'Rory Harris' }]), []);
+});

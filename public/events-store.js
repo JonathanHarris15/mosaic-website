@@ -134,6 +134,22 @@
         await batch.commit();
     }
 
+    // Undo a mark. A greeter taps the wrong row on a Sunday morning and needs it
+    // gone, not annotated — the Attendance record is "who was here", and somebody
+    // who was not here does not belong in it with a footnote. The rules let a
+    // Kiosk and an editor delete for exactly this (MS-321).
+    async function unmarkPresent(db, occurrenceId, personIds) {
+        const batch = db.batch();
+        const col = db.collection(OCCURRENCES).doc(occurrenceId).collection(ATTENDANCE);
+        const seen = {};
+        (personIds || []).forEach(function (id) {
+            if (!id || seen[id]) return;
+            seen[id] = true;
+            batch.delete(col.doc(id));
+        });
+        await batch.commit();
+    }
+
     async function setNeedsNameTags(db, opts) {
         const value = !!(opts && opts.value);
         if (opts && opts.occurrenceId) {
@@ -1577,6 +1593,7 @@
         loadKioskSeries,
         loadAttendance,
         markPresent,
+        unmarkPresent,
         setNeedsNameTags,
         loadVisibleSeries,
         loadCalendar,

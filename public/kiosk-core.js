@@ -43,14 +43,14 @@
         return isKioskAccount(data) ? 'kiosk.html' : 'index.html';
     }
 
-    // Past and today, newest first; future dates after that, soonest first.
+    // Today first, then whatever is coming. A gathering that has been and gone
+    // is not one people are arriving for, so it is not on the list at all —
+    // showing it only gives a greeter a wrong button to press on a busy
+    // morning. Attendance for a past Event is corrected on the Event itself.
     function sortOccurrencesForKiosk(occurrences, today) {
-        const list = (occurrences || []).slice();
-        const past = list.filter(o => o && o.date && o.date <= today)
-            .sort((a, b) => b.date.localeCompare(a.date));
-        const future = list.filter(o => o && o.date && o.date > today)
+        return (occurrences || [])
+            .filter(o => o && o.date && o.date >= today)
             .sort((a, b) => a.date.localeCompare(b.date));
-        return past.concat(future);
     }
 
     // The document id IS the Person id, so a second mark overwrites the first
@@ -80,6 +80,51 @@
         });
     }
 
+    // ── Who is already here (MS-321) ─────────────────────────────────────────
+    // Attendance is keyed by Person id, so a second mark overwrites the first
+    // and the count never doubles. What it USED to lose was the tag: a greeter
+    // reopening a Household to add a latecomer reprinted everybody. So the
+    // Attendance rows already written for this Event are read back and indexed,
+    // and an arrival is only somebody the index does not know.
+
+    function attendanceIndex(rows) {
+        const index = {};
+        (rows || []).forEach(function (row) {
+            if (!row || !row.personId) return;
+            index[row.personId] = {
+                markedAt: row.markedAt || null,
+                pickupCode: row.pickupCode || '',
+            };
+        });
+        return index;
+    }
+
+    function isPresent(index, personId) {
+        return !!(index && personId && index[personId]);
+    }
+
+    // The members of a Household who are NOT yet present. These are the only
+    // people a mark writes and the only ones a tag prints for; everybody else
+    // already has theirs, and a duplicate tag is worse than no tag.
+    function arrivals(members, index) {
+        return (members || []).filter(function (m) {
+            return m && m.personId && !isPresent(index, m.personId);
+        });
+    }
+
+    // The pickup code a Kid was given when they were first marked present. A
+    // reprint has to carry the SAME number or the stub on the parent's phone
+    // stops matching the tag on the child.
+    function pickupCodesFrom(index, members) {
+        const out = {};
+        (members || []).forEach(function (m) {
+            if (!m || !m.personId) return;
+            const row = index && index[m.personId];
+            if (row && row.pickupCode) out[m.personId] = row.pickupCode;
+        });
+        return out;
+    }
+
     function presentCountLabel(n) {
         const count = n || 0;
         return 'Mark ' + count + ' present';
@@ -95,6 +140,10 @@
         attendanceDocId,
         attendancePayload,
         markPresentWrites,
+        attendanceIndex,
+        isPresent,
+        arrivals,
+        pickupCodesFrom,
         presentCountLabel,
     };
 

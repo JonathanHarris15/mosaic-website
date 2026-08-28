@@ -42,10 +42,17 @@
     }
 
     function assignPickupCodes(members, already) {
-        const used = (already || []).slice();
+        // `already` is the Attendance this Event has written so far. Take the
+        // CODES out of it — passing the rows straight through left every key
+        // reading "[object Object]", so a new number dodged nothing and the
+        // promise of one number per Event was only ever probably true.
+        const used = [];
         const byPerson = {};
         (already || []).forEach(function (row) {
-            if (row && row.personId && row.pickupCode) byPerson[row.personId] = row.pickupCode;
+            if (!row) return;
+            const code = (typeof row === 'string') ? row : row.pickupCode;
+            if (code) used.push(code);
+            if (row.personId && row.pickupCode) byPerson[row.personId] = row.pickupCode;
         });
         (members || []).forEach(function (m) {
             if (!m || !m.kid || !m.personId) return;
@@ -97,85 +104,169 @@
         return labels;
     }
 
+    // How big the given name can be printed and still fit across the label.
+    //
+    // The tag exists to be read across a foyer, so the given name is set as
+    // large as the stock allows — but "Christopher" at the size that suits
+    // "Ada" runs off the edge, and a clipped name is worse than a small one.
+    // CSS cannot measure text before it lays out, so the size is worked out
+    // here from the one thing we know: how many characters there are.
+    //
+    // 51mm of usable width: 75mm of stock, less 4mm padding each side, less the
+    // 16mm column the Mosaic mark sits in. Bold Arial runs about 0.58em per
+    // character across a mixed-case name. Capped at 15mm so a short name does
+    // not become a billboard, floored at 5mm — roughly 14pt, still the biggest
+    // thing on the label — which fits a seventeen-character name on one line.
+    const NAME_WIDTH_MM = 51;
+    const NAME_EM_RATIO = 0.58;
+    const NAME_MAX_MM = 15;
+    const NAME_MIN_MM = 5;
+
+    function firstNameSizeMm(first) {
+        const chars = String(first || '').length;
+        if (!chars) return NAME_MAX_MM;
+        const fits = NAME_WIDTH_MM / (chars * NAME_EM_RATIO);
+        const size = Math.min(NAME_MAX_MM, Math.max(NAME_MIN_MM, fits));
+        return Math.round(size * 10) / 10;
+    }
+
     function escapeHtml(s) {
         return String(s || '').replace(/[&<>"']/g, function (ch) {
             return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
         });
     }
 
-    function labelMarkup(label) {
+    // The tag is a name and the Mosaic mark, and nothing else. The event and the
+    // date came off it (MS-320): a person wearing the tag knows which gathering
+    // they walked into, and every millimetre spent saying so was a millimetre
+    // taken off the one thing the tag is for — being read across a room.
+    //
+    // A Kid keeps the pickup number, on both their tag and the guardian stub.
+    // That is not decoration: it is how the right child goes home with the right
+    // adult, and it is the reason a stub exists at all.
+    function labelMarkup(label, logoSrc) {
         const kind = label.kind;
-        const title = kind === 'stub' ? 'Pickup stub' : (kind === 'child' ? 'Child' : '');
         const code = label.code
             ? '<div class="code">' + escapeHtml(label.code) + '</div>'
             : '';
-        const kindLine = title
-            ? '<div class="kind">' + escapeHtml(title) + '</div>'
+        // Only the stub says what it is. The dashed edge marks it out across the
+        // desk; the word settles it in the hand.
+        const kindLine = kind === 'stub'
+            ? '<div class="kind">Pickup stub</div>'
             : '';
+        const firstStyle = ' style="font-size:' + firstNameSizeMm(label.first) + 'mm"';
+        const mark = '<img class="mark" src="' + escapeHtml(logoSrc) + '" alt="">';
         return (
             '<article class="label kind-' + escapeHtml(kind) + '">' +
-                '<div>' +
+                '<div class="who">' +
                     kindLine +
-                    '<div class="first">' + escapeHtml(label.first) + '</div>' +
+                    '<div class="first"' + firstStyle + '>' + escapeHtml(label.first) + '</div>' +
                     '<div class="last">' + escapeHtml(label.last) + '</div>' +
                 '</div>' +
-                '<div class="footer">' +
-                    '<div>' +
-                        '<div class="event">' + escapeHtml(label.eventName) + '</div>' +
-                        '<div class="when">' + escapeHtml(label.date) + '</div>' +
-                    '</div>' +
+                '<div class="side">' +
+                    mark +
                     code +
                 '</div>' +
             '</article>'
         );
     }
 
-    function printHtml(labels) {
-        const body = (labels || []).map(labelMarkup).join('\n');
+    // Where the Mosaic mark comes from. A relative path, because the print frame
+    // inherits the kiosk page's base URL — and because a data URI would be
+    // repeated on every label in the sheet.
+    const LOGO_SRC = 'assets/mosaic-icon.png';
+
+    function printHtml(labels, opts) {
+        const logoSrc = (opts && opts.logoSrc) || LOGO_SRC;
+        const body = (labels || []).map(function (l) { return labelMarkup(l, logoSrc); }).join('\n');
         return '<!doctype html><html><head><meta charset="utf-8"><title>Name tags</title>' +
             '<style>' +
             '@page { size: ' + WIDTH + ' ' + HEIGHT + '; margin: 0; }' +
             'html, body { margin: 0; padding: 0; background: #fff; }' +
-            '.label { width: ' + WIDTH + '; height: ' + HEIGHT + '; box-sizing: border-box;' +
-            ' padding: 3mm 4mm; display: flex; flex-direction: column; justify-content: space-between;' +
+            // ⚠ THE LABEL IS A HAIR SHORTER THAN THE PAGE, ON PURPOSE. A box the
+            // exact height of the page box rounds up by a sub-pixel in Chrome and
+            // spills onto a second, blank page — so eight labels preview as
+            // sixteen pages, every other one empty. 0.4mm is invisible on a
+            // thermal label and is the whole fix.
+            '.label { width: ' + WIDTH + '; height: calc(' + HEIGHT + ' - 0.4mm); box-sizing: border-box;' +
+            ' overflow: hidden;' +
+            ' padding: 3mm 4mm; display: flex; flex-direction: row; align-items: center; gap: 3mm;' +
             ' page-break-after: always; break-after: page; color: #000; font-family: Arial, Helvetica, sans-serif;' +
             ' -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
             '.label:last-child { page-break-after: auto; break-after: auto; }' +
+            '.who { flex: 1 1 auto; min-width: 0; }' +
+            // The mark keeps its own column so the name never runs under it.
+            '.side { flex: 0 0 16mm; width: 16mm; display: flex; flex-direction: column;' +
+            ' align-items: center; justify-content: center; gap: 1.5mm; }' +
+            '.mark { width: 16mm; height: 16mm; display: block; object-fit: contain; }' +
             '.first { font-size: 15mm; font-weight: 700; line-height: 0.95; letter-spacing: -0.02em; white-space: nowrap; }' +
             '.last { font-size: 6mm; font-weight: 400; line-height: 1; margin-top: 1mm; }' +
             '.kind { font-size: 3mm; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 1mm; }' +
-            '.footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 3mm; }' +
-            '.event { font-size: 4mm; font-weight: 600; }' +
-            '.when { font-size: 2.8mm; margin-top: 0.6mm; }' +
-            '.code { font-family: "Courier New", monospace; font-size: 11mm; font-weight: 700; line-height: 0.9; letter-spacing: 0.5mm; }' +
+            '.code { font-family: "Courier New", monospace; font-size: 7mm; font-weight: 700; line-height: 0.9; letter-spacing: 0.4mm; }' +
             '.kind-stub { border: 0.6mm dashed #000; }' +
             '</style></head><body>' + body + '</body></html>';
     }
 
-    function printLabels(labels, doc) {
+    // Print the labels through a hidden frame, so the kiosk page itself is not
+    // what goes to the printer.
+    //
+    // ⚠ TWO THINGS HERE ARE NOT COSMETIC.
+    //
+    // 1. THE FRAME HAS A REAL SIZE. It used to be 0×0, and Chrome will open a
+    //    print preview for a zero-sized frame and then close it again on its own
+    //    — the dialog "blinks away" and nothing prints. It is parked off-screen
+    //    instead, which costs nothing and is what makes the dialog stay.
+    //
+    // 2. IT WAITS FOR THE FRAME TO LOAD, not for 50ms and a hope. Calling print()
+    //    before layout has run gives a preview of a blank page, or of the first
+    //    label only. `srcdoc` fires a real `load` event; one animation frame
+    //    after it, the pages exist and the dialog can be trusted.
+    //
+    // The frame is created once and kept. Removing it — even after the dialog
+    // opens — takes the dialog with it.
+    function printLabels(labels, doc, onReady) {
         const html = printHtml(labels);
         if (!doc || !doc.body) return html;
+
         let frame = doc.getElementById('kiosk-print-frame');
         if (!frame) {
             frame = doc.createElement('iframe');
             frame.id = 'kiosk-print-frame';
             frame.setAttribute('aria-hidden', 'true');
-            frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+            frame.setAttribute('tabindex', '-1');
+            frame.style.cssText =
+                'position:fixed;left:-10000px;top:0;width:320px;height:240px;border:0;opacity:0;';
             doc.body.appendChild(frame);
         }
-        const win = frame.contentWindow;
-        const inner = frame.contentDocument;
-        inner.open();
-        inner.write(html);
-        inner.close();
-        setTimeout(function () { win.focus(); win.print(); }, 50);
+
+        const open = function () {
+            const win = frame.contentWindow;
+            if (!win) return;
+            // One frame after load: the document is parsed, and this lets the
+            // page boxes lay out before the preview is asked to render them.
+            const go = function () {
+                try { win.focus(); } catch (e) { /* focus is a nicety, print is not */ }
+                win.print();
+                if (typeof onReady === 'function') onReady();
+            };
+            if (win.requestAnimationFrame) win.requestAnimationFrame(go);
+            else setTimeout(go, 0);
+        };
+
+        frame.onload = open;
+        // srcdoc rather than document.write: write() leaves the frame with no
+        // load event to wait for, which is what the old 50ms timer was papering
+        // over. Same-origin either way, so the print call is still allowed.
+        frame.srcdoc = html;
         return html;
     }
 
     const NametagCore = {
         WIDTH,
         HEIGHT,
+        LOGO_SRC,
         splitName,
+        firstNameSizeMm,
         nextPickupCode,
         assignPickupCodes,
         labelsFor,

@@ -35,15 +35,26 @@ test('signing in as a kiosk lands on the kiosk page, not the dashboard', () => {
     assert.strictEqual(Kiosk.landingPageFor({ permissionLevel: 'editor' }), 'index.html');
 });
 
-test('the event list is most-recent first, with future events below', () => {
+test('the event list is today first, then whatever is coming', () => {
     const sorted = Kiosk.sortOccurrencesForKiosk([
         { id: 'future-late', date: '2026-09-14' },
-        { id: 'past', date: '2026-08-10' },
         { id: 'today', date: '2026-08-27' },
         { id: 'future-soon', date: '2026-09-01' },
-        { id: 'older', date: '2026-07-01' },
     ], '2026-08-27').map(o => o.id);
-    assert.deepStrictEqual(sorted, ['today', 'past', 'older', 'future-soon', 'future-late']);
+    assert.deepStrictEqual(sorted, ['today', 'future-soon', 'future-late']);
+});
+
+test('a gathering that has been and gone is not on the kiosk at all', () => {
+    const sorted = Kiosk.sortOccurrencesForKiosk([
+        { id: 'yesterday', date: '2026-08-26' },
+        { id: 'today', date: '2026-08-27' },
+        { id: 'last-month', date: '2026-07-01' },
+    ], '2026-08-27').map(o => o.id);
+    assert.deepStrictEqual(sorted, ['today']);
+});
+
+test('an occurrence with no date is not guessed at', () => {
+    assert.deepStrictEqual(Kiosk.sortOccurrencesForKiosk([{ id: 'x' }, null], '2026-08-27'), []);
 });
 
 test('marking the same person present twice writes one document id', () => {
@@ -67,4 +78,36 @@ test('a duplicate id in one click is still one write', () => {
 test('the footer button names the live count', () => {
     assert.strictEqual(Kiosk.presentCountLabel(0), 'Mark 0 present');
     assert.strictEqual(Kiosk.presentCountLabel(4), 'Mark 4 present');
+});
+
+// ── Who is already here (MS-321) ────────────────────────────────────────────
+
+const rows = [
+    { personId: 'bob', markedAt: '2026-08-30T09:00:00Z' },
+    { personId: 'sam', markedAt: '2026-08-30T09:00:00Z', pickupCode: 'K7QF' },
+];
+const members = [
+    { personId: 'bob', name: 'Bob Harris', kid: false },
+    { personId: 'sam', name: 'Sam Harris', kid: true },
+    { personId: 'alice', name: 'Alice Harris', kid: false },
+];
+
+test('the Attendance already written says who is in the room', () => {
+    const index = Kiosk.attendanceIndex(rows);
+    assert.strictEqual(Kiosk.isPresent(index, 'bob'), true);
+    assert.strictEqual(Kiosk.isPresent(index, 'alice'), false);
+    assert.strictEqual(Kiosk.isPresent(index, undefined), false);
+    assert.strictEqual(index.sam.pickupCode, 'K7QF');
+});
+
+test('only the people not yet here are arrivals, so nobody is tagged twice', () => {
+    const index = Kiosk.attendanceIndex(rows);
+    assert.deepStrictEqual(Kiosk.arrivals(members, index).map(m => m.personId), ['alice']);
+    assert.deepStrictEqual(Kiosk.arrivals(members, {}).map(m => m.personId), ['bob', 'sam', 'alice']);
+});
+
+test('a reprint carries the pickup number the Kid was already given', () => {
+    const index = Kiosk.attendanceIndex(rows);
+    assert.deepStrictEqual(Kiosk.pickupCodesFrom(index, [members[1]]), { sam: 'K7QF' });
+    assert.deepStrictEqual(Kiosk.pickupCodesFrom(index, [members[0]]), {});
 });

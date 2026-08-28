@@ -551,7 +551,17 @@ service cloud.firestore {
     match /households/{householdId} {
       allow read: if isSignedIn() || isKiosk();
       allow create: if isKiosk() || isEditor();
-      allow update, delete: if isEditor();
+      // A Kiosk may only ADD (MS-321). The name may not change and nobody
+      // already in may be dropped, so "put my brother in the Harris household"
+      // is legal and renaming or emptying one is not. That is the whole
+      // difference between a greeter and an editor, said in the rule rather
+      // than trusted to the page — and it is what lets the kiosk grow a
+      // household instead of minting a second one beside it.
+      allow update: if isEditor() || (isKiosk()
+        && (!('name' in resource.data) || request.resource.data.name == resource.data.name)
+        && request.resource.data.memberIds is list
+        && request.resource.data.memberIds.hasAll(resource.data.memberIds));
+      allow delete: if isEditor();
     }
 
     // Shepherding System — elders and super_admins only
