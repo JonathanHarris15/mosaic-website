@@ -726,31 +726,57 @@
     var plain = JSON.parse(JSON.stringify(structure || { children: [] }));
     return db.collection("elder_document_structure").doc(docId || "root").set(plain).then(function () { return plain; });
   }
+  // ⚠ THE RECORD IS NOT ASSEMBLED HERE. It used to be, and it carried both of
+  // the identity faults MS-283 fixed on the web: a document signed with the
+  // literal string "Elder", and one written with `authorUid: null` (MS-304).
+  //
+  // Every Elder Document has an author, and one whose author cannot be resolved
+  // is REFUSED rather than written — an untraceable pastoral record is worse than
+  // a create that failed, because it exists, it stands in the Pastoral Record,
+  // and nothing surfaces the problem. ADR-0015 decision 8; CONTEXT.md says the
+  // same. Both were true only of the web until now.
+  //
+  // `resolveAuthor` is a strictly better rescue than the fallbacks it replaces:
+  // it takes the uid from the live auth session when the loaded profile has not
+  // arrived yet, AND recovers a display name from that session's email. So the
+  // one case that used to produce a bad record now produces a good one, and the
+  // refusal only fires when nobody is signed in at all.
+  //
+  // `buildElderDocument` throws before `.add()` is reached, so a refusal writes
+  // nothing. Both callers already catch and surface it.
   function createElderDocument(opts, user) {
-    var now = firebase.firestore.FieldValue.serverTimestamp();
-    var name = (user && user.name) || "Elder";
-    var uid = (user && user.uid) || (auth.currentUser && auth.currentUser.uid) || null;
+    var Core = window.ShepherdingDocsCore;
     var type = opts.type === "care-list" ? "care-list" : "note";
-    var docData = {
+    var docData = Core.buildElderDocument({
       title: opts.title || (type === "care-list" ? "New Care List" : "New Document"),
       docType: type,
-      authorName: name, authorUid: uid,
-      createdAt: now, updatedAt: now, updatedByName: name,
-    };
-    // MS-98: a document created under a profile is owned by that Person and hidden
-    // from shared surfaces until opted into the Library.
-    if (opts.ownerPersonId) {
-      docData.ownerPersonId = opts.ownerPersonId;
-      docData.inLibrary = false;
-    }
-    if (type === "care-list") {
-      if (opts.filterId) docData.filterId = opts.filterId;
-      else if (opts.filterConfig) docData.filterConfig = opts.filterConfig;
-      docData.careListData = {};
-    } else {
-      docData.contentJson = null;
-    }
+      author: Core.resolveAuthor({ user: user, name: user && user.name }, auth.currentUser),
+      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+      // MS-98: a document created under a profile is owned by that Person and
+      // hidden from shared surfaces until opted into the Library. The builder
+      // sets `inLibrary: false` alongside it.
+      ownerPersonId: opts.ownerPersonId || null,
+      filterId: opts.filterId || null,
+      filterConfig: opts.filterConfig || null,
+    });
     return db.collection("elder_documents").add(docData).then(function (ref) { return ref.id; });
+  }
+
+  // What an elder is told when a create fails. One sentence per cause, because
+  // "Error creating document" was the same six words for every one of them and
+  // the real error only ever reached the console — which is how a ten-second bug
+  // became an undiagnosable demo failure (MS-283). Lives beside the create, and
+  // is shared by both surfaces that offer one, so the wording cannot drift.
+  // Matches the web's `createFailureMessage`.
+  function documentCreateFailure(e) {
+    var Core = window.ShepherdingDocsCore;
+    if (e && Core && e.code === Core.MISSING_AUTHOR) {
+      return "Could not tell who is signed in, so nothing was created. Reload the page and try again.";
+    }
+    if (e && e.code === "permission-denied") {
+      return "You do not have permission to create a document here.";
+    }
+    return "Something went wrong creating the document.";
   }
   // MS-98: opt a profile document into the global Library — reference the same
   // record from the root tree (no copy) and flag it. targetFolderId '__root__'
@@ -1079,6 +1105,7 @@
     getDocumentStructure: getDocumentStructure,
     saveDocumentStructure: saveDocumentStructure,
     createElderDocument: createElderDocument,
+    documentCreateFailure: documentCreateFailure,
     addElderDocToLibrary: addElderDocToLibrary,
     pruneElderDocsFromLibrary: pruneElderDocsFromLibrary,
     renameElderDocument: renameElderDocument,

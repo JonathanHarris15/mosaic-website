@@ -83,6 +83,17 @@ it loads and saves `root`.
    click handler is what makes that rule testable at all — the same reason decision 1
    moved the tree logic here.
 
+   *Amended (MS-304).* The rule now holds on the phone too. MS-283 scoped mobile
+   out on the grounds that it "already resolves identity correctly" — true of
+   Shepherding Notes, Status Changes and Tag Changes, but not of
+   `createElderDocument`, which assembled the record inline, signed it "Elder"
+   when no profile had loaded, and fell through to `authorUid: null`. So the
+   decision was recorded as done while remaining false on one of the two
+   surfaces that can create a document. `mobile/data.js` now goes through
+   `resolveAuthor` and `buildElderDocument` like the web, which also means the
+   phone gains the core's better rescue: the uid off the live auth session and a
+   name recovered from its email, where before it reached straight for a literal.
+
 ## Consequences
 
 - The engine is reused wholesale; the coupling to the global library was just the
