@@ -119,16 +119,33 @@
         return snap.docs.map(d => Object.assign({ personId: d.id }, d.data()));
     }
 
-    async function markPresent(db, occurrenceId, personIds, markedAt) {
+    async function markPresent(db, occurrenceId, personIds, markedAt, extras) {
         const batch = db.batch();
         const col = db.collection(OCCURRENCES).doc(occurrenceId).collection(ATTENDANCE);
         const seen = {};
+        const extra = extras || {};
         (personIds || []).forEach(function (id) {
             if (!id || seen[id]) return;
             seen[id] = true;
-            batch.set(col.doc(id), { markedAt: markedAt });
+            const payload = { markedAt: markedAt };
+            if (extra[id] && extra[id].pickupCode) payload.pickupCode = extra[id].pickupCode;
+            batch.set(col.doc(id), payload);
         });
         await batch.commit();
+    }
+
+    async function setNeedsNameTags(db, opts) {
+        const value = !!(opts && opts.value);
+        if (opts && opts.occurrenceId) {
+            await db.collection(OCCURRENCES).doc(opts.occurrenceId).set(
+                { needsNameTags: value }, { merge: true }
+            );
+        }
+        if (opts && opts.seriesId) {
+            await db.collection(SERIES).doc(opts.seriesId).set(
+                { needsNameTags: value }, { merge: true }
+            );
+        }
     }
 
     // The series a viewer can see. Same constraint, same reason — the series
@@ -1560,6 +1577,7 @@
         loadKioskSeries,
         loadAttendance,
         markPresent,
+        setNeedsNameTags,
         loadVisibleSeries,
         loadCalendar,
         loadSeriesWindow,

@@ -434,6 +434,7 @@ service cloud.firestore {
       // cannot drop the foyer machine without noticing the helper sitting here.
       allow read: if isSignedIn() || isKiosk();
       allow create, delete: if isEditor();
+      allow create: if isKiosk();
       allow update: if isEditor();
 
       // Self-service (MS-87, ADR-0012): a Linked User may update ONLY their own
@@ -542,6 +543,15 @@ service cloud.firestore {
     match /families/{familyId} {
       allow read: if isSignedIn() || isKiosk();
       allow create, update, delete: if isEditor();
+    }
+
+    // Households (MS-319): the foyer grouping. Distinct from Family. A Kiosk
+    // may create one (and its People) on the spot; it cannot edit or delete
+    // an existing Household or Person.
+    match /households/{householdId} {
+      allow read: if isSignedIn() || isKiosk();
+      allow create: if isKiosk() || isEditor();
+      allow update, delete: if isEditor();
     }
 
     // Shepherding System — elders and super_admins only

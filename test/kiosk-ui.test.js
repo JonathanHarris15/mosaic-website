@@ -40,9 +40,10 @@ test('the kiosk searches Households, not Families', () => {
     const html = read('kiosk.html');
     assert.match(html, /Search by name/);
     assert.match(html, />Create household</);
-    assert.match(html, /Create household — coming next/);
-    assert.doesNotMatch(html, /[Ff]amily/);
-    assert.match(html, /disabled>Create household</);
+    assert.doesNotMatch(html, /disabled>Create household</);
+    assert.doesNotMatch(html, /Create family/i);
+    assert.doesNotMatch(html, />Family</);
+    assert.match(html, /view === 'create'/);
 });
 
 test('Start Attendance is how a greeter opens the search', () => {
@@ -60,6 +61,16 @@ test('Attendance is visible on Event detail and the Roles tab', () => {
     assert.match(RolesPanel.MARKUP.roles, />Who was present</);
     assert.match(RolesPanel.MARKUP.roles, /x-show="isEditor && attendance.length"/);
     assert.match(read('calendar-event.js'), /Store\.loadAttendance/);
+});
+
+test('an event can be marked as needing name tags', () => {
+    assert.match(read('calendar-event.html'), /Print name tags when people are marked present/);
+    assert.match(read('calendar-event.js'), /setNeedsNameTags/);
+});
+
+test('a Person can be marked a Kid from the directory', () => {
+    assert.match(read('peoples-page.html'), /x-model="selectedPerson.kid"/);
+    assert.match(read('peoples-page.js'), /kid: !!this.selectedPerson.kid/);
 });
 
 test('signing out of a kiosk clears Firestore persistence', () => {

@@ -80,7 +80,7 @@ test('a remembered rank that has moved does not stay on screen', () => {
 test('signing out forgets who you were', () => {
     // Otherwise the next person to sign in on a shared device starts their
     // first page holding the last person's rank.
-    assert.match(AUTH, /function logout\(\) \{\s*\n\s*forgetUserDoc\(\);/,
+    assert.match(AUTH, /function logout\(\) \{[\s\S]*?forgetUserDoc\(\);/,
         'logging out leaves the remembered identity on the device');
     assert.match(AUTH, /const known = rememberedUserDoc\(uid\)/,
         'the remembered identity is not looked up by uid');

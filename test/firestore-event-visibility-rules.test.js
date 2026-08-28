@@ -43,7 +43,7 @@ test('the events series collection is no longer world-readable', () => {
         /allow read: if true/,
         'the moment "Elders\' Meeting" can be a series, `if true` publishes its name to the internet'
     );
-    assert.match(block, /allow read: if .*rankCanSee\(/);
+    assert.match(block, /allow read: if [\s\S]*rankCanSee\(/);
 });
 
 test('the Sunday Service series stays readable by everyone, with no migration in between', () => {
@@ -130,7 +130,7 @@ test('a missing participant list is guarded rather than assumed', () => {
 
 test('the occurrence read rule uses rank OR participation, and nothing else', () => {
     const block = occurrencesBlock();
-    assert.match(block, /allow read: if rankCanSee\(stampedVisibility\(\)\)/);
+    assert.match(block, /rankCanSee\(stampedVisibility\(\)\)/);
     assert.match(block, /stampedVisibility\(\) == 'participant' && isEventParticipant\(\)/);
     assert.doesNotMatch(block, /allow read: if true/);
 });

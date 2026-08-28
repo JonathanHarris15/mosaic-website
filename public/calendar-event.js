@@ -1553,6 +1553,18 @@
                 this.occurrence.rosterShared = shared;
             },
 
+            async setNeedsNameTags(value) {
+                if (!this.isEditor || !this.occurrence) return;
+                const on = value === true;
+                await Store.setNeedsNameTags(db, {
+                    occurrenceId: this.occurrence.id,
+                    seriesId: this.occurrence.seriesId || (this.series && this.series.id) || null,
+                    value: on,
+                });
+                this.occurrence.needsNameTags = on;
+                if (this.series) this.series.needsNameTags = on;
+            },
+
             // ── Editing a one-off Event ──────────────────────────────────────
             //
             // A one-off has no series, so everything true of it is true of this

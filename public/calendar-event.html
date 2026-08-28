@@ -626,6 +626,15 @@
                             </label>
                         </div>
 
+                        <div class="mt-sm pt-sm border-t border-outline-variant">
+                            <label class="flex items-start gap-2 cursor-pointer">
+                                <input type="checkbox" :checked="!!occurrence.needsNameTags"
+                                       @change="setNeedsNameTags($event.target.checked)"
+                                       class="accent-primary mt-0.5 cal-focus" />
+                                <span class="text-[13px] text-on-surface">Print name tags when people are marked present at the kiosk</span>
+                            </label>
+                        </div>
+
                         <p class="mt-sm text-[11.5px] text-on-surface-variant"
                            x-text="isOneOff
                              ? 'This event happens once, so this applies to it alone.'

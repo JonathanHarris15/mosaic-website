@@ -49,3 +49,12 @@ test('a kiosk can read every event occurrence, ignoring the visibility ladder', 
     const block = blockFor(/match \/event_occurrences\/\{occurrenceId\}\s*\{([\s\S]*?)\n      match \/attendance/);
     assert.match(block, /allow read: if isKiosk\(\)/);
 });
+
+test('a kiosk may create a Person and a Household, and cannot delete either', () => {
+    const person = blockFor(/match \/people\/\{personId\}\s*\{([\s\S]*?)\n      match/);
+    assert.match(person, /allow create: if isKiosk\(\)/);
+    assert.doesNotMatch(person, /allow delete: if isKiosk\(\)/);
+    const households = blockFor(/match \/households\/\{householdId\}\s*\{([\s\S]*?)\n    \}/);
+    assert.match(households, /allow create: if isKiosk\(\)/);
+    assert.match(households, /allow update, delete: if isEditor\(\)/);
+});

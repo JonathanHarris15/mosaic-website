@@ -129,7 +129,7 @@ A first-class entity (its own `families` collection) that groups a household for
 _Avoid_: Household (that is a [[Household]] — the kiosk grouping, not this kinship tree), family tree (that is the emergent traversal, not a stored structure), relationship (that is the freeform shepherd concept)
 
 **Household**:
-A named collection of people who belong together at the foyer — "The Harris Household" might be a married couple, their children, and a grandmother. Distinct from [[Family]], which is the kinship tree (husband, wife, children) and is not stretched to fit whoever walked in together. A Person may belong to more than one Household (a child of separated parents); the Kiosk only ever creates a brand-new Household of brand-new people, so it cannot cause that. Until Households are stored as their own collection, they are projected from Families plus a singleton for every Person in no Family, so the Kiosk has something to search.
+A named collection of people who belong together at the foyer — "The Harris Household" might be a married couple, their children, and a grandmother. Distinct from [[Family]], which is the kinship tree (husband, wife, children) and is not stretched to fit whoever walked in together. Stored in its own `households` collection ([ADR 0043](docs/adr/0043-households-are-stored-as-their-own-collection.md)). A Person may belong to more than one Household (a child of separated parents); the Kiosk only ever creates a brand-new Household of brand-new people, so it cannot cause that. Families still project as Households, and a Person in no Family and no stored Household appears as a singleton, so search is not empty on day one.
 _Avoid_: House, family (that is the kinship tree), household group
 
 **Relationship**:
@@ -218,6 +218,18 @@ _Avoid_: Device account, shared account (use Kiosk)
 **Attendance**:
 A record that a Person was physically present at a particular Event, marked live at a Kiosk. Stored on the Event occurrence (`event_occurrences/{id}/attendance/{personId}`), not on the Person — the reverse of Involvement, and deliberately so ([ADR 0042](docs/adr/0042-attendance-is-written-live-and-lives-on-the-event.md)): there is no plan behind it to confirm, no nightly conversion, just a tap that is true the moment it's made. Distinct from Involvement, which answers "did they serve," not "were they here" — a Person can have either, both, or neither for the same Event.
 _Avoid_: Check-in (already claimed by the "Elder Check-in" Note Type), presence, attendance record (use Attendance)
+
+**Kid**:
+A Person marked as a child for foyer name tags — they get a child tag and a matching guardian stub with a [[Pickup Number]], rather than a plain adult tag. Set when a Household is created at the Kiosk, or later by an editor on the Person in the Membership Directory. Distinct from being a child on a [[Family]] (that is kinship). A Family child still projects as a Kid on the projected Household so existing directory children get the right tags on day one.
+_Avoid_: Child (use Kid for the tag mark; child stays the Family relation), minor, youth
+
+**Name Tag**:
+A 75mm × 50mm label printed at the Kiosk when an Event is marked as needing them. An adult gets one tag with their name. A Kid gets two: their own tag and a guardian stub, both carrying the same Pickup Number. Printed as HTML through the browser and the Zebra driver already on the kiosk machine — nothing extra to install. Attendance is written first; a print failure never undoes it.
+_Avoid_: Label, badge, check-in tag
+
+**Pickup Number**:
+A short code unique to one Kid at one Event, printed on both the child's Name Tag and the guardian stub so they can be matched at pickup. Generated at the moment they are marked present. A second mark at the same Event reuses the same number; a different Event gets a new one.
+_Avoid_: Pickup code (the printed thing is a number-like token, but call it Pickup Number), barcode
 
 **Roles tab**:
 The surface that puts named People into a single Event's Roles — every Role that date carries, its slots, each Assignment's state, and the picker that shows who was passed over and why. **One surface, two homes**: it is the Roles section of the Event detail screen, and it is a tab on the service page beside the Order of Service, because the Sunday is staffed every week and its order of service is edited elsewhere. Both mount the same markup and the same behaviour, so they cannot drift.

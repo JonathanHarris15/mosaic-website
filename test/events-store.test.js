@@ -1885,6 +1885,13 @@ test('marking present writes one document per person, keyed by personId', async 
     writes.forEach(w => assert.deepStrictEqual(w.data, { markedAt: '2026-08-27T12:00:00Z' }));
 });
 
+test('a kid\'s attendance can carry the pickup number written at mark time', async () => {
+    const db = fakeDb({ event_occurrences: OCCURRENCES }, { rank: 'kiosk', personId: null });
+    await Store.markPresent(db, 'picnic_2026-07-11', ['sam'], 't', { sam: { pickupCode: '7QK4' } });
+    const write = db._flatWrites().find(w => w.kind === 'set');
+    assert.deepStrictEqual(write.data, { markedAt: 't', pickupCode: '7QK4' });
+});
+
 test('attendance is loaded from the occurrence, keyed by personId', async () => {
     const db = fakeDb({
         event_occurrences: OCCURRENCES,
