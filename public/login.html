@@ -127,7 +127,9 @@
                     auth.onAuthStateChanged(user => {
                         // Only auto-redirect if we aren't currently in the middle of a login/signup submission
                         if (user && !user.isAnonymous && !this.loading) {
-                            window.location.href = 'index.html';
+                            getUserData(user.uid).then(data => {
+                                window.location.href = landingPageFor(data);
+                            });
                         }
                     });
                 },
@@ -194,11 +196,14 @@
 
                     this.loading = true;
                     try {
+                        let uid;
                         if (this.mode === 'login') {
-                            await auth.signInWithEmailAndPassword(this.email, this.password);
+                            const cred = await auth.signInWithEmailAndPassword(this.email, this.password);
+                            uid = cred.user.uid;
                         } else {
                             const userCredential = await auth.createUserWithEmailAndPassword(this.email, this.password);
                             const user = userCredential.user;
+                            uid = user.uid;
                             
                             // Create user document with default 'viewer' role.
                             //
@@ -214,7 +219,7 @@
                                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
                             });
                         }
-                        window.location.href = 'index.html';
+                        window.location.href = landingPageFor(await getUserData(uid));
                     } catch (err) {
                         this.error = err.message;
                         this.loading = false;

@@ -373,8 +373,31 @@
                 </span>
             </button>
 
+            <!-- ── Tabs (MS-321) ──────────────────────────────────────────
+                 The page was one long scroll and Attendance was a card buried
+                 near the top of Roles, which is where somebody looking for who
+                 turned up never thought to look. Two tabs: the Event, and who
+                 was there. Attendance is editor-only, like the list itself. -->
+            <div class="m-tabs mt-gutter" x-show="isEditor">
+                <button type="button" class="m-tabs__tab"
+                        :class="tab === 'event' && 'm-tabs__tab--current'"
+                        @click="tab = 'event'">Event</button>
+                <button type="button" class="m-tabs__tab"
+                        :class="tab === 'attendance' && 'm-tabs__tab--current'"
+                        @click="tab = 'attendance'">
+                    Attendance
+                    <span x-show="attendance.length"
+                          class="text-on-surface-variant" x-text="attendance.length"></span>
+                </button>
+            </div>
+
+            <!-- Who was present — shared markup, mounted only here. -->
+            <div class="mt-gutter" x-show="isEditor && tab === 'attendance'">
+                <div data-roles-panel="attendance"></div>
+            </div>
+
             <!-- ── Two columns ────────────────────────────────────────────── -->
-            <div class="mt-gutter cal-cols">
+            <div class="mt-gutter cal-cols" x-show="tab === 'event'">
 
                 <div class="min-w-0 flex flex-col gap-gutter">
 
@@ -669,6 +692,15 @@
                                         Everyone can see this event anyway, so this makes no difference here.
                                     </span>
                                 </span>
+                            </label>
+                        </div>
+
+                        <div class="mt-sm pt-sm border-t border-outline-variant">
+                            <label class="flex items-start gap-2 cursor-pointer">
+                                <input type="checkbox" :checked="!!occurrence.needsNameTags"
+                                       @change="setNeedsNameTags($event.target.checked)"
+                                       class="accent-primary mt-0.5 cal-focus" />
+                                <span class="text-[13px] text-on-surface">Print name tags when people are marked present at the kiosk</span>
                             </label>
                         </div>
 

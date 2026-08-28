@@ -127,8 +127,11 @@
       // Relationship Groups (MS-105). A brand-new collection, so tolerate its
       // absence rather than taking the whole viewer down with it.
       db.collection('relationship_groups').get().catch(function () { return { docs: [] }; }),
+      // Households (MS-321). Stored ones only — the kiosk's projections are a
+      // guess and this graph draws records. Tolerate the collection's absence.
+      db.collection('households').get().catch(function () { return { docs: [] }; }),
     ]).then(function (snaps) {
-      var peopleSnap = snaps[0], famSnap = snaps[1], relSnap = snaps[2], typeSnap = snaps[3], usersSnap = snaps[4], groupSnap = snaps[5];
+      var peopleSnap = snaps[0], famSnap = snaps[1], relSnap = snaps[2], typeSnap = snaps[3], usersSnap = snaps[4], groupSnap = snaps[5], houseSnap = snaps[6];
 
       // Elder-ness comes from the projected Elder Tag (MS-92). Interim fallback:
       // personIds linked to an *elder* User (super_admins excluded), so the graph
@@ -148,6 +151,7 @@
         relationships: toArr(relSnap),
         relationshipTypes: toArr(typeSnap),
         relationshipGroups: toArr(groupSnap),
+        households: toArr(houseSnap),
         eldersById: eldersById,
       });
 
@@ -166,6 +170,13 @@
       var EDGE = {
         family: { label: 'Family',           color: 'var(--primary)', dash: [], w: 2.2, rest: 86,  css: 'solid', custom: false, prio: false },
         elder:  { label: 'Elder Assignment', color: 'var(--tertiary)', dash: [], w: 1.9, rest: 128, css: 'solid', custom: false, prio: false },
+      };
+
+      // Households get a bubble row of their own — not in the Relationship
+      // Group list, because a Household is not one. Its toggle starts off.
+      EDGE[RelationsGraphCore.HOUSEHOLD_KEY] = {
+        label: 'Households', color: null, dash: [], w: 0, rest: 0,
+        css: 'solid', custom: false, group: true, prio: false,
       };
 
       // A Group-kind type has NO edges — it governs bubbles. So it gets its own
@@ -188,6 +199,7 @@
       self.EDGE = EDGE;
       self.customKeys = customKeys;
       self.groupKeys = groupKeys;
+      self.householdKeys = graph.householdGroups.length ? [RelationsGraphCore.HOUSEHOLD_KEY] : [];
       self.groups = graph.groups;
       self.leaderColour = graph.leaderColourByPerson;
       self.assignedElderName = graph.assignedElderName;
@@ -200,19 +212,29 @@
   // Group types are toggled like edge types — one switch governs a type's bubbles
   // AND its leader lines — so they belong in the same key space as the presets.
   RelationsViewer.prototype.allKeys = function () {
+    return this.primaryKeys.concat(this.customKeys, this.groupKeys || [], this.householdKeys || []);
+  };
+  // Every key a View Preset speaks for. Households are deliberately outside it:
+  // there is one bubble per household in the directory, so drawing them by
+  // default would bury the web this page exists to show. The foyer's grouping
+  // is opt-in, and a preset never switches it back on behind your back.
+  RelationsViewer.prototype.presetKeys = function () {
     return this.primaryKeys.concat(this.customKeys, this.groupKeys || []);
   };
   RelationsViewer.prototype.presetToggles = function (key) {
     var t = {}, self = this;
-    this.allKeys().forEach(function (k) {
+    this.presetKeys().forEach(function (k) {
       if (key === 'family') t[k] = (k === 'family');
       else if (key === 'elder') t[k] = (k === 'elder');
       else t[k] = true;
     });
+    (this.householdKeys || []).forEach(function (k) {
+      t[k] = !!(self.toggles && self.toggles[k]);   // off on load, untouched after
+    });
     return t;
   };
   RelationsViewer.prototype.activePreset = function () {
-    var t = this.toggles, keys = this.allKeys();
+    var t = this.toggles, keys = this.presetKeys();
     var allOn = keys.every(function (k) { return t[k]; });
     if (allOn) return 'full';
     var onlyFamily = keys.every(function (k) { return k === 'family' ? t[k] : !t[k]; });
@@ -233,14 +255,14 @@
     // hidden by Show-inactive drop out of the hull; a group left with nobody visible
     // simply isn't drawn this frame.
     this.visGroups = (this.groups || []).filter(function (g) {
-      return st.toggles['rel:' + g.typeId];
+      return st.toggles[g.key];
     }).map(function (g) {
       var memberNodes = g.memberIds.map(function (id) { return self.byId[id]; })
         .filter(function (n) { return n && active[n.id]; });
       var leaderNode = (g.leaderId && active[g.leaderId]) ? self.byId[g.leaderId] : null;
       return {
-        id: g.id, name: g.name, typeId: g.typeId, colour: g.colour,
-        prio: !!(self.EDGE['rel:' + g.typeId] || {}).prio,
+        id: g.id, key: g.key, name: g.name, typeId: g.typeId, colour: g.colour,
+        prio: !!(self.EDGE[g.key] || {}).prio,
         memberNodes: memberNodes, leaderNode: leaderNode || null,
       };
     }).filter(function (g) { return g.memberNodes.length > 0; });
@@ -979,7 +1001,8 @@
             '<div style="padding:20px 18px 26px;display:flex;flex-direction:column;gap:22px">' +
               '<div><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><span style="font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant)">View Preset</span></div><div data-rv="presets" style="display:flex;gap:6px"></div></div>' +
               '<div><span style="display:block;font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--outline-variant)">Relationship Types</span><div data-rv="primaryTypes"></div><div data-rv="customHdr" style="margin:12px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">hub</span> Custom Relationships</div><div data-rv="customTypes"></div><p data-rv="customNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">Custom types are elder-authored and appear here automatically as they’re created.</p>' +
-              '<div data-rv="groupHdr" style="margin:14px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">bubble_chart</span> Relationship Groups</div><div data-rv="groupTypes"></div><p data-rv="groupNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">One toggle governs a type’s bubbles and its leader lines. A group can be leaderless or empty — both are normal.</p></div>' +
+              '<div data-rv="groupHdr" style="margin:14px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">bubble_chart</span> Relationship Groups</div><div data-rv="groupTypes"></div><p data-rv="groupNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">One toggle governs a type’s bubbles and its leader lines. A group can be leaderless or empty — both are normal.</p>' +
+              '<div data-rv="householdHdr" style="margin:14px 2px 4px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant);opacity:.85;display:none;align-items:center;gap:6px"><span class="msy" style="font-size:14px">home</span> Households</div><div data-rv="householdTypes"></div><p data-rv="householdNote" style="margin:8px 4px 0;font-size:11px;line-height:1.45;color:var(--on-surface-variant);display:none">Who lives together, as the foyer records it — not the kinship tree. Off by default: there is one bubble per household, and all of them at once hides the web.</p></div>' +
               '<div><span style="display:block;font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant);margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--outline-variant)">Display</span>' +
                 '<div data-act="toggleIsolated" class="rv-row" style="display:flex;align-items:center;gap:11px;padding:9px 8px;border-radius:9px;cursor:pointer"><span class="msy" style="font-size:19px;color:var(--on-surface-variant)">scatter_plot</span><span style="flex:1 1 auto;font-size:13.5px;font-weight:600;color:var(--navy-900)">Show isolated people</span><span data-rv="isoBg"><span data-rv="isoKnob"></span></span></div>' +
                 '<div data-act="toggleInactive" class="rv-row" style="display:flex;align-items:center;gap:11px;padding:9px 8px;border-radius:9px;cursor:pointer"><span class="msy" style="font-size:19px;color:var(--on-surface-variant)">do_not_disturb_on</span><span style="flex:1 1 auto;font-size:13.5px;font-weight:600;color:var(--navy-900)">Show inactive people</span><span data-rv="inactBg"><span data-rv="inactKnob"></span></span></div>' +
@@ -1061,8 +1084,7 @@
   // is groups, not edges. The one toggle governs the bubbles AND the leader lines.
   RelationsViewer.prototype.groupTypeRow = function (k) {
     var def = this.EDGE[k], sw = this.switchStyles(!!this.toggles[k]);
-    var typeId = k.slice(4);
-    var mine = (this.groups || []).filter(function (g) { return g.typeId === typeId; });
+    var mine = (this.groups || []).filter(function (g) { return g.key === k; });
     var c1 = (mine[0] && mine[0].colour) || 'var(--outline)';
     var c2 = (mine[1] && mine[1].colour) || c1;
 
@@ -1097,6 +1119,13 @@
       this.refs.groupTypes.innerHTML = (this.groupKeys || []).map(function (k) { return self.groupTypeRow(k); }).join('');
       this.refs.groupHdr.style.display = hasGroups ? 'flex' : 'none';
       this.refs.groupNote.style.display = hasGroups ? 'block' : 'none';
+    }
+
+    var hasHouseholds = (this.householdKeys || []).length > 0;
+    if (this.refs.householdTypes) {
+      this.refs.householdTypes.innerHTML = (this.householdKeys || []).map(function (k) { return self.groupTypeRow(k); }).join('');
+      this.refs.householdHdr.style.display = hasHouseholds ? 'flex' : 'none';
+      this.refs.householdNote.style.display = hasHouseholds ? 'block' : 'none';
     }
   };
   RelationsViewer.prototype.renderDisplay = function () {

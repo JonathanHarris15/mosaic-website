@@ -663,6 +663,14 @@
                                         <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant text-[16px]">expand_more</span>
                                     </div>
                                 </div>
+                                <div class="flex flex-col gap-xs" x-show="canEdit">
+                                    <label class="m-label">Kid</label>
+                                    <label class="flex items-center gap-sm py-2">
+                                        <input type="checkbox" x-model="selectedPerson.kid"
+                                               class="rounded border-outline-variant text-primary">
+                                        <span class="text-sm text-on-surface-variant">Gets a child tag and a pickup stub at the kiosk</span>
+                                    </label>
+                                </div>
                             </div>
 
                             <!-- Membership Track (ADR-0012): stage slider + Inactive toggle, editors only -->

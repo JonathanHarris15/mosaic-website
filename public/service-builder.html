@@ -1379,6 +1379,10 @@
                 <template x-if="!loading && !error">
                     <div>
                         <div data-roles-panel="banner"></div>
+                        <!-- Who was present, above the rota — the same panel the
+                             Event page shows on its Attendance tab. This pane
+                             hosts eventDetailPage, so the data is already here. -->
+                        <div class="mb-md" x-show="isEditor" data-roles-panel="attendance"></div>
                         <div data-roles-panel="roles"></div>
                     </div>
                 </template>

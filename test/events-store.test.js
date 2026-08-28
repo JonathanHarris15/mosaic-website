@@ -36,6 +36,7 @@ function fakeDb(collections, viewer) {
     // in every test and was refused by production. A fake that borrowed the
     // model's opinion could never catch a write that forgot the stamp.
     function mayRead(doc, name) {
+        if (viewer && viewer.rank === 'kiosk') return true;
         if (name === Store.OCCURRENCES && !(doc && 'visibility' in doc)) return false;
         return Core.canSee(viewer && viewer.rank, doc, viewer && viewer.personId);
     }
@@ -1955,4 +1956,41 @@ test('emptying nothing is nothing, not a crash', async () => {
 test('a rota belongs to an event, and emptying one without saying which is refused', async () => {
     const db = rosteredDb();
     await assert.rejects(() => Store.clearRosters(db, '', ['2026-08-09']), /belongs to an event/);
+});
+
+test('a kiosk loads every occurrence, ignoring the visibility ladder', async () => {
+    const db = fakeDb({ event_occurrences: OCCURRENCES }, { rank: 'kiosk', personId: null });
+    const rows = await Store.loadKioskOccurrences(db);
+    assert.ok(rows.some(o => o.visibility === 'elder'));
+    assert.ok(rows.some(o => o.visibility === 'public'));
+    assert.equal(rows.length, Object.keys(OCCURRENCES).length);
+});
+
+test('marking present writes one document per person, keyed by personId', async () => {
+    const db = fakeDb({ event_occurrences: OCCURRENCES }, { rank: 'kiosk', personId: null });
+    await Store.markPresent(db, 'picnic_2026-07-11', ['alice', 'alice', 'bob'], '2026-08-27T12:00:00Z');
+    const writes = db._flatWrites().filter(w => w.kind === 'set');
+    assert.equal(writes.length, 2);
+    assert.ok(writes.some(w => w.path === 'event_occurrences/picnic_2026-07-11/attendance/alice'));
+    assert.ok(writes.some(w => w.path === 'event_occurrences/picnic_2026-07-11/attendance/bob'));
+    writes.forEach(w => assert.deepStrictEqual(w.data, { markedAt: '2026-08-27T12:00:00Z' }));
+});
+
+test('a kid\'s attendance can carry the pickup number written at mark time', async () => {
+    const db = fakeDb({ event_occurrences: OCCURRENCES }, { rank: 'kiosk', personId: null });
+    await Store.markPresent(db, 'picnic_2026-07-11', ['sam'], 't', { sam: { pickupCode: '7QK4' } });
+    const write = db._flatWrites().find(w => w.kind === 'set');
+    assert.deepStrictEqual(write.data, { markedAt: 't', pickupCode: '7QK4' });
+});
+
+test('attendance is loaded from the occurrence, keyed by personId', async () => {
+    const db = fakeDb({
+        event_occurrences: OCCURRENCES,
+        'event_occurrences/picnic_2026-07-11/attendance': {
+            alice: { markedAt: '2026-08-27T12:00:00Z' },
+            bob: { markedAt: '2026-08-27T12:01:00Z' },
+        },
+    }, { rank: 'editor', personId: 'ed' });
+    const rows = await Store.loadAttendance(db, 'picnic_2026-07-11');
+    assert.deepStrictEqual(rows.map(r => r.personId).sort(), ['alice', 'bob']);
 });

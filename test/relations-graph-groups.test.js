@@ -184,3 +184,55 @@ test('a graph with no groups still builds, and simply has none to draw', () => {
     assert.deepStrictEqual(g.groups, []);
     assert.deepStrictEqual(g.leaderColourByPerson, {});
 });
+
+// ── Households as bubbles (MS-321, ADR-0044) ────────────────────────────────
+// A Household is who lives together, as the foyer records it. It draws with the
+// same hull machinery a Relationship Group uses, but it is not one: no leader,
+// one colour for the lot, and its own toggle — which the viewer starts off.
+
+const households = [
+    { id: 'family:kanes', name: 'The Kane Household', memberIds: ['stephen', 'ruth'] },
+    { id: 'hh2', name: 'The Vale Household', members: [{ personId: 'carter' }, { personId: 'nathan' }] },
+];
+
+test('a stored Household becomes a bubble of its own', () => {
+    const g = Graph.buildGraph(Object.assign(base(), { households }));
+    const kane = g.householdGroups.find(h => h.id === 'household:family:kanes');
+    assert.ok(kane);
+    assert.deepStrictEqual(kane.memberIds, ['stephen', 'ruth']);
+    assert.strictEqual(kane.key, Graph.HOUSEHOLD_KEY);
+    assert.strictEqual(kane.leaderId, null);
+    assert.strictEqual(kane.colour, Graph.HOUSEHOLD_COLOUR);
+});
+
+test('a Household reads its members from either shape the collection stores', () => {
+    const g = Graph.buildGraph(Object.assign(base(), { households }));
+    const vale = g.householdGroups.find(h => h.id === 'household:hh2');
+    assert.deepStrictEqual(vale.memberIds, ['carter', 'nathan']);
+});
+
+test('every Household bubble takes the same colour, so they read as one kind', () => {
+    const g = Graph.buildGraph(Object.assign(base(), { households }));
+    const colours = g.householdGroups.map(h => h.colour);
+    assert.strictEqual(new Set(colours).size, 1);
+});
+
+test('Households join the same group list the viewer already draws', () => {
+    const g = Graph.buildGraph(Object.assign(base(), { households }));
+    assert.strictEqual(g.groups.length, g.householdGroups.length + g.groups.filter(x => x.typeId).length);
+    g.groups.forEach(x => assert.ok(x.key, 'every group carries the toggle key it answers to'));
+    assert.ok(g.primaryTypes.household);
+    assert.strictEqual(g.primaryTypes.household.kind, 'group');
+});
+
+test('a Household of people nobody has in the directory is not drawn', () => {
+    const g = Graph.buildGraph(Object.assign(base(), {
+        households: [{ id: 'hh3', name: 'Ghosts', memberIds: ['nobody'] }],
+    }));
+    assert.deepStrictEqual(g.householdGroups, []);
+});
+
+test('no Households at all leaves the graph exactly as it was', () => {
+    const g = Graph.buildGraph(base());
+    assert.deepStrictEqual(g.householdGroups, []);
+});

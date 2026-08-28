@@ -126,6 +126,12 @@ const NO_BAR_ON_PURPOSE = {
     'relations-viewer.html':
         'MS-233. A tool of its own rather than a page of the app; its bar ' +
         'carries a search and the counts, and the account was moved into it',
+    'kiosk.html':
+        'MS-321. A desk in a foyer rather than a page of the app. The one ' +
+        'thing it should say to somebody walking up to it is that they are ' +
+        'welcome, so the seal and Welcome! take the top and the app chrome ' +
+        'is not on it. The way back and Log Out are faint buttons in the ' +
+        'bottom corner, for the volunteer rather than the visitor',
 };
 
 test('every page of the app carries the shared bar', () => {

@@ -24,6 +24,13 @@
     // here rather than in the viewer, so a group keeps its colour across reloads.
     var GROUP_PALETTE = [1, 2, 3, 4, 5, 6].map(function (i) { return "var(--graph-" + i + ")"; });
 
+    // Households (ADR-0044) draw as bubbles too, but they are one KIND of thing
+    // rather than six, so they take one colour rather than a cycling palette —
+    // every Household on screen reads as the same category at a glance, and no
+    // Household can be mistaken for a Relationship Group.
+    var HOUSEHOLD_COLOUR = 'var(--steel)';
+    var HOUSEHOLD_KEY = 'household';
+
     // A Relationship Type is a kind × priority structure (ADR-0014). Legacy docs
     // carry a `directional` flag instead — read them defensively, so the graph is
     // right before the backfill has run.
@@ -69,6 +76,11 @@
         var relationships = inp.relationships || [];
         var relationshipTypes = inp.relationshipTypes || [];
         var relationshipGroups = inp.relationshipGroups || [];
+        // STORED Households only. The kiosk projects a Family as a Household so
+        // its search is never empty, but a projection is a guess and the graph
+        // must not draw guesses as records — a Household is minted the first
+        // time somebody uses it, and only then does a bubble appear.
+        var households = inp.households || [];
         var eldersById = inp.eldersById || null;
 
         var nodes = [];
@@ -143,6 +155,7 @@
         var primaryTypes = {
             family: { key: 'family', label: 'Family', kind: 'pairwise', prio: false },
             elder: { key: 'elder', label: 'Elder Assignment', kind: 'pairwise', prio: false },
+            household: { key: HOUSEHOLD_KEY, label: 'Households', kind: 'group', prio: false },
         };
 
         // ── Relationship Groups → one hull descriptor each (ADR-0014 s5) ──────
@@ -167,6 +180,7 @@
             var colour = GROUP_PALETTE[groups.length % GROUP_PALETTE.length];
             groups.push({
                 id: g.id,
+                key: 'rel:' + g.typeId,
                 name: g.name || 'Group',
                 typeId: g.typeId,
                 colour: colour,
@@ -180,21 +194,47 @@
             }
         });
 
+        // ── Households → one hull each (ADR-0044) ────────────────────────────
+        // Same descriptor as a Relationship Group, so the viewer draws them with
+        // the code it already has. Never a leader: a Household has no head — it
+        // is who lives together, not who is in charge. One toggle governs the
+        // lot, and it starts OFF, because a bubble round every family at once
+        // buries the graph the viewer exists to show.
+        var householdGroups = [];
+        households.forEach(function (h) {
+            if (!h || !h.id) return;
+            var ids = (h.memberIds || (h.members || []).map(function (m) { return m && m.personId; }))
+                .filter(function (id) { return !!byId[id]; });
+            if (!ids.length) return;
+            householdGroups.push({
+                id: 'household:' + h.id,
+                key: HOUSEHOLD_KEY,
+                name: h.name || 'Household',
+                typeId: null,
+                colour: HOUSEHOLD_COLOUR,
+                leaderId: null,
+                memberIds: ids,
+            });
+        });
+
         return {
             nodes: nodes,
             edges: edges,
             customTypes: customTypes,
             primaryTypes: primaryTypes,
-            groups: groups,
+            groups: groups.concat(householdGroups),
+            householdGroups: householdGroups,
             leaderColourByPerson: leaderColourByPerson,
             assignedElderName: assignedElderName,
-            hasData: edges.length > 0 || groups.length > 0,
+            hasData: edges.length > 0 || groups.length > 0 || householdGroups.length > 0,
         };
     }
 
     var RelationsGraphCore = {
         ELDER_TAG: ELDER_TAG,
         GROUP_PALETTE: GROUP_PALETTE,
+        HOUSEHOLD_COLOUR: HOUSEHOLD_COLOUR,
+        HOUSEHOLD_KEY: HOUSEHOLD_KEY,
         nameParts: nameParts,
         isElderNode: isElderNode,
         typeKind: typeKind,

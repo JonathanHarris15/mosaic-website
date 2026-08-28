@@ -33,6 +33,7 @@
     const SERIES = 'events';
     const OCCURRENCES = 'event_occurrences';
     const ROSTER = 'roster';
+    const ATTENDANCE = 'attendance';
 
     // Firestore caps a batch at 500 operations. The rest of this codebase commits
     // in 450s (see the week-shift tool), leaving room rather than riding the edge.
@@ -97,6 +98,70 @@
         return Core.mergeVisibleOccurrences(sets[0], sets[1] || [])
             .filter(o => Core.overlapsRange(o, opts.from, opts.to))
             .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    }
+
+    // A Kiosk sees every Event, ignoring the visibility ladder (MS-318). The
+    // rule names isKiosk() on the collection, so this query is legal only for
+    // that account — unconstrained for anyone else would error the way every
+    // other read here is written to avoid.
+    async function loadKioskOccurrences(db) {
+        const snap = await db.collection(OCCURRENCES).get();
+        return snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+    }
+
+    async function loadKioskSeries(db) {
+        const snap = await db.collection(SERIES).get();
+        return snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+    }
+
+    async function loadAttendance(db, occurrenceId) {
+        const snap = await db.collection(OCCURRENCES).doc(occurrenceId).collection(ATTENDANCE).get();
+        return snap.docs.map(d => Object.assign({ personId: d.id }, d.data()));
+    }
+
+    async function markPresent(db, occurrenceId, personIds, markedAt, extras) {
+        const batch = db.batch();
+        const col = db.collection(OCCURRENCES).doc(occurrenceId).collection(ATTENDANCE);
+        const seen = {};
+        const extra = extras || {};
+        (personIds || []).forEach(function (id) {
+            if (!id || seen[id]) return;
+            seen[id] = true;
+            const payload = { markedAt: markedAt };
+            if (extra[id] && extra[id].pickupCode) payload.pickupCode = extra[id].pickupCode;
+            batch.set(col.doc(id), payload);
+        });
+        await batch.commit();
+    }
+
+    // Undo a mark. A greeter taps the wrong row on a Sunday morning and needs it
+    // gone, not annotated — the Attendance record is "who was here", and somebody
+    // who was not here does not belong in it with a footnote. The rules let a
+    // Kiosk and an editor delete for exactly this (MS-321).
+    async function unmarkPresent(db, occurrenceId, personIds) {
+        const batch = db.batch();
+        const col = db.collection(OCCURRENCES).doc(occurrenceId).collection(ATTENDANCE);
+        const seen = {};
+        (personIds || []).forEach(function (id) {
+            if (!id || seen[id]) return;
+            seen[id] = true;
+            batch.delete(col.doc(id));
+        });
+        await batch.commit();
+    }
+
+    async function setNeedsNameTags(db, opts) {
+        const value = !!(opts && opts.value);
+        if (opts && opts.occurrenceId) {
+            await db.collection(OCCURRENCES).doc(opts.occurrenceId).set(
+                { needsNameTags: value }, { merge: true }
+            );
+        }
+        if (opts && opts.seriesId) {
+            await db.collection(SERIES).doc(opts.seriesId).set(
+                { needsNameTags: value }, { merge: true }
+            );
+        }
     }
 
     // The series a viewer can see. Same constraint, same reason — the series
@@ -1575,11 +1640,18 @@
         SERIES,
         OCCURRENCES,
         ROSTER,
+        ATTENDANCE,
         shiftOccurrences,
         shiftDays,
         seesEveryRung,
         // reading
         loadVisibleOccurrences,
+        loadKioskOccurrences,
+        loadKioskSeries,
+        loadAttendance,
+        markPresent,
+        unmarkPresent,
+        setNeedsNameTags,
         loadVisibleSeries,
         loadCalendar,
         loadSeriesWindow,

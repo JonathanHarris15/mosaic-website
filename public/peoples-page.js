@@ -961,6 +961,7 @@ document.addEventListener('alpine:init', () => {
                     'contact.address': (this.selectedPerson.contact?.address || '').trim(),
                     birthday: this.selectedPerson.birthday || null,
                     sex: this.selectedPerson.sex || null,
+                    kid: !!this.selectedPerson.kid,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 

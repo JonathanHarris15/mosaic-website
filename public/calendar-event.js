@@ -107,6 +107,10 @@
             occurrence: null,
             series: null,
             assignments: [],
+            attendance: [],
+            // Which pane of the Event page is open. Editors get a second one —
+            // who was actually here — so it starts on the Event either way.
+            tab: 'event',
             people: [],
             roleDefinitions: [],
             relationships: [],
@@ -425,6 +429,13 @@
                     this.occurrence = loaded;
                     this.assignments = loaded.assignments || [];
                     this.startOccurrenceDraft();
+                    if (this.isEditor) {
+                        try {
+                            this.attendance = await Store.loadAttendance(db, loaded.id);
+                        } catch (e) {
+                            this.attendance = [];
+                        }
+                    }
 
                     // The rest in one wave. None of these three needs anything
                     // from the others — they were only sequential because they
@@ -1554,6 +1565,18 @@
                 this.occurrence.rosterShared = shared;
             },
 
+            async setNeedsNameTags(value) {
+                if (!this.isEditor || !this.occurrence) return;
+                const on = value === true;
+                await Store.setNeedsNameTags(db, {
+                    occurrenceId: this.occurrence.id,
+                    seriesId: this.occurrence.seriesId || (this.series && this.series.id) || null,
+                    value: on,
+                });
+                this.occurrence.needsNameTags = on;
+                if (this.series) this.series.needsNameTags = on;
+            },
+
             // ── Editing a one-off Event ──────────────────────────────────────
             //
             // A one-off has no series, so everything true of it is true of this
@@ -1726,6 +1749,25 @@
 
             initials(name) { return View.initials(name); },
             formatTime(t) { return View.formatTime(t); },
+
+            // Attendance, in the order a person reads a list of names. The row
+            // carries its own name and time so the shared panel stays dumb.
+            get attendanceRows() {
+                return (this.attendance || []).map(row => ({
+                    personId: row.personId,
+                    name: this.personName(row.personId),
+                    pickupCode: row.pickupCode || '',
+                    markedAtLabel: this.markedAtLabel(row.markedAt),
+                })).sort((a, b) => a.name.localeCompare(b.name));
+            },
+            // The clock time they were marked. The date is the Event's own, so
+            // repeating it on every row would say nothing.
+            markedAtLabel(markedAt) {
+                if (!markedAt) return '';
+                const at = new Date(markedAt);
+                if (isNaN(at.getTime())) return '';
+                return at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            },
             stateLabel(a) { return Core.stateLabel(a); },
             stateTone(a) { return Core.stateTone(a); },
             visibilityLabel(l) { return View.visibilityLabel(l); },

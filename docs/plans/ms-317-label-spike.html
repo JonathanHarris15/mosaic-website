@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>MS-317 label spike — 75mm x 50mm</title>
+<!--
+  MS-317 spike: get one nametag out of the Zebra ZD421 from a browser.
+
+  Copy this file onto the kiosk machine and open it in Chrome.
+  Label stock is 75mm wide x 50mm tall (landscape).
+
+  Three runs, in order — see docs/plans/ms-317-zebra-label-printing.md:
+    1. Print normally. Set the Zebra as destination, paper size to the label,
+       margins None, headers/footers OFF.
+    2. Print again WITHOUT touching paper size. If it still comes out right,
+       Chrome is honouring the CSS and we do not need the paper-size policy.
+    3. Close Chrome, then relaunch with --kiosk-printing and click Print.
+       It should print with no dialog (expect a brief preview flash).
+
+  Then look at the label: is it all on the label, is the text crisp not fuzzy,
+  can you read the code across a room, does label 2 line up with label 1?
+-->
+<style>
+  /* The physical label. */
+  @page { size: 75mm 50mm; margin: 0; }
+
+  html, body { margin: 0; padding: 0; background: #f4f4f5; }
+
+  #label {
+    width: 75mm;
+    height: 50mm;
+    box-sizing: border-box;
+    padding: 3mm 4mm;
+    background: #fff;
+    color: #000;
+    font-family: Arial, Helvetica, sans-serif;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow: hidden;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .first {
+    font-size: 15mm;
+    font-weight: 700;
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+  }
+  .last {
+    font-size: 6mm;
+    font-weight: 400;
+    line-height: 1;
+    margin-top: 1mm;
+  }
+  .footer {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 3mm;
+  }
+  .room  { font-size: 4.5mm; font-weight: 600; line-height: 1.1; }
+  .when  { font-size: 2.8mm; font-weight: 400; margin-top: 0.8mm; }
+  .code  {
+    font-family: "Courier New", monospace;
+    font-size: 11mm;
+    font-weight: 700;
+    line-height: 0.9;
+    letter-spacing: 0.5mm;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  /* Screen only: show the label edge and the controls. */
+  @media screen {
+    body { padding: 20px; font-family: Arial, Helvetica, sans-serif; }
+    #label { border: 1px dashed #999; box-shadow: 0 1px 6px rgba(0,0,0,.15); }
+    #controls { margin-top: 20px; max-width: 75mm; }
+    button { font: inherit; padding: 8px 16px; cursor: pointer; }
+    p.note { font-size: 13px; color: #52525b; line-height: 1.5; }
+  }
+
+  /* Print: the label is the only thing on the page. */
+  @media print {
+    body { background: #fff; padding: 0; }
+    body > *:not(#label) { display: none !important; }
+    #label { border: none; box-shadow: none; }
+  }
+</style>
+
+<div id="label">
+  <div>
+    <div class="first">Amelia</div>
+    <div class="last">Harris</div>
+  </div>
+  <div class="footer">
+    <div>
+      <div class="room">Sparks &middot; Room 3</div>
+      <div class="when">Sun 30 Aug &middot; 9:30am</div>
+    </div>
+    <div class="code">7QK4</div>
+  </div>
+</div>
+
+<div id="controls">
+  <button onclick="window.print()">Print label</button>
+  <p class="note">
+    Label stock: 75mm &times; 50mm. If it prints at the wrong size, do not fight it
+    in CSS &mdash; set <code>PrintingPaperSizeDefault</code> by Chrome policy
+    (75000 &times; 50000 micrometres). See the research doc.
+  </p>
+</div>
+</html>

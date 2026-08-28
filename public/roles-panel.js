@@ -87,6 +87,41 @@
             </div>
 `;
 
+    // Who was present — Attendance, marked at the kiosk (MS-321). Distinct from
+    // who is SERVING: a Person can have either, both, or neither, which is why
+    // this is its own panel rather than a card inside Roles. It used to be a
+    // card at the top of the Roles markup, and it also hid itself when nobody
+    // had been marked — so on the Event page there was no answer at all to
+    // "did anyone turn up?", only silence. Now it is a slot each page places
+    // where it wants: a tab of its own on Event detail, above the rota on a
+    // Sunday. Both pages host eventDetailPage, so both already have the data.
+    const ATTENDANCE = `
+                    <section class="m-card">
+                        <div class="flex items-baseline justify-between gap-md pb-sm border-b border-outline-variant">
+                            <h2 class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Who was present</h2>
+                            <span class="text-[12.5px] text-on-surface-variant"
+                                  x-text="attendance.length + (attendance.length === 1 ? ' person' : ' people')"></span>
+                        </div>
+                        <div class="flex flex-col">
+                            <template x-for="row in attendanceRows" :key="row.personId">
+                                <div class="flex items-center gap-sm py-2.5 border-b border-outline-variant last:border-b-0">
+                                    <span class="text-[14.5px] flex-grow min-w-0 truncate"
+                                          x-text="row.name"></span>
+                                    <!-- The pickup number a Kid's tag and stub carry. -->
+                                    <span x-show="row.pickupCode"
+                                          class="shrink-0 font-mono text-[12.5px] tracking-widest text-on-surface-variant"
+                                          x-text="row.pickupCode"></span>
+                                    <span class="shrink-0 text-[12px] text-on-surface-variant"
+                                          x-text="row.markedAtLabel"></span>
+                                </div>
+                            </template>
+                        </div>
+                        <p x-show="!attendance.length" class="py-md text-[13.5px] text-on-surface-variant">
+                            Nobody has been marked present yet. Attendance is taken at the kiosk in the foyer.
+                        </p>
+                    </section>
+`;
+
     const ROLES = `
                     <!-- ── Roles ──────────────────────────────────────────── -->
                     <!-- A Sunday gets this too. It only ever draws NON-liturgical
@@ -526,7 +561,7 @@
     </div>
 `;
 
-    const MARKUP = { banner: BANNER, roles: ROLES, picker: PICKER };
+    const MARKUP = { banner: BANNER, roles: ROLES, attendance: ATTENDANCE, picker: PICKER };
 
     // Fill every placeholder this page carries. A missing one is not an error —
     // a page shows the parts of the panel it wants.
