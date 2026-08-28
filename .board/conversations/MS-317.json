@@ -1,0 +1,2164 @@
+{
+  "ticket": "MS-317",
+  "space": "MS",
+  "sessionId": "987e8e4d-0c27-446d-8765-3b6d52de5a31",
+  "permissionMode": "bypassPermissions",
+  "transcript": [
+    {
+      "role": "you",
+      "text": "The printer is a Zebra ZD421. The kiosk machine has all the drivers downloaded and has been printing nametags consistently in the old system which was planning centers check in system. Do some research on how we could impliment this into our system",
+      "at": "2026-08-27T20:47:40.861Z"
+    },
+    {
+      "role": "agent",
+      "text": "I'll dig into this. Let me kick off codebase context and web research in parallel.",
+      "at": "2026-08-27T20:47:48.891Z"
+    },
+    {
+      "role": "tool",
+      "text": "Skill",
+      "at": "2026-08-27T20:47:50.347Z"
+    },
+    {
+      "role": "tool",
+      "text": "Agent",
+      "at": "2026-08-27T20:47:54.775Z"
+    },
+    {
+      "role": "agent",
+      "text": "I'll explore the repo structure and search for all these topics in parallel.",
+      "at": "2026-08-27T20:47:56.392Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && ls -a && echo \"--- git ---\" && git log",
+      "at": "2026-08-27T20:47:58.523Z"
+    },
+    {
+      "role": "tool",
+      "text": "Grep: (?i)kiosk|check-?in|checkin|nametag|name tag|planning ?center|attendance|label print|printer",
+      "at": "2026-08-27T20:47:59.932Z"
+    },
+    {
+      "role": "tool",
+      "text": "Glob: docs/adr/**",
+      "at": "2026-08-27T20:47:59.944Z"
+    },
+    {
+      "role": "tool",
+      "text": "Glob: **/package.json",
+      "at": "2026-08-27T20:48:00.236Z"
+    },
+    {
+      "role": "tool",
+      "text": "Read: C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\package.json",
+      "at": "2026-08-27T20:48:05.980Z"
+    },
+    {
+      "role": "tool",
+      "text": "Read: C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\firebase.json",
+      "at": "2026-08-27T20:48:06.692Z"
+    },
+    {
+      "role": "tool",
+      "text": "Read: C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\capacitor.config.json",
+      "at": "2026-08-27T20:48:07.526Z"
+    },
+    {
+      "role": "tool",
+      "text": "Read: C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\CLAUDE.md",
+      "at": "2026-08-27T20:48:07.533Z"
+    },
+    {
+      "role": "tool",
+      "text": "Grep: (?i)kiosk",
+      "at": "2026-08-27T20:48:12.244Z"
+    },
+    {
+      "role": "tool",
+      "text": "Grep: (?i)planning ?center|\\bpco\\b|nametag|name ?tag|zebra|zpl|epl2|brother ?ql|dymo",
+      "at": "2026-08-27T20:48:14.414Z"
+    },
+    {
+      "role": "tool",
+      "text": "Grep: (?i)window\\.print|\\.print\\(\\)|@media print|print-|printArea|iframe.*print",
+      "at": "2026-08-27T20:48:15.825Z"
+    },
+    {
+      "role": "tool",
+      "text": "Grep: (?i)attendance|check-?in|checked-?in",
+      "at": "2026-08-27T20:48:16.891Z"
+    },
+    {
+      "role": "tool",
+      "text": "Grep: (?i)window\\.print|jspdf|@media print|print",
+      "at": "2026-08-27T20:48:21.967Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && ls public/*.html && echo \"--- mobile -",
+      "at": "2026-08-27T20:48:24.057Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && wc -l CONTEXT.md && grep -n \"^#\\{1,3\\}",
+      "at": "2026-08-27T20:48:24.862Z"
+    },
+    {
+      "role": "tool",
+      "text": "Agent",
+      "at": "2026-08-27T20:48:30.070Z"
+    },
+    {
+      "role": "agent",
+      "text": "I'll start by reading the repo's conventions, then research each option.",
+      "at": "2026-08-27T20:48:31.671Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: ls \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/docs/\"",
+      "at": "2026-08-27T20:48:33.089Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: ls \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/\"",
+      "at": "2026-08-27T20:48:33.640Z"
+    },
+    {
+      "role": "tool",
+      "text": "ToolSearch",
+      "at": "2026-08-27T20:48:33.857Z"
+    },
+    {
+      "role": "tool",
+      "text": "ToolSearch",
+      "at": "2026-08-27T20:48:35.886Z"
+    },
+    {
+      "role": "tool",
+      "text": "mcp__claude_ai_Atlassian_Rovo__getJiraIssue",
+      "at": "2026-08-27T20:48:36.644Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: ls \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/docs/adr/\" \"C:/Users/jono1/Professional Pr",
+      "at": "2026-08-27T20:48:37.891Z"
+    },
+    {
+      "role": "tool",
+      "text": "ToolSearch",
+      "at": "2026-08-27T20:48:42.309Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:48:43.980Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:48:44.474Z"
+    },
+    {
+      "role": "tool",
+      "text": "SendMessage",
+      "at": "2026-08-27T20:48:55.196Z"
+    },
+    {
+      "role": "agent",
+      "text": "Two agents are out: one mapping what's already in the codebase for kiosk/check-in, one doing the actual research against Zebra's and Planning Center's own docs.\n\nI pulled the ticket first and fed its framing into the research — it already names the three candidate paths (browser print dialog, network job, local helper) and says the local-helper answer is the one that changes the size of the epic. So I've told the researcher to be blunt about install and upkeep for each path, and to answer the bits that are easy to skip: what the web page actually learns when the printer is off or out of labels, and what one sentence describes what must stay installed on that machine.\n\nI'll come back when they land.",
+      "at": "2026-08-27T20:49:00.103Z"
+    },
+    {
+      "role": "tool",
+      "text": "Read: C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\CONTEXT.md",
+      "at": "2026-08-27T20:50:25.940Z"
+    },
+    {
+      "role": "tool",
+      "text": "Read: C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\CONTEXT.md",
+      "at": "2026-08-27T20:50:26.647Z"
+    },
+    {
+      "role": "tool",
+      "text": "Read: C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\CONTEXT.md",
+      "at": "2026-08-27T20:50:27.273Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && ls public/vendor/ && echo \"--- plans -",
+      "at": "2026-08-27T20:50:32.385Z"
+    },
+    {
+      "role": "agent",
+      "text": "Noted — I'll fold in the failure-surface question, the Cloud Functions constraint, and the install-burden focus. Continuing research.",
+      "at": "2026-08-27T20:50:32.707Z"
+    },
+    {
+      "role": "tool",
+      "text": "Grep: (?i)mosaic kids|barcode|qr ?code|scanner|badge",
+      "at": "2026-08-27T20:50:34.054Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:50:34.122Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && head -60 public/mobile.html && echo \"=",
+      "at": "2026-08-27T20:50:34.850Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:50:35.750Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && sed -n '495,555p' public/service-guide",
+      "at": "2026-08-27T20:50:40.777Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && ls -R .claude | head -50 && echo \"=== ",
+      "at": "2026-08-27T20:50:42.134Z"
+    },
+    {
+      "role": "tool",
+      "text": "Grep: (?i)jspdf|jsPDF|html2canvas",
+      "at": "2026-08-27T20:50:43.312Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:50:45.376Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:50:46.035Z"
+    },
+    {
+      "role": "tool",
+      "text": "Read: C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\CONTEXT.md",
+      "at": "2026-08-27T20:50:49.987Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && head -40 GEMINI.md && echo \"=== index.",
+      "at": "2026-08-27T20:50:51.184Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && ls design/ && echo \"=== firestore coll",
+      "at": "2026-08-27T20:50:56.334Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:50:57.477Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:50:58.071Z"
+    },
+    {
+      "role": "tool",
+      "text": "Read: C:\\Users\\jono1\\.claude\\projects\\C--Users-jono1-Professional-Projects-Mosaic-Project-main-worktrees-MS-317\\987e8e4d-0c27-",
+      "at": "2026-08-27T20:51:03.989Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:51:20.308Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:51:21.212Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:51:35.049Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:51:36.134Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:51:48.168Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:51:50.316Z"
+    },
+    {
+      "role": "agent",
+      "text": "Findings for MS-317.\n\n## 1. Kiosk / check-in feature: does not exist\n\nZero matches for `kiosk` anywhere in the repo (code, docs, ADRs, CONTEXT.md). No attendance feature, no attendance collection, no nametag/label code, no barcode/QR scanning code. There is no check-in surface of any kind.\n\n\"Check-in\" in this repo means only one thing, and it is unrelated: **`Elder Check-in`**, a value in the Note Type enum for Shepherding Notes. It appears in `C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\public\\shepherding-profile.js:8`, `public\\shepherding-document.js:387`, `public\\mobile\\screens-shepherd.js:641`. CONTEXT.md line 15 explicitly warns against the term: under **Elder Meeting**, `_Avoid_: Check-in, pastoral meeting`. So \"check-in\" is currently a *forbidden* domain word except as a Note Type value — worth naming a kiosk concept carefully.\n\n## 2. Planning Center: no integration, only a one-shot CSV import\n\n`C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\scripts\\import-members.js` — imports a Planning Center CSV roster export. Its header note is load-bearing for you:\n\n```\n* No external / PCO id is tracked — name is the only match key\n```\n\nSo there is no PCO id on Person records, no PCO API client, no OAuth to Planning Center, nothing. Any Planning Center Check-Ins integration would be greenfield, and there is currently no join key back to PCO.\n\n## 3. Tech stack\n\n**Frontend — two shells, both no-build, both vendored (no bundler, no npm runtime deps in the browser):**\n- **Desktop web**: plain multi-page HTML + **Alpine.js 3** + Tailwind (compiled to `public/mosaic.css` via `npm run build:css`). ~35 pages in `public/*.html`; \"routes\" are literally filenames (`calendar.html`, `service-guide.html`, `peoples-page.html`, …).\n- **Mobile shell**: **Preact + htm** (no JSX, no build step) at `public/mobile.html` + `public/mobile/*.js` (`app.js`, `destinations.js`, `screens-*.js`). Routing is in `public/mobile/destinations.js`.\n- `public/index.html` picks the shell at runtime: native Capacitor → mobile; browser at phone width with touch → mobile; else desktop. `?shell=web` / `?shell=mobile` overrides, remembered in `localStorage`.\n- All third-party libs are vendored into `public/vendor/` (Alpine, Preact, htm, Firebase compat SDK, jsPDF, Quill, TipTap, Fuse, Sortable, Lucide, Mammoth) by `scripts/vendor-assets.mjs` / `scripts/asset-manifest.mjs`. Nothing loads from a CDN.\n\n**Native**: **Capacitor 8** (`capacitor.config.json`, appId `com.mosaicmanagercstx.app`, `webDir: public`), with `android/` and `ios/` projects. No Electron. No custom Capacitor plugins — `android/app/build.gradle` pulls only `capacitor-android` and `capacitor-cordova-android-plugins`. (Relevant to you: a native print/Bluetooth plugin would be the first one added.)\n\n**Backend**: **Firebase** end to end.\n- Cloud Functions v2, Node 20, in `functions/` (`index.js` plus ~25 modules). Deployed as its own bundle; shared pure domain modules are copied from `public/` into `functions/shared/` by `scripts/sync-shared-to-functions.js` (a `predeploy` hook).\n- Firestore (`firestore.rules`, `firestore.indexes.json`), Firebase Auth, Firebase Storage.\n- **Hosting, two sites** (`firebase.json`): `mosaic-hymn-database` serving `public/`, and `mosaic-hymn-mcp` serving `mcp-site/` with rewrites to the `mcp` function (ADR-0038). Note the hosting `Cache-Control` comments in `firebase.json` — HTML/JS/CSS are `no-cache`, `vendor/**` and fonts are `max-age=604800`, and the ordering of those blocks is deliberate.\n- Local dev: `firebase emulators:start` (hosting on :5005, functions :5001, firestore :8080, auth :9099). Tests: `npm test` → `node --test`; emulator tests via `npm run test:emulator`.\n\n## 4. Existing printing code — yes, browser `window.print()` only\n\n- `C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\public\\service-guide.js:504` — `printGuide()`: clones live-preview pages into a hidden `#booklet-print-layer` in booklet imposition order, sets `x-ignore` so Alpine does not re-init the clones, then `setTimeout(() => window.print(), 150)` and clears the layer on `afterprint`. Requires exactly 16 pages.\n- `C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\public\\service-guide-editor.js:437` — the same pattern for the new template system.\n- `@media print` CSS lives in `public/mosaic.css`, `build/tailwind-input.css`, `public/service-guide.html`, `public/service-guide-editor.html`, and `public/mobile/tokens.css`.\n- A **\"Mosaic Print\" Style Preset** exists as Firestore data, frozen onto each week's guide snapshot — see `C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\scripts\\backfill-mosaic-print-css.js` and ADR-0008 §3.5.\n- **jsPDF 2.5.1** is vendored and used in exactly one place: `public/service-builder.js:2229` (`new jsPDF()`), loaded by `public/service-builder.html:157`. Also `scripts/export-service-guide.js` (Node-side export).\n\nNo raw-printer code at all: no ZPL, EPL, Zebra, Brother, DYMO, no WebUSB, no Web Bluetooth, no print-server. The only printing paradigm in the repo is \"render HTML, call `window.print()`, let the OS dialog handle it.\"\n\n## 5. CONTEXT.md domain terms relevant to check-in / attendance / kiosk / events\n\n`C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\CONTEXT.md` (817 lines). Nothing about attendance or kiosks. The terms you would be building next to:\n\n**People / identity**\n- **Person** (line 388) — the record; fields `name`, `contact`, `sex`, `membership.status`, `baptismDate`. No PCO id, no household id on the Person itself.\n- **Family** — separate `families` collection; `planAddFamilyRelation` / `planRemoveFamilyRelation` planners. This is the nearest thing to a household for a child/guardian kiosk flow.\n- **Membership Track / Membership Stage** (line 82/86) — `Visitor → Regular Attender → Prospective Member → Member → Moving Membership → Previous Member`. A first-time kiosk visitor maps to **Visitor**; note \"nobody self-declares onto the Membership Track\" (line 118).\n- **Membership Directory** (line 102) — Members / Non-members tabs; ADR-0031 \"the directory asks for an account\" — every directory collection requires a signed-in account, and *anonymous Firebase sign-in does not count*. **This is the single biggest constraint on a kiosk**: a kiosk browser reading `people` needs a real account, not an anonymous session.\n- **Directory Request** (line 116) — the existing pattern for \"a person tells the church something about their own record\" (Match Request / New Record Request / Name Fix / Family Request), editor-resolved via the `resolveDirectoryRequest` callable. A kiosk \"I'm new\" flow is shaped like this.\n- **Linked User**, **Projected Tag / Membership Tag / Elder Tag**, **Shepherding Tag** (`hidePeople`, `hiddenFromOthers`).\n\n**Events**\n- **Event series** (line 538) — `events` collection, recurrence rule, `roleSlugs`, visibility. Sunday Service is the locked series `sunday_service`.\n- **Event occurrence** (line 544) — `event_occurrences`, deterministic id `{seriesId}_{date}`, **sparse** (a doc exists only when there is something to say). A Sunday occurrence resolves to `services/{date}`, not a shadow record.\n- **Event visibility** (line 643) — the one field deliberately *stamped* onto the occurrence, because security rules read it off the document.\n- **Assignment** (Pending / Confirmed / Declined), **Commitment**, **Cover**, **Trade**, **Quiet**, **Warning**, **One-off Role**, **Away**, **Fairness**, **Involvement**.\n- **Involvement** (line 451) — \"a record that a Person **did serve**… never written for an Event that has not happened yet.\" Note the sharp existing distinction: **Assignment = the plan, Involvement = the fact** (flagged ambiguity, line 814). Attendance would be a *third* thing and must not be called either.\n- **Service Guide** (line 420) — \"the printed document (output) handed to congregants\", includes a **Mosaic Kids** component (parent discussion / lesson details). The only children's-ministry noun in the model.\n- **Autosave** (line 766, ADR-0032) — \"a page editor saves itself; a dialog keeps its button\"; 1.5s debounce (3s for Order of Service). Relevant if the kiosk has any editing surface.\n\nFirestore top-level collections (from `firestore.rules`): `users, directory_requests, hymns, tags, roles, events, event_occurrences` (+`roster` sub), `cover, trades, services, scripture_usage, themes, style_presets, page_templates, guide_templates, guide_assets, people` (+`involvement`, `pastoral_prayer_history`, `prayer_requests`, `away`, `shepherding_notes`, `shepherding_activity`), `people_tags, families, shepherding_tags, relationships, relationship_types, relationship_groups, shepherding_views, shepherding_reminders, elder_meetings, elder_documents, elder_document_structure, sms_test_replies, app_config, sms_messages, presence`. No attendance/check-in collection.\n\n## 6. docs/adr/ filenames (40 ADRs)\n\n```\n0001-people-involvement-model.md\n0002-service-entity-reconciliation.md\n0003-service-guide-generator.md\n0004-person-panel-sync-model.md\n0005-pastoral-record-status-denormalization.md\n0006-baptism-candidates-as-person-references.md\n0007-prayer-request-one-time-generation.md\n0008-service-guide-template-system.md\n0009-prayer-request-sms-reply-correlation.md\n0010-builder-generator-component-surfaces.md\n0011-shepherding-tag-identity-and-hold-duration.md\n0012-membership-track-field-and-tag-projection.md\n0013-elder-tag-projection-and-derived-relationships.md\n0014-relationship-types-as-structures-and-relationship-groups.md\n0015-shepherding-profile-documents.md\n0016-roles-as-events-locked-liturgical-editable-servant.md\n0017-shared-relationship-types-elder-controlled-editor-disclosure.md\n0018-event-occurrences-assignments-and-visibility.md\n0019-liturgical-involvement-is-written-after-the-date.md\n0020-fairness-is-a-weekly-solve.md\n0021-eligibility-advises-the-editor-decides.md\n0022-pastoral-prayer-history-is-the-record-the-person-field-is-a-cache.md\n0023-away-advises-a-person-and-refuses-a-program.md\n0024-a-run-of-days-belongs-to-a-one-off.md\n0025-link-requests-are-self-raised-and-editor-resolved.md\n0026-the-account-sync-moves-the-stage-not-the-tag.md\n0027-a-directory-request-is-how-you-change-your-own-record.md\n0028-editors-can-break-a-link.md\n0029-a-directory-photo-is-self-editable.md\n0030-eligibility-refuses-a-member-and-advises-an-editor.md\n0031-the-directory-asks-for-an-account.md\n0032-a-page-saves-itself-a-dialog-does-not.md\n0033-a-sermonette-is-an-event-not-a-liturgical-role.md\n0034-a-sunday-saves-the-fields-you-changed.md\n0035-one-person-per-box.md\n0036-a-notification-picks-its-channel-and-delivery-is-best-effort.md\n0037-service-theme-similarity-is-scored-server-side-on-a-calibrated-percentile.md\n0038-mcp-server-hosted-on-firebase-authenticates-through-firebase-auth.md\n0039-a-list-is-the-field-a-diff-cannot-split.md\n0040-nobody-reads-a-password.md\n```\n\nMost relevant to a kiosk ticket: **0031** (account floor, anonymous sessions excluded), **0027**/**0025** (self-raised, editor-resolved requests), **0032** (page vs dialog saving), **0008**/**0003** (the printing/template machinery that already exists), **0018** (occurrences and visibility), **0040** (credential handling — matters if a kiosk holds a shared login).\n\n## Practical notes for MS-317 (\"Print a label on the Zebra from the kiosk browser\")\n\n- Nothing exists to build on for the kiosk itself — it is a new `public/*.html` page (desktop shell, Alpine) or a new Preact screen in `public/mobile/`, your choice.\n- The only printing precedent is `window.print()` over cloned DOM with a hidden print layer (`public/service-guide.js:504`). A Zebra label from a *browser* would either follow that (CSS `@page` sized to the label, driver-mediated) or need something genuinely new — there is no WebUSB/Bluetooth/raw-socket code and no custom Capacitor plugin in the repo today.\n- `no-cache` on all HTML/JS/CSS in `firebase.json` means a kiosk browser will re-fetch the page each load; that is deliberate and documented.\n- ADR-0031 is the constraint to resolve early: a kiosk browser cannot read `people` anonymously.",
+      "at": "2026-08-27T20:51:56.560Z"
+    },
+    {
+      "role": "tool",
+      "text": "Read: C:\\Users\\jono1\\.claude\\projects\\C--Users-jono1-Professional-Projects-Mosaic-Project-main-worktrees-MS-317\\987e8e4d-0c27-",
+      "at": "2026-08-27T20:51:57.474Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:52:05.282Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:52:05.941Z"
+    },
+    {
+      "role": "tool",
+      "text": "SendMessage",
+      "at": "2026-08-27T20:52:16.546Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:52:24.113Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:52:25.646Z"
+    },
+    {
+      "role": "agent",
+      "text": "The codebase half is back. The printer research is still out.\n\n**What we have to build on: almost nothing, and that's mostly fine.** There is no kiosk, no check-in screen, no attendance record, no printing to hardware anywhere. The one printing thing the app does today is the Service Guide, which builds a hidden copy of the page and calls the browser's normal print dialog. That happens to be the cheapest of the three paths your ticket lists — so the option that costs least is also the one the code already knows how to do.\n\nThe stack matters for what's possible. Pages are plain HTML with Alpine, served over https from Firebase, and every outside library gets downloaded and checked into the repo rather than loaded from the web. So if the answer turns out to be Zebra's browser plugin, two things need to hold: the https page has to be allowed to talk to a local service on the same machine, and their SDK has to be a plain file we can vendor. I've sent both questions to the researcher as the deciding facts.\n\nTwo things I found that aren't in the ticket and probably should be:\n\n1. **A kiosk can't read people anonymously.** ADR-0031 says the directory requires a real signed-in account, and an anonymous session explicitly doesn't count. So the foyer machine needs a login of some kind before it can show a single name. That's an epic-level question, not a printing one, but it'll bite the ticket after this one.\n2. **\"Check-in\" is already taken.** In CONTEXT.md it means an Elder Check-in note, and the doc tells you to avoid the phrase for anything else. Worth picking a different word for the kiosk before it spreads through the code.\n\nNothing to decide yet. I'll bring the printer answer when it lands.",
+      "at": "2026-08-27T20:52:26.581Z"
+    },
+    {
+      "role": "agent",
+      "text": "Important constraint — let me nail the https/localhost question against Chromium's own specs.",
+      "at": "2026-08-27T20:52:41.239Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:52:42.651Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:52:43.643Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:52:52.410Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:53:06.728Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:53:07.996Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:53:17.717Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:53:19.163Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:53:31.088Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:53:32.313Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:53:46.205Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:53:47.437Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:54:06.288Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:54:06.819Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:54:30.893Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:54:31.545Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:54:48.114Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:54:49.371Z"
+    },
+    {
+      "role": "you",
+      "text": "Computer crashed. Continue.",
+      "at": "2026-08-27T20:55:27.895Z"
+    },
+    {
+      "role": "agent",
+      "text": "Machine crashed and took the research agent with it. Let me check whether it saved anything before dying.",
+      "at": "2026-08-27T20:55:31.410Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && ls docs/ 2>/dev/null && echo \"--- rese",
+      "at": "2026-08-27T20:55:33.085Z"
+    },
+    {
+      "role": "agent",
+      "text": "Nothing saved — it died before writing. Let me check the docs convention and try to resume it from its transcript.",
+      "at": "2026-08-27T20:55:41.472Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && echo \"=== docs/plans ===\" && ls docs/p",
+      "at": "2026-08-27T20:55:42.727Z"
+    },
+    {
+      "role": "tool",
+      "text": "ToolSearch",
+      "at": "2026-08-27T20:55:42.760Z"
+    },
+    {
+      "role": "tool",
+      "text": "SendMessage",
+      "at": "2026-08-27T20:55:54.596Z"
+    },
+    {
+      "role": "agent",
+      "text": "Old agent can't be resumed — relaunching with everything I'd fed it, plus instructions to save as it goes so a crash can't wipe it again.",
+      "at": "2026-08-27T20:56:07.444Z"
+    },
+    {
+      "role": "tool",
+      "text": "Agent",
+      "at": "2026-08-27T20:56:40.361Z"
+    },
+    {
+      "role": "agent",
+      "text": "I'll start with the deciding fact, then build out the document.",
+      "at": "2026-08-27T20:56:41.894Z"
+    },
+    {
+      "role": "tool",
+      "text": "ToolSearch",
+      "at": "2026-08-27T20:56:42.604Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: ls \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/docs/plans/\" 2>/dev/null | head -40",
+      "at": "2026-08-27T20:56:43.853Z"
+    },
+    {
+      "role": "agent",
+      "text": "Restarted. It's writing to `docs/plans/ms-317-zebra-label-printing.md` as it goes now, so another crash won't cost the lot.\n\nI also told it to message me the moment it settles the one question that decides this: our app is served over https, and Zebra's browser plugin works by having the page call a service running on the kiosk itself over plain http. Browsers usually block that mix. If it turns out blocked with no way round it, Zebra's own route is out and we're down to printing a label-sized page through the normal Windows driver — which is what the app already does for the Service Guide, so it'd be the cheap answer anyway.\n\nThe codebase findings from before the crash survived. Nothing lost there.",
+      "at": "2026-08-27T20:56:45.329Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:56:46.991Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:56:47.796Z"
+    },
+    {
+      "role": "agent",
+      "text": "Good lead. Let me get the primary source — Zebra's own Browser Print User Guide.",
+      "at": "2026-08-27T20:56:57.310Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:57:00.837Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:57:02.041Z"
+    },
+    {
+      "role": "agent",
+      "text": "The PDF was saved locally. Let me read it directly.",
+      "at": "2026-08-27T20:57:06.520Z"
+    },
+    {
+      "role": "tool",
+      "text": "Read: C:\\Users\\jono1\\.claude\\projects\\C--Users-jono1-Professional-Projects-Mosaic-Project-main-worktrees-MS-317\\987e8e4d-0c27-",
+      "at": "2026-08-27T20:57:07.774Z"
+    },
+    {
+      "role": "agent",
+      "text": "Strong primary source. Now the critical wrinkle — Chrome's Private/Local Network Access. Let me run that down while parallel agents cover the other options.",
+      "at": "2026-08-27T20:57:41.139Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:57:42.527Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:57:43.924Z"
+    },
+    {
+      "role": "agent",
+      "text": "This is the decisive wrinkle. Let me read Chrome's own post and fan out the other options in parallel.",
+      "at": "2026-08-27T20:57:54.622Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:57:58.151Z"
+    },
+    {
+      "role": "tool",
+      "text": "Agent",
+      "at": "2026-08-27T20:58:17.560Z"
+    },
+    {
+      "role": "tool",
+      "text": "ToolSearch",
+      "at": "2026-08-27T20:58:20.729Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:58:25.435Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:58:25.878Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:58:26.425Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:58:26.971Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:58:27.517Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:58:28.080Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:58:28.089Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:58:28.607Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:58:28.776Z"
+    },
+    {
+      "role": "tool",
+      "text": "Agent",
+      "at": "2026-08-27T20:58:42.188Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:58:44.730Z"
+    },
+    {
+      "role": "tool",
+      "text": "ToolSearch",
+      "at": "2026-08-27T20:58:45.073Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:58:46.912Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:58:48.003Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:58:49.094Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:58:50.185Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:58:50.864Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:58:51.277Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:58:52.367Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:58:53.396Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:58:53.933Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:58:54.004Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:58:54.062Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:58:54.625Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:06.499Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:08.682Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:08.875Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:09.688Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:09.931Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:11.023Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:12.114Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:12.662Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:13.210Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:13.777Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:13.928Z"
+    },
+    {
+      "role": "tool",
+      "text": "Read: C:\\Users\\jono1\\.claude\\projects\\C--Users-jono1-Professional-Projects-Mosaic-Project-main-worktrees-MS-317\\987e8e4d-0c27-",
+      "at": "2026-08-27T20:59:18.322Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && curl -sL -o zpl-guide.pdf \"https://cpws.zebra.com/cpws/docs/zpl/zpl-zbi2-pm-en.pdf\" && ls -la zpl-guide.pdf",
+      "at": "2026-08-27T20:59:19.424Z"
+    },
+    {
+      "role": "tool",
+      "text": "Agent",
+      "at": "2026-08-27T20:59:24.975Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:28.444Z"
+    },
+    {
+      "role": "tool",
+      "text": "ToolSearch",
+      "at": "2026-08-27T20:59:28.573Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:29.005Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:30.085Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:31.749Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:32.278Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: which pdftotext python3 python 2>/dev/null; python3 -c \"import PyPDF2\" 2>&1 | head -5; pip show pdfplumber 2>&1 | head -",
+      "at": "2026-08-27T20:59:32.503Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: ls -la /tmp/zpl-guide.pdf 2>/dev/null; file /tmp/zpl-guide.pdf 2>/dev/null; python3 --version 2>&1",
+      "at": "2026-08-27T20:59:33.193Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:33.373Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:34.474Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:35.130Z"
+    },
+    {
+      "role": "agent",
+      "text": "pdftotext is available. Let me extract the full text and search it directly.",
+      "at": "2026-08-27T20:59:37.835Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:37.999Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:38.013Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:38.550Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && pdftotext -layout zpl-guide.pdf zpl-guide.txt && wc -l zpl-guide.txt && wc -c zpl-guide.txt",
+      "at": "2026-08-27T20:59:38.561Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:39.093Z"
+    },
+    {
+      "role": "tool",
+      "text": "Agent",
+      "at": "2026-08-27T20:59:39.338Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:39.639Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:40.190Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:40.201Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:40.734Z"
+    },
+    {
+      "role": "tool",
+      "text": "ToolSearch",
+      "at": "2026-08-27T20:59:41.267Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:41.279Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:41.825Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:42.374Z"
+    },
+    {
+      "role": "agent",
+      "text": "Good, text extracted successfully (2.9MB, ~59k lines) despite the warning. Now let me locate each command section.",
+      "at": "2026-08-27T20:59:42.701Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:42.917Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:43.461Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:44.009Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:44.552Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"^\\^XA$\\|^~HS$\\|^\\^FO$\\|^\\^FD$\\|^\\^FS$\\|^\\^FB$\\|^\\^FW$\\|^\\^BC$\\|^\\^BQ$\\|^\\^BY$\\|^\\^LL$\\|^\\^PW$\\|^\\^LH",
+      "at": "2026-08-27T20:59:44.778Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:45.106Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:45.154Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:45.429Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:46.134Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T20:59:46.145Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:46.522Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:47.670Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"Form Print\\|^XA \\|XA Command\\|Start Format\" zpl-guide.txt | head -20 echo \"---\" grep -n \"^\\^XA\" zpl-",
+      "at": "2026-08-27T20:59:47.732Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:48.745Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:49.813Z"
+    },
+    {
+      "role": "agent",
+      "text": "This is the TOC/index with page numbers plus the actual content sections. Let me pull the TOC page-number index for all needed commands, then jump to actual content sections (marked with `�` separator pattern).",
+      "at": "2026-08-27T20:59:50.048Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:50.368Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:51.701Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"^\\\\^A \\|^\\\\^A@\\|^\\\\^CF \\|^\\\\^FO \\|^\\\\^FD \\|^\\\\^FS \\|^\\\\^FB \\|^\\\\^FW \\|^\\\\^BC \\|^\\\\^BQ \\|^\\\\^BY \\|^\\\\",
+      "at": "2026-08-27T20:59:52.138Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:52.568Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:52.723Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:54.745Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"^\\\\^BQ \\|^\\\\^BY \\|^\\\\^CF \\|^\\\\^LL \\|^\\\\^PW \\|^\\\\^LH \\|^\\\\^MN \\|^\\\\^MD \\|^\\\\^PR \\|^\\\\^PQ \\|^\\\\^JUS \\|",
+      "at": "2026-08-27T20:59:55.459Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"\\^BQ \\|\\^BY \\|\\^CF \\|\\^LL \\|\\^PW \\|\\^LH \\|\\^MN \\|\\^MD \\|\\^PR \\|\\^PQ \\|\\^JUS \\|\\^JC \" zpl-guide.txt |",
+      "at": "2026-08-27T20:59:57.948Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T20:59:58.522Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:00.164Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"\\^JUS\\|\\^JC \\|~JC \\|HQES\\|ES.*Error Status\\|Error Status\" zpl-guide.txt | head -30",
+      "at": "2026-08-27T21:00:00.810Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:01.656Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:01.668Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:02.488Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:02.934Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:03.496Z"
+    },
+    {
+      "role": "agent",
+      "text": "HQES section found around lines 8976-9130. There's no separate `^JUS` TOC entry as a command page — it seems `^JUS` (Save Current Configuration) might not have its own numbered page but appears elsewhere. Let me check and also look up ^JC (calibration) vs ~JC.",
+      "at": "2026-08-27T21:00:03.665Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"\\^JUS.*Save\\|Save Current\\|^JUS Command\\|^\\^JUS$\" zpl-guide.txt | head -10 echo \"---JC---\" grep -n \"",
+      "at": "2026-08-27T21:00:05.001Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:05.233Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:06.923Z"
+    },
+    {
+      "role": "agent",
+      "text": "Excellent, this is exactly what I need. Now let's get the ~HS (Host Status Return) section, and ^HH, and the other key command sections (^XA/^XZ, ^FO, ^A/^A@/^CF, ^FD/^FS, ^FB/^FW, ^BC/^BQ/^BY, label setup commands, ^JUS/~JC).",
+      "at": "2026-08-27T21:00:07.984Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:08.546Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && awk '/^~HS.*Host Status Return$/{print NR\": \"$0}' zpl-guide.txt grep -n \"^~HS \" zpl-guide.txt | head echo \"--",
+      "at": "2026-08-27T21:00:08.991Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:09.680Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && sed -n '9337,9560p' zpl-guide.txt",
+      "at": "2026-08-27T21:00:10.983Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:11.304Z"
+    },
+    {
+      "role": "agent",
+      "text": "Excellent, I have the full `~HS` details. Now let's get `^HH` (Configuration Label Return), `~JC`, `^JUS`, and the remaining core commands. Let me pull several sections in parallel batches.",
+      "at": "2026-08-27T21:00:13.404Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:13.480Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"^\\^HH � \\|^~JC � \\|^\\^JUS\" zpl-guide.txt",
+      "at": "2026-08-27T21:00:14.544Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:15.116Z"
+    },
+    {
+      "role": "agent",
+      "text": "I have the deciding fact. Writing the file now, then sending it up.",
+      "at": "2026-08-27T21:00:15.537Z"
+    },
+    {
+      "role": "tool",
+      "text": "Read: C:\\Users\\jono1\\.claude\\projects\\C--Users-jono1-Professional-Projects-Mosaic-Project-main-worktrees-MS-317\\987e8e4d-0c27-",
+      "at": "2026-08-27T21:00:15.758Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"^\\^XA � \\|^\\^XZ � \\|^\\^FO � \\|^\\^A � \\|^\\^A@ � \\|^\\^CF � \\|^\\^FD � \\|^\\^FS � \\|^\\^FB � \\|^\\^FW � \" z",
+      "at": "2026-08-27T21:00:16.182Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:16.254Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"^\\^BC � \\|^\\^BQ � \\|^\\^BY � \\|^\\^LL � \\|^\\^PW � \\|^\\^LH � \\|^\\^MN � \\|^\\^MD � \\|^\\^PR � \\|^\\^PQ � \" ",
+      "at": "2026-08-27T21:00:17.033Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:17.374Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:17.929Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:18.497Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:18.553Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:19.010Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:19.834Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:20.073Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:20.111Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:20.206Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:20.281Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:20.686Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:20.703Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:20.985Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"^\\^XA \" zpl-guide.txt echo \"---\" grep -n \"^\\^FO \" zpl-guide.txt echo \"---A---\" grep -n \"^\\^A \" zpl-g",
+      "at": "2026-08-27T21:00:21.176Z"
+    },
+    {
+      "role": "agent",
+      "text": "Good, so single-space-separated commands with `�` do exist for content sections, but grep pattern needs `\\^A ` which appeared only in TOC (page 42 for ^A content — let me check line near there since ^A doesn't have content marker match probably due to different heading format `^A �`). Let me search more broadly.",
+      "at": "2026-08-27T21:00:24.103Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"^\\^A .*Font$\\|Scalable/Bitmapped Font$\" zpl-guide.txt echo \"---HH---\" grep -n \"\\^HH.*Configuration L",
+      "at": "2026-08-27T21:00:25.733Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"JUS\" zpl-guide.txt | head -30",
+      "at": "2026-08-27T21:00:30.931Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:32.559Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:33.106Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"\\^JU � \\|\\^JU .Configuration Update\" zpl-guide.txt echo \"---\" grep -n \"^\\^JU$\\|Configuration Update$",
+      "at": "2026-08-27T21:00:34.331Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:34.905Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:35.462Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:35.556Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:36.002Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && sed -n '10779,10850p' zpl-guide.txt",
+      "at": "2026-08-27T21:00:36.056Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:36.544Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:37.636Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:37.743Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:38.280Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:38.536Z"
+    },
+    {
+      "role": "agent",
+      "text": "Now I have `^JUS` confirmed (`^JU` command with `S` parameter = \"save current settings\"), page 249-250. Now let's get remaining sections: `^A`/`^A@`/`^CF`, `^FD`/`^FS`, `^FB`/`^FW`, `^BC`/`^BQ`/`^BY`, `^LL`/`^PW`/`^LH`/`^MN`/`^MD`/`~SD`/`^PR`/`^PQ`, `^XA`/`^XZ`, `^HH`, `~JC`.",
+      "at": "2026-08-27T21:00:38.751Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:38.819Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && sed -n '2083,2160p' zpl-guide.txt",
+      "at": "2026-08-27T21:00:39.846Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:39.897Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && sed -n '14200,14260p' zpl-guide.txt",
+      "at": "2026-08-27T21:00:40.391Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && sed -n '8092,8160p' zpl-guide.txt",
+      "at": "2026-08-27T21:00:40.632Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:41.246Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: mkdir -p \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/docs/plans\" && cat > \"C:/Users/jono1",
+      "at": "2026-08-27T21:00:42.454Z"
+    },
+    {
+      "role": "agent",
+      "text": "Now let's grab the rest: `^A@`, `^CF`, `^FD`/`^FS`, `^FB`, `^FW`, `^BC`, `^BQ`, `^BY`, `^LL`, `^PW`, `^LH`, `^MN`, `^MD`, `~SD`, `^PR`, `^PQ`, `^XZ`, `^HH`, `~JC`.",
+      "at": "2026-08-27T21:00:42.823Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"^\\^A@ \\|^\\^CF \\|^\\^FB \\|^\\^FW \\|^\\^BY \\|^\\^LL \\|^\\^PW \\|^\\^LH \\|^\\^MN \\|^\\^MD \\|^\\^PR \\|^\\^PQ \\|^\\^X",
+      "at": "2026-08-27T21:00:44.131Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"^\\^LL \" zpl-guide.txt echo \"---FD---\" grep -n \"^\\^FD \" zpl-guide.txt echo \"---FS---\" grep -n \"^\\^FS ",
+      "at": "2026-08-27T21:00:47.026Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:48.550Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:00:48.560Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"\\^XZ.*End Format\" zpl-guide.txt echo \"---HH content---\" grep -n \"\\^HH.*Configuration Label\" zpl-guid",
+      "at": "2026-08-27T21:00:49.177Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:50.361Z"
+    },
+    {
+      "role": "agent",
+      "text": "Now let me read all remaining sections in batches.",
+      "at": "2026-08-27T21:00:50.986Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ^A@ (2177) ===\" && sed -n '2177,2230p' zpl-guide.txt echo \"=== ^CF (6277) ===\" && sed -n '6277,6340",
+      "at": "2026-08-27T21:00:51.805Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:52.752Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ^FD (7719) ===\" && sed -n '7719,7770p' zpl-guide.txt echo \"=== ^FS (8197) ===\" && sed -n '8197,8230",
+      "at": "2026-08-27T21:00:54.272Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:54.900Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ^FB (7555) ===\" && sed -n '7555,7640p' zpl-guide.txt",
+      "at": "2026-08-27T21:00:55.366Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ^FW (8316) ===\" && sed -n '8316,8370p' zpl-guide.txt",
+      "at": "2026-08-27T21:00:55.545Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:00:55.616Z"
+    },
+    {
+      "role": "agent",
+      "text": "Now barcode commands ^BC, ^BQ, ^BY, and label setup ^LL, ^PW, ^LH, ^MN, ^MD, ~SD, ^PR, ^PQ, ^XZ, ^HH, ~JC.",
+      "at": "2026-08-27T21:00:58.030Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ^BC (3629) ===\" && sed -n '3629,3740p' zpl-guide.txt",
+      "at": "2026-08-27T21:00:58.573Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ^BQ (5086) ===\" && sed -n '5086,5190p' zpl-guide.txt",
+      "at": "2026-08-27T21:00:59.625Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ^BY (6070) ===\" && sed -n '6070,6140p' zpl-guide.txt",
+      "at": "2026-08-27T21:00:59.948Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:01:01.014Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:01:01.028Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:01:01.234Z"
+    },
+    {
+      "role": "agent",
+      "text": "Now the label setup commands: ^LL, ^PW, ^LH, ^MN, ^MD, ~SD, ^PR, ^PQ, ^XZ, ^HH, ~JC.",
+      "at": "2026-08-27T21:01:02.207Z"
+    },
+    {
+      "role": "tool",
+      "text": "SendMessage",
+      "at": "2026-08-27T21:01:03.309Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n \"^\\^LL \" zpl-guide.txt grep -n \"Label Length\" zpl-guide.txt | grep -v \"\\. \\.\"",
+      "at": "2026-08-27T21:01:03.371Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ^LH (11270) ===\" && sed -n '11270,11320p' zpl-guide.txt",
+      "at": "2026-08-27T21:01:03.853Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ^MD (11582) ===\" && sed -n '11582,11640p' zpl-guide.txt",
+      "at": "2026-08-27T21:01:04.399Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ^MN (11853) ===\" && sed -n '11853,11930p' zpl-guide.txt",
+      "at": "2026-08-27T21:01:04.807Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:01:05.192Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:01:05.239Z"
+    },
+    {
+      "role": "agent",
+      "text": "Let me get ^LL rest of its parameters, ~SD, ^PR, ^PQ, ^XZ, ^HH, ~JC.",
+      "at": "2026-08-27T21:01:07.166Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && sed -n '11320,11360p' zpl-guide.txt",
+      "at": "2026-08-27T21:01:07.724Z"
+    },
+    {
+      "role": "agent",
+      "text": "Now let me nail Browser Print's status API, licence and current version.",
+      "at": "2026-08-27T21:01:08.084Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ~SD (12864) ===\" && sed -n '12864,12920p' zpl-guide.txt",
+      "at": "2026-08-27T21:01:08.833Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ^PR (12650) ===\" && sed -n '12650,12710p' zpl-guide.txt",
+      "at": "2026-08-27T21:01:09.355Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:01:09.496Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ^PQ (12577) ===\" && sed -n '12577,12650p' zpl-guide.txt",
+      "at": "2026-08-27T21:01:09.526Z"
+    },
+    {
+      "role": "agent",
+      "text": "Good — that's the crux answered, and it's better news than I expected. Let me push one thing back to the researcher before it finishes.",
+      "at": "2026-08-27T21:01:10.576Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:01:10.673Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:01:10.922Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:01:11.464Z"
+    },
+    {
+      "role": "agent",
+      "text": "Now ^PW (Print Width), ^XZ, ^HH, ~JC and check ~JC full section.",
+      "at": "2026-08-27T21:01:11.582Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:01:11.743Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:01:11.960Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ^PW (12754) ===\" && sed -n '12754,12800p' zpl-guide.txt",
+      "at": "2026-08-27T21:01:12.681Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ^XZ (14356) ===\" && sed -n '14356,14375p' zpl-guide.txt",
+      "at": "2026-08-27T21:01:13.217Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:01:13.375Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:01:14.182Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ^HH (8857) ===\" && sed -n '8857,8970p' zpl-guide.txt",
+      "at": "2026-08-27T21:01:14.311Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:01:14.367Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && echo \"=== ~JC (10057) ===\" && sed -n '10057,10080p' zpl-guide.txt",
+      "at": "2026-08-27T21:01:14.385Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:01:15.128Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && curl -sIL \"https://www.zebra.com/content/dam/support-dam/en/documentation/unrestricted/guide/programming/zpl-",
+      "at": "2026-08-27T21:01:23.636Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:01:24.026Z"
+    },
+    {
+      "role": "tool",
+      "text": "SendMessage",
+      "at": "2026-08-27T21:01:25.877Z"
+    },
+    {
+      "role": "agent",
+      "text": "That URL 404s (page moved). Let me confirm the current official location via search and check the efficientbi mirror / zebra support-downloads search page.",
+      "at": "2026-08-27T21:01:26.769Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:01:27.326Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: curl -sIL \"https://cpws.zebra.com/cpws/docs/zpl/zpl-zbi2-pm-en.pdf\" | head -20",
+      "at": "2026-08-27T21:01:28.086Z"
+    },
+    {
+      "role": "agent",
+      "text": "A newer guide exists (v1.3.2). Let me pull it.",
+      "at": "2026-08-27T21:01:28.816Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:01:30.347Z"
+    },
+    {
+      "role": "agent",
+      "text": "Early answer on the question that decides this: **https is not the problem.** A secure page is allowed to call a service running on the same machine — the rule is written about the address being called, not the page doing the calling. So the common advice that this can't work is wrong.\n\nThere is a newer snag, and it's the one that would have bitten you on a Sunday. Chrome now pops a permission prompt the first time a website tries to talk to anything on the local machine or network. On a foyer kiosk with nobody standing at it, that prompt just sits there and no nametag comes out. The fix is a single Chrome setting applied once to that machine, so it's real but small.\n\nZebra's own guide, from 2020, doesn't list the ZD421 among supported printers — the printer is newer than the document. That's being checked now and could matter on its own.\n\nThe thing I've asked them to chase hardest: Planning Center prints to that Zebra today, so whatever it needs is *already installed on that computer*. If it's Zebra's plugin, then the ticket's main fear — \"we'd have to install and babysit something in the foyer\" — mostly evaporates, because we'd inherit what's there rather than add to it. If Planning Center ships its own helper instead, we'd be adding one, which is a different and worse answer. Worth knowing before we decide.\n\nStill running. Two things I'll likely need from you once it lands: whether that printer is plugged in by USB or sitting on the church network, and what label stock it's loaded with.",
+      "at": "2026-08-27T21:01:34.709Z"
+    },
+    {
+      "role": "agent",
+      "text": "Good steers. Let me read the newer guide and check whether that Chrome policy is permanent or a temporary escape hatch.",
+      "at": "2026-08-27T21:01:40.491Z"
+    },
+    {
+      "role": "tool",
+      "text": "Read: C:\\Users\\jono1\\.claude\\projects\\C--Users-jono1-Professional-Projects-Mosaic-Project-main-worktrees-MS-317\\987e8e4d-0c27-",
+      "at": "2026-08-27T21:01:41.288Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:01:42.252Z"
+    },
+    {
+      "role": "agent",
+      "text": "Decisive finding on the ZD421. Let me save it immediately and check the policy's lifespan.",
+      "at": "2026-08-27T21:01:59.170Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:01:59.637Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:02:00.774Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:02:00.952Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cat >> \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/docs/plans/ms-317-zebra-label-printing",
+      "at": "2026-08-27T21:02:09.779Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:02:10.782Z"
+    },
+    {
+      "role": "agent",
+      "text": "# Chrome → Zebra ZD421 label printing via `window.print()`: research findings\n\n**Short answer up front:** Yes, technically doable, but \"acceptable quality and no dialog\" both have real gotchas. `@page { size: 2in 3in }` is old, well-supported CSS, but Chrome has a *long-standing, still-open* bug where the print-preview/print-dialog paper-size picker doesn't reliably follow it — so getting the *physical* label size to actually go to the printer needs either `--kiosk-printing` + a pinned default paper size policy, or you're gambling on whatever paper was last selected. The page also gets zero feedback if the label printer is out of stock or the lid is open — `window.print()` returns `undefined` and there's no error channel. And Zebra's own web-printing guide (2016, still the current one) doesn't even list \"browser → Windows driver → HTML\" as one of its supported methods; it recommends SDK/socket-based ZPL printing instead.\n\n---\n\n## 1. CSS `@page size` — syntax, support, and the paper-size mismatch bug\n\n**Spec syntax** (CSS Paged Media Module Level 3): `size: <length>{1,2} | auto | [ <page-size> || [ portrait | landscape ] ]`. Two lengths = width then height of the page box. One length = a square. https://www.w3.org/TR/css-page-3/\n\nSo `@page { size: 2in 3in; margin: 0; }` is exactly the spec-defined way to say \"2 inches wide, 3 inches tall, no margin.\"\n\n**Chrome support:** old — caniuse (backed by MDN browser-compat-data) lists the `@page size` descriptor as supported from **Chrome 15**. https://caniuse.com/mdn-css_at-rules_page_size\n\n**The catch — page box vs. printer paper size:** Chrome parses and lays out the page box correctly, but there is a long-running Chromium request, **\"Respect CSS @page property when selecting paper size\"**, asking Chrome to actually change the *paper size selected in the print dialog/print preview* to match the CSS. This exists both as the legacy Monorail bug id 238303 and its successor on the new tracker, issue 41010929 — both titles confirm the same open ask. I could not pull the full issue body (issuetracker.google.com requires a Google sign-in to render bug detail), but the bug's existence and title, and multiple independent write-ups, confirm the gap: Chrome will render your page at 2in×3in, but the print dialog's paper-size dropdown and the physical sheet Chrome asks the printer driver for can still default to something else (e.g., Letter/A4) unless the printer's own driver already exposes a matching stock size that Chrome auto-selects. https://bugs.chromium.org/p/chromium/issues/detail?id=238303 · https://issues.chromium.org/issues/41010929\n\nPractical implication for a Zebra label: this is exactly why kiosk deployments pin a paper size via policy (see §4) instead of trusting `@page size` alone to drive the printer's fed sheet size.\n\n## 2. Margins / unprintable area / headless differences\n\n- `margin: 0` on `@page` removes Chrome's own header/footer print margin — this is the CSS-level equivalent of the \"Margins: None\" option in the print dialog UI; MDN's paged-media guide documents `@page` as the mechanism for setting margins for print. https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Paged_media\n- **Headless print-to-PDF is a separate code path with its own defaults**, not just \"the same as choosing Print.\" The DevTools Protocol `Page.printToPDF` command defaults to **paperWidth 8.5in / paperHeight 11in and 1-inch margins on all sides**, regardless of what your page's `@page` rule says, unless you explicitly pass `paperWidth`/`paperHeight`/margins in the API call. https://chromedevtools.github.io/devtools-protocol/tot/Page/#method-printToPDF — and this divergence between interactive \"Print…\" and `--headless --print-to-pdf` behavior (including margin handling) is documented as a real, confusing gap by developers debugging it. (Community source, flagged UNVERIFIED for exact wording, but consistent with the DevTools Protocol default values above.) https://andre.arko.net/2025/05/25/chrome-headless-print-to-pdf/\n- For your case (interactive `window.print()`, not headless), this mostly matters as a warning: don't assume headless/CLI printing tests will reproduce dialog-based print behavior — margins and page-size defaults are handled differently in the two paths.\n\n## 3. `@media print` — hiding everything but the label\n\nStandard, well-documented MDN pattern: wrap non-label chrome in a print stylesheet or a `@media print` block and set `display: none`.\n\n```css\n@media print {\n  #header, #footer, #nav { display: none !important; }\n}\n```\nhttps://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Media_queries/Printing\n\nMDN also notes `@page` (size, margins, orientation) is the complementary at-rule for controlling the printed page itself, and that you can link a dedicated print stylesheet via `<link media=\"print\">`. Same page above.\n\n## 4. Kiosk printing flag + enterprise policies\n\n**`--kiosk-printing`** — I found the actual Chromium source definition, not just secondary write-ups:\n\n- Switch string: `\"kiosk-printing\"`\n- C++ constant: `kKioskModePrinting`\n- Chromium's own comment on it: **\"Enable automatically pressing the print button in print preview.\"**\nhttps://chromium.googlesource.com/chromium/src/+/HEAD/chrome/common/chrome_switches.cc\n\nSo mechanically: it doesn't remove the print pipeline, it auto-clicks \"Print\" inside print preview, sending the job to whatever printer print-preview currently has selected (last-used printer, unless you also force the OS-default via policy — see below). It does **not** require `--kiosk` — multiple independent reports describe it working standalone on desktop Chrome, only requiring `--kiosk` on ChromeOS/Edge kiosk-managed devices. This is corroborated by several community sources, not a primary spec doc, so treat the \"standalone works fine\" claim as UNVERIFIED at spec-grade even though it matches the source comment's behavior. https://gist.github.com/sajinct/cf4863f7b5da061b2c65c104c55a6da6\n\n**Known reliability wrinkle:** Chromium bug 169004 / issue 40959316, \"`--kiosk-printing` switch still shows a flash of the Print dialog for ~1 sec,\" documents that the dialog isn't fully suppressed — it flashes on screen briefly before auto-submitting, and search-result summaries describe this as long unowned/unresolved. Full bug text again required Google sign-in so I'm relying on secondary confirmation of the title/nature, not verified first-hand body text. https://bugs.chromium.org/p/chromium/issues/detail?id=169004 · https://issues.chromium.org/issues/40959316\n\n**Enterprise policies** (fetched via the Chromium-shared policy schema mirrored on Microsoft's Edge policy docs, since chromeenterprise.google itself is JS-rendered and returned only nav shell to automated fetch — noted as a fetch limitation, not a claim about content difference; Edge and Chrome share the same underlying Chromium policy definitions for these):\n\n- **`PrintPreviewUseSystemDefaultPrinter`** (boolean) — \"If you enable this policy, Print Preview uses the OS system default printer as the default destination choice. If you disable this policy or don't configure it, Print Preview uses the most recently used printer.\" https://chromeenterprise.google/policies/print-preview-use-system-default-printer/ (content verified via the Chromium-shared Edge policy doc: https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/printpreviewusesystemdefaultprinter)\n\n- **`DefaultPrinterSelection`** (string, JSON) — schema `{ idPattern, namePattern }` as regexes matched against printer id/name; first match wins; unset/no-match falls back to the built-in PDF printer or none. Example: `{ \"idPattern\": \".*public\", \"namePattern\": \".*Color\" }`. This is exactly the mechanism to pin a specific named Zebra queue as default. https://chromeenterprise.google/intl/en_ca/policies/default-printer-selection/ (verified: https://learn.microsoft.com/en-us/deployedge/microsoft-edge-browser-policies/defaultprinterselection)\n\n- **`PrintingPaperSizeDefault`** (dictionary) — `name` is a standard size keyword or `\"custom\"`, and if custom, `custom_size: { height, width }` **in micrometers**. Example: `{\"custom_size\": {\"height\": 297000, \"width\": 210000}, \"name\": \"custom\"}` (that example is A4; for a 2in×3in label you'd compute micrometers: 2in = 50800 µm, 3in = 76200 µm). Important caveat baked into the policy itself: **\"If the page size is unavailable on the printer chosen by the user, this policy is ignored.\"** — i.e., the Windows driver for the ZD421 has to actually expose/accept that custom size for this to take effect. https://chromeenterprise.google/intl/en_ca/policies/printing-paper-size-default/ (verified: https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/printingpapersizedefault)\n\n- **`PrinterTypeDenyList`** — I was unable to fetch its live text (same JS-render limitation) and didn't independently re-verify its schema; I'd flag any specific claim about it as unverified rather than guess. Recommend re-checking directly at https://chromeenterprise.google/policies/?policy=PrinterTypeDenyList before relying on it.\n\n**Bottom line for kiosk printing to a named Zebra:** yes — an admin can combine `DefaultPrinterSelection` (pin the ZD421 by name/id pattern) + `PrintingPaperSizeDefault` (pin the label's custom micrometer size, provided the Windows driver exposes that stock) + `--kiosk-printing` (auto-submit print preview) to get silent printing to the right printer at roughly the right size — with the flash-of-dialog caveat above, and contingent on the driver actually accepting that custom paper size (§1's bug and this policy's own caveat both point at the same weak link).\n\n## 5. What the page learns when printing fails\n\n- **`window.print()` returns `undefined`.** No promise, no callback, no status. It's also **synchronous/blocking**: JS execution pauses while the print dialog (or, under `--kiosk-printing`, print preview) is open. It throws nothing on failure. https://developer.mozilla.org/en-US/docs/Web/API/Window/print\n- **`beforeprint`/`afterprint`** are pure lifecycle hooks — \"about to print\" and \"print finished or dialog closed\" — generic `Event` objects with no payload about outcome, printer state, or errors. MDN's own guidance is to prefer `@media print` over these events where possible; they exist for content swapping, not status reporting. https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeprint_event\n- **Bluntly:** if the ZD421 is off, out of labels, or has its lid open, the web page learns nothing. The OS/driver may surface a Windows print-queue error, but nothing propagates back into JavaScript. `afterprint` fires regardless of whether the physical label actually came out. There is no standard web API for print-job/device-status feedback in this flow.\n\n## 6. Zebra's own position\n\nZebra's **Web Printing Solutions** guide (P/N unrestricted, last revised September 2016 per its own document-control table — this is still the document currently hosted at the canonical URL) enumerates six supported architectures for web-to-Zebra printing: **TCP/IP Back-End, Cloud Connect, Browser Print, Enterprise Browser, RhoMobile, URL Schema.** https://www.zebra.com/content/dam/support-dam/en/documentation/unrestricted/guide/software/web-printing-solutions.pdf\n\nNotably: **`window.print()` through the Windows print driver is not one of the six.** Every option Zebra documents routes print jobs as data (ZPL/CPCL over TCP sockets, WebLink/websocket, or the Browser Print local client app talking to Link-OS SDK) rather than through the OS print pipeline. This is a real gap in Zebra's own documentation for the driver+`window.print()` approach you're evaluating — Zebra doesn't warn about it because Zebra doesn't officially cover it in this guide at all.\n\nOn driver/rasterization behavior specifically, I could not find a primary Zebra document (driver install pages, ZD421 support page) that explicitly states \"the Windows driver rasterizes HTML output to a bitmap.\" What the primary sources do confirm:\n- The ZD421 support/driver page lists **\"Windows Printer Driver v10\"** and **\"v8\"** downloads and **Zebra Setup Utilities**, with no mention of browser/HTML printing guidance. https://www.zebra.com/us/en/support-downloads/printers/desktop/zd421.html\n- Zebra's driver-install docs for the ZD421/ZD621 cover installation mechanics only (power sequencing, ZSU wizard), not rendering pipeline internals. https://docs.zebra.com/us/en/printers/desktop/zd421-and-zd621-desktop-printers-user-guide/setup-for-windows/installing-the-windows-printer-drivers.html\n- General mechanism (not Zebra-sourced, standard Windows printing architecture knowledge, UNVERIFIED against a Zebra primary source): a GDI-class Windows printer driver for a thermal head necessarily receives a rasterized bitmap from the Windows print spooler for anything that isn't downloaded/native fonts or barcodes — the printer itself is a 1-bit-per-dot device at 203 dpi, so any anti-aliased web-rendered text gets dithered to black/white dots by the driver, which is a lossier path than native ZPL text/barcode commands sent directly. I did not find a Zebra-authored document stating this outright for the ZD421/driver-vs-ZPL comparison, so I'm flagging this whole paragraph as **UNVERIFIED against a Zebra primary source** — it's inferred from how GDI thermal drivers work generally, not confirmed in Zebra's docs.\n\n---\n\n### Net assessment against your question\n\n| Requirement | Verdict | Why |\n|---|---|---|\n| 2×3in physical page | Achievable in the render | `@page { size: 2in 3in; margin:0 }` is well-supported (Chrome 15+) |\n| That size actually reaching the printer | Fragile | Open Chromium bug on `@page` vs. paper-size-picker; needs `PrintingPaperSizeDefault` policy + driver support as a backstop |\n| No print dialog | Mostly achievable | `--kiosk-printing`, but with a documented ~1s dialog flash bug still tracked |\n| Silent default to the ZD421 specifically | Achievable via policy | `DefaultPrinterSelection` name/id pattern |\n| Failure feedback in JS | None | `window.print()`/`beforeprint`/`afterprint` carry no status |\n| Zebra's blessing for this exact architecture | Not given | Zebra's own Web Printing Solutions guide doesn't list driver+`window.print()` as a supported pattern at all |",
+      "at": "2026-08-27T21:02:14.943Z"
+    },
+    {
+      "role": "agent",
+      "text": "Now let me convert the ZD421 User Guide to text for reliable searching, and continue researching Topic B specifics.",
+      "at": "2026-08-27T21:02:19.447Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && find \"$HOME/.claude\" -iname \"webfetch-1787864349293*\" 2>/dev/null cp \"/c/Users/jono1/.claude/projects/C--User",
+      "at": "2026-08-27T21:02:22.634Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:02:23.181Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:02:23.852Z"
+    },
+    {
+      "role": "agent",
+      "text": "# Research findings\n\n## Topic 1 — Raw ZPL over TCP port 9100\n\n**What port 9100 is on Zebra printers.** Zebra's own docs confirm port 9100 is the default \"TCP raw\" port wired straight to the printer's internal ZPL print engine — you open a socket and stream ZPL bytes, no protocol handshake. Zebra explicitly separates it from the JSON/SGD status port (9200) and documents the port-selection command (`ip.port`).\n- [Default IP Ports Used by Zebra Link-OS Printers](https://support.zebra.com/article/000031643) (support.zebra.com)\n- [ip.port SGD command reference](https://docs.zebra.com/us/en/printers/software/zpl-pg/r-sgd-wireless-sgd-wireless-commands/r-sgd-wireless-ip-port.html) (docs.zebra.com)\n- [Concurrent TCP and Weblink connections to printer](https://developer.zebra.com/content/concurrent-tcp-and-weblink-connections-printer) (developer.zebra.com)\n\n**Is it authenticated?** Zebra's port-list article itself doesn't use the word \"authentication\" — it just documents the port as a raw socket. But Zebra sells a separate add-on product, PrintSecure, whose own marketing copy is explicit that its job is to give you \"tools to easily configure your printers to use secure connections... block unauthorized access\" — i.e., that protection is not there by default. [PrintSecure product page](https://www.zebra.com/ap/en/products/software/barcode-printers/link-os/printsecure.html) (zebra.com). The broader claim that port 9100/AppSocket has no authentication or encryption layer by protocol design is well established security literature, but that specific characterization is not Zebra's own wording — flag it **UNVERIFIED against a primary Zebra source**, though it is consistent with Zebra's own PrintSecure positioning.\n\n**Can Cloud Functions v2 reach it?** Yes for the \"open an arbitrary TCP socket\" part, no for \"reach a device on a home LAN.\"\n- Cloud Functions v2 / Cloud Run functions support **Direct VPC egress**, letting the function route outbound traffic (all-traffic or private-ranges-only) into a VPC network. [Configure Direct VPC egress for 2nd gen functions](https://docs.cloud.google.com/functions/docs/running/direct-vpc) (Google Cloud docs)\n- Serverless VPC Access / Direct VPC egress only gets you into **Google's own VPC and whatever is peered to it** — Cloud Interconnect, Cloud VPN, or VPC Network Peering. There is no path from a Cloud Function straight to an arbitrary device on someone's home or church-office router. [Send serverless traffic to a VPC network](https://docs.cloud.google.com/vpc/docs/serverless-vpc-access) (Google Cloud docs)\n\n**Bottom line, stated plainly:** reaching a printer sitting behind a home-grade router/NAT from Google Cloud is not realistic without first building a tunnel (Cloud VPN, a self-hosted VPN, or something like Cloudflare Tunnel/ngrok) terminating on-site. A church's internet connection almost certainly has a dynamic IP and no port forwarding configured, and even if it did, deliberately exposing an unauthenticated raw print socket to the public internet is a real security problem (this last point is general security reasoning, not a Google/Zebra doc claim, but it follows directly from the two confirmed facts above: no ingress path exists without a tunnel, and the port has no auth).\n\n## Topic 2 — WebUSB / Web Serial on Windows against a Zebra printer with the Windows driver installed\n\n**WebUSB basics.** `navigator.usb.requestDevice()` requires a secure context and (per MDN) transient user activation — it must be called from a user gesture such as a click. [USB: requestDevice() — MDN](https://developer.mozilla.org/en-US/docs/Web/API/USB/requestDevice)\n\n**The Windows driver-claiming problem — confirmed at the source.** Chrome's own \"Building a device for WebUSB\" doc states plainly: on Windows, unlike other platforms, a USB device can't be opened by a web page unless the special **WinUSB** driver is loaded for it — \"the basic requirement is that a device should not already have a driver claiming the interface the page wants to control.\" [Building a device for WebUSB — developer.chrome.com](https://developer.chrome.com/docs/capabilities/build-for-webusb)\n\nMicrosoft's own WinUSB docs describe exactly what installing WinUSB entails: either the device auto-installs as a \"WinUSB device,\" or you manually switch its driver via Device Manager, or you ship a custom INF (with a device interface GUID) that installs `Winusb.sys` **as the device's function driver** — i.e., it replaces whatever driver currently owns that interface. [WinUSB (Winusb.sys) Installation for Developers — learn.microsoft.com](https://learn.microsoft.com/en-us/windows-hardware/drivers/usbcon/winusb-installation)\n\nPutting those together: to WebUSB into a Zebra printer on Windows, you would have to replace the Zebra printer driver on that USB interface with WinUSB (Chrome's own doc mentions Zadig as the typical dev tool for this) — which means normal Windows/spooler-based printing to that device stops working. Neither Chrome's nor Microsoft's docs frame this as reversible without redoing the driver swap.\n\n**Does the ZD421 support WebUSB/WinUSB out of the box?** No indication it does. The Zebra ZD421/ZD621 USB interface page only talks about USB 2.0 plug-and-play and links out to \"Installing the Windows Printer Drivers\" — no mention of WebUSB, WinUSB, or a WebUSB platform descriptor anywhere in Zebra's docs I could find. [USB Interface — docs.zebra.com](https://docs.zebra.com/us/en/printers/desktop/zd421-and-zd621-desktop-printers-user-guide/c-zd620-420-setup/c-zt4x1-connect-the-printer-to-a-device/t-zd421-zd621-ug-connecting-your-printer-to-a-computer/r-zd620-420-usb-interface.html) — confirms your expectation that Zebra doesn't document WebUSB at all.\n\n**Web Serial.** MDN describes Web Serial as reaching devices that expose a serial port — either an actual serial port, or a USB device that emulates one (USB CDC-ACM), or Bluetooth SPP. [Web Serial API — MDN](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API) A ZD421 over its plain USB printer interface is not a CDC-ACM serial device — you'd need Zebra's optional serial port module and an actual serial cable, per Zebra's own serial-interface docs. [Serial Interface — docs.zebra.com](https://docs.zebra.com/us/en/printers/desktop/zd421-and-zd621-desktop-printers-user-guide/setup/connecting-your-printer-to-a-computer/serial-interface.html)\n\n**Browser support.** MDN's own compatibility notes for both APIs confirm Chromium-only: WebUSB works in Chrome/Edge/Opera, not Firefox, not Safari. [USB — MDN](https://developer.mozilla.org/en-US/docs/Web/API/USB) Web Serial: Chrome 89+, Edge 89+, Opera 75+, Firefox only very recently (151+); Safari unannounced. [Web Serial API — MDN](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API)\n\n## Topic 3 — Raw ZPL to a driver-installed printer, via a small Windows helper\n\n**The Win32 sequence.** Microsoft's archived KB article gives the exact call sequence and sample code: `OpenPrinter` → `StartDocPrinter` (with `DOC_INFO_1.pDatatype = \"RAW\"`) → `StartPagePrinter` → `WritePrinter` (loop) → `EndPagePrinter` → `EndDocPrinter` → `ClosePrinter`. [Send raw data to printers by using Win32 API](https://learn.microsoft.com/en-us/previous-versions/troubleshoot/windows/win32/win32-raw-data-to-printer) (learn.microsoft.com — archived but still the canonical reference). Individual function docs: [StartDocPrinter](https://learn.microsoft.com/en-us/windows/win32/printdocs/startdocprinter), [WritePrinter](https://learn.microsoft.com/en-us/windows/win32/printdocs/writeprinter).\n\n**RAW datatype bypasses driver rendering — confirmed.** Microsoft's driver docs state plainly: \"RAW data can be sent to a print monitor without further processing. The print processor just sends this data back to the spooler by calling WritePrinter\" — i.e., RAW is not rendered/transformed, it passes through untouched. [RAW Data Type — learn.microsoft.com](https://learn.microsoft.com/en-us/windows-hardware/drivers/print/raw-data-type) So no, you do not need a driver \"passthrough\" setting for the raw-spooler API route — `StartDocPrinter`/`WritePrinter` with `pDatatype=\"RAW\"` already skips rendering regardless of which driver is installed on the queue.\n\n**.NET route.** No supported managed API sends truly raw bytes — `System.Drawing.Printing` is explicitly documented as unsupported in services/ASP.NET and, since .NET 6, Windows-only ([PrintDocument class docs](https://learn.microsoft.com/en-us/dotnet/api/system.drawing.printing.printdocument?view=windowsdesktop-9.0)); it also renders via GDI rather than emitting raw bytes. Microsoft's own guidance for raw printing from managed code is P/Invoke into `winspool.drv` using the sequence above — this is stated in the community/support threads rather than a polished \"how-to\" page, so treat the specific \"P/Invoke is the standard answer\" framing as **largely UNVERIFIED against an official current MS doc** (the strongest primary evidence is that the only Microsoft-documented raw-printing path at all is the Win32 API above; there is no first-party managed wrapper for it).\n\n**Node.js / no native code route.** I could not find a Microsoft doc describing `copy /b file \\\\host\\share` or `net use LPT1: \\\\host\\share` as an endorsed programmatic printing method — the material that exists is Microsoft Q&A forum threads, not documentation pages, e.g. [Mapping LPT1 to a shared printer — Microsoft Q&A](https://learn.microsoft.com/en-us/answers/questions/2425451/mapping-lpt1-to-a-shared-printer) and [Net Use Command and Printing to text files — Microsoft Q&A archive](https://learn.microsoft.com/en-us/archive/msdn-technet-forums/161f58a8-c0d8-4119-96ee-37995443a892). **Label this whole approach UNVERIFIED / forum-only** — it is a real, commonly-used trick (map the shared printer to `LPT1:` via `net use`, then `copy /b` a raw ZPL file to it, which Windows treats as raw bytes to the print share), but it is not documented by Microsoft as a supported method, only discussed on their answers forum.\n\n**Zebra's own guidance.** Zebra's ZDesigner driver has a documented \"Passthrough Mode\" that lets ZPL/EPL/CPCL command blocks pass through the driver unchanged when explicitly enabled in driver settings ([ZebraDesigner Driver Passthrough](https://cpws.zebra.com/cpws/docs/zebradesigner/zebradesigner_driver_passthrough_mode.pdf) — Zebra doc, PDF content wasn't machine-readable via fetch but the doc exists and search results confirm its content: a driver-level \"Enable Passthrough Mode\" checkbox under Other Settings). Note this Passthrough Mode is a **driver-level** feature (relevant if you're printing \"through\" the ZDesigner driver's normal print pipeline, e.g. from an app calling the regular Windows print API with driver-specific escape commands) and is separate from the spooler's RAW datatype, which — per the Microsoft RAW-datatype doc above — bypasses the driver's processing regardless of the passthrough setting. Zebra also ships Zebra Setup Utilities with a direct-communication mode for sending files/commands straight to the printer, per Zebra's driver install/support docs. [Install Zebra Printers Using ZDesigner Windows Driver v10](https://support.zebra.com/article/000027281)\n\n**Printer status via the spooler.** `GetPrinter` with `PRINTER_INFO_2` gives a `Status` bitmask. Microsoft's reference page lists all the flags, confirming the five you asked about plus more: `PRINTER_STATUS_PAPER_OUT`, `PRINTER_STATUS_OFFLINE`, `PRINTER_STATUS_DOOR_OPEN`, `PRINTER_STATUS_ERROR`, `PRINTER_STATUS_NOT_AVAILABLE`, plus `PRINTER_STATUS_PAPER_JAM`, `PRINTER_STATUS_USER_INTERVENTION`, etc. [PRINTER_INFO_2 structure — learn.microsoft.com](https://learn.microsoft.com/en-us/windows/win32/printdocs/printer-info-2). Microsoft's docs don't make any reliability claim about this status for USB devices specifically — whether a USB Zebra actually populates these flags accurately depends on the ZDesigner driver/port monitor's own status reporting, which is not addressed in the Microsoft page. Treat \"is it reliable for a USB Zebra\" as **unanswered by primary sources** — you'd need to test it empirically or check Zebra's driver documentation, which I did not find addressing spooler status flags at all.\n\n## Topic 4 — Unattended Chrome kiosk on Windows\n\n**`--kiosk` and `--kiosk-printing`.** Chromium's own source defines the flag as `kKioskModePrinting` = `\"kiosk-printing\"`, with the code comment \"Enable automatically pressing the print button in print preview\" — i.e., it auto-clicks through Chrome's print-preview dialog straight to the default printer, rather than fully suppressing UI. [chrome_switches.cc, chromium/chromium GitHub mirror of source.chromium.org](https://github.com/chromium/chromium/blob/main/chrome/common/chrome_switches.cc) I could not get peter.sh's page to render the specific kiosk-printing row directly (page too large for the fetch tool), so treat peter.sh as unconfirmed for this specific entry — the Chromium source comment above is the stronger, authoritative source.\n\n**Chrome Enterprise printing policies** (all from chromeenterprise.google, the official policy list):\n- `PrintPreviewUseSystemDefaultPrinter` — when enabled, Chrome uses the OS default printer as the print-preview default; otherwise it uses the most-recently-used printer. [Policy page](https://chromeenterprise.google/policies/print-preview-use-system-default-printer/)\n- `DefaultPrinterSelection` — sets rules for which printer Chrome auto-selects as default, overriding normal selection logic, applied the first time a user prints. [Policy page](https://chromeenterprise.google/intl/en_ca/policies/default-printer-selection/)\n- `PrintingPaperSizeDefault` — overrides the default paper size Chrome prints with. [Policy page](https://chromeenterprise.google/intl/en_ca/policies/printing-paper-size-default/)\n\nI did not find a Chrome Enterprise policy that auto-grants WebUSB/Web Serial device permissions for a kiosk profile in this pass — worth a follow-up search if that's needed (likely candidates would be `WebUsbAllowDevicesForUrls` / `SerialAllowUsbDevicesForUrls`, but I have not confirmed these against chromeenterprise.google, so don't treat that guess as verified).\n\n**Launching into kiosk mode unattended on Windows.** Microsoft's Assigned Access docs describe two supported kiosk shapes on Windows 11 — single-app (including a Microsoft Edge-based kiosk) and multi-app — configured via Windows' own Assigned Access feature. [Assigned Access Overview](https://learn.microsoft.com/en-us/windows/configuration/assigned-access/) / [Configure a Single-App Kiosk](https://learn.microsoft.com/en-us/windows/configuration/assigned-access/configure-single-app-kiosk). That's Microsoft's first-party kiosk mechanism, but it's built around Edge, not Chrome. For **Chrome** specifically, the standard pattern (autologon into a dedicated Windows account + a `chrome.exe --kiosk <url>` shortcut placed in the Startup folder) is not documented by Microsoft or Google as an official method — it's the consistent community/support-forum recipe. **Label the Chrome-on-Windows autostart mechanism as UNVERIFIED / forum-only** — I did not find it on learn.microsoft.com or a Google-first-party support page; if you need an authoritative source for it, Google's Chrome Enterprise kiosk docs (a different page than the ones fetched here) may cover it but I did not locate and confirm one in this pass.\n\n---\nEverything above with an UNVERIFIED / forum-only label is exactly that — real-world practice with search corroboration, but not something I could pin to a page owned by Microsoft, Google, or Zebra.",
+      "at": "2026-08-27T21:02:30.144Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cat >> \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/docs/plans/ms-317-zebra-label-printing",
+      "at": "2026-08-27T21:02:32.734Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:02:36.173Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:02:37.309Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:02:37.569Z"
+    },
+    {
+      "role": "agent",
+      "text": "Two agents back. Let me write those sections while the other two finish.",
+      "at": "2026-08-27T21:02:37.807Z"
+    },
+    {
+      "role": "agent",
+      "text": "Here is what Planning Center's own documentation (help.planningcenter.com, plus their changelog/blog at planningcenter.com) says about Check-Ins label printing on Zebra hardware. Everything below is sourced from Planning Center's own site unless marked UNVERIFIED.\n\n## 1. Supported printers — is Zebra named, and which models?\n\nYes. Planning Center's own setup page lists specific Zebra models in a compatibility table.\n\n- **Compatible with desktop (USB):** GX420d, GK420d, GK420t, ZD420, ZD421d/421t, ZT420, ZD420/421, ZD620/621\n- **Compatible with iOS:** ZD420, ZQ620, ZQ630, ZD420/421, ZD620/621\n- **Compatible with Android:** ZD421d/421t, ZQ510, ZQ320, ZD420/421, ZD620/621\n- **Explicitly \"Not compatible\":** LP2844Z, ZSB series\n- **ZD410 and ZD411 do not appear anywhere on the page** — neither listed as supported nor called out as unsupported. They're simply absent from Planning Center's compatibility table.\n- Note on Mac: \"Zebra does not provide a driver for... macOS,\" so PC has users use the CUPS-based \"Zebra ZPL Label Printer\" driver, and warns print quality on Mac won't match Windows.\n\nSource: [Set up a Zebra printer](https://help.planningcenter.com/en/138282-set-up-a-zebra-printer.html)\n\nZebra is one of four supported brands overall (Zebra, Dymo, Brother, Citizen); Zebra is described as the fastest of the four.\nSource: [Software and hardware for Check-Ins](https://help.planningcenter.com/en/138283-software-and-hardware-for-check-ins.html)\n\n## 2. HOW printing actually happens — every path documented\n\n**Not Zebra Browser Print.** No page found anywhere on help.planningcenter.com, planningcenter.com/blog, or the pcocheck-ins Zendesk mentions \"Browser Print.\" Instead, Planning Center built and ships its **own** local helper:\n\n- \"Planning Center doesn't have direct access to your computer's hardware. To gain access, the Check-Ins app includes the **Check-Ins printing app**, which works as a widget that translates Planning Center code to the printer.\" — [Set up a Zebra printer](https://help.planningcenter.com/en/138282-set-up-a-zebra-printer.html)\n- Confirming this is a real local service: the external-sites doc lists **localhost** as a required dependency — \"Some ports are required for Check-Ins to connect to the user's computer\" — naming ports **8181, 8282, 8383, or 8484 for the Printing App**. Source: [External sites needed for Check-Ins](https://help.planningcenter.com/en/138284-external-sites-needed-for-check-ins.html). This is architecturally the same shape as Zebra Browser Print (local service + web page talking to localhost), but it is Planning Center's proprietary \"Printing App,\" not Zebra's product.\n\n**History — they used to be browser-based, and moved away from it:**\n- 2017: \"One of the greatest pain points... has been when a browser, such as Google Chrome, has updated itself over the weekend. This sometimes has broken the needed ties between your printer and your browser, which breaks any printing abilities, and effectively breaks Check-Ins.\" In response they shipped \"an installable app made for each platform\" — download and install Check-Ins \"built specifically for that device.\" Source: [Check-Ins for Mac and Windows](https://www.planningcenter.com/blog/2017/10/check-ins-for-mac-windows)\n- 2019: \"Direct Printing\" — \"By building the printing process into the Check-Ins application, we can control the entire printing process—from the time you open a station to when a label is created and sent to the printer,\" explicitly to decrease \"reliance on external printer software.\" Source: [Direct Printing for Check-Ins](https://www.planningcenter.com/blog/2019/03/direct-printing-for-check-ins)\n\n**Desktop/Mac/Windows:** Yes, a downloadable native app (not browser-only today). USB is called \"the most reliable setup.\" Source: [Software and hardware for Check-Ins](https://help.planningcenter.com/en/138283-software-and-hardware-for-check-ins.html)\n\n**Network printer via IP address:** Confirmed. Mobile setup offers \"Printer Setup\" with automatic discovery or \"Set Manually\" by entering the printer's IP address, then tapping Search. Source: [Set up a Zebra printer](https://help.planningcenter.com/en/138282-set-up-a-zebra-printer.html). Planning Center does not use the phrase \"port 9100\" anywhere found — they only describe entering an IP address, not the raw-socket protocol underneath.\n\n**iPad/iOS and Android:** Yes — native Check-Ins mobile apps connect to Zebra printers over Bluetooth, Wi-Fi, or manual IP entry. Source: [Set up a Zebra printer](https://help.planningcenter.com/en/138282-set-up-a-zebra-printer.html); [Software and hardware for Check-Ins](https://help.planningcenter.com/en/138283-software-and-hardware-for-check-ins.html)\n\n## 3. Do they print ZPL directly / let churches design labels?\n\nChurches can build custom labels through a **visual drag-and-drop label editor** (\"select and drag to create a box to open all available block types\" — Person details, Check-in details, Text, Security code, Image, Barcode blocks), not by writing ZPL. No ZPL authoring or code editing is exposed to users. The only ZPL reference on their docs is the name of the macOS print **driver** to select (\"Zebra ZPL Label Printer\") — that's a driver-selection instruction, not a label-design language. Sources: [Create custom labels](https://help.planningcenter.com/en/138206-create-custom-labels.html), [Set up a Zebra printer](https://help.planningcenter.com/en/138282-set-up-a-zebra-printer.html)\n\n## 4. The security code\n\n- \"Every check-in is assigned a randomized alpha-numeric tag for each check-in time. This security code will never be the same again for that person.\" Exact character count is not stated in any page found.\n- It is printed as **both text and a barcode**: the default Security Label \"includes the current date and time, the security code, and a barcode for scanning at a manned or roster station.\"\n- It can be **either scanned or read by eye**: \"Scan that code to check out the people associated with that check-in,\" and alternatively staff can \"type the security code in the search bar on a manned station.\"\n- Visitors checked in with an existing family \"share a security code with the household,\" so the same matching-label mechanism applies to them.\n\nSources: [Checking out](https://help.planningcenter.com/en/138321-checking-out.html), [Check in visitors](https://help.planningcenter.com/en/138322-check-in-visitors.html)\n\n## 5. Printer errors — status reporting and troubleshooting\n\n- **Desktop:** A \"Printer Check\" screen inside Kiosk mode, opened with **Ctrl+2** (Windows) / **Cmd+2** (Mac), with dropdowns for Printer and Label Type and a \"Send Test Print\" button — used when switching printers/labels or diagnosing issues. Source: [Set up a Zebra printer](https://help.planningcenter.com/en/138282-set-up-a-zebra-printer.html)\n- **Mobile:** The printer settings page has a \"Troubleshoot\" button opening a troubleshooting wizard, and app permissions (camera, local network for Wi-Fi, Bluetooth) are called out as common causes of connection failure.\n- Zebra-specific basic troubleshooting on the same page: confirm \"Zebra\" appears in the printer's name in the computer's printer settings, keep apps updated, restart the computer, and power-cycle the printer (unplug 10 seconds).\n- I could not verify, on a primary Planning Center page I fetched directly, an explicit statement of a colored (green/red) printer-status indicator — search results pointed to this existing in the Check-Ins mobile app changelog, but I was not able to load that changelog page's exact text directly, so treat the \"green when connected, red when disconnected\" detail as **UNVERIFIED** (found via search snippet only, not confirmed on the primary page itself).\n\n## 6. Network requirements\n\n- \"It's best if the Check-Ins devices are given priority on a **closed, managed network**\" and kept \"in close proximity to access points/routers.\" Source: [Software and hardware for Check-Ins](https://help.planningcenter.com/en/138283-software-and-hardware-for-check-ins.html)\n- Recommends separating 2.4GHz/5GHz onto distinct SSIDs, and putting stations/printers \"on their own VLAN\" for Wi-Fi stability (this appeared consistently across search results citing the same help page).\n- USB-wired printer on a computer station is called \"the most reliable setup\" — Wi-Fi is explicitly the weakest connection type.\n- **No explicit \"same subnet\" requirement statement** was found on any primary page — it's implied by IP-address discovery/search working over the local network, but Planning Center does not spell out a subnet rule in the text I could retrieve.\n- **No explicit \"static IP required\" statement** either — the closest is a practical tip: label the bottom of the printer with its IP address so staff can identify it if moved, which implies IPs can be church-managed but doesn't mandate static addressing.\n- For locked-down church networks, Planning Center documents a **required external-site allowlist**: `*.planningcenteronline.com`, `ws.pusherapp.com` (live updates / station-online detection), `*.cloudfront.net`, `*.amazonaws.com`, `*.typekit.net`, `www.google-analytics.com`, `fonts.googleapis.com`, plus optional `www.dymo.com` / `www.zebra.com` (driver downloads) and **localhost ports 8181/8282/8383/8484** for the local Printing App. Source: [External sites needed for Check-Ins](https://help.planningcenter.com/en/138284-external-sites-needed-for-check-ins.html)\n\n## Bottom line for your prototype question\n\nPlanning Center does **not** use Zebra's Browser Print product. They build and ship their own local \"Printing App\" (a localhost service on fixed ports that a browser-based or native station app talks to), reachable by USB, Bluetooth, or LAN/IP for networked printers — and they moved to this specifically after years of a plain browser-based approach breaking on browser updates. If MS-317's prototype is testing \"print from the kiosk browser to a Zebra thermal printer,\" Planning Center's own history is a caution: they tried pure browser printing first and abandoned it for a bundled local helper app for reliability reasons.",
+      "at": "2026-08-27T21:02:47.393Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:02:50.084Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:02:51.721Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:02:53.377Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:02:53.992Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp cp \"/c/Users/jono1/.claude/projects/C--Users-jono1-Professional-Projects-Mosaic-Project-main-worktrees-MS-317/98",
+      "at": "2026-08-27T21:03:03.185Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:03:03.737Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && cat zd421-specsheet.txt",
+      "at": "2026-08-27T21:03:13.431Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cat >> \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/docs/plans/ms-317-zebra-label-printing",
+      "at": "2026-08-27T21:03:13.850Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:03:14.082Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: curl -sL \"https://docs.zebra.com/us/en/printers/software/zpl-pg/r-sgd-wireless-sgd-wireless-commands/r-sgd-wireless-ip-p",
+      "at": "2026-08-27T21:03:34.518Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:03:35.076Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:03:35.452Z"
+    },
+    {
+      "role": "agent",
+      "text": "Good, the ip.port SGD page has \"9100\" 5 times. Let me pull the surrounding text properly.",
+      "at": "2026-08-27T21:03:44.983Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && python3 -c \" import re html = open('ipport.html', encoding='utf-8', errors='ignore').read() # strip tags crud",
+      "at": "2026-08-27T21:03:45.665Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && sed -e 's/<[^>]*>/ /g' ipport.html | tr -s ' \\t' ' ' | grep -o '.\\{200\\}9100.\\{100\\}' | head -5",
+      "at": "2026-08-27T21:03:49.857Z"
+    },
+    {
+      "role": "agent",
+      "text": "Big finding — it reverses the assumption. Let me capture it.",
+      "at": "2026-08-27T21:03:50.418Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && sed -e 's/<[^>]*>/ /g' ipport.html > ipport_stripped.txt tr -s ' \\t\\n\\r' ' ' < ipport_stripped.txt > ipport_o",
+      "at": "2026-08-27T21:03:53.458Z"
+    },
+    {
+      "role": "agent",
+      "text": "This confirms `ip.port` SGD default = 9100, used for normal TCP host communications. Let's grab a bit more context (the description above the Setvar part) and check for ZPL/EPL/SGD mentions.",
+      "at": "2026-08-27T21:03:56.576Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -o '.\\{400\\}Normal TCP communications' ipport_oneline.txt | head -1",
+      "at": "2026-08-27T21:03:56.799Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:04:00.812Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n -i \"link-os\\|firmware version\\|V[0-9][0-9]\\.[0-9][0-9]\" zd421-guide.txt | head -20",
+      "at": "2026-08-27T21:04:01.792Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n -i \"part number\\|model number\\|nomenclature\\|ZD4A\" zd421-guide.txt | head -20",
+      "at": "2026-08-27T21:04:12.119Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && sed -n '656,800p' zd421-guide.txt",
+      "at": "2026-08-27T21:04:12.706Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cat >> \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/docs/plans/ms-317-zebra-label-printing",
+      "at": "2026-08-27T21:04:14.539Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && head -100 browserprint-guide.txt",
+      "at": "2026-08-27T21:04:22.655Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && grep -n -i \"version\\|revision\\|ZD421\\|ZD410\\|ZD420\\|supported printer\\|date\" browserprint-guide.txt | head -4",
+      "at": "2026-08-27T21:04:23.186Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:04:23.716Z"
+    },
+    {
+      "role": "agent",
+      "text": "This confirms the v1.3 user guide (dated Jan 2020, matching what the user already knew) does NOT list ZD421. Let's check the full supported-printer table and changelog for the highest listed version.",
+      "at": "2026-08-27T21:04:25.626Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && sed -n '230,337p' browserprint-guide.txt",
+      "at": "2026-08-27T21:04:25.633Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: curl -sL \"https://www.zebra.com/us/en/support-downloads/software/printer-software/browser-print.html\" -A \"Mozilla/5.0\" -",
+      "at": "2026-08-27T21:04:34.516Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:04:34.952Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: sed -e 's/<[^>]*>/ /g' /tmp/bp_support.html | tr -s ' \\t\\n\\r' ' ' | grep -o '.\\{50\\}[Bb]rowser [Pp]rint.\\{100\\}' | head ",
+      "at": "2026-08-27T21:04:45.345Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: curl -sL \"https://developer.zebra.com/products/printers/browser-print\" -A \"Mozilla/5.0\" -o /tmp/bp_dev.html wc -l /tmp/b",
+      "at": "2026-08-27T21:04:46.468Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cat >> \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/docs/plans/ms-317-zebra-label-printing",
+      "at": "2026-08-27T21:04:52.092Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:04:57.504Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:04:57.632Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:05:09.453Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:05:10.291Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:05:28.503Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebFetch",
+      "at": "2026-08-27T21:05:29.815Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp cp \"/c/Users/jono1/.claude/projects/C--Users-jono1-Professional-Projects-Mosaic-Project-main-worktrees-MS-317/98",
+      "at": "2026-08-27T21:05:36.952Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && sed -n '1,20p;120,200p' bp-android-guide.txt",
+      "at": "2026-08-27T21:05:43.293Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cat >> \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/docs/plans/ms-317-zebra-label-printing",
+      "at": "2026-08-27T21:05:47.085Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:05:50.538Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: curl -sL -o /tmp/bp_windows_v132.pdf \"https://www.zebra.com/content/dam/zebra_new_ia/en-us/solutions-verticals/product/S",
+      "at": "2026-08-27T21:05:52.436Z"
+    },
+    {
+      "role": "agent",
+      "text": "Heredoc choked on a quote. Let me write it as a file instead.",
+      "at": "2026-08-27T21:05:54.828Z"
+    },
+    {
+      "role": "agent",
+      "text": "Found the exact Windows/Mac v1.3.2 guide directly. Let me pull the text from both to confirm.",
+      "at": "2026-08-27T21:05:57.195Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && pdftotext -layout bp_windows_v132.pdf bp_windows_v132.txt grep -n -i \"version\\|date\\|ZD421\\|ZD400\\|supported\\",
+      "at": "2026-08-27T21:05:58.049Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && sed -n '130,145p' bp_windows_v132.txt",
+      "at": "2026-08-27T21:06:05.891Z"
+    },
+    {
+      "role": "tool",
+      "text": "WebSearch",
+      "at": "2026-08-27T21:06:06.323Z"
+    },
+    {
+      "role": "agent",
+      "text": "Confirmed: Zebra's own product page URL `zebra.com/us/en/products/printers/desktop/zd400-series/zd421.html` places the ZD421 directly under the ZD400 Series family, which matches the Browser Print v1.3.2 compatibility table's \"ZD400 Series\" entry. I now have everything needed for both topics. Let me compile the final report.",
+      "at": "2026-08-27T21:06:17.290Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd /tmp && sed -n '11930,11960p' zpl-guide.txt | head -5 echo \"---check MN offset dpi note already captured---\" grep -n ",
+      "at": "2026-08-27T21:06:18.784Z"
+    },
+    {
+      "role": "tool",
+      "text": "Write: C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\docs\\plans\\_frag.md",
+      "at": "2026-08-27T21:06:31.810Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/docs/plans\" && cat _frag.md >> ms-317-zebr",
+      "at": "2026-08-27T21:06:34.785Z"
+    },
+    {
+      "role": "agent",
+      "text": "Now the recommendation. Let me draft it and prepend it to the doc.",
+      "at": "2026-08-27T21:07:02.856Z"
+    },
+    {
+      "role": "tool",
+      "text": "Write: C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\docs\\plans\\_head.md",
+      "at": "2026-08-27T21:07:25.720Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/docs/plans\" && sed -n '1,12p' ms-317-zebra",
+      "at": "2026-08-27T21:07:29.579Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/docs/plans\" && tail -n +9 ms-317-zebra-lab",
+      "at": "2026-08-27T21:07:34.275Z"
+    },
+    {
+      "role": "agent",
+      "text": "Let me write the spike and open questions while the ZPL agent finishes.",
+      "at": "2026-08-27T21:07:40.093Z"
+    },
+    {
+      "role": "agent",
+      "text": "# ZPL / Zebra ZD421 Research — Primary Sources Only\n\n## TOPIC A — ZPL Basics for a Nametag Label\n\n**Source used:** *Programming Guide for ZPL II, ZBI 2, Set-Get-Do, Mirror, WML*, part number P1099958-001, dated 1/31/18 — served from Zebra's own document host, https://cpws.zebra.com/cpws/docs/zpl/zpl-zbi2-pm-en.pdf (confirmed Zebra-owned server via response headers: `X-Served-By`/cert chain resolve to zebra.com infrastructure). Zebra's newer public URL for this same guide 404s as of today, so this Zebra-hosted mirror is the primary copy I could retrieve in full; page numbers below are the guide's own internal page numbers (\"ZPL Commands NN\").\n\n### `^XA` … `^XZ` — label format wrapper\n- `^XA` = **Start Format**, the opening bracket for a label (ZPL Commands p.339). Can be sent as raw ASCII STX (0x02).\n- `^XZ` = **End Format** (p.344). When the printer receives `^XZ`, the label actually prints. Can be sent as raw ASCII ETX (0x03).\n- Every label must start with `^XA` and end with `^XZ` to be valid.\n\n### `^FO` — Field Origin\nFormat: `^FOx,y,z` (p.176-177). x/y = 0 to 32000 dots, position of the **upper-left corner** of the field, measured from the `^LH` label-home point. z = justification (0 left / 1 right / 2 auto — firmware V60.14.x+ only). Units are always **dots**, not inches or mm.\n\n### Fonts — `^A`, `^A@`, `^CF`\n- `^CF f,h,w` (p.131) — sets the **default** font/height/width (dots) for every subsequent alphanumeric field until changed. Default font A, default height 9, default width = last permanent value.\n- `^A f,o,h,w` (p.42-43) — sets font for the *next* `^FD` only, one-shot. f = font letter/number (A-Z, 0-9), o = orientation (N/R/I/B), h/w = height/width in dots (scalable fonts: 10–32000; bitmap fonts: multiples of base size).\n- `^A@ o,h,w,d:f.x` (p.44) — same idea but calls a font by its **file name** (e.g. `E:SWISS721.TTF`) instead of a single-letter designator.\n\n### `^FD` / `^FS` — data and terminator\n- `^FD a` (p.167) — the literal data string for the current field, up to 3072 bytes.\n- `^FS` (p.179) — **Field Separator**, ends a field definition. Can be sent as ASCII SI (0x0F).\n\n### `^FB` / `^FW`\n- `^FB a,b,c,d,e` (p.163-164) — **Field Block**: wraps/word-wraps `^FD` text into a box. a = block width in dots, b = max lines, c = inter-line spacing, d = justification (L/C/R/J), e = hanging indent of wrapped lines. Auto-hyphenates.\n- `^FW r,z` (p.183-184) — **Field Orientation**: sets the *default* rotation (N/R/I/B) and justification for fields that don't specify their own. Persists until changed or power-off.\n\n### Barcodes — `^BC`, `^BQ`, `^BY`\n- `^BY w,r,h` (p.126-127) — sets barcode **module width** (1-10 dots, default 2), **wide:narrow ratio** (2.0-3.0, 0.1 steps, fixed-ratio codes ignore this), and **height** (default 10 dots). Stays active until reissued.\n- `^BC o,h,f,g,e,m` (p.76-78) — **Code 128**. o=orientation, h=height (dots), f=print interpretation (human-readable) line Y/N, g=that line above the code Y/N, e=UCC check digit Y/N, m=mode (N/U/A/D — \"A\" = automatic subset selection). Data comes from `^FD`, width-limited to the label.\n- `^BQ a,b,c,d,e` (p.106-108) — **QR Code**. a=orientation, b=model (1 or 2, 2 recommended), c=magnification 1-10 (default scales with dpi: 2 @ 203dpi, 3 @ 300dpi), d=error correction (H/Q/M/L, default Q), e=mask 0-7. Data is passed through `^FD` using QR \"switch\" syntax (`^FDQA,text^FS` etc.).\n\n**Which is better for a 4-character security code?** `^BC` (Code 128). It's a 1‑D linear symbology cheap laser/CCD scanners at a check-in desk read reliably, it's compact for a 4-character alphanumeric string, and — critically — `^BC`'s `f` parameter gives you an automatic **human-readable line under the bars** for free, so a volunteer can eyeball-match the code without a scanner. `^BQ` (QR) needs a camera-class imager, has no built-in human-readable text, and is overkill for 4 characters — it's meant for URLs/larger payloads.\n\n### Label geometry & media commands\n- `^LL y` (p.264-265) — **Label Length** in dots. Needed for continuous media. Formula given in the guide: inches × dots-per-inch = y (203.2 dots/in at 8 dots/mm).\n- `^PW a` (p.304) — **Print Width** in dots.\n- `^LH x,y` (p.263) — **Label Home**, the origin point all `^FO` coordinates are relative to. Must come before the first `^FS`.\n- `^MN a,b` (p.277-278) — **Media Tracking**: N=continuous, Y/W=web (gap) sensing, M=black-mark sensing, A=auto-detect, V=continuous variable-length.\n- `^MD a` (p.271-272) and `~SD ##` (p.307) — **Media Darkness**. `^MD` is a relative adjustment (-30 to 30) to the current darkness; `~SD` sets an absolute two-digit value (00-30); the guide states the `~SD` value is *added to* the `^MD` value.\n- `^PR p,s,b` (p.301-302) — **Print Rate**: print speed / slew speed / backfeed speed, values 1-14 mapping to 25.4–304.8 mm/sec depending on model.\n- `^PQ q,p,r,o,e` (p.299-300) — **Print Quantity**: q=total labels, p=pause-after-count, r=serial-number replicates, o=override pause (Y/N), e=cut-on-error-label.\n\n### Status & error queries\n- `~HS` (p.207-210) — **Host Status Return**. Sends three `<STX>…<ETX><CR><LF>` strings back. String 1 field `b` = paper-out flag, field `c` = pause flag. String 2 field `o` = head-up / ribbon-out flag (dual use), field `p` = thermal-transfer-mode flag. **Important caveat directly from the guide**: *\"When a `~HS` command is sent the printer will not send a response to the host if the printer is in one of these conditions: MEDIA OUT, RIBBON OUT, HEAD OPEN, REWINDER FULL, HEAD OVER-TEMPERATURE.\"* — i.e. `~HS` can go silent exactly when you need it most.\n- `~HQES` (p.201-204, Tables 14-15) — **Host Query, Error Status**. Response format:\n  ```\n  PRINTER STATUS\n  ERRORS:   1 00000000 0000000B\n  WARNINGS: 0 00000000 00000000\n  ```\n  Each response line is `<flag> <nibbles 16-9> <nibbles 8-1>`; the last hex digit(s) are bitmasks: **Media Out = 1, Ribbon Out = 2, Head Open = 4, Cutter Fault = 8** (all in nibble 1, additive — e.g. `B` = 8+2+1 = cutter fault + ribbon out + media out simultaneously). \"Paused\" is a *warning* flag, not in this error table, and only listed for the KR403 model — general pause state is read via `~HS` string 1's `c` flag instead. `~HQ` also supports `HA` (network hardware address), `JT` (printhead test), `MA`/`MI` (maintenance), `OD` (odometer), `PH` (printhead history), `PP`, `SN`, `UI`.\n- `^HH` (p.198) — **Configuration Label Return**: echoes the full printer configuration back over the same port as readable text (what you'd get on a printed config label), triggered as `^XA^HH^XZ`.\n\n### Save/calibrate\n- `^JUS` — I could not find a *standalone* `^JUS` command page; in this guide it is documented as the `S` parameter of `^JU` (**Configuration Update**, p.249-250): `^JUa` where a = F(reload factory)/N(reload factory network)/R(recall last saved)/S(**save current settings**). `^XA^JUS^XZ` is the idiom used throughout the guide to persist changes (e.g. after `^CM`, `^JH`, Communications Mode changes) across power-off.\n- `~JC` (p.226-227) — **Set Media Sensor Calibration**: forces a label-length measurement and re-adjusts media/ribbon sensor values. No parameters. Note: there is no separate `^JC` (caret) command in this guide — only `~JC` (tilde) exists.\n\n### Ready-to-send example — 2.25\" × 1.25\" direct-thermal nametag, 203 dpi\n\n2.25″ × 1.25″ is the more standard size here — it's a real Zebra-branded SKU sold specifically as a desktop-printer label (**Zebra Z-Select 4000D, 800322-125**, staples.com/barcodefactory.com listings), commonly used for badges/nametags, versus 2″×3″ which is Zebra's general shipping/product-label size. At 203 dpi (8 dots/mm): 2.25 in × 203 = 456 dots wide; 1.25 in × 203 = 254 dots tall.\n\n```zpl\n^XA\n^PW456\n^LL254\n^LH0,0\n^MNY\n^MD0\n^CF0,30\n\n^FO20,10^A0N,70,65^FDEMMA^FS\n^FO20,88^A0N,32,30^FDJOHNSON^FS\n^FO20,128^A0N,24,22^FDRoom 12 - Ducklings^FS\n\n^BY2,3,45\n^FO20,158^BCN,45,Y,N,N\n^FD7X3K^FS\n\n^PQ1\n^XZ\n```\nEvery coordinate stays inside the 456×254 dot canvas with margin to spare (barcode + human-readable line ends around dot 228, leaving ~26 dots / 0.13\" bottom margin). If a room/class name might run long, wrap the third field in `^FB416,1,,C^FS`-style block instead of plain `^FO`/`^A` (per `^FB`, p.163).\n\n---\n\n## TOPIC B — Zebra ZD421 Specifics\n\n**Sources:** Zebra ZD421 Technical Specifications PDF (dated 03/12/2021), https://www.zebra.com/content/dam/zebra_dam/en/tech-specs/zd421-tech-specs-en-us.pdf; Zebra's live docs site, https://docs.zebra.com/us/en/printers/desktop/zd421-and-zd621-desktop-printers-user-guide/...; the ZD421/ZD621 User Guide PDF (P1123730-06EN Rev A, dated 2025/09/30), https://www.zebra.com/content/dam/support-dam/en/documentation/unrestricted/guide/product/zd421-zd621-ug-en.pdf; Zebra's SGD command reference, https://docs.zebra.com/us/en/printers/software/zpl-pg/r-sgd-wireless-sgd-wireless-commands/r-sgd-wireless-ip-port.html; Browser Print User Guide v1.3 (Jan 2020) and v1.3.2 (Feb 2023), both hosted at zebra.com.\n\n### Connectivity per SKU\n- **Standard on every ZD421**: USB 2.0 and USB Host — confirmed in the \"Standard Features\" block of the tech-specs PDF: *\"Connectivity: USB 2.0, USB Host\"*.\n- **Ethernet is never standard** — it always appears under the spec sheet's separate \"Connectivity Options\" heading: *\"Field-installable 10/100 Ethernet\"*, and the User Guide repeats this for the ZD421 specifically: *\"ZD421 Field installable connectivity modules: Internal Ethernet Print Server (LAN, RJ-45 connector)... Serial (RS-232 DB-9) Port\"* (contrast with the ZD621, which does ship with Ethernet+Serial built in).\n- Also field/factory-installable: RS-232 serial, and wireless — either \"Wi-Fi (802.11ac...), Bluetooth Classic 4.1, and Bluetooth Low Energy (LE) 5.0\" or a newer \"Wi-Fi (802.11ax...), Bluetooth 5.3\" radio option, per the User Guide's printer-options section.\n- **Model numbers**: real SKUs seen in reseller listings follow the pattern `ZD4A0nn-xxxxxxEZ` (e.g. `ZD4A042-D01E00EZ`, `ZD4A042-301E00EZ`), where the `ZD4A0` prefix marks the 4-inch ZD421 family and the digit block after the dash encodes resolution/ribbon-type/connectivity. I could **not find a Zebra-published decoder table** for this string in the primary sources checked (spec sheet, user guide, support page) — treat any letter-by-letter breakdown as **UNVERIFIED** (it's reseller-inferred, e.g. barcodesinc.com/connection.com listings, not a Zebra document).\n\n### Direct thermal vs. thermal transfer vs. cartridge\nConfirmed by the tech-specs PDF's own naming: **ZD421d** = direct thermal, **ZD421t** = thermal transfer (ribbon roll), **ZD421c** = ribbon-cartridge model (uses Zebra's snap-in cartridge, described as \"the only thermal printer to offer a ribbon cartridge that takes just a few seconds to load\", per Zebra's ZD400-series product page, https://www.zebra.com/us/en/products/printers/desktop/zd400-series/zd421.html).\n\n### 203 dpi vs. 300 dpi\nBoth are real, purchasable resolutions (tech-specs PDF, \"Optional Features: 300 dpi print resolution (12 dots per mm)\" vs. standard 203 dpi/8 dots per mm). **`^FO` dot coordinates and font-height/width values do NOT auto-scale between resolutions** — the guide's own `^LH`/`^LL` documentation gives *different* dots-per-inch conversion factors per printhead density (152.4 dots/in @ 6 dots/mm, 203.2 @ 8 dots/mm, 304.8 @ 12 dots/mm, 609.6 @ 24 dots/mm — ZPL II Guide p.264-265). A label built in dots for 203 dpi will physically print ~1.5× smaller if sent unchanged to a 300 dpi head. I found **no `^JM` or other ZPL command in this guide that auto-rescales a format between resolutions**; the guide instead expects you to recompute coordinates using the dots-per-inch table above, or design in real-world units and multiply by the target dpi yourself. (I did not find a primary Zebra source describing `^JM` — that command name does not appear in this programming guide at all; treat any claim about a `^JM` dpi-switch command as **UNVERIFIED** until seen in an actual Zebra doc.)\n\n### Max print width & media\nPer the ZD421 tech-specs PDF and matching current docs.zebra.com specs page:\n- Max print width: **104 mm (4.09 in.)** general figure in the 2021 spec sheet table; the live docs.zebra.com page gives per-model figures — **108 mm DT**, **112 mm TT**, **118 mm cartridge**.\n- Max media roll OD: **127 mm (5.0 in.)**. Core ID standard **12.7 mm (0.5 in.) or 25.4 mm (1 in.)**; with adapter kit, 38.1/50.8/76.2 mm (1.5/2/3 in.).\n- Max print length: **991 mm (39 in.)**; min print length depends on cut/peel mode (6.4–12.7 mm).\n\n### Link-OS, SGD, and port 9100\n- ZD421 runs **Link-OS**, ZPL II and EPL2 both, plus SGD (Set/Get/Do) — explicit in the tech-specs PDF (\"Set-Get-Do commands to set and get printer configuration details\") and the User Guide.\n- **Port 9100 raw TCP is confirmed by Zebra's own SGD reference**: the `ip.port` command's page states *\"This printer setting refers to the port number that the TCP print service is listening on. Normal TCP communications from the host should be directed to this port... Default '9100'.\"* — https://docs.zebra.com/us/en/printers/software/zpl-pg/r-sgd-wireless-sgd-wireless-commands/r-sgd-wireless-ip-port.html. The Browser Print Windows/Mac User Guide independently corroborates this from the client side: *\"Browser Print cannot run when any other program is using the device's 9100 or 9101 ports. These ports are used for RAW printing.\"*\n\n### Zebra Browser Print support for ZD421\nThis is the most useful finding. The **v1.3 User Guide** (dated Jan 2020, https://www.zebra.com/content/dam/zebra_new_ia/en-us/solutions-verticals/product/Software/Printer%20Software/Link-OS/browser-print/zebra-browser-print-user-guide-v1-3-en-us.pdf) confirms your premise: its \"Bi-directional Communications\" compatibility row lists individual model numbers — ZD410, ZD420, ZD500, ZD500R, ZD620, ZQ610, ZQ520, ZQ620, ZT220, ZT410, GX420d, KR403, QLn220, QLn320, TLP2824+ — **no ZD421** (unsurprising: ZD421 launched after this table was last written for these specific names).\n\nBut there **is a newer release**: **Browser Print v1.3.2**, guide revision dated **February 2023** (Windows/Mac) — https://www.zebra.com/content/dam/zebra_dam/en/guide/portfolio/zebra-browser-print-user-guide-v1-3-2-en-us.pdf — and a parallel **Android edition also at v1.3.2, dated March 2023**. In this updated guide, Zebra rewrote the \"Bi-directional Communications\" table to list **printer *series*, not individual models**:\n> `ZT200 Series; ZT400 Series; ZT500 Series; ZT600 Series; ZD400 Series; ZD500 Series; ZD600 Series; ZQ300 Series; ZQ500 Series; ZQ600 Series; ZQ300 Plus Series; ZQ600 Plus Series; QLn Series; IMZ Series; ZR Series; G-Series; LP/TLP2824-Z; LP/TLP2844-Z; LP/TLP3844-Z`\n\nThe ZD421 sits in the **\"ZD400 Series\"** on Zebra's own product taxonomy (its own product-family URL is literally `zebra.com/us/en/products/printers/desktop/zd400-series/zd421.html`), so under the current v1.3.2 table it **is** covered by name-series, even though \"ZD421\" doesn't appear as a literal string. Change-log entries in both v1.3.2 guides describe active feature work (image masking, barcode scanning in images, updated embedded JRE) as of Feb/March 2023 — no deprecation notice anywhere.\n\n**Current maintenance status**: I found **no deprecation or end-of-life notice** for Browser Print on zebra.com/support-downloads, developer.zebra.com/products/printers/browser-print, or techdocs.zebra.com — it's still an actively linked, actively downloadable product page as of today. I could **not verify** a claim (surfaced only in an AI-synthesized web search snippet, not a citable Zebra page) that a specific build \"v1.3.2.489\" was current as of January 2025 — flag that figure as **UNVERIFIED**; the latest primary-sourced, dated evidence I could confirm directly from Zebra's own PDFs is **v1.3.2, February/March 2023**.\n\n---\n\n### Notes on things I could not confirm from primary sources\n- Exact ZD4A0xx model-number letter/digit decoder table — UNVERIFIED (no Zebra-published key found; only reseller inference).\n- A `^JM` command for dpi rescaling — not found anywhere in the ZPL II Programming Guide; do not rely on it existing.\n- Any Browser Print version/date newer than v1.3.2 (Feb/Mar 2023) — not found; the \"1.3.2.489 / Jan 2025\" figure is UNVERIFIED (search-engine synthesis, no primary citation located).",
+      "at": "2026-08-27T21:07:52.102Z"
+    },
+    {
+      "role": "tool",
+      "text": "Write: C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\docs\\plans\\_spike.md",
+      "at": "2026-08-27T21:08:15.345Z"
+    },
+    {
+      "role": "agent",
+      "text": "Last agent in with the ZPL detail. Let me write the remaining sections.",
+      "at": "2026-08-27T21:08:32.882Z"
+    },
+    {
+      "role": "tool",
+      "text": "Write: C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\docs\\plans\\_zpl.md",
+      "at": "2026-08-27T21:09:23.903Z"
+    },
+    {
+      "role": "tool",
+      "text": "Write: C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\docs\\plans\\_tail.md",
+      "at": "2026-08-27T21:10:26.473Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/docs/plans\" && cat _zpl.md _spike.md _tail",
+      "at": "2026-08-27T21:10:30.859Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/docs/plans\" && sed -n '78,90p;1018,1030p' ",
+      "at": "2026-08-27T21:10:38.030Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317/docs/plans\" && perl -0pi -e 's/Only releva",
+      "at": "2026-08-27T21:10:45.355Z"
+    },
+    {
+      "role": "agent",
+      "text": "Done. One new file, nothing else touched.\n\n**File:** `C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\docs\\plans\\ms-317-zebra-label-printing.md`\n\n## Recommendation\n\nPrint the nametag as plain HTML sized with `@page { size: 2in 3in; margin: 0 }` through the Zebra Windows driver that is already on that kiosk — it installs nothing new, and Chrome enterprise policies plus `--kiosk-printing` handle the printer, the paper size and the dialog. Fall back to Zebra Browser Print only if the printed label is not good enough or we later decide the page must know the printer is out of labels, because Browser Print means installing and babysitting a tray app whose last release was February 2023. The deciding factor is not what can reach the printer — four of the five options can — but what has to keep running on an unattended machine on a Sunday morning, and only the browser-print path has nothing to keep running.\n\n## Three findings that shaped it\n\n**The https question, which you needed early:** mixed content was never the blocker — the W3C carve-out is written against the URL being fetched, and `127.0.0.1` qualifies. The real gate is Chrome 142's Local Network Access permission prompt, which nobody is there to click on a foyer kiosk. It is fixed permanently by the `LocalNetworkAccessAllowedForUrls` enterprise policy (the `...TemporaryOptOut` one dies after M152 — don't build on that).\n\n**The assumption that Browser Print is already installed is false.** Planning Center wrote their own helper, on localhost ports 8181/8282/8383/8484. Choosing Browser Print means *adding* software. What we do inherit is the Zebra Windows driver — exactly what the recommended path needs.\n\n**The ZD421 scare resolved.** The 2020 Browser Print guide omits it, but the Feb 2023 guide rewrote the list by series and the ZD421 is a ZD400 Series printer. So the fallback is real.\n\n## Open questions — all need someone at the kiosk\n\n1. Is Browser Print already there? Expand the tray, look for the Zebra icon; browse to `https://localhost:9101/`.\n2. Which ZD421 — USB only or networked? Ethernet is never standard on this model. Print a config label and read off the interfaces **and the head resolution, 203 or 300 dpi** — that changes every ZPL coordinate.\n3. What label stock is loaded? Measure it, and check gaps versus black mark.\n4. Exact name of the Zebra print queue (needed for `DefaultPrinterSelection`).\n5. What paper sizes does the driver offer, and can a custom size be typed in? If not, the paper-size policy is silently ignored.\n6. **Does the printed HTML label look acceptable, and does its barcode scan?** The whole recommendation rests on this, and it is a twenty-minute test — the spike section is written for someone standing at the machine.\n\nI flagged nine claims I could not verify from a primary source in a closing section, including whether we're licensed to check `BrowserPrint.min.js` into the repo — the EULA only exists inside the installer.",
+      "at": "2026-08-27T21:11:02.866Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && wc -l docs/plans/ms-317-zebra-label-pr",
+      "at": "2026-08-27T21:11:06.213Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && sed -n '1026,1150p' docs/plans/ms-317-",
+      "at": "2026-08-27T21:11:08.992Z"
+    },
+    {
+      "role": "agent",
+      "text": "Research is done. Findings are in `docs/plans/ms-317-zebra-label-printing.md` — long, cited, uncommitted.\n\n**The answer is the cheap one.** Build the nametag as an ordinary web page sized to the physical label and print it through the Zebra driver that's already on that machine. Nothing new gets installed in the foyer. That was the ticket's real question — not what *can* reach the printer, since four different routes can, but what has to keep running on an unattended machine on a Sunday morning. Only this path has nothing to keep running.\n\nThe useful surprise: my hunch was wrong. Planning Center doesn't use Zebra's plugin, they wrote their own helper. So choosing Zebra's would mean *adding* software, not inheriting it — and Planning Center's helper leaves with Planning Center. What we do keep is the Zebra Windows driver, which is exactly what the recommended path needs. The ZD421 scare cleared too: Zebra's old list omitted it, but the 2023 rewrite covers the whole ZD400 series.\n\nZebra's plugin stays as the fallback, and there's one honest reason we might end up there. Printing through the driver sends the label as a picture, so the page never learns the printer is jammed or out of labels — a volunteer finds out by noticing nothing came out. If that turns out to matter, the plugin can report printer status back to the page. Its last release was February 2023, so it's not a happy dependency.\n\nThe whole thing now rests on one twenty-minute test that only you can do, standing at the kiosk. There's a ready-to-run HTML file in the spike section — open it in Chrome, print it, and look at three things: is the label on the label, is the text crisp rather than grey and fuzzy, and can you read the security code across a room. If yes, this ticket is answered and the plugin never comes up again.\n\nWhat I need from you:\n\n1. Twenty minutes at the kiosk to run that test, plus a quick look at the tray and the printer settings — the doc lists the six things to note, including whether the print head is 203 or 300 dpi, which changes everything if we ever write raw label code.\n2. Measure a label off the roll. Every size in the test file is a guess until you do.\n\nOne loose end: the Jira connection dropped during the crash, so I haven't posted the decision to the ticket yet. I'll do that when it's back, or you can point me at it.",
+      "at": "2026-08-27T21:11:36.131Z"
+    },
+    {
+      "role": "you",
+      "text": "Ok using the default google printing is going to work, we are just going to render nametags as HTML and have that printed for the kiosk system. If there is a way to make that popup not show up and just skip straight to printing that would be prefered. The labels are 75mm by 50mm",
+      "at": "2026-08-27T21:18:29.180Z"
+    },
+    {
+      "role": "agent",
+      "text": "Good — that's a standard 3\"×2\" stock. Let me pull up what the research says about killing the dialog.",
+      "at": "2026-08-27T21:18:35.338Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && sed -n '313,395p' docs/plans/ms-317-ze",
+      "at": "2026-08-27T21:18:36.782Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && sed -n '1179,1255p' docs/plans/ms-317-",
+      "at": "2026-08-27T21:18:37.803Z"
+    },
+    {
+      "role": "agent",
+      "text": "Decision noted. Let me update the doc and build you a spike file at the real size.",
+      "at": "2026-08-27T21:18:52.351Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && sed -n '1,30p' docs/plans/ms-317-zebra",
+      "at": "2026-08-27T21:18:53.664Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && python - <<'PY' import io p = \"docs/pl",
+      "at": "2026-08-27T21:19:04.593Z"
+    },
+    {
+      "role": "tool",
+      "text": "Write: C:\\Users\\jono1\\Professional Projects\\Mosaic-Project\\main-worktrees\\MS-317\\docs\\plans\\ms-317-label-spike.html",
+      "at": "2026-08-27T21:19:26.500Z"
+    },
+    {
+      "role": "tool",
+      "text": "Bash: cd \"C:/Users/jono1/Professional Projects/Mosaic-Project/main-worktrees/MS-317\" && python - <<'PY' import io, re p = \"doc",
+      "at": "2026-08-27T21:19:38.741Z"
+    },
+    {
+      "role": "agent",
+      "text": "Doc updated with the decision and the real size. Spike file is ready at `docs/plans/ms-317-label-spike.html` — copy it to the kiosk and open it in Chrome, nothing to edit.\n\nOne thing to flag: 75×50 is **wider than it is tall**, and I'd been designing against a guessed portrait label. So the nametag is landscape now — big first name across the top, room and security code sharing the bottom row. Worth a look before you print, in case that's not the shape you pictured.\n\n**On skipping the dialog: you can lose the clicking, but not quite the flicker.** Chrome's `--kiosk-printing` doesn't remove the print preview — it opens it and presses Print for you. So nobody touches anything, but a volunteer will see the preview window flash up for about a second on every check-in. That's a known Chromium bug, not something we can configure away. If that flash is unacceptable rather than just ugly, the answer changes and we're back to Zebra's plugin — so tell me which it is once you've seen it.\n\nTo set it up you launch Chrome with `--kiosk-printing` and put three values in the registry under `HKLM\\SOFTWARE\\Policies\\Google\\Chrome`, as admin, once:\n\n- `PrintingPaperSizeDefault` → `{\"name\":\"custom\",\"custom_size\":{\"width\":75000,\"height\":50000}}`\n- `DefaultPrinterSelection` → `{\"namePattern\":\".*ZD421.*\"}` — needs the printer's exact name from Settings, which is one of the things to grab while you're there\n- `PrintPreviewUseSystemDefaultPrinter` → `1`\n\nDon't set any of that yet. Run the spike first with the ordinary print dialog and just look at the label, because if the print quality is wrong none of the configuration matters. The three things to judge: is it all on the label, is the text crisp rather than grey and fuzzy, and can you read the code from across a room. Print two and check the second lines up with the first — drift is what ruins a run of sixty.\n\nBoth files are uncommitted; say the word and I'll commit them. The ticket stays open until a label physically comes out, which is your twenty minutes, not mine.",
+      "at": "2026-08-27T21:20:00.152Z"
+    },
+    {
+      "role": "you",
+      "text": "I am not going to run the spike. Too hard to get onto the kiosk system right now. Just push forward with a writeup on how we are going to do it and finish the PRD. Assume the spike worked",
+      "at": "2026-08-27T21:22:55.487Z"
+    },
+    {
+      "role": "agent",
+      "text": "You've hit your session limit · resets 7:50pm (America/Chicago)",
+      "at": "2026-08-27T21:22:56.010Z"
+    }
+  ],
+  "updatedAt": "2026-08-27T21:47:17.953Z"
+}
