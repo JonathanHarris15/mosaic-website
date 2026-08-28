@@ -89,6 +89,17 @@
     this.panning = false;
     this.heat = 1;
     this.autoFit = true;
+    // ── Editing state (MS-280) ────────────────────────────────────────────
+    // The panel writes the Membership Track, the Pastoral Status and the
+    // Shepherding Tags through ShepherdingCore, exactly as the Shepherding
+    // Profile does. The graph node carries only what the graph draws with
+    // (stage, inactive), so the raw Person is kept beside it for the rest.
+    this.personById = {};        // personId -> the Person doc as loaded
+    this.tagVocab = [];          // people_tags, ordered by name
+    this.activityById = {};      // personId -> shepherding_activity, loaded lazily
+    this.newTagName = '';        // the create-tag box, kept across re-renders
+    this.writing = false;        // a write is in flight; the panel refuses a second
+    this.me = { uid: null, name: 'Elder', personId: null, permissionLevel: 'viewer' };
   }
 
   RelationsViewer.prototype.start = function () {
@@ -130,8 +141,11 @@
       // Households (MS-321). Stored ones only — the kiosk's projections are a
       // guess and this graph draws records. Tolerate the collection's absence.
       db.collection('households').get().catch(function () { return { docs: [] }; }),
+      // The Shepherding Tag vocabulary (MS-280). The panel applies existing tags
+      // and creates new ones, so it needs the same list the profile reads.
+      db.collection('people_tags').orderBy('name', 'asc').get().catch(function () { return { docs: [] }; }),
     ]).then(function (snaps) {
-      var peopleSnap = snaps[0], famSnap = snaps[1], relSnap = snaps[2], typeSnap = snaps[3], usersSnap = snaps[4], groupSnap = snaps[5], houseSnap = snaps[6];
+      var peopleSnap = snaps[0], famSnap = snaps[1], relSnap = snaps[2], typeSnap = snaps[3], usersSnap = snaps[4], groupSnap = snaps[5], houseSnap = snaps[6], tagSnap = snaps[7];
 
       // Elder-ness comes from the projected Elder Tag (MS-92). Interim fallback:
       // personIds linked to an *elder* User (super_admins excluded), so the graph
@@ -145,8 +159,24 @@
       var toArr = function (snap) {
         return (snap.docs || []).map(function (d) { var o = d.data() || {}; o.id = d.id; return o; });
       };
+      // Keep the Persons themselves, not just the nodes built from them: the
+      // panel edits `tags` and `shepherdingStatus`, which the graph never draws
+      // and RelationsGraphCore therefore (rightly) drops.
+      var people = toArr(peopleSnap);
+      self.personById = {};
+      people.forEach(function (p) { self.personById[p.id] = p; });
+      self.tagVocab = (tagSnap.docs || []).map(function (d) {
+        var t = d.data() || {};
+        return {
+          id: d.id,
+          name: t.name || d.id,
+          hiddenFromOthers: !!t.hiddenFromOthers,
+          hidePeople: !!t.hidePeople,
+        };
+      });
+
       var graph = RelationsGraphCore.buildGraph({
-        people: toArr(peopleSnap),
+        people: people,
         families: toArr(famSnap),
         relationships: toArr(relSnap),
         relationshipTypes: toArr(typeSnap),
@@ -884,9 +914,29 @@
   };
   RelationsViewer.prototype.selectNode = function (id) {
     this.selectedId = id; this.query = ''; this.searchFocus = false;
+    this.newTagName = '';
     this.camGoal = null; this.focusNodeId = id; this.focusK = Math.max(this.cam.k, 1.1);
     if (this.searchInput) this.searchInput.value = '';
     this.renderResults(); this.renderPanel();
+    this.loadActivity(id);
+  };
+
+  // A Person's Pastoral Record, fetched once per person and kept. It is needed
+  // for one thing only — the Tag Hold on each tag chip (ADR-0011) — so it is not
+  // worth loading for everybody up front, and the panel renders without it.
+  RelationsViewer.prototype.loadActivity = function (id) {
+    var self = this;
+    if (!id || this.activityById[id]) return Promise.resolve();
+    this.activityById[id] = [];   // claim it, so a second click doesn't refetch
+    return firebase.firestore().collection('people').doc(id)
+      .collection('shepherding_activity').orderBy('createdAt', 'desc').get()
+      .then(function (snap) {
+        self.activityById[id] = (snap.docs || []).map(function (d) {
+          var o = d.data() || {}; o.id = d.id; return o;
+        });
+        if (self.selectedId === id) self.renderPanel();
+      })
+      .catch(function (e) { console.error('Relations Viewer: activity load failed', e); });
   };
   RelationsViewer.prototype.zoomBy = function (f) {
     this.releaseCamera();
@@ -1185,6 +1235,10 @@
     var el = this.refs.panel, self = this;
     var n = this.selectedId ? this.byId[this.selectedId] : null;
     if (!n) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    // The panel re-renders whole on every write. Editing a tag near the bottom
+    // and being thrown back to the top would make the section unusable, so the
+    // scroll position is carried across.
+    var keepScroll = el.scrollTop;
     var relGroups = this.relForSelected(n);
     var relCount = relGroups.reduce(function (a, g) { return a + g.items.length; }, 0);
     var careName = n.elder ? null : this.assignedElderName[n.id];
@@ -1220,9 +1274,393 @@
         '</div></div>' +
       (careName ? '<div style="display:flex;align-items:center;gap:11px;padding:14px 0;border-bottom:1px solid var(--outline-variant)"><span class="msy" style="font-size:20px;color:var(--steel)">volunteer_activism</span><div style="line-height:1.3"><div style="font-size:10px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--on-surface-variant)">Shepherded By</div><div style="font-size:14px;font-weight:600;color:var(--navy-900)">' + esc(careName) + '</div></div></div>' : '') +
       '<div style="padding-top:18px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><span style="font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant)">Relationships</span><span style="font-size:12px;font-weight:600;color:var(--on-surface-variant)">' + relCount + '</span></div>' + relsBlock + '</div>' +
+      // The three editable sections ported from the Shepherding Profile (MS-280).
+      this.panelMembershipHtml(n) +
+      this.panelStatusHtml(n) +
+      this.panelTagsHtml(n) +
       '<button data-act="viewProfile" class="rv-primary" style="margin-top:24px;width:100%;display:flex;align-items:center;justify-content:center;gap:9px;background:var(--primary);color:var(--on-primary);border:none;border-radius:10px;padding:13px;font-family:var(--font-sans);font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;box-shadow:0 1px 2px rgba(14,28,54,.14)"><span class="msy" style="font-size:18px">contact_page</span> View Full Profile</button>' +
     '</div>';
     el.style.display = 'block';
+    el.scrollTop = keepScroll;
+  };
+
+
+  // ---------- the editable sections of the detail panel (MS-280) ----------
+  // The Membership Track, the Pastoral Status and the Shepherding Tags are the
+  // same three sections the Shepherding Profile carries, put where an elder is
+  // already looking so a pre-meeting sweep doesn't cost a page load per person.
+  // The profile's markup is Alpine-bound and this page has no Alpine, so they
+  // are re-authored here as DOM strings — but every WRITE goes through the same
+  // ShepherdingCore call the profile makes, stamped with this page as its source.
+  var PANEL_SOURCE = 'relations_viewer';
+
+  // The Person behind a node. The node carries what the graph draws; this
+  // carries the rest (tags, shepherdingStatus, membership).
+  RelationsViewer.prototype.personFor = function (id) {
+    return this.personById[id] || null;
+  };
+
+  RelationsViewer.prototype.tagName = function (tagId) {
+    var t = this.tagVocab.filter(function (x) { return x.id === tagId; })[0];
+    return t ? t.name : tagId;
+  };
+
+  // Whether pastoral content should be screened from the person reading it.
+  // Same terms as the profile: dev-only, super-admin-only, never on your own.
+  RelationsViewer.prototype.panelBlur = function (id) {
+    return window.ShepherdingBlur
+      ? ShepherdingBlur.pastoralClass({ ownProfile: this.me.personId === id })
+      : '';
+  };
+
+  RelationsViewer.prototype.sectionShell = function (title, inner, trailing) {
+    return '<div style="padding-top:18px;margin-top:18px;border-top:1px solid var(--outline-variant)">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px">' +
+        '<span style="font-size:10.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--on-surface-variant)">' + title + '</span>' +
+        (trailing || '') +
+      '</div>' + inner + '</div>';
+  };
+
+  // -- Membership Track ------------------------------------------------------
+  // The stage slider and the Inactive toggle (ADR-0012). `.track-slider` is the
+  // profile's own control and its CSS already lives in mosaic.css; it paints
+  // from currentColor, which is why the colour is set explicitly.
+  RelationsViewer.prototype.panelMembershipHtml = function (n) {
+    var p = this.personFor(n.id), m = (p && p.membership) || {};
+    var stages = ShepherdingCore.MEMBERSHIP_STAGES;
+    var inactive = !!m.inactive;
+    var i = stages.indexOf(m.stage || null);
+    var idx = i === -1 ? 0 : i;
+    var label = inactive ? 'Inactive'
+      : (ShepherdingCore.MEMBERSHIP_STAGE_LABEL[m.stage] || 'Not on the Track');
+
+    var chip = '<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:999px;background:' +
+      (inactive ? 'var(--surface-container-high);color:var(--on-surface-variant)' : 'var(--primary-fixed);color:var(--primary)') +
+      '">' + esc(label) + '</span>';
+
+    var ticks = stages.map(function (st, k) {
+      var on = (k === idx && !inactive);
+      return '<span style="flex:1 1 0;text-align:center;padding:0 1px;font-size:8.5px;line-height:1.15;' +
+        (on ? 'color:var(--primary);font-weight:600' : 'color:var(--on-surface-variant)') + '">' +
+        esc(ShepherdingCore.MEMBERSHIP_STAGE_LABEL[st]) + '</span>';
+    }).join('');
+
+    var slider = '<div style="padding:10px 2px 2px;border:1px solid var(--outline-variant);border-radius:10px;' +
+      'display:flex;flex-direction:column;gap:6px;' + (inactive ? 'opacity:.5' : '') + '">' +
+      '<input type="range" data-act="setStage" class="track-slider" min="0" max="' + (stages.length - 1) + '" step="1"' +
+        ' value="' + idx + '"' + (inactive ? ' disabled' : '') +
+        ' style="color:var(--primary);--track-index:' + idx + ';--track-stops:' + stages.length + '">' +
+      '<div style="display:flex;padding:0 2px 8px">' + ticks + '</div>' +
+    '</div>';
+
+    var toggle = '<button data-act="personInactive" style="align-self:flex-start;margin-top:10px;display:inline-flex;' +
+      'align-items:center;gap:6px;padding:6px 12px;border-radius:9px;cursor:pointer;font-family:var(--font-sans);' +
+      'font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;border:1px solid ' +
+      (inactive ? 'var(--primary);background:var(--primary);color:var(--on-primary)'
+                : 'var(--outline-variant);background:var(--surface-container-lowest);color:var(--on-surface-variant)') +
+      '"><span class="msy" style="font-size:15px">' + (inactive ? 'toggle_on' : 'toggle_off') + '</span>' +
+      (inactive ? 'Inactive — click to reactivate' : 'Mark inactive') + '</button>';
+
+    return this.sectionShell('Membership Track',
+      '<div style="display:flex;flex-direction:column">' + slider + toggle + '</div>', chip);
+  };
+
+  // -- Pastoral Status -------------------------------------------------------
+  // The 3x3 urgency x importance matrix. Clicking the cell already in force
+  // clears the status, which is how the profile behaves.
+  RelationsViewer.prototype.panelStatusHtml = function (n) {
+    var p = this.personFor(n.id);
+    var cur = (p && p.shepherdingStatus) || null;
+    var blur = this.panelBlur(n.id);
+    var urgs = ['urgent', 'somewhat_urgent', 'not_urgent'];
+    var imps = ['important', 'somewhat_important', 'not_important'];
+    var grid = 'display:grid;gap:4px;grid-template-columns:58px repeat(3, 1fr);align-items:center';
+    var head = 'text-align:center;font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--on-surface-variant);padding-bottom:2px';
+
+    var html = '<div class="' + blur + '" style="display:flex;flex-direction:column;gap:4px">' +
+      '<div style="' + grid + '"><span></span>' +
+        urgs.map(function (u) {
+          return '<span style="' + head + '">' + esc(ShepherdingCore.URGENCY_LABEL_SHORT[u]) + '</span>';
+        }).join('') +
+      '</div>';
+
+    imps.forEach(function (imp) {
+      html += '<div style="' + grid + '">' +
+        '<span style="text-align:right;padding-right:6px;font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--on-surface-variant);line-height:1.15">' +
+          esc(ShepherdingCore.IMPORTANCE_LABEL_SHORT[imp]) + '</span>' +
+        urgs.map(function (urg) {
+          var on = !!cur && cur.urgency === urg && cur.importance === imp && !blur;
+          // An unselected cell takes its colour band from the same helper the
+          // profile uses (Tailwind classes, already in mosaic.css); only the
+          // selected one is painted here, so the two never fight.
+          var cls = on ? '' : ShepherdingCore.statusCellColor(urg, imp);
+          var style = 'height:44px;border-width:2px;border-style:solid;border-radius:9px;cursor:pointer;' +
+            'display:flex;align-items:center;justify-content:center;transition:background .15s,border-color .15s;' +
+            (on ? 'background:var(--primary);border-color:var(--primary)' : '');
+          return '<button data-act="setStatus" data-urg="' + urg + '" data-imp="' + imp + '"' +
+            ' class="' + cls + '" style="' + style + '">' +
+            (on ? '<span style="width:11px;height:11px;border-radius:50%;background:var(--on-primary)"></span>' : '') +
+            '</button>';
+        }).join('') +
+      '</div>';
+    });
+    html += '</div>';
+
+    var foot = cur
+      ? '<div style="display:flex;align-items:center;gap:7px;margin-top:12px;padding-top:10px;border-top:1px solid var(--outline-variant)">' +
+          '<span class="msy" style="font-size:15px;color:var(--secondary)">radio_button_checked</span>' +
+          '<span class="' + blur + '" style="font-size:13px;font-weight:500;color:var(--on-surface)">' +
+            esc((ShepherdingCore.URGENCY_LABEL[cur.urgency] || cur.urgency) + ' · ' +
+                (ShepherdingCore.IMPORTANCE_LABEL[cur.importance] || cur.importance)) + '</span>' +
+          '<button data-act="clearStatus" style="margin-left:auto;border:none;background:transparent;cursor:pointer;' +
+            'font-family:var(--font-sans);font-size:11.5px;color:var(--on-surface-variant)">Clear</button>' +
+        '</div>'
+      : '<p style="margin:12px 0 0;font-size:12.5px;font-style:italic;color:var(--on-surface-variant)">Click a cell to set status.</p>';
+
+    return this.sectionShell('Pastoral Status', html + foot);
+  };
+
+  // -- Shepherding Tags ------------------------------------------------------
+  // A Projected Tag (a Membership Tag, or the Elder Tag) is a view of a field of
+  // truth and is never hand-applied: it wears a lock, has no remove button, and
+  // is absent from the add list. ADR-0012 / ADR-0013.
+  RelationsViewer.prototype.panelTagsHtml = function (n) {
+    var self = this;
+    var p = this.personFor(n.id);
+    var applied = [], seen = {};
+    ((p && p.tags) || []).forEach(function (t) { if (!seen[t]) { seen[t] = 1; applied.push(t); } });
+    var blur = this.panelBlur(n.id);
+    // Tag Holds come from the Pastoral Record, which loads after the first
+    // render; an empty record simply means no hold is shown yet.
+    var holds = ShepherdingCore.deriveTagHolds(this.activityById[n.id] || [], applied, Date.now());
+
+    var chips = applied.map(function (tagId) {
+      var projected = ShepherdingCore.isProjectedTagId(tagId);
+      var hold = holds[tagId] ? ShepherdingCore.formatHoldDuration(holds[tagId].durationMs) : '';
+      return '<span class="' + blur + '" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;' +
+        'background:var(--primary);color:var(--on-primary);border-radius:999px;font-size:11.5px;font-weight:500">' +
+        esc(self.tagName(tagId)) +
+        (hold ? '<span style="opacity:.7;font-size:10.5px" title="Held for ' + esc(hold) + '">· ' + esc(hold) + '</span>' : '') +
+        (projected
+          ? '<span class="msy" style="font-size:13px;opacity:.7" title="Set by the Membership Track, not by hand">lock</span>'
+          : '<button data-act="removeTag" data-tag="' + esc(tagId) + '" title="Remove" style="border:none;background:transparent;' +
+            'color:inherit;cursor:pointer;padding:0;display:inline-flex;align-items:center"><span class="msy" style="font-size:14px">close</span></button>') +
+        '</span>';
+    }).join('');
+    if (!applied.length) {
+      chips = '<span style="font-size:12.5px;font-style:italic;color:var(--on-surface-variant)">No tags applied.</span>';
+    }
+
+    var addable = this.tagVocab.filter(function (t) {
+      return applied.indexOf(t.id) < 0 && !ShepherdingCore.isProjectedTagId(t.id);
+    });
+    var addRow = addable.map(function (t) {
+      return '<button data-act="addTag" data-tag="' + esc(t.id) + '" class="' + blur + '" style="display:inline-flex;align-items:center;gap:4px;' +
+        'padding:4px 10px;border:none;border-radius:999px;background:var(--surface-container);color:var(--on-surface);' +
+        'cursor:pointer;font-family:var(--font-sans);font-size:11.5px">' +
+        '<span class="msy" style="font-size:14px">add</span>' + esc(t.name) + '</button>';
+    }).join('');
+    if (!addable.length) {
+      addRow = '<span style="font-size:12.5px;font-style:italic;color:var(--on-surface-variant)">' +
+        (this.tagVocab.length ? 'All tags applied.' : 'No tags defined yet.') + '</span>';
+    }
+
+    var inner =
+      '<div style="display:flex;flex-wrap:wrap;gap:6px">' + chips + '</div>' +
+      '<div style="margin-top:14px;display:flex;flex-direction:column;gap:7px">' +
+        '<span style="font-size:9.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant)">Add tag</span>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:6px">' + addRow + '</div>' +
+      '</div>' +
+      '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--outline-variant);display:flex;flex-direction:column;gap:7px">' +
+        '<span style="font-size:9.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-variant)">Create tag</span>' +
+        '<div style="display:flex;gap:6px">' +
+          '<input data-rv="newTag" placeholder="New tag name…" value="' + esc(this.newTagName) + '"' +
+            ' style="flex:1 1 auto;min-width:0;height:34px;padding:0 10px;border:1px solid var(--outline-variant);' +
+            'border-radius:9px;background:var(--surface);font-family:var(--font-sans);font-size:13px;color:var(--navy-900);outline:none">' +
+          '<button data-act="createTag" style="flex:0 0 auto;padding:0 12px;height:34px;border:none;border-radius:9px;' +
+            'background:var(--primary);color:var(--on-primary);cursor:pointer;font-family:var(--font-sans);font-size:12px;font-weight:600">Create</button>' +
+        '</div>' +
+      '</div>';
+
+    return this.sectionShell('Shepherding Tags', inner);
+  };
+
+  // ---------- the writes (MS-280) ----------
+  // Every one of these mirrors its namesake on the Shepherding Profile and calls
+  // the same ShepherdingCore commit, so the Pastoral Record cannot tell the two
+  // surfaces apart except by the `source` it stamps.
+
+  // A brief message at the foot of the page. The viewer has no toast of its own
+  // and a failed write must not be silent.
+  RelationsViewer.prototype.toast = function (msg, kind) {
+    var el = this.toastEl;
+    if (!el) {
+      el = this.toastEl = document.createElement('div');
+      el.style.cssText = 'position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:200;' +
+        'padding:11px 18px;border-radius:10px;font-family:var(--font-sans);font-size:13px;font-weight:500;' +
+        'box-shadow:0 8px 24px rgba(14,28,54,.18);pointer-events:none;opacity:0;transition:opacity .18s';
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.style.background = kind === 'error' ? 'var(--error)' : 'var(--navy)';
+    el.style.color = kind === 'error' ? 'var(--on-error)' : 'var(--cream)';
+    el.style.opacity = '1';
+    clearTimeout(this._toastT);
+    this._toastT = setTimeout(function () { el.style.opacity = '0'; }, 2600);
+  };
+
+  // Redraw the panel and, because stage and Inactive are things the graph draws,
+  // the graph with it. The selection is deliberately kept: marking somebody
+  // Inactive while "Show inactive people" is off takes their node off the web,
+  // and the panel is then the only way back.
+  RelationsViewer.prototype.afterPanelWrite = function () {
+    this.recompute();
+    this.updateCounts();
+    this.updateEmpty();
+    this.renderPanel();
+  };
+
+  RelationsViewer.prototype.commitMembership = function (next) {
+    var self = this, id = this.selectedId;
+    var p = this.personFor(id), node = this.byId[id];
+    if (!p || !node || this.writing) return;
+    var m = p.membership || {};
+    var previous = { stage: m.stage || null, inactive: !!m.inactive };
+    if (previous.stage === next.stage && previous.inactive === next.inactive) return;
+    this.writing = true;
+    ShepherdingCore.commitMembershipChange(firebase.firestore(), id, {
+      currentTags: p.tags || [],
+      previous: previous,
+      next: next,
+      authorUid: this.me.uid,
+      authorName: this.me.name,
+      source: PANEL_SOURCE,
+    }).then(function () {
+      p.tags = ShepherdingCore.applyMembershipTags(p.tags || [], next);
+      // Only stage and inactive move — commitMembershipChange writes dotted
+      // paths precisely so joinedAt and the back-compat status field survive.
+      p.membership = Object.assign({}, p.membership || {}, { stage: next.stage, inactive: next.inactive });
+      // The node is what the graph draws from, so it has to move too.
+      node.stage = next.stage;
+      node.inactive = next.inactive;
+      delete self.activityById[id];      // the Membership Change is new history
+      self.loadActivity(id);
+      self.toast(ShepherdingCore.describeMembershipChange(
+        ShepherdingCore.buildMembershipChange({ previous: previous, next: next })
+      ));
+    }).catch(function (e) {
+      console.error('Relations Viewer: membership write failed', e);
+      self.toast('Could not update membership', 'error');
+    }).then(function () {
+      self.writing = false;
+      self.afterPanelWrite();
+    });
+  };
+
+  RelationsViewer.prototype.setStatus = function (urgency, importance) {
+    var self = this, id = this.selectedId;
+    var p = this.personFor(id);
+    if (!p || this.writing) return;
+    var previousStatus = p.shepherdingStatus || null;
+    var clearing = !!previousStatus && previousStatus.urgency === urgency && previousStatus.importance === importance;
+    var newStatus = clearing ? null : { urgency: urgency, importance: importance };
+    this.writing = true;
+    ShepherdingCore.commitPastoralChange(firebase.firestore(), id, {
+      shepherdingStatus: newStatus,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }, ShepherdingCore.buildStatusChange({
+      previousStatus: previousStatus,
+      newStatus: newStatus,
+      authorUid: this.me.uid,
+      authorName: this.me.name,
+      source: PANEL_SOURCE,
+    })).then(function () {
+      p.shepherdingStatus = newStatus;
+      self.toast(clearing ? 'Status cleared' : 'Status updated');
+    }).catch(function (e) {
+      console.error('Relations Viewer: status write failed', e);
+      self.toast('Could not update status', 'error');
+    }).then(function () {
+      self.writing = false;
+      self.renderPanel();
+    });
+  };
+
+  RelationsViewer.prototype.toggleTag = function (tagId) {
+    var self = this, id = this.selectedId;
+    var p = this.personFor(id);
+    if (!p || !tagId || this.writing) return;
+    if (ShepherdingCore.isProjectedTagId(tagId)) {
+      this.toast('This tag is set by the system, not by hand', 'error');
+      return;
+    }
+    var current = p.tags || [];
+    var hasIt = current.indexOf(tagId) >= 0;
+    var newTags = hasIt
+      ? current.filter(function (t) { return t !== tagId; })
+      : current.concat([tagId]);
+    // A tag flagged hidePeople hides the Person from the shepherding lists; the
+    // flag on the Person is the OR of every such tag they now carry.
+    var hiders = {};
+    this.tagVocab.forEach(function (t) { if (t.hidePeople) hiders[t.id] = true; });
+    var shepherdingHidden = newTags.some(function (t) { return !!hiders[t]; });
+    var db = firebase.firestore();
+    this.writing = true;
+    ShepherdingCore.commitPastoralChange(db, id, {
+      tags: hasIt
+        ? firebase.firestore.FieldValue.arrayRemove(tagId)
+        : firebase.firestore.FieldValue.arrayUnion(tagId),
+      shepherdingHidden: shepherdingHidden,
+    }, ShepherdingCore.buildTagChange({
+      tagId: tagId,
+      tagName: this.tagName(tagId),
+      action: hasIt ? 'removed' : 'added',
+      authorUid: this.me.uid,
+      authorName: this.me.name,
+      source: PANEL_SOURCE,
+    })).then(function () {
+      p.tags = newTags;
+      p.shepherdingHidden = shepherdingHidden;
+      delete self.activityById[id];      // the Tag Change changes the Tag Hold
+      self.loadActivity(id);
+    }).catch(function (e) {
+      console.error('Relations Viewer: tag write failed', e);
+      self.toast('Could not update tags', 'error');
+    }).then(function () {
+      self.writing = false;
+      self.renderPanel();
+    });
+  };
+
+  // Mint a new Shepherding Tag and apply it, mirroring the profile: a stable
+  // auto-id identity independent of the name (ADR-0011), and no duplicate names.
+  RelationsViewer.prototype.createTag = function () {
+    var self = this;
+    var name = (this.newTagName || '').trim();
+    if (!name || this.writing) return;
+    var lower = name.toLowerCase();
+    if (this.tagVocab.some(function (t) { return t.name.toLowerCase() === lower; })) {
+      this.toast('Tag already exists', 'error');
+      return;
+    }
+    this.writing = true;
+    firebase.firestore().collection('people_tags')
+      .add({ name: name, hiddenFromOthers: false, hidePeople: false })
+      .then(function (ref) {
+        self.tagVocab = self.tagVocab.concat([
+          { id: ref.id, name: name, hiddenFromOthers: false, hidePeople: false },
+        ]).sort(function (a, b) { return a.name.localeCompare(b.name); });
+        self.newTagName = '';
+        self.writing = false;
+        self.renderPanel();
+        self.toggleTag(ref.id);       // created here means wanted here
+      })
+      .catch(function (e) {
+        console.error('Relations Viewer: tag create failed', e);
+        self.writing = false;
+        self.toast('Could not create tag', 'error');
+        self.renderPanel();
+      });
   };
 
   // ---------- chrome events (delegation) ----------
@@ -1246,6 +1684,43 @@
       else if (act === 'zoomIn') { self.zoomBy(1.25); }
       else if (act === 'zoomOut') { self.zoomBy(0.8); }
       else if (act === 'fitView') { self.fitView(); }
+      // ── The detail panel's editable sections (MS-280) ───────────────────
+      // Per-control and immediate: the panel is a page surface, not a dialog,
+      // so there is no Save button between the elder and the write (ADR-0032).
+      else if (act === 'personInactive') {
+        var pm = self.personFor(self.selectedId);
+        var mm = (pm && pm.membership) || {};
+        self.commitMembership({ stage: mm.stage || null, inactive: !mm.inactive });
+      }
+      else if (act === 'setStatus') {
+        self.setStatus(actEl.getAttribute('data-urg'), actEl.getAttribute('data-imp'));
+      }
+      else if (act === 'clearStatus') {
+        var cs = (self.personFor(self.selectedId) || {}).shepherdingStatus;
+        if (cs) self.setStatus(cs.urgency, cs.importance);   // setting the current cell clears it
+      }
+      else if (act === 'addTag' || act === 'removeTag') {
+        self.toggleTag(actEl.getAttribute('data-tag'));
+      }
+      else if (act === 'createTag') { self.createTag(); }
+    });
+
+    // The stage slider reports on `change`, not `click`, and the create-tag box
+    // has to survive the panel re-rendering under it — so both are delegated
+    // separately rather than folded into the click chain above.
+    this.mount.addEventListener('change', function (e) {
+      var el = e.target.closest ? e.target.closest('[data-act="setStage"]') : null;
+      if (!el) return;
+      var stage = ShepherdingCore.MEMBERSHIP_STAGES[Number(el.value)];
+      if (stage) self.commitMembership({ stage: stage, inactive: false });
+    });
+    this.mount.addEventListener('input', function (e) {
+      var el = e.target.closest ? e.target.closest('[data-rv="newTag"]') : null;
+      if (el) self.newTagName = el.value;
+    });
+    this.mount.addEventListener('keydown', function (e) {
+      var el = e.target.closest ? e.target.closest('[data-rv="newTag"]') : null;
+      if (el && e.key === 'Enter') { self.newTagName = el.value; self.createTag(); }
     });
     this.searchInput.addEventListener('input', function (e) { self.query = e.target.value; self.searchFocus = true; self.renderResults(); });
     this.searchInput.addEventListener('focus', function () { self.searchFocus = true; self.renderResults(); });
@@ -1267,6 +1742,25 @@
       if (['elder', 'super_admin'].indexOf(role) < 0) { window.location.href = 'index.html'; return; }
       var mount = document.getElementById('app');
       var view = new RelationsViewer(mount);
+      // Who is making the edits — stamped onto every Membership Change, Status
+      // Change and Tag Change the panel writes (MS-280).
+      view.me = {
+        uid: user.uid,
+        // The same author name the Shepherding Profile records, so the two
+        // surfaces sign a Pastoral Record entry identically.
+        name: (userData && userData.email) ? userData.email.split('@')[0] : 'Elder',
+        personId: (userData && userData.personId) || null,
+        permissionLevel: (userData && (userData.permissionLevel || userData.role)) || 'viewer',
+      };
+      // The dev-only privacy screen over pastoral content, same terms as the
+      // profile: a real elder never sees a blur, the super admin does.
+      if (window.ShepherdingBlur) {
+        ShepherdingBlur.configure({
+          permissionLevel: view.me.permissionLevel,
+          uid: view.me.uid,
+          personId: view.me.personId,
+        });
+      }
       view.start().catch(function (err) {
         console.error('Relations Viewer failed to load:', err);
         mount.innerHTML = '<div style="padding:60px 24px;text-align:center;font-family:var(--font-serif);font-style:italic;color:var(--on-surface-variant)">Couldn’t load the relationship graph.</div>';

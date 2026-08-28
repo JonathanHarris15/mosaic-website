@@ -68,6 +68,13 @@
          `#auth-container` is built into it by `buildSkeleton`. -->
     <div id="app"></div>
     <script src="relations-graph-core.js"></script>
+    <!-- MS-280: the detail panel now edits the Membership Track, the Pastoral
+         Status and the Shepherding Tags, so it needs the same two scripts the
+         Shepherding Profile leans on — ShepherdingCore for every write path and
+         the stage/status/tag vocabulary, ShepherdingBlur for the super-admin
+         privacy screen over pastoral content. -->
+    <script src="shepherding-core.js"></script>
+    <script src="shepherding-blur.js"></script>
     <script src="relations-viewer.js"></script>
 </body>
 </html>
