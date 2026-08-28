@@ -711,7 +711,10 @@
         if (!folder.children) folder.children = [];
         folder.children.push({ type: "document", id: id });
         data.saveDocumentStructure(next, structDocId).then(function () { nav("documentEditor", { id: id }); }).catch(function () { showToast("Error creating", "error"); });
-      }).catch(function () { showToast("Error creating", "error"); });
+      }).catch(function (e) {
+        console.error("Error creating document:", e);
+        showToast(data.documentCreateFailure(e), "error");
+      });
     }
     function createFolder() {
       var fid = DC.newId(); var next = clone(structure);

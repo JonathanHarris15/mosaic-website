@@ -232,7 +232,13 @@
         // (doesn't yet contain the new doc), so don't rely on openDoc's lookup.
         data.saveDocumentStructure(next).then(function () { props.nav(c.type === "care-list" ? "careList" : "documentEditor", { id: id }); })
           .catch(function () { showToast("Error creating document", "error"); });
-      }).catch(function () { showToast("Error creating document", "error"); });
+      // Say WHICH failure. A refusal for a missing author is a different
+      // thing from a permission problem, and an elder can act on one of
+      // them (MS-304).
+      }).catch(function (e) {
+        console.error("Error creating document:", e);
+        showToast(data.documentCreateFailure(e), "error");
+      });
     }
     function createFolder() {
       var fid = genId();
