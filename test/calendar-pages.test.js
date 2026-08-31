@@ -1980,7 +1980,7 @@ test('one date of a repeating Event has a box of its own', () => {
     const flat = html.replace(/\s+/g, ' ');
     assert.ok(flat.indexOf('x-show="isEditor && isDateOfSeries"') !== -1,
         'a date of a series still has nowhere to say anything about itself');
-    assert.ok(flat.indexOf('Just this date') !== -1);
+    assert.ok(flat.indexOf('Individual description') !== -1);
 
     // It overrides the Event's own words, so it reads directly under them in
     // the main column — not across the page in the side column, which left you

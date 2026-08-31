@@ -497,7 +497,8 @@
                          edits. -->
                     <section x-show="eventDescription"
                              class="m-card">
-                        <p class="font-headline-lg text-[17px] leading-[1.55] text-on-surface" x-text="eventDescription"></p>
+                        <span class="m-label">Recurring description</span>
+                        <p class="font-headline-lg text-[17px] leading-[1.55] text-on-surface mt-1" x-text="eventDescription"></p>
                     </section>
 
                     <!-- What this date says, for somebody who cannot edit it.
@@ -506,7 +507,7 @@
                          sentence that contradicts it. -->
                     <section x-show="!isEditor && dateDescription"
                              class="m-card">
-                        <h2 class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Just this date</h2>
+                        <span class="m-label">Individual description</span>
                         <p class="text-[15px] leading-[1.55] text-on-surface mt-1" x-text="dateDescription"></p>
                     </section>
 
@@ -533,11 +534,9 @@
                          for that. -->
                     <section x-show="isEditor && isDateOfSeries"
                              class="m-card">
-                        <h3 class="font-display text-[17px] text-primary">Just this date</h3>
-
-                        <div class="mt-sm flex flex-col gap-md">
+                        <div class="flex flex-col gap-md">
                             <label class="block">
-                                <span class="m-label">What's different about this one</span>
+                                <span class="m-label">Individual description</span>
                                 <textarea x-model="occurrenceDraft.description" rows="3"
                                           placeholder="Bring the trestle tables — we're eating after."
                                           class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
