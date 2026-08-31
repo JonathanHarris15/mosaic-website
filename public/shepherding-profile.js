@@ -858,14 +858,14 @@ document.addEventListener('alpine:init', () => {
                     await notesRef.doc(this.editingNote.id).update({
                         ...payload,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        updatedBy: this.currentUser.uid,
+                        updatedBy: this.currentUser && this.currentUser.uid,
                         updatedByName: this.currentUserName,
                     });
                     this.showToast('Note updated');
                 } else {
                     await notesRef.add({
                         ...payload,
-                        authorUid: this.currentUser.uid,
+                        authorUid: this.currentUser && this.currentUser.uid,
                         authorName: this.currentUserName,
                         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                     });
@@ -989,7 +989,7 @@ document.addEventListener('alpine:init', () => {
                 }, ShepherdingCore.buildTagChange({
                     tagId, tagName,
                     action: hasIt ? 'removed' : 'added',
-                    authorUid: this.currentUser.uid,
+                    authorUid: this.currentUser && this.currentUser.uid,
                     authorName: this.currentUserName,
                     source: 'profile',
                 }));
@@ -1096,7 +1096,7 @@ document.addEventListener('alpine:init', () => {
             try {
                 const liveUser = auth.currentUser;
                 const credential = firebase.auth.EmailAuthProvider.credential(
-                    liveUser.email,
+                    liveUser && liveUser.email,
                     this.deletePassword
                 );
                 await liveUser.reauthenticateWithCredential(credential);
@@ -1171,7 +1171,7 @@ document.addEventListener('alpine:init', () => {
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                 }, ShepherdingCore.buildStatusChange({
                     previousStatus, newStatus,
-                    authorUid: this.currentUser.uid,
+                    authorUid: this.currentUser && this.currentUser.uid,
                     authorName: this.currentUserName,
                     source: 'profile',
                 }));
