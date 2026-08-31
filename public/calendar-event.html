@@ -422,9 +422,74 @@
                         </p>
                     </section>
 
+                    <!-- ── The two descriptions ─────────────────────
+                         An Event carries two, and they answer different
+                         questions. This is the EVENT'S: what it is for, true of
+                         every date of it. It is read-only here and edited on
+                         the recurring Events page, because editing it from a
+                         screen about the fifteenth of July would change every
+                         other date too. Under it comes the other one — what is
+                         different about this date, which only this screen
+                         edits. -->
                     <section x-show="eventDescription"
                              class="m-card">
                         <p class="font-headline-lg text-[17px] leading-[1.55] text-on-surface" x-text="eventDescription"></p>
+                    </section>
+
+                    <!-- What this date says, for somebody who cannot edit it.
+                         Said plainly and labelled, because unlabelled it reads
+                         as a second sentence of the Event's — and it is the
+                         sentence that contradicts it. -->
+                    <section x-show="!isEditor && dateDescription"
+                             class="m-card">
+                        <h2 class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant">Just this date</h2>
+                        <p class="text-[15px] leading-[1.55] text-on-surface mt-1" x-text="dateDescription"></p>
+                    </section>
+
+                    <!-- ── Just this date, on a REPEATING Event (MS-288) ─────
+                         ONE box, for the one fact that is genuinely about a
+                         single date. "Bring the trestle tables, we're eating
+                         after" is true of one week and wrong for the rest, and
+                         there was nowhere to put it.
+
+                         It sits directly under what the Event says, because
+                         it is read with those words, not instead of them.
+                         It used to sit in the side column, so the two
+                         lived on opposite sides of the screen and you held one
+                         in your head while reading the other. Two lines of help
+                         went with the move: with the Event's own words above
+                         it, an empty box plainly adds nothing to them.
+
+                         Everything else stays on the Event. The name, the
+                         place, the time and the pattern are true of every
+                         date, and editing them from a screen about the
+                         fifteenth of July would change them all. The date
+                         itself is refused outright by the store — its id is
+                         derived from it, so "Move this one" is the operation
+                         for that. -->
+                    <section x-show="isEditor && isDateOfSeries"
+                             class="m-card">
+                        <h3 class="font-display text-[17px] text-primary">Just this date</h3>
+
+                        <div class="mt-sm flex flex-col gap-md">
+                            <label class="block">
+                                <span class="m-label">What's different about this one</span>
+                                <textarea x-model="occurrenceDraft.description" rows="3"
+                                          placeholder="Bring the trestle tables — we're eating after."
+                                          class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
+                                                 text-[15px] text-on-surface placeholder:text-outline cal-focus"></textarea>
+                            </label>
+
+                            <div class="flex items-center justify-end gap-sm" x-show="occurrenceDetailsChanged">
+                                <button @click="startOccurrenceDraft()"
+                                        class="px-3 py-1.5 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
+                                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Undo</button>
+                                <button @click="saveOccurrenceDetails()" :disabled="!occurrenceDetailsValid || saving"
+                                        class="bg-primary text-on-primary px-3 py-1.5 rounded-lg shadow-xs font-label-md
+                                               text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus
+                                               disabled:opacity-40">Save</button>
+                            </div>
+                        </div>
                     </section>
 
                     <!-- ── Sunday: settled, not disabled ──────────────────── -->
@@ -600,52 +665,6 @@
                                            disabled:opacity-40">
                                 Delete this event
                             </button>
-                        </div>
-                    </section>
-
-                    <!-- ── Just this date, on a REPEATING Event (MS-288) ─────
-                         The panel above is a one-off's whole Event, so it can
-                         edit everything. This one is the opposite: ONE box, for
-                         the one fact that is genuinely about a single date.
-                         "Bring the trestle tables, we're eating after" is true
-                         of one week and wrong for the rest, and there was
-                         nowhere to put it.
-
-                         Everything else stays on the Event. The name, the
-                         place, the time and the pattern are true of every
-                         date, and editing them from a screen about the
-                         fifteenth of July would change them all. The date
-                         itself is refused outright by the store — its id is
-                         derived from it, so "Move this one" is the operation
-                         for that. -->
-                    <section x-show="isEditor && isDateOfSeries"
-                             class="m-card">
-                        <h3 class="font-display text-[17px] text-primary">Just this date</h3>
-                        <p class="text-[12.5px] text-on-surface-variant mt-1">
-                            Anything true of every one of these belongs on the event itself.
-                        </p>
-
-                        <div class="mt-sm flex flex-col gap-md">
-                            <label class="block">
-                                <span class="m-label">What's different about this one</span>
-                                <textarea x-model="occurrenceDraft.description" rows="3"
-                                          placeholder="Bring the trestle tables — we're eating after."
-                                          class="mt-1 w-full bg-surface border border-outline-variant rounded-lg px-3 py-2
-                                                 text-[15px] text-on-surface placeholder:text-outline cal-focus"></textarea>
-                                <span class="mt-1 block text-[11.5px] text-on-surface-variant">
-                                    Leave it empty and this date says what the event says.
-                                </span>
-                            </label>
-
-                            <div class="flex items-center justify-end gap-sm" x-show="occurrenceDetailsChanged">
-                                <button @click="startOccurrenceDraft()"
-                                        class="px-3 py-1.5 rounded-lg font-label-md text-[11.5px] uppercase tracking-wider
-                                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Undo</button>
-                                <button @click="saveOccurrenceDetails()" :disabled="!occurrenceDetailsValid || saving"
-                                        class="bg-primary text-on-primary px-3 py-1.5 rounded-lg shadow-xs font-label-md
-                                               text-[11.5px] uppercase tracking-wider cal-motion cal-press cal-focus
-                                               disabled:opacity-40">Save</button>
-                            </div>
                         </div>
                     </section>
 

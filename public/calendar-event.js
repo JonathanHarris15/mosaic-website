@@ -591,13 +591,21 @@
                 return Core.locationOf(this.occurrence, this.series);
             },
 
-            // What this date is for. Read through for the same reason as the
+            // What the EVENT is for. Read through for the same reason as the
             // place: a repeating Event's description is typed on the EVENT, and
             // reading the document alone showed nothing on every date of it
             // while the Event page one screen away had the words filled in.
-            // A date that HAS said something of its own says it instead.
+            // Edited on the recurring Events page, never here — it is true of
+            // every date, and this screen is about one of them.
             get eventDescription() {
-                return Core.descriptionOf(this.occurrence, this.series);
+                return Core.eventDescriptionOf(this.occurrence, this.series);
+            },
+
+            // What is different about THIS DATE — the other description, which
+            // adds to the Event's rather than replacing it. Only this
+            // screen edits it, and only a date of a series has one.
+            get dateDescription() {
+                return Core.dateDescriptionOf(this.occurrence);
             },
 
             // "to Friday 27 November · 5 days" — empty for a single-day Event,

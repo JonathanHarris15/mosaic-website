@@ -1759,7 +1759,9 @@ test('a repeating Event shows the description typed on the Event itself', () => 
     assert.strictEqual(page.eventDescription, 'Prayer and a cup of tea.');
 });
 
-test('a date with something of its own says that instead', () => {
+test('a date with something of its own says it AS WELL, not instead', () => {
+    // Two descriptions, two questions. What the Event is for is still true on
+    // the week the trestle tables are wanted, and hiding it was the bug.
     const page = loadComponent('calendar-event.js', 'eventDetailPage');
     page.occurrence = {
         id: 'midweek_2026-08-05', seriesId: 'midweek', date: '2026-08-05',
@@ -1767,14 +1769,40 @@ test('a date with something of its own says that instead', () => {
     };
     page.series = { id: 'midweek', description: 'Prayer and a cup of tea.' };
 
-    assert.strictEqual(page.eventDescription, 'Bring trestle tables — eating after.');
+    assert.strictEqual(page.eventDescription, 'Prayer and a cup of tea.');
+    assert.strictEqual(page.dateDescription, 'Bring trestle tables — eating after.');
 });
 
-test('the description section is bound to the read-through, not the raw field', () => {
+test("a one-off's description is the Event's, and it has no second one", () => {
+    const page = loadComponent('calendar-event.js', 'eventDetailPage');
+    page.occurrence = { id: 'harvest', seriesId: null, date: '2026-09-20', description: 'Supper in the hall.' };
+
+    assert.strictEqual(page.eventDescription, 'Supper in the hall.');
+    assert.strictEqual(page.dateDescription, null,
+        "a one-off's own words would be printed twice on the one screen");
+});
+
+test('the page draws both descriptions, and reads each through the model', () => {
     const html = readPage('calendar-event.html');
+    const flat = html.replace(/\s+/g, ' ');
     assert.strictEqual(html.indexOf('x-text="occurrence.description"'), -1,
-        'the page reads the date\'s own description again, so a series\' is invisible');
-    assert.ok(html.indexOf('x-text="eventDescription"') !== -1);
+        'the page reads a raw field again instead of the model');
+    assert.ok(flat.indexOf('x-text="eventDescription"') !== -1);
+    assert.ok(flat.indexOf('x-text="dateDescription"') !== -1,
+        'a member is shown nothing of what is different about this date');
+    assert.ok(flat.indexOf('x-text="eventDescription"') < flat.indexOf('x-text="dateDescription"'),
+        "what is different about this date reads before the Event's own words");
+});
+
+test("the Event's description cannot be edited from one date of it", () => {
+    // It is true of every date. An editable box here would change the fifteenth
+    // of July AND every other week from a screen about the fifteenth.
+    const html = readPage('calendar-event.html');
+    const flat = html.replace(/\s+/g, ' ');
+    assert.strictEqual(flat.indexOf('x-model="seriesDraft.description"'), -1,
+        "the Event's description is editable from one date of it");
+    assert.strictEqual(flat.indexOf('x-model="series.description"'), -1,
+        "the Event's description is editable from one date of it");
 });
 
 test('one date of a repeating Event has a box of its own', () => {
@@ -1783,8 +1811,18 @@ test('one date of a repeating Event has a box of its own', () => {
     assert.ok(flat.indexOf('x-show="isEditor && isDateOfSeries"') !== -1,
         'a date of a series still has nowhere to say anything about itself');
     assert.ok(flat.indexOf('Just this date') !== -1);
-    assert.ok(flat.indexOf('Leave it empty and this date says what the event says.') !== -1,
-        'the box does not say what emptying it does');
+
+    // It overrides the Event's own words, so it reads directly under them in
+    // the main column — not across the page in the side column, which left you
+    // holding one sentence in your head while you read the other.
+    assert.ok(flat.indexOf('x-text="eventDescription"') < flat.indexOf('x-show="isEditor && isDateOfSeries"'),
+        'the box no longer sits under what the Event says');
+    assert.ok(flat.indexOf('x-show="isEditor && isDateOfSeries"') < flat.indexOf('<aside'),
+        'the box drifted back into the side column');
+
+    // With those words above it, the help line only said them again.
+    assert.strictEqual(flat.indexOf('Leave it empty and this date says what the event says.'), -1,
+        'the box still explains what the sentence above it already shows');
 });
 
 test('that box edits the description and NOTHING else', () => {

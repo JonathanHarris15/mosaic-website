@@ -439,29 +439,49 @@
         return o.location || (series && series.location) || null;
     }
 
-    // ── What a date says about itself ────────────────────────────────────────
+    // ── The two descriptions ─────────────────────────────────────────────────
     //
-    // Exactly `locationOf`, for exactly the same reason. A REPEATING EVENT'S
-    // DESCRIPTION LIVES ON THE SERIES — "prayer and a cup of tea" is a fact
-    // about the Midweek Gathering, not about the fifteenth of July — so a date
-    // with nothing of its own reads the series' rather than showing nothing.
-    // Which is what the Event screen did: the description typed on the series
-    // was invisible on every date it produced.
+    // An Event carries TWO of them, and they are different facts, so they are
+    // read separately and drawn separately.
     //
-    // A date's own description WINS, and unlike a place it is expected to
-    // differ: "bring the trestle tables, we're eating after" is true of one
-    // week and wrong for the rest. That is the per-date box MS-288 added.
+    // The EVENT'S description is a fact about the Event: "prayer and a cup of
+    // tea" is true of the Midweek Gathering, not of the fifteenth of July. It
+    // is typed on the Event series and is the same on every date of it.
+    //
+    // A DATE'S description is what is different about that one — "bring the
+    // trestle tables, we're eating after" — true of one week and wrong for the
+    // rest. It is typed on the date, on the Event page.
+    //
+    // The date's used to OVERRIDE the Event's, so saying one thing about one
+    // week silently hid what the Event says about all of them, and the date
+    // that had the most to say showed the least. It ADDS now: both are read,
+    // and a screen shows the Event's words and then, under them, what is
+    // different about this one.
+    //
+    // Read through, never stamped on. Copied onto the occurrence the Event's
+    // words would ride into the document on the next save and freeze that one
+    // date at the old ones — the trap `seriesColour` and `time` were pulled
+    // out of.
+
+    // What the EVENT says. A date of a series has none of its own to give, so
+    // this is the series'. A one-off IS its Event, so it is the occurrence's.
+    function eventDescriptionOf(occurrence, series) {
+        const o = occurrence || {};
+        if (o.seriesId) return (series && series.description) || null;
+        return o.description || (series && series.description) || null;
+    }
+
+    // What is different about THIS DATE. Only a date of a series can have one:
+    // a one-off's own description is its Event's, and reading it here would
+    // print it twice on the one screen.
     //
     // Empty is not an answer. The box stores `null` when the editor clears it,
-    // and `''` would too if a screen ever sent one, so both fall through to the
-    // series — "I have nothing of my own to say" rather than "say nothing".
-    //
-    // Read through, never stamped on. Copied onto the occurrence it would ride
-    // into the document on the next save and freeze that one date at the old
-    // words — the trap `seriesColour` and `time` were pulled out of.
-    function descriptionOf(occurrence, series) {
+    // and `''` would too if a screen ever sent one; both mean "nothing is
+    // different about this one", and nothing is drawn.
+    function dateDescriptionOf(occurrence) {
         const o = occurrence || {};
-        return o.description || (series && series.description) || null;
+        if (!o.seriesId) return null;
+        return o.description || null;
     }
 
     // Says WHERE it went, not just that it went. "Not happening" on the first
@@ -977,7 +997,8 @@
         notHappening,
         timeOf,
         locationOf,
-        descriptionOf,
+        eventDescriptionOf,
+        dateDescriptionOf,
         movedNote,
         dayMonth,
         mergeOccurrences,

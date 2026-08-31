@@ -668,55 +668,63 @@ test('every liturgical Role the model has is one the Service can be read for', (
     });
 });
 
-// ── What a date says about itself (MS-288) ───────────────────────────────────
+// ── The two descriptions (MS-288, split later) ───────────────────────────
 //
-// Same shape as `locationOf`, and for the same reason: a repeating Event's
-// description is typed once on the series, so a date with nothing of its own
-// has to read through to it rather than showing nothing. A date CAN have its
-// own — "bring the trestle tables, we're eating after" is true of one week and
-// not the others — and when it does, it wins.
+// An Event carries two, and they are different facts. The EVENT'S ("prayer and
+// a cup of tea") is true of every date and lives on the series. The DATE'S
+// ("bring the trestle tables, we're eating after") is what is different about
+// one of them and lives on that date.
+//
+// The date's used to override the Event's, so a week with something to say hid
+// what the Event says. It adds now: both are read, and both are drawn.
 
-test('a date with no description of its own reads the series', () => {
+test("the Event's words are the series', on every date of it", () => {
     const series = { description: 'Midweek prayer and a cup of tea.' };
     assert.strictEqual(
-        Core.descriptionOf({ seriesId: 'midweek', date: '2026-07-15' }, series),
+        Core.eventDescriptionOf({ seriesId: 'midweek', date: '2026-07-15' }, series),
         'Midweek prayer and a cup of tea.'
     );
 });
 
-test("a date's own description wins over the series", () => {
+test("a date's own words do not replace the Event's", () => {
     const series = { description: 'Midweek prayer and a cup of tea.' };
     const occurrence = { seriesId: 'midweek', description: 'Bring trestle tables — eating after.' };
-    assert.strictEqual(
-        Core.descriptionOf(occurrence, series),
-        'Bring trestle tables — eating after.'
-    );
+
+    assert.strictEqual(Core.eventDescriptionOf(occurrence, series), 'Midweek prayer and a cup of tea.');
+    assert.strictEqual(Core.dateDescriptionOf(occurrence), 'Bring trestle tables — eating after.');
 });
 
-test('a one-off with only its own description keeps it', () => {
-    assert.strictEqual(
-        Core.descriptionOf({ description: 'Harvest Supper in the hall.' }, null),
-        'Harvest Supper in the hall.'
-    );
+test('a date with nothing of its own adds nothing', () => {
+    const series = { description: 'Midweek prayer and a cup of tea.' };
+    assert.strictEqual(Core.dateDescriptionOf({ seriesId: 'midweek', date: '2026-07-15' }), null);
+    assert.strictEqual(Core.eventDescriptionOf({ seriesId: 'midweek' }, series), 'Midweek prayer and a cup of tea.');
+});
+
+test("a one-off's own description is its Event's, and is not read twice", () => {
+    // A one-off IS its Event, so its words belong in the Event's section — and
+    // reading them as a date's too would print them twice on the one screen.
+    const occurrence = { description: 'Harvest Supper in the hall.' };
+    assert.strictEqual(Core.eventDescriptionOf(occurrence, null), 'Harvest Supper in the hall.');
+    assert.strictEqual(Core.dateDescriptionOf(occurrence), null);
 });
 
 test('nothing anywhere is nothing, not an empty string', () => {
-    assert.strictEqual(Core.descriptionOf({}, {}), null);
-    assert.strictEqual(Core.descriptionOf(null, null), null);
+    assert.strictEqual(Core.eventDescriptionOf({}, {}), null);
+    assert.strictEqual(Core.eventDescriptionOf(null, null), null);
+    assert.strictEqual(Core.dateDescriptionOf({}), null);
+    assert.strictEqual(Core.dateDescriptionOf(null), null);
 });
 
-test('a cleared date description falls back to the series, it does not blank it', () => {
-    // This is the whole point of storing `null` when the editor empties the box:
-    // "I have no answer of my own" has to be distinguishable from "say nothing".
+test('a cleared date description leaves the Event standing on its own', () => {
+    // This is why the box stores `null` when the editor empties it: "nothing is
+    // different about this one" has to leave what the Event says untouched.
     const series = { description: 'Midweek prayer and a cup of tea.' };
-    assert.strictEqual(
-        Core.descriptionOf({ seriesId: 'midweek', description: null }, series),
-        'Midweek prayer and a cup of tea.'
-    );
-    assert.strictEqual(
-        Core.descriptionOf({ seriesId: 'midweek', description: '' }, series),
-        'Midweek prayer and a cup of tea.'
-    );
+    const cleared = { seriesId: 'midweek', description: null };
+    const blanked = { seriesId: 'midweek', description: '' };
+
+    assert.strictEqual(Core.dateDescriptionOf(cleared), null);
+    assert.strictEqual(Core.dateDescriptionOf(blanked), null);
+    assert.strictEqual(Core.eventDescriptionOf(cleared, series), 'Midweek prayer and a cup of tea.');
 });
 
 // ── A date that is not happening ──────────────────────────────────────────────
