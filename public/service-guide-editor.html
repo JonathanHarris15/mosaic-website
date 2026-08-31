@@ -22,6 +22,7 @@
     <script src="auth.js"></script>
     <!-- Engine + catalog + seed + store (pure, dual-export modules) -->
     <script src="date-utils.js"></script>
+    <script src="guide-image-core.js"></script>
     <script src="guide-engine.js"></script>
     <script src="guide-components.js"></script>
     <script src="guide-seed.js"></script>
@@ -274,7 +275,7 @@
                                     </div>
                                     <label class="flex-1">
                                         <span class="inline-block px-3 py-2 bg-white border border-outline-variant rounded-lg text-xs font-bold text-primary cursor-pointer hover:bg-surface text-center w-full">Select image</span>
-                                        <input type="file" class="hidden" accept="image/*" @change="handleImage(field, $event)" />
+                                        <input type="file" class="hidden" accept="image/jpeg,image/png,image/webp,image/gif" @change="handleImage(field, $event)" />
                                     </label>
                                     <button x-show="values[field.key]" @click="values[field.key] = null" class="text-error"><span class="material-symbols-outlined text-sm">delete</span></button>
                                 </div>

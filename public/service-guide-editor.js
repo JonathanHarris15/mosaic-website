@@ -300,12 +300,21 @@ function guideEditorV2() {
 
         setValue(key, val) { this.values[key] = val; },
 
-        handleImage(field, event) {
+        // A picked picture is stored INSIDE services/{date}, so it is redrawn
+        // to a ceiling before it goes anywhere near `values` — a photo off a
+        // phone is bigger on its own than the whole document may be. See
+        // guide-image-core.js.
+        async handleImage(field, event) {
             const file = event.target.files[0];
             if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => { this.values[field.key] = e.target.result; };
-            reader.readAsDataURL(file);
+            try {
+                this.values[field.key] = await GuideImageCore.capToDataUrl(file);
+            } catch (e) {
+                console.error('image import failed:', e);
+                alert(e.message || 'Could not read that image.');
+            } finally {
+                event.target.value = '';
+            }
         },
 
         async handleDocx(field, event) {

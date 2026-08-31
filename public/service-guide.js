@@ -594,17 +594,23 @@ function guideEditor() {
             return new Date(y, m - 1, d).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
         },
 
-        handleImageUpload(event) {
+        // Capped for the same reason as the v2 editor's: the country map is
+        // stored in services/{date} along with everything else, and Firestore
+        // refuses the document rather than the picture. See guide-image-core.js.
+        async handleImageUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = (e) => {
+            try {
+                const dataUrl = await GuideImageCore.capToDataUrl(file);
                 if (this.selectedElement && this.selectedElement.type === 'pastoral_prayer') {
-                    this.selectedElement.countryImage = e.target.result;
+                    this.selectedElement.countryImage = dataUrl;
                 }
-            };
-            reader.readAsDataURL(file);
+            } catch (e) {
+                console.error('image import failed:', e);
+                alert(e.message || 'Could not read that image.');
+            } finally {
+                event.target.value = '';
+            }
         },
 
         autoResize(el) {
