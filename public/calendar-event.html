@@ -389,6 +389,9 @@
                         :class="tab === 'event' && 'm-tabs__tab--current'"
                         @click="tab = 'event'">Event</button>
                 <button type="button" class="m-tabs__tab"
+                        :class="tab === 'roles' && 'm-tabs__tab--current'"
+                        @click="tab = 'roles'">Roles</button>
+                <button type="button" class="m-tabs__tab"
                         :class="tab === 'files' && 'm-tabs__tab--current'"
                         @click="tab = 'files'">
                     Files
@@ -464,27 +467,6 @@
             <div class="mt-gutter cal-cols" x-show="tab === 'event'">
 
                 <div class="min-w-0 flex flex-col gap-gutter">
-
-                    <!-- Your part — a member's first answer to "am I in this?" -->
-                    <section x-show="!isEditor && myAssignment"
-                             class="bg-primary rounded-lg p-md">
-                        <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-primary-fixed-dim">Your part</div>
-                        <p class="font-headline-lg text-[24px] text-on-primary mt-1"
-                           x-text="myAssignment ? (myAssignment.label || roleName(myAssignment.roleSlug)) : ''"></p>
-                        <div class="mt-2 flex items-center gap-2">
-                            <span class="w-[8px] h-[8px] rounded-full"
-                                  :class="{
-                                    'border-[1.5px] border-primary-fixed-dim': stateTone(myAssignment) === 'calm',
-                                    'bg-success': stateTone(myAssignment) === 'good',
-                                    'bg-error': stateTone(myAssignment) === 'attention'
-                                  }"></span>
-                            <span class="text-[11px] font-label-md tracking-[.14em] uppercase text-primary-fixed"
-                                  x-text="stateLabel(myAssignment)"></span>
-                        </div>
-                        <p class="text-[13px] text-primary-fixed mt-3">
-                            Let an editor know either way and they'll mark it.
-                        </p>
-                    </section>
 
                     <!-- ── The two descriptions ─────────────────────
                          An Event carries two, and they answer different
@@ -584,54 +566,6 @@
                         </div>
                     </section>
 
-                    <!-- Who's serving — the whole roster, flat, for a member the
-                         editor shared it with.
-
-                         A member used to get the editor's Role cards instead:
-                         numbered places, empty-slot rows, per-person state
-                         controls they cannot use — AND this list in the side
-                         column, so the same people were named twice on one
-                         screen. Administering an Event is the editor's job; a
-                         member is answering "who else is coming". -->
-                    <section x-show="!isEditor && canSeeRoster && assignments.length"
-                             class="m-card">
-                        <h2 class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant
-                                   pb-sm border-b border-outline-variant">Who's serving</h2>
-                        <div class="flex flex-col">
-                            <template x-for="a in assignments" :key="a.personId + (a.slotId || a.oneOffId)">
-                                <div class="flex items-center gap-sm py-2.5 border-b border-outline-variant last:border-b-0">
-                                    <span class="w-[28px] h-[28px] rounded-full flex items-center justify-center overflow-hidden
-                                                 text-[10.5px] font-label-md border border-outline-variant shrink-0"
-                                          :class="a.personId === personId ? 'bg-primary-fixed' : 'bg-surface-container-high'"
-                                          x-html="avatarInner(a.personId)"></span>
-                                    <span class="text-[14.5px] flex-grow min-w-0 truncate"
-                                          :class="a.personId === personId ? 'font-semibold' : ''">
-                                        <span x-text="personName(a.personId)"></span><span x-show="a.personId === personId"> (you)</span>
-                                    </span>
-                                    <span class="text-[13px] text-on-surface-variant shrink-0"
-                                          x-text="a.label || roleName(a.roleSlug)"></span>
-                                </div>
-                            </template>
-                        </div>
-                        <p x-show="needsAttention" class="mt-sm text-[12.5px] text-on-surface-variant">
-                            One place is still being sorted out.
-                        </p>
-                    </section>
-
-                    <!-- Roles — shared with the service page (MS-16). A Sunday gets this
-                         too, drawing only its NON-liturgical Roles. -->
-                    <div data-roles-panel="roles"></div>
-
-                    <!-- A member who may not see the roster gets a calm note,
-                         never an error. -->
-                    <section x-show="!isEditor && !canSeeRoster && myAssignment"
-                             class="bg-surface-container-low border border-outline-variant rounded-lg p-md flex items-start gap-sm">
-                        <span class="material-symbols-outlined text-[20px] text-outline shrink-0">visibility_off</span>
-                        <p class="text-[13.5px] text-on-surface">
-                            Only your own part is shown for this event.
-                            Ask an elder if you need to know who else is coming.
-                        </p>
-                    </section>
                 </div>
 
                 <!-- ── Side column ────────────────────────────────────────── -->
@@ -898,6 +832,85 @@
                     </section>
 
                 </aside>
+            </div>
+
+            <!-- ── The Roles tab ──────────────────────────────────────────
+                 Who is on this date, and — for an editor — the Role cards
+                 that put them there. Its own tab now: it used to sit at the
+                 bottom of one long scroll on the Event tab, which is where
+                 Attendance was buried before it got the same treatment
+                 (MS-321). -->
+            <div class="mt-gutter max-w-[640px]" x-show="tab === 'roles'">
+
+                <!-- Your part — a member's first answer to "am I in this?" -->
+                <section x-show="!isEditor && myAssignment"
+                         class="bg-primary rounded-lg p-md mb-sm">
+                    <div class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-primary-fixed-dim">Your part</div>
+                    <p class="font-headline-lg text-[24px] text-on-primary mt-1"
+                       x-text="myAssignment ? (myAssignment.label || roleName(myAssignment.roleSlug)) : ''"></p>
+                    <div class="mt-2 flex items-center gap-2">
+                        <span class="w-[8px] h-[8px] rounded-full"
+                              :class="{
+                                'border-[1.5px] border-primary-fixed-dim': stateTone(myAssignment) === 'calm',
+                                'bg-success': stateTone(myAssignment) === 'good',
+                                'bg-error': stateTone(myAssignment) === 'attention'
+                              }"></span>
+                        <span class="text-[11px] font-label-md tracking-[.14em] uppercase text-primary-fixed"
+                              x-text="stateLabel(myAssignment)"></span>
+                    </div>
+                    <p class="text-[13px] text-primary-fixed mt-3">
+                        Let an editor know either way and they'll mark it.
+                    </p>
+                </section>
+
+                <!-- Who's serving — the whole roster, flat, for a member the
+                     editor shared it with.
+
+                     A member used to get the editor's Role cards instead:
+                     numbered places, empty-slot rows, per-person state
+                     controls they cannot use — AND this list in the side
+                     column, so the same people were named twice on one
+                     screen. Administering an Event is the editor's job; a
+                     member is answering "who else is coming". -->
+                <section x-show="!isEditor && canSeeRoster && assignments.length"
+                         class="m-card mb-sm">
+                    <h2 class="text-[10.5px] font-label-md tracking-[.14em] uppercase text-on-surface-variant
+                               pb-sm border-b border-outline-variant">Who's serving</h2>
+                    <div class="flex flex-col">
+                        <template x-for="a in assignments" :key="a.personId + (a.slotId || a.oneOffId)">
+                            <div class="flex items-center gap-sm py-2.5 border-b border-outline-variant last:border-b-0">
+                                <span class="w-[28px] h-[28px] rounded-full flex items-center justify-center overflow-hidden
+                                             text-[10.5px] font-label-md border border-outline-variant shrink-0"
+                                      :class="a.personId === personId ? 'bg-primary-fixed' : 'bg-surface-container-high'"
+                                      x-html="avatarInner(a.personId)"></span>
+                                <span class="text-[14.5px] flex-grow min-w-0 truncate"
+                                      :class="a.personId === personId ? 'font-semibold' : ''">
+                                    <span x-text="personName(a.personId)"></span><span x-show="a.personId === personId"> (you)</span>
+                                </span>
+                                <span class="text-[13px] text-on-surface-variant shrink-0"
+                                      x-text="a.label || roleName(a.roleSlug)"></span>
+                            </div>
+                        </template>
+                    </div>
+                    <p x-show="needsAttention" class="mt-sm text-[12.5px] text-on-surface-variant">
+                        One place is still being sorted out.
+                    </p>
+                </section>
+
+                <!-- Roles — shared with the service page (MS-16). A Sunday gets this
+                     too, drawing only its NON-liturgical Roles. -->
+                <div data-roles-panel="roles"></div>
+
+                <!-- A member who may not see the roster gets a calm note,
+                     never an error. -->
+                <section x-show="!isEditor && !canSeeRoster && myAssignment"
+                         class="bg-surface-container-low border border-outline-variant rounded-lg p-md flex items-start gap-sm">
+                    <span class="material-symbols-outlined text-[20px] text-outline shrink-0">visibility_off</span>
+                    <p class="text-[13.5px] text-on-surface">
+                        Only your own part is shown for this event.
+                        Ask an elder if you need to know who else is coming.
+                    </p>
+                </section>
             </div>
         </div>
         </template>
