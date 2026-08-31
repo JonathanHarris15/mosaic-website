@@ -43,7 +43,8 @@
 // separate flat "Coming up" list that said the same thing the editor's own
 // "next few" card said, on a different screen. `tabs` filters by role instead:
 // a member gets Dates and a read-only Event; an editor gets those two plus
-// Rota, Roles & rules and Who can see it, and still lands on Rota by default.
+// Rota, Roles & rules and Who can see it. Both land on Dates by default —
+// "what's next" needs no grid read first.
 //
 // Each role still only ever sees the events its own rank may see — the series
 // read is constrained by visibility like every other, so a member's list simply
@@ -116,11 +117,11 @@
             //
             // Everything about the chosen series used to be a second page at
             // `calendar-event.html?series=…`, so changing a Sunday's start time
-            // meant losing sight of the Sunday's rota. It is four tabs of one
-            // pane now, and the tab survives changing series: an editor
-            // comparing who can see what across three events should not have to
-            // find that tab again for each of them.
-            tab: 'rota',
+            // meant losing sight of the Sunday's rota. It is tabs of one pane
+            // now, and the tab survives changing series: an editor comparing
+            // who can see what across three events should not have to find
+            // that tab again for each of them.
+            tab: 'dates',
 
             // The phone is TWO SCREENS, not two columns: at 390px a 320px panel
             // beside anything is a panel and nothing else. So the list is a
@@ -164,9 +165,10 @@
                 this.rank = await this.resolveRank();
                 if (!this.rank) { this.loading = false; return; }
 
-                // Editors still land on Rota (unchanged); a member's old
-                // effective default was "Coming up", which is Dates now.
-                this.tab = this.isEditor ? 'rota' : 'dates';
+                // Everyone lands on Dates — an editor's old default was Rota,
+                // but Dates is the tab both roles share and the one that
+                // answers "what's next" without a grid to read first.
+                this.tab = 'dates';
 
                 try {
                     // The directory is the GRID's ingredient — names for the

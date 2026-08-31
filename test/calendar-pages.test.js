@@ -6869,10 +6869,10 @@ test('the browse lane offers nothing that writes', () => {
         'the colour picker is offered to a member');
 });
 
-test('editors still land on Rota; a member lands on Dates', async () => {
-    // "Editors still land on Rota (unchanged); a member's old effective
-    // default was 'Coming up', which is Dates now" — MS-287's own words for
-    // what each role should see first.
+test('both roles land on Dates by default', async () => {
+    // A member's old effective default was "Coming up", which is Dates now.
+    // An editor's old default was Rota — changed on review of this ticket:
+    // "what's next" should not need a grid read first, for either role.
     const Store = Object.assign({}, require('../public/events-store.js'), {
         async loadVisibleSeries() { return []; },
     });
@@ -6899,7 +6899,7 @@ test('editors still land on Rota; a member lands on Dates', async () => {
         db: fakeDb,
     });
     await editor.init();
-    assert.strictEqual(editor.tab, 'rota');
+    assert.strictEqual(editor.tab, 'dates');
 });
 
 // ── The Dates tab reads "today forward", not wherever Rota is paged ──────────
