@@ -1522,6 +1522,10 @@
     <script src="roles-core.js"></script>
     <script src="calendar-view.js"></script>
     <script src="fairness-core.js"></script>
+    <!-- family-core BEFORE calendar-event: it captures window.FamilyCore at the
+         head of its IIFE and calls servingGroups when the Roles picker loads.
+         Without it the picker throws mid-load and stays empty (MS-321). -->
+    <script src="family-core.js"></script>
     <script src="calendar-event.js"></script>
 
     <!-- Fills the data-roles-panel placeholders. Must run AFTER them and BEFORE
