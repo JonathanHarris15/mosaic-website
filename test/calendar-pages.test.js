@@ -6832,7 +6832,7 @@ test('a member reaches Dates and a read-only Event, never a tab that writes', ()
         'a member is offered a tab that writes');
 
     page.rank = 'editor';
-    assert.deepEqual(page.tabs.map(t => t.id), ['rota', 'dates', 'roles', 'event', 'who']);
+    assert.deepEqual(page.tabs.map(t => t.id), ['dates', 'event', 'rota', 'roles', 'who']);
 });
 
 test('the browse lane offers nothing that writes', () => {

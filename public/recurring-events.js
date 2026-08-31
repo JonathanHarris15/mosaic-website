@@ -391,10 +391,10 @@
             // editor-only; Dates and The event are everyone's.
             get tabs() {
                 const all = [
-                    { id: 'rota', label: 'Rota', editorOnly: true },
                     { id: 'dates', label: 'Dates', editorOnly: false },
-                    { id: 'roles', label: 'Roles & rules', editorOnly: true },
                     { id: 'event', label: 'The event', editorOnly: false },
+                    { id: 'rota', label: 'Rota', editorOnly: true },
+                    { id: 'roles', label: 'Roles & rules', editorOnly: true },
                     { id: 'who', label: 'Who can see it', editorOnly: true },
                 ];
                 return this.isEditor ? all : all.filter(t => !t.editorOnly);
