@@ -49,6 +49,7 @@ function loadComponent(scriptFile, factoryName, overrides) {
         Map: Map,
         encodeURIComponent: encodeURIComponent,
         URLSearchParams: URLSearchParams,
+        setTimeout: setTimeout,
     };
 
     sandbox.window = sandbox;
@@ -922,30 +923,74 @@ function attachmentsFakeDb() {
     };
 }
 
-// A fake `firebase.storage()` standing in for the real SDK — `put()` resolves
-// to a snapshot whose `ref.getDownloadURL()` echoes back a URL built from the
-// path, so a test can assert the record actually points at what was "uploaded".
-function fakeFirebase() {
+// A fake `firebase.storage()` standing in for the real SDK.
+//
+// ⚠ `getDownloadURL()` THROWS here, on purpose. It is not an unimplemented
+// corner of the fake — it is the assertion. That call mints a token which
+// serves the file to anyone holding the link, signed out, forever, without
+// storage.rules ever being asked (ADR-0046), so the page must never reach for
+// it on an attachment. If it does, the test that made it happen goes red and
+// says why, rather than a reviewer having to notice a line that looks normal.
+function fakeFirebase(opts) {
     const uploads = [];
+    const o = opts || {};
+    const noPublicUrl = {
+        async getDownloadURL() {
+            throw new Error('getDownloadURL() must never be called on an attachment');
+        },
+    };
     return {
         _uploads: uploads,
+        auth() {
+            return {
+                currentUser: 'currentUser' in o ? o.currentUser : {
+                    async getIdToken() { return 'id-token-for-this-reader'; },
+                },
+            };
+        },
         storage() {
             return {
                 ref() {
                     return {
                         child(path) {
-                            return {
-                                async put(file, opts) {
-                                    uploads.push({ path: path, file: file, opts: opts });
-                                    return {
-                                        ref: { async getDownloadURL() { return 'https://files.example/' + path; } },
-                                    };
+                            return Object.assign({
+                                bucket: 'mosaic-hymn-database.appspot.com',
+                                fullPath: path,
+                                async put(file, putOpts) {
+                                    uploads.push({ path: path, file: file, opts: putOpts });
+                                    return { ref: noPublicUrl };
                                 },
-                            };
+                            }, noPublicUrl);
                         },
                     };
                 },
             };
+        },
+    };
+}
+
+// The browser edges `openAttachment` uses: one fetch, one object URL, one
+// anchor clicked. Records what happened so a test can read it back.
+function fakeBrowser(response) {
+    const calls = { fetches: [], clicked: [], revoked: [] };
+    const anchor = {
+        click() { calls.clicked.push({ href: anchor.href, download: anchor.download }); },
+        remove() {},
+    };
+    return {
+        _calls: calls,
+        fetch: async (url, init) => {
+            calls.fetches.push({ url: url, init: init });
+            return response;
+        },
+        URL: {
+            createObjectURL(blob) { calls.blob = blob; return 'blob:the-bytes'; },
+            revokeObjectURL(u) { calls.revoked.push(u); },
+        },
+        document: {
+            addEventListener() {},
+            createElement() { return anchor; },
+            body: { appendChild() {} },
         },
     };
 }
@@ -971,8 +1016,57 @@ test('an editor attaches a file: it uploads first, then the Firestore pointer na
     assert.match(firebase._uploads[0].path, /^event_attachments\/picnic_2026-07-11\//);
 
     assert.strictEqual(db._writes.length, 1, 'the Firestore write happens AFTER the upload, not instead of it');
-    assert.strictEqual(db._writes[0].data.url, 'https://files.example/' + firebase._uploads[0].path);
     assert.strictEqual(db._writes[0].data.storagePath, firebase._uploads[0].path);
+    assert.ok(!('url' in db._writes[0].data),
+        'the record must point at the path behind the rule, never at a public link');
+});
+
+// -- Reading a file back is a request the rule gets to refuse ---------------
+//
+// The point of all this: the bytes travel over a request carrying THIS
+// account's token, so storage.rules is asked "may this person see this Event?"
+// every single time. A URL in an href is asked nothing, once, by nobody.
+
+test('opening an attachment fetches it as the signed-in reader, not from a public link', async () => {
+    const browser = fakeBrowser({ ok: true, status: 200, async blob() { return 'the-pdf-bytes'; } });
+    const firebase = fakeFirebase();
+    const page = loadComponent('calendar-event.js', 'eventDetailPage',
+        Object.assign({ db: attachmentsFakeDb(), firebase: firebase }, browser));
+
+    await page.openAttachment({
+        id: 'att1',
+        name: 'Order of Service.pdf',
+        storagePath: 'event_attachments/picnic_2026-07-11/att1/Order of Service.pdf',
+    });
+
+    assert.strictEqual(page.attachmentError, '');
+    assert.strictEqual(browser._calls.fetches.length, 1);
+
+    const call = browser._calls.fetches[0];
+    assert.match(call.url, /^https:\/\/firebasestorage\.googleapis\.com\/v0\/b\/mosaic-hymn-database\.appspot\.com\/o\//);
+    assert.match(call.url, /alt=media$/);
+    assert.strictEqual(call.init.headers.Authorization, 'Firebase id-token-for-this-reader',
+        "without the reader's own token the rule cannot tell who is asking");
+
+    assert.deepStrictEqual(browser._calls.clicked,
+        [{ href: 'blob:the-bytes', download: 'Order of Service.pdf' }]);
+    assert.strictEqual(page.openingAttachmentId, null);
+});
+
+test('a reader the rule refuses is told so, and handed nothing', async () => {
+    const browser = fakeBrowser({ ok: false, status: 403, async blob() { return ''; } });
+    const page = loadComponent('calendar-event.js', 'eventDetailPage',
+        Object.assign({ db: attachmentsFakeDb(), firebase: fakeFirebase() }, browser));
+
+    await page.openAttachment({
+        id: 'att1',
+        name: 'Elders Floor Plan.pdf',
+        storagePath: 'event_attachments/elders_2026-07-11/att1/Elders Floor Plan.pdf',
+    });
+
+    assert.match(page.attachmentError, /access/i);
+    assert.strictEqual(browser._calls.clicked.length, 0, 'nothing may reach the browser');
+    assert.strictEqual(page.openingAttachmentId, null);
 });
 
 test('a file over the size cap is refused before anything uploads', async () => {

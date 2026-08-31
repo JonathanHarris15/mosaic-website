@@ -96,8 +96,15 @@
     // What the Firestore document carries. One function, so a screen that only
     // knows about a few of these fields cannot write a lopsided record — every
     // field is always present, `null` where the caller gave nothing.
+    //
+    // ⚠ THERE IS NO `url` FIELD, AND ADDING ONE BACK REOPENS MS-287'S HOLE.
+    // It used to hold what `getDownloadURL()` returned, which is a link that
+    // reads the file for anyone holding it — signed out, forever, whatever
+    // storage.rules says about who may see the Event. The record carries the
+    // PATH instead, and the reader's own credentials fetch the bytes each
+    // time (ADR-0046).
     const RECORD_FIELDS = [
-        'name', 'contentType', 'size', 'storagePath', 'url',
+        'name', 'contentType', 'size', 'storagePath',
         'uploadedBy', 'uploadedByName', 'uploadedAt',
     ];
 

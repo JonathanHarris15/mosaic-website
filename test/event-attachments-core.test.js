@@ -99,7 +99,6 @@ test('buildAttachmentRecord fills every field the store and the UI both depend o
         contentType: 'application/pdf',
         size: 12345,
         storagePath: 'event_attachments/picnic_2026-07-11/att123/Order of Service.pdf',
-        url: 'https://example.com/file',
         uploadedBy: 'uid1',
         uploadedByName: 'Bethany Croft',
         uploadedAt: 't',
@@ -109,11 +108,23 @@ test('buildAttachmentRecord fills every field the store and the UI both depend o
         contentType: 'application/pdf',
         size: 12345,
         storagePath: 'event_attachments/picnic_2026-07-11/att123/Order of Service.pdf',
-        url: 'https://example.com/file',
         uploadedBy: 'uid1',
         uploadedByName: 'Bethany Croft',
         uploadedAt: 't',
     });
+});
+
+// The hole MS-287 shipped with: a `url` field held what getDownloadURL()
+// returned, which serves the file to anyone holding the link — signed out,
+// forever, whatever storage.rules says about who may see the Event. A record
+// that carries no such link cannot leak one.
+test('the record carries no public URL, only the path behind the rule', () => {
+    const record = Core.buildAttachmentRecord({
+        name: 'a.pdf', storagePath: 'event_attachments/x/y/a.pdf',
+        url: 'https://files.example/leaked-forever',
+    });
+    assert.ok(!('url' in record),
+        'a public download link is back in the record — see ADR-0046');
 });
 
 test('buildAttachmentRecord never invents a field it was not given', () => {

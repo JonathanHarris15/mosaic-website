@@ -115,6 +115,8 @@
             attachments: [],
             uploadingAttachment: false,
             attachmentError: '',
+            // The row whose bytes are on their way down, so it can say so.
+            openingAttachmentId: null,
             // Set only when removing a file would need confirming.
             pendingAttachmentRemoval: null,
             // Which pane of the Event page is open. Editors get a second one —
@@ -1642,15 +1644,19 @@
                     const path = Attachments.storagePath(occurrenceId, attachmentId, file.name);
 
                     const ref = firebase.storage().ref().child(path);
-                    const snap = await ref.put(file, { contentType: file.type || 'application/octet-stream' });
-                    const url = await snap.ref.getDownloadURL();
+                    // ⚠ NO getDownloadURL() HERE, AND NOWHERE ELSE ON THIS PATH.
+                    // It mints a token that reads the file for anyone holding
+                    // the link, signed out, forever — which would walk straight
+                    // past the visibility rule in storage.rules. The record
+                    // carries the PATH; `openAttachment` fetches the bytes as
+                    // the signed-in reader, and the rule is checked every time.
+                    await ref.put(file, { contentType: file.type || 'application/octet-stream' });
 
                     const record = Attachments.buildAttachmentRecord({
                         name: file.name,
                         contentType: file.type || null,
                         size: file.size,
                         storagePath: path,
-                        url: url,
                         uploadedBy: this.uid,
                         uploadedByName: this.personId ? this.personName(this.personId) : null,
                         uploadedAt: new Date().toISOString(),
@@ -1662,6 +1668,52 @@
                     this.attachmentError = 'That file could not be attached. Try again.';
                 } finally {
                     this.uploadingAttachment = false;
+                }
+            },
+
+            // Hand the reader the file, WITHOUT ever putting a public link to
+            // it on the page (MS-287, ADR-0046). The bytes come down over a
+            // request carrying this account's own token, so storage.rules gets
+            // asked "may THIS person see THIS Event?" on every single fetch —
+            // which is the whole point, and is not true of a URL sitting in an
+            // href. The browser then saves the blob under the file's real name.
+            async openAttachment(attachment) {
+                const a = attachment || {};
+                if (!a.storagePath || this.openingAttachmentId) return;
+
+                this.openingAttachmentId = a.id;
+                this.attachmentError = '';
+                let objectUrl = null;
+                try {
+                    const user = firebase.auth().currentUser;
+                    if (!user) throw new Error('not signed in');
+
+                    const ref = firebase.storage().ref().child(a.storagePath);
+                    const token = await user.getIdToken();
+                    const endpoint = 'https://firebasestorage.googleapis.com/v0/b/' +
+                        ref.bucket + '/o/' + encodeURIComponent(ref.fullPath) + '?alt=media';
+
+                    const response = await fetch(endpoint, {
+                        headers: { Authorization: 'Firebase ' + token },
+                    });
+                    // 403 here is the rule doing its job, not a fault.
+                    if (!response.ok) throw new Error('storage responded ' + response.status);
+
+                    objectUrl = URL.createObjectURL(await response.blob());
+                    const link = document.createElement('a');
+                    link.href = objectUrl;
+                    link.download = a.name || 'attachment';
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                } catch (e) {
+                    console.error('Attachment download failed:', e);
+                    this.attachmentError = 'That file could not be opened. You may no longer have access to it.';
+                } finally {
+                    // Left alive a while past the click so the browser has taken
+                    // the bytes; revoking in the same breath cancels the save.
+                    if (objectUrl) setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+                    this.openingAttachmentId = null;
                 }
             },
 

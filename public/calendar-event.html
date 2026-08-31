@@ -449,10 +449,17 @@
                         <div class="m-row">
                             <span class="material-symbols-outlined text-[19px] text-secondary shrink-0"
                                   x-text="attachmentIcon(a)"></span>
-                            <a :href="a.url" target="_blank" rel="noopener" class="m-row__main">
+                            <!-- A button, not a link. There is no URL to put in
+                                 an href: the file is fetched as this reader
+                                 (MS-287, ADR-0046) so the visibility rule is
+                                 asked every time. -->
+                            <button type="button" @click="openAttachment(a)"
+                                    :disabled="openingAttachmentId === a.id"
+                                    class="m-row__main text-left cal-focus">
                                 <span class="m-row__title" x-text="a.name"></span>
-                                <span class="m-row__sub" x-text="attachmentMeta(a)"></span>
-                            </a>
+                                <span class="m-row__sub"
+                                      x-text="openingAttachmentId === a.id ? 'Opening…' : attachmentMeta(a)"></span>
+                            </button>
                             <button x-show="canManageAttachments" @click="askRemoveAttachment(a)"
                                     class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus"
                                     :aria-label="'Remove ' + a.name">

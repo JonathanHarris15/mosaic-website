@@ -1,5 +1,6 @@
 const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
 const {onDocumentWritten} = require("firebase-functions/v2/firestore");
+const {onObjectFinalized} = require("firebase-functions/v2/storage");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {defineSecret, defineString} = require("firebase-functions/params");
 const {log} = require("firebase-functions/logger");
@@ -596,6 +597,45 @@ exports.cleanUpReplacedPhoto = onDocumentWritten(
  * already gone by the time this runs, so a failure to remove bytes must never
  * look like a failure to remove the attachment.
  */
+/**
+ * Strips the download token Cloud Storage mints for an Event Attachment.
+ *
+ * Storage stamps every uploaded object with a `firebaseStorageDownloadTokens`
+ * value, and that token is a URL which serves the file to ANYONE who holds it:
+ * signed out, from any browser, forever, without storage.rules being consulted
+ * at all. For a Directory Photo that is merely untidy. For an Event Attachment
+ * it is the whole boundary MS-287 promised — an elder-only floor plan is one
+ * forwarded link away from being public, and the link cannot be recalled.
+ *
+ * So the token is removed the moment the object lands. Nothing in the app asks
+ * for one (calendar-event.js downloads over an authenticated request instead,
+ * ADR-0046); this is the guard for the paths that do not go through the app at
+ * all — a file dropped in from the Firebase console, or a future caller that
+ * forgets. Setting the key to null is how the Storage client deletes it.
+ */
+exports.sealEventAttachment = onObjectFinalized(
+    {region: "us-central1"},
+    async (event) => {
+      const object = event.data || {};
+      const name = object.name;
+      if (!name || !name.startsWith("event_attachments/")) return;
+
+      const tokens = object.metadata &&
+        object.metadata.firebaseStorageDownloadTokens;
+      if (!tokens) return; // Nothing was minted — nothing to take away.
+
+      try {
+        await admin.storage().bucket(object.bucket).file(name).setMetadata({
+          metadata: {firebaseStorageDownloadTokens: null},
+        });
+        log(`Sealed event attachment ${name}`);
+      } catch (e) {
+        // Worth shouting about: a token left in place is a public file.
+        log(`Could not seal attachment ${name}: ${e.message}`);
+      }
+    },
+);
+
 exports.cleanUpDeletedAttachment = onDocumentWritten(
     {
       document: "event_occurrences/{occurrenceId}/attachments/{attachmentId}",
