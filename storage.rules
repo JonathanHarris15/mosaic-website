@@ -23,43 +23,119 @@ service firebase.storage {
       allow delete: if false;
     }
 
+    // ── Who is asking, in Firestore's terms ──────────────────────────────────
+    //
+    // Cross-service Rules: a Storage rule may read Cloud Firestore. The budget
+    // is TWO documents per evaluation and no more, so everything below is
+    // arranged to spend exactly two — the asker's `users` document and the
+    // occurrence — and never the same one twice.
+    //
+    // These restate `permissionLevel()`, `isSignedIn()` and `rankCanSee()` from
+    // firestore.rules in a second engine that cannot import them. That
+    // duplication is real and it is the price of the boundary being enforced
+    // where the bytes are; test/storage-event-attachment-rules.test.js reads
+    // both files and fails when they drift apart.
+
+    function myUserDoc() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // `permissionLevel` with the legacy `role` fallback, exactly as
+    // firestore.rules reads it during the MS-119 migration.
+    function levelOf(u) {
+      return ('permissionLevel' in u) ? u.permissionLevel : u.role;
+    }
+
+    // ⚠ Anonymous sign-in is enabled on this project, so `request.auth != null`
+    // is NOT "signed in" — same trap firestore.rules documents at length.
+    function isSignedIn() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    // ── What the occurrence says about itself ────────────────────────────────
+    //
+    // An occurrence with no `visibility` field reads as 'none' and matches
+    // nothing, so a document that ships unstamped is invisible rather than
+    // public — the same fail-closed default firestore.rules takes. A missing
+    // occurrence fails the same way: `.data` on nothing denies.
+
+    function stampedVisibility(occ) {
+      return ('visibility' in occ) ? occ.visibility : 'none';
+    }
+
+    // rankCanSee(), plus the one rung rank alone cannot answer: `participant`
+    // is decided against the occurrence's own list of Person ids.
+    function rankOrParticipantSees(occ, u) {
+      return (stampedVisibility(occ) == 'member'
+              && levelOf(u) in ['member', 'editor', 'admin', 'elder', 'super_admin'])
+        || (stampedVisibility(occ) in ['member', 'participant', 'editor']
+              && levelOf(u) in ['editor', 'admin', 'elder', 'super_admin'])
+        || (stampedVisibility(occ) == 'elder'
+              && levelOf(u) in ['elder', 'super_admin'])
+        || (stampedVisibility(occ) == 'participant'
+              && ('personId' in u) && ('participantIds' in occ)
+              && u.personId in occ.participantIds);
+    }
+
+    // A public occurrence is answered without reading the asker at all, so a
+    // signed-out request never reaches a get() on `users/`.
+    function canSeeOccurrence(occurrenceId) {
+      return canSee(
+        firestore.get(/databases/(default)/documents/event_occurrences/$(occurrenceId)).data
+      );
+    }
+
+    function canSee(occ) {
+      return stampedVisibility(occ) == 'public'
+        || (isSignedIn() && rankOrParticipantSees(occ, myUserDoc()));
+    }
+
+    function isEditorAccount() {
+      return isSignedIn()
+        && levelOf(myUserDoc()) in ['editor', 'admin', 'elder', 'super_admin'];
+    }
+
     // Event Attachments (MS-287): a file attached to one Event occurrence — a
     // flyer, a sign-up sheet, a floor plan, whatever file type the church
-    // needs. Same shape as Directory Photos above: these rules cannot tell
-    // whether this uploader may edit THIS occurrence — that lives in the
-    // Firestore rule on `event_occurrences/{id}/attachments`, which is what
-    // decides whether an uploaded file can ever be POINTED AT from an Event.
+    // needs.
+    //
+    // READ IS THE OCCURRENCE'S OWN VISIBILITY, not "signed in". Unlike a
+    // Directory Photo, an Event has a restrictive rung to under-deliver on:
+    // the elders' meeting is elder-only, and its floor plan being a plain file
+    // any signed-in account could fetch by path made the rung a decoration.
+    // The rule now reads the occurrence's stamped visibility out of Firestore
+    // and answers the same question the Firestore rule on
+    // `event_occurrences/{id}/attachments` answers about the record pointing
+    // here. Whoever may see the Event may see what is attached to it, and
+    // nobody else — one sentence, now true in both places.
+    //
+    // ⚠ THIS RULE IS ONLY HALF THE BOUNDARY. `getDownloadURL()` mints a token
+    // that bypasses these rules entirely and never expires, so nothing may
+    // ever call it on this path — a single forwarded link would undo
+    // everything above, permanently, for a signed-out stranger. Two things
+    // keep that shut: the browser downloads through an authenticated request
+    // (calendar-event.js `openAttachment`), which IS checked here on every
+    // fetch; and `sealEventAttachment` strips the token Storage mints at
+    // upload, so there is none left to hand out. See ADR-0046.
     //
     // No content-type restriction, deliberately — "any file type" is the
     // whole point (confirmed on the ticket: not a Google Drive integration,
-    // just accepting lots of file types into our own Storage). What IS
-    // enforceable here is the size, and 25MB matches the cap
-    // `EventAttachmentsCore.MAX_ATTACHMENT_BYTES` refuses before the upload
-    // even starts.
-    //
-    // ⚠ KNOWN GAP, inherited from the Directory Photo pattern above, and
-    // flagged on the ticket rather than fixed silently here: `allow read`
-    // only checks SIGNED IN, not the occurrence's own visibility rung — an
-    // elder-only Event's attachment is a plain file any signed-in account
-    // can fetch by path, and `getDownloadURL()` mints a token that keeps
-    // working even for a signed-out holder of the link, forever. A Directory
-    // Photo has no restrictive rung to under-deliver on; an Event does, and
-    // this ticket's read-access promise is specifically about that rung.
-    // Closing it properly needs either a Storage rule that reads the
-    // occurrence's stamped visibility via `firestore.get()`, re-deriving the
-    // same rank/rung logic `rankCanSee()` already encodes in firestore.rules,
-    // or routing downloads through a callable that checks visibility
-    // server-side and hands back a short-lived signed URL instead of a
-    // permanent token. Neither is done here.
+    // just accepting lots of file types into our own Storage). The size cap
+    // matches `EventAttachmentsCore.MAX_ATTACHMENT_BYTES`, which the browser
+    // refuses at before the upload even starts.
     match /event_attachments/{occurrenceId}/{attachmentId}/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
+      allow read: if canSeeOccurrence(occurrenceId);
+
+      // Only an editor uploads, which these rules CAN now answer. Before
+      // cross-service reads this said "signed in", and a member could park
+      // 25MB under any occurrence id they could guess.
+      allow write: if isEditorAccount()
         && request.resource.size < 25 * 1024 * 1024;
 
-      // No client deletes — same reasoning as Directory Photos. These rules
-      // cannot tell an editor apart from any other signed-in account, so
-      // deleting here would let any signed-in account remove any Event's
-      // attachments. `cleanUpDeletedAttachment` removes the blob once the
+      // No client deletes — same reasoning as Directory Photos. Deleting the
+      // bytes is the one thing an editor should not do directly: the record
+      // is the truth, and `cleanUpDeletedAttachment` removes the blob once the
       // Firestore record pointing at it is gone.
       allow delete: if false;
     }
