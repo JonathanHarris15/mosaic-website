@@ -583,6 +583,45 @@ exports.cleanUpReplacedPhoto = onDocumentWritten(
 );
 
 /**
+ * Deletes an Event Attachment's blob once its Firestore record is gone
+ * (MS-287) — the same division of labour as cleanUpReplacedPhoto (ADR-0029):
+ * Storage rules cannot tell an editor apart from any other signed-in account,
+ * so a rule that let clients delete under event_attachments/ would let ANY
+ * signed-in account delete ANY Event's files. This trigger, running with
+ * admin privileges, is what actually removes the bytes.
+ *
+ * Unlike a Directory Photo there is no "replace in place" here — an editor
+ * removing a file deletes its one document outright, so this only ever fires
+ * on delete (`after` does not exist). Best-effort by design: the record is
+ * already gone by the time this runs, so a failure to remove bytes must never
+ * look like a failure to remove the attachment.
+ */
+exports.cleanUpDeletedAttachment = onDocumentWritten(
+    {
+      document: "event_occurrences/{occurrenceId}/attachments/{attachmentId}",
+      region: "us-central1",
+    },
+    async (event) => {
+      const before = event.data && event.data.before && event.data.before.exists ?
+        event.data.before.data() : null;
+      const after = event.data && event.data.after && event.data.after.exists ?
+        event.data.after.data() : null;
+      if (after) return; // Created or updated, not deleted — nothing to tidy.
+
+      const oldPath = before && before.storagePath;
+      if (!oldPath) return; // Nothing was ever stored against this record.
+
+      try {
+        await admin.storage().bucket().file(oldPath).delete();
+        log(`Removed deleted attachment ${oldPath}`);
+      } catch (e) {
+        // Already gone, or never landed. Either way the record is correct.
+        log(`Could not remove attachment ${oldPath}: ${e.message}`);
+      }
+    },
+);
+
+/**
  * Breaks a Linked User: clears users/{uid}.personId and people/{id}.userId.
  *
  * A callable rather than a rule because the `users` collection is admin-only —

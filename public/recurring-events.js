@@ -12,14 +12,16 @@
 // to be a second page at `calendar-event.html?series=…`, reached by a link that
 // left this one. So changing the Sunday's start time meant losing sight of the
 // Sunday's rota, and coming back meant finding the event in the list again.
-// They are four tabs of one pane now:
+// They are tabs of one pane now:
 //
-//   ROTA               the grid, and the dates you tick on it
-//   ROLES & RULES      which Roles it carries, and the rules across two of them
-//   THE EVENT          name, time, place, pattern, colour, the next few dates
-//   WHO CAN SEE IT     the five rungs, and whether the roster is shared
+//   DATES              upcoming occurrences as cards, one per date — EVERYONE'S
+//   THE EVENT          name, time, place, pattern, colour — EVERYONE'S, read-only
+//                      for a member, editable for an editor
+//   ROTA               the grid, and the dates you tick on it — editor-only
+//   ROLES & RULES      which Roles it carries, and the rules across two — editor-only
+//   WHO CAN SEE IT     the five rungs, and whether the roster is shared — editor-only
 //
-// Two doors still lead off it —
+// Two doors still lead off it, both editor-only —
 //
 //   the DRAFT ROOM        redraw the dates you ticked (auto-assign.html)
 //   one DATE              who is on that one, and change a single person
@@ -34,20 +36,17 @@
 // order to throw the result away. It cannot half-edit anything: it takes
 // everybody off, or it does nothing.
 //
-// TWO LANES, not one door and one wall.
+// ONE PANE, TWO ROLES (MS-287, was two lanes drawing two panes).
 //
-// An editor gets all of the above. Everybody else gets the same list of events
-// and nothing that writes: tap one and it opens to show when it next falls, and
-// which of those dates they are on. No rota, no auto-assign, no emptying, no
-// door to the Event itself.
+// A member and an editor now open the SAME tabbed pane — the fork used to be
+// two lanes at the top of this file, an editor's four-tab pane and a member's
+// separate flat "Coming up" list that said the same thing the editor's own
+// "next few" card said, on a different screen. `tabs` filters by role instead:
+// a member gets Dates and a read-only Event; an editor gets those two plus
+// Rota, Roles & rules and Who can see it. Both land on Dates by default —
+// "what's next" needs no grid read first.
 //
-// This used to be an editors-only page that told a member "this one is for
-// editors" — but "when does the Core Seminar run until?" is an ordinary question
-// for anybody in the church, and the Calendar answers it a month at a time,
-// which is the wrong shape for a thing defined by its pattern. The list of what
-// repeats is not privileged; changing it is.
-//
-// Each lane still only ever sees the events its own rank may see — the series
+// Each role still only ever sees the events its own rank may see — the series
 // read is constrained by visibility like every other, so a member's list simply
 // does not contain the elders' meeting.
 
@@ -105,15 +104,24 @@
             gridLoading: false,
             clearing: false,
 
+            // ── Dates (MS-287) ───────────────────────────────────────────────
+            //
+            // date → occurrence, for the fixed "today forward" window the
+            // Dates tab reads. Deliberately its OWN cache, separate from
+            // `occurrences` above — that one moves with the Rota tab's own
+            // paging (`anchor`), and the Dates tab must not move with it.
+            upcomingOccurrences: {},
+            upcomingLoading: false,
+
             // ── The pane (MS-229) ────────────────────────────────────────────
             //
             // Everything about the chosen series used to be a second page at
             // `calendar-event.html?series=…`, so changing a Sunday's start time
-            // meant losing sight of the Sunday's rota. It is four tabs of one
-            // pane now, and the tab survives changing series: an editor
-            // comparing who can see what across three events should not have to
-            // find that tab again for each of them.
-            tab: 'rota',
+            // meant losing sight of the Sunday's rota. It is tabs of one pane
+            // now, and the tab survives changing series: an editor comparing
+            // who can see what across three events should not have to find
+            // that tab again for each of them.
+            tab: 'dates',
 
             // The phone is TWO SCREENS, not two columns: at 390px a 320px panel
             // beside anything is a panel and nothing else. So the list is a
@@ -156,6 +164,11 @@
             async init() {
                 this.rank = await this.resolveRank();
                 if (!this.rank) { this.loading = false; return; }
+
+                // Everyone lands on Dates — an editor's old default was Rota,
+                // but Dates is the tab both roles share and the one that
+                // answers "what's next" without a grid to read first.
+                this.tab = 'dates';
 
                 try {
                     // The directory is the GRID's ingredient — names for the
@@ -315,7 +328,14 @@
                 // name over another event's record and offer to save it there.
                 this.startSeriesDraft();
                 this.recomputeDates();
-                await this.loadWindow();
+                // The Rota's own grid is an editor-only read (MS-287) — a
+                // member never opens that tab, so there is nothing there for
+                // them to wait on. The Dates tab is everyone's, and reads its
+                // own fixed window regardless of role.
+                await Promise.all([
+                    this.isEditor ? this.loadWindow() : Promise.resolve(),
+                    this.loadUpcomingWindow(),
+                ]);
 
                 // Opening the Sunday Service is also the moment it gets
                 // repaired if it has drifted, or created if it never existed.
@@ -365,16 +385,21 @@
                 await this.choose(id);
             },
 
-            // The four sides of one event. Held here rather than in the markup
-            // so the tab bar and the panels under it cannot come to disagree
-            // about how many there are.
+            // The sides of one event. Held here rather than in the markup so
+            // the tab bar and the panels under it cannot come to disagree
+            // about how many there are — and, since MS-287, so the two lanes
+            // sharing one pane cannot come to disagree about which of them a
+            // member may open. Rota, Roles & rules and Who can see it stay
+            // editor-only; Dates and The event are everyone's.
             get tabs() {
-                return [
-                    { id: 'rota', label: 'Rota' },
-                    { id: 'roles', label: 'Roles & rules' },
-                    { id: 'event', label: 'The event' },
-                    { id: 'who', label: 'Who can see it' },
+                const all = [
+                    { id: 'dates', label: 'Dates', editorOnly: false },
+                    { id: 'event', label: 'The event', editorOnly: false },
+                    { id: 'rota', label: 'Rota', editorOnly: true },
+                    { id: 'roles', label: 'Roles & rules', editorOnly: true },
+                    { id: 'who', label: 'Who can see it', editorOnly: true },
                 ];
+                return this.isEditor ? all : all.filter(t => !t.editorOnly);
             },
 
             // The rung the pane's badge says, in the ladder's own words.
@@ -384,23 +409,56 @@
                     || { level: level, label: 'Not set', icon: 'lock' };
             },
 
-            // When it next falls, and which of those dates are yours. `dates` is
-            // already the window from today forward, so this is the next stretch
-            // of it rather than a history.
+            // When it next falls, and which of those dates are yours. Fixed to
+            // "today forward" (`upcomingDates`), not the Rota tab's own paged
+            // window — the Dates tab must read the same stretch whichever tab
+            // an editor last paged the grid to.
             get upcoming() {
                 if (!this.chosen) return [];
                 return Grid.upcoming({
-                    dates: this.dates,
+                    dates: this.upcomingDates,
                     from: Dates.todayStr(),
                     personId: this.personId,
-                    occurrenceAt: date => this.occurrences[date] || null,
+                    occurrenceAt: date => this.upcomingOccurrences[date] || null,
                 });
             },
 
             // A pattern that has run out. Said in words, because a row that opens
             // onto nothing looks like a read that failed.
             get finished() {
-                return !!this.chosen && !this.gridLoading && !this.upcoming.length;
+                return !!this.chosen && !this.upcomingLoading && !this.upcoming.length;
+            },
+
+            // ── The Dates tab (MS-287) ────────────────────────────────────────
+            //
+            // The same WINDOW the Rota tab pages in, but anchored to today and
+            // never moved — the scope this tab promises is "upcoming dates
+            // only, no earlier/later paging", which the Rota tab's own anchor
+            // cannot be trusted to hold once an editor has paged it elsewhere.
+            get upcomingDates() {
+                const today = Dates.todayStr();
+                return this.allDates.filter(d => d >= today).slice(0, WINDOW);
+            },
+
+            async loadUpcomingWindow() {
+                const dates = this.upcomingDates;
+                if (!dates.length) { this.upcomingOccurrences = {}; return; }
+
+                this.upcomingLoading = true;
+                try {
+                    this.upcomingOccurrences = await Store.loadSeriesWindow(db, this.seriesId, {
+                        rank: this.rank,
+                        personId: this.personId,
+                        from: dates[0],
+                        to: dates[dates.length - 1],
+                    });
+                } catch (e) {
+                    console.error('Could not read the upcoming dates:', e);
+                    this.upcomingOccurrences = {};
+                    this.error = 'The upcoming dates could not be read.';
+                } finally {
+                    this.upcomingLoading = false;
+                }
             },
 
             recomputeDates() {
@@ -949,6 +1007,16 @@
                 return dateStr ? Dates.formatDateLong(dateStr, 'en-GB') : '';
             },
 
+            // The date badge on a Dates-tab card (MS-287) — three letters and a
+            // number, the same shape the Services page's List View uses.
+            weekdayShort(dateStr) {
+                return this.weekday(dateStr).slice(0, 3);
+            },
+
+            dayNumber(dateStr) {
+                return dateStr ? Number(dateStr.slice(8, 10)) : '';
+            },
+
             // What the window covers, in one line, so paging has something to
             // land on other than the columns themselves changing.
             get windowLabel() {
@@ -1256,17 +1324,12 @@
                 }
             },
 
-            // ── The next few dates ───────────────────────────────────────────
+            // ── The order of service ─────────────────────────────────────────
             //
-            // A Role only ever gets somebody's name against it on a DATE, and a
-            // Sunday's liturgy is built in its order of service — so this hands
-            // over both, and they are two links because they are two jobs.
-
-            get seriesNextDates() {
-                const rule = this.rule;
-                if (!rule) return [];
-                return View.nextDates(rule, Dates.todayStr(), 4);
-            },
+            // A Sunday's liturgy is built there, one date at a time — kept as
+            // its own link (MS-287 removed "The next few" card that used to
+            // draw it, but the URL it built is still what a Sunday's own Event
+            // page reaches for).
 
             orderOfServiceHref(date) {
                 return 'service-builder.html?date=' + encodeURIComponent(date);

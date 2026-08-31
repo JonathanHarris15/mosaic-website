@@ -22,6 +22,7 @@ const Core = require('../public/events-occurrence-core.js');
 function fakeDb(collections, viewer) {
     const committed = [];
     const queriesRun = [];
+    let autoIdCounter = 0;
 
     // The rule from firestore.rules, restated: rank, or the participant rung
     // answered against the document's own participant list.
@@ -95,9 +96,12 @@ function fakeDb(collections, viewer) {
 
     function collection(name) {
         const api = makeQuery(name, []);
+        // A real `.doc()` with no id mints a fresh one — `newAttachmentId` (and
+        // anything else that mints an id before it has anything to write) relies
+        // on that, the same way the real SDK's auto-id does.
         api.doc = id => ({
-            id: id,
-            path: name + '/' + id,
+            id: id || 'auto_' + (++autoIdCounter),
+            path: name + '/' + (id || 'auto_' + autoIdCounter),
             // A single-document read is rule-checked too, and — the part that
             // caught a real bug — a MISSING document is DENIED, not returned as
             // "does not exist". `stampedVisibility()` reads `resource.data`, and
@@ -2057,4 +2061,66 @@ test('attendance is loaded from the occurrence, keyed by personId', async () => 
     }, { rank: 'editor', personId: 'ed' });
     const rows = await Store.loadAttendance(db, 'picnic_2026-07-11');
     assert.deepStrictEqual(rows.map(r => r.personId).sort(), ['alice', 'bob']);
+});
+
+// ── Event Attachments (MS-287) ────────────────────────────────────────────────
+//
+// A file attached to one occurrence — a flyer, a sign-up sheet, a floor plan.
+// The bytes live in Storage; this subcollection is the pointer to them, same
+// shape as `person-photo-core.js`'s `photoUrl`/`photoPath` pair, one document
+// per file rather than one field per Person.
+
+test('newAttachmentId hands out a fresh id under the right occurrence, before anything uploads', () => {
+    const db = fakeDb({ event_occurrences: OCCURRENCES }, { rank: 'editor', personId: 'ed' });
+    const id = Store.newAttachmentId(db, 'picnic_2026-07-11');
+    assert.ok(id, 'an id must come back so the Storage path can be built before the write');
+    assert.notStrictEqual(id, Store.newAttachmentId(db, 'picnic_2026-07-11'), 'two calls must not collide');
+});
+
+test('saving an attachment writes it under its occurrence, keyed by its own id', async () => {
+    const db = fakeDb({ event_occurrences: OCCURRENCES }, { rank: 'editor', personId: 'ed' });
+    const record = {
+        name: 'Order of Service.pdf', contentType: 'application/pdf', size: 12345,
+        storagePath: 'event_attachments/picnic_2026-07-11/att1/Order of Service.pdf',
+        url: 'https://example.com/file', uploadedBy: 'ed', uploadedByName: 'Edie Torres', uploadedAt: 't',
+    };
+    await Store.saveAttachment(db, 'picnic_2026-07-11', 'att1', record);
+
+    const write = db._flatWrites().find(w => w.kind === 'set');
+    assert.strictEqual(write.path, 'event_occurrences/picnic_2026-07-11/attachments/att1');
+    assert.deepStrictEqual(write.data, record);
+});
+
+test('attachments are loaded from the occurrence, each carrying its own id', async () => {
+    const db = fakeDb({
+        event_occurrences: OCCURRENCES,
+        'event_occurrences/picnic_2026-07-11/attachments': {
+            att1: { name: 'Order of Service.pdf', size: 100, uploadedAt: '2026-07-01T00:00:00Z' },
+            att2: { name: 'Map to the field.png', size: 200, uploadedAt: '2026-07-02T00:00:00Z' },
+        },
+    }, { rank: 'editor', personId: 'ed' });
+
+    const rows = await Store.loadAttachments(db, 'picnic_2026-07-11');
+    assert.deepStrictEqual(rows.map(r => r.id).sort(), ['att1', 'att2']);
+    assert.ok(rows.every(r => r.name), 'the stored fields must ride along with the id');
+});
+
+test('an occurrence with nothing attached yet loads an empty list, not an error', async () => {
+    const db = fakeDb({ event_occurrences: OCCURRENCES }, { rank: 'member', personId: 'p1' });
+    const rows = await Store.loadAttachments(db, 'picnic_2026-07-11');
+    assert.deepStrictEqual(rows, []);
+});
+
+test('removing an attachment deletes its document — the Storage blob is the Cloud Function\'s job, not this one\'s', async () => {
+    const db = fakeDb({
+        event_occurrences: OCCURRENCES,
+        'event_occurrences/picnic_2026-07-11/attachments': {
+            att1: { name: 'Order of Service.pdf', size: 100 },
+        },
+    }, { rank: 'editor', personId: 'ed' });
+
+    await Store.deleteAttachment(db, 'picnic_2026-07-11', 'att1');
+
+    const del = db._flatWrites().find(w => w.kind === 'delete');
+    assert.strictEqual(del.path, 'event_occurrences/picnic_2026-07-11/attachments/att1');
 });
