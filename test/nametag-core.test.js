@@ -73,17 +73,25 @@ test('a Kid already carrying a number keeps it', () => {
 
 test('a short given name is printed as large as the label allows', () => {
     assert.strictEqual(Nametag.firstNameSizeMm('Ada'), 15);
-    assert.strictEqual(Nametag.firstNameSizeMm('Molly'), 15);
+    // Molly stops just short of the cap: five wide letters have to be allowed
+    // for, because the estimate cannot tell an 'l' from a 'w'.
+    assert.ok(Nametag.firstNameSizeMm('Molly') >= 13);
 });
 
 test('a long given name is shrunk to fit rather than clipped', () => {
     const big = Nametag.firstNameSizeMm('Ada');
     const long = Nametag.firstNameSizeMm('Christopher');
     assert.ok(long < big, 'a long name is set smaller');
-    // Whatever the length, it stays inside the 67mm of usable label width.
-    ['Ada', 'Jonathan', 'Christopher', 'Maximilian-Rose'].forEach(name => {
-        const width = name.length * 0.58 * Nametag.firstNameSizeMm(name);
-        assert.ok(width <= 51.5, name + ' runs off the label at ' + width.toFixed(1) + 'mm');
+    // Whatever the length, it stays inside the 48mm between the padding and the
+    // mark's column — the gap included, which the old sum forgot. 'Dawson' is
+    // the name that printed through the logo and is why this list has it.
+    ['Ada', 'Molly', 'Dawson', 'Wendy', 'Jonathan', 'Christopher', 'Maximilian-Rose'].forEach(name => {
+        const width = name.length * 0.66 * Nametag.firstNameSizeMm(name);
+        // Or it has hit the 5mm floor, which is deliberate: below that a name
+        // stops being readable across a room, so the floor wins and '.who'
+        // clips what will not fit. The mark is safe either way.
+        assert.ok(width <= 46.5 || Nametag.firstNameSizeMm(name) === 5,
+            name + ' runs off the label at ' + width.toFixed(1) + 'mm');
     });
 });
 
@@ -100,8 +108,10 @@ test('a sheet of labels is one page each, with no blank page between', () => {
         { kind: 'adult', first: 'Pip', last: 'Cole', eventName: 'E', date: 'D' },
     ]);
     assert.match(html, /@page \{ size: 75mm 50mm; margin: 0; \}/);
-    // A box the exact height of the page rounds up and spills onto a blank one.
-    assert.match(html, /height: calc\(50mm - 0\.4mm\)/);
+    // A box as tall as the page spills onto a blank one the moment the stock
+    // is shorter than the page — and the stock is not ours to choose. The
+    // content sets the height now, and the break sets the pages.
+    assert.doesNotMatch(html, /.label {[^}]*height:/);
     assert.match(html, /page-break-after: always/);
     assert.match(html, /\.label:last-child \{ page-break-after: auto/);
 });
@@ -124,6 +134,31 @@ test('the mark sits in its own column, so a long name cannot run under it', () =
     const html = Nametag.printHtml([{ kind: 'adult', first: 'Christopher', last: 'Vale' }]);
     assert.match(html, /\.side \{ flex: 0 0 16mm/);
     assert.match(html, /class="who"/);
+    // The column is only half of it: a nowrap name overflows its own box and
+    // prints across the mark unless the box clips it. 'Dawson' did exactly that.
+    assert.match(html, /.who {[^}]*overflow: hidden/);
+});
+
+
+// The printer's stock is not always the page the CSS asked for, so the corner
+// the two rectangles share is the only place a name can be relied on to land.
+// Centred content drifted down and to the right on the Zebra (MS-320).
+test('the name is pinned to the top left, not centred on the label', () => {
+    const html = Nametag.printHtml([{ kind: 'adult', first: 'Jonathan', last: 'Harris' }]);
+    assert.match(html, /\.label \{[^}]*align-items: flex-start/);
+    assert.doesNotMatch(html, /\.label \{[^}]*align-items: center/);
+    // The mark rides at the top of its column too, level with the name.
+    assert.match(html, /\.side \{[^}]*justify-content: flex-start/);
+});
+
+// A stub is a whole sticker, not a corner torn off one. Nothing on it should
+// suggest a cut, because nobody cuts it (MS-320).
+test('the stub carries no cut line', () => {
+    const labels = Nametag.labelsFor([{ personId: 'k', name: 'Nora Crites', kid: true }], {}, { k: 'K7QF' });
+    const html = Nametag.printHtml(labels);
+    assert.doesNotMatch(html, /dashed/);
+    // It still says which one it is.
+    assert.match(html, /Pickup stub/);
 });
 
 test('a Kid keeps the pickup number on the tag and on the stub', () => {

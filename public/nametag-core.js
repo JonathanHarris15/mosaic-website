@@ -112,13 +112,26 @@
     // CSS cannot measure text before it lays out, so the size is worked out
     // here from the one thing we know: how many characters there are.
     //
-    // 51mm of usable width: 75mm of stock, less 4mm padding each side, less the
-    // 16mm column the Mosaic mark sits in. Bold Arial runs about 0.58em per
-    // character across a mixed-case name. Capped at 15mm so a short name does
-    // not become a billboard, floored at 5mm — roughly 14pt, still the biggest
-    // thing on the label — which fits a seventeen-character name on one line.
-    const NAME_WIDTH_MM = 51;
-    const NAME_EM_RATIO = 0.58;
+    // ⚠ THE USABLE WIDTH IS 48mm, AND THE SUM USED TO SAY 51.
+    //
+    // 75mm of stock, less 4mm of padding each side, less the 16mm column the
+    // Mosaic mark sits in, LESS THE 3mm GAP between the name and that column.
+    // The gap was left out, so a name three millimetres too wide was called a
+    // fit and ran under the mark — "Dawson" printed straight through the logo.
+    // 46 keeps two more millimetres in hand.
+    //
+    // 0.58em per character was an average, and an average is the wrong number
+    // for a worst case: Arial Bold sets 'w' and 'D' far wider than 'i', so a
+    // short name of wide letters beat it. 0.66 covers the widest real given
+    // names ('Wendy' is 0.67 and is the worst of them). Capped at 15mm so a
+    // short name does not become a billboard, floored at 5mm — roughly 14pt,
+    // still the biggest thing on the label.
+    //
+    // The estimate is belt; '.who' clipping its own overflow is braces. No
+    // arithmetic here can be trusted absolutely, and a name cut off at the
+    // column edge is bad where a name printed across the mark is worse.
+    const NAME_WIDTH_MM = 46;
+    const NAME_EM_RATIO = 0.66;
     const NAME_MAX_MM = 15;
     const NAME_MIN_MM = 5;
 
@@ -149,8 +162,10 @@
         const code = label.code
             ? '<div class="code">' + escapeHtml(label.code) + '</div>'
             : '';
-        // Only the stub says what it is. The dashed edge marks it out across the
-        // desk; the word settles it in the hand.
+        // Only the stub says what it is — the word, and nothing else. It used to
+        // carry a dashed border, which reads as a cut line on a label that is
+        // never cut: the stub is a whole sticker of its own, the same size as the
+        // tag beside it (MS-320).
         const kindLine = kind === 'stub'
             ? '<div class="kind">Pickup stub</div>'
             : '';
@@ -183,27 +198,48 @@
             '<style>' +
             '@page { size: ' + WIDTH + ' ' + HEIGHT + '; margin: 0; }' +
             'html, body { margin: 0; padding: 0; background: #fff; }' +
-            // ⚠ THE LABEL IS A HAIR SHORTER THAN THE PAGE, ON PURPOSE. A box the
+            // ⚠ THE CONTENT IS ANCHORED TOP-LEFT, NOT CENTRED. That is what makes
+            // the printed label match the preview (MS-320).
+            //
+            // Chrome lays the page out at the size `@page` asks for, but the paper
+            // it hands the driver is whatever stock the Zebra queue is set to — the
+            // CSS never gets to choose it (Chromium issue 41010929; the spike wrote
+            // this down in docs/plans/ms-317-zebra-label-printing.md). So the page
+            // box and the label under the printhead are two slightly different
+            // rectangles. Centred content splits that difference on every edge and
+            // drifts down and to the right, which is exactly what came out of the
+            // printer while the preview looked square. Content pinned to the corner
+            // both rectangles share cannot drift: the name lands in the same place
+            // whatever stock is loaded, and the mismatch is spent on the empty
+            // bottom of the label rather than on the name.
+            //
+            // ⚠ THE BOX IS AS TALL AS ITS CONTENT, NOT AS TALL AS THE PAGE.
+            //
+            // It used to be the height of the label less 0.4mm, because a box the
             // exact height of the page box rounds up by a sub-pixel in Chrome and
-            // spills onto a second, blank page — so eight labels preview as
-            // sixteen pages, every other one empty. 0.4mm is invisible on a
-            // thermal label and is the whole fix.
-            '.label { width: ' + WIDTH + '; height: calc(' + HEIGHT + ' - 0.4mm); box-sizing: border-box;' +
+            // spills onto a second, blank page. That shaving only held while the
+            // page really was 50mm — and it is not, because the paper the driver
+            // prints on is not the page the CSS asked for (see above). On any
+            // shorter stock every tag spilled, and a blank sticker fed out between
+            // them. A box that stops where the name stops cannot spill onto a
+            // second page on any stock, so the guess is gone rather than retuned.
+            // The forced break after each label is what puts one tag on one
+            // sticker; the height was never doing that job.
+            '.label { width: ' + WIDTH + '; box-sizing: border-box;' +
             ' overflow: hidden;' +
-            ' padding: 3mm 4mm; display: flex; flex-direction: row; align-items: center; gap: 3mm;' +
+            ' padding: 3mm 4mm; display: flex; flex-direction: row; align-items: flex-start; gap: 3mm;' +
             ' page-break-after: always; break-after: page; color: #000; font-family: Arial, Helvetica, sans-serif;' +
             ' -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
             '.label:last-child { page-break-after: auto; break-after: auto; }' +
-            '.who { flex: 1 1 auto; min-width: 0; }' +
+            '.who { flex: 1 1 auto; min-width: 0; overflow: hidden; }' +
             // The mark keeps its own column so the name never runs under it.
             '.side { flex: 0 0 16mm; width: 16mm; display: flex; flex-direction: column;' +
-            ' align-items: center; justify-content: center; gap: 1.5mm; }' +
+            ' align-items: center; justify-content: flex-start; gap: 1.5mm; }' +
             '.mark { width: 16mm; height: 16mm; display: block; object-fit: contain; }' +
             '.first { font-size: 15mm; font-weight: 700; line-height: 0.95; letter-spacing: -0.02em; white-space: nowrap; }' +
             '.last { font-size: 6mm; font-weight: 400; line-height: 1; margin-top: 1mm; }' +
             '.kind { font-size: 3mm; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 1mm; }' +
             '.code { font-family: "Courier New", monospace; font-size: 7mm; font-weight: 700; line-height: 0.9; letter-spacing: 0.4mm; }' +
-            '.kind-stub { border: 0.6mm dashed #000; }' +
             '</style></head><body>' + body + '</body></html>';
     }
 
