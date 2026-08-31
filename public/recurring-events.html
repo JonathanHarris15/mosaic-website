@@ -150,19 +150,6 @@
         .re-rung__who { display: block; font-size: 12px; line-height: 1.4; color: var(--on-surface-variant); }
         .re-footnote { margin-top: var(--space-sm); font-size: 11.5px; color: var(--on-surface-variant); }
 
-        .re-datecard { border: 1px solid var(--outline-variant); border-radius: var(--radius); overflow: hidden; }
-        .re-datecard__head {
-            padding: 8px var(--space-sm); font-size: 14px; color: var(--on-surface);
-            background: var(--surface-container-lowest); border-bottom: 1px solid var(--outline-variant);
-        }
-        .re-datecard__link {
-            display: flex; align-items: center; gap: var(--space-base);
-            padding: 8px var(--space-sm); font-size: 13px; color: var(--on-surface);
-            border-top: 1px solid var(--outline-variant);
-        }
-        .re-datecard__link:first-of-type { border-top: 0; }
-        .re-datecard__link:hover { background: var(--surface-container-low); }
-
         /* ── The phone: two screens, not two columns ─────────────────────────
            At 390px a 320px panel beside anything is a panel and nothing else.
            So the list is a screen, the event you picked replaces it, and the
@@ -253,120 +240,35 @@
             </div>
         </div>
 
-        <!-- ── Browsing: signed in, nothing to change ─────────────────────── -->
-        <!-- The same room with fewer doors. What runs every week, and until
-             when, is an ordinary question — what is privileged is changing the
-             list, not reading it. -->
-        <template x-if="browsing">
+        <!-- ── The pane, shared by both lanes (MS-287) ─────────────────────
+             One tabbed pane for a member and an editor alike. A member reads
+             Dates and a read-only Event; an editor gets those two plus Rota,
+             Roles & rules and Who can see it. Two lanes drawing two panes was
+             how the editor's "The next few" card and the member's own flat
+             "Coming up" list ended up saying the same thing twice, and how
+             a member reading a series' own pattern needed an editor to ask on
+             their behalf. -->
+        <template x-if="!signedOut">
         <div>
-            <p class="text-[13px] text-on-surface-variant max-w-[62ch] pb-md">
+            <p class="text-[13px] text-on-surface-variant max-w-[62ch] pb-md" x-show="!isEditor">
                 Everything that comes round again. Open one to see when it next falls.
             </p>
 
-            <div x-show="!series.length" class="m-empty">
-                <span class="material-symbols-outlined">event_repeat</span>
-                <h2 class="font-display text-[20px] text-primary">Nothing repeats yet.</h2>
-                <p class="max-w-[46ch]">
-                    When the church has something that comes round — a Sunday, a midweek
-                    gathering — it appears here.
-                </p>
-            </div>
-
-            <div x-show="series.length" class="m-split"
-                 :class="phonePane ? 're-split--pane' : 're-split--list'">
-
-                <div class="m-split__list">
-                    <span class="m-label" style="padding-left:4px">The events</span>
-                    <div class="m-picklist" style="margin-top:6px">
-                        <template x-for="s in series" :key="s.id">
-                            <button @click="pickSeries(s.id)" :disabled="gridLoading"
-                                    class="m-picklist__item re-motion"
-                                    :class="s.id === seriesId ? 'm-picklist__item--current' : ''">
-                                <span class="m-picklist__dot" :style="'background:' + colourOf(s).bar"></span>
-                                <span class="m-picklist__main">
-                                    <span class="m-picklist__name" x-text="s.name"></span>
-                                    <span class="m-picklist__line" x-text="patternOf(s)"></span>
-                                    <span class="m-picklist__meta" x-text="'Next ' + nextDateOf(s)"></span>
-                                </span>
-                            </button>
-                        </template>
-                    </div>
-                </div>
-
-                <div class="m-split__pane re-pane" x-show="chosen">
-                    <div class="re-pane__head">
-                        <button @click="phonePane = false"
-                                class="re-pane__back m-icon-btn m-icon-btn--sm m-icon-btn--ghost re-focus"
-                                aria-label="Back to the events">
-                            <span class="material-symbols-outlined">chevron_left</span>
-                        </button>
-                        <div class="min-w-0 flex-grow">
-                            <h2 class="re-pane__name" x-text="chosen ? chosen.name : ''"></h2>
-                            <p class="re-pane__pattern" x-text="chosen ? patternOf(chosen) : ''"></p>
-                        </div>
-                    </div>
-
-                    <div class="re-pane__body">
-                        <div>
-                            <span class="m-label">Coming up</span>
-
-                            <div x-show="gridLoading" class="flex items-center gap-1.5 text-[12.5px] text-on-surface-variant py-1">
-                                <span class="material-symbols-outlined text-[16px] m-spinner">progress_activity</span>
-                                Reading the dates
-                            </div>
-
-                            <p x-show="finished" class="re-standfirst">
-                                This one has finished — there are no more dates coming.
-                            </p>
-
-                            <div x-show="!gridLoading && upcoming.length" class="m-card-list" style="margin-top:var(--space-base);max-width:560px">
-                                <template x-for="row in upcoming" :key="row.date">
-                                    <a :href="dateHref(row.date)" class="m-row m-row--interactive re-focus">
-                                        <span class="material-symbols-outlined text-[18px]"
-                                              :class="row.cancelled ? 'text-outline' : 'text-on-surface-variant'"
-                                              x-text="row.cancelled ? 'event_busy' : 'event'"></span>
-                                        <span class="m-row__main">
-                                            <span class="m-row__title"
-                                                  :class="row.cancelled ? 'text-outline line-through' : ''"
-                                                  x-text="longDate(row.date)"></span>
-                                        </span>
-                                        <!-- Two things worth flagging on a date, and
-                                             neither is guessable from the date itself. -->
-                                        <span x-show="row.cancelled" class="m-label m-label--sm">Not on</span>
-                                        <span x-show="row.mine && !row.cancelled"
-                                              class="m-label m-label--sm flex items-center gap-1 text-secondary">
-                                            <span class="material-symbols-outlined text-[14px]">person_check</span>
-                                            You're on
-                                        </span>
-                                        <span class="m-row__chevron">
-                                            <span class="material-symbols-outlined text-[16px]">chevron_right</span>
-                                        </span>
-                                    </a>
-                                </template>
-                            </div>
-
-                            <p x-show="upcoming.length" class="re-footnote">The Calendar has the rest.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        </template>
-
-        <!-- ── The editor's lane ──────────────────────────────────────────── -->
-        <template x-if="isEditor">
-        <div>
             <!-- Nothing repeats yet. Only reachable on a church with no Sunday
                  Service at all, but that is exactly the state a fresh install is
                  in, and an empty grid with no explanation is a dead end. -->
             <div x-show="!series.length" class="m-empty">
                 <span class="material-symbols-outlined">event_repeat</span>
                 <h2 class="font-display text-[20px] text-primary">Nothing repeats yet.</h2>
-                <p class="max-w-[46ch]">
+                <p class="max-w-[46ch]" x-show="isEditor">
                     A recurring event is anything that comes round — a Sunday, a midweek
                     gathering, an elders' meeting. Make the first one and its rota appears here.
                 </p>
-                <a :href="newEventHref" class="m-btn m-btn--primary m-btn--sm re-motion re-press re-focus">
+                <p class="max-w-[46ch]" x-show="!isEditor">
+                    When the church has something that comes round — a Sunday, a midweek
+                    gathering — it appears here.
+                </p>
+                <a x-show="isEditor" :href="newEventHref" class="m-btn m-btn--primary m-btn--sm re-motion re-press re-focus">
                     <span class="material-symbols-outlined">add</span>
                     <span class="m-btn__label">New recurring event</span>
                 </a>
@@ -387,7 +289,8 @@
                                 <span class="m-picklist__main">
                                     <span class="m-picklist__name" x-text="s.name"></span>
                                     <span class="m-picklist__line" x-text="patternOf(s)"></span>
-                                    <span class="m-picklist__meta" x-text="listLineOf(s)"></span>
+                                    <span class="m-picklist__meta"
+                                          x-text="isEditor ? listLineOf(s) : ('Next ' + nextDateOf(s))"></span>
                                 </span>
                             </button>
                         </template>
@@ -416,7 +319,7 @@
                                     x-text="' · ' + (chosen ? chosen.location : '')"></span>
                             </p>
                         </div>
-                        <div class="re-pane__meta">
+                        <div class="re-pane__meta" x-show="isEditor">
                             <span x-show="isSundaySeries" class="m-badge m-badge--neutral">
                                 <span class="material-symbols-outlined text-[14px]">lock</span> Settled
                             </span>
@@ -605,6 +508,66 @@
                         </div>
                         </template>
 
+                        <!-- ══ Dates (MS-287) ═════════════════════════════════
+                             Everyone's tab — a member's old effective default
+                             ("Coming up"), and an editor's too, styled like the
+                             Services page's List View: one card per instance,
+                             a button through to that date's own Event page.
+                             Fixed to today forward, deliberately independent of
+                             the Rota tab's own paging (`anchor`/`this.dates`) —
+                             an editor scrolling the grid to next month must not
+                             also move what a member reads here. -->
+                        <template x-if="tab === 'dates'">
+                        <div class="re-stack" style="gap:var(--space-md)">
+                            <div x-show="upcomingLoading" class="flex items-center gap-1.5 text-[12.5px] text-on-surface-variant py-1">
+                                <span class="material-symbols-outlined text-[16px] m-spinner">progress_activity</span>
+                                Reading the dates
+                            </div>
+
+                            <p x-show="finished" class="re-standfirst">
+                                This one has finished — there are no more dates coming.
+                            </p>
+
+                            <div x-show="!upcomingLoading && upcoming.length" class="flex flex-col gap-sm" style="max-width:640px">
+                                <template x-for="row in upcoming" :key="row.date">
+                                    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md
+                                                flex flex-col sm:flex-row sm:items-center justify-between gap-sm re-motion"
+                                         :class="row.cancelled ? 'opacity-60' : ''">
+                                        <div class="flex items-center gap-md min-w-0">
+                                            <div class="rounded-xl w-14 h-14 flex flex-col items-center justify-center flex-shrink-0"
+                                                 :class="row.cancelled ? 'bg-surface-container text-on-surface-variant' : 'bg-primary-fixed text-on-primary-fixed'">
+                                                <span class="text-[10px] uppercase font-bold tracking-wider" x-text="weekdayShort(row.date)"></span>
+                                                <span class="text-xl font-bold" x-text="dayNumber(row.date)"></span>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <p class="font-headline-md text-body-lg text-on-surface mb-0"
+                                                   :class="row.cancelled ? 'line-through text-on-surface-variant' : ''"
+                                                   x-text="longDate(row.date)"></p>
+                                                <!-- Two things worth flagging on a date, and
+                                                     neither is guessable from the date itself. -->
+                                                <span x-show="row.cancelled" class="m-label m-label--sm">Not on</span>
+                                                <span x-show="row.mine && !row.cancelled"
+                                                      class="m-label m-label--sm flex items-center gap-1 text-secondary w-fit">
+                                                    <span class="material-symbols-outlined text-[14px]">person_check</span>
+                                                    You're on
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <a :href="dateHref(row.date)"
+                                           class="border border-outline text-secondary px-4 py-2 rounded-full font-label-md text-[12.5px]
+                                                  hover:bg-secondary hover:text-on-secondary hover:border-secondary re-motion re-focus
+                                                  flex items-center justify-center gap-1.5 flex-shrink-0 w-fit">
+                                            <span>Open</span>
+                                            <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+                                        </a>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <p x-show="upcoming.length" class="re-footnote">The Calendar has the rest.</p>
+                        </div>
+                        </template>
+
                         <!-- ══ Roles & rules ══════════════════════════════════ -->
                         <template x-if="tab === 'roles'">
                         <div class="re-stack" style="gap:var(--space-md)">
@@ -770,7 +733,7 @@
                                     <h3 class="re-cardhead">Details</h3>
                                     <p class="re-standfirst">True of every date of this event.</p>
 
-                                    <div class="re-fields">
+                                    <div class="re-fields" x-show="isEditor">
                                         <label class="m-field">
                                             <span class="m-label">What is it</span>
                                             <input type="text" class="m-input re-focus" x-model="seriesDraft.name"
@@ -819,6 +782,29 @@
                                             </button>
                                         </div>
                                     </div>
+
+                                    <!-- Read-only for a member (MS-287): the same facts, as
+                                         plain text — no inputs, no save controls. -->
+                                    <div class="re-fields" x-show="!isEditor">
+                                        <div>
+                                            <span class="m-label">What is it</span>
+                                            <p class="text-[14px] text-on-surface mt-1" x-text="chosen && chosen.name"></p>
+                                        </div>
+                                        <div class="re-two-up">
+                                            <div>
+                                                <span class="m-label">Starts at</span>
+                                                <p class="text-[14px] text-on-surface mt-1" x-text="seriesTime || 'Not set'"></p>
+                                            </div>
+                                            <div>
+                                                <span class="m-label">Where</span>
+                                                <p class="text-[14px] text-on-surface mt-1" x-text="(chosen && chosen.location) || 'Not set'"></p>
+                                            </div>
+                                        </div>
+                                        <div x-show="chosen && chosen.description">
+                                            <span class="m-label">What it's for</span>
+                                            <p class="text-[14px] text-on-surface mt-1" x-text="chosen && chosen.description"></p>
+                                        </div>
+                                    </div>
                                 </section>
 
                                 <section class="m-card">
@@ -845,7 +831,7 @@
                                         Just so it's easy to pick out. An event that needs sorting still shows
                                         red, whatever colour you pick.
                                     </p>
-                                    <div class="re-swatches">
+                                    <div class="re-swatches" x-show="isEditor">
                                         <template x-for="c in colours" :key="c.slug">
                                             <button @click="setColour(c.slug)" :disabled="saving"
                                                     class="re-swatch re-motion re-press re-focus"
@@ -856,37 +842,11 @@
                                             </button>
                                         </template>
                                     </div>
-                                </section>
-
-                                <!-- The next few dates. A Role only ever gets somebody's
-                                     name against it on a DATE, so this screen has to
-                                     hand you one. -->
-                                <section class="m-card">
-                                    <h3 class="re-cardhead">The next few</h3>
-                                    <p class="re-standfirst">
-                                        A role only ever gets somebody's name against it on a date.
-                                    </p>
-                                    <div class="re-stack" style="margin-top:var(--space-sm)">
-                                        <template x-for="d in seriesNextDates" :key="d">
-                                            <div class="re-datecard">
-                                                <div class="re-datecard__head" x-text="longDate(d)"></div>
-                                                <!-- Two jobs, two links. Filling the sound desk and
-                                                     building the order of service are not the same
-                                                     act, and one screen pretending to be both is how
-                                                     the liturgy ends up editable from the Event. -->
-                                                <a :href="dateHref(d)" class="re-datecard__link re-motion re-focus">
-                                                    <span class="material-symbols-outlined text-[16px] text-secondary shrink-0">group</span>
-                                                    <span class="flex-grow">Who's on</span>
-                                                    <span class="material-symbols-outlined text-[14px] text-outline shrink-0">chevron_right</span>
-                                                </a>
-                                                <a x-show="isSundaySeries" :href="orderOfServiceHref(d)"
-                                                   class="re-datecard__link re-motion re-focus">
-                                                    <span class="material-symbols-outlined text-[16px] text-secondary shrink-0">menu_book</span>
-                                                    <span class="flex-grow">Order of service</span>
-                                                    <span class="material-symbols-outlined text-[14px] text-outline shrink-0">north_east</span>
-                                                </a>
-                                            </div>
-                                        </template>
+                                    <!-- Read-only for a member (MS-287): the colour itself,
+                                         with nothing to press. -->
+                                    <div x-show="!isEditor" class="flex items-center gap-2" style="margin-top:var(--space-sm)">
+                                        <span class="re-swatch__dot" :style="'background:' + colour.bar"></span>
+                                        <span class="text-[13.5px] text-on-surface" x-text="colour.name"></span>
                                     </div>
                                 </section>
                             </div>
@@ -959,8 +919,10 @@
                          the rota and the count rides on the buttons, so the
                          buttons cannot be a tab away — and a long list of roles
                          would scroll a header pair off, which is why the old
-                         page drew them twice. -->
-                    <div class="m-actionbar re-desktop-only" x-show="hasRoles">
+                         page drew them twice. Editor-only (MS-287): the Dates
+                         tab now shares this pane with a member, and this
+                         footer is the drafting door a member may never open. -->
+                    <div class="m-actionbar re-desktop-only" x-show="isEditor && hasRoles">
                         <div class="m-actionbar__said">
                             <template x-if="!range">
                                 <p class="m-actionbar__note">
@@ -1016,7 +978,7 @@
                     </div>
 
                     <!-- The phone gets the reason rather than a dead button. -->
-                    <div class="m-actionbar re-phone-only" x-show="hasRoles">
+                    <div class="m-actionbar re-phone-only" x-show="isEditor && hasRoles">
                         <div class="m-actionbar__said">
                             <p class="m-actionbar__note">
                                 Drafting a rota is a wide grid of dates against roles, so it waits for a

@@ -293,6 +293,21 @@ service cloud.firestore {
               && myPersonId() in get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.participantIds);
         allow create, update, delete: if isEditor();
       }
+
+      // Event Attachments (MS-287): a file attached to this occurrence — a
+      // flyer, a sign-up sheet, a floor plan. Unlike the roster, there is no
+      // sharing toggle to check: anyone who can already see the EVENT can see
+      // what is attached to it, so the read gate is exactly the occurrence's
+      // own visibility (plus the `participant` rung, the one rank alone cannot
+      // answer). Only an editor may attach or remove one.
+      match /attachments/{attachmentId} {
+        allow read: if isKiosk()
+          || rankCanSee(get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.visibility)
+          || (get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.visibility == 'participant'
+              && request.auth != null
+              && myPersonId() in get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.participantIds);
+        allow create, update, delete: if isEditor();
+      }
     }
 
     // The Calendar needs YOUR OWN assignments across a whole month without

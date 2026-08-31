@@ -26,6 +26,7 @@
     const Events = window.EventsCore;
     const Fairness = window.FairnessCore;
     const FamilyCore = window.FamilyCore;
+    const Attachments = window.EventAttachmentsCore;
 
     const params = new URLSearchParams(window.location.search);
 
@@ -108,6 +109,14 @@
             series: null,
             assignments: [],
             attendance: [],
+            // A file attached to this occurrence (MS-287) — a flyer, a sign-up
+            // sheet, a floor plan. Visible to anyone who can see the Event,
+            // same as its description; only an editor attaches or removes one.
+            attachments: [],
+            uploadingAttachment: false,
+            attachmentError: '',
+            // Set only when removing a file would need confirming.
+            pendingAttachmentRemoval: null,
             // Which pane of the Event page is open. Editors get a second one —
             // who was actually here — so it starts on the Event either way.
             tab: 'event',
@@ -437,6 +446,18 @@
                         }
                     }
 
+                    // Attachments are read for EVERYONE who reached this far —
+                    // unlike Attendance, they are not editor-only (MS-287's PRD:
+                    // anyone who can see the Event can see what is attached to
+                    // it). A refusal degrades to an empty list rather than
+                    // failing the page, the same direction attendance already
+                    // takes.
+                    try {
+                        this.attachments = await Store.loadAttachments(db, loaded.id);
+                    } catch (e) {
+                        this.attachments = [];
+                    }
+
                     // The rest in one wave. None of these three needs anything
                     // from the others — they were only sequential because they
                     // were written in the order somebody thought of them, and
@@ -631,6 +652,11 @@
             get isEditor() {
                 return ['editor', 'admin', 'elder', 'super_admin'].indexOf(this.rank) !== -1;
             },
+
+            // Attaching or removing a file is editor-only; SEEING what is
+            // attached is not — the Files tab is open to anyone who can already
+            // see the Event, same gate as its description (MS-287's PRD).
+            get canManageAttachments() { return this.isEditor; },
 
             get isSunday() {
                 return this.occurrence && this.occurrence.seriesId === Core.SUNDAY_SERVICE_ID;
@@ -1583,6 +1609,109 @@
                 });
                 this.occurrence.needsNameTags = on;
                 if (this.series) this.series.needsNameTags = on;
+            },
+
+            // ── Files (MS-287) ────────────────────────────────────────────────
+            //
+            // A file attached to this occurrence. The bytes go straight to
+            // Storage, the same shape a Directory Photo already uses
+            // (ADR-0029): validate, upload, THEN write the Firestore pointer —
+            // so a browser closed mid-upload leaves an orphan blob rather than
+            // a record pointing at nothing.
+
+            // The file input is native, not Alpine-modelled — a `<input
+            // type="file">`'s value cannot be bound, only read at the moment it
+            // changes.
+            chooseAttachmentFile(event) {
+                const file = event && event.target && event.target.files && event.target.files[0];
+                if (event && event.target) event.target.value = '';
+                if (file) this.uploadAttachment(file);
+            },
+
+            async uploadAttachment(file) {
+                if (!this.canManageAttachments || !this.occurrence || this.uploadingAttachment) return;
+
+                const check = Attachments.validateAttachmentFile(file);
+                if (!check.ok) { this.attachmentError = check.error; return; }
+
+                this.uploadingAttachment = true;
+                this.attachmentError = '';
+                try {
+                    const occurrenceId = this.occurrence.id;
+                    const attachmentId = Store.newAttachmentId(db, occurrenceId);
+                    const path = Attachments.storagePath(occurrenceId, attachmentId, file.name);
+
+                    const ref = firebase.storage().ref().child(path);
+                    const snap = await ref.put(file, { contentType: file.type || 'application/octet-stream' });
+                    const url = await snap.ref.getDownloadURL();
+
+                    const record = Attachments.buildAttachmentRecord({
+                        name: file.name,
+                        contentType: file.type || null,
+                        size: file.size,
+                        storagePath: path,
+                        url: url,
+                        uploadedBy: this.uid,
+                        uploadedByName: this.personId ? this.personName(this.personId) : null,
+                        uploadedAt: new Date().toISOString(),
+                    });
+                    await Store.saveAttachment(db, occurrenceId, attachmentId, record);
+                    this.attachments = this.attachments.concat([Object.assign({ id: attachmentId }, record)]);
+                } catch (e) {
+                    console.error('Attachment upload failed:', e);
+                    this.attachmentError = 'That file could not be attached. Try again.';
+                } finally {
+                    this.uploadingAttachment = false;
+                }
+            },
+
+            askRemoveAttachment(attachment) {
+                if (!this.canManageAttachments) return;
+                this.pendingAttachmentRemoval = attachment;
+            },
+
+            cancelAttachmentRemoval() {
+                this.pendingAttachmentRemoval = null;
+            },
+
+            async confirmRemoveAttachment() {
+                const attachment = this.pendingAttachmentRemoval;
+                if (!attachment || !this.occurrence || this.saving) return;
+                this.saving = true;
+                try {
+                    // Deletes the POINTER. The bytes are the Cloud Function's
+                    // job — cleanUpDeletedAttachment — the same division of
+                    // labour a Directory Photo's cleanup trigger already uses,
+                    // because Storage rules cannot tell an editor apart from
+                    // any other signed-in account.
+                    await Store.deleteAttachment(db, this.occurrence.id, attachment.id);
+                    this.attachments = this.attachments.filter(a => a.id !== attachment.id);
+                    this.pendingAttachmentRemoval = null;
+                } catch (e) {
+                    console.error('Attachment removal failed:', e);
+                    this.attachmentError = 'That file could not be removed. Try again.';
+                } finally {
+                    this.saving = false;
+                }
+            },
+
+            attachmentIcon(attachment) {
+                return Attachments.materialIconFor(attachment && attachment.name);
+            },
+
+            // Everything the PRD asked this tab to list, in one line: type,
+            // size, who, when — the name itself is already the row's own
+            // title, so it is not repeated here.
+            attachmentMeta(attachment) {
+                const a = attachment || {};
+                const parts = [
+                    Attachments.fileExtension(a.name) || 'File',
+                    Attachments.formatFileSize(a.size),
+                ];
+                if (a.uploadedByName) parts.push(a.uploadedByName);
+                const when = Attachments.formatUploadedAt(a.uploadedAt);
+                if (when) parts.push(when);
+                return parts.join(' · ');
             },
 
             // ── Editing a one-off Event ──────────────────────────────────────

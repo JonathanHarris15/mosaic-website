@@ -34,6 +34,7 @@
     const OCCURRENCES = 'event_occurrences';
     const ROSTER = 'roster';
     const ATTENDANCE = 'attendance';
+    const ATTACHMENTS = 'attachments';
 
     // Firestore caps a batch at 500 operations. The rest of this codebase commits
     // in 450s (see the week-shift tool), leaving room rather than riding the edge.
@@ -147,6 +148,52 @@
             seen[id] = true;
             batch.delete(col.doc(id));
         });
+        await batch.commit();
+    }
+
+    // ── Event Attachments (MS-287) ────────────────────────────────────────────
+    //
+    // A file attached to one occurrence — a flyer, a sign-up sheet, a floor
+    // plan. The bytes live in Storage; this subcollection is the pointer to
+    // them, one document per file (never a field on the occurrence, the same
+    // reason the roster is a subcollection rather than a field).
+    //
+    // Reading here is deliberately by-occurrence only — there is no cross-Event
+    // "every attachment this church has" query, so there is nothing here for
+    // the visibility trap the rest of this file guards against. Who may see an
+    // occurrence's own attachments is the security rule's job, keyed off the
+    // SAME visibility already stamped on the occurrence (MS-287's PRD: anyone
+    // who can already see the Event can see what's attached to it).
+
+    // A fresh id, handed out BEFORE the bytes ever leave the browser — the
+    // Storage path is built from it (`EventAttachmentsCore.storagePath`), the
+    // same order a Directory Photo's `fileId` is minted before its `put()`.
+    function newAttachmentId(db, occurrenceId) {
+        return occurrenceRef(db, occurrenceId).collection(ATTACHMENTS).doc().id;
+    }
+
+    // Write the record. Always a full `set`, never a patch — the record's
+    // shape is decided once, by `EventAttachmentsCore.buildAttachmentRecord`,
+    // so there is no earlier version of this document for a merge to protect.
+    async function saveAttachment(db, occurrenceId, attachmentId, record) {
+        await occurrenceRef(db, occurrenceId).collection(ATTACHMENTS).doc(attachmentId).set(record);
+        return record;
+    }
+
+    async function loadAttachments(db, occurrenceId) {
+        const snap = await occurrenceRef(db, occurrenceId).collection(ATTACHMENTS).get();
+        return snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+    }
+
+    // Deletes the POINTER, not the bytes. Storage rules cannot tell an editor
+    // apart from any other signed-in account (ADR-0029 §4's reasoning applies
+    // here just as it does to a Directory Photo), so a client can never be
+    // trusted to delete the blob itself — `cleanUpDeletedAttachment` removes it
+    // once this document is gone, the same division of labour
+    // `cleanUpReplacedPhoto` already uses.
+    async function deleteAttachment(db, occurrenceId, attachmentId) {
+        const batch = db.batch();
+        batch.delete(occurrenceRef(db, occurrenceId).collection(ATTACHMENTS).doc(attachmentId));
         await batch.commit();
     }
 
@@ -1662,6 +1709,7 @@
         OCCURRENCES,
         ROSTER,
         ATTENDANCE,
+        ATTACHMENTS,
         shiftOccurrences,
         shiftDays,
         seesEveryRung,
@@ -1672,6 +1720,10 @@
         loadAttendance,
         markPresent,
         unmarkPresent,
+        newAttachmentId,
+        saveAttachment,
+        loadAttachments,
+        deleteAttachment,
         setNeedsNameTags,
         loadVisibleSeries,
         loadCalendar,

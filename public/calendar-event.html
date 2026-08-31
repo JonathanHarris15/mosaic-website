@@ -36,6 +36,9 @@
     <script src="vendor/firebase/firebase-app-compat.js"></script>
     <script src="vendor/firebase/firebase-auth-compat.js"></script>
     <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <!-- For uploading a Files-tab attachment (MS-287), the same SDK a
+         Directory Photo upload already relies on. -->
+    <script src="vendor/firebase/firebase-storage-compat.js"></script>
     <!-- On-device cache for the phone app (no-op on the web). Must load before
          auth.js, which builds the Firestore handle persistence attaches to. -->
     <script src="local-cache.js"></script>
@@ -47,6 +50,7 @@
     <script src="fairness-core.js"></script>
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
+    <script src="event-attachments-core.js"></script>
     <script src="away-core.js"></script>
     <script src="away-store.js"></script>
     <!-- calendar-view.js reads this for "what you are down for" (MS-20).
@@ -373,16 +377,25 @@
                 </span>
             </button>
 
-            <!-- ── Tabs (MS-321) ──────────────────────────────────────────
+            <!-- ── Tabs (MS-321, MS-287) ───────────────────────────────────
                  The page was one long scroll and Attendance was a card buried
                  near the top of Roles, which is where somebody looking for who
-                 turned up never thought to look. Two tabs: the Event, and who
-                 was there. Attendance is editor-only, like the list itself. -->
-            <div class="m-tabs mt-gutter" x-show="isEditor">
+                 turned up never thought to look. Event and Files are open to
+                 anyone who can see this far — Files the same way the Event's
+                 own description is, read-only for a member. Attendance stays
+                 editor-only, like the list itself. -->
+            <div class="m-tabs mt-gutter">
                 <button type="button" class="m-tabs__tab"
                         :class="tab === 'event' && 'm-tabs__tab--current'"
                         @click="tab = 'event'">Event</button>
                 <button type="button" class="m-tabs__tab"
+                        :class="tab === 'files' && 'm-tabs__tab--current'"
+                        @click="tab = 'files'">
+                    Files
+                    <span x-show="attachments.length"
+                          class="text-on-surface-variant" x-text="attachments.length"></span>
+                </button>
+                <button type="button" class="m-tabs__tab" x-show="isEditor"
                         :class="tab === 'attendance' && 'm-tabs__tab--current'"
                         @click="tab = 'attendance'">
                     Attendance
@@ -394,6 +407,57 @@
             <!-- Who was present — shared markup, mounted only here. -->
             <div class="mt-gutter" x-show="isEditor && tab === 'attendance'">
                 <div data-roles-panel="attendance"></div>
+            </div>
+
+            <!-- ── Files (MS-287) ──────────────────────────────────────────
+                 A file attached to this occurrence — a flyer, a sign-up sheet,
+                 a floor plan. Anyone who reached this page far enough to read
+                 the tab bar can see what is here; only an editor can change
+                 it. -->
+            <div class="mt-gutter max-w-[640px]" x-show="tab === 'files'">
+                <p class="text-[12.5px] text-on-surface-variant mb-sm">
+                    Anything worth having on hand for this date.
+                </p>
+
+                <section x-show="canManageAttachments" class="m-card mb-sm">
+                    <input type="file" x-ref="attachmentInput" class="hidden" @change="chooseAttachmentFile($event)" />
+                    <button type="button" @click="$refs.attachmentInput.click()" :disabled="uploadingAttachment"
+                            class="border border-secondary text-secondary px-md py-2 rounded-lg font-label-md
+                                   text-xs uppercase tracking-wider cal-motion cal-press cal-focus
+                                   hover:bg-surface-container disabled:opacity-40 flex items-center gap-1.5 w-fit">
+                        <span class="material-symbols-outlined text-[18px]"
+                              :class="uploadingAttachment ? 'm-spinner' : ''"
+                              x-text="uploadingAttachment ? 'progress_activity' : 'attach_file'"></span>
+                        <span x-text="uploadingAttachment ? 'Uploading…' : 'Attach a file'"></span>
+                    </button>
+                    <p x-show="attachmentError" class="text-[12.5px] text-error mt-2" x-text="attachmentError"></p>
+                </section>
+
+                <div x-show="!attachments.length" class="m-empty">
+                    <span class="material-symbols-outlined">attach_file</span>
+                    <h3 class="font-display text-[18px] text-primary">Nothing attached yet.</h3>
+                    <p x-show="!canManageAttachments" class="max-w-[46ch]">
+                        Nothing has been attached to this event.
+                    </p>
+                </div>
+
+                <div x-show="attachments.length" class="m-card-list">
+                    <template x-for="a in attachments" :key="a.id">
+                        <div class="m-row">
+                            <span class="material-symbols-outlined text-[19px] text-secondary shrink-0"
+                                  x-text="attachmentIcon(a)"></span>
+                            <a :href="a.url" target="_blank" rel="noopener" class="m-row__main">
+                                <span class="m-row__title" x-text="a.name"></span>
+                                <span class="m-row__sub" x-text="attachmentMeta(a)"></span>
+                            </a>
+                            <button x-show="canManageAttachments" @click="askRemoveAttachment(a)"
+                                    class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus"
+                                    :aria-label="'Remove ' + a.name">
+                                <span class="material-symbols-outlined text-[18px]">delete</span>
+                            </button>
+                        </div>
+                    </template>
+                </div>
             </div>
 
             <!-- ── Two columns ────────────────────────────────────────────── -->
@@ -1032,6 +1096,34 @@
                         class="bg-error text-on-error px-md py-2 rounded-lg shadow-xs font-label-md
                                text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">
                     Take it off
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Removing a Files attachment (MS-287) ────────────────────────────── -->
+    <div x-show="pendingAttachmentRemoval" @keydown.escape.window="cancelAttachmentRemoval()"
+         class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
+        <div class="bg-surface-container-lowest rounded-lg border border-outline-variant w-full max-w-[460px] mt-[14vh]">
+            <div class="px-md py-md flex items-start gap-sm">
+                <span class="material-symbols-outlined text-[22px] text-error shrink-0 mt-0.5">warning</span>
+                <div class="min-w-0">
+                    <h3 class="font-display text-[20px] text-primary">
+                        Remove <span x-text="pendingAttachmentRemoval && pendingAttachmentRemoval.name"></span>?
+                    </h3>
+                    <p class="text-[13px] text-on-surface-variant mt-2">
+                        Nobody is told. Anyone who could see this file loses it immediately.
+                    </p>
+                </div>
+            </div>
+            <div class="px-md py-md border-t border-outline-variant flex items-center justify-end gap-sm">
+                <button @click="cancelAttachmentRemoval()"
+                        class="px-md py-2 rounded-lg font-label-md text-xs uppercase tracking-wider
+                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Keep it</button>
+                <button @click="confirmRemoveAttachment()" :disabled="saving"
+                        class="bg-error text-on-error px-md py-2 rounded-lg shadow-xs font-label-md
+                               text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">
+                    Remove it
                 </button>
             </div>
         </div>

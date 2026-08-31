@@ -32,6 +32,7 @@ const blockFor = pattern => {
 const eventsBlock = () => blockFor(/match \/events\/\{eventId\}\s*\{([\s\S]*?)\n    \}/);
 const occurrencesBlock = () => blockFor(/match \/event_occurrences\/\{occurrenceId\}\s*\{([\s\S]*?)\n    \}\n/);
 const rosterBlock = () => blockFor(/match \/roster\/\{assignmentId\}\s*\{([\s\S]*?)\n      \}/);
+const attachmentsBlock = () => blockFor(/match \/attachments\/\{attachmentId\}\s*\{([\s\S]*?)\n      \}/);
 const fnBody = name => blockFor(new RegExp('function ' + name + '\\([^)]*\\)\\s*\\{([\\s\\S]*?)\\n    \\}'));
 
 // ── The series collection is closed ───────────────────────────────────────────
@@ -202,4 +203,40 @@ test('myPersonId guards the absent field rather than assuming it', () => {
     const body = fnBody('myPersonId');
     assert.match(body, /'personId' in d/);
     assert.match(body, /: null/, 'an unlinked User has no Person, and must match no participant list');
+});
+
+// ── Event Attachments (MS-287) ────────────────────────────────────────────────
+//
+// A file attached to one occurrence. Unlike the roster there is no sharing
+// toggle to check — the decision (confirmed on the ticket) is that anyone who
+// can already see the Event can see what is attached to it, so the read gate
+// is the occurrence's OWN visibility, read off the parent document.
+
+test('attachments are not world-readable', () => {
+    const block = attachmentsBlock();
+    assert.doesNotMatch(block, /allow read: if true/);
+    assert.doesNotMatch(block, /allow read, write: if true/);
+});
+
+test('attachments are readable by anyone who can already see the occurrence, via the parent\'s stamped visibility', () => {
+    const block = attachmentsBlock();
+    assert.match(
+        block,
+        /rankCanSee\(get\(\/databases\/\$\(database\)\/documents\/event_occurrences\/\$\(occurrenceId\)\)\.data\.visibility\)/,
+        'the gate must read the OCCURRENCE\'s stamp, not invent a stamp of its own'
+    );
+});
+
+test('a participant sees attachments on their own participant-rung Event, the one rung rank alone cannot answer', () => {
+    const block = attachmentsBlock();
+    assert.match(block, /visibility == 'participant'/);
+    assert.match(block, /myPersonId\(\) in get\([\s\S]*\)\.data\.participantIds/);
+});
+
+test('only an editor may attach or remove a file', () => {
+    assert.match(attachmentsBlock(), /allow create, update, delete: if isEditor\(\)/);
+});
+
+test('a kiosk is not refused — it already sees every occurrence', () => {
+    assert.match(attachmentsBlock(), /isKiosk\(\)/);
 });

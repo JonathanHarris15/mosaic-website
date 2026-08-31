@@ -57,6 +57,7 @@ function loadComponent(scriptFile, factoryName, overrides) {
     // The real modules, so the component is wired to the code it ships with.
     sandbox.EventsOccurrenceCore = require('../public/events-occurrence-core.js');
     sandbox.EventsStore = require('../public/events-store.js');
+    sandbox.EventAttachmentsCore = require('../public/event-attachments-core.js');
     sandbox.CalendarView = require('../public/calendar-view.js');
     sandbox.RolesCore = require('../public/roles-core.js');
     sandbox.FamilyCore = require('../public/family-core.js');
@@ -873,6 +874,175 @@ test('the colour section is offered to editors and writes through the store', ()
     // It must say which way the change lands — series-wide or this one — because
     // both are reasonable to expect and only one is true.
     assert.ok(/every date of this event/.test(html));
+});
+
+// ── Files (MS-287) ─────────────────────────────────────────────────────────────
+//
+// A file attached to one occurrence. Bytes go to Storage first, THEN the
+// Firestore pointer is written — the same order a Directory Photo upload
+// already uses — so a fake Storage plus a fake Firestore is enough to drive
+// the whole flow without a browser or a real bucket.
+
+function attachmentsFakeDb() {
+    const writes = [];
+    let counter = 0;
+
+    function attachmentDoc(occurrenceId, attachmentId) {
+        const id = attachmentId || 'auto' + (++counter);
+        const path = 'event_occurrences/' + occurrenceId + '/attachments/' + id;
+        return {
+            id: id,
+            path: path,
+            async set(data) { writes.push({ path: path, data: data }); },
+        };
+    }
+
+    function occurrenceDoc(occurrenceId) {
+        return {
+            collection(sub) {
+                assert.strictEqual(sub, 'attachments');
+                return { doc: attachmentId => attachmentDoc(occurrenceId, attachmentId) };
+            },
+        };
+    }
+
+    return {
+        collection(name) {
+            assert.strictEqual(name, 'event_occurrences');
+            return { doc: occurrenceId => occurrenceDoc(occurrenceId) };
+        },
+        batch() {
+            const deletes = [];
+            return {
+                delete(ref) { deletes.push(ref.path); },
+                async commit() { deletes.forEach(p => writes.push({ path: p, deleted: true })); },
+            };
+        },
+        _writes: writes,
+    };
+}
+
+// A fake `firebase.storage()` standing in for the real SDK — `put()` resolves
+// to a snapshot whose `ref.getDownloadURL()` echoes back a URL built from the
+// path, so a test can assert the record actually points at what was "uploaded".
+function fakeFirebase() {
+    const uploads = [];
+    return {
+        _uploads: uploads,
+        storage() {
+            return {
+                ref() {
+                    return {
+                        child(path) {
+                            return {
+                                async put(file, opts) {
+                                    uploads.push({ path: path, file: file, opts: opts });
+                                    return {
+                                        ref: { async getDownloadURL() { return 'https://files.example/' + path; } },
+                                    };
+                                },
+                            };
+                        },
+                    };
+                },
+            };
+        },
+    };
+}
+
+test('an editor attaches a file: it uploads first, then the Firestore pointer names where it landed', async () => {
+    const db = attachmentsFakeDb();
+    const firebase = fakeFirebase();
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', { db: db, firebase: firebase });
+    page.rank = 'editor';
+    page.uid = 'u1';
+    page.personId = 'p1';
+    page.people = [{ id: 'p1', name: 'Edie Torres' }];
+    page.occurrence = { id: 'picnic_2026-07-11', seriesId: 'picnic', date: '2026-07-11' };
+
+    await page.uploadAttachment({ name: 'Order of Service.pdf', size: 1024, type: 'application/pdf' });
+
+    assert.strictEqual(page.attachmentError, '');
+    assert.strictEqual(page.attachments.length, 1);
+    assert.strictEqual(page.attachments[0].name, 'Order of Service.pdf');
+    assert.strictEqual(page.attachments[0].uploadedByName, 'Edie Torres');
+
+    assert.strictEqual(firebase._uploads.length, 1, 'the bytes must actually go to Storage');
+    assert.match(firebase._uploads[0].path, /^event_attachments\/picnic_2026-07-11\//);
+
+    assert.strictEqual(db._writes.length, 1, 'the Firestore write happens AFTER the upload, not instead of it');
+    assert.strictEqual(db._writes[0].data.url, 'https://files.example/' + firebase._uploads[0].path);
+    assert.strictEqual(db._writes[0].data.storagePath, firebase._uploads[0].path);
+});
+
+test('a file over the size cap is refused before anything uploads', async () => {
+    const db = attachmentsFakeDb();
+    const firebase = fakeFirebase();
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', { db: db, firebase: firebase });
+    page.rank = 'editor';
+    page.occurrence = { id: 'picnic_2026-07-11' };
+
+    const Core2 = require('../public/event-attachments-core.js');
+    await page.uploadAttachment({ name: 'video.mov', size: Core2.MAX_ATTACHMENT_BYTES + 1 });
+
+    assert.match(page.attachmentError, /25\s?MB/);
+    assert.strictEqual(page.attachments.length, 0);
+    assert.strictEqual(firebase._uploads.length, 0, 'a refused file must never reach Storage');
+    assert.strictEqual(db._writes.length, 0);
+});
+
+test('a member cannot attach a file, whatever they call the method with', async () => {
+    const db = attachmentsFakeDb();
+    const firebase = fakeFirebase();
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', { db: db, firebase: firebase });
+    page.rank = 'member';
+    page.occurrence = { id: 'picnic_2026-07-11' };
+
+    await page.uploadAttachment({ name: 'flyer.png', size: 100 });
+
+    assert.strictEqual(firebase._uploads.length, 0);
+    assert.strictEqual(db._writes.length, 0);
+});
+
+test('removing an attachment asks first, then deletes the pointer and drops it from the list', async () => {
+    const db = attachmentsFakeDb();
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', { db: db });
+    page.rank = 'editor';
+    page.occurrence = { id: 'picnic_2026-07-11' };
+    page.attachments = [
+        { id: 'att1', name: 'Order of Service.pdf' },
+        { id: 'att2', name: 'Map to the field.png' },
+    ];
+
+    page.askRemoveAttachment(page.attachments[0]);
+    assert.strictEqual(page.pendingAttachmentRemoval.id, 'att1');
+    assert.strictEqual(db._writes.length, 0, 'asking must not delete anything yet');
+
+    await page.confirmRemoveAttachment();
+
+    assert.strictEqual(page.pendingAttachmentRemoval, null);
+    assert.deepStrictEqual(page.attachments.map(a => a.id), ['att2']);
+    assert.ok(db._writes.some(w => w.deleted && w.path === 'event_occurrences/picnic_2026-07-11/attachments/att1'));
+});
+
+test('cancelling the removal dialog deletes nothing', () => {
+    const db = attachmentsFakeDb();
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', { db: db });
+    page.attachments = [{ id: 'att1', name: 'Order of Service.pdf' }];
+    page.askRemoveAttachment(page.attachments[0]);
+    page.cancelAttachmentRemoval();
+
+    assert.strictEqual(page.pendingAttachmentRemoval, null);
+    assert.strictEqual(page.attachments.length, 1, 'nothing was confirmed, so nothing is gone');
+});
+
+test('the Files tab is offered to a member, but only an editor sees anything that writes', () => {
+    const html = readPage('calendar-event.html');
+    // The tab bar itself is no longer editor-only — Files (and Event) are open
+    // to anyone who gets this far; only Attendance stays behind isEditor.
+    assert.doesNotMatch(html, /<div class="m-tabs mt-gutter" x-show="isEditor">/);
+    assert.match(html, /tab === 'files'/);
+    assert.match(html, /x-show="canManageAttachments"/, 'uploading must be gated to an editor');
 });
 
 // ── Managing the Sunday Service as an Event ───────────────────────────────────
@@ -3474,10 +3644,13 @@ test('Auto-assign is offered beside a chosen event, to editors, and not on a pho
     const link = html.match(/<a[^>]*:href="draftHref"[\s\S]*?<\/a>/);
 
     assert.ok(link, 'Recurring Events does not offer Auto-assign at all');
-    // The whole page is inside x-if="isEditor", which is the same promise the
-    // Calendar made with x-show="canCreate" — stated here so a later refactor
-    // that lifts the grid out cannot quietly drop it.
-    assert.match(html, /x-if="isEditor"/, 'the page is offered to people who cannot use it');
+    // The pane is shared with a member now (MS-287 gave a member a Dates tab
+    // and a read-only Event tab in the same pane an editor uses), so the
+    // isEditor promise the Calendar makes with `x-show="canCreate"` is no
+    // longer the whole page's — it is this footer's, stated here so a later
+    // refactor that lifts the grid out cannot quietly drop it.
+    assert.match(html, /class="m-actionbar re-desktop-only" x-show="isEditor && hasRoles"/,
+        'the drafting footer is offered to people who cannot use it');
     // The room it opens is a wide grid and says so when you arrive. Better not
     // to offer the journey than to end it with a shrug — so the whole action
     // bar stands down on a phone, and the door goes with it (MS-229).
@@ -6643,28 +6816,140 @@ test('the browse lane opens one event beside the list, not under it', async () =
     assert.strictEqual(page.phonePane, true, 'picking an event did not open it on a phone');
 });
 
-test('the browse lane offers nothing that writes', () => {
-    // Everything that changes a series lives inside the editor template. A
-    // control that leaks into the member's half is one they will be refused on
-    // arrival, which is worse than never offering it.
-    const html = readPage('recurring-events.html');
-    const lane = html.slice(html.indexOf('x-if="browsing"'), html.indexOf('x-if="isEditor"'));
+test('a member reaches Dates and a read-only Event, never a tab that writes', () => {
+    // Since MS-287 both roles share one pane (MS-229's, which used to fork
+    // into an editor's four tabs and a member's separate flat list). A
+    // member's safety is no longer "a separate lane with no tab bar" — it is
+    // that `tabs` never hands them an editor-only id.
+    const page = loadComponent('recurring-events.js', 'recurringEventsPage');
+    page.rank = 'member';
+    // Loose deepEqual, not deepStrictEqual — `tabs` builds its list inside the
+    // sandboxed component, so the array is a different realm's Array from the
+    // literal on the right, and deepStrictEqual's prototype check would fail
+    // on that alone. The same reason most array assertions in this file use
+    // deepEqual against a loadComponent page.
+    assert.deepEqual(page.tabs.map(t => t.id), ['dates', 'event'],
+        'a member is offered a tab that writes');
 
-    assert.ok(lane.length > 400, 'the browse lane is not where this test thinks it is');
+    page.rank = 'editor';
+    assert.deepEqual(page.tabs.map(t => t.id), ['rota', 'dates', 'roles', 'event', 'who']);
+});
+
+test('the browse lane offers nothing that writes', () => {
+    // The Dates and Event tabs are the two a member can reach (proven by the
+    // test above). Dates must carry nothing that writes at all; the Event tab
+    // is SHARED with an editor, so its write controls are still in the
+    // markup — they just have to sit behind their own `x-show="isEditor"`
+    // (or `patternEditable`, which is isEditor under a different name),
+    // never bare in a block a member reads too.
+    const html = readPage('recurring-events.html');
+
+    const datesTab = html.slice(html.indexOf("tab === 'dates'"), html.indexOf("tab === 'roles'"));
     [
-        'takeEverybodyOff', 'draftHref', 'byHandHref', 'newEventHref',
-        'toggle(', 'clearSelection',
-        // The event's own controls are tabs now, so the lane that may not write
-        // must not carry the tab bar either (MS-229).
-        'm-tabs', 'seriesDraft', 'setColour', 'setSeriesVisibility', 'askRemoveSeriesRole',
+        'takeEverybodyOff', 'draftHref', 'byHandHref', 'toggle(', 'clearSelection',
+        'seriesDraft', 'setColour', 'setSeriesVisibility', 'askRemoveSeriesRole',
         'addPairRule', 'openPattern',
     ].forEach(control => {
-        assert.ok(lane.indexOf(control) === -1,
-            'the browse lane offers ' + control + ', which a member may not do');
+        assert.ok(datesTab.indexOf(control) === -1,
+            'the Dates tab offers ' + control + ', which a member may not do');
     });
+    assert.ok(/dateHref\(/.test(datesTab), 'a member cannot reach a single date from Dates');
 
-    assert.ok(/pickSeries\(/.test(lane), 'nothing in the browse lane opens an event');
-    assert.ok(/dateHref\(/.test(lane), 'a member cannot reach a single date from the list');
+    const eventTab = html.slice(html.indexOf("tab === 'event'"), html.indexOf("tab === 'who'"));
+    const editableFields = eventTab.match(/<div class="re-fields" x-show="isEditor">[\s\S]*?<\/div>\s*<\/div>/);
+    assert.ok(editableFields, 'the Event tab\'s editable fields are not behind x-show="isEditor"');
+    ['x-model="seriesDraft.name"', 'x-model="seriesDraft.location"',
+     'x-model="seriesDraft.description"', 'saveSeriesTime(', 'saveSeriesDetails()']
+        .forEach(control => {
+            assert.ok(editableFields[0].indexOf(control) !== -1,
+                'the Event tab lost its editable ' + control);
+        });
+
+    assert.match(eventTab, /class="re-swatches" x-show="isEditor"/,
+        'the colour picker is offered to a member');
+});
+
+test('editors still land on Rota; a member lands on Dates', async () => {
+    // "Editors still land on Rota (unchanged); a member's old effective
+    // default was 'Coming up', which is Dates now" — MS-287's own words for
+    // what each role should see first.
+    const Store = Object.assign({}, require('../public/events-store.js'), {
+        async loadVisibleSeries() { return []; },
+    });
+    const fakeDb = {
+        collection: () => ({
+            get: async () => ({ docs: [] }),
+            where: () => ({ get: async () => ({ docs: [] }) }),
+        }),
+    };
+
+    const member = loadComponent('recurring-events.js', 'recurringEventsPage', {
+        EventsStore: Store,
+        auth: { onAuthStateChanged(cb) { cb({ uid: 'u1' }); } },
+        getUserData: async () => ({ personId: 'p1', permissionLevel: 'member' }),
+        db: fakeDb,
+    });
+    await member.init();
+    assert.strictEqual(member.tab, 'dates');
+
+    const editor = loadComponent('recurring-events.js', 'recurringEventsPage', {
+        EventsStore: Store,
+        auth: { onAuthStateChanged(cb) { cb({ uid: 'u2' }); } },
+        getUserData: async () => ({ personId: 'p2', permissionLevel: 'editor' }),
+        db: fakeDb,
+    });
+    await editor.init();
+    assert.strictEqual(editor.tab, 'rota');
+});
+
+// ── The Dates tab reads "today forward", not wherever Rota is paged ──────────
+
+test('the Dates tab stays anchored to today, however far the Rota tab has paged', () => {
+    // "Scope matches today's member list: upcoming dates only, no
+    // earlier/later paging" — the Rota tab's own `anchor` moves when an
+    // editor pages it, and the Dates tab a member reads must not move with
+    // it. Ten weekly dates, paged five along, prove the two windows differ.
+    const page = loadComponent('recurring-events.js', 'recurringEventsPage', {
+        DateUtils: Object.assign({}, require('../public/date-utils.js'), {
+            todayStr: () => '2026-08-01',
+        }),
+    });
+    page.rank = 'editor';
+    page.allDates = ['2026-08-02', '2026-08-09', '2026-08-16', '2026-08-23',
+        '2026-08-30', '2026-09-06', '2026-09-13', '2026-09-20', '2026-09-27', '2026-10-04'];
+
+    assert.deepEqual(page.upcomingDates, page.allDates.slice(0, 8),
+        'the Dates tab is not the first 8 dates from today');
+
+    // An editor pages the Rota tab five dates along.
+    page.anchor = '2026-09-06';
+    assert.deepEqual(page.dates, page.allDates.slice(5),
+        'the Rota window did not move the way paging is supposed to move it');
+
+    // The Dates tab is unmoved.
+    assert.deepEqual(page.upcomingDates, page.allDates.slice(0, 8),
+        'paging the Rota tab moved the Dates tab too');
+});
+
+test('a member never triggers the Rota tab\'s own read', () => {
+    // Rota is editor-only now (MS-287) — a member has no tab that shows it,
+    // so `choose` must not spend a read on it either.
+    const reads = [];
+    const Store = Object.assign({}, require('../public/events-store.js'), {
+        async loadSeriesWindow(db, seriesId, opts) { reads.push(opts); return {}; },
+    });
+    const page = loadComponent('recurring-events.js', 'recurringEventsPage', {
+        EventsStore: Store,
+        DateUtils: Object.assign({}, require('../public/date-utils.js'), {
+            todayStr: () => '2026-08-01',
+        }),
+    });
+    page.rank = 'member';
+    page.series = [{ id: 'midweek', name: 'Midweek', recurrence: { freq: 'weekly', weekday: 3, startDate: '2026-08-05' } }];
+
+    return page.choose('midweek').then(() => {
+        assert.strictEqual(reads.length, 1, 'a member triggered more than the Dates tab\'s one read');
+    });
 });
 
 // ── Where "back" goes ─────────────────────────────────────────────────────────

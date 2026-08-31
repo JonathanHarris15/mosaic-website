@@ -1514,6 +1514,10 @@
          Calendar are the same code, not two that have to agree. -->
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
+    <!-- calendar-event.js reads this for the Files tab (MS-287), even though
+         this host never draws that markup — the module is captured at load
+         time regardless of which part of the page uses it. -->
+    <script src="event-attachments-core.js"></script>
     <!-- calendar-view.js reads this for "what you are down for" (MS-20).
          Without it the rail card throws and renders blank. -->
     <script src="commitments-core.js"></script>

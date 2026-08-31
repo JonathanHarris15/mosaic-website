@@ -23,6 +23,47 @@ service firebase.storage {
       allow delete: if false;
     }
 
+    // Event Attachments (MS-287): a file attached to one Event occurrence — a
+    // flyer, a sign-up sheet, a floor plan, whatever file type the church
+    // needs. Same shape as Directory Photos above: these rules cannot tell
+    // whether this uploader may edit THIS occurrence — that lives in the
+    // Firestore rule on `event_occurrences/{id}/attachments`, which is what
+    // decides whether an uploaded file can ever be POINTED AT from an Event.
+    //
+    // No content-type restriction, deliberately — "any file type" is the
+    // whole point (confirmed on the ticket: not a Google Drive integration,
+    // just accepting lots of file types into our own Storage). What IS
+    // enforceable here is the size, and 25MB matches the cap
+    // `EventAttachmentsCore.MAX_ATTACHMENT_BYTES` refuses before the upload
+    // even starts.
+    //
+    // ⚠ KNOWN GAP, inherited from the Directory Photo pattern above, and
+    // flagged on the ticket rather than fixed silently here: `allow read`
+    // only checks SIGNED IN, not the occurrence's own visibility rung — an
+    // elder-only Event's attachment is a plain file any signed-in account
+    // can fetch by path, and `getDownloadURL()` mints a token that keeps
+    // working even for a signed-out holder of the link, forever. A Directory
+    // Photo has no restrictive rung to under-deliver on; an Event does, and
+    // this ticket's read-access promise is specifically about that rung.
+    // Closing it properly needs either a Storage rule that reads the
+    // occurrence's stamped visibility via `firestore.get()`, re-deriving the
+    // same rank/rung logic `rankCanSee()` already encodes in firestore.rules,
+    // or routing downloads through a callable that checks visibility
+    // server-side and hands back a short-lived signed URL instead of a
+    // permanent token. Neither is done here.
+    match /event_attachments/{occurrenceId}/{attachmentId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.size < 25 * 1024 * 1024;
+
+      // No client deletes — same reasoning as Directory Photos. These rules
+      // cannot tell an editor apart from any other signed-in account, so
+      // deleting here would let any signed-in account remove any Event's
+      // attachments. `cleanUpDeletedAttachment` removes the blob once the
+      // Firestore record pointing at it is gone.
+      allow delete: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if request.auth != null;
     }
