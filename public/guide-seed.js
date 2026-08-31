@@ -447,10 +447,14 @@
       <span class="m-head-label"><service-date format="long"></service-date></span>
     </div>
     <div class="m-rule-strong" style="margin:14px 0 16px;"></div>
-    <!-- Announcements take all extra vertical space; the blocks below sit at the bottom. -->
-    <div style="flex:1; min-height:0;">
+    <!-- Announcements take all extra vertical space; the blocks below sit at the
+         bottom and stay there. The box holds about nine lines at the base size, so
+         a heavy week's announcements set in smaller type (fit-lines) rather than
+         growing and pushing the schedule and footer off the page; past the floor
+         the box clips. -->
+    <div style="flex:1; min-height:0; overflow:hidden;">
       <div class="m-kicker-sm">Announcements</div>
-      <div class="m-body" style="margin-top:7px;"><input-list key="announcements" label="Weekly Announcements" render-as="announcements" required></input-list></div>
+      <div class="m-body" style="margin-top:7px;"><input-list key="announcements" label="Weekly Announcements" render-as="announcements" fit-lines="9" required></input-list></div>
     </div>
     <div class="m-kicker-sm" style="margin-top:16px;">Weekly Events</div>
     <p class="m-body" style="margin-top:7px;"><span style="font-weight:600; color:var(--navy);">Mosaic Kids</span> &#8212; 8:30 a.m. Sundays before service; a structured lesson from the Gospel Project.</p>

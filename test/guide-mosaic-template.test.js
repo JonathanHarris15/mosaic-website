@@ -149,6 +149,52 @@ test('the back cover carries announcements + the designed preaching schedule', (
     assert.match(back, /Daniel 9:1–23/);
 });
 
+// A busy week's announcements must not push the preaching schedule, the QR
+// block and the footer off the bottom of the back cover. The box is a fixed
+// height, so the type steps down to fit and, past the floor, the box clips.
+const bigAnnouncements = (n) => ({
+    announcements: Array.from({ length: n }, (_, i) => ({
+        title: `Announcement ${i + 1}`,
+        content: '<p>' + 'Every word of this notice is here to fill the line. '.repeat(3) + '</p>',
+    })),
+});
+
+const backCoverOf = (vals) => {
+    const { result } = resolveMosaic(ctx(), Object.assign({}, values, vals));
+    return result.pages[result.pages.length - 1].html;
+};
+const announcementSizePt = (html) => {
+    const m = html.match(/font-size:([\d.]+)pt;">\s*<div style="margin-bottom/);
+    return m ? Number(m[1]) : null;
+};
+
+test('a normal week of announcements prints at the full size', () => {
+    assert.strictEqual(announcementSizePt(backCoverOf({})), 10);
+});
+
+test('a heavy week of announcements sets smaller rather than growing the block', () => {
+    const light = announcementSizePt(backCoverOf(bigAnnouncements(2)));
+    const heavy = announcementSizePt(backCoverOf(bigAnnouncements(5)));
+    assert.ok(heavy < light, `expected ${heavy}pt to be smaller than ${light}pt`);
+    assert.ok(heavy >= 7, 'never shrinks past the readable floor');
+});
+
+test('announcements stop shrinking at the floor, and the box clips instead', () => {
+    const back = backCoverOf(bigAnnouncements(40));
+    assert.strictEqual(announcementSizePt(back), 7);
+    // The block below announcements is clipped by the page, not shoved down it.
+    assert.match(back, /flex:1; min-height:0; overflow:hidden;/);
+    assert.match(back, /Preaching Schedule/);
+});
+
+test('the size ladder reads the announcement text, not its markup', () => {
+    const withTags = Components.announcementLength({ title: 'A', content: '<p><strong>hi</strong></p>' });
+    const plain = Components.announcementLength({ title: 'A', content: 'hi' });
+    assert.strictEqual(withTags, plain);
+    // No declared box (the legacy full-page placement) means no shrinking.
+    assert.strictEqual(Components.announcementsSizePt([2000, 2000], undefined), 10);
+});
+
 test('every Mosaic page resolves with no leftover unknown component tags', () => {
     const { result } = resolveMosaic(ctx(), values);
     for (const p of result.pages) {

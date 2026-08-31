@@ -432,6 +432,62 @@
         },
     };
 
+    // ── Announcements sizing ──────────────────────────────────────────────────
+    // Announcements are the one weekly list with no ceiling on it: a busy week
+    // writes four long ones onto a back cover with room for about nine lines.
+    // When they no longer fit, the type steps down instead of the block growing
+    // and shoving the schedule and the footer off the bottom of the page.
+    //
+    // The engine renders to a string with no DOM to measure, so the fit is
+    // estimated from the text: a page author declares how many base-size lines
+    // the box holds (`fit-lines`), and the render picks the largest size on the
+    // ladder whose estimated block fits. Smaller type wins twice — more
+    // characters per line AND a shorter line — so the block shrinks roughly with
+    // the square of the size, and one step down buys a lot of room. Below the
+    // floor it stops shrinking and the box clips, which is still better than
+    // pushing the rest of the page away.
+    const ANNC_BASE_PT = 10;          // what announcements print at when they fit
+    const ANNC_MIN_PT = 7;            // unreadable below this; clip instead
+    const ANNC_STEP_PT = 0.5;
+    const ANNC_LINE = 1.375;          // Tailwind leading-snug
+    const ANNC_GAP_EM = 0.6;          // space between announcements
+    const ANNC_CHARS_PER_LINE = 85;   // at base size, across the booklet's column
+                                      // (measured off a printed back cover)
+
+    // What one announcement contributes to the estimate: its bold title plus its
+    // body as plain text (the body is rich text, so tags are not characters).
+    function announcementLength(item) {
+        const title = (item && item.title) || '';
+        const body = String((item && item.content) || '')
+            .replace(/<[^>]*>/g, '')
+            .replace(/&[a-z]+;|&#\d+;/gi, ' ');
+        return (title ? title.length + 2 : 0) + body.length;
+    }
+
+    function announcementsSizePt(lengths, fitLines) {
+        const lines = Number(fitLines);
+        if (!lines || !(lines > 0)) return ANNC_BASE_PT;
+        const capacity = lines * ANNC_LINE * ANNC_BASE_PT;   // box height, in points
+        const gaps = Math.max(0, lengths.length - 1) * ANNC_GAP_EM;
+        for (let pt = ANNC_BASE_PT; pt > ANNC_MIN_PT; pt -= ANNC_STEP_PT) {
+            const perLine = ANNC_CHARS_PER_LINE * (ANNC_BASE_PT / pt);
+            let textLines = 0;
+            for (const len of lengths) textLines += Math.max(1, Math.ceil(len / perLine));
+            if ((textLines * ANNC_LINE + gaps) * pt <= capacity) return pt;
+        }
+        return ANNC_MIN_PT;
+    }
+
+    function renderAnnouncements(list, attrs) {
+        const pt = announcementsSizePt(list.map(announcementLength), (attrs || {})['fit-lines']);
+        const items = list.map((it, i) => {
+            const gap = i === list.length - 1 ? '0' : ANNC_GAP_EM + 'em';
+            const title = (it.title || '') + (it.title ? ': ' : '');
+            return `<div style="margin-bottom:${gap};"><span class="font-bold">${esc(title)}</span><span>${it.content || ''}</span></div>`;
+        }).join('');
+        return `<div class="leading-snug" style="font-size:${pt}pt;">${items}</div>`;
+    }
+
     // A repeating group of weekly entries. The value is an array; `render-as`
     // picks the print layout. Powers announcements, Mosaic Kids summary/questions
     // and pastoral-prayer prompts (ADR-0008 §3.1).
@@ -449,9 +505,7 @@
             const mode = ctx.attrs['render-as'] || 'bullets';
             const cls = ctx.attrs.class || '';
             if (mode === 'announcements') {
-                return list
-                    .map(it => `<div class="mb-2 last:mb-0 text-[10pt] leading-snug"><span class="font-bold">${esc((it.title || '') + (it.title ? ': ' : ''))}</span><span>${it.content || ''}</span></div>`)
-                    .join('');
+                return list.length ? renderAnnouncements(list, ctx.attrs) : '';
             }
             // bullets (default): array of strings or { text }
             const lis = list
@@ -525,6 +579,7 @@
 
     const GuideComponents = {
         esc, attrEsc, shortDate, baptismNamesClass,
+        announcementLength, announcementsSizePt,
         V1_COMPONENTS,
         components: V1_COMPONENTS,
         makeCatalog,
