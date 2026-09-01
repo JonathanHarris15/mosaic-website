@@ -154,3 +154,15 @@ test('the token Storage mints at upload is stripped again', () => {
     assert.match(functions, /firebaseStorageDownloadTokens: null/,
         'setting the key to null is how the token is actually removed');
 });
+
+// Not a style point. `onObjectFinalized` throws AT LOAD when it cannot find a
+// bucket, and FIREBASE_CONFIG carries none during deploy analysis — so an
+// inferred bucket does not fail this one function, it fails the whole
+// codebase with "Cannot determine backend specification" and nothing deploys.
+test('the storage trigger names its bucket rather than inferring one', () => {
+    const functions = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
+    const block = /exports\.sealEventAttachment = onObjectFinalized\(\s*\{([^}]*)\}/.exec(functions);
+    assert.ok(block, 'sealEventAttachment has moved or been renamed');
+    assert.match(block[1], /bucket: "[^"]+"/,
+        'without a named bucket the whole functions codebase fails to deploy');
+});

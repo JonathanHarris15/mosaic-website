@@ -613,8 +613,11 @@ exports.cleanUpReplacedPhoto = onDocumentWritten(
  * all — a file dropped in from the Firebase console, or a future caller that
  * forgets. Setting the key to null is how the Storage client deletes it.
  */
+// The bucket is named rather than inferred: FIREBASE_CONFIG carries no
+// storageBucket during deploy analysis, and onObjectFinalized throws at load
+// without one — which fails the whole codebase, not just this function.
 exports.sealEventAttachment = onObjectFinalized(
-    {region: "us-central1"},
+    {region: "us-central1", bucket: "mosaic-hymn-database.firebasestorage.app"},
     async (event) => {
       const object = event.data || {};
       const name = object.name;
