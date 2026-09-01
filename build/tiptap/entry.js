@@ -16,10 +16,25 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableHeader from "@tiptap/extension-table-header";
 import TableCell from "@tiptap/extension-table-cell";
+// Word-like editing (added after the Files-tab work): a picture, a link, a
+// paragraph aligned somewhere other than left, a block you can drag by its
+// paragraph aligned somewhere other than left, and a live outline.
+//
+// ⚠ NO DragHandle. It is open source now and it would be nice to have, but on
+// TipTap v2 @tiptap/extension-drag-handle hard-depends on
+// @tiptap/extension-collaboration -> y-prosemirror -> yjs: about 180KB of
+// collaborative-editing machinery this app does not use, in a bundle the phone
+// app ships. Revisit if this ever moves to TipTap v3, where the two are
+// decoupled.
+import Image from "@tiptap/extension-image";
+import Link from "@tiptap/extension-link";
+import TextAlign from "@tiptap/extension-text-align";
+import { TableOfContents } from "@tiptap/extension-table-of-contents";
 
 window._TipTapLib = {
   Editor, Extension, Node, InputRule, mergeAttributes,
   Plugin, PluginKey,
   StarterKit, Underline, Mention, TextStyle, FontFamily, Highlight,
   Table, TableRow, TableHeader, TableCell,
+  Image, Link, TextAlign, TableOfContents,
 };

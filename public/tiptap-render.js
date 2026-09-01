@@ -28,12 +28,48 @@
                `&fromTitle=${encodeURIComponent(b.fromTitle || '')}`;
     }
 
+    // TextAlign writes a CSS value onto the node. Only the three that are not
+    // the default are emitted, and only if they are one of the four it can
+    // produce — never a value straight out of the document into a style
+    // attribute.
+    const ALIGNMENTS = { center: 1, right: 1, justify: 1 };
+
+    function alignStyle(node) {
+        const value = String((node.attrs && node.attrs.textAlign) || '').toLowerCase();
+        return ALIGNMENTS[value] ? ` style="text-align:${value}"` : '';
+    }
+
+    // A link, an image src — anything that becomes an address in the page. Only
+    // http, https, mailto and an inline data: image may through; `javascript:`
+    // and everything else become nothing at all.
+    function safeUrl(url, allowData) {
+        const raw = String(url == null ? '' : url).trim();
+        if (/^https?:\/\//i.test(raw) || /^mailto:/i.test(raw)) return escapeHtml(raw);
+        if (allowData && /^data:image\/[a-z0-9.+-]+;base64,/i.test(raw)) return escapeHtml(raw);
+        return '';
+    }
+
     function renderNode(node, options) {
         switch (node.type) {
             case 'paragraph': {
                 const inner = node.content ? renderNodes(node.content, options) : '';
-                return inner ? `<p>${inner}</p>` : '<p></p>';
+                return inner ? `<p${alignStyle(node)}>${inner}</p>` : '<p></p>';
             }
+            // Headings had no case at all, so every one of them fell through to
+            // the default and rendered as bare text — a Note Body's structure
+            // quietly flattened everywhere it was read back.
+            case 'heading': {
+                const level = Math.min(Math.max(Number(node.attrs && node.attrs.level) || 1, 1), 6);
+                return `<h${level}${alignStyle(node)}>${renderNodes(node.content, options)}</h${level}>`;
+            }
+            case 'image': {
+                const src = safeUrl(node.attrs && node.attrs.src, true);
+                if (!src) return '';
+                const alt = escapeHtml((node.attrs && node.attrs.alt) || '');
+                return `<img src="${src}" alt="${alt}" style="max-width:100%;height:auto" />`;
+            }
+            case 'horizontalRule': return '<hr />';
+            case 'blockquote':     return `<blockquote>${renderNodes(node.content, options)}</blockquote>`;
             case 'text': {
                 let t = escapeHtml(node.text || '');
                 if (node.marks) {
@@ -44,6 +80,10 @@
                         if (m.type === 'highlight') {
                             const color = m.attrs?.color || '#fef08a';
                             t = `<mark style="background-color:${color};padding:0 2px;border-radius:2px;">${t}</mark>`;
+                        }
+                        if (m.type === 'link') {
+                            const href = safeUrl(m.attrs?.href);
+                            if (href) t = `<a href="${href}" target="_blank" rel="noopener noreferrer">${t}</a>`;
                         }
                         if (m.type === 'textStyle') {
                             const styles = [];

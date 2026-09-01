@@ -690,7 +690,7 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
             }
 
             const content = snap.data().contentJson || '';
-            const { Editor, StarterKit, Underline, TextStyle, FontFamily, FontSize, Highlight } = window._TipTap;
+            const { Editor, StarterKit, Underline, TextStyle, FontFamily, FontSize, Highlight, Image, Link, TextAlign } = window._TipTap;
             const trigExt = createInlineTriggersExtension({
                 personId: attrs.personId,
                 getAllTags:       () => _allTagsList,
@@ -731,7 +731,14 @@ function makePersonPanelNodeView({ node, getPos, editor }) {
             });
             bodyEditor = new Editor({
                 element: bodyMount,
-                extensions: [StarterKit, Underline, TextStyle, FontFamily, FontSize, Highlight.configure({ multicolor: true }), trigExt],
+                extensions: [
+                    StarterKit, Underline, TextStyle, FontFamily, FontSize,
+                    Highlight.configure({ multicolor: true }),
+                    Image.configure({ inline: false, allowBase64: true }),
+                    Link.configure({ openOnClick: false, autolink: true }),
+                    TextAlign.configure({ types: ['heading', 'paragraph'] }),
+                    trigExt,
+                ],
                 content,
                 onUpdate() {
                     clearTimeout(bodyTimer);
@@ -868,6 +875,8 @@ document.addEventListener('alpine:init', () => {
         // library is 1.1MB and arrives on the first click, so the first export
         // of a session takes a moment the rest do not.
         exportingWord: false,
+        // …and the same, coming the other way.
+        importingWord: false,
 
         // ── Person picker ──
         showPersonPicker: false,
@@ -973,6 +982,36 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        // ── Arriving from a Word file ─────────────────────────────────────────
+        //
+        // The file input is native, not Alpine-modelled — an <input type="file">
+        // cannot be bound, only read at the moment it changes.
+        chooseWordFile(event) {
+            const file = event && event.target && event.target.files && event.target.files[0];
+            if (event && event.target) event.target.value = '';
+            if (file) this.importWordFile(file);
+        },
+
+        async importWordFile(file) {
+            if (this.importingWord || !_docEditor) return;
+            this.importingWord = true;
+            try {
+                const html = await DocumentDocx.wordFileToHtml(file);
+                // INSERTED AT THE CURSOR, NEVER OVER THE TOP. A document you
+                // imported into by accident can be undone; one that was
+                // silently replaced is gone. It also means a Word file can be
+                // dropped into the middle of minutes already being written,
+                // which is the thing people actually want.
+                _docEditor.chain().focus().insertContent(html).run();
+                this.showToast('Imported ' + file.name);
+            } catch (e) {
+                console.error('Word import failed:', e);
+                this.showToast('Could not read that Word file', 'error');
+            } finally {
+                this.importingWord = false;
+            }
+        },
+
         // ── Leaving as a Word file ────────────────────────────────────────────
         //
         // What is on screen, not what was last saved — somebody who has just
@@ -1029,51 +1068,13 @@ document.addEventListener('alpine:init', () => {
         // ── Editor ────────────────────────────────────────────────────────────
 
         async initEditor() {
-            if (!window._TipTap) {
-                const [
-                    { Editor, Extension, Node, InputRule },
-                    { Plugin, PluginKey },
-                    { default: StarterKit },
-                    { default: Underline },
-                    { default: Mention },
-                    { default: TextStyle },
-                    { default: FontFamily },
-                    { default: Highlight },
-                    { default: Table },
-                    { default: TableRow },
-                    { default: TableHeader },
-                    { default: TableCell },
-                ] = await Promise.all([
-                    import('https://esm.sh/@tiptap/core@2'),
-                    import('https://esm.sh/prosemirror-state@1'),
-                    import('https://esm.sh/@tiptap/starter-kit@2'),
-                    import('https://esm.sh/@tiptap/extension-underline@2'),
-                    import('https://esm.sh/@tiptap/extension-mention@2'),
-                    import('https://esm.sh/@tiptap/extension-text-style@2'),
-                    import('https://esm.sh/@tiptap/extension-font-family@2'),
-                    import('https://esm.sh/@tiptap/extension-highlight@2'),
-                    import('https://esm.sh/@tiptap/extension-table@2'),
-                    import('https://esm.sh/@tiptap/extension-table-row@2'),
-                    import('https://esm.sh/@tiptap/extension-table-header@2'),
-                    import('https://esm.sh/@tiptap/extension-table-cell@2'),
-                ]);
-
-                const FontSize = Extension.create({
-                    name: 'fontSize',
-                    addOptions() { return { types: ['textStyle'] }; },
-                    addGlobalAttributes() {
-                        return [{ types: this.options.types, attributes: { fontSize: { default: null, parseHTML: el => el.style.fontSize || null, renderHTML: attrs => attrs.fontSize ? { style: `font-size: ${attrs.fontSize}` } : {} } } }];
-                    },
-                    addCommands() {
-                        return {
-                            setFontSize:   size => ({ chain }) => chain().setMark('textStyle', { fontSize: size }).run(),
-                            unsetFontSize: ()   => ({ chain }) => chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run(),
-                        };
-                    },
-                });
-
-                window._TipTap = { Editor, Extension, Node, InputRule, Plugin, PluginKey, StarterKit, Underline, Mention, TextStyle, FontFamily, FontSize, Highlight, Table, TableRow, TableHeader, TableCell };
-            }
+            // The VENDORED bundle, not esm.sh. This was a dozen dynamic
+            // imports from a CDN nobody chose: if it was slow, blocked or
+            // down, the editor did not open and nothing said why — on the
+            // pages the elders write in. tiptap-editor-loader.js reads
+            // vendor/tiptap/tiptap.bundle.js, the same file the phone app has
+            // always used, and builds the identical window._TipTap (ADR-0050).
+            await window.TiptapEditorLoader.ensureTipTap();
 
             await loadDocMentionData();
 
@@ -1081,7 +1082,7 @@ document.addEventListener('alpine:init', () => {
             if (!el) return;
             if (_docEditor) { _docEditor.destroy(); _docEditor = null; }
 
-            const { Editor, StarterKit, Underline, Mention, TextStyle, FontFamily, FontSize, Highlight, Table, TableRow, TableHeader, TableCell } = window._TipTap;
+            const { Editor, StarterKit, Underline, Mention, TextStyle, FontFamily, FontSize, Highlight, Table, TableRow, TableHeader, TableCell, Image, Link, TextAlign } = window._TipTap;
             const PersonPanelNode = createPersonPanelNode();
             const InlinePickerExtension = createInlinePickerPlugin();
             const self = this;
@@ -1099,6 +1100,12 @@ document.addEventListener('alpine:init', () => {
                     TableRow,
                     TableHeader,
                     TableCell,
+                    // Added with the Word work. Image is the one that matters
+                    // most: without it a picture in an imported .docx is
+                    // dropped on the way in and nobody is told.
+                    Image.configure({ inline: false, allowBase64: true }),
+                    Link.configure({ openOnClick: false, autolink: true }),
+                    TextAlign.configure({ types: ['heading', 'paragraph'] }),
                     PersonPanelNode,
                     InlinePickerExtension,
                     Mention.configure({

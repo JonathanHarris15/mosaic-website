@@ -1,4 +1,4 @@
-// The other half of .docx export: turning the description that
+// The browser edge of .docx, both ways: turning the description that
 // `document-docx-core.js` produced into the `docx` library's own objects, and
 // asking it for a file.
 //
@@ -24,25 +24,35 @@
     // format knowledge is not worth loading into a page nobody will export
     // from, so it arrives on the first click and never again.
     const DOCX_LIBRARY_SRC = 'vendor/docx-9.7.1.iife.js';
-    let loading = null;
+    // The same converter the Service Guide and the Files viewer already use.
+    const MAMMOTH_SRC = 'vendor/mammoth-1.6.0.browser.min.js';
 
-    function loadDocxLibrary() {
-        if (global && global.docx) return Promise.resolve(global.docx);
-        if (loading) return loading;
-        loading = new Promise(function (resolve, reject) {
+    const loading = {};
+
+    // Neither library belongs in a page head: one is 1.1MB and writes Word
+    // files, the other is 350KB and reads them, and most visits to a document
+    // do neither. They arrive on the first click and never again.
+    function loadLibraryOnce(src, globalName) {
+        if (global && global[globalName]) return Promise.resolve(global[globalName]);
+        if (loading[src]) return loading[src];
+        loading[src] = new Promise(function (resolve, reject) {
             const el = document.createElement('script');
-            el.src = DOCX_LIBRARY_SRC;
+            el.src = src;
             el.onload = function () {
-                if (global && global.docx) resolve(global.docx);
-                else reject(new Error('the docx library loaded but defined nothing'));
+                if (global && global[globalName]) resolve(global[globalName]);
+                else reject(new Error(src + ' loaded but defined nothing'));
             };
             el.onerror = function () {
-                loading = null;
-                reject(new Error('could not load ' + DOCX_LIBRARY_SRC));
+                delete loading[src];
+                reject(new Error('could not load ' + src));
             };
             document.head.appendChild(el);
         });
-        return loading;
+        return loading[src];
+    }
+
+    function loadDocxLibrary() {
+        return loadLibraryOnce(DOCX_LIBRARY_SRC, 'docx');
     }
 
     // ── Numbering ─────────────────────────────────────────────────────────────
@@ -94,6 +104,36 @@
 
     // ── Runs ──────────────────────────────────────────────────────────────────
 
+    // Word's names for the four alignments TextAlign can produce. 'left' never
+    // reaches here — the core drops it rather than restating a default.
+    const ALIGNMENT_NAMES = { center: 'CENTER', right: 'RIGHT', justify: 'JUSTIFIED' };
+
+    function alignmentFor(lib, align) {
+        const name = ALIGNMENT_NAMES[align];
+        return name ? lib.AlignmentType[name] : undefined;
+    }
+
+    // base64 to bytes, whichever side this is running on. The browser has atob;
+    // Node, where the tests run, has Buffer. Neither exists in both.
+    function base64ToBytes(base64) {
+        const clean = String(base64 || '');
+        if (typeof atob === 'function') {
+            const binary = atob(clean);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes;
+        }
+        return new Uint8Array(Buffer.from(clean, 'base64'));
+    }
+
+    // What the library calls each kind of picture. Anything not on this list is
+    // something Word will not embed, so the block is skipped rather than
+    // producing a file that opens with a red X in it.
+    const IMAGE_TYPES = {
+        'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg',
+        'image/gif': 'gif', 'image/bmp': 'bmp',
+    };
+
     // Word writes colour as six hex digits with no hash.
     function hexOnly(colour) {
         const match = /^#?([0-9a-f]{6})$/i.exec(String(colour || ''));
@@ -144,6 +184,8 @@
         const options = { children: runsFor(lib, block.runs, { italic: block.style === 'Quote' }) };
 
         if (heading) options.heading = lib.HeadingLevel[heading];
+        const alignment = alignmentFor(lib, block.align);
+        if (alignment) options.alignment = alignment;
         // Word has no reliable built-in Quote style to lean on across versions,
         // so a quote is what a quote looks like: indented, and italic (applied
         // to the runs above).
@@ -152,12 +194,36 @@
     }
 
     function listParagraphFor(lib, block) {
-        return new lib.Paragraph({
+        const options = {
             numbering: {
                 reference: block.ordered ? NUMBER_REFERENCE : BULLET_REFERENCE,
                 level: Math.min(Math.max(block.level || 0, 0), LIST_LEVELS - 1),
             },
             children: runsFor(lib, block.runs),
+        };
+        const alignment = alignmentFor(lib, block.align);
+        if (alignment) options.alignment = alignment;
+        return new lib.Paragraph(options);
+    }
+
+    // A picture is a run, and a run has to sit in a paragraph. Word needs a size
+    // for it and will not work one out, so the size is read from the picture's
+    // own header and scaled to fit a page (see the core's fitImage).
+    function imageParagraphFor(lib, block) {
+        const type = IMAGE_TYPES[block.mime];
+        if (!type) return null;
+
+        const bytes = base64ToBytes(block.base64);
+        if (!bytes.length) return null;
+        const size = Core.fitImage(Core.imageSizeFromBytes(bytes));
+
+        return new lib.Paragraph({
+            children: [new lib.ImageRun({
+                data: bytes,
+                type: type,
+                transformation: { width: size.width, height: size.height },
+                altText: block.alt ? { name: block.alt, description: block.alt, title: block.alt } : undefined,
+            })],
         });
     }
 
@@ -197,6 +263,11 @@
             if (block.kind === 'listItem') { out.push(listParagraphFor(lib, block)); return; }
             if (block.kind === 'table') { out.push(tableFor(lib, block)); return; }
             if (block.kind === 'rule') { out.push(ruleParagraphFor(lib)); return; }
+            if (block.kind === 'image') {
+                const paragraph = imageParagraphFor(lib, block);
+                if (paragraph) out.push(paragraph);
+                return;
+            }
             out.push(paragraphFor(lib, block));
         });
         return out;
@@ -254,11 +325,36 @@
         setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
     }
 
+    // ── Reading a Word file in ────────────────────────────────────────────────
+    //
+    // mammoth converts a .docx to HTML in the browser — nothing is uploaded
+    // anywhere to be converted (ADR-0048) — and TipTap parses that HTML into
+    // its own schema using whichever extensions the editor has registered.
+    //
+    // ⚠ WHAT THE EDITOR DOES NOT KNOW, IT DROPS. The editor currently has no
+    // Image extension, so a picture in a Word file arrives as a data: URI in
+    // the HTML and is thrown away on the way into the document. Adding
+    // @tiptap/extension-image to build/tiptap/entry.js is what fixes that, and
+    // until it is there the import is text-only.
+    async function wordFileToHtml(file) {
+        if (!file) throw new Error('no file');
+        const mammoth = await loadLibraryOnce(MAMMOTH_SRC, 'mammoth');
+        const result = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
+        // Mammoth reports what it could not carry across. Worth having in the
+        // console when somebody says "my headings went missing".
+        if (result && result.messages && result.messages.length) {
+            console.warn('Word import notes:', result.messages);
+        }
+        return Core.sanitizeDocxHtml(result && result.value);
+    }
+
     const DocumentDocx = {
         DOCX_LIBRARY_SRC,
+        MAMMOTH_SRC,
         buildWordDocument,
         toWordBlob,
         downloadAsWord,
+        wordFileToHtml,
         hexOnly,
     };
 

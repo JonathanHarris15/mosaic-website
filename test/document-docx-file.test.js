@@ -242,3 +242,57 @@ test('a colour is written the way Word writes one: six hex digits, no hash', () 
     assert.strictEqual(DocumentDocx.hexOnly('#fff'), null);
     assert.strictEqual(DocumentDocx.hexOnly(null), null);
 });
+
+// ── Pictures and alignment, as Word records them ─────────────────────────────
+
+const PNG_1x1_B64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+test('a picture pasted into a note is a picture in the Word file', async () => {
+    const buffer = await wordFileFrom(doc([
+        { type: 'image', attrs: { src: 'data:image/png;base64,' + PNG_1x1_B64, alt: 'the flyer' } },
+    ]));
+
+    const xml = readZipEntry(buffer, 'word/document.xml');
+    assert.match(xml, /<w:drawing>/, 'the picture is not drawn anywhere in the document');
+
+    // The bytes have to be IN the file, as their own part, or Word shows a red
+    // X where the picture should be.
+    const names = zipEntryNames(buffer);
+    assert.ok(names.some(n => /^word\/media\//.test(n)),
+        'no media part — the picture never made it into the zip');
+});
+
+test('a picture is given a size, because Word will not work one out', async () => {
+    const buffer = await wordFileFrom(doc([
+        { type: 'image', attrs: { src: 'data:image/png;base64,' + PNG_1x1_B64, alt: '' } },
+    ]));
+    const xml = readZipEntry(buffer, 'word/document.xml');
+    // An extent of zero is a picture Word draws as nothing at all.
+    const extent = /<wp:extent cx="(\d+)" cy="(\d+)"/.exec(xml);
+    assert.ok(extent, 'the picture has no extent recorded');
+    assert.ok(Number(extent[1]) > 0 && Number(extent[2]) > 0, 'the picture is zero-sized');
+});
+
+test('a centred paragraph is centred in Word too', async () => {
+    const buffer = await wordFileFrom(doc([
+        { type: 'paragraph', attrs: { textAlign: 'center' }, content: [text('Order of Service')] },
+    ]));
+    assert.match(readZipEntry(buffer, 'word/document.xml'), /w:jc w:val="center"/);
+});
+
+test('a left-aligned paragraph says nothing, rather than overriding the document', async () => {
+    const buffer = await wordFileFrom(doc([
+        { type: 'paragraph', attrs: { textAlign: 'left' }, content: [text('plain')] },
+    ]));
+    assert.doesNotMatch(readZipEntry(buffer, 'word/document.xml'), /w:jc w:val="left"/);
+});
+
+test('a link written in a note survives the round trip into Word', async () => {
+    const buffer = await wordFileFrom(doc([
+        { type: 'paragraph', content: [
+            text('the rota', [{ type: 'link', attrs: { href: 'https://example.org/rota' } }]),
+        ] },
+    ]));
+    assert.match(readZipEntry(buffer, 'word/_rels/document.xml.rels'), /example\.org\/rota/);
+});

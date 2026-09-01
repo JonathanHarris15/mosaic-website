@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport" />
+    <script src="mobile-shell.js"></script>
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <title>Document | Mosaic</title>
+
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+
+    <style>
+        [x-cloak] { display: none !important; }
+        .ProseMirror { outline: none; min-height: 100%; padding: 24px; box-sizing: border-box; }
+        .ProseMirror p { margin: 0 0 0.5em; }
+        .ProseMirror p:last-child { margin-bottom: 0; }
+        .ProseMirror ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.5em; }
+        .ProseMirror ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 0.5em; }
+        .ProseMirror li p { margin: 0; }
+        .ProseMirror h1 { font-size: 1.6em; font-weight: 600; margin: 0.6em 0 0.3em; }
+        .ProseMirror h2 { font-size: 1.35em; font-weight: 600; margin: 0.6em 0 0.3em; }
+        .ProseMirror h3 { font-size: 1.15em; font-weight: 600; margin: 0.6em 0 0.3em; }
+        .ProseMirror blockquote { border-left: 3px solid var(--outline-variant); padding-left: 12px; margin: 0 0 0.5em; color: var(--on-surface-variant); }
+        .ProseMirror table { border-collapse: collapse; width: 100%; margin-bottom: 0.5em; table-layout: fixed; }
+        .ProseMirror th, .ProseMirror td { border: 1px solid var(--outline-variant); padding: 4px 8px; min-width: 50px; position: relative; vertical-align: top; }
+        .ProseMirror th { background: var(--cream); font-weight: 600; }
+        .selectedCell { background: var(--primary-fixed) !important; }
+    </style>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <!-- On-device cache for the phone app (no-op on the web). Must load before
+         auth.js, which builds the Firestore handle persistence attaches to. -->
+    <script src="local-cache.js"></script>
+    <script src="auth.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+</head>
+
+<body class="bg-background text-on-background font-body-md text-body-md antialiased h-screen overflow-hidden flex flex-col"
+      x-data="eventDocumentPage" x-cloak>
+
+    <!-- No __title in the chrome: the document's own title is the editable
+         field at the top of the body. That is the record being written, not the
+         app's name for a place. -->
+    <header class="m-header">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a :href="backHref" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label" x-text="eventName">Event</span>
+                </a>
+            </div>
+            <div class="m-header__actions">
+                <template x-if="isEditor">
+                    <span class="contents">
+                        <input type="file" x-ref="wordInput" class="hidden" accept=".docx"
+                               @change="chooseWordFile($event)" />
+                        <button type="button" @click="$refs.wordInput.click()" :disabled="importingWord"
+                                class="m-btn m-btn--ghost m-btn--sm"
+                                :title="importingWord ? 'Reading the file…' : 'Insert a Word file at the cursor'"
+                                aria-label="Import from Word">
+                            <span class="material-symbols-outlined text-[16px]"
+                                  :class="importingWord ? 'm-spinner' : ''"
+                                  x-text="importingWord ? 'progress_activity' : 'upload_file'"></span>
+                            <span class="m-btn__label" x-text="importingWord ? 'Reading…' : 'Import'"></span>
+                        </button>
+                    </span>
+                </template>
+                <button type="button" @click="downloadAsWord()" :disabled="exportingWord"
+                        class="m-btn m-btn--ghost m-btn--sm"
+                        :title="exportingWord ? 'Making the file…' : 'Download as Word'"
+                        aria-label="Download as Word">
+                    <span class="material-symbols-outlined text-[16px]"
+                          :class="exportingWord ? 'm-spinner' : ''"
+                          x-text="exportingWord ? 'progress_activity' : 'download'"></span>
+                    <span class="m-btn__label" x-text="exportingWord ? 'Making…' : 'Word'"></span>
+                </button>
+
+                <template x-if="isEditor && saveStatus === 'saving'">
+                    <span class="m-badge m-badge--neutral m-header__chip">
+                        <span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                        <span class="m-btn__label">Saving…</span>
+                    </span>
+                </template>
+                <template x-if="isEditor && saveStatus === 'saved'">
+                    <span class="m-badge m-badge--success m-header__chip">
+                        <span class="material-symbols-outlined text-[14px]">check_circle</span>
+                        <span class="m-btn__label">Saved</span>
+                    </span>
+                </template>
+                <template x-if="isEditor && saveStatus === 'unsaved'">
+                    <span class="m-badge m-badge--warning m-header__chip">
+                        <span class="m-chip-dot m-chip-dot--pulse"></span>
+                        <span class="m-btn__label">Unsaved changes</span>
+                    </span>
+                </template>
+                <!-- A member reading somebody else's document is told so once,
+                     rather than being shown a toolbar that does nothing. -->
+                <template x-if="!isEditor && !loading">
+                    <span class="m-badge m-badge--neutral m-header__chip">
+                        <span class="material-symbols-outlined text-[14px]">visibility</span>
+                        <span class="m-btn__label">Read only</span>
+                    </span>
+                </template>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
+        </div>
+    </header>
+
+    <div x-show="loading" class="m-loading">
+        <span class="m-spinner material-symbols-outlined">progress_activity</span>
+    </div>
+
+    <div x-show="error" class="m-empty mt-gutter">
+        <span class="material-symbols-outlined">error</span>
+        <p class="max-w-[46ch]" x-text="error"></p>
+    </div>
+
+    <main x-show="!loading && !error"
+          class="flex-grow overflow-hidden w-full px-4 md:px-margin pb-lg flex flex-col gap-sm pt-md">
+
+        <input type="text" x-model="title" @input="onTitleInput()" :readonly="!isEditor"
+               placeholder="Untitled Document"
+               class="w-full bg-transparent border-0 font-display text-[26px] text-primary
+                      focus:outline-none focus:ring-0 px-1 read-only:cursor-default" />
+
+        <!-- The toolbar an editor gets. A reader gets no toolbar at all rather
+             than a row of buttons that quietly refuse. -->
+        <div x-show="isEditor" class="flex flex-wrap items-center gap-1 border-b border-outline-variant pb-sm">
+            <button type="button" @click="toggle('bold')" :aria-pressed="isActive('bold')"
+                    class="m-icon-btn m-icon-btn--sm cal-focus"
+                    :class="isActive('bold') && 'bg-surface-container'" title="Bold">
+                <span class="material-symbols-outlined text-[16px]">format_bold</span>
+            </button>
+            <button type="button" @click="toggle('italic')" :aria-pressed="isActive('italic')"
+                    class="m-icon-btn m-icon-btn--sm cal-focus"
+                    :class="isActive('italic') && 'bg-surface-container'" title="Italic">
+                <span class="material-symbols-outlined text-[16px]">format_italic</span>
+            </button>
+            <button type="button" @click="toggle('underline')" :aria-pressed="isActive('underline')"
+                    class="m-icon-btn m-icon-btn--sm cal-focus"
+                    :class="isActive('underline') && 'bg-surface-container'" title="Underline">
+                <span class="material-symbols-outlined text-[16px]">format_underlined</span>
+            </button>
+            <button type="button" @click="toggle('highlight')" :aria-pressed="isActive('highlight')"
+                    class="m-icon-btn m-icon-btn--sm cal-focus"
+                    :class="isActive('highlight') && 'bg-surface-container'" title="Highlight">
+                <span class="material-symbols-outlined text-[16px]">highlight</span>
+            </button>
+
+            <span class="w-px h-4 bg-outline-variant mx-1"></span>
+
+            <template x-for="level in [1, 2, 3]" :key="level">
+                <button type="button" @click="setHeading(level)"
+                        :aria-pressed="isActive('heading', { level: level })"
+                        class="m-icon-btn m-icon-btn--sm cal-focus"
+                        :class="isActive('heading', { level: level }) && 'bg-surface-container'"
+                        :title="'Heading ' + level">
+                    <span class="material-symbols-outlined text-[16px]"
+                          x-text="'format_h' + level"></span>
+                </button>
+            </template>
+            <button type="button" @click="setHeading(0)" class="m-icon-btn m-icon-btn--sm cal-focus"
+                    title="Normal text">
+                <span class="material-symbols-outlined text-[16px]">format_paragraph</span>
+            </button>
+
+            <span class="w-px h-4 bg-outline-variant mx-1"></span>
+
+            <button type="button" @click="toggle('bulletList')" :aria-pressed="isActive('bulletList')"
+                    class="m-icon-btn m-icon-btn--sm cal-focus"
+                    :class="isActive('bulletList') && 'bg-surface-container'" title="Bulleted list">
+                <span class="material-symbols-outlined text-[16px]">format_list_bulleted</span>
+            </button>
+            <button type="button" @click="toggle('orderedList')" :aria-pressed="isActive('orderedList')"
+                    class="m-icon-btn m-icon-btn--sm cal-focus"
+                    :class="isActive('orderedList') && 'bg-surface-container'" title="Numbered list">
+                <span class="material-symbols-outlined text-[16px]">format_list_numbered</span>
+            </button>
+            <button type="button" @click="toggle('blockquote')" :aria-pressed="isActive('blockquote')"
+                    class="m-icon-btn m-icon-btn--sm cal-focus"
+                    :class="isActive('blockquote') && 'bg-surface-container'" title="Quote">
+                <span class="material-symbols-outlined text-[16px]">format_quote</span>
+            </button>
+            <button type="button" @click="insertTable()" class="m-icon-btn m-icon-btn--sm cal-focus"
+                    title="Insert a table">
+                <span class="material-symbols-outlined text-[16px]">table</span>
+            </button>
+
+            <span class="w-px h-4 bg-outline-variant mx-1"></span>
+
+            <template x-for="a in ['left', 'center', 'right']" :key="a">
+                <button type="button" @click="setAlign(a)"
+                        :aria-pressed="isActive({ textAlign: a })"
+                        class="m-icon-btn m-icon-btn--sm cal-focus"
+                        :class="isActive({ textAlign: a }) && 'bg-surface-container'"
+                        :title="'Align ' + a">
+                    <span class="material-symbols-outlined text-[16px]"
+                          x-text="'format_align_' + a"></span>
+                </button>
+            </template>
+
+            <span class="w-px h-4 bg-outline-variant mx-1"></span>
+
+            <button type="button" @click="setLink()" :aria-pressed="isActive('link')"
+                    class="m-icon-btn m-icon-btn--sm cal-focus"
+                    :class="isActive('link') && 'bg-surface-container'" title="Link">
+                <span class="material-symbols-outlined text-[16px]">link</span>
+            </button>
+            <!-- A picture lives INSIDE the document rather than in Storage, so
+                 the Event's own visibility rule covers it with nothing else to
+                 set — and it survives the trip out to Word and back. -->
+            <input type="file" x-ref="imageInput" class="hidden" accept="image/*"
+                   @change="chooseImage($event)" />
+            <button type="button" @click="$refs.imageInput.click()"
+                    class="m-icon-btn m-icon-btn--sm cal-focus" title="Insert a picture">
+                <span class="material-symbols-outlined text-[16px]">image</span>
+            </button>
+
+            <span class="w-px h-4 bg-outline-variant mx-1"></span>
+
+            <button type="button" @click="command(c => c.undo().run())"
+                    class="m-icon-btn m-icon-btn--sm cal-focus" title="Undo">
+                <span class="material-symbols-outlined text-[16px]">undo</span>
+            </button>
+            <button type="button" @click="command(c => c.redo().run())"
+                    class="m-icon-btn m-icon-btn--sm cal-focus" title="Redo">
+                <span class="material-symbols-outlined text-[16px]">redo</span>
+            </button>
+        </div>
+
+        <div class="flex-grow overflow-y-auto bg-surface-container-lowest border border-outline-variant rounded-lg">
+            <div id="event-document-editor" class="h-full"></div>
+        </div>
+    </main>
+
+    <script src="events-core.js"></script>
+    <script src="events-occurrence-core.js"></script>
+    <script src="events-store.js"></script>
+    <script src="document-body-core.js"></script>
+    <!-- Word, both ways. Neither pulls in its library until somebody clicks. -->
+    <script src="document-docx-core.js"></script>
+    <script src="document-docx.js"></script>
+    <!-- Loads the VENDORED TipTap bundle, not esm.sh. -->
+    <script src="tiptap-editor-loader.js"></script>
+    <script src="event-document.js"></script>
+</body>
+</html>

@@ -291,30 +291,9 @@ test('a very long file is cut, and says it was', () => {
     assert.strictEqual(cut.truncated, true);
 });
 
-// ── The one kind that arrives as markup ───────────────────────────────────────
-//
-// mammoth's output is written into the page, and a Word hyperlink carries
-// whatever address it was given.
-
-test('a docx cannot bring script into the page it is shown on', () => {
-    const dirty = '<p onclick="steal()">Hello</p><script>steal()<\/script>' +
-        '<a href="javascript:steal()">click</a>';
-    const clean = Core.sanitizeDocxHtml(dirty);
-    assert.ok(!/<script/i.test(clean), 'a script tag survived');
-    assert.ok(!/onclick/i.test(clean), 'an event handler survived');
-    assert.ok(!/javascript:/i.test(clean), 'a javascript: link survived');
-    assert.ok(/Hello/.test(clean), 'the actual document was thrown away too');
-});
-
-test('an unclosed script tag cannot slip through by never closing', () => {
-    assert.ok(!/<script/i.test(Core.sanitizeDocxHtml('<p>hi</p><script>steal()')));
-});
-
-test('an ordinary Word document comes through untouched', () => {
-    const html = '<h1>Elders Meeting</h1><p><strong>Present:</strong> Tom</p>' +
-        '<a href="https://example.org/notes">notes</a>';
-    assert.strictEqual(Core.sanitizeDocxHtml(html), html);
-});
+// The .docx sanitiser this module used to own now lives in
+// document-docx-core.js, because the document editor's Word import needs the
+// identical function — see test/document-docx-core.test.js for its tests.
 
 // ── When it was uploaded, read back ───────────────────────────────────────────
 

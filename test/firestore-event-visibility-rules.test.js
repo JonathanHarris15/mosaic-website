@@ -240,3 +240,37 @@ test('only an editor may attach or remove a file', () => {
 test('a kiosk is not refused — it already sees every occurrence', () => {
     assert.match(attachmentsBlock(), /isKiosk\(\)/);
 });
+
+// ── The other half of the Files tab ──────────────────────────────────────────
+//
+// An Event Document is written here rather than uploaded, but it sits on the
+// same tab and answers the same question about who may see it. These rules have
+// no way to name a condition once and use it twice, so the gate is restated —
+// and a restated rule is one somebody tightens on one tab and forgets on the
+// other. That is the drift worth a test.
+
+const documentsBlock = () => blockFor(/match \/documents\/\{documentId\}\s*\{([\s\S]*?)\n      \}/);
+
+test('an Event Document is gated exactly like an Event Attachment, character for character', () => {
+    assert.strictEqual(
+        documentsBlock().trim(),
+        attachmentsBlock().trim(),
+        'the two Files-tab rules have drifted apart — one tab now shows what the other hides'
+    );
+});
+
+test('an Event Document is not world-readable', () => {
+    assert.doesNotMatch(documentsBlock(), /allow read: if true/);
+    assert.doesNotMatch(documentsBlock(), /allow read: if request\.auth != null;/);
+});
+
+test('an Event Document reads the occurrence\'s own stamp, like everything else on the Event', () => {
+    assert.match(
+        documentsBlock(),
+        /rankCanSee\(get\(\/databases\/\$\(database\)\/documents\/event_occurrences\/\$\(occurrenceId\)\)\.data\.visibility\)/
+    );
+});
+
+test('only an editor may write an Event Document', () => {
+    assert.match(documentsBlock(), /allow create, update, delete: if isEditor\(\)/);
+});

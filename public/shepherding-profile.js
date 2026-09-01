@@ -714,58 +714,13 @@ document.addEventListener('alpine:init', () => {
         },
 
         async initEditor(content = '') {
-            if (!window._TipTap) {
-                const [
-                    { Editor, Extension },
-                    { default: StarterKit },
-                    { default: Underline },
-                    { default: Mention },
-                    { default: TextStyle },
-                    { default: FontFamily },
-                    { default: Highlight },
-                    { default: Table },
-                    { default: TableRow },
-                    { default: TableHeader },
-                    { default: TableCell },
-                ] = await Promise.all([
-                    import('https://esm.sh/@tiptap/core@2'),
-                    import('https://esm.sh/@tiptap/starter-kit@2'),
-                    import('https://esm.sh/@tiptap/extension-underline@2'),
-                    import('https://esm.sh/@tiptap/extension-mention@2'),
-                    import('https://esm.sh/@tiptap/extension-text-style@2'),
-                    import('https://esm.sh/@tiptap/extension-font-family@2'),
-                    import('https://esm.sh/@tiptap/extension-highlight@2'),
-                    import('https://esm.sh/@tiptap/extension-table@2'),
-                    import('https://esm.sh/@tiptap/extension-table-row@2'),
-                    import('https://esm.sh/@tiptap/extension-table-header@2'),
-                    import('https://esm.sh/@tiptap/extension-table-cell@2'),
-                ]);
-
-                const FontSize = Extension.create({
-                    name: 'fontSize',
-                    addOptions() { return { types: ['textStyle'] }; },
-                    addGlobalAttributes() {
-                        return [{
-                            types: this.options.types,
-                            attributes: {
-                                fontSize: {
-                                    default: null,
-                                    parseHTML: el => el.style.fontSize || null,
-                                    renderHTML: attrs => attrs.fontSize ? { style: `font-size: ${attrs.fontSize}` } : {},
-                                },
-                            },
-                        }];
-                    },
-                    addCommands() {
-                        return {
-                            setFontSize: size => ({ chain }) => chain().setMark('textStyle', { fontSize: size }).run(),
-                            unsetFontSize: () => ({ chain }) => chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run(),
-                        };
-                    },
-                });
-
-                window._TipTap = { Editor, StarterKit, Underline, Mention, TextStyle, FontFamily, FontSize, Highlight, Table, TableRow, TableHeader, TableCell };
-            }
+            // The VENDORED bundle, not esm.sh. This was a dozen dynamic
+            // imports from a CDN nobody chose: if it was slow, blocked or
+            // down, the editor did not open and nothing said why — on the
+            // pages the elders write in. tiptap-editor-loader.js reads
+            // vendor/tiptap/tiptap.bundle.js, the same file the phone app has
+            // always used, and builds the identical window._TipTap (ADR-0050).
+            await window.TiptapEditorLoader.ensureTipTap();
 
             await loadMentionData();
 
@@ -774,7 +729,7 @@ document.addEventListener('alpine:init', () => {
 
             if (_noteEditor) { _noteEditor.destroy(); _noteEditor = null; }
 
-            const { Editor, StarterKit, Underline, Mention, TextStyle, FontFamily, FontSize, Highlight, Table, TableRow, TableHeader, TableCell } = window._TipTap;
+            const { Editor, StarterKit, Underline, Mention, TextStyle, FontFamily, FontSize, Highlight, Table, TableRow, TableHeader, TableCell, Image, Link, TextAlign } = window._TipTap;
             const self = this;
             _noteEditor = new Editor({
                 element: el,
@@ -789,6 +744,12 @@ document.addEventListener('alpine:init', () => {
                     TableRow,
                     TableHeader,
                     TableCell,
+                    // Added with the Word work. Image is the one that matters
+                    // most: without it a picture in an imported .docx is
+                    // dropped on the way in and nobody is told.
+                    Image.configure({ inline: false, allowBase64: true }),
+                    Link.configure({ openOnClick: false, autolink: true }),
+                    TextAlign.configure({ types: ['heading', 'paragraph'] }),
                     Mention.configure({
                         HTMLAttributes: { class: 'mention-chip' },
                         suggestion: createMentionSuggestion(),
