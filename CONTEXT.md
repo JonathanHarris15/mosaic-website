@@ -31,11 +31,12 @@ The category of a Shepherding Note. Known types: Elder Check-in, Elder Interview
 _Avoid_: Note category, note tag
 
 **Note Body**:
-The rich-text content of a Shepherding Note or Meeting Minutes record. Stored as TipTap JSON. May contain Cross-References.
+The rich-text content of anything written in the Note Module — a Shepherding Note, Meeting Minutes, an [[Elder Document]] or an [[Event Document]]. Stored as TipTap JSON, everywhere, whatever it hangs off. Exports to Word and imports from it by a walk this codebase owns (ADR-0048). May contain Cross-References, but only where the surrounding document is elder-only — see Note Module.
 _Avoid_: Content, text, body (use Note Body as the full compound term)
 
 **Note Module**:
-The shared TipTap-based editor component used to author both Shepherding Notes and Meeting Minutes. Provides the @-mention Cross-Reference picker. Mounted in different surrounding UIs depending on context (inline panel on Shepherding Profile; split-pane editor on Meeting Minutes page).
+The shared TipTap-based editor component used to author every Note Body. Mounted in different surrounding UIs depending on context (inline panel on Shepherding Profile; split-pane editor on Meeting Minutes page; the document editor on an [[Event Document]]).
+- **The Cross-Reference picker is not part of every mounting.** An @-mention points at a Person, a Shepherding Note, an Elder Document or a Folder — all elder-only. A surface that anyone who can see an Event may read cannot offer a picker onto elder-only records, so the picker is on where the document is elder-only and off where it is not. The editor is shared; its extension set is decided per surface.
 _Avoid_: Editor, rich text editor, text area
 
 **Cross-Reference**:
@@ -694,6 +695,13 @@ A file attached to one [[Event occurrence]] — a flyer, a sign-up sheet, a floo
 - **Shown here, or saved — never handed to Google** (ADR-0047). Clicking an attachment opens it inside the Event page when the browser can draw it (a PDF, a picture, a Word file, a .csv, a sound or video file) and saves it when it cannot. It is drawn out of the same blob the reader already fetched, so no second read and no link. Docs, Sheets and Drive's own previewer are impossible here by construction: they open a file by fetching it from an address anyone could read, which is the one thing an Event Attachment must never have.
 - **Deleting removes the pointer, not the bytes.** A client is never trusted to delete the blob directly — `cleanUpDeletedAttachment` removes it once the Firestore record is gone, mirroring `cleanUpReplacedPhoto`.
 _Avoid_: file, upload, document (this app already uses "document" for an Elder Document — use Event Attachment for this concept)
+
+### Event Document
+A document WRITTEN in Mosaic and belonging to one [[Event occurrence]] — an agenda, a running order, a set of minutes — as opposed to an [[Event Attachment]], which is a file uploaded from somewhere else. Both are listed on the Event's **Files** tab, and the difference a person sees is what happens when they click: an Attachment is fetched and shown or saved, a Document opens in the editor.
+- **The same Note Body as everything else** (ADR-0049). Stored as TipTap JSON in `event_occurrences/{occurrenceId}/documents/{documentId}`, the same shape an Elder Document uses, edited in the same [[Note Module]], exported to Word by the same walk. What differs between the two is where it hangs and who may read it — never the content shape or the editor.
+- **Read like the Event, written like the roster.** Anyone who can see the occurrence can read its Documents; only an editor may create, rename or delete one — the same gate the Attachments subcollection uses, and for the same reason.
+- **No Cross-References.** The Note Module's @-mention picker points at elder-only records, and an Event Document may be readable by any member. The picker is off here.
+_Avoid_: Event note (Shepherding Note owns "note"), Event file (an Attachment is the file)
 
 ## Shepherding System
 

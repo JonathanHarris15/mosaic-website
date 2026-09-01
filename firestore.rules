@@ -308,6 +308,24 @@ service cloud.firestore {
               && myPersonId() in get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.participantIds);
         allow create, update, delete: if isEditor();
       }
+
+      // An Event Document — one WRITTEN here rather than uploaded — sits on the
+      // same Files tab and answers the same question about who may see it, so
+      // it takes the same gate, restated rather than shared because these rules
+      // have no way to name a condition twice.
+      //
+      // ⚠ IF THE ATTACHMENTS RULE ABOVE CHANGES, THIS ONE CHANGES WITH IT.
+      // test/firestore-event-visibility-rules.test.js reads both blocks and
+      // fails when they stop agreeing, which is the drift that would actually
+      // happen — somebody tightens one tab's rule and not the other's.
+      match /documents/{documentId} {
+        allow read: if isKiosk()
+          || rankCanSee(get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.visibility)
+          || (get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.visibility == 'participant'
+              && request.auth != null
+              && myPersonId() in get(/databases/$(database)/documents/event_occurrences/$(occurrenceId)).data.participantIds);
+        allow create, update, delete: if isEditor();
+      }
     }
 
     // The Calendar needs YOUR OWN assignments across a whole month without
