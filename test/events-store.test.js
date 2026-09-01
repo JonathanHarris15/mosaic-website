@@ -2124,3 +2124,99 @@ test('removing an attachment deletes its document — the Storage blob is the Cl
     const del = db._flatWrites().find(w => w.kind === 'delete');
     assert.strictEqual(del.path, 'event_occurrences/picnic_2026-07-11/attachments/att1');
 });
+
+// ── Hanging something off a date that does not exist yet ─────────────────────
+//
+// The bug this guards, which was found in production and is invisible at the
+// moment it happens: occurrences are SPARSE, so a date nobody has touched has
+// no document. The rules on `attachments` and `documents` both read the
+// OCCURRENCE's stamped visibility to decide who may see them — so with no
+// occurrence document the rule fails closed and NOBODY can read what was just
+// written, including the editor who wrote it. The write itself succeeds,
+// because writing only needs isEditor(), so nothing looks wrong until somebody
+// tries to open the thing.
+
+const EDITOR = { rank: 'editor', personId: 'p1' };
+
+test('a date with no document of its own is written before anything hangs off it', async () => {
+    const db = fakeDb({
+        events: { app_grid: { name: 'App Grid', visibility: 'member', rosterShared: false } },
+        event_occurrences: {},
+    }, EDITOR);
+
+    const created = await Store.ensureOccurrenceDocument(db, {
+        id: 'app_grid_2026-09-03', seriesId: 'app_grid', date: '2026-09-03',
+        stored: false, visibility: 'member', rosterShared: false, assignments: [],
+    });
+
+    assert.strictEqual(created, true);
+    const writes = db._committed.flat().filter(w => w.path === 'event_occurrences/app_grid_2026-09-03');
+    assert.strictEqual(writes.length, 1, 'the date was not written');
+    // The stamp is the whole point: without a visibility on the document, the
+    // rule refuses every reader on every branch.
+    assert.strictEqual(writes[0].data.visibility, 'member');
+    assert.strictEqual(writes[0].data.seriesId, 'app_grid');
+    assert.strictEqual(writes[0].data.date, '2026-09-03');
+    assert.deepStrictEqual(writes[0].options, { merge: true });
+});
+
+test('a date that already exists is left exactly as it is', async () => {
+    const db = fakeDb({
+        events: { app_grid: { name: 'App Grid', visibility: 'member' } },
+        event_occurrences: {
+            'app_grid_2026-09-03': {
+                seriesId: 'app_grid', date: '2026-09-03',
+                visibility: 'elder', participantIds: ['p9'],
+            },
+        },
+    }, EDITOR);
+
+    const created = await Store.ensureOccurrenceDocument(db, {
+        id: 'app_grid_2026-09-03', seriesId: 'app_grid', date: '2026-09-03',
+        stored: true, visibility: 'elder',
+    });
+
+    assert.strictEqual(created, false);
+    assert.strictEqual(db._committed.flat().length, 0,
+        'an existing date must not be restated by whatever is being hung off it');
+});
+
+test('the people already on the rota keep the Event when the date is written', async () => {
+    // A subcollection does not need its parent to exist, so a date can have a
+    // roster and no occurrence. Stamping participantIds: [] here would take the
+    // Event away from everybody standing on the rota for it.
+    const db = fakeDb({
+        events: { app_grid: { name: 'App Grid', visibility: 'participant' } },
+        event_occurrences: {},
+        'event_occurrences/app_grid_2026-09-03/roster': {
+            a1: { personId: 'p7', roleSlug: 'welcome', state: 'assigned' },
+            a2: { personId: 'p8', roleSlug: 'sound', state: 'assigned' },
+        },
+    }, EDITOR);
+
+    await Store.ensureOccurrenceDocument(db, {
+        id: 'app_grid_2026-09-03', seriesId: 'app_grid', date: '2026-09-03',
+        stored: false, visibility: 'participant',
+        assignments: [
+            { personId: 'p7', roleSlug: 'welcome', state: 'assigned' },
+            { personId: 'p8', roleSlug: 'sound', state: 'assigned' },
+        ],
+    });
+
+    const write = db._committed.flat().find(w => w.path === 'event_occurrences/app_grid_2026-09-03');
+    assert.ok(write, 'the date was not written');
+    assert.deepStrictEqual(write.data.participantIds.slice().sort(), ['p7', 'p8'],
+        'the roster was thrown away, and the participant rung with it');
+});
+
+test('a date that never says whether it is stored is left alone', async () => {
+    // Anything but an explicit "this was rebuilt" means keep your hands off.
+    // A refused read and a missing document are the same answer from Firestore,
+    // so guessing here is how an elders' meeting gets restamped as a members'
+    // one by an editor attaching a flyer.
+    const db = fakeDb({ events: {}, event_occurrences: {} }, EDITOR);
+    for (const occ of [{}, { id: 'x_2026-09-03', seriesId: 'x', date: '2026-09-03' }]) {
+        assert.strictEqual(await Store.ensureOccurrenceDocument(db, occ), false);
+    }
+    assert.strictEqual(db._committed.flat().length, 0);
+});

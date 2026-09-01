@@ -1684,6 +1684,12 @@
                 this.uploadingAttachment = true;
                 this.attachmentError = '';
                 try {
+                    // The date may not exist as a document yet — occurrences
+                    // are sparse. Until it does, the rule guarding this
+                    // subcollection has no visibility to read and refuses every
+                    // reader, including this one.
+                    await Store.ensureOccurrenceDocument(db, this.occurrence);
+
                     const occurrenceId = this.occurrence.id;
                     const attachmentId = Store.newAttachmentId(db, occurrenceId);
                     const path = Attachments.storagePath(occurrenceId, attachmentId, file.name);
@@ -1992,6 +1998,10 @@
                 this.creatingDocument = true;
                 this.attachmentError = '';
                 try {
+                    // Same as an attachment: hang nothing off a date that is
+                    // not there yet, or nobody will be able to read it back.
+                    await Store.ensureOccurrenceDocument(db, this.occurrence);
+
                     const occurrenceId = this.occurrence.id;
                     const documentId = Store.newEventDocumentId(db, occurrenceId);
                     const now = firebase.firestore.FieldValue.serverTimestamp();

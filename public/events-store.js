@@ -152,6 +152,67 @@
         await batch.commit();
     }
 
+    // ── Making a virtual date real, before hanging anything off it ────────────
+    //
+    // ⚠ THE BUG THIS EXISTS TO STOP, BECAUSE IT IS INVISIBLE AT THE MOMENT IT
+    // HAPPENS. Occurrences are SPARSE: a date nobody has touched has no
+    // document at all and is rebuilt from its series on the way in. That is
+    // fine for reading the date, and fatal for anything hung underneath it.
+    //
+    // The rules on `attachments` and on `documents` both answer "may this
+    // person see this Event?" by reading the OCCURRENCE's stamped visibility.
+    // With no occurrence document that `get()` returns null, the rule fails
+    // closed, and nobody can read what was just written — including the editor
+    // who wrote it. Writing still SUCCEEDS, because writing only needs
+    // `isEditor()`, so nothing goes wrong until somebody tries to open it.
+    //
+    // So a file or a document landing on a date counts as something landing on
+    // the date, and the date is written first — exactly as it already is when
+    // somebody adds a Role or changes the visibility.
+    async function ensureOccurrenceDocument(db, occurrence) {
+        const o = occurrence || {};
+
+        // ⚠ ONLY ON POSITIVE EVIDENCE THAT THE DATE HAS NO DOCUMENT.
+        //
+        // `stored` is set by `loadOccurrence`: false when it had to rebuild the
+        // date from its series, true when it read a real document. Asking
+        // Firestore again instead would be worse than useless, because a
+        // REFUSED read and a MISSING one are the same answer — so an editor who
+        // may not see an `elder` date would conclude it was absent and stamp it
+        // at the series' visibility, quietly turning an elders' meeting into a
+        // members' one. Anything that does not say it is unstored is left
+        // alone.
+        if (o.stored !== false) return false;
+
+        const id = o.id || Core.occurrenceId(o.seriesId, o.date);
+        // A one-off IS its own document, so it cannot be missing one — and with
+        // no series and date there is nothing to rebuild from anyway.
+        if (!id || !o.seriesId || !o.date || !o.visibility) return false;
+
+        // ⚠ THE ROSTER OUTLIVES THE MISSING DOCUMENT. A subcollection does not
+        // need its parent to exist, so a date can have people standing on it
+        // and still have no occurrence — `loadOccurrence` carries that roster
+        // across the rebuild for exactly this reason. Stamping
+        // `participantIds: []` would take the Event away from every one of them
+        // at the participant rung.
+        const assignments = o.assignments || [];
+
+        // The stamp comes off the rebuild rather than a second read of the
+        // series: `rebuildOccurrence` already applied `stampFor`, so the
+        // visibility here is the series' own, and there is no way for a fresh
+        // read to disagree with the page the editor is looking at.
+        await occurrenceRef(db, id).set({
+            seriesId: o.seriesId,
+            date: o.date,
+            visibility: o.visibility,
+            rosterShared: !!o.rosterShared,
+            participantIds: Core.participantIds(assignments),
+            needsAttention: Core.needsAttention({ assignments: assignments }),
+            outForCover: Core.outForCover(Object.assign({}, o, { assignments: assignments })),
+        }, { merge: true });
+        return true;
+    }
+
     // ── Event Attachments (MS-287) ────────────────────────────────────────────
     //
     // A file attached to one occurrence — a flyer, a sign-up sheet, a floor
@@ -1772,6 +1833,7 @@
         loadAttendance,
         markPresent,
         unmarkPresent,
+        ensureOccurrenceDocument,
         newAttachmentId,
         saveAttachment,
         loadAttachments,
