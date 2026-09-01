@@ -309,23 +309,16 @@
 
     // ── The one kind that arrives as markup ───────────────────────────────────
     //
-    // mammoth turns a .docx into HTML, and that HTML is written into the page.
-    // Everything else it produces is a paragraph, a heading, a list or a table —
-    // but a Word hyperlink carries whatever address it was given, and Word can
-    // be made to carry `javascript:`. Only an editor can attach a file, so this
-    // is a low door rather than a locked one; it still costs nothing to shut.
+    // mammoth turns a .docx into HTML and that HTML is written into the page, so
+    // it has to be cleaned first. That cleaning now lives in
+    // `document-docx-core.js` — `DocumentDocxCore.sanitizeDocxHtml` — because the
+    // document editor's Word IMPORT does the identical thing to the identical
+    // input, and two copies of a security filter is how one gets fixed and the
+    // other does not (ADR-0048).
     //
-    // An .html attachment is NOT run through this. It is shown as text, because
-    // a blob URL inherits this site's own origin, so an uploaded page would run
+    // An .html attachment is NOT run through it. It is shown as text, because a
+    // blob URL inherits this site's own origin, so an uploaded page would run
     // its script with our signed-in reader's session sitting right there.
-    const previewIsRenderedAsMarkup = true;
-
-    function sanitizeDocxHtml(html) {
-        return String(html == null ? '' : html)
-            .replace(/<\s*(script|iframe|object|embed|link|style)\b[\s\S]*?(?:<\s*\/\s*\1\s*>|$)/gi, '')
-            .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-            .replace(/((?:href|src|xlink:href)\s*=\s*)(["'])\s*javascript:[^"']*\2/gi, '$1$2#$2');
-    }
 
     // ── When it was uploaded, read back ───────────────────────────────────────
     //
@@ -357,8 +350,6 @@
         delimiterFor,
         parseDelimitedRows,
         truncateForPreview,
-        sanitizeDocxHtml,
-        previewIsRenderedAsMarkup,
         formatUploadedAt,
     };
 

@@ -1835,7 +1835,7 @@
                         const result = await window.mammoth.convertToHtml(
                             { arrayBuffer: await blob.arrayBuffer() });
                         if (!this.preview || this.preview.id !== a.id) return;
-                        this.preview.html = Attachments.sanitizeDocxHtml(result && result.value) ||
+                        this.preview.html = DocumentDocxCore.sanitizeDocxHtml(result && result.value) ||
                             '<p>There is no text in this document.</p>';
                     }
 

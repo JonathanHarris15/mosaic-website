@@ -73,6 +73,20 @@
                 </a>
             </div>
             <div class="m-header__actions">
+                <!-- …and a document written elsewhere has to be able to arrive.
+                     Converted in this browser by mammoth; nothing is uploaded
+                     anywhere to be read (ADR-0048). -->
+                <input type="file" x-ref="wordInput" class="hidden" accept=".docx"
+                       @change="chooseWordFile($event)" />
+                <button type="button" @click="$refs.wordInput.click()" :disabled="importingWord"
+                        class="m-btn m-btn--ghost m-btn--sm"
+                        :title="importingWord ? 'Reading the file…' : 'Insert a Word file at the cursor'"
+                        aria-label="Import from Word">
+                    <span class="material-symbols-outlined text-[16px]"
+                          :class="importingWord ? 'm-spinner' : ''"
+                          x-text="importingWord ? 'progress_activity' : 'upload_file'"></span>
+                    <span class="m-btn__label" x-text="importingWord ? 'Reading…' : 'Import'"></span>
+                </button>
                 <!-- A document written here has to be able to leave here. -->
                 <button type="button" @click="downloadAsWord()" :disabled="exportingWord"
                         class="m-btn m-btn--ghost m-btn--sm"

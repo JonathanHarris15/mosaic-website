@@ -868,6 +868,8 @@ document.addEventListener('alpine:init', () => {
         // library is 1.1MB and arrives on the first click, so the first export
         // of a session takes a moment the rest do not.
         exportingWord: false,
+        // …and the same, coming the other way.
+        importingWord: false,
 
         // ── Person picker ──
         showPersonPicker: false,
@@ -970,6 +972,36 @@ document.addEventListener('alpine:init', () => {
             } catch (e) {
                 console.error('Error loading document:', e);
                 this.showToast('Error loading document', 'error');
+            }
+        },
+
+        // ── Arriving from a Word file ─────────────────────────────────────────
+        //
+        // The file input is native, not Alpine-modelled — an <input type="file">
+        // cannot be bound, only read at the moment it changes.
+        chooseWordFile(event) {
+            const file = event && event.target && event.target.files && event.target.files[0];
+            if (event && event.target) event.target.value = '';
+            if (file) this.importWordFile(file);
+        },
+
+        async importWordFile(file) {
+            if (this.importingWord || !_docEditor) return;
+            this.importingWord = true;
+            try {
+                const html = await DocumentDocx.wordFileToHtml(file);
+                // INSERTED AT THE CURSOR, NEVER OVER THE TOP. A document you
+                // imported into by accident can be undone; one that was
+                // silently replaced is gone. It also means a Word file can be
+                // dropped into the middle of minutes already being written,
+                // which is the thing people actually want.
+                _docEditor.chain().focus().insertContent(html).run();
+                this.showToast('Imported ' + file.name);
+            } catch (e) {
+                console.error('Word import failed:', e);
+                this.showToast('Could not read that Word file', 'error');
+            } finally {
+                this.importingWord = false;
             }
         },
 

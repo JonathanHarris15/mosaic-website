@@ -305,6 +305,41 @@ test('an unknown node is walked through, never dropped', () => {
     assert.strictEqual(blocks[0].runs[0].text, 'still here');
 });
 
+// ── Coming the other way: a Word file made safe to put in a page ──────────────
+//
+// mammoth's output is written straight into the DOM — into the editor on
+// import, into the Files-tab viewer on an attachment. A Word hyperlink carries
+// whatever address it was given, and Word can be made to carry javascript:.
+//
+// This filter used to exist twice, here and in event-attachments-core.js. One
+// copy now, because two copies of a security filter is how one gets fixed and
+// the other does not.
+
+test('a Word file cannot bring script into the page it lands on', () => {
+    const dirty = '<p onclick="steal()">Hello</p><script>steal()<\/script>' +
+        '<a href="javascript:steal()">click</a>';
+    const clean = Core.sanitizeDocxHtml(dirty);
+    assert.ok(!/<script/i.test(clean), 'a script tag survived');
+    assert.ok(!/onclick/i.test(clean), 'an event handler survived');
+    assert.ok(!/javascript:/i.test(clean), 'a javascript: link survived');
+    assert.ok(/Hello/.test(clean), 'the actual document was thrown away too');
+});
+
+test('an unclosed script tag cannot slip through by never closing', () => {
+    assert.ok(!/<script/i.test(Core.sanitizeDocxHtml('<p>hi</p><script>steal()')));
+});
+
+test('an ordinary Word document comes through untouched', () => {
+    const html = '<h1>Elders Meeting</h1><p><strong>Present:</strong> Tom</p>' +
+        '<a href="https://example.org/notes">notes</a>';
+    assert.strictEqual(Core.sanitizeDocxHtml(html), html);
+});
+
+test('a style or link tag smuggled into a Word file does not reach the page', () => {
+    assert.ok(!/<style/i.test(Core.sanitizeDocxHtml('<style>body{display:none}</style><p>hi</p>')));
+    assert.ok(!/<iframe/i.test(Core.sanitizeDocxHtml('<iframe src="evil"></iframe>')));
+});
+
 // ── The filename ──────────────────────────────────────────────────────────────
 
 test('a title becomes a filename Windows will accept', () => {

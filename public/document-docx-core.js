@@ -1,4 +1,4 @@
-// TipTap JSON → a description of a Word document.
+// The .docx edge of a document, in both directions.
 //
 // THE HALF OF .docx EXPORT THAT IS WORTH TESTING. Writing an actual .docx means
 // zipping a dozen XML parts, and the `docx` library does that correctly and we
@@ -288,6 +288,26 @@
         }, []);
     }
 
+    // ── Coming the other way: a Word file, made safe to put in a page ─────────
+    //
+    // mammoth turns a .docx into HTML, and that HTML gets written straight into
+    // the DOM — into the editor on import, into the viewer on the Files tab.
+    // Everything mammoth normally produces is a paragraph, a heading, a list or
+    // a table, but a Word hyperlink carries whatever address it was given, and
+    // Word can be made to carry `javascript:`. Only an editor can put a file
+    // into either place, so this is a low door rather than a locked one — it
+    // still costs nothing to shut.
+    //
+    // One copy, deliberately. This used to live in `event-attachments-core.js`
+    // as well; two copies of a security filter is how one gets fixed and the
+    // other does not.
+    function sanitizeDocxHtml(html) {
+        return String(html == null ? '' : html)
+            .replace(/<\s*(script|iframe|object|embed|link|style)\b[\s\S]*?(?:<\s*\/\s*\1\s*>|$)/gi, '')
+            .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+            .replace(/((?:href|src|xlink:href)\s*=\s*)(["'])\s*javascript:[^"']*\2/gi, '$1$2#$2');
+    }
+
     // ── A filename somebody can find again ────────────────────────────────────
     //
     // Windows refuses \ / : * ? " < > | in a filename outright, and a name that
@@ -303,6 +323,7 @@
 
     const DocumentDocxCore = {
         docxBlocksFromTiptap,
+        sanitizeDocxHtml,
         docxFileName,
         fontSizeToPoints,
         HEADING_STYLES,
