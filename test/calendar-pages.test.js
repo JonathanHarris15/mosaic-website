@@ -1027,6 +1027,9 @@ test('an editor attaches a file: it uploads first, then the Firestore pointer na
 // account's token, so storage.rules is asked "may this person see this Event?"
 // every single time. A URL in an href is asked nothing, once, by nobody.
 
+// A PDF is a file the browser can DRAW, so clicking it opens it here rather
+// than saving it (ADR-0047) — but it is fetched exactly the way a download was:
+// as this reader, so the rule is asked. What must never appear is a link.
 test('opening an attachment fetches it as the signed-in reader, not from a public link', async () => {
     const browser = fakeBrowser({ ok: true, status: 200, async blob() { return 'the-pdf-bytes'; } });
     const firebase = fakeFirebase();
@@ -1036,6 +1039,7 @@ test('opening an attachment fetches it as the signed-in reader, not from a publi
     await page.openAttachment({
         id: 'att1',
         name: 'Order of Service.pdf',
+        contentType: 'application/pdf',
         storagePath: 'event_attachments/picnic_2026-07-11/att1/Order of Service.pdf',
     });
 
@@ -1048,9 +1052,51 @@ test('opening an attachment fetches it as the signed-in reader, not from a publi
     assert.strictEqual(call.init.headers.Authorization, 'Firebase id-token-for-this-reader',
         "without the reader's own token the rule cannot tell who is asking");
 
+    assert.strictEqual(page.preview.status, 'ready');
+    assert.strictEqual(page.preview.kind, 'pdf');
+    assert.strictEqual(page.preview.name, 'Order of Service.pdf');
+    // A blob URL, made here from bytes already fetched. It dies with the tab
+    // and means nothing to anyone else — unlike the Storage download link this
+    // whole path exists to avoid.
+    assert.strictEqual(page.preview.url, 'blob:the-bytes');
+    assert.strictEqual(browser._calls.clicked.length, 0, 'a viewable file should open, not save');
+});
+
+// The other door. Nothing can draw a .zip, so clicking it does what it always
+// did.
+test('a file nothing can show is saved instead, the moment it is clicked', async () => {
+    const browser = fakeBrowser({ ok: true, status: 200, async blob() { return 'the-zip-bytes'; } });
+    const page = loadComponent('calendar-event.js', 'eventDetailPage',
+        Object.assign({ db: attachmentsFakeDb(), firebase: fakeFirebase() }, browser));
+
+    await page.openAttachment({
+        id: 'att2',
+        name: 'Photos.zip',
+        storagePath: 'event_attachments/picnic_2026-07-11/att2/Photos.zip',
+    });
+
+    assert.strictEqual(page.attachmentError, '');
+    assert.strictEqual(page.preview, null, 'there is nothing to show, so nothing should open');
+    assert.deepStrictEqual(browser._calls.clicked,
+        [{ href: 'blob:the-bytes', download: 'Photos.zip' }]);
+    assert.strictEqual(page.openingAttachmentId, null);
+});
+
+test('saving the file you are looking at does not ask Storage for it twice', async () => {
+    const browser = fakeBrowser({ ok: true, status: 200, async blob() { return 'the-pdf-bytes'; } });
+    const page = loadComponent('calendar-event.js', 'eventDetailPage',
+        Object.assign({ db: attachmentsFakeDb(), firebase: fakeFirebase() }, browser));
+
+    await page.openAttachment({
+        id: 'att1',
+        name: 'Order of Service.pdf',
+        storagePath: 'event_attachments/picnic_2026-07-11/att1/Order of Service.pdf',
+    });
+    page.downloadFromPreview();
+
+    assert.strictEqual(browser._calls.fetches.length, 1, 'the bytes were already here');
     assert.deepStrictEqual(browser._calls.clicked,
         [{ href: 'blob:the-bytes', download: 'Order of Service.pdf' }]);
-    assert.strictEqual(page.openingAttachmentId, null);
 });
 
 test('a reader the rule refuses is told so, and handed nothing', async () => {
@@ -1064,9 +1110,63 @@ test('a reader the rule refuses is told so, and handed nothing', async () => {
         storagePath: 'event_attachments/elders_2026-07-11/att1/Elders Floor Plan.pdf',
     });
 
+    assert.strictEqual(page.preview.status, 'error');
+    assert.match(page.preview.error, /access/i);
+    assert.strictEqual(page.preview.url, '', 'a refused file has no bytes to point at');
+    assert.strictEqual(browser._calls.clicked.length, 0, 'nothing may reach the browser');
+});
+
+test('a reader the rule refuses is told so on the download path too', async () => {
+    const browser = fakeBrowser({ ok: false, status: 403, async blob() { return ''; } });
+    const page = loadComponent('calendar-event.js', 'eventDetailPage',
+        Object.assign({ db: attachmentsFakeDb(), firebase: fakeFirebase() }, browser));
+
+    await page.openAttachment({
+        id: 'att1',
+        name: 'Elders Plans.zip',
+        storagePath: 'event_attachments/elders_2026-07-11/att1/Elders Plans.zip',
+    });
+
     assert.match(page.attachmentError, /access/i);
     assert.strictEqual(browser._calls.clicked.length, 0, 'nothing may reach the browser');
     assert.strictEqual(page.openingAttachmentId, null);
+});
+
+// A .csv is the one attachment this app reads for itself rather than handing to
+// the browser, so the wiring between the viewer and the parser is worth a test.
+test('a spreadsheet arrives at the viewer as rows, not as commas', async () => {
+    const browser = fakeBrowser({
+        ok: true, status: 200,
+        async blob() { return { async text() { return 'Name,Role\nBethany,Welcome\n'; } }; },
+    });
+    const page = loadComponent('calendar-event.js', 'eventDetailPage',
+        Object.assign({ db: attachmentsFakeDb(), firebase: fakeFirebase() }, browser));
+
+    await page.openAttachment({
+        id: 'att3',
+        name: 'Sign-up.csv',
+        storagePath: 'event_attachments/picnic_2026-07-11/att3/Sign-up.csv',
+    });
+
+    assert.strictEqual(page.preview.status, 'ready');
+    assert.strictEqual(page.preview.kind, 'sheet');
+    assert.deepStrictEqual(page.preview.rows, [['Name', 'Role'], ['Bethany', 'Welcome']]);
+    assert.strictEqual(page.preview.truncated, false);
+});
+
+test('closing the viewer lets go of the bytes it was holding', async () => {
+    const browser = fakeBrowser({ ok: true, status: 200, async blob() { return 'the-pdf-bytes'; } });
+    const page = loadComponent('calendar-event.js', 'eventDetailPage',
+        Object.assign({ db: attachmentsFakeDb(), firebase: fakeFirebase() }, browser));
+
+    await page.openAttachment({
+        id: 'att1',
+        name: 'Order of Service.pdf',
+        storagePath: 'event_attachments/picnic_2026-07-11/att1/Order of Service.pdf',
+    });
+    page.closeAttachmentPreview();
+
+    assert.strictEqual(page.preview, null);
 });
 
 test('a file over the size cap is refused before anything uploads', async () => {

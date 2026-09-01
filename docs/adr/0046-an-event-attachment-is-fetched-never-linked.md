@@ -84,9 +84,14 @@ cannot share code. `test/storage-event-attachment-rules.test.js` reads both
 files and fails when they name different permission levels, which is the drift
 that would actually happen.
 
-**Files download rather than open in a tab.** A blob cannot be handed to a new
-tab as reliably as a URL can, so a PDF saves instead of previewing. That is the
-price of not having a URL, and for a flyer or a sign-up sheet it is a fair one.
+**~~Files download rather than open in a tab.~~** *(Superseded by
+[ADR-0047](0047-an-event-attachment-is-shown-by-this-app-never-by-a-viewer-that-needs-a-link.md).)*
+This paragraph confused two things. Handing the file to a viewer that fetches it
+itself — Google Docs, the Office web viewer — is indeed impossible, and always
+will be, because it needs the very link this decision refuses to mint. But
+DRAWING the blob is not: the bytes are already in the browser, and a browser
+renders most of them unaided. A PDF, a picture, a Word file and a .csv now open
+in place, out of the same authenticated fetch.
 
 **A Directory Photo still works the old way.** This ADR does not change
 ADR-0029. A photo of a member is visible to signed-in members by design; there

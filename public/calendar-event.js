@@ -28,6 +28,28 @@
     const FamilyCore = window.FamilyCore;
     const Attachments = window.EventAttachmentsCore;
 
+    // A library fetched only when somebody actually opens the kind of file that
+    // needs it. mammoth reads exactly one thing — a .docx — and is 350KB of
+    // parser, so putting it in the page head would slow every Event page down
+    // for a file most of them do not carry. Everything on this site is vendored
+    // locally (nothing loads from a CDN), so this works packaged in the phone
+    // app as well as on the web.
+    const loadingScripts = {};
+    function loadScriptOnce(src) {
+        if (loadingScripts[src]) return loadingScripts[src];
+        loadingScripts[src] = new Promise(function (resolve, reject) {
+            const el = document.createElement('script');
+            el.src = src;
+            el.onload = function () { resolve(); };
+            el.onerror = function () {
+                delete loadingScripts[src];
+                reject(new Error('could not load ' + src));
+            };
+            document.head.appendChild(el);
+        });
+        return loadingScripts[src];
+    }
+
     const params = new URLSearchParams(window.location.search);
 
     // ── Where "back" goes ────────────────────────────────────────────────────
@@ -119,6 +141,11 @@
             openingAttachmentId: null,
             // Set only when removing a file would need confirming.
             pendingAttachmentRemoval: null,
+            // The file being shown on top of the page, or null for none. Holds
+            // what the viewer draws — a blob URL, and the text, rows or markup
+            // read out of it — never the bytes themselves: Alpine wraps state in
+            // a proxy, and a proxied Blob is no longer a Blob to the browser.
+            preview: null,
             // Which pane of the Event page is open. Editors get a second one —
             // who was actually here — so it starts on the Event either way.
             tab: 'event',
@@ -1671,50 +1698,173 @@
                 }
             },
 
-            // Hand the reader the file, WITHOUT ever putting a public link to
-            // it on the page (MS-287, ADR-0046). The bytes come down over a
-            // request carrying this account's own token, so storage.rules gets
+            // ── Opening one ──────────────────────────────────────────────────
+            //
+            // Drive puts two doors on a file: look at it, or save it. So does
+            // this — but the first door cannot be Google's. Docs, Sheets and
+            // Drive's own previewer all open a file by fetching it themselves
+            // from a link anyone can read, and an Event Attachment has no such
+            // link on purpose (ADR-0046). We draw it ourselves instead
+            // (ADR-0047).
+            //
+            // Either door starts the same way: the bytes come down over a
+            // request carrying this account's own token, so storage.rules is
             // asked "may THIS person see THIS Event?" on every single fetch —
             // which is the whole point, and is not true of a URL sitting in an
-            // href. The browser then saves the blob under the file's real name.
-            async openAttachment(attachment) {
+            // href.
+            async fetchAttachmentBlob(attachment) {
+                const user = firebase.auth().currentUser;
+                if (!user) throw new Error('not signed in');
+
+                const ref = firebase.storage().ref().child(attachment.storagePath);
+                const token = await user.getIdToken();
+                const endpoint = 'https://firebasestorage.googleapis.com/v0/b/' +
+                    ref.bucket + '/o/' + encodeURIComponent(ref.fullPath) + '?alt=media';
+
+                const response = await fetch(endpoint, {
+                    headers: { Authorization: 'Firebase ' + token },
+                });
+                // 403 here is the rule doing its job, not a fault.
+                if (!response.ok) throw new Error('storage responded ' + response.status);
+                return await response.blob();
+            },
+
+            // Which renderer this file gets, or null for "nothing to show".
+            attachmentPreviewKind(attachment) {
+                const a = attachment || {};
+                return Attachments.previewKindFor(a.name, a.contentType);
+            },
+
+            // What the button says: View, Play, or Download for the rest.
+            attachmentActionLabel(attachment) {
+                const a = attachment || {};
+                return Attachments.previewVerbFor(a.name, a.contentType) || 'Download';
+            },
+
+            // Clicking the row does the obvious thing: show it if it can be
+            // shown, save it if it cannot.
+            openAttachment(attachment) {
+                if (this.attachmentPreviewKind(attachment)) return this.previewAttachment(attachment);
+                return this.downloadAttachment(attachment);
+            },
+
+            async downloadAttachment(attachment) {
                 const a = attachment || {};
                 if (!a.storagePath || this.openingAttachmentId) return;
 
                 this.openingAttachmentId = a.id;
                 this.attachmentError = '';
-                let objectUrl = null;
                 try {
-                    const user = firebase.auth().currentUser;
-                    if (!user) throw new Error('not signed in');
-
-                    const ref = firebase.storage().ref().child(a.storagePath);
-                    const token = await user.getIdToken();
-                    const endpoint = 'https://firebasestorage.googleapis.com/v0/b/' +
-                        ref.bucket + '/o/' + encodeURIComponent(ref.fullPath) + '?alt=media';
-
-                    const response = await fetch(endpoint, {
-                        headers: { Authorization: 'Firebase ' + token },
-                    });
-                    // 403 here is the rule doing its job, not a fault.
-                    if (!response.ok) throw new Error('storage responded ' + response.status);
-
-                    objectUrl = URL.createObjectURL(await response.blob());
-                    const link = document.createElement('a');
-                    link.href = objectUrl;
-                    link.download = a.name || 'attachment';
-                    document.body.appendChild(link);
-                    link.click();
-                    link.remove();
+                    this.saveBlobUrl(URL.createObjectURL(await this.fetchAttachmentBlob(a)), a.name);
                 } catch (e) {
                     console.error('Attachment download failed:', e);
                     this.attachmentError = 'That file could not be opened. You may no longer have access to it.';
                 } finally {
-                    // Left alive a while past the click so the browser has taken
-                    // the bytes; revoking in the same breath cancels the save.
-                    if (objectUrl) setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
                     this.openingAttachmentId = null;
                 }
+            },
+
+            // The blob URL is left alive a while past the click so the browser
+            // has taken the bytes; revoking in the same breath cancels the save.
+            saveBlobUrl(objectUrl, fileName) {
+                const link = document.createElement('a');
+                link.href = objectUrl;
+                link.download = fileName || 'attachment';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 60000);
+            },
+
+            // ── Showing one in place ─────────────────────────────────────────
+            //
+            // The viewer opens straight away and says it is working, because
+            // the fetch behind it can take a moment and a page that does
+            // nothing for a second looks broken.
+            //
+            // One blob serves both the picture and the Download button beside
+            // it, so saving what you are looking at costs no second trip.
+            async previewAttachment(attachment) {
+                const a = attachment || {};
+                const kind = this.attachmentPreviewKind(a);
+                if (!a.storagePath || !kind) return;
+
+                this.closeAttachmentPreview();
+                this.attachmentError = '';
+                this.preview = {
+                    id: a.id,
+                    name: a.name,
+                    meta: this.attachmentMeta(a),
+                    icon: this.attachmentIcon(a),
+                    kind: kind,
+                    status: 'loading',
+                    error: '',
+                    url: '',
+                    text: '',
+                    html: '',
+                    rows: [],
+                    truncated: false,
+                    hiddenRows: 0,
+                };
+
+                try {
+                    const blob = await this.fetchAttachmentBlob(a);
+                    // Closed, or moved on to another file, while it downloaded.
+                    if (!this.preview || this.preview.id !== a.id) return;
+                    this.preview.url = URL.createObjectURL(blob);
+
+                    if (kind === 'text' || kind === 'sheet') {
+                        const cut = Attachments.truncateForPreview(await blob.text());
+                        this.preview.truncated = cut.truncated;
+                        if (kind === 'text') {
+                            this.preview.text = cut.text;
+                        } else {
+                            const rows = Attachments.parseDelimitedRows(
+                                cut.text, Attachments.delimiterFor(a.name));
+                            this.preview.hiddenRows = Math.max(0, rows.length - Attachments.MAX_PREVIEW_ROWS);
+                            this.preview.rows = rows.slice(0, Attachments.MAX_PREVIEW_ROWS);
+                        }
+                    } else if (kind === 'docx') {
+                        // The same converter the Service Guide already uses to
+                        // read a Word file, loaded only now.
+                        await loadScriptOnce('vendor/mammoth-1.6.0.browser.min.js');
+                        const result = await window.mammoth.convertToHtml(
+                            { arrayBuffer: await blob.arrayBuffer() });
+                        if (!this.preview || this.preview.id !== a.id) return;
+                        this.preview.html = Attachments.sanitizeDocxHtml(result && result.value) ||
+                            '<p>There is no text in this document.</p>';
+                    }
+
+                    if (this.preview && this.preview.id === a.id) this.preview.status = 'ready';
+                } catch (e) {
+                    console.error('Attachment preview failed:', e);
+                    if (!this.preview || this.preview.id !== a.id) return;
+                    this.preview.status = 'error';
+                    this.preview.error = 'That file could not be opened. You may no longer have access to it.';
+                }
+            },
+
+            closeAttachmentPreview() {
+                const open = this.preview;
+                this.preview = null;
+                if (open && open.url) {
+                    setTimeout(function () { URL.revokeObjectURL(open.url); }, 60000);
+                }
+            },
+
+            // Save the thing on screen. The bytes are already here.
+            downloadFromPreview() {
+                if (!this.preview || !this.preview.url) return;
+                this.saveBlobUrl(this.preview.url, this.preview.name);
+            },
+
+            // A picture or a film the browser accepted and then could not draw
+            // — an .mov holding a codec it does not have, most often. Better to
+            // say so than to leave a black rectangle sitting there.
+            previewFailedToRender() {
+                if (!this.preview) return;
+                this.preview.status = 'error';
+                this.preview.error = 'This browser cannot show this file. Download it to open it.';
             },
 
             askRemoveAttachment(attachment) {
