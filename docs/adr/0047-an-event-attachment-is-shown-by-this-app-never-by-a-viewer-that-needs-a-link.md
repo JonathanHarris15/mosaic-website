@@ -73,10 +73,17 @@ Four of those rows are decisions rather than lists:
    "download it to look at it".
 
 4. **`.xlsx` has no renderer, and `.csv` does.** Reading an `.xlsx` needs a
-   parser carried in full — everything on this site is vendored locally, nothing
-   loads from a CDN — and the last version published to one has a
-   prototype-pollution hole in exactly the code that would read an uploaded
-   file. A `.csv` is a spreadsheet that can be read with thirty lines of pure
+   parser carried in full — every `<script>` this site loads is vendored
+   locally, tracked in `scripts/asset-manifest.mjs` — and the last version
+   published to a CDN has a prototype-pollution hole in exactly the code that
+   would read an uploaded file.
+
+   *(Correction, 2026-09-01: this originally said "nothing loads from a CDN",
+   which is not true. `shepherding-care-list.js`, `shepherding-document.js` and
+   `shepherding-profile.js` import TipTap from `esm.sh` at runtime on the web —
+   35 dynamic imports the asset manifest does not know about. The vendoring
+   policy holds for script tags and is what this decision rests on; the absolute
+   claim was wrong.)* A `.csv` is a spreadsheet that can be read with thirty lines of pure
    function, so it is. The same goes for `.doc`, `.xls` and `.ppt`: pre-2007
    binaries with no browser-side reader worth carrying.
 

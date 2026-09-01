@@ -35,6 +35,7 @@
     const ROSTER = 'roster';
     const ATTENDANCE = 'attendance';
     const ATTACHMENTS = 'attachments';
+    const DOCUMENTS = 'documents';
 
     // Firestore caps a batch at 500 operations. The rest of this codebase commits
     // in 450s (see the week-shift tool), leaving room rather than riding the edge.
@@ -195,6 +196,57 @@
         const batch = db.batch();
         batch.delete(occurrenceRef(db, occurrenceId).collection(ATTACHMENTS).doc(attachmentId));
         await batch.commit();
+    }
+
+    // ── Event Documents (ADR-0049) ────────────────────────────────────────────
+    //
+    // The other half of the Files tab: a document WRITTEN here rather than
+    // uploaded. Same subcollection pattern as an Attachment, same rule, one
+    // document per record — and, unlike an Attachment, the whole thing lives in
+    // Firestore, because a Note Body is JSON and there are no bytes to keep
+    // anywhere else.
+    //
+    // By-occurrence only, for the same reason the Attachments reads are: there
+    // is no cross-Event "every document this church has" query, so there is
+    // nothing here for the visibility trap the rest of this file guards
+    // against.
+
+    function newEventDocumentId(db, occurrenceId) {
+        return occurrenceRef(db, occurrenceId).collection(DOCUMENTS).doc().id;
+    }
+
+    // A full `set`, for a document being created. Its shape is decided once,
+    // by `DocumentBodyCore.buildDocumentRecord`.
+    async function saveEventDocument(db, occurrenceId, documentId, record) {
+        await occurrenceRef(db, occurrenceId).collection(DOCUMENTS).doc(documentId).set(record);
+        return record;
+    }
+
+    // A patch, for a document being edited. NEVER a `set` — an autosave that
+    // writes the whole record would carry the editor's idea of who created the
+    // document, which it has no business restating on every keystroke.
+    async function updateEventDocument(db, occurrenceId, documentId, patch) {
+        await occurrenceRef(db, occurrenceId).collection(DOCUMENTS).doc(documentId).update(patch);
+    }
+
+    async function loadEventDocument(db, occurrenceId, documentId) {
+        const snap = await occurrenceRef(db, occurrenceId).collection(DOCUMENTS).doc(documentId).get();
+        return snap.exists ? Object.assign({ id: snap.id }, snap.data()) : null;
+    }
+
+    // The Files tab lists these beside the Attachments, so it wants them in a
+    // stable order rather than Firestore's. Sorted by the caller — the list is
+    // a handful of documents, and an orderBy here would need an index for a
+    // sort a browser does instantly.
+    async function loadEventDocuments(db, occurrenceId) {
+        const snap = await occurrenceRef(db, occurrenceId).collection(DOCUMENTS).get();
+        return snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+    }
+
+    // Nothing to clean up afterwards. An Attachment leaves bytes in Storage for
+    // a Cloud Function to sweep; a Document is only ever this record.
+    async function deleteEventDocument(db, occurrenceId, documentId) {
+        await occurrenceRef(db, occurrenceId).collection(DOCUMENTS).doc(documentId).delete();
     }
 
     async function setNeedsNameTags(db, opts) {
@@ -1724,6 +1776,12 @@
         saveAttachment,
         loadAttachments,
         deleteAttachment,
+        newEventDocumentId,
+        saveEventDocument,
+        updateEventDocument,
+        loadEventDocument,
+        loadEventDocuments,
+        deleteEventDocument,
         setNeedsNameTags,
         loadVisibleSeries,
         loadCalendar,

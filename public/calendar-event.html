@@ -51,6 +51,8 @@
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
     <script src="event-attachments-core.js"></script>
+    <!-- The shape of a document written on the Files tab (ADR-0049). -->
+    <script src="document-body-core.js"></script>
     <!-- Owns the one .docx sanitiser, which the Files viewer uses to show a
          Word file and the document editor uses to import one. -->
     <script src="document-docx-core.js"></script>
@@ -398,8 +400,9 @@
                         :class="tab === 'files' && 'm-tabs__tab--current'"
                         @click="tab = 'files'">
                     Files
-                    <span x-show="attachments.length"
-                          class="text-on-surface-variant" x-text="attachments.length"></span>
+                    <span x-show="attachments.length + documents.length"
+                          class="text-on-surface-variant"
+                          x-text="attachments.length + documents.length"></span>
                 </button>
                 <button type="button" class="m-tabs__tab" x-show="isEditor"
                         :class="tab === 'attendance' && 'm-tabs__tab--current'"
@@ -427,24 +430,60 @@
 
                 <section x-show="canManageAttachments" class="m-card mb-sm">
                     <input type="file" x-ref="attachmentInput" class="hidden" @change="chooseAttachmentFile($event)" />
-                    <button type="button" @click="$refs.attachmentInput.click()" :disabled="uploadingAttachment"
-                            class="border border-secondary text-secondary px-md py-2 rounded-lg font-label-md
-                                   text-xs uppercase tracking-wider cal-motion cal-press cal-focus
-                                   hover:bg-surface-container disabled:opacity-40 flex items-center gap-1.5 w-fit">
-                        <span class="material-symbols-outlined text-[18px]"
-                              :class="uploadingAttachment ? 'm-spinner' : ''"
-                              x-text="uploadingAttachment ? 'progress_activity' : 'attach_file'"></span>
-                        <span x-text="uploadingAttachment ? 'Uploading…' : 'Attach a file'"></span>
-                    </button>
+                    <div class="flex flex-wrap items-center gap-sm">
+                        <button type="button" @click="$refs.attachmentInput.click()" :disabled="uploadingAttachment"
+                                class="border border-secondary text-secondary px-md py-2 rounded-lg font-label-md
+                                       text-xs uppercase tracking-wider cal-motion cal-press cal-focus
+                                       hover:bg-surface-container disabled:opacity-40 flex items-center gap-1.5 w-fit">
+                            <span class="material-symbols-outlined text-[18px]"
+                                  :class="uploadingAttachment ? 'm-spinner' : ''"
+                                  x-text="uploadingAttachment ? 'progress_activity' : 'attach_file'"></span>
+                            <span x-text="uploadingAttachment ? 'Uploading…' : 'Attach a file'"></span>
+                        </button>
+                        <!-- The other half of the tab: a document written here,
+                             kept here, and readable by exactly whoever can see
+                             this Event (ADR-0049). -->
+                        <button type="button" @click="createDocument()" :disabled="creatingDocument"
+                                class="border border-secondary text-secondary px-md py-2 rounded-lg font-label-md
+                                       text-xs uppercase tracking-wider cal-motion cal-press cal-focus
+                                       hover:bg-surface-container disabled:opacity-40 flex items-center gap-1.5 w-fit">
+                            <span class="material-symbols-outlined text-[18px]"
+                                  :class="creatingDocument ? 'm-spinner' : ''"
+                                  x-text="creatingDocument ? 'progress_activity' : 'post_add'"></span>
+                            <span x-text="creatingDocument ? 'Creating…' : 'New document'"></span>
+                        </button>
+                    </div>
                     <p x-show="attachmentError" class="text-[12.5px] text-error mt-2" x-text="attachmentError"></p>
                 </section>
 
-                <div x-show="!attachments.length" class="m-empty">
+                <div x-show="!attachments.length && !documents.length" class="m-empty">
                     <span class="material-symbols-outlined">attach_file</span>
-                    <h3 class="font-display text-[18px] text-primary">Nothing attached yet.</h3>
+                    <h3 class="font-display text-[18px] text-primary">Nothing here yet.</h3>
                     <p x-show="!canManageAttachments" class="max-w-[46ch]">
                         Nothing has been attached to this event.
                     </p>
+                </div>
+
+                <!-- Documents lead the list. They are the thing somebody on this
+                     page is most likely to be coming back to. -->
+                <div x-show="documents.length" class="m-card-list mb-sm">
+                    <template x-for="d in sortedDocuments" :key="d.id">
+                        <div class="m-row">
+                            <span class="material-symbols-outlined text-[19px] text-secondary shrink-0">description</span>
+                            <!-- A real link, unlike an Attachment's button:
+                                 there IS somewhere to go, and it is a page in
+                                 this app rather than bytes to fetch. -->
+                            <a :href="documentHref(d)" class="m-row__main cal-focus">
+                                <span class="m-row__title" x-text="d.title || 'Untitled Document'"></span>
+                                <span class="m-row__sub" x-text="documentMeta(d)"></span>
+                            </a>
+                            <button x-show="canManageAttachments" @click="askRemoveDocument(d)"
+                                    class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus"
+                                    :aria-label="'Remove ' + (d.title || 'this document')">
+                                <span class="material-symbols-outlined text-[18px]">delete</span>
+                            </button>
+                        </div>
+                    </template>
                 </div>
 
                 <div x-show="attachments.length" class="m-card-list">
@@ -1325,6 +1364,36 @@
                     </div>
                 </template>
 
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Removing a document written here (ADR-0049) ─────────────────────── -->
+    <div x-show="pendingDocumentRemoval" @keydown.escape.window="cancelDocumentRemoval()"
+         class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
+        <div class="bg-surface-container-lowest rounded-lg border border-outline-variant w-full max-w-[460px] mt-[14vh]">
+            <div class="px-md py-md flex items-start gap-sm">
+                <span class="material-symbols-outlined text-[22px] text-error shrink-0 mt-0.5">warning</span>
+                <div class="min-w-0">
+                    <h3 class="font-display text-[20px] text-primary">
+                        Delete
+                        <span x-text="pendingDocumentRemoval && (pendingDocumentRemoval.title || 'this document')"></span>?
+                    </h3>
+                    <p class="text-[13px] text-on-surface-variant mt-2">
+                        This was written here, so this is the only copy. Download it as
+                        a Word file first if you want to keep it.
+                    </p>
+                </div>
+            </div>
+            <div class="px-md py-md border-t border-outline-variant flex items-center justify-end gap-sm">
+                <button @click="cancelDocumentRemoval()"
+                        class="px-md py-2 rounded-lg font-label-md text-xs uppercase tracking-wider
+                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Keep it</button>
+                <button @click="confirmRemoveDocument()" :disabled="saving"
+                        class="bg-error text-on-error px-md py-2 rounded-lg shadow-xs font-label-md
+                               text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">
+                    Delete it
+                </button>
             </div>
         </div>
     </div>

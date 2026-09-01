@@ -73,7 +73,11 @@ Three smaller decisions inside it:
 ## Consequences
 
 **The library is 1.1MB, and is loaded on the first click and never in a page
-head.** No Event page or profile pays for it. The phone app carries it in its
+head.** It is vendored locally and listed in `scripts/asset-manifest.mjs`, like
+every other `<script>` here. (An earlier draft of this ADR said nothing on this
+site loads from a CDN. That is not true — the three shepherding pages import
+TipTap from `esm.sh` at runtime. Vendoring this one was still the right call,
+but it is a choice rather than an existing rule with no exceptions.) No Event page or profile pays for it. The phone app carries it in its
 bundle, which is the real cost of this decision and is accepted for a feature
 named as a must.
 

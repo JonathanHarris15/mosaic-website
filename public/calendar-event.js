@@ -27,6 +27,7 @@
     const Fairness = window.FairnessCore;
     const FamilyCore = window.FamilyCore;
     const Attachments = window.EventAttachmentsCore;
+    const DocumentBody = window.DocumentBodyCore;
 
     // A library fetched only when somebody actually opens the kind of file that
     // needs it. mammoth reads exactly one thing — a .docx — and is 350KB of
@@ -135,6 +136,12 @@
             // sheet, a floor plan. Visible to anyone who can see the Event,
             // same as its description; only an editor attaches or removes one.
             attachments: [],
+            // A document WRITTEN here rather than uploaded (ADR-0049). Listed
+            // on the same tab, read by the same people; the difference a person
+            // sees is what happens when they click.
+            documents: [],
+            creatingDocument: false,
+            pendingDocumentRemoval: null,
             uploadingAttachment: false,
             attachmentError: '',
             // The row whose bytes are on their way down, so it can say so.
@@ -489,6 +496,13 @@
                         this.attachments = await Store.loadAttachments(db, loaded.id);
                     } catch (e) {
                         this.attachments = [];
+                    }
+
+                    // Same tab, same rule, same degradation.
+                    try {
+                        this.documents = await Store.loadEventDocuments(db, loaded.id);
+                    } catch (e) {
+                        this.documents = [];
                     }
 
                     // The rest in one wave. None of these three needs anything
@@ -1939,6 +1953,89 @@
                 } catch (e) {
                     console.error('Attachment removal failed:', e);
                     this.attachmentError = 'That file could not be removed. Try again.';
+                } finally {
+                    this.saving = false;
+                }
+            },
+
+            // ── Documents written here (ADR-0049) ────────────────────────────
+
+            // Newest first. Sorted in the browser rather than by Firestore: a
+            // handful of documents sorts instantly, and an orderBy would need
+            // an index for it.
+            get sortedDocuments() {
+                return this.documents.slice().sort((a, b) => {
+                    const at = (a.updatedAt && a.updatedAt.seconds) || 0;
+                    const bt = (b.updatedAt && b.updatedAt.seconds) || 0;
+                    return bt - at;
+                });
+            },
+
+            documentHref(document_) {
+                return 'event-document.html?occurrence=' + encodeURIComponent(this.occurrence.id) +
+                    '&id=' + encodeURIComponent(document_.id);
+            },
+
+            // The line under the name. A document nobody has typed in yet says
+            // so, rather than showing an empty line that reads as a bug.
+            documentMeta(document_) {
+                const preview = DocumentBody.bodyPreview(document_ && document_.contentJson);
+                if (preview) return preview;
+                return 'Empty — nothing written yet.';
+            },
+
+            // Created and opened in one move. A "name it first" dialog is a
+            // step between wanting to write and writing, and the title is
+            // editable at the top of the document anyway.
+            async createDocument() {
+                if (!this.canManageAttachments || !this.occurrence || this.creatingDocument) return;
+                this.creatingDocument = true;
+                this.attachmentError = '';
+                try {
+                    const occurrenceId = this.occurrence.id;
+                    const documentId = Store.newEventDocumentId(db, occurrenceId);
+                    const now = firebase.firestore.FieldValue.serverTimestamp();
+                    const record = DocumentBody.buildDocumentRecord({
+                        title: '',
+                        contentJson: DocumentBody.emptyBody(),
+                        createdAt: now,
+                        createdBy: this.uid,
+                        createdByName: this.personId ? this.personName(this.personId) : null,
+                        updatedAt: now,
+                        updatedByName: this.personId ? this.personName(this.personId) : null,
+                    });
+                    await Store.saveEventDocument(db, occurrenceId, documentId, record);
+                    window.location.href = 'event-document.html?occurrence=' +
+                        encodeURIComponent(occurrenceId) + '&id=' + encodeURIComponent(documentId);
+                } catch (e) {
+                    console.error('Could not create the document:', e);
+                    this.attachmentError = 'That document could not be created. Try again.';
+                    this.creatingDocument = false;
+                }
+            },
+
+            askRemoveDocument(document_) {
+                if (!this.canManageAttachments) return;
+                this.pendingDocumentRemoval = document_;
+            },
+
+            cancelDocumentRemoval() {
+                this.pendingDocumentRemoval = null;
+            },
+
+            async confirmRemoveDocument() {
+                const document_ = this.pendingDocumentRemoval;
+                if (!document_ || !this.occurrence || this.saving) return;
+                this.saving = true;
+                try {
+                    // Nothing to sweep afterwards. Unlike an Attachment, a
+                    // Document has no bytes anywhere but this record.
+                    await Store.deleteEventDocument(db, this.occurrence.id, document_.id);
+                    this.documents = this.documents.filter(d => d.id !== document_.id);
+                    this.pendingDocumentRemoval = null;
+                } catch (e) {
+                    console.error('Could not remove the document:', e);
+                    this.attachmentError = 'That document could not be removed. Try again.';
                 } finally {
                     this.saving = false;
                 }
