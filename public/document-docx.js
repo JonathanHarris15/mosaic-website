@@ -104,6 +104,36 @@
 
     // ── Runs ──────────────────────────────────────────────────────────────────
 
+    // Word's names for the four alignments TextAlign can produce. 'left' never
+    // reaches here — the core drops it rather than restating a default.
+    const ALIGNMENT_NAMES = { center: 'CENTER', right: 'RIGHT', justify: 'JUSTIFIED' };
+
+    function alignmentFor(lib, align) {
+        const name = ALIGNMENT_NAMES[align];
+        return name ? lib.AlignmentType[name] : undefined;
+    }
+
+    // base64 to bytes, whichever side this is running on. The browser has atob;
+    // Node, where the tests run, has Buffer. Neither exists in both.
+    function base64ToBytes(base64) {
+        const clean = String(base64 || '');
+        if (typeof atob === 'function') {
+            const binary = atob(clean);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes;
+        }
+        return new Uint8Array(Buffer.from(clean, 'base64'));
+    }
+
+    // What the library calls each kind of picture. Anything not on this list is
+    // something Word will not embed, so the block is skipped rather than
+    // producing a file that opens with a red X in it.
+    const IMAGE_TYPES = {
+        'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg',
+        'image/gif': 'gif', 'image/bmp': 'bmp',
+    };
+
     // Word writes colour as six hex digits with no hash.
     function hexOnly(colour) {
         const match = /^#?([0-9a-f]{6})$/i.exec(String(colour || ''));
@@ -154,6 +184,8 @@
         const options = { children: runsFor(lib, block.runs, { italic: block.style === 'Quote' }) };
 
         if (heading) options.heading = lib.HeadingLevel[heading];
+        const alignment = alignmentFor(lib, block.align);
+        if (alignment) options.alignment = alignment;
         // Word has no reliable built-in Quote style to lean on across versions,
         // so a quote is what a quote looks like: indented, and italic (applied
         // to the runs above).
@@ -162,12 +194,36 @@
     }
 
     function listParagraphFor(lib, block) {
-        return new lib.Paragraph({
+        const options = {
             numbering: {
                 reference: block.ordered ? NUMBER_REFERENCE : BULLET_REFERENCE,
                 level: Math.min(Math.max(block.level || 0, 0), LIST_LEVELS - 1),
             },
             children: runsFor(lib, block.runs),
+        };
+        const alignment = alignmentFor(lib, block.align);
+        if (alignment) options.alignment = alignment;
+        return new lib.Paragraph(options);
+    }
+
+    // A picture is a run, and a run has to sit in a paragraph. Word needs a size
+    // for it and will not work one out, so the size is read from the picture's
+    // own header and scaled to fit a page (see the core's fitImage).
+    function imageParagraphFor(lib, block) {
+        const type = IMAGE_TYPES[block.mime];
+        if (!type) return null;
+
+        const bytes = base64ToBytes(block.base64);
+        if (!bytes.length) return null;
+        const size = Core.fitImage(Core.imageSizeFromBytes(bytes));
+
+        return new lib.Paragraph({
+            children: [new lib.ImageRun({
+                data: bytes,
+                type: type,
+                transformation: { width: size.width, height: size.height },
+                altText: block.alt ? { name: block.alt, description: block.alt, title: block.alt } : undefined,
+            })],
         });
     }
 
@@ -207,6 +263,11 @@
             if (block.kind === 'listItem') { out.push(listParagraphFor(lib, block)); return; }
             if (block.kind === 'table') { out.push(tableFor(lib, block)); return; }
             if (block.kind === 'rule') { out.push(ruleParagraphFor(lib)); return; }
+            if (block.kind === 'image') {
+                const paragraph = imageParagraphFor(lib, block);
+                if (paragraph) out.push(paragraph);
+                return;
+            }
             out.push(paragraphFor(lib, block));
         });
         return out;

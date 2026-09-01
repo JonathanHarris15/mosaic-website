@@ -28,9 +28,10 @@
     // paragraphs that each carry a level, so flattening here is not a
     // simplification — it is the shape Word actually wants.
     //
-    //   { kind: 'paragraph', style, runs }
-    //   { kind: 'listItem',  ordered, level, runs }
+    //   { kind: 'paragraph', style, align, runs }
+    //   { kind: 'listItem',  ordered, level, align, runs }
     //   { kind: 'table',     rows: [ { cells: [ { header, blocks } ] } ] }
+    //   { kind: 'image',     mime, base64, alt }
     //   { kind: 'rule' }
     //
     // A run is one stretch of text with one set of marks:
@@ -42,6 +43,17 @@
 
     const HEADING_STYLES = ['Heading1', 'Heading2', 'Heading3',
                             'Heading4', 'Heading5', 'Heading6'];
+
+    // TextAlign writes a CSS value onto the paragraph. Word has the same four,
+    // under different names, and 'left' is the default — emitting it explicitly
+    // would override a document whose own default is something else, so it is
+    // dropped rather than restated.
+    const ALIGNMENTS = { left: null, center: 'center', right: 'right', justify: 'justify' };
+
+    function alignmentOf(attrs) {
+        const value = String((attrs && attrs.textAlign) || '').toLowerCase();
+        return Object.prototype.hasOwnProperty.call(ALIGNMENTS, value) ? ALIGNMENTS[value] : null;
+    }
 
     function emptyRun() {
         return {
@@ -150,11 +162,13 @@
                         kind: 'listItem',
                         ordered: context.list.ordered,
                         level: context.list.level,
+                        align: alignmentOf(attrs),
                         runs: runsFromInline(node.content),
                     }
                     : {
                         kind: 'paragraph',
                         style: context.style || 'Normal',
+                        align: alignmentOf(attrs),
                         runs: runsFromInline(node.content),
                     });
                 return out;
@@ -164,6 +178,7 @@
                 out.push({
                     kind: 'paragraph',
                     style: HEADING_STYLES[level - 1],
+                    align: alignmentOf(attrs),
                     runs: runsFromInline(node.content),
                 });
                 return out;
@@ -195,6 +210,34 @@
 
             case 'listItem':
                 return blocksFromNodes(node.content, context, out);
+
+            case 'image': {
+                // Only a data: URI can go into a Word file. A picture held at a
+                // URL would need fetching, and a .docx carrying a link to one
+                // shows a broken frame to anyone reading it offline — which is
+                // most people, most of the time, with a document they were
+                // emailed.
+                const parsed = parseDataUri(attrs.src);
+                if (parsed) {
+                    out.push({
+                        kind: 'image',
+                        mime: parsed.mime,
+                        base64: parsed.base64,
+                        alt: String(attrs.alt || ''),
+                    });
+                } else if (attrs.src) {
+                    out.push({
+                        kind: 'paragraph',
+                        style: 'Normal',
+                        align: null,
+                        runs: [Object.assign(emptyRun(), {
+                            text: '[' + (attrs.alt || 'Picture') + ']',
+                            italic: true,
+                        })],
+                    });
+                }
+                return out;
+            }
 
             case 'horizontalRule':
                 out.push({ kind: 'rule' });
@@ -288,6 +331,85 @@
         }, []);
     }
 
+    // ── A picture, and how big it is ──────────────────────────────────────────
+    //
+    // Mammoth turns a picture in a Word file into a data: URI, and the Image
+    // extension keeps it as one. Getting it back INTO a Word file needs two
+    // things the URI does not say out loud: the bytes, and how big they are.
+    //
+    // Splitting the URI is pure string work and lives here. Turning the base64
+    // into bytes is not the same job in a browser (atob) as in Node (Buffer),
+    // so each side does that itself and hands the bytes back for measuring.
+    function parseDataUri(uri) {
+        // Images only. This is only ever asked about a picture, and a data URI
+        // holding markup has no business reaching the block list at all — even
+        // though the writer downstream would refuse it anyway.
+        const match = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i
+            .exec(String(uri == null ? '' : uri).trim());
+        if (!match) return null;
+        return { mime: match[1].toLowerCase(), base64: match[2].replace(/\s+/g, '') };
+    }
+
+    // How big the picture is, read from its own header rather than guessed at.
+    // Word needs a size in points for every image and will not work one out; a
+    // wrong one is a picture squashed to a stamp or spilling off the page.
+    //
+    // PNG says so at a fixed offset. GIF says so at a fixed offset, the other
+    // way round. JPEG has to be walked segment by segment until a start-of-frame
+    // marker, because everything before it is metadata of unknown length.
+    function imageSizeFromBytes(bytes) {
+        if (!bytes || bytes.length < 24) return null;
+        const at = i => bytes[i];
+        const be16 = i => (at(i) << 8) | at(i + 1);
+        const be32 = i => ((at(i) << 24) >>> 0) + (at(i + 1) << 16) + (at(i + 2) << 8) + at(i + 3);
+
+        // PNG: 8-byte signature, then IHDR with width and height big-endian.
+        if (at(0) === 0x89 && at(1) === 0x50 && at(2) === 0x4e && at(3) === 0x47) {
+            return { width: be32(16), height: be32(20) };
+        }
+        // GIF: 'GIF8', then width and height LITTLE-endian at byte 6.
+        if (at(0) === 0x47 && at(1) === 0x49 && at(2) === 0x46) {
+            return { width: at(6) | (at(7) << 8), height: at(8) | (at(9) << 8) };
+        }
+        // JPEG: walk the segments. 0xFFD8 starts the file; each marker after it
+        // carries its own length, and the frame markers (0xC0–0xCF, minus the
+        // four that are not frames) carry the size.
+        if (at(0) === 0xff && at(1) === 0xd8) {
+            let i = 2;
+            while (i + 9 < bytes.length) {
+                if (at(i) !== 0xff) { i++; continue; }
+                const marker = at(i + 1);
+                if (marker >= 0xc0 && marker <= 0xcf &&
+                    marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+                    return { height: be16(i + 5), width: be16(i + 7) };
+                }
+                i += 2 + be16(i + 2);
+            }
+        }
+        return null;
+    }
+
+    // A picture the size of a page is a picture nobody meant to send. Word
+    // measures in points; this is the widest a picture may be before it is
+    // scaled down, keeping its shape.
+    const MAX_IMAGE_WIDTH_PT = 450;
+
+    function fitImage(size) {
+        if (!size || !size.width || !size.height) {
+            // Nothing said how big it is. A square that reads as "a picture"
+            // beats leaving it out of the document altogether.
+            return { width: 200, height: 200 };
+        }
+        // Pixels at 96dpi into points at 72.
+        const width = size.width * 0.75;
+        const height = size.height * 0.75;
+        if (width <= MAX_IMAGE_WIDTH_PT) {
+            return { width: Math.round(width), height: Math.round(height) };
+        }
+        const scale = MAX_IMAGE_WIDTH_PT / width;
+        return { width: Math.round(width * scale), height: Math.round(height * scale) };
+    }
+
     // ── Coming the other way: a Word file, made safe to put in a page ─────────
     //
     // mammoth turns a .docx into HTML, and that HTML gets written straight into
@@ -326,6 +448,10 @@
         sanitizeDocxHtml,
         docxFileName,
         fontSizeToPoints,
+        parseDataUri,
+        imageSizeFromBytes,
+        fitImage,
+        MAX_IMAGE_WIDTH_PT,
         HEADING_STYLES,
     };
 

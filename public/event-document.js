@@ -144,6 +144,7 @@
                 const {
                     Editor, StarterKit, Underline, TextStyle, FontFamily, FontSize,
                     Highlight, Table, TableRow, TableHeader, TableCell,
+                    Image, Link, TextAlign,
                 } = TipTap;
 
                 const self = this;
@@ -166,6 +167,9 @@
                         TableRow,
                         TableHeader,
                         TableCell,
+                        Image.configure({ inline: false, allowBase64: true }),
+                        Link.configure({ openOnClick: false, autolink: true }),
+                        TextAlign.configure({ types: ['heading', 'paragraph'] }),
                         // ⚠ Mention is deliberately absent — see the note at the
                         // top of this file.
                     ],
@@ -183,7 +187,13 @@
             // is touched so Alpine re-evaluates when the cursor moves.
             isActive(name, attrs) {
                 this.editorTick;
-                return !!editor && editor.isActive(name, attrs || {});
+                if (!editor) return false;
+                // TipTap takes either a node name or a bare bag of attributes —
+                // alignment is the second kind, since it is an attribute of
+                // whatever block the cursor happens to be in.
+                return typeof name === 'object'
+                    ? editor.isActive(name)
+                    : editor.isActive(name, attrs || {});
             },
 
             command(run) {
@@ -206,6 +216,73 @@
             insertTable() {
                 this.command(chain =>
                     chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run());
+            },
+
+            // ── Links ────────────────────────────────────────────────────────
+            //
+            // A prompt rather than a bespoke popover. This is the least
+            // interesting part of the editor and a panel would be the most code
+            // in it.
+            setLink() {
+                if (!editor || !this.isEditor) return;
+                const existing = editor.getAttributes('link').href || '';
+                const entered = window.prompt('Link address', existing);
+                if (entered === null) return;
+
+                const href = String(entered).trim();
+                if (!href) {
+                    this.command(chain => chain.extendMarkRange('link').unsetLink().run());
+                    return;
+                }
+                // A bare address is meant as a web address. Without this,
+                // "example.org" becomes a link relative to this app.
+                const url = /^[a-z][a-z0-9+.-]*:/i.test(href) ? href : 'https://' + href;
+                if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) {
+                    this.error = 'A link has to be a web address or an email address.';
+                    return;
+                }
+                this.command(chain => chain.extendMarkRange('link').setLink({ href: url }).run());
+            },
+
+            // ── A picture ────────────────────────────────────────────────────
+            //
+            // Read here and kept INSIDE the document as a data URI, never
+            // uploaded. That means it is governed by the Event's own visibility
+            // rule with nothing else to get wrong, and it is what makes a
+            // picture survive the round trip out to Word and back.
+            //
+            // The cap is far smaller than an Event Attachment's 25MB, and for a
+            // different reason: this rides in a Firestore document, which
+            // cannot exceed 1MB in total, and base64 adds about a third to
+            // whatever the file already weighs.
+            chooseImage(event) {
+                const file = event && event.target && event.target.files && event.target.files[0];
+                if (event && event.target) event.target.value = '';
+                if (file) this.insertImage(file);
+            },
+
+            insertImage(file) {
+                if (!editor || !this.isEditor) return;
+                if (file.size > 400 * 1024) {
+                    this.error = 'That picture is over 400KB. A document carries its pictures inside it, ' +
+                        'so they have to be small — attach it as a file instead.';
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = () => {
+                    this.error = '';
+                    this.command(chain => chain.setImage({ src: reader.result, alt: file.name }).run());
+                    this.saveStatus = 'unsaved';
+                    this.queueSave();
+                };
+                reader.onerror = () => { this.error = 'That picture could not be read.'; };
+                reader.readAsDataURL(file);
+            },
+
+            setAlign(align) {
+                this.command(chain => align
+                    ? chain.setTextAlign(align).run()
+                    : chain.unsetTextAlign().run());
             },
 
             // ── Saving ───────────────────────────────────────────────────────

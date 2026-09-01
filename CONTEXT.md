@@ -31,7 +31,7 @@ The category of a Shepherding Note. Known types: Elder Check-in, Elder Interview
 _Avoid_: Note category, note tag
 
 **Note Body**:
-The rich-text content of anything written in the Note Module — a Shepherding Note, Meeting Minutes, an [[Elder Document]] or an [[Event Document]]. Stored as TipTap JSON, everywhere, whatever it hangs off. Exports to Word and imports from it by a walk this codebase owns (ADR-0048). May contain Cross-References, but only where the surrounding document is elder-only — see Note Module.
+The rich-text content of anything written in the Note Module — a Shepherding Note, Meeting Minutes, an [[Elder Document]] or an [[Event Document]]. Stored as TipTap JSON, everywhere, whatever it hangs off. Exports to Word and imports from it by a walk this codebase owns (ADR-0048). May hold headings, bold/italic/underline, highlights, fonts and sizes, bullet and numbered lists, tables, alignment, links and pictures — a picture rides INSIDE the body as a data URI rather than in Storage, so whatever rule governs the document governs the picture. May contain Cross-References, but only where the surrounding document is elder-only — see Note Module.
 _Avoid_: Content, text, body (use Note Body as the full compound term)
 
 **Note Module**:

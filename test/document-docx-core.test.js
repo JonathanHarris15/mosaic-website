@@ -358,3 +358,124 @@ test('a very long title is cut rather than refused', () => {
     assert.ok(name.length <= 125, 'got ' + name.length);
     assert.ok(name.endsWith('.docx'));
 });
+
+// ── Alignment ─────────────────────────────────────────────────────────────────
+
+test('an alignment rides on the block, and left is dropped rather than restated', () => {
+    const aligned = a => Core.docxBlocksFromTiptap(doc([
+        { type: 'paragraph', attrs: { textAlign: a }, content: [text('x')] },
+    ]))[0].align;
+
+    assert.strictEqual(aligned('center'), 'center');
+    assert.strictEqual(aligned('right'), 'right');
+    assert.strictEqual(aligned('justify'), 'justify');
+    // Emitting 'left' would override a document whose own default is something
+    // else, so the absence is the point.
+    assert.strictEqual(aligned('left'), null);
+    assert.strictEqual(aligned(undefined), null);
+    assert.strictEqual(aligned('nonsense'), null);
+});
+
+test('a heading and a list item carry alignment too', () => {
+    const heading = Core.docxBlocksFromTiptap(doc([
+        { type: 'heading', attrs: { level: 1, textAlign: 'center' }, content: [text('T')] },
+    ]));
+    assert.strictEqual(heading[0].align, 'center');
+
+    const list = Core.docxBlocksFromTiptap(doc([
+        { type: 'bulletList', content: [
+            { type: 'listItem', content: [
+                { type: 'paragraph', attrs: { textAlign: 'right' }, content: [text('x')] },
+            ] },
+        ] },
+    ]));
+    assert.strictEqual(list[0].align, 'right');
+});
+
+// ── A picture ─────────────────────────────────────────────────────────────────
+
+test('a data URI is split into what it is and what it holds', () => {
+    assert.deepStrictEqual(Core.parseDataUri('data:image/png;base64,AAAB'),
+        { mime: 'image/png', base64: 'AAAB' });
+    assert.deepStrictEqual(Core.parseDataUri('DATA:image/JPEG;base64,QQ=='),
+        { mime: 'image/jpeg', base64: 'QQ==' });
+});
+
+test('anything that is not an inline picture is not one', () => {
+    assert.strictEqual(Core.parseDataUri('https://example.org/a.png'), null);
+    assert.strictEqual(Core.parseDataUri('data:text/html;base64,AAAA'), null,
+        'only images may be inlined into a Word file');
+    assert.strictEqual(Core.parseDataUri(''), null);
+    assert.strictEqual(Core.parseDataUri(null), null);
+});
+
+test('a picture becomes an image block, carrying its bytes and its words', () => {
+    const blocks = Core.docxBlocksFromTiptap(doc([
+        { type: 'image', attrs: { src: 'data:image/png;base64,AAAB', alt: 'the flyer' } },
+    ]));
+    assert.deepStrictEqual(blocks, [
+        { kind: 'image', mime: 'image/png', base64: 'AAAB', alt: 'the flyer' },
+    ]);
+});
+
+test('a picture held at a URL says so in words instead of breaking the file', () => {
+    // A .docx carrying a link to a picture shows a broken frame to anyone
+    // reading it offline, which is most people with a document they were sent.
+    const blocks = Core.docxBlocksFromTiptap(doc([
+        { type: 'image', attrs: { src: 'https://example.org/a.png', alt: 'the flyer' } },
+    ]));
+    assert.strictEqual(blocks[0].kind, 'paragraph');
+    assert.strictEqual(blocks[0].runs[0].text, '[the flyer]');
+    assert.strictEqual(blocks[0].runs[0].italic, true);
+});
+
+// ── How big a picture is, read from the picture ───────────────────────────────
+
+const PNG_1x1 = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64');
+
+test('a PNG says how big it is, and is believed', () => {
+    assert.deepStrictEqual(Core.imageSizeFromBytes(new Uint8Array(PNG_1x1)), { width: 1, height: 1 });
+});
+
+test('a GIF is read the other way round, because that is how a GIF stores it', () => {
+    const gif = new Uint8Array(24);
+    gif.set([0x47, 0x49, 0x46, 0x38, 0x39, 0x61], 0);  // GIF89a
+    gif[6] = 0x20; gif[7] = 0x00;                       // width  32, little-endian
+    gif[8] = 0x10; gif[9] = 0x00;                       // height 16
+    assert.deepStrictEqual(Core.imageSizeFromBytes(gif), { width: 32, height: 16 });
+});
+
+test('a JPEG is walked to its frame marker, past whatever metadata came first', () => {
+    const jpeg = new Uint8Array([
+        0xff, 0xd8,                          // start of image
+        0xff, 0xe0, 0x00, 0x04, 0x00, 0x00,  // a segment of its own length
+        0xff, 0xc0, 0x00, 0x11, 0x08,        // start of frame
+        0x00, 0x40,                          // height 64
+        0x00, 0x80,                          // width 128
+        0, 0, 0, 0, 0, 0, 0,
+    ]);
+    assert.deepStrictEqual(Core.imageSizeFromBytes(jpeg), { width: 128, height: 64 });
+});
+
+test('something that is not a picture measures as nothing, not as a guess', () => {
+    assert.strictEqual(Core.imageSizeFromBytes(new Uint8Array(4)), null);
+    assert.strictEqual(Core.imageSizeFromBytes(null), null);
+});
+
+test('a picture too wide for a page is scaled down, keeping its shape', () => {
+    const fitted = Core.fitImage({ width: 2000, height: 1000 });
+    assert.strictEqual(fitted.width, Core.MAX_IMAGE_WIDTH_PT);
+    assert.strictEqual(fitted.height, Core.MAX_IMAGE_WIDTH_PT / 2, 'the picture was stretched');
+});
+
+test('a small picture keeps its own size, converted to points', () => {
+    assert.deepStrictEqual(Core.fitImage({ width: 100, height: 50 }), { width: 75, height: 38 });
+});
+
+test('a picture that would not say how big it is still gets into the document', () => {
+    // Leaving it out is worse than showing it at a size nobody chose.
+    const fitted = Core.fitImage(null);
+    assert.ok(fitted.width > 0 && fitted.height > 0);
+});

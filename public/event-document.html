@@ -192,6 +192,36 @@
 
             <span class="w-px h-4 bg-outline-variant mx-1"></span>
 
+            <template x-for="a in ['left', 'center', 'right']" :key="a">
+                <button type="button" @click="setAlign(a)"
+                        :aria-pressed="isActive({ textAlign: a })"
+                        class="m-icon-btn m-icon-btn--sm cal-focus"
+                        :class="isActive({ textAlign: a }) && 'bg-surface-container'"
+                        :title="'Align ' + a">
+                    <span class="material-symbols-outlined text-[16px]"
+                          x-text="'format_align_' + a"></span>
+                </button>
+            </template>
+
+            <span class="w-px h-4 bg-outline-variant mx-1"></span>
+
+            <button type="button" @click="setLink()" :aria-pressed="isActive('link')"
+                    class="m-icon-btn m-icon-btn--sm cal-focus"
+                    :class="isActive('link') && 'bg-surface-container'" title="Link">
+                <span class="material-symbols-outlined text-[16px]">link</span>
+            </button>
+            <!-- A picture lives INSIDE the document rather than in Storage, so
+                 the Event's own visibility rule covers it with nothing else to
+                 set — and it survives the trip out to Word and back. -->
+            <input type="file" x-ref="imageInput" class="hidden" accept="image/*"
+                   @change="chooseImage($event)" />
+            <button type="button" @click="$refs.imageInput.click()"
+                    class="m-icon-btn m-icon-btn--sm cal-focus" title="Insert a picture">
+                <span class="material-symbols-outlined text-[16px]">image</span>
+            </button>
+
+            <span class="w-px h-4 bg-outline-variant mx-1"></span>
+
             <button type="button" @click="command(c => c.undo().run())"
                     class="m-icon-btn m-icon-btn--sm cal-focus" title="Undo">
                 <span class="material-symbols-outlined text-[16px]">undo</span>

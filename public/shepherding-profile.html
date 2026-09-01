@@ -1359,6 +1359,9 @@
     <script src="shepherding-quick-assign.js"></script>
     <script src="shepherding-documents-core.js"></script>
     <script src="shepherding-documents.js"></script>
+    <!-- Loads the vendored TipTap bundle. Must come before the page
+         script, which calls TiptapEditorLoader.ensureTipTap(). -->
+    <script src="tiptap-editor-loader.js"></script>
     <script src="shepherding-profile.js"></script>
 </body>
 </html>

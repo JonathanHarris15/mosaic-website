@@ -86,3 +86,83 @@ test('lists and tables nest correctly', () => {
     const table = { type: 'table', content: [{ type: 'tableRow', content: [{ type: 'tableCell', content: [para(txt('c'))] }] }] };
     assert.strictEqual(renderTiptapJson(doc(table)), '<table class="note-table"><tr><td><p>c</p></td></tr></table>');
 });
+
+// ── Nodes and marks the editor gained with the Word work ─────────────────────
+//
+// ADR-0048's rule: when the editor learns a node, this renderer and the Word
+// walk both need the case. These are the ones added with Image, Link and
+// TextAlign — plus headings, which had no case at all and rendered as bare
+// text, quietly flattening every Note Body's structure everywhere it was read.
+
+const rdoc = content => ({ type: 'doc', content: content });
+
+test('a heading renders as a heading, not as a bare line of text', () => {
+    const html = renderTiptapJson(rdoc([
+        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Agenda' }] },
+    ]));
+    assert.strictEqual(html, '<h2>Agenda</h2>');
+});
+
+test('a heading level nobody has is pulled to one that exists', () => {
+    const html = renderTiptapJson(rdoc([
+        { type: 'heading', attrs: { level: 9 }, content: [{ type: 'text', text: 'x' }] },
+    ]));
+    assert.match(html, /^<h6>/);
+});
+
+test('an alignment reaches the page, and the default one is not restated', () => {
+    const align = a => renderTiptapJson(rdoc([
+        { type: 'paragraph', attrs: { textAlign: a }, content: [{ type: 'text', text: 'x' }] },
+    ]));
+    assert.match(align('center'), /style="text-align:center"/);
+    assert.match(align('right'), /style="text-align:right"/);
+    assert.doesNotMatch(align('left'), /text-align/);
+});
+
+test('an alignment nobody wrote cannot become a style attribute of its own', () => {
+    const html = renderTiptapJson(rdoc([
+        { type: 'paragraph', attrs: { textAlign: 'center;background:url(x)' },
+          content: [{ type: 'text', text: 'x' }] },
+    ]));
+    assert.doesNotMatch(html, /background/);
+});
+
+test('a link renders as one, and opens away from this app', () => {
+    const html = renderTiptapJson(rdoc([
+        { type: 'paragraph', content: [
+            { type: 'text', text: 'the rota', marks: [{ type: 'link', attrs: { href: 'https://example.org/rota' } }] },
+        ] },
+    ]));
+    assert.match(html, /<a href="https:\/\/example\.org\/rota"/);
+    assert.match(html, /rel="noopener noreferrer"/);
+});
+
+test('a javascript: link is not a link at all', () => {
+    // A Note Body can be written by anyone who can write a note, and read by
+    // every elder. A href straight out of the document is a way in.
+    const html = renderTiptapJson(rdoc([
+        { type: 'paragraph', content: [
+            { type: 'text', text: 'click', marks: [{ type: 'link', attrs: { href: 'javascript:steal()' } }] },
+        ] },
+    ]));
+    assert.doesNotMatch(html, /javascript:/);
+    assert.doesNotMatch(html, /<a /);
+    assert.match(html, /click/, 'the words were thrown away with the link');
+});
+
+test('a picture renders, but only from a data URI or the web', () => {
+    const src = s => renderTiptapJson(rdoc([{ type: 'image', attrs: { src: s, alt: 'a flyer' } }]));
+    assert.match(src('data:image/png;base64,AAAA'), /<img src="data:image\/png;base64,AAAA" alt="a flyer"/);
+    assert.match(src('https://example.org/f.png'), /<img src="https:\/\/example\.org\/f\.png"/);
+    assert.strictEqual(src('javascript:steal()'), '');
+    assert.strictEqual(src(''), '');
+});
+
+test('a rule and a quote render as themselves', () => {
+    assert.strictEqual(renderTiptapJson(rdoc([{ type: 'horizontalRule' }])), '<hr />');
+    assert.match(
+        renderTiptapJson(rdoc([
+            { type: 'blockquote', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'q' }] }] },
+        ])),
+        /^<blockquote><p>q<\/p><\/blockquote>$/);
+});
