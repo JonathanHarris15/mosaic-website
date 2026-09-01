@@ -122,6 +122,18 @@
     <main x-show="!loading && !error"
           class="flex-grow overflow-hidden w-full px-4 md:px-margin pb-lg flex flex-col gap-sm pt-md">
 
+        <!-- Something went wrong that the document survives. It sits above the
+             title and can be dismissed; it never replaces the page. -->
+        <div x-show="notice" class="flex items-start gap-sm rounded-lg border border-outline-variant
+                                    bg-surface-container px-md py-2">
+            <span class="material-symbols-outlined text-[18px] text-error shrink-0 mt-0.5">error</span>
+            <p class="text-[13px] text-on-surface-variant flex-1" x-text="notice"></p>
+            <button type="button" @click="notice = ''"
+                    class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus" aria-label="Dismiss">
+                <span class="material-symbols-outlined text-[16px]">close</span>
+            </button>
+        </div>
+
         <input type="text" x-model="title" @input="onTitleInput()" :readonly="!isEditor"
                placeholder="Untitled Document"
                class="w-full bg-transparent border-0 font-display text-[26px] text-primary
@@ -217,7 +229,9 @@
                    @change="chooseImage($event)" />
             <button type="button" @click="$refs.imageInput.click()"
                     class="m-icon-btn m-icon-btn--sm cal-focus" title="Insert a picture">
-                <span class="material-symbols-outlined text-[16px]">image</span>
+                <span class="material-symbols-outlined text-[16px]"
+                      :class="insertingImage ? 'm-spinner' : ''"
+                      x-text="insertingImage ? 'progress_activity' : 'image'"></span>
             </button>
 
             <span class="w-px h-4 bg-outline-variant mx-1"></span>
@@ -237,10 +251,48 @@
         </div>
     </main>
 
+    <!-- ── A picture too big to carry as it is ─────────────────────────────────
+         A document keeps its pictures inside itself, so a photograph straight
+         off a phone will not fit as it is. That is a question, not a refusal —
+         and asking it must never take the document off the screen. -->
+    <div x-show="pendingImage" @keydown.escape.window="cancelImage()"
+         class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
+        <div class="bg-surface-container-lowest rounded-lg border border-outline-variant w-full max-w-[460px] mt-[14vh]">
+            <div class="px-md py-md flex items-start gap-sm">
+                <span class="material-symbols-outlined text-[22px] text-secondary shrink-0 mt-0.5">compress</span>
+                <div class="min-w-0">
+                    <h3 class="font-display text-[20px] text-primary">Shrink this picture?</h3>
+                    <p class="text-[13px] text-on-surface-variant mt-2">
+                        <span class="font-medium" x-text="pendingImage && pendingImage.name"></span>
+                        is <span x-text="pendingImage && pendingImage.size"></span>. A document carries its
+                        pictures inside it, so this one needs making smaller before it will fit.
+                    </p>
+                    <p class="text-[12.5px] text-on-surface-variant mt-2">
+                        It will still be big enough to fill the page. If you need the original at full
+                        size, attach it to the event as a file instead.
+                    </p>
+                </div>
+            </div>
+            <div class="px-md py-md border-t border-outline-variant flex items-center justify-end gap-sm">
+                <button @click="cancelImage()"
+                        class="px-md py-2 rounded-lg font-label-md text-xs uppercase tracking-wider
+                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Cancel</button>
+                <button @click="confirmImageShrink()"
+                        class="bg-secondary text-on-secondary px-md py-2 rounded-lg shadow-xs font-label-md
+                               text-xs uppercase tracking-wider cal-motion cal-press cal-focus">
+                    Shrink and insert
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="events-core.js"></script>
     <script src="events-occurrence-core.js"></script>
     <script src="events-store.js"></script>
     <script src="document-body-core.js"></script>
+    <!-- Shrinks an oversized picture rather than refusing it — the same ladder
+         the Service Guide uses. -->
+    <script src="guide-image-core.js"></script>
     <!-- Word, both ways. Neither pulls in its library until somebody clicks. -->
     <script src="document-docx-core.js"></script>
     <script src="document-docx.js"></script>

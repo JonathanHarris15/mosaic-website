@@ -24,6 +24,9 @@
 
     const Store = window.EventsStore;
     const Body = window.DocumentBodyCore;
+    // The picture-shrinking the Service Guide already does: a ladder of sizes
+    // and qualities tried until one comes under a byte budget.
+    const ImageCore = window.GuideImageCore;
 
     const params = new URLSearchParams(window.location.search);
     const OCCURRENCE_ID = params.get('occurrence') || '';
@@ -37,10 +40,28 @@
     let editor = null;
     let saveTimer = null;
 
+    // ⚠ KEPT OUT OF ALPINE STATE ON PURPOSE. Alpine wraps state in a proxy, and
+    // a proxied File is no longer a File to FileReader — the brand check fails
+    // and the read throws. Only what the dialog needs to SAY goes into state.
+    let pendingImageFile = null;
+
+    function describeBytes(bytes) {
+        const n = Number(bytes) || 0;
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return Math.round(n / 1024) + ' KB';
+        return (Math.round(n / (1024 * 1024) * 10) / 10) + ' MB';
+    }
+
     window.eventDocumentPage = function eventDocumentPage() {
         return {
             loading: true,
+            // Fatal only: the document could not be opened at all, so there is
+            // nothing to show. Anything the page can carry on from goes in
+            // `notice` — setting `error` for a picture that was too big took
+            // the whole document off the screen, which is a worse thing than
+            // the picture not going in.
             error: '',
+            notice: '',
 
             rank: null,
             uid: null,
@@ -54,6 +75,9 @@
             saveStatus: 'saved',
             exportingWord: false,
             importingWord: false,
+            insertingImage: false,
+            // What the "shall I shrink it?" dialog is about, or null for none.
+            pendingImage: null,
 
             // Redrawn whenever the selection moves, so the toolbar can show
             // what is true of the cursor. Alpine cannot watch inside TipTap.
@@ -238,7 +262,7 @@
                 // "example.org" becomes a link relative to this app.
                 const url = /^[a-z][a-z0-9+.-]*:/i.test(href) ? href : 'https://' + href;
                 if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) {
-                    this.error = 'A link has to be a web address or an email address.';
+                    this.notice = 'A link has to be a web address or an email address.';
                     return;
                 }
                 this.command(chain => chain.extendMarkRange('link').setLink({ href: url }).run());
@@ -261,22 +285,55 @@
                 if (file) this.insertImage(file);
             },
 
+            // A picture that already fits goes straight in. One that does not
+            // is NOT refused — it is offered a shrink. "Attach it as a file
+            // instead" is not an answer to somebody who has just picked a photo,
+            // and it certainly is not worth taking their document off the screen
+            // to say it.
             insertImage(file) {
                 if (!editor || !this.isEditor) return;
-                if (file.size > 400 * 1024) {
-                    this.error = 'That picture is over 400KB. A document carries its pictures inside it, ' +
-                        'so they have to be small — attach it as a file instead.';
+                this.notice = '';
+
+                const check = ImageCore.validateImageFile(file);
+                if (!check.ok) { this.notice = check.error; return; }
+
+                if (!ImageCore.needsRedraw(file, ImageCore.BUDGET_BYTES)) {
+                    this.placeImage(file);
                     return;
                 }
-                const reader = new FileReader();
-                reader.onload = () => {
-                    this.error = '';
-                    this.command(chain => chain.setImage({ src: reader.result, alt: file.name }).run());
+
+                pendingImageFile = file;
+                this.pendingImage = { name: file.name, size: describeBytes(file.size) };
+            },
+
+            confirmImageShrink() {
+                const file = pendingImageFile;
+                this.pendingImage = null;
+                pendingImageFile = null;
+                if (file) this.placeImage(file);
+            },
+
+            cancelImage() {
+                this.pendingImage = null;
+                pendingImageFile = null;
+            },
+
+            // Shrinks only when it has to — a picture already under budget keeps
+            // its own bytes, so a PNG logo is not re-encoded as a JPEG and left
+            // with white behind its transparency.
+            async placeImage(file) {
+                this.insertingImage = true;
+                try {
+                    const dataUrl = await ImageCore.capToDataUrl(file, ImageCore.BUDGET_BYTES);
+                    this.command(chain => chain.setImage({ src: dataUrl, alt: file.name }).run());
                     this.saveStatus = 'unsaved';
                     this.queueSave();
-                };
-                reader.onerror = () => { this.error = 'That picture could not be read.'; };
-                reader.readAsDataURL(file);
+                } catch (e) {
+                    console.error('Could not read that picture:', e);
+                    this.notice = 'That picture could not be read.';
+                } finally {
+                    this.insertingImage = false;
+                }
             },
 
             setAlign(align) {
@@ -333,7 +390,7 @@
                     });
                 } catch (e) {
                     console.error('Word export failed:', e);
-                    this.error = 'Could not make a Word file.';
+                    this.notice = 'That would not turn into a Word file. Try again.';
                 } finally {
                     this.exportingWord = false;
                 }
@@ -357,7 +414,7 @@
                     this.queueSave();
                 } catch (e) {
                     console.error('Word import failed:', e);
-                    this.error = 'Could not read that Word file.';
+                    this.notice = 'That Word file could not be read.';
                 } finally {
                     this.importingWord = false;
                 }
