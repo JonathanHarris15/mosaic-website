@@ -59,3 +59,10 @@ scripts/spike/themes.json
 # pins the issuer to the hosting site, so a clean checkout needs no secrets
 # to deploy correctly.
 functions/.env.*
+
+# Board conversation logs (.board/conversations/*.json|md) — the working notes
+# the ticket skills leave behind as they plan and implement. They are a record
+# of how a ticket was talked through, not part of the app, and they change every
+# time anything touches the board. Ignored so they stop showing up as untracked
+# noise in every status.
+.board/
