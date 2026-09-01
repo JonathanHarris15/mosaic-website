@@ -73,6 +73,16 @@
                 </a>
             </div>
             <div class="m-header__actions">
+                <!-- A document written here has to be able to leave here. -->
+                <button type="button" @click="downloadAsWord()" :disabled="exportingWord"
+                        class="m-btn m-btn--ghost m-btn--sm"
+                        :title="exportingWord ? 'Making the file…' : 'Download as Word'"
+                        aria-label="Download as Word">
+                    <span class="material-symbols-outlined text-[16px]"
+                          :class="exportingWord ? 'm-spinner' : ''"
+                          x-text="exportingWord ? 'progress_activity' : 'download'"></span>
+                    <span class="m-btn__label" x-text="exportingWord ? 'Making…' : 'Word'"></span>
+                </button>
                 <template x-if="saveStatus === 'saving'">
                     <span class="m-badge m-badge--neutral m-header__chip">
                         <span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
@@ -364,6 +374,11 @@
         <span x-text="toast.message"></span>
     </div>
 
+    <!-- Turning a Note Body into a Word file (the walk, then the writer).
+         Neither pulls in the 1.1MB docx library — document-docx.js fetches that
+         only when somebody actually asks for a download. -->
+    <script src="document-docx-core.js"></script>
+    <script src="document-docx.js"></script>
     <script src="shepherding-core.js"></script>
     <script src="shepherding-blur.js"></script>
     <script src="shepherding-inline-triggers.js"></script>

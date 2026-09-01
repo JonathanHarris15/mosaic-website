@@ -455,10 +455,21 @@
                                  asked every time. -->
                             <button type="button" @click="openAttachment(a)"
                                     :disabled="openingAttachmentId === a.id"
-                                    class="m-row__main text-left cal-focus">
+                                    class="m-row__main text-left cal-focus"
+                                    :aria-label="attachmentActionLabel(a) + ' ' + a.name">
                                 <span class="m-row__title" x-text="a.name"></span>
                                 <span class="m-row__sub"
                                       x-text="openingAttachmentId === a.id ? 'Opening…' : attachmentMeta(a)"></span>
+                            </button>
+                            <!-- Only worth its space on a file the row would
+                                 OPEN. Clicking one that cannot be shown already
+                                 saves it, so a Save button beside it would be
+                                 the same button twice. -->
+                            <button type="button" x-show="attachmentPreviewKind(a)"
+                                    @click="downloadAttachment(a)"
+                                    class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus"
+                                    :aria-label="'Download ' + a.name">
+                                <span class="material-symbols-outlined text-[18px]">download</span>
                             </button>
                             <button x-show="canManageAttachments" @click="askRemoveAttachment(a)"
                                     class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus"
@@ -1144,6 +1155,173 @@
                                text-xs uppercase tracking-wider cal-motion cal-press cal-focus disabled:opacity-40">
                     Remove it
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Looking at a Files attachment (ADR-0047) ─────────────────────────
+         Drive gives a file two doors — look at it, or save it — and this is the
+         first one, minus Google. Docs, Sheets and Drive's own previewer open a
+         file by FETCHING IT from a link anyone can read, and an Event
+         Attachment has no such link on purpose (ADR-0046). So the browser draws
+         it here instead, out of bytes fetched as the reader. Nothing on this
+         page is an address anybody else could follow. -->
+    <div x-show="preview" role="dialog" aria-modal="true"
+         @keydown.escape.window="closeAttachmentPreview()"
+         @click.self="closeAttachmentPreview()"
+         class="fixed inset-0 z-50 bg-on-surface/40 flex items-start justify-center p-4">
+        <div x-ref="previewPanel"
+             @fullscreenchange.document="notePreviewFullscreen()"
+             class="bg-surface-container-lowest border border-outline-variant
+                    w-full flex flex-col overflow-hidden"
+             :class="previewFullscreen
+                     ? 'max-w-none h-screen mt-0 rounded-none'
+                     : 'max-w-[900px] h-[86vh] mt-[5vh] rounded-lg'">
+
+            <div class="px-md py-sm border-b border-outline-variant flex items-center gap-sm shrink-0">
+                <span class="material-symbols-outlined text-[20px] text-secondary shrink-0"
+                      x-text="preview && preview.icon"></span>
+                <div class="min-w-0 flex-1">
+                    <h3 class="font-display text-[17px] text-primary truncate"
+                        x-text="preview && preview.name"></h3>
+                    <p class="text-[12px] text-on-surface-variant truncate"
+                       x-text="preview && preview.meta"></p>
+                </div>
+                <!-- A PDF or a picture reads far better in the browser's own
+                     reader than in a box on this page. Only the kinds the
+                     BROWSER draws are offered a tab: what we render ourselves
+                     stays here, where we control what runs. -->
+                <button type="button" x-show="previewOpensInOwnTab" @click="openPreviewInOwnTab()"
+                        class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus shrink-0"
+                        aria-label="Open in a new tab" title="Open in a new tab">
+                    <span class="material-symbols-outlined text-[18px]">open_in_new</span>
+                </button>
+                <!-- Full screen works for everything, including the files this
+                     page draws itself — it is the same page, just bigger. -->
+                <button type="button" x-show="preview && preview.status === 'ready'"
+                        @click="togglePreviewFullscreen()"
+                        class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus shrink-0"
+                        :aria-label="previewFullscreen ? 'Leave full screen' : 'Full screen'"
+                        :title="previewFullscreen ? 'Leave full screen' : 'Full screen'">
+                    <span class="material-symbols-outlined text-[18px]"
+                          x-text="previewFullscreen ? 'close_fullscreen' : 'open_in_full'"></span>
+                </button>
+                <!-- The bytes are already down. Saving them asks Storage for
+                     nothing a second time. -->
+                <button type="button" x-show="preview && preview.url" @click="downloadFromPreview()"
+                        class="border border-secondary text-secondary px-md py-1.5 rounded-lg font-label-md
+                               text-xs uppercase tracking-wider cal-motion cal-press cal-focus
+                               hover:bg-surface-container flex items-center gap-1.5 shrink-0">
+                    <span class="material-symbols-outlined text-[17px]">download</span>
+                    <span>Download</span>
+                </button>
+                <button type="button" @click="closeAttachmentPreview()"
+                        class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus shrink-0"
+                        aria-label="Close">
+                    <span class="material-symbols-outlined text-[18px]">close</span>
+                </button>
+            </div>
+
+            <div class="flex-1 min-h-0 overflow-auto">
+
+                <template x-if="preview && preview.status === 'loading'">
+                    <div class="h-full flex flex-col items-center justify-center gap-sm text-on-surface-variant">
+                        <span class="material-symbols-outlined m-spinner text-[24px]">progress_activity</span>
+                        <p class="text-[13px]">Opening…</p>
+                    </div>
+                </template>
+
+                <template x-if="preview && preview.status === 'error'">
+                    <div class="h-full flex flex-col items-center justify-center gap-sm px-md text-center">
+                        <span class="material-symbols-outlined text-[24px] text-error">error</span>
+                        <p class="text-[13px] text-on-surface-variant max-w-[46ch]" x-text="preview.error"></p>
+                    </div>
+                </template>
+
+                <template x-if="preview && preview.status === 'ready'">
+                    <div class="h-full">
+
+                        <!-- A PDF is drawn by the browser's own reader. The blob
+                             is same-origin, but the reader is not our JavaScript
+                             — no uploaded file gets to run as this page. -->
+                        <template x-if="preview.kind === 'pdf'">
+                            <iframe :src="preview.url" :title="preview.name"
+                                    class="w-full h-full border-0 bg-white"></iframe>
+                        </template>
+
+                        <template x-if="preview.kind === 'image'">
+                            <div class="h-full p-md flex items-center justify-center">
+                                <img :src="preview.url" :alt="preview.name" @error="previewFailedToRender()"
+                                     class="max-w-full max-h-full object-contain" />
+                            </div>
+                        </template>
+
+                        <template x-if="preview.kind === 'video'">
+                            <div class="h-full flex items-center justify-center bg-on-surface">
+                                <video :src="preview.url" controls @error="previewFailedToRender()"
+                                       class="max-w-full max-h-full"></video>
+                            </div>
+                        </template>
+
+                        <template x-if="preview.kind === 'audio'">
+                            <div class="h-full p-md flex items-center justify-center">
+                                <audio :src="preview.url" controls @error="previewFailedToRender()"
+                                       class="w-full max-w-[520px]"></audio>
+                            </div>
+                        </template>
+
+                        <!-- A Word file, read by the same converter the Service
+                             Guide already uses. Links and event handlers are
+                             stripped on the way in. -->
+                        <template x-if="preview.kind === 'docx'">
+                            <div class="p-md prose prose-sm max-w-none" x-html="preview.html"></div>
+                        </template>
+
+                        <!-- Plain letters, INCLUDING an .html file: a blob URL
+                             inherits this site's origin, so a page uploaded as
+                             an attachment would run its script beside the
+                             reader's own session. It gets read, never run. -->
+                        <template x-if="preview.kind === 'text'">
+                            <div class="p-md">
+                                <pre class="text-[12.5px] font-mono whitespace-pre-wrap break-words text-on-surface"
+                                     x-text="preview.text"></pre>
+                                <p x-show="preview.truncated" class="text-[12px] text-on-surface-variant mt-md">
+                                    This file is too long to show all of. Download it to read the rest.
+                                </p>
+                            </div>
+                        </template>
+
+                        <!-- A .csv IS a spreadsheet, so it is drawn as one
+                             rather than as the commas it is made of. An .xlsx
+                             cannot be: reading one needs a parser we would have
+                             to carry in full, so it downloads. -->
+                        <template x-if="preview.kind === 'sheet'">
+                            <div class="p-md">
+                                <table class="text-[12.5px] border-collapse">
+                                    <tbody>
+                                        <template x-for="(row, ri) in preview.rows" :key="ri">
+                                            <tr>
+                                                <template x-for="(cell, ci) in row" :key="ci">
+                                                    <td class="border border-outline-variant px-2 py-1 align-top
+                                                               whitespace-pre-wrap max-w-[320px]"
+                                                        :class="ri === 0 && 'bg-surface-container font-label-md'"
+                                                        x-text="cell"></td>
+                                                </template>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                                <p x-show="preview.hiddenRows || preview.truncated"
+                                   class="text-[12px] text-on-surface-variant mt-md">
+                                    Showing the first <span x-text="preview.rows.length"></span> rows.
+                                    Download it to see all of it.
+                                </p>
+                            </div>
+                        </template>
+
+                    </div>
+                </template>
+
             </div>
         </div>
     </div>

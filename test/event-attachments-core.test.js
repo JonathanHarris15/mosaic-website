@@ -152,6 +152,170 @@ test('fileExtension reads the same letters the icon is chosen from', () => {
     assert.strictEqual(Core.fileExtension('no-extension'), '');
 });
 
+// ── Which files can be SHOWN rather than only saved (ADR-0047) ────────────────
+//
+// The ask was "let me open it like Google Drive would". Drive's first door is
+// Google's own servers fetching the file from a public link, which an Event
+// Attachment does not have and must not get (ADR-0046) — so the door is ours,
+// and this is the list of what is behind it.
+
+test('the files Drive would open in a viewer are the files this opens in one', () => {
+    const shown = {
+        'order-of-service.pdf': 'pdf',
+        'flyer.png': 'image',
+        'photo.JPG': 'image',
+        'sign.webp': 'image',
+        'logo.svg': 'image',
+        'minutes.docx': 'docx',
+        'notes.txt': 'text',
+        'readme.md': 'text',
+        'rota.csv': 'sheet',
+        'export.tsv': 'sheet',
+        'talk.mp3': 'audio',
+        'service.mp4': 'video',
+    };
+    Object.keys(shown).forEach(name => {
+        assert.strictEqual(Core.previewKindFor(name), shown[name], name + ' should open in a viewer');
+        assert.strictEqual(Core.canPreview(name), true, name);
+    });
+});
+
+test('a file with no viewer says so, rather than opening an empty box', () => {
+    // .doc, .xls and .ppt are the pre-2007 binaries; .xlsx and .pptx need a
+    // parser this app does not carry. All four download, which is what Drive
+    // itself falls back to for anything it cannot read.
+    ['archive.zip', 'talk.pptx', 'rota.xlsx', 'letter.doc', 'book.xls',
+     'deck.ppt', 'letter.rtf', 'mystery.xyz', 'no-extension'].forEach(name => {
+        assert.strictEqual(Core.previewKindFor(name), null, name + ' has no viewer');
+        assert.strictEqual(Core.canPreview(name), false, name);
+        assert.strictEqual(Core.previewVerbFor(name), null, name);
+    });
+});
+
+test('a picture only Safari can draw is treated as one nobody can', () => {
+    // A broken image in a box is a worse answer than "save it to look at it".
+    assert.strictEqual(Core.previewKindFor('holiday.heic'), null);
+    assert.strictEqual(Core.previewKindFor('scan.tiff'), null);
+    assert.strictEqual(Core.previewKindFor('x', 'image/heic'), null);
+});
+
+test('a file whose name says nothing falls back to what the browser called it', () => {
+    assert.strictEqual(Core.previewKindFor('scan', 'application/pdf'), 'pdf');
+    assert.strictEqual(Core.previewKindFor('', 'image/png'), 'image');
+    assert.strictEqual(Core.previewKindFor('untitled', 'text/csv'), 'sheet');
+    assert.strictEqual(Core.previewKindFor('untitled', 'text/plain; charset=utf-8'), 'text');
+    assert.strictEqual(Core.previewKindFor('untitled', 'application/octet-stream'), null);
+    assert.strictEqual(Core.previewKindFor('untitled', null), null);
+});
+
+test('the name wins over the recorded type, because the name is the thing read', () => {
+    // Browsers routinely record a .docx as a zip, which is technically true and
+    // completely unhelpful.
+    assert.strictEqual(Core.previewKindFor('minutes.docx', 'application/zip'), 'docx');
+});
+
+test('the button names the door after what is behind it', () => {
+    assert.strictEqual(Core.previewVerbFor('flyer.pdf'), 'View');
+    assert.strictEqual(Core.previewVerbFor('sermon.mp3'), 'Play');
+    assert.strictEqual(Core.previewVerbFor('service.mp4'), 'Play');
+    assert.strictEqual(Core.previewVerbFor('archive.zip'), null);
+});
+
+// ── A tab of its own is a narrower offer than full screen ─────────────────────
+
+test('only the files the BROWSER draws are trusted with a tab of their own', () => {
+    ['pdf', 'image', 'video', 'audio'].forEach(kind => {
+        assert.strictEqual(Core.previewOpensInOwnTab(kind), true, kind);
+    });
+});
+
+test('a file this page renders itself stays on this page', () => {
+    // 'text' is the one that matters: a .txt in a tab is harmless, a .html in a
+    // tab runs its own script under this site's origin, and both arrive here as
+    // 'text'. Full screen is the answer for all three — same page, just bigger.
+    ['text', 'sheet', 'docx', null, undefined].forEach(kind => {
+        assert.strictEqual(Core.previewOpensInOwnTab(kind), false, String(kind));
+    });
+});
+
+// ── Reading a .csv as the table it is ─────────────────────────────────────────
+
+test('a spreadsheet is split into rows and cells', () => {
+    const rows = Core.parseDelimitedRows('Name,Role\nBethany,Welcome\nTom,Sound\n');
+    assert.deepStrictEqual(rows, [
+        ['Name', 'Role'],
+        ['Bethany', 'Welcome'],
+        ['Tom', 'Sound'],
+    ]);
+});
+
+test('a cell may hold a comma, a quote, or a line break of its own', () => {
+    const rows = Core.parseDelimitedRows('"Croft, Bethany","She said ""yes"""\n"two\nlines",plain');
+    assert.deepStrictEqual(rows, [
+        ['Croft, Bethany', 'She said "yes"'],
+        ['two\nlines', 'plain'],
+    ]);
+});
+
+test('a file saved on Windows does not gain a stray carriage return', () => {
+    assert.deepStrictEqual(Core.parseDelimitedRows('a,b\r\nc,d\r\n'), [['a', 'b'], ['c', 'd']]);
+});
+
+test('a file ending mid-line still shows its last row', () => {
+    assert.deepStrictEqual(Core.parseDelimitedRows('a,b\nc,d'), [['a', 'b'], ['c', 'd']]);
+});
+
+test('nothing at all is no rows, not one empty one', () => {
+    assert.deepStrictEqual(Core.parseDelimitedRows(''), []);
+    assert.deepStrictEqual(Core.parseDelimitedRows(null), []);
+});
+
+test('a .tsv is split on tabs, a .csv on commas', () => {
+    assert.strictEqual(Core.delimiterFor('export.tsv'), '\t');
+    assert.strictEqual(Core.delimiterFor('rota.csv'), ',');
+    assert.deepStrictEqual(
+        Core.parseDelimitedRows('a\tb\nc\td', Core.delimiterFor('export.tsv')),
+        [['a', 'b'], ['c', 'd']]);
+});
+
+// ── A long file is cut before it reaches the page ─────────────────────────────
+
+test('a short file is shown whole', () => {
+    assert.deepStrictEqual(Core.truncateForPreview('hello'), { text: 'hello', truncated: false });
+});
+
+test('a very long file is cut, and says it was', () => {
+    const long = 'x'.repeat(Core.MAX_PREVIEW_CHARACTERS + 500);
+    const cut = Core.truncateForPreview(long);
+    assert.strictEqual(cut.text.length, Core.MAX_PREVIEW_CHARACTERS);
+    assert.strictEqual(cut.truncated, true);
+});
+
+// ── The one kind that arrives as markup ───────────────────────────────────────
+//
+// mammoth's output is written into the page, and a Word hyperlink carries
+// whatever address it was given.
+
+test('a docx cannot bring script into the page it is shown on', () => {
+    const dirty = '<p onclick="steal()">Hello</p><script>steal()<\/script>' +
+        '<a href="javascript:steal()">click</a>';
+    const clean = Core.sanitizeDocxHtml(dirty);
+    assert.ok(!/<script/i.test(clean), 'a script tag survived');
+    assert.ok(!/onclick/i.test(clean), 'an event handler survived');
+    assert.ok(!/javascript:/i.test(clean), 'a javascript: link survived');
+    assert.ok(/Hello/.test(clean), 'the actual document was thrown away too');
+});
+
+test('an unclosed script tag cannot slip through by never closing', () => {
+    assert.ok(!/<script/i.test(Core.sanitizeDocxHtml('<p>hi</p><script>steal()')));
+});
+
+test('an ordinary Word document comes through untouched', () => {
+    const html = '<h1>Elders Meeting</h1><p><strong>Present:</strong> Tom</p>' +
+        '<a href="https://example.org/notes">notes</a>';
+    assert.strictEqual(Core.sanitizeDocxHtml(html), html);
+});
+
 // ── When it was uploaded, read back ───────────────────────────────────────────
 
 test('formatUploadedAt reads a stored ISO instant as a plain date', () => {
