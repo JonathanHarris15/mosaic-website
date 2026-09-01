@@ -6,6 +6,18 @@ let _currentUserId   = '';
 
 let _docEditor = null;
 
+// ⚠ KEPT OUT OF ALPINE STATE ON PURPOSE. Alpine wraps state in a proxy, and a
+// proxied File is no longer a File to FileReader — the brand check fails and
+// the read throws. Only what the dialog needs to SAY goes into state.
+let _pendingImageFile = null;
+
+function _describeBytes(bytes) {
+    const n = Number(bytes) || 0;
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return Math.round(n / 1024) + ' KB';
+    return (Math.round(n / (1024 * 1024) * 10) / 10) + ' MB';
+}
+
 let _mentionPeople   = [];
 let _mentionNotes    = [];
 let _mentionDocs     = [];
@@ -877,6 +889,14 @@ document.addEventListener('alpine:init', () => {
         exportingWord: false,
         // …and the same, coming the other way.
         importingWord: false,
+        insertingImage: false,
+        // What the "shall I shrink it?" dialog is about, or null for none.
+        pendingImage: null,
+
+        // An Elder Document is elder-only, so linking a block of it to
+        // somebody's Shepherding Note discloses nothing they could not already
+        // read. The Event Document editor sets this false (ADR-0049).
+        toolbarHasPersonPanel: true,
 
         // ── Person picker ──
         showPersonPicker: false,
@@ -1147,8 +1167,118 @@ document.addEventListener('alpine:init', () => {
         },
 
         focusEditor() { _docEditor?.commands.focus(); },
-        isActive(name) { return _docEditor ? _docEditor.isActive(name) : false; },
+        // ⚠ TOUCHES `editorUpdated` ITSELF. The markup used to carry
+        // `editorUpdated >= 0 &&` in front of every call to make Alpine
+        // re-evaluate when the cursor moved; the shared toolbar cannot know to
+        // do that, so the dependency belongs here where it can never be
+        // forgotten.
+        isActive(name, attrs) {
+            this.editorUpdated;
+            if (!_docEditor) return false;
+            // TipTap takes either a node name or a bare bag of attributes —
+            // alignment is the second kind, being an attribute of whatever
+            // block the cursor is in rather than a node of its own.
+            return typeof name === 'object'
+                ? _docEditor.isActive(name)
+                : _docEditor.isActive(name, attrs || {});
+        },
         editorCmd(command) { _docEditor?.chain().focus()[command]().run(); },
+
+        command(run) {
+            if (!_docEditor) return;
+            run(_docEditor.chain().focus());
+            this.editorUpdated++;
+        },
+
+        toggle(name) {
+            this.command(chain => chain['toggle' + name.charAt(0).toUpperCase() + name.slice(1)]().run());
+        },
+
+        setHeading(level) {
+            this.command(chain => level
+                ? chain.toggleHeading({ level: level }).run()
+                : chain.setParagraph().run());
+        },
+
+        setAlign(align) {
+            this.command(chain => align ? chain.setTextAlign(align).run() : chain.unsetTextAlign().run());
+        },
+
+        // A prompt rather than a bespoke popover: this is the least interesting
+        // part of the editor and a panel would be the most code in it.
+        setLink() {
+            if (!_docEditor) return;
+            const existing = _docEditor.getAttributes('link').href || '';
+            const entered = window.prompt('Link address', existing);
+            if (entered === null) return;
+
+            const href = String(entered).trim();
+            if (!href) {
+                this.command(chain => chain.extendMarkRange('link').unsetLink().run());
+                return;
+            }
+            // A bare address is meant as a web address. Without this,
+            // "example.org" becomes a link relative to this app.
+            const url = /^[a-z][a-z0-9+.-]*:/i.test(href) ? href : 'https://' + href;
+            if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) {
+                this.showToast('A link has to be a web address or an email address', 'error');
+                return;
+            }
+            this.command(chain => chain.extendMarkRange('link').setLink({ href: url }).run());
+        },
+
+        // ── A picture ────────────────────────────────────────────────────────
+        //
+        // Kept INSIDE the Note Body as a data URI rather than uploaded, so
+        // whatever rule governs the document governs the picture — and so it
+        // survives the round trip out to Word and back.
+        chooseImage(event) {
+            const file = event && event.target && event.target.files && event.target.files[0];
+            if (event && event.target) event.target.value = '';
+            if (file) this.insertImage(file);
+        },
+
+        // A picture that already fits goes straight in. One that does not is
+        // offered a shrink rather than refused — every photograph off a phone
+        // is too big, and "attach it as a file instead" is not an answer.
+        insertImage(file) {
+            if (!_docEditor) return;
+            const check = GuideImageCore.validateImageFile(file);
+            if (!check.ok) { this.showToast(check.error, 'error'); return; }
+
+            if (!GuideImageCore.needsRedraw(file, GuideImageCore.BUDGET_BYTES)) {
+                this.placeImage(file);
+                return;
+            }
+            _pendingImageFile = file;
+            this.pendingImage = { name: file.name, size: _describeBytes(file.size) };
+        },
+
+        confirmImageShrink() {
+            const file = _pendingImageFile;
+            this.pendingImage = null;
+            _pendingImageFile = null;
+            if (file) this.placeImage(file);
+        },
+
+        cancelImage() {
+            this.pendingImage = null;
+            _pendingImageFile = null;
+        },
+
+        async placeImage(file) {
+            this.insertingImage = true;
+            try {
+                const dataUrl = await GuideImageCore.capToDataUrl(file, GuideImageCore.BUDGET_BYTES);
+                this.command(chain => chain.setImage({ src: dataUrl, alt: file.name }).run());
+                this.scheduleSave();
+            } catch (e) {
+                console.error('Could not read that picture:', e);
+                this.showToast('That picture could not be read', 'error');
+            } finally {
+                this.insertingImage = false;
+            }
+        },
 
         setFontFamily(family) {
             if (!_docEditor) return;

@@ -139,111 +139,12 @@
                class="w-full bg-transparent border-0 font-display text-[26px] text-primary
                       focus:outline-none focus:ring-0 px-1 read-only:cursor-default" />
 
-        <!-- The toolbar an editor gets. A reader gets no toolbar at all rather
-             than a row of buttons that quietly refuse. -->
-        <div x-show="isEditor" class="flex flex-wrap items-center gap-1 border-b border-outline-variant pb-sm">
-            <button type="button" @click="toggle('bold')" :aria-pressed="isActive('bold')"
-                    class="m-icon-btn m-icon-btn--sm cal-focus"
-                    :class="isActive('bold') && 'bg-surface-container'" title="Bold">
-                <span class="material-symbols-outlined text-[16px]">format_bold</span>
-            </button>
-            <button type="button" @click="toggle('italic')" :aria-pressed="isActive('italic')"
-                    class="m-icon-btn m-icon-btn--sm cal-focus"
-                    :class="isActive('italic') && 'bg-surface-container'" title="Italic">
-                <span class="material-symbols-outlined text-[16px]">format_italic</span>
-            </button>
-            <button type="button" @click="toggle('underline')" :aria-pressed="isActive('underline')"
-                    class="m-icon-btn m-icon-btn--sm cal-focus"
-                    :class="isActive('underline') && 'bg-surface-container'" title="Underline">
-                <span class="material-symbols-outlined text-[16px]">format_underlined</span>
-            </button>
-            <button type="button" @click="toggle('highlight')" :aria-pressed="isActive('highlight')"
-                    class="m-icon-btn m-icon-btn--sm cal-focus"
-                    :class="isActive('highlight') && 'bg-surface-container'" title="Highlight">
-                <span class="material-symbols-outlined text-[16px]">highlight</span>
-            </button>
-
-            <span class="w-px h-4 bg-outline-variant mx-1"></span>
-
-            <template x-for="level in [1, 2, 3]" :key="level">
-                <button type="button" @click="setHeading(level)"
-                        :aria-pressed="isActive('heading', { level: level })"
-                        class="m-icon-btn m-icon-btn--sm cal-focus"
-                        :class="isActive('heading', { level: level }) && 'bg-surface-container'"
-                        :title="'Heading ' + level">
-                    <span class="material-symbols-outlined text-[16px]"
-                          x-text="'format_h' + level"></span>
-                </button>
-            </template>
-            <button type="button" @click="setHeading(0)" class="m-icon-btn m-icon-btn--sm cal-focus"
-                    title="Normal text">
-                <span class="material-symbols-outlined text-[16px]">format_paragraph</span>
-            </button>
-
-            <span class="w-px h-4 bg-outline-variant mx-1"></span>
-
-            <button type="button" @click="toggle('bulletList')" :aria-pressed="isActive('bulletList')"
-                    class="m-icon-btn m-icon-btn--sm cal-focus"
-                    :class="isActive('bulletList') && 'bg-surface-container'" title="Bulleted list">
-                <span class="material-symbols-outlined text-[16px]">format_list_bulleted</span>
-            </button>
-            <button type="button" @click="toggle('orderedList')" :aria-pressed="isActive('orderedList')"
-                    class="m-icon-btn m-icon-btn--sm cal-focus"
-                    :class="isActive('orderedList') && 'bg-surface-container'" title="Numbered list">
-                <span class="material-symbols-outlined text-[16px]">format_list_numbered</span>
-            </button>
-            <button type="button" @click="toggle('blockquote')" :aria-pressed="isActive('blockquote')"
-                    class="m-icon-btn m-icon-btn--sm cal-focus"
-                    :class="isActive('blockquote') && 'bg-surface-container'" title="Quote">
-                <span class="material-symbols-outlined text-[16px]">format_quote</span>
-            </button>
-            <button type="button" @click="insertTable()" class="m-icon-btn m-icon-btn--sm cal-focus"
-                    title="Insert a table">
-                <span class="material-symbols-outlined text-[16px]">table</span>
-            </button>
-
-            <span class="w-px h-4 bg-outline-variant mx-1"></span>
-
-            <template x-for="a in ['left', 'center', 'right']" :key="a">
-                <button type="button" @click="setAlign(a)"
-                        :aria-pressed="isActive({ textAlign: a })"
-                        class="m-icon-btn m-icon-btn--sm cal-focus"
-                        :class="isActive({ textAlign: a }) && 'bg-surface-container'"
-                        :title="'Align ' + a">
-                    <span class="material-symbols-outlined text-[16px]"
-                          x-text="'format_align_' + a"></span>
-                </button>
-            </template>
-
-            <span class="w-px h-4 bg-outline-variant mx-1"></span>
-
-            <button type="button" @click="setLink()" :aria-pressed="isActive('link')"
-                    class="m-icon-btn m-icon-btn--sm cal-focus"
-                    :class="isActive('link') && 'bg-surface-container'" title="Link">
-                <span class="material-symbols-outlined text-[16px]">link</span>
-            </button>
-            <!-- A picture lives INSIDE the document rather than in Storage, so
-                 the Event's own visibility rule covers it with nothing else to
-                 set — and it survives the trip out to Word and back. -->
-            <input type="file" x-ref="imageInput" class="hidden" accept="image/*"
-                   @change="chooseImage($event)" />
-            <button type="button" @click="$refs.imageInput.click()"
-                    class="m-icon-btn m-icon-btn--sm cal-focus" title="Insert a picture">
-                <span class="material-symbols-outlined text-[16px]"
-                      :class="insertingImage ? 'm-spinner' : ''"
-                      x-text="insertingImage ? 'progress_activity' : 'image'"></span>
-            </button>
-
-            <span class="w-px h-4 bg-outline-variant mx-1"></span>
-
-            <button type="button" @click="command(c => c.undo().run())"
-                    class="m-icon-btn m-icon-btn--sm cal-focus" title="Undo">
-                <span class="material-symbols-outlined text-[16px]">undo</span>
-            </button>
-            <button type="button" @click="command(c => c.redo().run())"
-                    class="m-icon-btn m-icon-btn--sm cal-focus" title="Redo">
-                <span class="material-symbols-outlined text-[16px]">redo</span>
-            </button>
+        <!-- The one toolbar, shared with the Elder Document editor
+             (document-toolbar.js). A reader gets none at all rather than a row
+             of buttons that quietly refuse. -->
+        <div x-show="isEditor">
+            <div data-document-toolbar="bar"></div>
+            <div data-document-toolbar="table-tools"></div>
         </div>
 
         <div class="flex-grow overflow-y-auto bg-surface-container-lowest border border-outline-variant rounded-lg">
@@ -251,40 +152,7 @@
         </div>
     </main>
 
-    <!-- ── A picture too big to carry as it is ─────────────────────────────────
-         A document keeps its pictures inside itself, so a photograph straight
-         off a phone will not fit as it is. That is a question, not a refusal —
-         and asking it must never take the document off the screen. -->
-    <div x-show="pendingImage" @keydown.escape.window="cancelImage()"
-         class="fixed inset-0 z-50 bg-on-surface/30 flex items-start justify-center overflow-y-auto p-4">
-        <div class="bg-surface-container-lowest rounded-lg border border-outline-variant w-full max-w-[460px] mt-[14vh]">
-            <div class="px-md py-md flex items-start gap-sm">
-                <span class="material-symbols-outlined text-[22px] text-secondary shrink-0 mt-0.5">compress</span>
-                <div class="min-w-0">
-                    <h3 class="font-display text-[20px] text-primary">Shrink this picture?</h3>
-                    <p class="text-[13px] text-on-surface-variant mt-2">
-                        <span class="font-medium" x-text="pendingImage && pendingImage.name"></span>
-                        is <span x-text="pendingImage && pendingImage.size"></span>. A document carries its
-                        pictures inside it, so this one needs making smaller before it will fit.
-                    </p>
-                    <p class="text-[12.5px] text-on-surface-variant mt-2">
-                        It will still be big enough to fill the page. If you need the original at full
-                        size, attach it to the event as a file instead.
-                    </p>
-                </div>
-            </div>
-            <div class="px-md py-md border-t border-outline-variant flex items-center justify-end gap-sm">
-                <button @click="cancelImage()"
-                        class="px-md py-2 rounded-lg font-label-md text-xs uppercase tracking-wider
-                               text-on-surface-variant cal-motion cal-focus hover:bg-surface-container">Cancel</button>
-                <button @click="confirmImageShrink()"
-                        class="bg-secondary text-on-secondary px-md py-2 rounded-lg shadow-xs font-label-md
-                               text-xs uppercase tracking-wider cal-motion cal-press cal-focus">
-                    Shrink and insert
-                </button>
-            </div>
-        </div>
-    </div>
+    <div data-document-toolbar="image-dialog"></div>
 
     <script src="events-core.js"></script>
     <script src="events-occurrence-core.js"></script>
@@ -299,5 +167,8 @@
     <!-- Loads the VENDORED TipTap bundle, not esm.sh. -->
     <script src="tiptap-editor-loader.js"></script>
     <script src="event-document.js"></script>
+    <!-- Fills the data-document-toolbar placeholders above with the one
+         shared editing surface. Must run AFTER them and BEFORE Alpine. -->
+    <script src="document-toolbar.js"></script>
 </body>
 </html>

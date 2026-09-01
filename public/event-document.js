@@ -83,6 +83,12 @@
             // what is true of the cursor. Alpine cannot watch inside TipTap.
             editorTick: 0,
 
+            // A Person Panel links a block of a document to somebody's
+            // Shepherding Note, which is an elder-only record. This document can
+            // be read by any member who can see the Event (ADR-0049), so the
+            // button is not offered here.
+            toolbarHasPersonPanel: false,
+
             get isEditor() {
                 return ['editor', 'admin', 'elder', 'super_admin'].indexOf(this.rank) !== -1;
             },
@@ -237,9 +243,32 @@
                     : chain.setParagraph().run());
             },
 
-            insertTable() {
-                this.command(chain =>
-                    chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run());
+            insertTable(rows, cols) {
+                this.command(chain => chain.insertTable({
+                    rows: Math.min(Math.max(Number(rows) || 3, 1), 20),
+                    cols: Math.min(Math.max(Number(cols) || 3, 1), 20),
+                    withHeaderRow: true,
+                }).run());
+            },
+
+            // ── The rest of the shared toolbar's contract ────────────────────
+
+            setFontFamily(family) {
+                this.command(chain => family
+                    ? chain.setFontFamily(family).run()
+                    : chain.unsetFontFamily().run());
+            },
+
+            setFontSize(size) {
+                this.command(chain => size
+                    ? chain.setFontSize(size).run()
+                    : chain.unsetFontSize().run());
+            },
+
+            setHighlight(colour) {
+                this.command(chain => colour === null
+                    ? chain.unsetHighlight().run()
+                    : chain.setHighlight({ color: colour }).run());
             },
 
             // ── Links ────────────────────────────────────────────────────────
