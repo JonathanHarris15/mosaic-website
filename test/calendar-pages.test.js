@@ -7186,3 +7186,108 @@ test('the Event page says the way back once, and every exit reads it', () => {
     assert.ok(bound >= 2,
         'not every way out of the Event page reads the same answer (found ' + bound + ')');
 });
+
+// ── A Files tab that reads as empty when it is not ───────────────────────────
+//
+// Occurrences are sparse, and the rule on both subcollections reads the
+// OCCURRENCE's stamped visibility. An EMPTY query succeeds — no document is
+// returned for the rule to judge — but the moment there is one file the whole
+// query is refused. That refusal used to be swallowed into an empty list, so a
+// tab full of files drew as an empty one, and only creating a new document
+// (which writes the date) brought the old ones back.
+
+function filesStore(overrides) {
+    return Object.assign({}, require('../public/events-store.js'), overrides);
+}
+
+function refusal() {
+    const e = new Error('Missing or insufficient permissions.');
+    e.code = 'permission-denied';
+    return e;
+}
+
+test('a Files tab refused because the date was never written repairs itself', async () => {
+    let written = 0;
+    const Store = filesStore({
+        async loadAttachments() {
+            if (!written) throw refusal();
+            return [{ id: 'a1', name: 'Flyer.pdf' }];
+        },
+        async loadEventDocuments() {
+            if (!written) throw refusal();
+            return [{ id: 'd1', title: 'Agenda' }];
+        },
+        async ensureOccurrenceDocument() { written++; return true; },
+    });
+
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', { EventsStore: Store, db: {} });
+    page.rank = 'editor';
+
+    await page.loadFilesTab({
+        id: 'app_grid_2026-09-03', seriesId: 'app_grid', date: '2026-09-03', stored: false,
+    });
+
+    assert.strictEqual(written, 1, 'the date was never written, so the files stayed hidden');
+    assert.strictEqual(page.attachments.length, 1);
+    assert.strictEqual(page.documents.length, 1);
+    assert.strictEqual(page.filesError, '');
+});
+
+test('a date that already exists is never written to just because a read failed', async () => {
+    // A stored date whose files are refused is a real refusal. Writing it would
+    // restamp an Event nobody asked us to touch.
+    let written = 0;
+    const Store = filesStore({
+        async loadAttachments() { throw refusal(); },
+        async loadEventDocuments() { throw refusal(); },
+        async ensureOccurrenceDocument() { written++; return true; },
+    });
+
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', { EventsStore: Store, db: {} });
+    page.rank = 'editor';
+
+    await page.loadFilesTab({ id: 'app_grid_2026-09-03', stored: true });
+
+    assert.strictEqual(written, 0);
+    assert.match(page.filesError, /could not be read/i);
+});
+
+test('a member who is refused is told, not shown an empty tab', async () => {
+    // Only an editor may write the date, so there is nothing to repair — but
+    // "nothing here" would be a lie, and the reason nobody could report this
+    // bug precisely.
+    let written = 0;
+    const Store = filesStore({
+        async loadAttachments() { throw refusal(); },
+        async loadEventDocuments() { throw refusal(); },
+        async ensureOccurrenceDocument() { written++; return true; },
+    });
+
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', { EventsStore: Store, db: {} });
+    page.rank = 'member';
+
+    await page.loadFilesTab({ id: 'app_grid_2026-09-03', stored: false });
+
+    assert.strictEqual(written, 0, 'a member must never write the date');
+    // The component lives in a vm sandbox, so its [] is a different realm's
+    // Array and deepStrictEqual refuses it on the prototype.
+    assert.strictEqual(page.attachments.length, 0);
+    assert.strictEqual(page.documents.length, 0);
+    assert.match(page.filesError, /could not be read/i);
+});
+
+test('a Files tab that reads cleanly says nothing at all', async () => {
+    const Store = filesStore({
+        async loadAttachments() { return []; },
+        async loadEventDocuments() { return [{ id: 'd1', title: 'Agenda' }]; },
+        async ensureOccurrenceDocument() { throw new Error('must not be called'); },
+    });
+
+    const page = loadComponent('calendar-event.js', 'eventDetailPage', { EventsStore: Store, db: {} });
+    page.rank = 'editor';
+
+    await page.loadFilesTab({ id: 'app_grid_2026-09-03', stored: false });
+
+    assert.strictEqual(page.filesError, '');
+    assert.strictEqual(page.documents.length, 1);
+});

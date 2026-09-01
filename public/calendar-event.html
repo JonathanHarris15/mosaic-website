@@ -456,7 +456,15 @@
                     <p x-show="attachmentError" class="text-[12.5px] text-error mt-2" x-text="attachmentError"></p>
                 </section>
 
-                <div x-show="!attachments.length && !documents.length" class="m-empty">
+                <!-- A refusal is not an empty tab, and must never be drawn
+                     as one. -->
+                <div x-show="filesError" class="flex items-start gap-sm rounded-lg border border-outline-variant
+                                                bg-surface-container px-md py-2 mb-sm">
+                    <span class="material-symbols-outlined text-[18px] text-error shrink-0 mt-0.5">error</span>
+                    <p class="text-[13px] text-on-surface-variant" x-text="filesError"></p>
+                </div>
+
+                <div x-show="!filesError && !attachments.length && !documents.length" class="m-empty">
                     <span class="material-symbols-outlined">attach_file</span>
                     <h3 class="font-display text-[18px] text-primary">Nothing here yet.</h3>
                     <p x-show="!canManageAttachments" class="max-w-[46ch]">

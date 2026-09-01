@@ -142,6 +142,11 @@
             documents: [],
             creatingDocument: false,
             pendingDocumentRemoval: null,
+            // Set when the Files tab could not be read at all. It used to
+            // degrade to an empty list, which is indistinguishable from "there
+            // is nothing here" — so a tab full of files read as an empty one
+            // and nobody could tell the difference.
+            filesError: '',
             uploadingAttachment: false,
             attachmentError: '',
             // The row whose bytes are on their way down, so it can say so.
@@ -486,24 +491,11 @@
                         }
                     }
 
-                    // Attachments are read for EVERYONE who reached this far —
-                    // unlike Attendance, they are not editor-only (MS-287's PRD:
-                    // anyone who can see the Event can see what is attached to
-                    // it). A refusal degrades to an empty list rather than
-                    // failing the page, the same direction attendance already
-                    // takes.
-                    try {
-                        this.attachments = await Store.loadAttachments(db, loaded.id);
-                    } catch (e) {
-                        this.attachments = [];
-                    }
-
-                    // Same tab, same rule, same degradation.
-                    try {
-                        this.documents = await Store.loadEventDocuments(db, loaded.id);
-                    } catch (e) {
-                        this.documents = [];
-                    }
+                    // Read for EVERYONE who reached this far — unlike
+                    // Attendance, the Files tab is not editor-only (MS-287's
+                    // PRD: anyone who can see the Event can see what is attached
+                    // to it).
+                    await this.loadFilesTab(loaded);
 
                     // The rest in one wave. None of these three needs anything
                     // from the others — they were only sequential because they
@@ -1961,6 +1953,65 @@
                     this.attachmentError = 'That file could not be removed. Try again.';
                 } finally {
                     this.saving = false;
+                }
+            },
+
+            // ── Reading the Files tab ────────────────────────────────────────
+            //
+            // ⚠ THE BUG THIS SHAPE EXISTS FOR: a tab full of files reading as an
+            // empty one.
+            //
+            // Occurrences are sparse, and both rules here answer "may this
+            // person see this Event?" by reading the OCCURRENCE's stamped
+            // visibility. When the date has no document of its own that read
+            // returns null and the rule fails closed — but only when there is
+            // something to evaluate it against. An EMPTY subcollection query
+            // succeeds, because no document is ever returned for the rule to
+            // judge. So:
+            //
+            //   • a sparse date with no files  → succeeds, empty. Correct.
+            //   • a sparse date WITH files     → the whole query is refused.
+            //
+            // That refusal used to be swallowed into an empty list, which looks
+            // exactly like "nothing here". Creating a document then wrote the
+            // date (ensureOccurrenceDocument), and on the way back everything
+            // appeared at once — which is what it looked like from outside:
+            // files that come back only after you make a new one.
+            //
+            // So a refusal is now repaired where it can be, and SAID where it
+            // cannot.
+            async loadFilesTab(occurrence) {
+                const read = async () => {
+                    const [attachments, documents] = await Promise.all([
+                        Store.loadAttachments(db, occurrence.id),
+                        Store.loadEventDocuments(db, occurrence.id),
+                    ]);
+                    this.attachments = attachments;
+                    this.documents = documents;
+                    this.filesError = '';
+                };
+
+                try {
+                    await read();
+                    return;
+                } catch (e) {
+                    // Only an editor may write the date, and only a date that
+                    // was REBUILT is missing one. Anything else is a genuine
+                    // refusal and must not be answered with a write.
+                    if (this.isEditor && occurrence && occurrence.stored === false) {
+                        try {
+                            await Store.ensureOccurrenceDocument(db, occurrence);
+                            await read();
+                            return;
+                        } catch (repairFailed) {
+                            console.error('Files still unreadable after writing the date:', repairFailed);
+                        }
+                    }
+                    console.error('The Files tab could not be read:', e);
+                    this.attachments = [];
+                    this.documents = [];
+                    this.filesError = 'The files on this event could not be read. Reload the page — ' +
+                        'and if this keeps happening, an editor should check who this event is visible to.';
                 }
             },
 
