@@ -233,6 +233,26 @@
         return PREVIEW_VERBS[previewKindFor(fileName, contentType)] || null;
     }
 
+    // ── Which files can be trusted with a tab of their own ────────────────────
+    //
+    // A blob opened in a tab is served under THIS site's origin, so this list
+    // is short on purpose: the thing drawing the file has to be the BROWSER —
+    // its PDF reader, its image decoder, its media player — and never our page.
+    //
+    // The three kinds we render ourselves are absent, and .html is the reason
+    // why. A .txt attachment in a tab is harmless; a .html one would run its
+    // script beside the reader's own signed-in session, and both arrive here as
+    // 'text'. A .docx or a .csv in a tab is not a document, it is a download
+    // with extra steps.
+    //
+    // Full screen has no such problem — the page is still ours, it is just
+    // bigger — so anything can go full screen.
+    const OWN_TAB_KINDS = Object.freeze({ pdf: true, image: true, video: true, audio: true });
+
+    function previewOpensInOwnTab(kind) {
+        return OWN_TAB_KINDS[kind] === true;
+    }
+
     // ── Reading a spreadsheet the browser cannot open ─────────────────────────
     //
     // A .csv is a spreadsheet that happens to be legible, so it is drawn as the
@@ -332,6 +352,7 @@
         materialIconFor,
         previewKindFor,
         canPreview,
+        previewOpensInOwnTab,
         previewVerbFor,
         delimiterFor,
         parseDelimitedRows,

@@ -146,6 +146,10 @@
             // read out of it — never the bytes themselves: Alpine wraps state in
             // a proxy, and a proxied Blob is no longer a Blob to the browser.
             preview: null,
+            // Whether the viewer has taken over the screen. Kept in step with
+            // the browser rather than assumed, because Escape leaves full
+            // screen without telling this page.
+            previewFullscreen: false,
             // Which pane of the Event page is open. Editors get a second one —
             // who was actually here — so it starts on the Event either way.
             tab: 'event',
@@ -1844,7 +1848,50 @@
                 }
             },
 
+            // ── Bigger, or somewhere else entirely ────────────────────────────
+            //
+            // A floor plan in a box 900px wide is a floor plan you cannot read.
+            // Two ways out, and they are not the same way:
+            //
+            //   • FULL SCREEN keeps the file inside this page, so it works for
+            //     everything — a Word file and a spreadsheet included, since we
+            //     are the ones drawing those.
+            //   • A TAB OF ITS OWN hands the file to the browser, which is
+            //     better for a PDF (a real reader, with search and pages) and a
+            //     picture (real zoom) — but only for the files the browser
+            //     itself renders. See previewOpensInOwnTab.
+            get previewOpensInOwnTab() {
+                return !!this.preview && !!this.preview.url &&
+                    Attachments.previewOpensInOwnTab(this.preview.kind);
+            },
+
+            // A blob URL is not a public link: it is only meaningful inside
+            // this browser, under this origin, until the tab holding it goes
+            // away. Nobody can be sent one (ADR-0046 stands).
+            openPreviewInOwnTab() {
+                if (!this.previewOpensInOwnTab) return;
+                window.open(this.preview.url, '_blank', 'noopener');
+            },
+
+            togglePreviewFullscreen() {
+                const panel = this.$refs && this.$refs.previewPanel;
+                if (!panel) return;
+                if (document.fullscreenElement) {
+                    if (document.exitFullscreen) document.exitFullscreen();
+                    return;
+                }
+                if (panel.requestFullscreen) panel.requestFullscreen();
+            },
+
+            // The browser is the one that knows. Escape, the F11 key and the
+            // button all end up here.
+            notePreviewFullscreen() {
+                this.previewFullscreen = !!document.fullscreenElement;
+            },
+
             closeAttachmentPreview() {
+                if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+                this.previewFullscreen = false;
                 const open = this.preview;
                 this.preview = null;
                 if (open && open.url) {

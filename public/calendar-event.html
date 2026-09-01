@@ -1170,8 +1170,13 @@
          @keydown.escape.window="closeAttachmentPreview()"
          @click.self="closeAttachmentPreview()"
          class="fixed inset-0 z-50 bg-on-surface/40 flex items-start justify-center p-4">
-        <div class="bg-surface-container-lowest rounded-lg border border-outline-variant
-                    w-full max-w-[900px] h-[86vh] mt-[5vh] flex flex-col overflow-hidden">
+        <div x-ref="previewPanel"
+             @fullscreenchange.document="notePreviewFullscreen()"
+             class="bg-surface-container-lowest border border-outline-variant
+                    w-full flex flex-col overflow-hidden"
+             :class="previewFullscreen
+                     ? 'max-w-none h-screen mt-0 rounded-none'
+                     : 'max-w-[900px] h-[86vh] mt-[5vh] rounded-lg'">
 
             <div class="px-md py-sm border-b border-outline-variant flex items-center gap-sm shrink-0">
                 <span class="material-symbols-outlined text-[20px] text-secondary shrink-0"
@@ -1182,6 +1187,25 @@
                     <p class="text-[12px] text-on-surface-variant truncate"
                        x-text="preview && preview.meta"></p>
                 </div>
+                <!-- A PDF or a picture reads far better in the browser's own
+                     reader than in a box on this page. Only the kinds the
+                     BROWSER draws are offered a tab: what we render ourselves
+                     stays here, where we control what runs. -->
+                <button type="button" x-show="previewOpensInOwnTab" @click="openPreviewInOwnTab()"
+                        class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus shrink-0"
+                        aria-label="Open in a new tab" title="Open in a new tab">
+                    <span class="material-symbols-outlined text-[18px]">open_in_new</span>
+                </button>
+                <!-- Full screen works for everything, including the files this
+                     page draws itself — it is the same page, just bigger. -->
+                <button type="button" x-show="preview && preview.status === 'ready'"
+                        @click="togglePreviewFullscreen()"
+                        class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost cal-focus shrink-0"
+                        :aria-label="previewFullscreen ? 'Leave full screen' : 'Full screen'"
+                        :title="previewFullscreen ? 'Leave full screen' : 'Full screen'">
+                    <span class="material-symbols-outlined text-[18px]"
+                          x-text="previewFullscreen ? 'close_fullscreen' : 'open_in_full'"></span>
+                </button>
                 <!-- The bytes are already down. Saving them asks Storage for
                      nothing a second time. -->
                 <button type="button" x-show="preview && preview.url" @click="downloadFromPreview()"

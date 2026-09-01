@@ -221,6 +221,23 @@ test('the button names the door after what is behind it', () => {
     assert.strictEqual(Core.previewVerbFor('archive.zip'), null);
 });
 
+// ── A tab of its own is a narrower offer than full screen ─────────────────────
+
+test('only the files the BROWSER draws are trusted with a tab of their own', () => {
+    ['pdf', 'image', 'video', 'audio'].forEach(kind => {
+        assert.strictEqual(Core.previewOpensInOwnTab(kind), true, kind);
+    });
+});
+
+test('a file this page renders itself stays on this page', () => {
+    // 'text' is the one that matters: a .txt in a tab is harmless, a .html in a
+    // tab runs its own script under this site's origin, and both arrive here as
+    // 'text'. Full screen is the answer for all three — same page, just bigger.
+    ['text', 'sheet', 'docx', null, undefined].forEach(kind => {
+        assert.strictEqual(Core.previewOpensInOwnTab(kind), false, String(kind));
+    });
+});
+
 // ── Reading a .csv as the table it is ─────────────────────────────────────────
 
 test('a spreadsheet is split into rows and cells', () => {
