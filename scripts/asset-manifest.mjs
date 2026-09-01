@@ -36,6 +36,10 @@ export const JS_CSS_ASSETS = [
   { url: "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js", local: "vendor/mammoth-1.4.21.browser.min.js" },
   { url: "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js",  local: "vendor/mammoth-1.6.0.browser.min.js" },
 
+  // ---- docx (writes a Word file from a Note Body, ADR-0048). Loaded on
+  //      demand by document-docx.js, never in a page head. ----
+  { url: "https://cdn.jsdelivr.net/npm/docx@9.7.1/dist/index.iife.js", local: "vendor/docx-9.7.1.iife.js" },
+
   // ---- jsPDF ----
   { url: "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", local: "vendor/jspdf-2.5.1.umd.min.js" },
 

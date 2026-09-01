@@ -864,6 +864,11 @@ document.addEventListener('alpine:init', () => {
         _saveTimer: null,
         editorUpdated: 0,
 
+        // Set while a Word file is being built, so the button can say so. The
+        // library is 1.1MB and arrives on the first click, so the first export
+        // of a session takes a moment the rest do not.
+        exportingWord: false,
+
         // ── Person picker ──
         showPersonPicker: false,
         _pickerMode: 'insert',        // 'insert' | 'reattach'
@@ -966,6 +971,59 @@ document.addEventListener('alpine:init', () => {
                 console.error('Error loading document:', e);
                 this.showToast('Error loading document', 'error');
             }
+        },
+
+        // ── Leaving as a Word file ────────────────────────────────────────────
+        //
+        // What is on screen, not what was last saved — somebody who has just
+        // typed a line and hit Download means to take that line with them.
+        async downloadAsWord() {
+            if (this.exportingWord) return;
+            this.exportingWord = true;
+            try {
+                const contentJson = _docEditor ? _docEditor.getJSON() : null;
+                await DocumentDocx.downloadAsWord({
+                    title: this.title.trim() || 'Untitled Document',
+                    doc: contentJson,
+                    panelBodies: await this.readPanelBodies(contentJson),
+                });
+            } catch (e) {
+                console.error('Word export failed:', e);
+                this.showToast('Could not make a Word file', 'error');
+            } finally {
+                this.exportingWord = false;
+            }
+        },
+
+        // A Person Panel is an atom: the document holds only who it is about,
+        // and the words live on that person's Shepherding Note (ADR-0004). So
+        // the walk cannot reach them and this has to fetch them first —
+        // otherwise every panel exports as a name with nothing under it.
+        //
+        // A note that cannot be read is left out rather than failing the whole
+        // download; the core says so in the file where the body would have been.
+        async readPanelBodies(contentJson) {
+            const panels = [];
+            (function walk(node) {
+                if (!node) return;
+                if (node.type === 'personPanel' && node.attrs &&
+                    node.attrs.noteId && node.attrs.personId) {
+                    panels.push(node.attrs);
+                }
+                (node.content || []).forEach(walk);
+            })(contentJson);
+
+            const bodies = {};
+            await Promise.all(panels.map(async attrs => {
+                try {
+                    const snap = await db.collection('people').doc(attrs.personId)
+                        .collection('shepherding_notes').doc(attrs.noteId).get();
+                    if (snap.exists) bodies[attrs.noteId] = snap.data().contentJson || null;
+                } catch (e) {
+                    console.warn('Could not read a panel note for export:', e);
+                }
+            }));
+            return bodies;
         },
 
         // ── Editor ────────────────────────────────────────────────────────────
