@@ -60,27 +60,53 @@
             <div class="flex flex-wrap items-center gap-1 border-b border-outline-variant pb-sm">
 
                 <!-- Font and size. Selects rather than icons because the value
-                     itself is the label — an icon for "14px" would be a puzzle. -->
+                     itself is the label — an icon for "14pt" would be a puzzle.
+                     They are sized to the 28px icon buttons beside them and the
+                     arrow is pulled in: the forms plugin gives every select
+                     2.5rem of padding-right and a 1.5em arrow, which next to a
+                     row of icons reads as two fat pills. -->
                 <select @change="setFontFamily($event.target.value)" title="Font"
-                        class="border border-outline-variant rounded px-2 py-1 text-xs font-label-md
-                               text-on-surface-variant bg-surface-container hover:bg-surface-container-high
-                               focus:outline-none focus:ring-1 focus:ring-primary/30 cursor-pointer">
+                        style="background-size:1.05em 1.05em;background-position:right 0.25rem center"
+                        class="h-7 pl-2 pr-6 py-0 text-xs leading-none font-label-md rounded
+                               border border-outline-variant text-on-surface-variant bg-surface-container
+                               hover:bg-surface-container-high focus:outline-none
+                               focus:ring-1 focus:ring-primary/30 cursor-pointer">
                     <option value="">Font</option>
                     <option value="Work Sans, sans-serif">Work Sans</option>
                     <option value="Noto Serif, serif">Noto Serif</option>
-                    <option value="monospace">Monospace</option>
+                    <option value="Georgia, serif">Georgia</option>
+                    <option value="Arial, Helvetica, sans-serif">Arial</option>
+                    <option value="Times New Roman, Times, serif">Times New Roman</option>
+                    <option value="Courier New, Courier, monospace">Courier New</option>
                 </select>
+                <!-- Word's own list, and in POINTS rather than pixels. Word
+                     measures type in points, so a document written at 12pt
+                     exports as 12pt exactly instead of arriving via a pixel
+                     conversion that lands half a point out. -->
                 <select @change="setFontSize($event.target.value)" title="Size"
-                        class="border border-outline-variant rounded px-2 py-1 text-xs font-label-md
-                               text-on-surface-variant bg-surface-container hover:bg-surface-container-high
-                               focus:outline-none focus:ring-1 focus:ring-primary/30 cursor-pointer">
+                        style="background-size:1.05em 1.05em;background-position:right 0.25rem center"
+                        class="h-7 pl-2 pr-6 py-0 text-xs leading-none font-label-md rounded
+                               border border-outline-variant text-on-surface-variant bg-surface-container
+                               hover:bg-surface-container-high focus:outline-none
+                               focus:ring-1 focus:ring-primary/30 cursor-pointer">
                     <option value="">Size</option>
-                    <option value="12px">Small (12)</option>
-                    <option value="14px">14</option>
-                    <option value="16px">Normal (16)</option>
-                    <option value="18px">18</option>
-                    <option value="20px">Large (20)</option>
-                    <option value="24px">24</option>
+                    <option value="8pt">8</option>
+                    <option value="9pt">9</option>
+                    <option value="10pt">10</option>
+                    <option value="10.5pt">10.5</option>
+                    <option value="11pt">11</option>
+                    <option value="12pt">12</option>
+                    <option value="14pt">14</option>
+                    <option value="16pt">16</option>
+                    <option value="18pt">18</option>
+                    <option value="20pt">20</option>
+                    <option value="22pt">22</option>
+                    <option value="24pt">24</option>
+                    <option value="26pt">26</option>
+                    <option value="28pt">28</option>
+                    <option value="36pt">36</option>
+                    <option value="48pt">48</option>
+                    <option value="72pt">72</option>
                 </select>
 
                 <span class="w-px h-4 bg-outline-variant mx-1"></span>

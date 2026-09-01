@@ -479,3 +479,14 @@ test('a picture that would not say how big it is still gets into the document', 
     const fitted = Core.fitImage(null);
     assert.ok(fitted.width > 0 && fitted.height > 0);
 });
+
+test('the toolbar now offers Word sizes in points, and they survive exactly', () => {
+    // The size dropdown moved from pixels to points so a document written at
+    // 12pt exports as 12pt, rather than arriving via a conversion that lands
+    // half a point out. Every value the toolbar offers has to come through
+    // untouched.
+    ['8', '9', '10', '10.5', '11', '12', '14', '16', '18', '20',
+     '22', '24', '26', '28', '36', '48', '72'].forEach(size => {
+        assert.strictEqual(Core.fontSizeToPoints(size + 'pt'), Number(size), size + 'pt');
+    });
+});
