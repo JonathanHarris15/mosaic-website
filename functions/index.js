@@ -18,6 +18,8 @@ const ac = require("./assignment-conversion");
 const si = require("./service-involvement");
 const dr = require("./directory-request");
 const lu = require("./linked-user");
+const fp = require("./forms-public");
+const FormsCore = require("./shared/forms-core");
 // The Firestore half of answering and taking. It takes a `db` rather than
 // reaching for one, which is what lets test/emulator/ drive the transactions
 // against real Firestore semantics (MS-217). The decisions inside it stay in
@@ -2655,3 +2657,145 @@ exports.notifyEldersOnPrayerComplete = onDocumentWritten(
     },
 );
 
+
+/**
+ * The one door a form is opened and answered through (MS-360, ADR-0051).
+ *
+ * ⚠ THIS IS THE ONLY WAY IN, AND THAT IS DELIBERATE. `firestore.rules` grants
+ * a signed-out caller nothing at all on `forms`, `form_responses` or
+ * `form_ledger` — the public path is not a hole in that file. Marking public
+ * forms world-readable there would have been the obvious build and is the exact
+ * shape of MS-197 (the directory shipped open because a rule said
+ * `request.auth != null` where `isSignedIn()` was meant), and it would make
+ * every public form enumerable besides.
+ *
+ * ⚠ ONE CALLABLE, TWO OPERATIONS, ON PURPOSE. Fetching the questions and
+ * submitting the answers are the same security boundary asked twice. Split into
+ * two exports they become two places to configure App Check, two places to rate
+ * limit, and two places for "is this form open" to drift apart — and the pair
+ * that drifted would be *may I read this* against *may I write this*.
+ *
+ * ⚠ EVERY REFUSAL RETURNS 200 WITH `{ok: false}`. Throwing would let a caller
+ * tell a missing form from an unpublished one from a members-only one by status
+ * code alone, which turns a 128-bit id into something worth guessing at. A
+ * refusal is data here, and the shapes are uniform.
+ *
+ * ⚠ App Check is ENFORCED. An unauthenticated write endpoint with no throttle
+ * is a spam sink and the day it matters is a public day. This will refuse every
+ * call until App Check is configured for the project — which is the correct
+ * failure, and is why the ticket lists it as a deploy prerequisite rather than
+ * ops work to do afterwards.
+ *
+ * Every judgement is in forms-public.js and forms-core.js, both pure and tested
+ * without an emulator. This reads, asks, and writes.
+ */
+exports.publicForm = onCall(
+    {cors: true, region: "us-central1", enforceAppCheck: true},
+    async (request) => {
+      const db = admin.firestore();
+      const {op, formId, answers} = request.data || {};
+
+      // Shape-check the id before it reaches a read. A form's id is 128 bits of
+      // base58 and nothing else ever addresses one.
+      if (typeof formId !== "string" || !FormsCore.looksLikeFormId(formId)) {
+        return {ok: false, code: "not-found", message: "There is no form here."};
+      }
+      if (op !== "fetch" && op !== "submit") {
+        throw new HttpsError("invalid-argument", "Unknown operation.");
+      }
+
+      // Who is asking. Signed out is the ordinary case here, not the edge one.
+      let rank = null;
+      let personId = null;
+      if (request.auth) {
+        const userSnap = await db.collection("users")
+            .doc(request.auth.uid).get();
+        const user = userSnap.exists ? userSnap.data() : {};
+        rank = user.permissionLevel || user.role || null;
+        personId = user.personId || null;
+      }
+      const caller = {signedIn: !!request.auth, rank: rank};
+      const today = ac.churchToday(new Date());
+
+      const formSnap = await db.collection("forms").doc(formId).get();
+      const form = formSnap.exists ? formSnap.data() : null;
+
+      if (op === "fetch") {
+        return fp.whatToServe(form, caller, today);
+      }
+
+      // ── submit ───────────────────────────────────────────────────────────
+      //
+      // One Response Each is keyed on the ledger, whose document id is
+      // deterministic — `{formId}_{personId}` — so asking "have they answered"
+      // is a single get rather than a query, and two simultaneous submissions
+      // cannot mint two entries.
+      const oneEach = !!(form && form.oneEach === true &&
+        FormsCore.needsAccount(form.rung));
+      const ledgerId = personId ? `${formId}_${personId}` : null;
+
+      let alreadyAnswered = null;
+      if (oneEach && ledgerId) {
+        const seen = await db.collection("form_ledger").doc(ledgerId).get();
+        if (seen.exists) alreadyAnswered = ledgerId;
+      }
+
+      // The name only when the form records one. Reading a Person for a form
+      // that promised anonymity would be a read nobody asked for.
+      let personName = null;
+      if (form && form.attribution === true && personId) {
+        const personSnap = await db.collection("people").doc(personId).get();
+        if (personSnap.exists) personName = personSnap.data().name || null;
+      }
+
+      const verdict = fp.judgeSubmission(form, {
+        formId: formId,
+        answers: answers,
+        signedIn: !!request.auth,
+        rank: rank,
+        personId: personId,
+        personName: personName,
+        alreadyAnswered: alreadyAnswered,
+      }, today);
+
+      if (!verdict.ok) return verdict;
+
+      // ⚠ THE ANSWER AND THE LEDGER ENTRY GO IN ONE BATCH. Half a write here
+      // means either a vote nobody is recorded as having cast, or somebody
+      // recorded as having voted with no vote — and on a ballot neither can be
+      // reconciled afterwards, because reconciling them is the join that is
+      // forbidden.
+      const batch = db.batch();
+
+      // Replacing an earlier answer, which only ever happens on an ATTRIBUTED
+      // one-each form — a ballot refuses this in judgeSubmission, because
+      // finding somebody's own anonymous answer needs the forbidden join.
+      if (verdict.replaces) {
+        const mine = await db.collection("form_responses")
+            .where("formId", "==", formId)
+            .where("personId", "==", personId)
+            .limit(1).get();
+        mine.forEach((doc) => batch.delete(doc.ref));
+      }
+
+      const responseRef = db.collection("form_responses").doc();
+      batch.set(responseRef, Object.assign({}, verdict.response, {
+        submittedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }));
+
+      if (verdict.ledger && ledgerId) {
+        batch.set(db.collection("form_ledger").doc(ledgerId), verdict.ledger);
+      }
+
+      await batch.commit();
+
+      // ⚠ NOTHING ABOUT THE TALLY COMES BACK. Whoever just answered gets a
+      // thank-you and no more: showing the running split changes what later
+      // people answer, and on a public form it would hand every answer to
+      // whoever holds a forwarded link.
+      log(`publicForm: answer recorded for ${formId}` +
+        (oneEach ? " (one each)" : "") +
+        (verdict.replaces ? " (replaced)" : ""));
+      return {ok: true};
+    },
+);

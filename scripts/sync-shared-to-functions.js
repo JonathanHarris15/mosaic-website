@@ -48,6 +48,13 @@ const MODULES = [
     'service-read-core.js',
     'mosaic-identity.js',
     'service-authorship.js',
+    // MS-360. The server is the ONLY thing that validates a public form's
+    // submission — a browser answering one is not something we control — so the
+    // required-question check, the rung, whether the form is closed and the
+    // absent-not-null person field all have to be the same code here as on the
+    // page. A restated copy is how the screen comes to refuse what the server
+    // accepts.
+    'forms-core.js',
 ];
 
 const BANNER = [

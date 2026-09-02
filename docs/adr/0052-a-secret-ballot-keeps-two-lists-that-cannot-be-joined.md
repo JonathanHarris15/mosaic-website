@@ -96,3 +96,23 @@ schema, which is harder to spot and no less broken.
 
 An attributed form keeps its timestamps. There is nothing to protect there — the
 answer already says who gave it.
+
+## Consequence found while building — you cannot change a vote
+
+**One Response Each** normally means a second visit hands somebody their own
+answer back to change, rather than refusing them. On a ballot it cannot.
+
+To return your answer we would have to *find* it, and the only thing that could
+find it is the join between the ledger and the answers that this decision
+forbids. There is no clever version of this: a system that can show you your own
+secret vote can be made to show it to somebody else. The property that makes the
+ballot secret is exactly the property that makes it unamendable.
+
+So a ballot takes **one answer per person, final**, and says so on the form
+before they answer rather than after they try to change it. An attributed
+one-each form keeps the ordinary behaviour.
+
+This is a real cost and worth stating plainly rather than discovering: a church
+vote where somebody changes their mind has to be re-run, not edited. The
+alternative — attributed voting with a promise not to look — is a weaker promise
+kept by policy rather than by construction, and it is not what the form says.
