@@ -5,9 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="robots" content="noindex, nofollow" />
     <title>Mosaic Church</title>
-    <link rel="stylesheet" href="mosaic.css" />
-    <link rel="stylesheet" href="fonts.css" />
-    <link rel="icon" href="assets/mosaic-logo.png" />
+    <!-- ⚠ EVERY PATH HERE IS ROOT-ABSOLUTE, AND MUST STAY THAT WAY. This page
+         is served at /f/<token> by a hosting rewrite, so a relative "mosaic.css"
+         resolves to /f/mosaic.css — which the same rewrite answers with THIS
+         PAGE, 200 and text/html. The browser asks for a stylesheet, is handed
+         an HTML document, and silently ignores it. Every script does the same,
+         so Alpine never runs and the page renders naked with all its states
+         visible at once. It looks like a broken app; it is a broken URL. -->
+    <link rel="stylesheet" href="/mosaic.css" />
+    <link rel="stylesheet" href="/fonts.css" />
+    <link rel="icon" href="/assets/mosaic-logo.png" />
 
     <!--
       ⚠ THIS PAGE IS THE ONLY ONE A SIGNED-OUT STRANGER EVER REACHES, AND IT
@@ -28,14 +35,14 @@
       phone, on mobile data, following a link from a text. Every script here is
       one they wait for.
     -->
-    <script src="vendor/firebase/firebase-app-compat.js"></script>
-    <script src="vendor/firebase/firebase-auth-compat.js"></script>
-    <script src="vendor/firebase/firebase-app-check-compat.js"></script>
-    <script src="vendor/firebase/firebase-functions-compat.js"></script>
-    <script src="app-check-config.js"></script>
-    <script src="forms-core.js"></script>
-    <script src="form-answer.js"></script>
-    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+    <script src="/vendor/firebase/firebase-app-compat.js"></script>
+    <script src="/vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="/vendor/firebase/firebase-app-check-compat.js"></script>
+    <script src="/vendor/firebase/firebase-functions-compat.js"></script>
+    <script src="/app-check-config.js"></script>
+    <script src="/forms-core.js"></script>
+    <script src="/form-answer.js"></script>
+    <script defer src="/vendor/alpine-3.15.12.min.js"></script>
 </head>
 
 <body class="m-page" x-data="answerPage()" x-init="load()" x-cloak>
@@ -43,7 +50,7 @@
     <!-- Whose form this is. First thing anybody sees, and the reason they
          believe the page enough to type a phone number into it. -->
     <header class="fa-brand">
-        <img src="assets/mosaic-logo.png" alt="" width="26" height="26" />
+        <img src="/assets/mosaic-logo.png" alt="" width="26" height="26" />
         <span class="fa-brand__name">Mosaic Church</span>
         <span class="fa-brand__where" x-text="whoami"></span>
     </header>

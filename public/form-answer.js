@@ -121,7 +121,10 @@
             },
 
             get signInHref() {
-                return 'login.html?next=' + encodeURIComponent(location.pathname + location.search);
+                // Absolute for the same reason every asset path is: at
+                // /f/<token> a relative 'login.html' resolves to /f/login.html,
+                // which the rewrite answers with this page again.
+                return '/login.html?next=' + encodeURIComponent(location.pathname + location.search);
             },
 
             myName: '',
