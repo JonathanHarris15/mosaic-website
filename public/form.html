@@ -94,55 +94,88 @@
                     </button>
                 </div>
 
-                <!-- ── Questions ─────────────────────────────────────────── -->
+                <!-- ── Questions ──────────────────────────────────── -->
                 <div class="f-panebody" x-show="tab === 'questions'">
                     <div class="fp-cols">
 
-                        <!-- The aside. Sits left on a wide screen and below the
-                             questions on a phone: it is written last and read
-                             last, and on a small screen the questions are what
-                             you came for. -->
+                        <!-- Who may answer sits left, because it is the frame
+                             everything else is written inside: the rung decides
+                             what the other two switches are allowed to be at
+                             all. On a phone it drops below the questions. -->
                         <aside class="fp-aside">
                             <section class="fp-block">
-                            <div class="fp-block__head"><span class="m-label">What happens next</span></div>
-                            <p class="fp-block__hint">Shown once they have answered. The one thing somebody wants to know after they have committed.</p>
-                            <div class="fp-field">
-                                <textarea id="f-after" class="m-input" rows="5" maxlength="300" x-model="form.afterword" @input="touch()"
-                                          placeholder="Nathan will text you before 21 September with the room and where to get the book."></textarea>
-                            </div>
+                                <div class="fp-block__head"><span class="m-label">Who may answer</span></div>
+
+                                <div class="m-seg">
+                                    <template x-for="r in liveRungs" :key="r">
+                                        <button type="button" class="m-seg__opt" :aria-pressed="form.rung === r" @click="setRung(r)"
+                                                x-text="r === 'public' ? 'Public' : 'Members'"></button>
+                                    </template>
+                                </div>
+
+                                <div class="fp-switch">
+                                    <label class="m-check">
+                                        <input type="checkbox" x-model="form.attribution" :disabled="!settings.attribution.available" @change="touch()" />
+                                        <span>Record who answered</span>
+                                    </label>
+                                    <!-- The only text left in this card, and it
+                                         earns it: a greyed box with no reason is
+                                         a bug report waiting to happen, and these
+                                         two are unavailable for DIFFERENT
+                                         reasons. Shown only when disabled. -->
+                                    <span class="fp-off" x-show="!settings.attribution.available">No account to attach a name to</span>
+                                </div>
+
+                                <div class="fp-switch">
+                                    <label class="m-check">
+                                        <input type="checkbox" x-model="form.oneEach" :disabled="!settings.oneEach.available" @change="touch()" />
+                                        <span>One response each</span>
+                                    </label>
+                                    <span class="fp-off" x-show="!settings.oneEach.available">Cannot tell one person from another</span>
+                                </div>
+
+                                <div class="m-notice m-notice--info" x-show="isBallot">
+                                    <span class="material-symbols-outlined m-notice__icon">how_to_vote</span>
+                                    <div class="m-notice__body">
+                                        <span class="m-notice__title">A secret ballot.</span>
+                                        <span class="m-notice__text">One answer each, final.</span>
+                                    </div>
+                                </div>
+
+                                <div class="fp-switch">
+                                    <label class="m-label m-label--sm" for="f-closing">Closing date</label>
+                                    <input id="f-closing" type="date" class="m-input" x-model="form.closingDate" @change="touch()" />
+                                </div>
                             </section>
                         </aside>
 
                         <div class="fp-maincol">
+
                             <section class="fp-block">
-                            <div class="fp-block__head"><span class="m-label">The form</span></div>
-                            <div class="fp-field">
-                                <label class="m-label" for="f-title">Title</label>
-                                <input id="f-title" type="text" class="m-input" maxlength="90" x-model="form.title" @input="touch()" />
-                                <span class="m-input-hint">Whoever opens the link reads this first. <span x-text="titleCount"></span>.</span>
-                            </div>
-
-                            <div class="fp-field">
-                                <label class="m-label" for="f-desc">Description</label>
-                                <textarea id="f-desc" class="m-input" rows="2" maxlength="400" x-model="form.description" @input="touch()"
-                                          placeholder="What this is, what it costs, when it closes."></textarea>
-                            </div>
-
+                                <div class="fp-block__head"><span class="m-label">The form</span></div>
+                                <div class="fp-field">
+                                    <label class="m-label m-label--sm" for="f-title">Title</label>
+                                    <input id="f-title" type="text" class="m-input" maxlength="90" x-model="form.title" @input="touch()" />
+                                </div>
+                                <div class="fp-field">
+                                    <label class="m-label m-label--sm" for="f-desc">Description</label>
+                                    <textarea id="f-desc" class="m-input" rows="2" maxlength="400" x-model="form.description" @input="touch()"></textarea>
+                                </div>
                             </section>
 
                             <section class="fp-block">
-                            <div class="fp-block__head"><span class="m-label">Questions</span></div>
-                            <div class="fp-field">
-                                <span class="m-label m-label--sm" style="align-self:flex-end" x-text="askedCount"></span>
+                                <div class="fp-block__head">
+                                    <span class="m-label">Questions</span>
+                                    <span class="m-label m-label--sm" x-text="askedCount"></span>
+                                </div>
 
                                 <template x-for="(q, i) in form.questions" :key="q.id">
                                     <div>
-                                        <!-- Retired: kept so its answers keep their label, never asked again -->
                                         <div class="f-qrow f-dim" x-show="q.retired">
                                             <span class="f-qnum">—</span>
                                             <span style="flex:1 1 auto;min-width:0">
                                                 <span class="f-qtext" x-text="q.text"></span>
-                                                <span class="f-qmeta"><span>Retired — no longer asked, its answers kept</span></span>
+                                                <span class="f-qmeta"><span>Retired — its answers kept</span></span>
                                             </span>
                                             <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="restoreQuestion(q)">Ask it again</button>
                                         </div>
@@ -208,66 +241,11 @@
                                 <button type="button" class="f-add" style="align-self:flex-start" @click="addQuestion()">
                                     <span class="material-symbols-outlined">add</span>Add a question
                                 </button>
-                            </div>
-
                             </section>
 
                             <section class="fp-block">
-                            <div class="fp-block__head"><span class="m-label">Who may answer</span></div>
-                            <div class="fp-field">
-                                <div class="f-set">
-                                    <div>
-                                        <div style="font-size:15px;margin-bottom:8px">Answering rung</div>
-                                        <div class="m-seg">
-                                            <template x-for="r in liveRungs" :key="r">
-                                                <button type="button" class="m-seg__opt" :aria-pressed="form.rung === r" @click="setRung(r)"
-                                                        x-text="r === 'public' ? 'Public' : 'Members'"></button>
-                                            </template>
-                                        </div>
-                                        <p class="m-input-hint">Editors and elders arrive with the next two rungs.</p>
-                                    </div>
-
-                                    <hr class="m-divider" />
-                                    <p class="m-settled m-settled--sm"
-                                       x-text="form.rung === 'public' ? 'Anyone with the link can answer, without an account.' : 'Members and above can answer. They sign in on the way through.'"></p>
-                                    <hr class="m-divider" />
-
-                                    <div>
-                                        <label class="m-check">
-                                            <input type="checkbox" x-model="form.attribution" :disabled="!settings.attribution.available" @change="touch()" />
-                                            <span>Record who answered</span>
-                                        </label>
-                                        <p class="f-why" x-text="settings.attribution.why"></p>
-                                    </div>
-
-                                    <div>
-                                        <label class="m-check">
-                                            <input type="checkbox" x-model="form.oneEach" :disabled="!settings.oneEach.available" @change="touch()" />
-                                            <span>One response each</span>
-                                        </label>
-                                        <p class="f-why" x-text="settings.oneEach.why"></p>
-                                    </div>
-
-                                    <div class="m-notice m-notice--info" x-show="isBallot">
-                                        <span class="material-symbols-outlined m-notice__icon">how_to_vote</span>
-                                        <div class="m-notice__body">
-                                            <span class="m-notice__title">This is a secret ballot.</span>
-                                            <span class="m-notice__text">We record that you answered. We do not record what you said. Whoever opens the form reads that above the first question — and because nothing can find somebody's own answer, a ballot takes <strong>one answer each, final</strong>.</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="f-set">
-                                    <div class="f-opthead">
-                                        <div>
-                                            <div style="font-size:15px">Closing date</div>
-                                            <p class="m-input-hint" style="margin-top:4px">After this date the link still opens and says the form is closed.</p>
-                                        </div>
-                                        <input type="date" class="m-input" style="width:200px" x-model="form.closingDate" @change="touch()" />
-                                    </div>
-                                </div>
-                            </div>
-
+                                <div class="fp-block__head"><span class="m-label">What happens next</span></div>
+                                <textarea id="f-after" class="m-input" rows="3" maxlength="300" x-model="form.afterword" @input="touch()"></textarea>
                             </section>
                         </div>
                     </div>
@@ -413,8 +391,19 @@
             padding-bottom: var(--space-base);
             border-bottom: 1px solid var(--outline-variant);
         }
-        .fp-block__hint { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--on-surface-variant); text-wrap: pretty; }
         .fp-block > .fp-field { gap: var(--space-sm); }
+
+        /* One control and, only when it is disabled, the reason. */
+        .fp-switch { display: flex; flex-direction: column; gap: var(--space-xs); }
+        .fp-off {
+            margin-left: 28px;
+            font-size: 11.5px; line-height: 1.4;
+            color: var(--on-surface-variant); text-wrap: pretty;
+        }
+        /* The aside is a narrow column, so its controls go full width rather
+           than sitting at whatever width they were designed for on a form. */
+        .fp-aside .m-seg { width: 100%; }
+        .fp-aside .m-input { width: 100%; }
         .fp-row { display: flex; gap: var(--space-sm); align-items: flex-end; flex-wrap: wrap; }
         .fp-quotes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-sm); }
         .f-dim { opacity: .72; }
