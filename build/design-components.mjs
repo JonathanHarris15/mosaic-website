@@ -364,13 +364,14 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
     notes: [
       "For a published form's link. You publish on Sunday and want the link again on Thursday, so it lives on the page rather than only in the moment of publishing.",
       "Monospace, because it is a string somebody may have to read out or check character by character.",
-      "The URL carries the form's id, which is 128 bits of base58 and never its title — a readable slug would be a guessable one (ADR-0051). So it is long, and the pill does not try to hide that.",
+      "The URL carries the form's id, which is 128 bits of base58 and never its title — a readable slug would be a guessable one (ADR-0051). So it is long, and this does not try to hide that.",
+      "⚠ --radius, not --radius-full. It was drawn as a pill and shipped as one, and on the form page it was then the only round-cornered thing among cards, buttons, question rows and setting blocks that are all 10px. One pill among square corners does not read as emphasis, it reads as a mistake.",
     ],
     examples: [
       '<div class="f-linkrow"><span class="material-symbols-outlined">link</span><code>mosaicmanagercstx.com/f/7bQm2xK9vRt4Lp8sYw3NcF</code><button class="m-btn m-btn--quiet m-btn--sm">Copy</button></div>',
     ],
     css: `
-.f-linkrow { display: inline-flex; align-items: center; gap: var(--space-base); padding: 7px 8px 7px 14px; background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-radius: var(--radius-full); }
+.f-linkrow { display: inline-flex; align-items: center; gap: var(--space-base); padding: 7px 8px 7px 14px; background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-radius: var(--radius); }
 .f-linkrow code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 `,
   },

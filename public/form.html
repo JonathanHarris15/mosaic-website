@@ -358,11 +358,14 @@
 
     <style>
         .fp-acts { display: flex; align-items: center; gap: var(--space-base); flex: 0 0 auto; flex-wrap: wrap; }
-        /* The confirmation stands where the Delete button stood. */
+        /* The confirmation stands where the Delete button stood.
+           --radius, not --radius-full: it is a bar holding buttons, and those
+           buttons are --radius. A pill around square corners reads as two
+           different rounding systems on one control. */
         .fp-confirm {
             padding: var(--space-xs) var(--space-xs) var(--space-xs) var(--space-sm);
             background: var(--surface-container-low);
-            border: 1px solid var(--error); border-radius: var(--radius-full);
+            border: 1px solid var(--error); border-radius: var(--radius);
         }
         .fp-confirm__ask { font-size: 13.5px; line-height: 1.35; color: var(--on-surface); text-wrap: pretty; }
         .fp-link { padding: var(--space-base) var(--space-md); border-bottom: 1px solid var(--outline-variant); }
