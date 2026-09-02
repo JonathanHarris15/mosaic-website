@@ -29,5 +29,17 @@
         // Replace with the reCAPTCHA site key from the Firebase console.
         // The wizard writes it here.
         siteKey: '6Leq76UtAAAAADJc3TUWYPjG89v3tfWQT6DMvasB',
+
+        // ⚠ WHICH KIND OF KEY THAT IS, AND IT MATTERS. Firebase App Check
+        // offers two reCAPTCHA providers and they are not interchangeable:
+        // an Enterprise key attested through the v3 flow simply fails, and
+        // the failure looks like "the form will not load" rather than
+        // anything mentioning reCAPTCHA.
+        //
+        // Passing a bare string to appCheck().activate() silently picks V3,
+        // which is why this is named rather than inferred. Ours is Enterprise
+        // (Mosaic-Manager-Forms, created in Google Cloud); set 'v3' if the key
+        // ever comes from google.com/recaptcha/admin instead.
+        provider: 'enterprise',
     };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -79,3 +79,36 @@ test('the rewrite this all depends on is still there', () => {
     assert.ok(rewrite, 'the /f/** rewrite is gone, so form links 404');
     assert.strictEqual(rewrite.destination, '/form-answer.html');
 });
+
+test('every state the page can be in has something to draw', () => {
+    // ⚠ THE ONE THAT BIT. `state` was set to 'error' on a failed fetch and no
+    // block matched it, so the page rendered the church's header and then
+    // nothing — a blank screen, which reads as the app being dead rather than
+    // as something you could try again. A state with no markup is not a quiet
+    // failure, it is an invisible one.
+    const set = new Set();
+    for (const m of js.matchAll(/state\s*=\s*'([a-z]+)'/g)) set.add(m[1]);
+    for (const m of js.matchAll(/state:\s*'([a-z]+)'/g)) set.add(m[1]);
+
+    const drawn = new Set();
+    for (const m of html.matchAll(/state === '([a-z]+)'/g)) drawn.add(m[1]);
+
+    const undrawn = [...set].filter(s => !drawn.has(s));
+    assert.deepStrictEqual(undrawn, [],
+        'these states can be reached and render nothing: ' + undrawn.join(', '));
+});
+
+test('the App Check provider is named rather than inferred', () => {
+    // appCheck().activate() given a bare string quietly builds a
+    // ReCaptchaV3Provider. Ours is an Enterprise key, which the v3 flow cannot
+    // attest — and the symptom is not an error mentioning reCAPTCHA, it is
+    // every submission refused and a form that will not load.
+    assert.match(js, /ReCaptchaEnterpriseProvider/,
+        'nothing selects the Enterprise provider, so a bare string will pick v3');
+    assert.doesNotMatch(js, /activate\(\s*appCheckKey/,
+        'the raw site key is passed to activate(), which silently means v3');
+
+    const cfg = fs.readFileSync(path.join(PUBLIC, 'app-check-config.js'), 'utf8');
+    assert.match(cfg, /provider:\s*'(enterprise|v3)'/,
+        'the config does not say which kind of reCAPTCHA key it holds');
+});

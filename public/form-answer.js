@@ -42,9 +42,19 @@
     // half-finished setup should be "nothing works yet", never "everything
     // works and nothing is checked".
     const appCheckKey = (window.MOSAIC_APP_CHECK && window.MOSAIC_APP_CHECK.siteKey) || '';
+    const appCheckKind = (window.MOSAIC_APP_CHECK && window.MOSAIC_APP_CHECK.provider) || 'enterprise';
     if (appCheckKey) {
         try {
-            firebase.appCheck().activate(appCheckKey, true);
+            // ⚠ THE PROVIDER IS NAMED, NEVER INFERRED. activate() given a bare
+            // string quietly builds a ReCaptchaV3Provider — and ours is an
+            // Enterprise key, which the v3 flow cannot attest. The symptom is
+            // not an error mentioning reCAPTCHA; it is every submission
+            // refused and a form that will not load.
+            const P = firebase.appCheck;
+            const provider = appCheckKind === 'v3'
+                ? new P.ReCaptchaV3Provider(appCheckKey)
+                : new P.ReCaptchaEnterpriseProvider(appCheckKey);
+            firebase.appCheck().activate(provider, true);
         } catch (e) {
             // Never fatal. A page that will not render because attestation
             // failed to start is worse than one that renders and is refused
@@ -167,6 +177,11 @@
                     // dropped mid-send is the one moment somebody has already
                     // done the work, and a page that clears itself here is a
                     // page they do not come back to.
+                    // The underlying message goes to the console for whoever
+                    // is diagnosing, never onto the page — "internal" and an
+                    // App Check rejection mean nothing to somebody trying to
+                    // sign up for a bible study.
+                    console.error('publicForm failed:', e && (e.code || ''), e && e.message);
                     this.problem = isFetch ?
                         'This did not load. Check your connection and try again.' :
                         'That did not send. Nothing has been lost — try again.';

@@ -69,6 +69,22 @@
             <p class="m-body-md">The link may have been mistyped, or the form may have been taken down. Whoever sent it to you can tell you which.</p>
         </div>
 
+        <!-- ── It did not load ───────────────────────────────────────────
+             ⚠ EVERY state this page can be in NEEDS A BLOCK HERE. 'error' had
+             none, so a failed fetch rendered the church's header and then
+             nothing at all — a blank page, which reads as the app being dead
+             rather than as something to try again. A state with no markup is
+             not a quiet failure, it is an invisible one. -->
+        <div x-show="state === 'error'" class="fa-centred fa-said">
+            <span class="material-symbols-outlined fa-said__icon">cloud_off</span>
+            <h1 class="m-headline-lg">This did not load.</h1>
+            <p class="m-body-md" x-text="problem"></p>
+            <button type="button" class="m-btn m-btn--primary m-btn--lg fa-wide" @click="state = 'loading'; problem = ''; load()">
+                <span class="m-btn__label">Try again</span>
+            </button>
+            <p class="m-body-md fa-quiet">If it keeps happening, tell whoever sent you the link.</p>
+        </div>
+
         <!-- ── Members only, and they are signed out ─────────────────────── -->
         <div x-show="state === 'signin'" class="fa-centred fa-said">
             <span class="material-symbols-outlined fa-said__icon">lock_person</span>
