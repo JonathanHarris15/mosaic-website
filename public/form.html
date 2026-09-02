@@ -66,13 +66,28 @@
                             </template>
                         </div>
                     </div>
-                    <div class="fp-acts">
+                    <div class="fp-acts" x-show="!confirmingDelete">
                         <button type="button" class="m-btn m-btn--danger-outline m-btn--sm" @click="confirmingDelete = true">
                             <span class="material-symbols-outlined">delete</span><span class="m-btn__label">Delete</span>
                         </button>
                         <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="form.published && !isClosed" @click="setClosed(true)">Close form</button>
                         <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="form.closed" @click="setClosed(false)">Reopen</button>
                         <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="save(true)">Save</button>
+                    </div>
+
+                    <!-- ⚠ THE QUESTION IS ASKED WHERE THE BUTTON WAS, replacing
+                         it. It used to be a notice at the foot of the page, so
+                         on anything but a short form you pressed Delete, saw
+                         nothing move, and concluded the button was broken. A
+                         confirmation you have to go and find is worse than no
+                         confirmation: it teaches people the control does not
+                         work. Naming the count is what makes it answerable. -->
+                    <div class="fp-acts fp-confirm" x-show="confirmingDelete">
+                        <span class="fp-confirm__ask" x-text="deleteQuestion"></span>
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="confirmingDelete = false">Keep it</button>
+                        <button type="button" class="m-btn m-btn--danger m-btn--sm" @click="doDelete()">
+                            <span class="material-symbols-outlined">delete</span><span class="m-btn__label">Delete</span>
+                        </button>
                     </div>
                 </div>
 
@@ -328,18 +343,6 @@
             </div>
         </template>
 
-        <!-- Deleting names the count, the way the Document Library does -->
-        <div class="m-notice m-notice--error" x-show="confirmingDelete">
-            <span class="material-symbols-outlined m-notice__icon">delete</span>
-            <div class="m-notice__body">
-                <span class="m-notice__title" x-text="deleteQuestion"></span>
-                <span class="m-notice__text">The link stops working and this cannot be undone.</span>
-            </div>
-            <div class="m-notice__acts">
-                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="confirmingDelete = false">Keep it</button>
-                <button type="button" class="m-btn m-btn--danger m-btn--sm" @click="doDelete()">Delete</button>
-            </div>
-        </div>
     </main>
 
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -355,6 +358,13 @@
 
     <style>
         .fp-acts { display: flex; align-items: center; gap: var(--space-base); flex: 0 0 auto; flex-wrap: wrap; }
+        /* The confirmation stands where the Delete button stood. */
+        .fp-confirm {
+            padding: var(--space-xs) var(--space-xs) var(--space-xs) var(--space-sm);
+            background: var(--surface-container-low);
+            border: 1px solid var(--error); border-radius: var(--radius-full);
+        }
+        .fp-confirm__ask { font-size: 13.5px; line-height: 1.35; color: var(--on-surface); text-wrap: pretty; }
         .fp-link { padding: var(--space-base) var(--space-md); border-bottom: 1px solid var(--outline-variant); }
         .fp-field { display: flex; flex-direction: column; gap: var(--space-base); }
 
