@@ -812,6 +812,45 @@ _Avoid_: FCM token, device id, registration, push subscription
 The one OS prompt asking whether Mosaic may notify this phone. **Asked once, and only after a Mosaic-owned explainer** on the phone's home once somebody is signed in and linked — never on first launch. iOS gives exactly one prompt: denied is denied, and the only way back is talking somebody through iOS Settings, so spending it on a stranger who has not yet seen what Mosaic does is spending it badly. A permanent toggle in settings is the way back afterwards. Mosaic keeps **no preferences of its own** on top of it — no per-kind opt-outs — because with one thing sending Notifications that is a settings screen with one row; revisit when there are genuinely different kinds to choose between.
 _Avoid_: opt-in, subscription, notification settings
 
+## Forms and Registrations — MS-173
+
+### Form Template
+The definition of a form: a title and an ordered set of sections and questions, each question carrying a response type and optionally **required**. Built and owned by **editors and above**, in the Forms & Registrations library, sorted into [[Folder]]s the way the [[Document Library]] already is. A template is never the thing somebody fills in — it is what the filled-in thing is made from.
+_Avoid_: form (unqualified — the template is what is built, a [[Form Document]] and a [[Response]] are what it makes), survey, questionnaire
+
+### Form Mode
+What a [[Form Template]] produces, chosen when the template is made. The spine of MS-173, and the reason several settings exist on one side of it and are meaningless on the other.
+- **`document`** — filled in **once**, and the filled-in thing *is* the record. Lands in a document library like anything else written in Mosaic. The Elder Interview is the case. The same template is deliberately used many times by the same person, each time producing a separate [[Form Document]].
+- **`responses`** — **published** to a link, answered by many people, read as a tally. The church poll and the bible-study sign-up.
+_Avoid_: form type, template kind, output type
+
+### Response
+One person's answers to a `responses`-mode [[Form Template]]. Counted on the **Responses tab**; never shown to the person answering (see [[Answering rung]]). Distinct from a [[Form Document]], which is a record rather than a data point.
+_Avoid_: submission, entry, result
+
+### Answering rung
+Who may answer a [[Form Template]] — `public`, `member`, `editor`, `elder` — reusing the [[Event visibility]] ladder rather than inventing a second one. **`public` is the only rung that needs no account**, because proving you are a member requires one; "is sign-in required" is therefore not a separate switch, it is read off the rung.
+- **A `public` form is link-only and unlisted** ([ADR 0051](docs/adr/0051-a-public-form-is-served-and-answered-through-one-closed-door.md)). You can open a form whose link you were sent; you cannot ask what forms exist, and an id is not guessable.
+- **A signed-out person never touches Firestore.** One Cloud Function hands out the questions and takes the answer, and `firestore.rules` gains nothing — the public path is a door with somebody standing in it, not a hole in the wall. Public submissions pass an invisible bot check (App Check).
+_Avoid_: visibility (that is [[Event visibility]]'s word for an Event), audience, access level
+
+### Attribution
+Separately from the [[Answering rung]], whether a [[Response]] records **who** gave it. On a signed-in rung that means stamping the [[Person]]. On `public` there is no Person to stamp, so a name is a *question on the form* like any other — the form asks, rather than Mosaic knowing.
+_Avoid_: anonymous (as the field name — attribution is the setting, anonymous is one of its values), named, identified
+
+### One Response Each
+A [[Form Template]] setting: may a person answer more than once. **Only available on `member` and above**, because a `public` form has no account to key on and half-enforcing it with a browser cookie would be a promise the thing cannot keep. **Only meaningful in `responses` [[Form Mode]]** — a [[Form Document]] is filled in repeatedly by the same person on purpose. A member who has answered may go back and **change** their answer until the form closes; they never get a second one.
+- **It combines with [[Attribution]] off to make a real secret ballot**, and the two lists that requires may never be joined ([ADR 0052](docs/adr/0052-a-secret-ballot-keeps-two-lists-that-cannot-be-joined.md)): the answers carry no person, the ledger carries no answers, and timestamps are coarse because millisecond ordering would line them back up. The form says so in its own words — *we record that you answered, we do not record what you said* — because the promise the church hears must be the one the storage makes.
+_Avoid_: single submission, one vote, unique response
+
+### Closed (a form)
+A `responses`-mode [[Form Template]] that has stopped taking answers — pressed shut by an editor, or reached the **closing date** set when it was published. A closed form's link still works and shows the form's **title and when it closed**, never the questions and never the tally: a working link that renders as not-found reads as broken and generates a phone call, and showing the tally would hand every answer to whoever holds a forwarded link. Closing also ends a member's right to change their answer.
+_Avoid_: expired, archived, disabled, locked
+
+### Answering a form
+What the person filling one in sees. They get the questions, and on submitting they get **a thank-you and nothing else** — never the running tally. Showing the split changes what later people answer, which quietly ruins the poll being run, and on a `public` form it would let a stranger holding a forwarded link read everybody else's answers.
+- **Nobody is notified when an answer arrives.** The Responses tab is the inbox and an editor goes and looks. Pushing an answer at a named person is real and wanted — MS-271 needs it — but it is its own ticket, not part of proving a stranger can answer safely.
+
 ## User Interface Conventions
 
 ### Autosave
