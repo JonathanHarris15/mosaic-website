@@ -71,3 +71,8 @@ functions/.env.*
 # re-include a file inside an excluded directory.
 .board/conversations/*
 !.board/conversations/README.md
+
+# The App Check wizard's own memory of what you typed. The site key it captures
+# is PUBLIC and lives in public/app-check-config.js, which is committed — this
+# file is only so a re-run can offer the last value back.
+.app-check.local

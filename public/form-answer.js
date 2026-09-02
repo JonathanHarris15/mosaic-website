@@ -29,6 +29,34 @@
 
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
+    // ── App Check ────────────────────────────────────────────────────────────
+    //
+    // The browser collects a token proving it is running this website, and
+    // `publicForm` refuses anything without one. Invisible to whoever is
+    // filling the form in — no "tick to prove you are human", because a waiver
+    // is already friction and a second hurdle loses people.
+    //
+    // ⚠ ACTIVATED ONLY WHEN A SITE KEY IS SET, and the server enforces either
+    // way. So an unconfigured deploy REFUSES public submissions rather than
+    // accepting them unchecked. That asymmetry is deliberate: the failure of a
+    // half-finished setup should be "nothing works yet", never "everything
+    // works and nothing is checked".
+    const appCheckKey = (window.MOSAIC_APP_CHECK && window.MOSAIC_APP_CHECK.siteKey) || '';
+    if (appCheckKey) {
+        try {
+            firebase.appCheck().activate(appCheckKey, true);
+        } catch (e) {
+            // Never fatal. A page that will not render because attestation
+            // failed to start is worse than one that renders and is refused
+            // with a message somebody can act on.
+            console.warn('App Check did not start:', e && e.message);
+        }
+    } else {
+        console.warn(
+            'App Check has no site key, so public forms will be refused. ' +
+            'Run: bash scripts/wizard-app-check.sh');
+    }
+
     const fns = firebase.app().functions('us-central1');
 
     // The form's id, from /f/<token> or ?f=<token>. Both work: the rewrite
