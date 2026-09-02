@@ -440,6 +440,59 @@
         }));
     }
 
+    // ── Counting what came back ──────────────────────────────────────────────
+    //
+    // Per question. A choice question gets a count and a share per option; a
+    // text question gets its answers, in the order the caller hands them over.
+    //
+    // ⚠ `answered` is counted from the ANSWERS, never from the ledger of who
+    // has answered. They are the same number on a form where everybody answered
+    // every question and different otherwise, and reaching for the ledger to
+    // get the "right" one is the join ADR-0052 forbids.
+    function tally(form, responses) {
+        const rows = responses || [];
+        return ((form && form.questions) || []).map(q => {
+            const given = rows
+                .map(r => (r.answers || {})[q.id])
+                .filter(v => v != null && v !== '');
+
+            const out = {
+                id: q.id,
+                text: q.text,
+                type: q.type,
+                retired: q.retired === true,
+                answered: given.length,
+                of: rows.length,
+            };
+
+            if (hasOptions(q.type)) {
+                const counts = {};
+                (q.options || []).forEach(o => { counts[o] = 0; });
+                given.forEach(v => {
+                    (Array.isArray(v) ? v : [v]).forEach(one => {
+                        if (one in counts) counts[one] += 1;
+                    });
+                });
+                // The share is of the people who ANSWERED THIS QUESTION, not of
+                // everybody who submitted. An optional question answered by
+                // three of forty is not "7% chili".
+                const base = given.length || 1;
+                const top = Math.max(1, ...Object.values(counts));
+                out.options = (q.options || []).map(o => ({
+                    label: o,
+                    count: counts[o],
+                    share: Math.round((counts[o] / base) * 100),
+                    // Bar width is relative to the biggest answer, so a clear
+                    // winner fills the track and the rest are read against it.
+                    width: Math.round((counts[o] / top) * 100),
+                }));
+            } else {
+                out.answers = given.map(v => String(v));
+            }
+            return out;
+        });
+    }
+
     const FormsCore = {
         MAX_TITLE_LENGTH,
         MAX_QUESTION_LENGTH,
@@ -473,6 +526,7 @@
         buildResponse,
         buildLedgerEntry,
         missingRequired,
+        tally,
         stableShuffle,
         anonymousReadOrder,
     };

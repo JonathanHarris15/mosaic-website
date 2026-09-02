@@ -101,12 +101,17 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 - **Input** `.m-input` — A single-line text field, its label, and its error.
 - **Select** `.m-select` — A native dropdown matched to Input, with an inline chevron drawn as a Material Symbol rather than a bundled SVG.
 - **Checkbox** `.m-check` — A checkbox and its label, as one target.
+- **FormPane** `.f-pane` — A titled panel with a head, a body, and a row of badges saying what the thing inside it is.
+- **QuestionEditor** `.f-qrow` — A question on a form being built — a row when it is shut, a panel when it is open.
+- **SettingBlock** `.f-set` — A group of settings that constrain each other, each carrying its own reason.
 - **OptionCard** `.m-option` — One choice on a form somebody is answering, as a card you tap rather than a radio you aim at.
 - **SearchBar** `.m-search` — An Input with a leading search glyph and a clear button that only appears once there is something to clear.
 - **Segmented** `.m-seg` — Two to four named choices with one of them chosen, all visible at once.
 - **UnitField** `.m-unitfield` — A number and the unit it is in, as one field.
 
 **Display**
+- **Tally** `.f-tally` — What came back from a form — a labelled bar per option, and free-text answers as quotes.
+- **LinkRow** `.f-linkrow` — A URL you are meant to copy, with the button to copy it.
 - **SectionLabel** `.m-label` — The tracked-caps overline above a group of things.
 - **SerifHead** `.m-serif-head` — An EB Garamond heading for the things a person reads rather than operates — a hymn name, a role, a one-line summary.
 - **Card** `.m-card` — A flat container with a warm hairline.
@@ -133,6 +138,7 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 - **Notice** `.m-notice` — The edged bar: signed out, a read that failed, a write that half-failed, or what a selection adds up to.
 
 **Layout**
+- **Breadcrumbs** `.f-crumbs` — Where you are in a library you can navigate into.
 - **PageShell** `.m-page` — The body of a desktop page: warm background, navy ink, a column capped at --container-max.
 - **PageHeader** `.m-header` — The strip across the top of every desktop page: the way back, the page's name, the page's actions, and the account.
 - **BackLink** `.m-back` — The way out of a page, top left.

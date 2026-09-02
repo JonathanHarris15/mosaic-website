@@ -257,6 +257,143 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   },
 
   {
+    name: "FormPane",
+    cls: "f-pane",
+    group: "Forms",
+    summary: "A titled panel with a head, a body, and a row of badges saying what the thing inside it is.",
+    variants: { part: ["pane", "head", "name", "body", "badges"] },
+    notes: [
+      "From the MS-360 design. It is the form page's whole shell: the form's name, what it is (public/members, named/anonymous, open/closed) as badges, the actions, then the tabs and the body.",
+      "⚠ Its shell is the same three declarations m-card-list uses — surface-container-lowest, a hairline, radius-xl. That is not an accident and not yet worth merging: a card LIST is rows, this is a titled container with a head. If a third thing wants the same shell, promote it rather than adding a fourth copy.",
+      "__name is serif because it is the form's own name, the same reason m-row--serif exists.",
+    ],
+    examples: [
+      '<div class="f-pane"><div class="f-panehead"><div><span class="m-label m-label--sm">Editing form</span><h2 class="f-panename">Monday gathering</h2></div></div><div class="f-panebody">…</div></div>',
+    ],
+    css: `
+.f-pane { display: flex; flex-direction: column; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); overflow: hidden; }
+.f-panehead { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-md); padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--outline-variant); }
+.f-panename { margin: 4px 0 0; font-family: var(--font-serif); font-size: 26px; font-weight: 600; line-height: 1.2; color: var(--on-surface); text-wrap: pretty; }
+.f-panebody { padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-md); }
+.f-badgewrap { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+`,
+  },
+
+  {
+    name: "QuestionEditor",
+    cls: "f-qrow",
+    group: "Forms",
+    summary: "A question on a form being built — a row when it is shut, a panel when it is open.",
+    variants: { state: ["shut", "open"], part: ["row", "number", "text", "meta", "head", "option", "add"] },
+    notes: [
+      "The main event of the MS-360 design, and the thing it was asked to have an opinion about. Shut, a question is one row saying its type, its option count and whether it is needed. Open, it is a panel with a left edge in --primary so you can see at a glance which one you are in.",
+      "One open at a time is the PAGE's rule, not this component's — the component only knows how to be shut or open.",
+      "f-add is the dashed 'Add a question' affordance. Dashed because it is not a thing yet; every other button here does something to something that exists.",
+      "The type picker inside an open question is a plain m-select with optgroups. It is built for thirteen types while only three work, because a picker that grows from three loose buttons to thirteen is a redesign and a grouped list that lights up is not.",
+    ],
+    examples: [
+      '<button class="f-qrow"><span class="f-qnum">1</span><span><span class="f-qtext">Which evening suits you?</span><span class="f-qmeta"><span>Multiple choice</span></span></span></button>',
+    ],
+    css: `
+.f-qrow { display: flex; align-items: flex-start; gap: var(--space-sm); width: 100%; padding: 12px 14px 13px; text-align: left; background: var(--surface); border: 1px solid var(--outline-variant); border-radius: var(--radius); cursor: pointer; font-family: var(--font-sans); transition: background-color var(--duration) var(--ease-standard); }
+.f-qrow:hover { background: var(--surface-container-low); }
+.f-qnum { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: 0 0 auto; margin-top: 1px; border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: var(--surface-container); font-family: var(--font-sans); font-size: 11px; font-weight: 700; color: var(--on-surface-variant); }
+.f-qtext { display: block; font-family: var(--font-serif); font-size: 17px; line-height: 1.3; color: var(--on-surface); text-wrap: pretty; }
+.f-qmeta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 5px; font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant); }
+.f-qopen { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-sm) var(--space-sm) 14px; background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-left: 3px solid var(--primary); border-radius: var(--radius); }
+.f-qhead { display: flex; align-items: center; gap: var(--space-base); }
+.f-opt { display: flex; align-items: center; gap: var(--space-base); }
+.f-opt .m-input { height: 44px; font-size: 15px; }
+.f-opthead { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.f-add { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs); min-height: 46px; padding: 0 var(--space-sm); background: transparent; border: 1px dashed var(--outline-variant); border-radius: var(--radius); color: var(--secondary); font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600; letter-spacing: .14em; text-transform: uppercase; cursor: pointer; transition: background-color var(--duration) var(--ease-standard); }
+.f-add:hover { background: var(--surface-container); }
+`,
+  },
+
+  {
+    name: "SettingBlock",
+    cls: "f-set",
+    group: "Forms",
+    summary: "A group of settings that constrain each other, each carrying its own reason.",
+    variants: { part: ["block", "why"] },
+    notes: [
+      "⚠ f-why is the load-bearing half. On a public form both Attribution and One Response Each are off and cannot be turned on, FOR DIFFERENT REASONS — no account to attach a name to, and no way to tell one person from another. A greyed checkbox with no why is the thing this exists to prevent, and one blanket sentence over both would be a lie about one of them.",
+      "Indented to 28px so the reason lines up under its checkbox's label rather than its box.",
+    ],
+    examples: [
+      '<div class="f-set"><label class="m-check"><input type="checkbox" disabled><span>Record who answered</span></label><p class="f-why">Off, and not yours to change: a public form has no account to attach a name to.</p></div>',
+    ],
+    css: `
+.f-set { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-sm) var(--space-sm) 14px; background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-radius: var(--radius); }
+.f-why { margin: 0 0 0 28px; font-family: var(--font-sans); font-size: 12.5px; line-height: 1.45; color: var(--on-surface-variant); text-wrap: pretty; }
+`,
+  },
+
+  {
+    name: "Tally",
+    cls: "f-tally",
+    group: "Display",
+    summary: "What came back from a form — a labelled bar per option, and free-text answers as quotes.",
+    variants: { part: ["tally", "bar", "quote"] },
+    notes: [
+      "⚠ A quote carries its handle and NEVER a date when the form is anonymous. Arrival order plus a timestamp is what lines the answers back up against the ledger of who answered, which is the join ADR-0052 exists to prevent. An attributed form may show times; the component does not care, the page decides.",
+      "The bar is a track and a fill rather than a chart library. Four options on a phone is not a visualisation problem.",
+      "f-barname is a fixed 8.5rem so the bars start at the same x and can be compared by eye, which is the only thing a tally is for.",
+    ],
+    examples: [
+      '<div class="f-tally"><div class="f-bar"><span class="f-barname">Chili</span><span class="f-bartrack"><span class="f-barfill" style="width:100%"></span></span><span class="f-barnum">14 · 41%</span></div></div>',
+    ],
+    css: `
+.f-tally { display: flex; flex-direction: column; gap: 10px; }
+.f-bar { display: flex; align-items: center; gap: var(--space-sm); }
+.f-barname { flex: 0 0 8.5rem; font-family: var(--font-serif); font-size: 16px; color: var(--on-surface); }
+.f-bartrack { flex: 1 1 auto; height: 26px; background: var(--surface-container); border-radius: var(--radius-sm); overflow: hidden; }
+.f-barfill { display: block; height: 100%; background: var(--primary-fixed); border-right: 2px solid var(--primary); }
+.f-barnum { flex: 0 0 5.5rem; font-family: var(--font-sans); font-size: 13px; color: var(--on-surface-variant); }
+.f-quote { padding: 13px 16px 14px; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-left: 2px solid var(--gold); border-radius: var(--radius); }
+.f-quote p { margin: 0; font-family: var(--font-serif); font-size: 16px; line-height: 1.5; color: var(--on-surface); text-wrap: pretty; }
+.f-quote span { display: block; margin-top: 7px; font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--outline); }
+`,
+  },
+
+  {
+    name: "LinkRow",
+    cls: "f-linkrow",
+    group: "Display",
+    summary: "A URL you are meant to copy, with the button to copy it.",
+    notes: [
+      "For a published form's link. You publish on Sunday and want the link again on Thursday, so it lives on the page rather than only in the moment of publishing.",
+      "Monospace, because it is a string somebody may have to read out or check character by character.",
+      "The URL carries the form's id, which is 128 bits of base58 and never its title — a readable slug would be a guessable one (ADR-0051). So it is long, and the pill does not try to hide that.",
+    ],
+    examples: [
+      '<div class="f-linkrow"><span class="material-symbols-outlined">link</span><code>mosaicmanagercstx.com/f/7bQm2xK9vRt4Lp8sYw3NcF</code><button class="m-btn m-btn--quiet m-btn--sm">Copy</button></div>',
+    ],
+    css: `
+.f-linkrow { display: inline-flex; align-items: center; gap: var(--space-base); padding: 7px 8px 7px 14px; background: var(--surface-container-low); border: 1px solid var(--outline-variant); border-radius: var(--radius-full); }
+.f-linkrow code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+`,
+  },
+
+  {
+    name: "Breadcrumbs",
+    cls: "f-crumbs",
+    group: "Layout",
+    summary: "Where you are in a library you can navigate into.",
+    notes: [
+      "MS-360 ships it reading 'Forms' and nothing else, because there is nowhere yet to go — folders arrive with MS-361 (ADR-0053). It is here now so that ticket adds depth to a page already shaped for it rather than rebuilding the navigation.",
+    ],
+    examples: [
+      '<nav class="f-crumbs"><span class="material-symbols-outlined">folder_open</span><a href="#">Forms</a><span class="material-symbols-outlined">chevron_right</span><span>Sign-ups</span></nav>',
+    ],
+    css: `
+.f-crumbs { display: flex; align-items: center; gap: 4px; font-family: var(--font-sans); font-size: var(--label-sm-size); font-weight: 600; letter-spacing: var(--label-sm-spacing); text-transform: uppercase; color: var(--on-surface-variant); }
+.f-crumbs a { color: inherit; }
+.f-crumbs .material-symbols-outlined { font-size: 16px; opacity: .5; }
+`,
+  },
+
+  {
     name: "OptionCard",
     cls: "m-option",
     group: "Forms",
