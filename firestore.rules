@@ -810,5 +810,52 @@ service cloud.firestore {
         allow write: if false;
       }
     }
+
+    // ── Forms and Registrations (MS-360) ────────────────────────────────────
+    //
+    // ⚠ THERE IS NO PUBLIC ACCESS IN THIS FILE, AND THAT IS THE DESIGN.
+    //
+    // A public form is answerable by somebody with no account at all. The
+    // obvious way to do that is `allow read: if true` on a form marked public,
+    // and it is the exact shape of the bug MS-197 already cost us — see the
+    // isSignedIn() comment at the top of this file. It would also make every
+    // public form enumerable, turning a poll sent to forty people into one the
+    // whole internet can list.
+    //
+    // So the public path is not a hole in this file. It is one Cloud Function
+    // that hands out the questions and takes the answer, running with admin
+    // credentials past these rules (ADR-0051). A reviewer looking here for
+    // where public access was granted should not find it, because it was not
+    // granted here.
+    //
+    // What that leaves is the ordinary editor ladder, and nothing below it.
+    match /forms/{formId} {
+      allow read, write: if isEditor();
+    }
+
+    // One person's answers. Editors read them on the Responses tab; the
+    // function writes them. No client writes — validation (required questions,
+    // the rung, whether the form is closed) happens on the server, because a
+    // browser answering a public form is not something we control.
+    match /form_responses/{responseId} {
+      allow read: if isEditor();
+      allow write: if false;
+    }
+
+    // ⚠ THE BALLOT LEDGER — WHO HAS ANSWERED, HOLDING NOTHING ABOUT WHAT THEY
+    // SAID. NOBODY READS THIS FROM A BROWSER. NOT EVEN AN ELDER.
+    //
+    // ADR-0052 says the answers and this list may never be joined. An editor
+    // who can read both can join them by hand, and then the secret ballot is
+    // secret only by everyone's good manners — which is not what the form
+    // promises the congregation. Its ONLY job is to let the server refuse a
+    // second answer, and the server does not need these rules to do it.
+    //
+    // "How many people have answered" comes from counting answers, never from
+    // counting this. A screen that needed this list would be a screen that had
+    // stopped keeping the promise.
+    match /form_ledger/{entryId} {
+      allow read, write: if false;
+    }
   }
 }
