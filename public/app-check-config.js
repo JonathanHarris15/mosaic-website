@@ -28,6 +28,6 @@
     global.MOSAIC_APP_CHECK = {
         // Replace with the reCAPTCHA site key from the Firebase console.
         // The wizard writes it here.
-        siteKey: '',
+        siteKey: '6Leq76UtAAAAADJc3TUWYPjG89v3tfWQT6DMvasB',
     };
 })(typeof window !== 'undefined' ? window : globalThis);
