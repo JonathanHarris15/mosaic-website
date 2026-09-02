@@ -271,7 +271,10 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
       '<div class="f-pane"><div class="f-panehead"><div><span class="m-label m-label--sm">Editing form</span><h2 class="f-panename">Monday gathering</h2></div></div><div class="f-panebody">…</div></div>',
     ],
     css: `
-.f-pane { display: flex; flex-direction: column; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); overflow: hidden; }
+/* overflow is VISIBLE, not hidden: the question-type Dropdown opens a panel
+   that would otherwise be clipped by this card. Nothing inside carries its own
+   background, so nothing pokes out of the rounded corners either way. */
+.f-pane { display: flex; flex-direction: column; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); overflow: visible; }
 .f-panehead { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-md); padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--outline-variant); }
 .f-panename { margin: 4px 0 0; font-family: var(--font-serif); font-size: 26px; font-weight: 600; line-height: 1.2; color: var(--on-surface); text-wrap: pretty; }
 .f-panebody { padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-md); }
@@ -391,6 +394,67 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 .f-crumbs { display: flex; align-items: center; gap: 4px; font-family: var(--font-sans); font-size: var(--label-sm-size); font-weight: 600; letter-spacing: var(--label-sm-spacing); text-transform: uppercase; color: var(--on-surface-variant); }
 .f-crumbs a { color: inherit; }
 .f-crumbs .material-symbols-outlined { font-size: 16px; opacity: .5; }
+`,
+  },
+
+  {
+    name: "Dropdown",
+    cls: "m-dropdown",
+    group: "Forms",
+    summary: "A picker with grouped options that opens downward, caps its height, and scrolls inside.",
+    variants: { part: ["button", "panel", "group", "option"], state: ["picked", "later"] },
+    notes: [
+      "⚠ THIS EXISTS BECAUSE A NATIVE <select> CANNOT BE MADE TO BEHAVE. Its popup is drawn by the operating system: it will not take a font, a colour, a corner or a max-height, and the browser decides whether it opens up or down. On the form page the question-type picker had thirteen options in six groups and opened UPWARD off the top of the window, in system chrome that looked nothing like the rest of the app. None of that is fixable with CSS on the select.",
+      "Opens DOWN, always, and caps at min(320px, 50vh) with the list scrolling inside. Predictable beats clever: a picker that sometimes flips is a picker you have to look for.",
+      "__opt--later is for an option that is named but not built yet. It is shown, greyed and unselectable, with the word 'later' after it — a picker that grows from three entries to thirteen is a redesign, and one that shows all thirteen from the start is not.",
+      "Escape closes it and a click outside closes it. Both are the caller's to wire; this is CSS.",
+      "It needs an ancestor that does not clip. f-pane carries overflow:visible for exactly this.",
+    ],
+    examples: [
+      '<div class="m-dropdown"><button class="m-dropdown__button">Short answer<span class="material-symbols-outlined">expand_more</span></button><div class="m-dropdown__panel"><div class="m-dropdown__group">Text</div><button class="m-dropdown__opt m-dropdown__opt--picked">Short answer</button></div></div>',
+    ],
+    css: `
+.m-dropdown { position: relative; display: block; }
+.m-dropdown__button {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
+  width: 100%; min-height: 48px; padding: 0 var(--space-base) 0 var(--space-sm);
+  background: var(--surface); border: 1px solid var(--outline-variant);
+  border-radius: var(--radius); cursor: pointer;
+  font-family: var(--font-sans); font-size: 15px; color: var(--on-surface); text-align: left;
+  transition: background-color var(--duration) var(--ease-standard);
+}
+.m-dropdown__button:hover { background: var(--surface-container-low); }
+.m-dropdown__button:focus-visible { outline: 2px solid var(--m-focus-ring); outline-offset: 2px; }
+.m-dropdown__button .material-symbols-outlined { font-size: 20px; color: var(--on-surface-variant); flex: 0 0 auto; }
+.m-dropdown__panel {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 40;
+  max-height: min(320px, 50vh); overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--space-xs);
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant); border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+.m-dropdown__group {
+  padding: var(--space-base) var(--space-base) var(--space-xs);
+  font-family: var(--font-sans); font-size: var(--label-xs-size); font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant);
+}
+.m-dropdown__opt {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
+  width: 100%; padding: 9px var(--space-base);
+  background: transparent; border: 0; border-radius: var(--radius-sm); cursor: pointer;
+  font-family: var(--font-sans); font-size: 15px; color: var(--on-surface); text-align: left;
+  transition: background-color var(--duration) var(--ease-standard);
+}
+.m-dropdown__opt:hover:not(:disabled) { background: var(--surface-container-low); }
+.m-dropdown__opt:focus-visible { outline: 2px solid var(--m-focus-ring); outline-offset: -2px; }
+.m-dropdown__opt--picked { background: var(--primary-fixed); color: var(--primary); font-weight: 600; }
+.m-dropdown__opt:disabled { color: var(--outline); cursor: default; }
+.m-dropdown__later {
+  flex: 0 0 auto;
+  font-size: var(--label-xs-size); font-weight: 600; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--outline);
+}
 `,
   },
 

@@ -44,7 +44,6 @@ function formPage() {
         get isBallot() { return this.form && FormsCore.isBallot(this.form); },
         get settings() { return FormsCore.settingsFor(this.form ? this.form.rung : 'member'); },
         get liveRungs() { return FormsCore.RUNGS_LIVE; },
-        get questionTypes() { return FormsCore.QUESTION_TYPES; },
 
         get badges() {
             if (!this.form) return [];
@@ -209,6 +208,24 @@ function formPage() {
         },
 
         hasOptions(type) { return FormsCore.hasOptions(type); },
+
+        // The type picker's own vocabulary. Derived from FormsCore rather than
+        // listed here, so the day a type goes live the picker follows without
+        // anybody remembering to edit a second list.
+        get typeGroups() {
+            const seen = [];
+            FormsCore.QUESTION_TYPES.forEach(t => { if (!seen.includes(t.group)) seen.push(t.group); });
+            return seen;
+        },
+
+        typesIn(group) {
+            return FormsCore.QUESTION_TYPES.filter(t => t.group === group);
+        },
+
+        typeLabel(id) {
+            const t = FormsCore.questionType(id);
+            return t ? t.label : 'Short answer';
+        },
 
         metaFor(q) {
             const t = FormsCore.questionType(q.type);

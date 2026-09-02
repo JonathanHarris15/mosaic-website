@@ -104,6 +104,7 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 - **FormPane** `.f-pane` — A titled panel with a head, a body, and a row of badges saying what the thing inside it is.
 - **QuestionEditor** `.f-qrow` — A question on a form being built — a row when it is shut, a panel when it is open.
 - **SettingBlock** `.f-set` — A group of settings that constrain each other, each carrying its own reason.
+- **Dropdown** `.m-dropdown` — A picker with grouped options that opens downward, caps its height, and scrolls inside.
 - **OptionCard** `.m-option` — One choice on a form somebody is answering, as a card you tap rather than a radio you aim at.
 - **SearchBar** `.m-search` — An Input with a leading search glyph and a clear button that only appears once there is something to clear.
 - **Segmented** `.m-seg` — Two to four named choices with one of them chosen, all visible at once.

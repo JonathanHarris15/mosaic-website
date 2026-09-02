@@ -219,17 +219,39 @@
                                             <input type="text" class="m-input" placeholder="Ask the question" x-model="q.text" @input="touch()" />
 
                                             <div class="fp-row">
-                                                <span class="m-select-wrap" style="flex:0 0 240px">
-                                                    <select class="m-select" x-model="q.type" @change="onTypeChange(q)">
-                                                        <template x-for="g in ['Text','Choice','Number','When','Attach','From the app']" :key="g">
-                                                            <optgroup :label="g">
-                                                                <template x-for="t in questionTypes.filter(x => x.group === g)" :key="t.id">
-                                                                    <option :value="t.id" :disabled="!t.live" x-text="t.live ? t.label : t.label + ' — later'"></option>
+                                                <!-- Not a <select>. Its popup is drawn by the OS:
+                                                     it takes no styling, no max-height, and the
+                                                     browser decides whether it opens up or down —
+                                                     which here meant thirteen options opening
+                                                     upward off the top of the window. -->
+                                                <div class="m-dropdown" style="flex:0 0 260px"
+                                                     x-data="{ open: false }"
+                                                     @click.outside="open = false"
+                                                     @keydown.escape.window="open = false">
+                                                    <button type="button" class="m-dropdown__button"
+                                                            :aria-expanded="open" aria-haspopup="listbox"
+                                                            @click="open = !open">
+                                                        <span x-text="typeLabel(q.type)"></span>
+                                                        <span class="material-symbols-outlined" x-text="open ? 'expand_less' : 'expand_more'"></span>
+                                                    </button>
+                                                    <div class="m-dropdown__panel" role="listbox" x-show="open" x-transition.opacity.duration.120ms>
+                                                        <template x-for="g in typeGroups" :key="g">
+                                                            <div>
+                                                                <div class="m-dropdown__group" x-text="g"></div>
+                                                                <template x-for="t in typesIn(g)" :key="t.id">
+                                                                    <button type="button" class="m-dropdown__opt"
+                                                                            role="option" :aria-selected="q.type === t.id"
+                                                                            :class="q.type === t.id ? 'm-dropdown__opt--picked' : ''"
+                                                                            :disabled="!t.live"
+                                                                            @click="q.type = t.id; onTypeChange(q); open = false">
+                                                                        <span x-text="t.label"></span>
+                                                                        <span class="m-dropdown__later" x-show="!t.live">later</span>
+                                                                    </button>
                                                                 </template>
-                                                            </optgroup>
+                                                            </div>
                                                         </template>
-                                                    </select>
-                                                </span>
+                                                    </div>
+                                                </div>
                                                 <label class="m-check"><input type="checkbox" x-model="q.required" @change="touch()" /><span>Needed</span></label>
                                             </div>
 
