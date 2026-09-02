@@ -64,5 +64,10 @@ functions/.env.*
 # the ticket skills leave behind as they plan and implement. They are a record
 # of how a ticket was talked through, not part of the app, and they change every
 # time anything touches the board. Ignored so they stop showing up as untracked
-# noise in every status.
-.board/
+# noise in every status. Its README stays: it explains what the directory is,
+# and that the logs in it are safe to delete.
+#
+# The CONTENTS are ignored rather than the directory, because git cannot
+# re-include a file inside an excluded directory.
+.board/conversations/*
+!.board/conversations/README.md
