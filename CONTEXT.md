@@ -815,8 +815,16 @@ _Avoid_: opt-in, subscription, notification settings
 ## Forms and Registrations — MS-173
 
 ### Form Template
-The definition of a form: a title and an ordered set of sections and questions, each question carrying a response type and optionally **required**. Built and owned by **editors and above**, in the Forms & Registrations library, sorted into [[Folder]]s the way the [[Document Library]] already is. A template is never the thing somebody fills in — it is what the filled-in thing is made from.
+The definition of a form: a title and an ordered set of sections and questions, each question carrying a response type and optionally **required**. Built and owned by **editors and above**, in the [[Forms library]]. A template is never the thing somebody fills in — it is what the filled-in thing is made from.
+- **The title is capped at 90 characters.** Whoever opens the link reads it first, and it has to survive a phone. The cap is in the model, not in the text box.
+- **Questions stay editable after publishing**, because a sign-up whose wording cannot be fixed is worse than one that changes under you. But editing a form that already has [[Response]]s **says so before it saves**, and a question carrying answers is never deleted — it is retired, so the tally it already gathered survives. There is no template versioning: an edit does not migrate answers already given.
 _Avoid_: form (unqualified — the template is what is built, a [[Form Document]] and a [[Response]] are what it makes), survey, questionnaire
+
+### Forms library
+The page the [[Form Template]]s live on, and **a place you navigate into rather than a list you pick from** ([ADR 0053](docs/adr/0053-the-forms-library-is-a-place-you-navigate-not-a-pane-you-pick-from.md)). A full-width list; opening a form goes to the form's own page carrying its questions, its settings and its responses. Modelled on the [[Document Library]], which is the closest sibling this feature has — not on the [[Roles Manager]]'s split pane, which cannot hold a folder tree beside an editor and would have to be thrown away the moment folders arrive.
+- **Folders arrive with MS-361.** Until then the breadcrumb reads `Forms` and nothing else, because there is nowhere yet to go.
+- Carries a **search across every form**, and a **hide-closed** toggle that is **on by default** — a [[Closed]] form is a record, and this page is a working list. What is folded away says so, and says the links still work.
+_Avoid_: forms manager, forms dashboard, the forms pane
 
 ### Form Mode
 What a [[Form Template]] produces, chosen when the template is made. The spine of MS-173, and the reason several settings exist on one side of it and are meaningless on the other.
@@ -826,13 +834,17 @@ _Avoid_: form type, template kind, output type
 
 ### Response
 One person's answers to a `responses`-mode [[Form Template]]. Counted on the **Responses tab**; never shown to the person answering (see [[Answering rung]]). Distinct from a [[Form Document]], which is a record rather than a data point.
+- **A Response may be partial.** Only *required* questions must be answered, so "four of five questions" is an ordinary Response and not a broken one.
+- **The Responses tab changes shape with [[Attribution]].** An anonymous form has no people to list, so it leads with the per-question tally. An attributed form leads with **who answered**, one row each, opened one at a time — two answers are a list of people, not a chart — and the tally sits a tab away.
+- **An anonymous answer's handle is positional, never chronological** ([ADR 0052](docs/adr/0052-a-secret-ballot-keeps-two-lists-that-cannot-be-joined.md)). Answers are read back in a stable shuffle keyed by the form, so "answer 6" means the same thing to two elders reading at once and says nothing about when it arrived. **No timestamp is shown against an anonymous answer at all** — not a date, not "3 days ago". An attributed answer keeps its timestamps; it already says who gave it.
 _Avoid_: submission, entry, result
 
 ### Answering rung
 Who may answer a [[Form Template]] — `public`, `member`, `editor`, `elder` — reusing the [[Event visibility]] ladder rather than inventing a second one. **`public` is the only rung that needs no account**, because proving you are a member requires one; "is sign-in required" is therefore not a separate switch, it is read off the rung.
 - **A `public` form is link-only and unlisted** ([ADR 0051](docs/adr/0051-a-public-form-is-served-and-answered-through-one-closed-door.md)). You can open a form whose link you were sent; you cannot ask what forms exist, and an id is not guessable.
 - **A signed-out person never touches Firestore.** One Cloud Function hands out the questions and takes the answer, and `firestore.rules` gains nothing — the public path is a door with somebody standing in it, not a hole in the wall. Public submissions pass an invisible bot check (App Check).
-_Avoid_: visibility (that is [[Event visibility]]'s word for an Event), audience, access level
+- **A form's link carries a random token, never its title.** `/f/7bQm2xK9vRt4Lp8sYw3NcF` — 128 bits, base58, stable for the life of the form. A readable slug like `/f/monday-food` is a *guessable* slug, and derivable from the form's own name, which is the enumeration the closed door exists to prevent. The form page carries a **copy-link row**, because you come back on Thursday and want the link again.
+_Avoid_: visibility (that is [[Event visibility]]'s word for an Event), audience, access level, slug
 
 ### Attribution
 Separately from the [[Answering rung]], whether a [[Response]] records **who** gave it. On a signed-in rung that means stamping the [[Person]]. On `public` there is no Person to stamp, so a name is a *question on the form* like any other — the form asks, rather than Mosaic knowing.

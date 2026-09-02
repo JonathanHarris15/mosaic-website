@@ -114,6 +114,7 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 - **Badge** `.m-badge` — A small rectangular tag: a theological theme, a ministry area, a state.
 - **Avatar** `.m-avatar` — A Person's Directory Photo, or their initials when there is none.
 - **ScriptureBlock** `.m-scripture` — A quoted passage set in EB Garamond with a gold hairline down its edge, and the reference beneath in tracked caps.
+- **Type** `.m-body-md` — The type scale, as classes.
 - **Divider** `.m-divider` — A warm hairline between things.
 - **Token** `.m-token` — A name, and the control that takes it off the list.
 - **RuleRow** `.m-rule-row` — One rule, read back as a sentence in serif, with whatever it is made of underneath.

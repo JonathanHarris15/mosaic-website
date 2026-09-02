@@ -80,3 +80,27 @@ to disagree. The rung is checked inside the function for everybody.
 
 **App Check must be configured before a public form ships**, not after. It is
 listed as an acceptance criterion on MS-360 rather than left as ops work.
+
+## Refinement — what a form's link actually looks like (2026-09-02)
+
+The MS-360 design came back with `mosaicchurch.app/f/monday-food`, and it was
+right about the need and wrong about the value.
+
+The need is real: a link that goes in a text message to the whole church is a
+thing people see, and an opaque blob looks like phishing. The design also added
+a copy-link row on the form page, which is plainly correct — you come back on
+Thursday and want the link again.
+
+But a readable slug is a **guessable** slug. Walk `/f/` with a wordlist and you
+find forms nobody sent you, which is the enumeration this ADR exists to prevent.
+`monday-food` is worse than a guess — it is derivable from the form's own title.
+
+**So: the affordance is taken, the value is not.** A form's link carries a
+high-entropy random token (128 bits, base58, e.g. `/f/7bQm2xK9vRt4Lp8sYw3NcF`) —
+unguessable, unenumerable, and stable for the life of the form. The copy-link
+row stays, and the token is what it copies.
+
+A vanity slug is not forbidden forever, but it would have to be *opt-in per
+form and clearly labelled as public*, because choosing one is choosing to be
+findable. That is a product decision nobody has made, and it must never be the
+default that a form's own title quietly becomes its address.

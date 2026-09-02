@@ -565,6 +565,66 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
   },
 
   {
+    name: "Type",
+    cls: "m-body-md",
+    group: "Display",
+    summary: "The type scale, as classes. Six roles over the three families — display for the church's own voice, serif for headings, sans for everything you read.",
+    variants: { role: ["display-lg", "headline-lg", "headline-md", "body-lg", "body-md", "label-md"] },
+    notes: [
+      "⚠ These classes existed in build/design-tokens/typography.css — the file we PUSH to Claude Design — and nowhere the app could reach. The custom properties were spliced into the app's stylesheet; the classes wrapping them were not. So the design system documented a scale the app could not use, and a design composed against it came back full of classes that resolve to nothing in a browser. Found on the MS-360 pull (2026-09-02), where the type would have looked right in the design and silently fallen back to browser defaults in the page.",
+      "They live here now because this file is the one source of m-* classes and generates into BOTH public/mosaic.css and public/mobile/tokens.css. Adding them to the token file again would recreate the split.",
+      "Purely additive — no existing page used one, so nothing re-renders.",
+      "m-label-md uppercases. It is the small caps label above a field, not a <label> element's default styling; m-label is the form component and a different thing.",
+    ],
+    examples: [
+      '<h1 class="m-display-lg">Mosaic</h1>',
+      '<h2 class="m-headline-lg">Inductive Bible Study</h2>',
+      '<p class="m-body-md">A box that grows as they type.</p>',
+      '<span class="m-label-md">Answering rung</span>',
+    ],
+    css: `
+.m-display-lg {
+  font-family: var(--font-display);
+  font-size: var(--display-lg-size);
+  line-height: var(--display-lg-line);
+  letter-spacing: var(--display-lg-spacing);
+  font-weight: var(--display-lg-weight);
+  color: var(--primary);
+}
+.m-headline-lg {
+  font-family: var(--font-serif);
+  font-size: var(--headline-lg-size);
+  line-height: var(--headline-lg-line);
+  font-weight: var(--headline-lg-weight);
+}
+.m-headline-md {
+  font-family: var(--font-serif);
+  font-size: var(--headline-md-size);
+  line-height: var(--headline-md-line);
+  font-weight: var(--headline-md-weight);
+}
+.m-body-lg {
+  font-family: var(--font-sans);
+  font-size: var(--body-lg-size);
+  line-height: var(--body-lg-line);
+}
+.m-body-md {
+  font-family: var(--font-sans);
+  font-size: var(--body-md-size);
+  line-height: var(--body-md-line);
+}
+.m-label-md {
+  font-family: var(--font-sans);
+  font-size: var(--label-md-size);
+  line-height: var(--label-md-line);
+  letter-spacing: var(--label-md-spacing);
+  font-weight: var(--label-md-weight);
+  text-transform: uppercase;
+}
+`,
+  },
+
+  {
     name: "Divider",
     cls: "m-divider",
     group: "Display",

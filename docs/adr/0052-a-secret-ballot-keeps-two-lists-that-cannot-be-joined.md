@@ -67,3 +67,32 @@ comment.
 **It only applies to Responses.** A Form Document is filled in by a named person
 as their own record — there is no ballot and no ledger, and the same template
 is deliberately used many times by the same person.
+
+## Refinement — how an anonymous answer is referred to (2026-09-02)
+
+The MS-360 design labelled anonymous free-text answers `Answer 6 · 31 Aug`, and
+defended it in its own notes as "the only handle an anonymous form has."
+
+The need is genuine — two elders discussing a poll need to be able to say *which*
+answer — and this ADR did not supply one, which is why the design invented one.
+
+The invention is nonetheless the exact leak this decision closes. **Arrival order
+plus a date is the correlation channel**, and it does not need a stored field to
+be one: read the ledger's entries against answers numbered by arrival and the
+ballot comes apart. Saying "answers are not stored in submission order" while the
+screen prints the submission order is a promise broken in the UI rather than the
+schema, which is harder to spot and no less broken.
+
+**So: a handle exists, and it is positional, not chronological.**
+
+- Answers are read back in a **stable shuffle** keyed by the form id — the same
+  order every time the tab is opened, by any reader, so "answer 6" means the same
+  thing to two people looking at once; unrelated to the order they arrived in.
+- The number shown is the answer's **position in that shuffle**, assigned at read
+  time. It is a label on a screen, not a field on a record.
+- **No timestamp is shown against an anonymous answer at all.** Not a date, not a
+  relative "3 days ago". The form's own open and close dates are the only time
+  anybody needs, and they belong to the form rather than to a person's answer.
+
+An attributed form keeps its timestamps. There is nothing to protect there — the
+answer already says who gave it.
