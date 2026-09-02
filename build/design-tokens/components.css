@@ -159,6 +159,36 @@ textarea.m-input { height: auto; min-height: 96px; padding: 12px 14px; line-heig
 .m-check input:disabled { cursor: not-allowed; }
 .m-check:has(input:disabled) { opacity: .5; cursor: not-allowed; }
 
+/* OptionCard — One choice on a form somebody is answering, as a card you tap rather than a radio you aim at. */
+.m-option {
+  display: flex; align-items: center; gap: var(--space-base);
+  min-height: 52px; padding: 11px var(--space-sm);
+  background: var(--surface); border: 1px solid var(--outline-variant);
+  border-radius: var(--radius); cursor: pointer;
+  font-family: var(--font-sans); font-size: 16px; line-height: 1.35;
+  color: var(--on-surface);
+  transition: background-color var(--duration) var(--ease-standard);
+}
+.m-option:hover { background: var(--surface-container-low); }
+.m-option:focus-within { outline: 2px solid var(--m-focus-ring); outline-offset: 2px; }
+.m-option input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.m-option__mark {
+  display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; flex: 0 0 auto;
+  border: 1.5px solid var(--outline); border-radius: var(--radius-full);
+}
+.m-option__mark::after { content: ""; width: 10px; height: 10px; border-radius: var(--radius-full); background: transparent; }
+.m-option--picked {
+  background: var(--primary-fixed); border: 1.5px solid var(--tertiary); font-weight: 500;
+}
+.m-option--picked .m-option__mark { border-color: var(--primary); }
+.m-option--picked .m-option__mark::after { background: var(--primary); }
+.m-option__said {
+  margin-left: auto; flex: 0 0 auto;
+  font-size: var(--label-xs-size); font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--primary);
+}
+
 /* SearchBar — An Input with a leading search glyph and a clear button that only appears once there is something to clear. */
 .m-search { position: relative; display: flex; align-items: center; }
 .m-search > .material-symbols-outlined {

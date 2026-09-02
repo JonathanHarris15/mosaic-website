@@ -126,6 +126,17 @@ const NO_BAR_ON_PURPOSE = {
     'relations-viewer.html':
         'MS-233. A tool of its own rather than a page of the app; its bar ' +
         'carries a search and the counts, and the account was moved into it',
+    'form-answer.html':
+        'MS-371. The one page a signed-out stranger ever reaches, and for ' +
+        'most people the only thing they ever see of Mosaic — a link from a ' +
+        'text message asking them to sign up for a bible study. The shared ' +
+        'bar carries a way Home, an account and a log out, and all three are ' +
+        'answers to questions this reader does not have: there is no Home ' +
+        'they belong to, no account they hold, and nothing to log out of. It ' +
+        'wears the church mark and name instead, which is the only chrome ' +
+        'that earns its place — somebody deciding whether to type a phone ' +
+        'number in needs to know whose form this is. It also loads no ' +
+        'Firestore client at all (ADR-0051), and the shared bar brings one',
     'kiosk.html':
         'MS-321. A desk in a foyer rather than a page of the app. The one ' +
         'thing it should say to somebody walking up to it is that they are ' +

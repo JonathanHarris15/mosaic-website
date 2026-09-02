@@ -60,8 +60,16 @@ function rankSatisfies(rung, rank) {
 function answerersView(form) {
   const view = {
     title: form.title,
+    description: form.description || "",
     questions: FormsCore.askedQuestions(form).map((q) => {
-      const out = {id: q.id, type: q.type, text: q.text, required: q.required};
+      const out = {
+        id: q.id,
+        type: q.type,
+        text: q.text,
+        hint: q.hint || "",
+        placeholder: q.placeholder || "",
+        required: q.required,
+      };
       if (FormsCore.hasOptions(q.type)) out.options = (q.options || []).slice();
       return out;
     }),

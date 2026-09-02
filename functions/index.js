@@ -2796,6 +2796,14 @@ exports.publicForm = onCall(
       log(`publicForm: answer recorded for ${formId}` +
         (oneEach ? " (one each)" : "") +
         (verdict.replaces ? " (replaced)" : ""));
-      return {ok: true};
+
+      // The afterword — "what happens next" — is the ONE thing that comes back
+      // with the thank-you, and it is prose the author wrote in advance rather
+      // than anything about this answer or the ones around it.
+      return {
+        ok: true,
+        afterword: (form && form.afterword) || "",
+        replaced: !!verdict.replaces,
+      };
     },
 );

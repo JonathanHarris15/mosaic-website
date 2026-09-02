@@ -35,6 +35,26 @@
     const MAX_QUESTION_LENGTH = 300;
     const MAX_OPTION_LENGTH = 200;
 
+    // ── The prose an author writes around the questions ──────────────────────
+    //
+    // Two fields, and deliberately not three. The MS-371 design drew a
+    // description at the top, a footnote at the bottom AND a what-happens-next
+    // on the thank-you; three prose boxes is a builder nobody fills in, so the
+    // footnote folds into the description.
+    //
+    //   description — read BEFORE answering. What this is, what it costs, when
+    //                 it closes, who is running it.
+    //   afterword   — read AFTER answering, under "What happens next". The one
+    //                 thing somebody wants to know once they have committed.
+    const MAX_DESCRIPTION_LENGTH = 400;
+    const MAX_AFTERWORD_LENGTH = 300;
+
+    // Per question. A hint sits under the box and explains why the question is
+    // being asked; a placeholder sits inside it and shows the shape of an
+    // answer. Both are short on purpose — they are read on a phone, standing up.
+    const MAX_HINT_LENGTH = 140;
+    const MAX_PLACEHOLDER_LENGTH = 80;
+
     // ── Question types ───────────────────────────────────────────────────────
     //
     // Three work today and ten do not. They are ALL named here, grouped, with
@@ -199,13 +219,19 @@
         return normaliseTitle(title) === DEFAULT_TITLE;
     }
 
+    function trimTo(value, max) {
+        return String(value == null ? '' : value).trim().slice(0, max);
+    }
+
     function buildQuestion(spec) {
         const s = spec || {};
         const type = isLiveType(s.type) ? s.type : 'short_text';
         const q = {
             id: String(s.id || ''),
             type: type,
-            text: String(s.text == null ? '' : s.text).trim().slice(0, MAX_QUESTION_LENGTH),
+            text: trimTo(s.text, MAX_QUESTION_LENGTH),
+            hint: trimTo(s.hint, MAX_HINT_LENGTH),
+            placeholder: trimTo(s.placeholder, MAX_PLACEHOLDER_LENGTH),
             required: s.required === true,
             // A question that has gathered answers is RETIRED, never deleted —
             // the tally it already holds would otherwise lose its label. A
@@ -235,6 +261,8 @@
 
         const record = {
             title: normaliseTitle(s.title),
+            description: trimTo(s.description, MAX_DESCRIPTION_LENGTH),
+            afterword: trimTo(s.afterword, MAX_AFTERWORD_LENGTH),
             questions: (Array.isArray(s.questions) ? s.questions : []).map(buildQuestion),
             rung: rung,
             // Forced values win over whatever was passed. A form saved as
@@ -408,6 +436,10 @@
         MAX_TITLE_LENGTH,
         MAX_QUESTION_LENGTH,
         MAX_OPTION_LENGTH,
+        MAX_DESCRIPTION_LENGTH,
+        MAX_AFTERWORD_LENGTH,
+        MAX_HINT_LENGTH,
+        MAX_PLACEHOLDER_LENGTH,
         DEFAULT_TITLE,
         QUESTION_TYPES,
         RUNGS,

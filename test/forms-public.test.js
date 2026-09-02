@@ -51,7 +51,11 @@ test('an answerer gets the questions and nothing else about the record', () => {
     });
     const served = fp.whatToServe(form, stranger, TODAY);
     assert.ok(served.ok);
-    assert.deepStrictEqual(Object.keys(served.view).sort(), ['attribution', 'questions', 'rung', 'title']);
+    // An exact list on purpose: a new field reaching an answerer should have to
+    // be added here deliberately, not arrive because somebody widened a spread.
+    assert.deepStrictEqual(Object.keys(served.view).sort(), ['attribution', 'description', 'questions', 'rung', 'title']);
+    assert.deepStrictEqual(Object.keys(served.view.questions[0]).sort(),
+        ['hint', 'id', 'placeholder', 'required', 'text', 'type']);
     const json = JSON.stringify(served.view);
     assert.ok(!json.includes('createdBy'), 'who wrote it went out with the questions');
     assert.ok(!json.includes('Jonathan'), 'an author name reached an answerer');

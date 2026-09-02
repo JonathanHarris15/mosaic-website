@@ -101,6 +101,7 @@ Each component has a `.prompt.md` (what it is, its variants, a worked example) a
 - **Input** `.m-input` — A single-line text field, its label, and its error.
 - **Select** `.m-select` — A native dropdown matched to Input, with an inline chevron drawn as a Material Symbol rather than a bundled SVG.
 - **Checkbox** `.m-check` — A checkbox and its label, as one target.
+- **OptionCard** `.m-option` — One choice on a form somebody is answering, as a card you tap rather than a radio you aim at.
 - **SearchBar** `.m-search` — An Input with a leading search glyph and a clear button that only appears once there is something to clear.
 - **Segmented** `.m-seg` — Two to four named choices with one of them chosen, all visible at once.
 - **UnitField** `.m-unitfield` — A number and the unit it is in, as one field.

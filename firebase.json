@@ -8,6 +8,13 @@
         "**/.*",
         "**/node_modules/**"
       ],
+      "rewrites": [
+        {
+          "//": "A form's link (MS-360). /f/<token> is what goes in a text message to the whole church, and it has to look like something a person would tap — but the token is 128 bits of base58 and never the form's title, because a readable slug is a guessable one and would make every public form enumerable (ADR-0051). The page reads the token off the path; ?f=<token> still works so links copied from an older build do not break.",
+          "source": "/f/**",
+          "destination": "/form-answer.html"
+        }
+      ],
       "headers": [
         {
           "//": "Firebase's default is an hour's cache on everything. Nothing here is content-hashed — calendar.js is always calendar.js — so for an hour after a deploy a browser can run the NEW page against the OLD script. Alpine swallows a binding to a member the old script never had, so the symptom is a screen that renders blank rather than an error: exactly the bug that hid this. ⚠ THIS COSTS A FULL RE-DOWNLOAD PER FILE, NOT A 304 — see the vendor block below. It is still right for these files, which genuinely can go stale; the way out is giving them a name that changes when they do, and then they can be cached like everything else.",
