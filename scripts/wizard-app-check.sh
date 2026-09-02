@@ -193,7 +193,7 @@ ENV_FILE=".app-check.local"
 PROJECT_ID="mosaic-hymn-database"
 CONFIG_FILE="public/app-check-config.js"
 
-TOTAL_STAGES=5
+TOTAL_STAGES=6
 
 banner "App Check for Mosaic's public forms"
 
@@ -216,24 +216,47 @@ say "You will need about five minutes and a browser signed in to Firebase."
 pause "Ready?"
 
 # ── 2 ─────────────────────────────────────────────────────────────────────
-stage "Register the website with App Check"
-say "Opening App Check for the $PROJECT_ID project."
-open_url "https://console.firebase.google.com/project/${PROJECT_ID}/appcheck/apps"
+stage "Make the reCAPTCHA key FIRST, in Google Cloud"
+warn "Firebase does NOT create this key. Its App Check screen only has a box"
+warn "to paste one into, so going there first leaves you stuck on a Save"
+warn "button that will not go."
 say ""
-step "Find the WEB app in the list (not iOS, not Android)."
-step "Choose to register it, and pick reCAPTCHA as the provider."
-note "Firebase offers reCAPTCHA Enterprise and the older reCAPTCHA v3. Either"
-note "works here. Enterprise is the one Google recommends; v3 is fewer clicks."
-note "The console walks you through creating the key either way."
-step "When it asks which domains the key is for, include the church's live"
-step "domain AND localhost, so you can test before you deploy."
+say "Opening reCAPTCHA Enterprise for the $PROJECT_ID project."
+open_url "https://console.cloud.google.com/security/recaptcha?project=${PROJECT_ID}"
 say ""
-warn "Console labels move. If the wording differs, follow the intent: register"
-warn "the web app, and end up holding a reCAPTCHA SITE key."
-pause "Registered, and you can see a site key?"
+step "If it offers to enable the reCAPTCHA Enterprise API, do that first."
+step "Create key."
+step "Display name: anything. mosaic-app-check does."
+step "Application type: WEBSITE."
+step "Domains: the church's live domain, plus localhost so you can test."
+step "Turn OFF the checkbox challenge — App Check wants the invisible,"
+step "score-based kind, not the 'I am not a robot' tickbox."
+step "Create, then copy the Key ID. It starts 6L."
+say ""
+note "Billing: reCAPTCHA Enterprise needs a billing account on the project."
+note "This one has one already — v2 Cloud Functions require the Blaze plan —"
+note "so it should not ask. If it does, stop and say so."
+note ""
+note "Fallback: App Check also offers a plain 'reCAPTCHA' provider (the older"
+note "v3). Its keys come from google.com/recaptcha/admin instead, need no"
+note "billing, and are fine here. Take it if Enterprise fights you."
+pause "Got a key starting 6L?"
 
 # ── 3 ─────────────────────────────────────────────────────────────────────
-stage "Capture the site key"
+stage "Hand the key to Firebase App Check"
+open_url "https://console.firebase.google.com/project/${PROJECT_ID}/appcheck/apps"
+say ""
+step "Find the WEB app in the list — hymn_database. It will say Unregistered."
+step "Expand reCAPTCHA Enterprise and paste the key you just made."
+step "Leave Token time to live at 1 hour."
+step "Save."
+say ""
+warn "Console labels move. If the wording differs, follow the intent: the web"
+warn "app ends up Registered, against a key you made in the previous stage."
+pause "Registered?"
+
+# ── 4 ─────────────────────────────────────────────────────────────────────
+stage "Save the key into the repo"
 say "The site key is public — it ships in every browser that loads the page,"
 say "exactly like the Firebase apiKey already in auth.js. It goes into the"
 say "repo, and it is NOT a secret."
@@ -261,7 +284,7 @@ else
 fi
 pause
 
-# ── 4 ─────────────────────────────────────────────────────────────────────
+# ── 5 ─────────────────────────────────────────────────────────────────────
 stage "A debug token, so you can test before it is live"
 say "On localhost the browser cannot prove it is the real site, so App Check"
 say "would refuse you too. A debug token is how Google lets a developer"
@@ -277,7 +300,7 @@ warn "A debug token is a real bypass. Never paste one into a page, a commit,"
 warn "or a screenshot — it belongs only in the Firebase console."
 pause "Done, or skipping"
 
-# ── 5 ─────────────────────────────────────────────────────────────────────
+# ── 6 ─────────────────────────────────────────────────────────────────────
 stage "Deploy, and check it actually works"
 say "The server has enforced App Check since MS-367. It is the browser half"
 say "that was missing, and it is now in the repo — so this deploy is what"
