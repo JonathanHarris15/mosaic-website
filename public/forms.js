@@ -119,17 +119,18 @@ function formsPage() {
 
         get visible() {
             const q = this.search.trim().toLowerCase();
-            return this.forms.filter(f => {
+            // Browsing shows this folder; searching reaches every one of them.
+            //
+            // WHICH forms count as being in this folder is the module's answer
+            // rather than this page's, because it is not a plain comparison: a
+            // form filed into a folder that has since gone comes back to the top
+            // level instead of disappearing (ADR-0054), and that rule written
+            // twice is a rule that can drift.
+            const here = q
+                ? this.forms
+                : FormFoldersCore.formsIn(this.forms, this.currentFolderId, this.folders);
+            return here.filter(f => {
                 if (this.hideClosed && this.isClosed(f)) return false;
-                // Searching reaches every folder; browsing shows this one. A
-                // form filed into a folder that has since gone comes back to
-                // the top level rather than disappearing (ADR-0054).
-                if (!q) {
-                    const filed = f.folderId || null;
-                    const known = filed && this.folders.some(x => x.id === filed);
-                    const where = known ? filed : null;
-                    if (where !== this.currentFolderId) return false;
-                }
                 if (!q) return true;
                 // Searching looks at the title AND the questions — you remember
                 // that you asked about childcare long after you have forgotten

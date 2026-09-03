@@ -835,9 +835,22 @@ It is also not numbered on the fill-in page, and does not count towards "9 quest
 
 _Avoid_: section (unqualified — it names a structure this does not have), group, page break
 
+### Form Folder
+A named place a [[Form Template]] can be filed in, in the [[Forms library]]. Folders nest to any depth. Editors and above may make, rename, move and delete them; nobody below may read them.
+
+**A form remembers its folder; a folder does not remember its forms** ([ADR 0054](docs/adr/0054-a-form-remembers-its-folder-a-folder-does-not-remember-its-forms.md)). This is the one place the Forms library deliberately parts company with the [[Document Library]] it is otherwise modelled on: that page keeps its whole folder tree in a **single record** and rewrites it whole, which is safe for a handful of elders and wrong here for two reasons.
+- The Forms library is open to **editors**, who are many. Two filing at the same moment would both write the whole tree, and the second would silently discard the first.
+- A form's id is a **public address**. A form that fell out of the shared tree would still be taking answers while nobody could find it to close it.
+
+So the library lists the `forms` collection exactly as it did before folders existed. **Filing changes where a form is drawn, never whether it is**: a form nobody filed sits at the top level, and one whose folder has been deleted comes back there.
+
+On screen it is the Document Library's behaviour, deliberately — inline creation with no dialog, drag to move with a **"Move to…"** fallback, rename in place, and the one confirmation on the page before a full folder goes, **naming how many forms go with it at every depth**. The count is what makes the question answerable.
+
+_Avoid_: form tree, form structure (both name the storage this deliberately is not)
+
 ### Forms library
 The page the [[Form Template]]s live on, and **a place you navigate into rather than a list you pick from** ([ADR 0053](docs/adr/0053-the-forms-library-is-a-place-you-navigate-not-a-pane-you-pick-from.md)). A full-width list; opening a form goes to the form's own page carrying its questions, its settings and its responses. Modelled on the [[Document Library]], which is the closest sibling this feature has — not on the [[Roles Manager]]'s split pane, which cannot hold a folder tree beside an editor and would have to be thrown away the moment folders arrive.
-- **Folders arrive with MS-361.** Until then the breadcrumb reads `Forms` and nothing else, because there is nowhere yet to go.
+- **Folders arrived with MS-361.** The breadcrumb has depth, every level navigates, and every level takes a drop — dragging something onto `Forms` is how it comes back out of a folder. See [[Form Folder]].
 - Carries a **search across every form**, and a **hide-closed** toggle that is **on by default** — a [[Closed]] form is a record, and this page is a working list. What is folded away says so, and says the links still work.
 _Avoid_: forms manager, forms dashboard, the forms pane
 
