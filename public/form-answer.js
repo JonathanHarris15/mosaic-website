@@ -65,7 +65,23 @@
     // works and nothing is checked".
     const appCheckKey = (window.MOSAIC_APP_CHECK && window.MOSAIC_APP_CHECK.siteKey) || '';
     const appCheckKind = (window.MOSAIC_APP_CHECK && window.MOSAIC_APP_CHECK.provider) || 'enterprise';
-    if (appCheckKey) {
+
+    // ⚠ ACTIVATION NEEDS <body> TO EXIST, and failing that is not survivable.
+    // The reCAPTCHA provider appends its container to document.body. From
+    // <head> that is null, and it throws AFTER App Check has already recorded
+    // an "attestation is starting" promise that will now never resolve — so
+    // every later call waits for a token that is never coming. A hang, not an
+    // error, and a hang is the one failure this page cannot report.
+    //
+    // This script is loaded at the end of <body> so it cannot happen. The
+    // check is here so that if somebody ever moves it back, they get a loud
+    // refusal in the console instead of a spinner nobody can explain.
+    if (appCheckKey && !document.body) {
+        console.error(
+            'form-answer.js ran before <body> existed. App Check is NOT being ' +
+            'started, because starting it here hangs every call for ever. ' +
+            'Move this script back to the end of <body>.');
+    } else if (appCheckKey) {
         try {
             // ⚠ THE PROVIDER IS NAMED, NEVER INFERRED. activate() given a bare
             // string quietly builds a ReCaptchaV3Provider — and ours is an
@@ -90,6 +106,30 @@
     }
 
     const fns = firebase.app().functions('us-central1');
+
+    // ⚠ NOTHING ON THIS PAGE IS ALLOWED TO WAIT FOR EVER.
+    //
+    // The worst bug this page has had was not a crash — it was a wait. App
+    // Check failed to start in a way that left the callable waiting on a token
+    // that never arrived, so the page sat on its spinner with no error, no
+    // rejection and nothing to report. From the outside that is a blank page,
+    // and it took days to find precisely because nothing had gone "wrong".
+    //
+    // So every wait here has an end. A page that gives up and says so can be
+    // retried by whoever is looking at it; a page that hangs cannot, and it
+    // tells whoever is debugging it nothing at all. The cause of the next hang
+    // will be different — the symptom will not be silent.
+    function withTimeout(promise, ms, what) {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error(what)), ms);
+            promise.then(
+                v => { clearTimeout(timer); resolve(v); },
+                e => { clearTimeout(timer); reject(e); });
+        });
+    }
+
+    const CALL_TIMEOUT = 20000;   // a slow phone on mobile data, and then some
+    const AUTH_TIMEOUT = 8000;    // longer than a session ever takes to rehydrate
 
     // The form's id, from /f/<token> or ?f=<token>. Both work: the rewrite
     // gives the pretty one, and the query string is what a copied link from an
@@ -170,12 +210,18 @@
                 // read a members-only form as signed-out for anybody whose
                 // session had not yet rehydrated — they would be told to sign
                 // in while already signed in.
-                await new Promise(resolve => {
+                // ⚠ AND IF AUTH NEVER SETTLES, CARRY ON AS SIGNED OUT. The
+                // worst that costs a member is being shown the sign-in door
+                // they can already open. Waiting instead costs everybody the
+                // whole page.
+                await withTimeout(new Promise(resolve => {
                     const stop = firebase.auth().onAuthStateChanged(u => {
                         this.myName = (u && u.displayName) || '';
                         stop();
                         resolve();
                     });
+                }), AUTH_TIMEOUT, 'auth never settled').catch(e => {
+                    console.warn('Carrying on signed out:', e && e.message);
                 });
 
                 await this.ask({ op: 'fetch', formId: formId }, true);
@@ -192,7 +238,10 @@
 
             async ask(payload, isFetch) {
                 try {
-                    const res = await fns.httpsCallable('publicForm')(payload);
+                    const res = await withTimeout(
+                        fns.httpsCallable('publicForm')(payload),
+                        CALL_TIMEOUT,
+                        'the server did not answer in time');
                     this.settle(res.data || {}, isFetch);
                 } catch (e) {
                     // ⚠ WHAT THEY TYPED STAYS ON THE SCREEN. A network that

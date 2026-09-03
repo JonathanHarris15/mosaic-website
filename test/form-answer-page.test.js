@@ -18,7 +18,7 @@ function loadPage(reply, locationOver) {
 
     const sandbox = {
         console, Promise, Date, Object, Array, Math, String, Number, JSON,
-        Set, Map, encodeURIComponent, URLSearchParams, setTimeout,
+        Set, Map, encodeURIComponent, URLSearchParams, setTimeout, clearTimeout,
     };
     sandbox.window = sandbox;
     sandbox.globalThis = sandbox;

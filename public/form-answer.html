@@ -60,13 +60,14 @@
     <script src="/vendor/firebase/firebase-auth-compat.js"></script>
     <script src="/vendor/firebase/firebase-app-check-compat.js"></script>
     <script src="/vendor/firebase/firebase-functions-compat.js"></script>
-    <script src="/app-check-config.js"></script>
-    <script src="/forms-core.js"></script>
-    <script src="/form-answer.js"></script>
     <script defer src="/vendor/alpine-3.15.12.min.js"></script>
 </head>
 
-<body class="m-page" x-data="answerPage()" x-init="load()" x-cloak>
+<!-- data-state is the page saying out loud what it is doing. It costs nothing,
+     it is how the browser test knows the page arrived somewhere, and it is the
+     first thing to read in devtools when somebody reports a blank screen —
+     which is exactly what this page's worst bug looked like from outside. -->
+<body class="m-page" x-data="answerPage()" x-init="load()" :data-state="state" x-cloak>
 
     <!-- Whose form this is. First thing anybody sees, and the reason they
          believe the page enough to type a phone number into it. -->
@@ -314,5 +315,28 @@
         .fa-send__said { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0; font-size: 11.5px; line-height: 1.45; text-align: center; color: var(--on-surface-variant); }
         .fa-send__said .material-symbols-outlined { font-size: 15px; }
     </style>
+
+    <!--
+      ⚠ THESE THREE RUN AT THE END OF <body>, AND THAT POSITION IS THE FIX FOR A
+      REAL BUG — do not tidy them up into <head> with the SDKs.
+
+      App Check's reCAPTCHA provider appends its own container to
+      `document.body`. Run from <head>, `document.body` is null, so it throws —
+      but only AFTER App Check has stored an "attestation is starting" promise
+      that now never resolves. Every call then waits for a token that is never
+      coming: no error, no rejection, just a spinner for ever. It looks exactly
+      like a blank page.
+
+      Scripts here are classic (not deferred), so they execute during parsing
+      and therefore BEFORE the deferred Alpine in <head>. `answerPage` is
+      defined by the time Alpine looks for it, and `document.body` exists by
+      the time App Check looks for that. Both orderings are load-bearing.
+
+      Shipped once, on 2026-09-02. test/form-answer-browser.test.js is the
+      guard, and it uses a real browser because nothing less can catch this.
+    -->
+    <script src="/app-check-config.js"></script>
+    <script src="/forms-core.js"></script>
+    <script src="/form-answer.js"></script>
 </body>
 </html>

@@ -134,6 +134,41 @@ test('a failure before Alpine can still say something', () => {
         'the fatal block is hidden by the very x-cloak it needs to escape');
 });
 
+test('the page scripts load at the end of <body>, not in <head>', () => {
+    // ⚠ POSITION IS THE FIX FOR A REAL BUG, so it is pinned here as well as in
+    // the browser test — this one runs on every machine, Chrome or no Chrome.
+    //
+    // App Check's reCAPTCHA provider appends its container to document.body.
+    // From <head> that is null, and it throws AFTER App Check has stored a
+    // promise saying attestation is starting. Nothing ever resolves it, so the
+    // callable waits for a token that is never coming: no error, no rejection,
+    // a spinner for ever. It reads as a blank page and it took days to find.
+    const bodyAt = html.indexOf('<body');
+    assert.ok(bodyAt > 0, 'no <body> tag');
+    for (const src of ['/form-answer.js', '/forms-core.js', '/app-check-config.js']) {
+        const at = html.indexOf('src="' + src + '"');
+        assert.ok(at > bodyAt,
+            src + ' is loaded before <body> exists. App Check cannot start ' +
+            'there, and the way it fails is a hang rather than an error.');
+    }
+    // And Alpine must still come last, or it looks for answerPage() before the
+    // script that defines it has run.
+    assert.match(html, /<script defer src="\/vendor\/alpine-3\.15\.12\.min\.js">/,
+        'Alpine must stay deferred so it runs after the end-of-body scripts');
+});
+
+test('nothing on this page can wait for ever', () => {
+    // The failure that cost the most was not a crash but a WAIT. Both of the
+    // page's waits — the callable and the auth check — now end on their own,
+    // so the worst case is an apology with a Try again button rather than a
+    // spinner nobody can explain.
+    assert.match(js, /function withTimeout/, 'the timeout helper is gone');
+    assert.match(js, /withTimeout\(\s*\n?\s*fns\.httpsCallable/,
+        'the server call has no timeout, so a server that never answers hangs the page');
+    assert.match(js, /withTimeout\(new Promise\(resolve => \{\s*\n\s*const stop = firebase\.auth\(\)/,
+        'the auth wait has no timeout, so auth that never settles hangs the page');
+});
+
 test('[hidden] actually hides on this page', () => {
     // ⚠ The browser's own [hidden]{display:none} LOSES to any class that sets
     // display, and .fa-centred is display:flex. So the "This page did not
@@ -143,4 +178,14 @@ test('[hidden] actually hides on this page', () => {
     // page is lying about itself, and it hides the real fault underneath.
     assert.match(html, /\[hidden\]\s*\{\s*display:\s*none\s*!important/,
         'hidden is set on the fatal block but nothing makes it win over display:flex');
+});
+
+test('the page reports its own state to the DOM', () => {
+    // The browser test reads this, and so does anybody in devtools looking at
+    // a screen that appears blank. x-show is not a usable signal — Alpine
+    // defers it to requestAnimationFrame — so this binding is the only honest
+    // answer to "what is the page actually doing?"
+    assert.match(html, /:data-state="state"/,
+        'the body no longer publishes its state, so a blank screen becomes ' +
+        'undiagnosable again and the browser test loses its only signal');
 });
