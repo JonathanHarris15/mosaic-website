@@ -595,7 +595,18 @@ document.addEventListener('alpine:init', () => {
         openDocument(docId) {
             const doc = this.allDocs[docId];
             const isCareList = doc && doc.docType === 'care-list';
-            if (window.MOSAIC_SHELL === 'mobile') {
+            // A Form Document opens on its own page, the way a Care List does.
+            // Not a branch inside the prose editor: what it draws is a form, and
+            // a 1,500-line editor gaining a second mode is how both get harder
+            // to change (MS-386).
+            const isForm = doc && doc.docType === 'form';
+            if (isForm) {
+                // The same page in the shell on a phone rather than a native
+                // port, so there is one Form Document editor to keep in step
+                // with the model.
+                const shell = window.MOSAIC_SHELL === 'mobile' ? '&shell=mobile' : '';
+                window.location.href = `shepherding-form-document.html?id=${encodeURIComponent(docId)}${shell}`;
+            } else if (window.MOSAIC_SHELL === 'mobile') {
                 const route = isCareList ? 'careList' : 'documentEditor';
                 window.location.href = `mobile.html#/${route}?id=${encodeURIComponent(docId)}`;
             } else if (isCareList) {
