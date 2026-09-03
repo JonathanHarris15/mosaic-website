@@ -36,6 +36,7 @@ function loadPage(reply, locationOver) {
         getElementById: () => null,
     };
 
+    const signedOut = [];
     sandbox.firebase = {
         apps: [],
         initializeApp() { sandbox.firebase.apps.push({}); },
@@ -58,6 +59,7 @@ function loadPage(reply, locationOver) {
         auth() {
             return {
                 onAuthStateChanged(cb) { authCb = cb; return () => {}; },
+                signOut() { signedOut.push(true); return Promise.resolve(); },
             };
         },
     };
@@ -67,7 +69,11 @@ function loadPage(reply, locationOver) {
     vm.runInContext(code, sandbox);
 
     const page = sandbox.answerPage();
-    return { page, calls, signIn: (u) => authCb && authCb(u || null) };
+    return {
+        page, calls, signedOut,
+        signIn: (u) => authCb && authCb(u || null),
+        where: () => sandbox.location.href,
+    };
 }
 
 const OPEN_FORM = {
@@ -226,4 +232,65 @@ test('a signed-in member with a name gets thanked by it', async () => {
     page.answers.q1 = 'x';
     await page.submit();
     assert.strictEqual(page.thanks, 'Thank you, Ruth Alvarez.');
+});
+
+// ── Who the answer gets filed under ──────────────────────────────────────────
+//
+// A form link arrives by text and gets opened on whatever device is nearest,
+// signed in as whoever used it last. The page has to say whose name is going
+// on the answer BEFORE it is given, and let the wrong person fix it without
+// losing the form.
+
+test('a form that records names says whose name, and offers a way out', async () => {
+    const attributed = { ok: true, view: Object.assign({}, OPEN_FORM.view, { attribution: true, rung: 'member' }) };
+    const { page, signIn } = loadPage(attributed, { pathname: '/f/abc123def456ghi789' });
+    const p = page.load(); signIn({ displayName: 'Ruth Alvarez', email: 'ruth@example.com' }); await p;
+
+    assert.strictEqual(page.identifies, true);
+    assert.strictEqual(page.whoLabel, 'Answering as');
+    assert.strictEqual(page.whoName, 'Ruth Alvarez');
+});
+
+test('a public form names nobody, because it knows nobody', async () => {
+    // OPEN_FORM is public and unattributed. Showing an account here would
+    // claim something untrue about where the answer goes.
+    const { page, signIn } = loadPage(OPEN_FORM, { pathname: '/f/abc123def456ghi789' });
+    const p = page.load(); signIn(null); await p;
+    assert.strictEqual(page.identifies, false);
+});
+
+test('a ballot says signed in, never answering as', async () => {
+    // ⚠ A ballot records THAT you answered and never what you said. "Answering
+    // as Ruth" over a secret ballot reads as a page quietly breaking its own
+    // promise, which is the one thing ADR-0052 exists to stop.
+    const ballot = { ok: true, view: Object.assign({}, OPEN_FORM.view, { ballot: true, attribution: false, rung: 'member' }) };
+    const { page, signIn } = loadPage(ballot, { pathname: '/f/abc123def456ghi789' });
+    const p = page.load(); signIn({ displayName: 'Ruth Alvarez' }); await p;
+
+    assert.strictEqual(page.identifies, true, 'a ballot still records that it was you');
+    assert.strictEqual(page.whoLabel, 'Signed in as');
+});
+
+test('an account with no display name is named by its email', async () => {
+    const attributed = { ok: true, view: Object.assign({}, OPEN_FORM.view, { attribution: true, rung: 'member' }) };
+    const { page, signIn } = loadPage(attributed, { pathname: '/f/abc123def456ghi789' });
+    const p = page.load(); signIn({ displayName: '', email: 'ruth@example.com' }); await p;
+    assert.strictEqual(page.whoName, 'ruth@example.com',
+        '"Answering as" followed by nothing is worse than no line at all');
+});
+
+test('the wrong person can sign out and come back to the same form', async () => {
+    const attributed = { ok: true, view: Object.assign({}, OPEN_FORM.view, { attribution: true, rung: 'member' }) };
+    const { page, signIn, signedOut, where } = loadPage(attributed, { pathname: '/f/abc123def456ghi789' });
+    const p = page.load(); signIn({ displayName: 'Somebody Else' }); await p;
+
+    await page.switchAccount();
+
+    // ⚠ SIGNING OUT IS NOT OPTIONAL. The sign-in page sends anybody already
+    // signed in straight back where they came from, so without this the
+    // button would look like it does nothing at all.
+    assert.deepStrictEqual(signedOut, [true], 'it went to sign in still signed in');
+    assert.match(where(), /^\/login\.html\?next=/);
+    assert.match(decodeURIComponent(where()), /\/f\/abc123def456ghi789/,
+        'they were sent to sign in and would not have come back to the form');
 });

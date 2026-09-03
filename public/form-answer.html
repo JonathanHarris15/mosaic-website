@@ -74,7 +74,24 @@
     <header class="fa-brand">
         <img src="/assets/mosaic-logo.png" alt="" width="26" height="26" />
         <span class="fa-brand__name">Mosaic Church</span>
-        <span class="fa-brand__where" x-text="whoami"></span>
+
+        <!-- ⚠ WHO THE ANSWER WILL BE FILED UNDER, on the forms where that is a
+             fact about a person rather than nothing at all. A form link
+             arrives by text and gets opened on whatever phone or iPad is
+             nearest, signed in as whoever used it last. Filing an answer under
+             the wrong name is worse than filing none: on a one-each form it
+             spends somebody else's turn, and on a ballot it spends their vote.
+             So the name is stated before they answer, not after, and it can be
+             changed from here without losing the form. -->
+        <div class="fa-who" x-show="identifies" x-cloak>
+            <span class="fa-who__said">
+                <span class="fa-who__label" x-text="whoLabel"></span>
+                <span class="fa-who__name" x-text="whoName"></span>
+            </span>
+            <button type="button" class="fa-who__swap" @click="switchAccount()">Not you?</button>
+        </div>
+
+        <span class="fa-brand__where" x-show="!identifies" x-text="whoami"></span>
     </header>
 
     <!-- ⚠ NOT ALPINE'S. If the script throws, Alpine never runs, nothing ever
@@ -270,6 +287,17 @@
         .fa-brand { display: flex; align-items: center; gap: 10px; padding: 13px var(--space-sm); background: var(--surface-container-lowest); border-bottom: 1px solid var(--outline-variant); }
         .fa-brand__name { font-family: var(--font-display); font-size: 13px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--primary); }
         .fa-brand__where { margin-left: auto; font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant); }
+
+        /* Who the answer gets filed under, and the way out of being the wrong
+           person. Sized to sit in the same bar as the church's name on a
+           phone: the name truncates, the button never does, because the
+           button is the part that has to stay pressable. */
+        .fa-who { margin-left: auto; display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .fa-who__said { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; }
+        .fa-who__label { font-size: 9.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--outline); }
+        .fa-who__name { max-width: 42vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 600; color: var(--on-surface); }
+        .fa-who__swap { flex: 0 0 auto; padding: 5px 9px; background: transparent; border: 1px solid var(--outline-variant); border-radius: var(--radius); font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--on-surface-variant); cursor: pointer; }
+        .fa-who__swap:hover { background: var(--surface-container); color: var(--on-surface); }
 
         /* Phone first. On a desktop it stays one column and stops growing —
            a form is read down, and a 1200px-wide question is a worse question. */

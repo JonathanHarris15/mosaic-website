@@ -53,16 +53,11 @@
 
     // ── App Check ────────────────────────────────────────────────────────────
     //
-    // The browser collects a token proving it is running this website, and
-    // `publicForm` refuses anything without one. Invisible to whoever is
+    // The browser collects a token proving it is running this website, so that
+    // `publicForm` can refuse anything without one. Invisible to whoever is
     // filling the form in — no "tick to prove you are human", because a waiver
     // is already friction and a second hurdle loses people.
     //
-    // ⚠ ACTIVATED ONLY WHEN A SITE KEY IS SET, and the server enforces either
-    // way. So an unconfigured deploy REFUSES public submissions rather than
-    // accepting them unchecked. That asymmetry is deliberate: the failure of a
-    // half-finished setup should be "nothing works yet", never "everything
-    // works and nothing is checked".
     // ⚠ `enabled` HAS TO AGREE WITH enforceAppCheck ON THE SERVER. Enabled here
     // and not enforced there checks nothing; enforced there and not enabled
     // here refuses everybody. It is currently off at both ends — the reasons
@@ -200,6 +195,47 @@
                 return typeof navigator !== 'undefined' && !!navigator.share;
             },
 
+            // ── Who this will be filed under ─────────────────────────────────
+            //
+            // ⚠ ONLY WHERE THE ANSWER IS TIED TO AN ACCOUNT. A public form
+            // knows nobody, and showing a name on one would claim something
+            // untrue about where the answer goes.
+            //
+            // The reason it is shown at all is the shared phone. A link
+            // arrives by text, somebody opens it on the family iPad, and the
+            // account signed in is whoever used it last. An answer filed under
+            // the wrong name is worse than no answer: on a one-each form it
+            // also spends somebody else's turn, and on a ballot it spends
+            // their vote.
+            get identifies() {
+                return !!(this.form && (this.form.attribution || this.form.ballot));
+            },
+
+            get whoLabel() {
+                // A ballot records THAT you answered and never what you said,
+                // so "answering as" would overstate it — and not overstating
+                // it is the entire promise this page makes (ADR-0052).
+                return this.form.ballot ? 'Signed in as' : 'Answering as';
+            },
+
+            get whoName() {
+                return this.myName || this.myEmail || 'this account';
+            },
+
+            async switchAccount() {
+                // ⚠ SIGN OUT FIRST. The sign-in page sends anybody already
+                // signed in straight back where they came from, so without
+                // this the button looks like it does nothing at all.
+                try {
+                    await firebase.auth().signOut();
+                } catch (e) {
+                    // Going to the sign-in page regardless — it can ask again
+                    // there, and stranding somebody here helps nobody.
+                    console.warn('Sign out failed, going to sign in anyway:', e && e.message);
+                }
+                location.href = this.signInHref;
+            },
+
             get signInHref() {
                 // Absolute for the same reason every asset path is: at
                 // /f/<token> a relative 'login.html' resolves to /f/login.html,
@@ -208,6 +244,7 @@
             },
 
             myName: '',
+            myEmail: '',
 
             async load() {
                 const formId = formIdFromLocation();
@@ -225,6 +262,11 @@
                 await withTimeout(new Promise(resolve => {
                     const stop = firebase.auth().onAuthStateChanged(u => {
                         this.myName = (u && u.displayName) || '';
+                        // The email is the fallback name. Plenty of
+                        // accounts have never set a display name, and
+                        // "Answering as" followed by nothing is worse
+                        // than no line at all.
+                        this.myEmail = (u && u.email) || '';
                         stop();
                         resolve();
                     });
