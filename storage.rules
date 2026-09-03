@@ -140,6 +140,38 @@ service firebase.storage {
       allow delete: if false;
     }
 
+    // What somebody sent with a form answer (MS-389).
+    //
+    // ⚠ WRITE IS FALSE, FOR EVERYBODY, AND THAT IS THE DESIGN RATHER THAN AN
+    // OVERSIGHT.
+    //
+    // Somebody answering a public form has no account, and every rule in this
+    // file — down to the catch-all below — requires one. There is no rule that
+    // could let them upload without opening the bucket to the world. So the
+    // bytes go through the same closed door as every other public write: the
+    // `publicForm` Cloud Function, which runs past these rules with admin
+    // credentials (ADR-0051).
+    //
+    // That leaves nothing for a client to do here, and `if false` says so
+    // better than any condition could: it needs no reasoning about who is
+    // asking, and it cannot be loosened by accident.
+    //
+    // ⚠ AND NOTHING MAY EVER CALL getDownloadURL() ON THIS PATH. It mints a
+    // token that bypasses everything above and never expires, so one forwarded
+    // link would undo this permanently (ADR-0046). The upload is written with
+    // an empty token and the Responses tab fetches it as the signed-in reader,
+    // which IS checked here on every request.
+    //
+    // Read is editor-and-above, restating `isEditor()` from firestore.rules in
+    // an engine that cannot import it — the same duplication event_attachments
+    // already accepts, and test/storage-form-upload-rules.test.js fails when
+    // the two drift.
+    match /form_uploads/{formId}/{responseId}/{fileName} {
+      allow read: if isEditorAccount();
+      allow write: if false;
+      allow delete: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if request.auth != null;
     }

@@ -143,6 +143,73 @@ function whatToServe(form, caller, today) {
 // ── Taking the answer ────────────────────────────────────────────────────────
 
 /**
+ * Where an uploaded file is kept.
+ *
+ * Under the form and the response it belongs to, so the rules can answer "may
+ * you read this" by looking at the path, and so deleting a response's files is
+ * a prefix delete rather than a search.
+ *
+ * The stored name is the response's own id plus the question's, NOT the name
+ * the file arrived with. An answerer picks that name, and a path built from
+ * something a stranger chose is a path a stranger can aim. The original name is
+ * kept in the record, where it is data rather than an address.
+ *
+ * @param {string} formId The form.
+ * @param {string} responseId The response the file belongs to.
+ * @param {string} questionId The question it answers.
+ * @param {string} name The name it arrived with, for its extension only.
+ * @return {string} The storage path.
+ */
+function uploadPath(formId, responseId, questionId, name) {
+  const dot = String(name || "").lastIndexOf(".");
+  const ext = dot > 0 ? String(name).slice(dot).toLowerCase().replace(/[^.a-z0-9]/g, "") : "";
+  return `form_uploads/${formId}/${responseId}/${questionId}${ext}`;
+}
+
+/**
+ * Are these files answers this form can actually take?
+ *
+ * Pure, so the interesting cases are testable without a bucket. What it will
+ * not do is trust the page: the size is checked here as well, because the page
+ * that checked it is one we do not control on a public form.
+ *
+ * @param {?Object} form The stored Form Template.
+ * @param {?Object} files Question id → {name, contentType, size, dataBase64}.
+ * @return {!Array<!Object>} One {id, text, why} per file that cannot be taken.
+ */
+function judgeUploads(form, files) {
+  const out = [];
+  const asked = {};
+  FormsCore.askedQuestions(form).forEach((q) => {
+    asked[q.id] = q;
+  });
+
+  Object.keys(files || {}).forEach((qid) => {
+    const file = files[qid];
+    const q = asked[qid];
+    if (!q) {
+      out.push({id: qid, text: "", why: "That question is not on this form."});
+      return;
+    }
+    if (!FormsCore.isUploadType(q.type)) {
+      out.push({id: qid, text: q.text, why: "That question does not take a file."});
+      return;
+    }
+    const fault = FormsCore.uploadFault(file);
+    if (fault) {
+      out.push({id: qid, text: q.text, why: fault});
+      return;
+    }
+    // The bytes have to BE bytes. A page sending something else is a page we
+    // did not write, which on a public form is the ordinary case.
+    if (typeof file.dataBase64 !== "string" || !file.dataBase64.length) {
+      out.push({id: qid, text: q.text, why: "That file did not arrive."});
+    }
+  });
+  return out;
+}
+
+/**
  * May this submission be written, and what should be written.
  *
  * @param {?Object} form The stored Form Template.
@@ -193,6 +260,21 @@ function judgeSubmission(form, attempt, today) {
       // Same key as the missing list, so the page marks the same questions the
       // same way rather than growing a second highlighting path.
       missing: unfit,
+    };
+  }
+
+  // Files, judged BEFORE anything is written. An upload that cannot be taken
+  // should stop the submission rather than leaving bytes in the bucket with no
+  // Response pointing at them.
+  const badFiles = judgeUploads(form, a.files);
+  if (badFiles.length) {
+    return {
+      ok: false,
+      code: "unanswerable",
+      message: badFiles.length === 1 ?
+        "One file could not be accepted." :
+        `${badFiles.length} files could not be accepted.`,
+      missing: badFiles,
     };
   }
 
@@ -258,6 +340,8 @@ function judgeSubmission(form, attempt, today) {
 }
 
 module.exports = {
+  uploadPath,
+  judgeUploads,
   RANKS_AT_OR_ABOVE,
   rankSatisfies,
   answerersView,
