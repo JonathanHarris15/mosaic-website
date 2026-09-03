@@ -133,3 +133,14 @@ test('a failure before Alpine can still say something', () => {
     assert.match(js, /removeAttribute\('x-cloak'\)/,
         'the fatal block is hidden by the very x-cloak it needs to escape');
 });
+
+test('[hidden] actually hides on this page', () => {
+    // ⚠ The browser's own [hidden]{display:none} LOSES to any class that sets
+    // display, and .fa-centred is display:flex. So the "This page did not
+    // start" block sat visible from first paint, announcing a failure that had
+    // not happened and reporting an empty reason — because nothing had called
+    // fatal(). An error banner that is always on is worse than no banner: the
+    // page is lying about itself, and it hides the real fault underneath.
+    assert.match(html, /\[hidden\]\s*\{\s*display:\s*none\s*!important/,
+        'hidden is set on the fatal block but nothing makes it win over display:flex');
+});

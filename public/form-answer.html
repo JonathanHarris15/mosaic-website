@@ -21,7 +21,21 @@
          nothing, so the raw markup paints first with EVERY state visible at
          once, and then Alpine boots and hides them. The flash is not a slow
          page; it is the page before anything is deciding what to show. -->
-    <style>[x-cloak] { display: none !important; }</style>
+    <style>
+      /* ⚠ TWO ATTRIBUTES THAT STYLE NOTHING UNLESS A PAGE SAYS SO, and this
+         page has now been bitten by both.
+
+         x-cloak: Alpine sets it and removes it, but nothing hides it for you.
+         Without this the raw markup paints with every state visible at once.
+
+         hidden: the browser DOES define [hidden]{display:none} — and it loses
+         to any class that sets display. .fa-centred is display:flex, so the
+         "This page did not start" block sat permanently on top of the page,
+         announcing a failure that had not happened. An error banner that is
+         always on is worse than none: it is a page lying about itself. */
+      [x-cloak] { display: none !important; }
+      [hidden]  { display: none !important; }
+    </style>
 
     <!--
       ⚠ THIS PAGE IS THE ONLY ONE A SIGNED-OUT STRANGER EVER REACHES, AND IT
