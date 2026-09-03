@@ -157,10 +157,14 @@
 
                                 <div class="m-seg">
                                     <template x-for="r in liveRungs" :key="r">
-                                        <button type="button" class="m-seg__opt" :aria-pressed="form.rung === r" @click="setRung(r)"
+                                        <button type="button" class="m-seg__opt" :aria-pressed="form.rung === r"
+                                                :disabled="r === 'public' && !publicCheck.ok"
+                                                @click="setRung(r)"
                                                 x-text="rungLabel(r)"></button>
                                     </template>
                                 </div>
+                                <!-- The reason, not just a greyed button. -->
+                                <span class="m-input-hint" x-show="!publicCheck.ok" x-text="publicCheck.why"></span>
 
                                 <div class="fp-switch">
                                     <label class="m-check">
@@ -309,6 +313,32 @@
                                                 </button>
                                             </div>
 
+                                            <!-- Who a Directory Person picker offers. A tag
+                                                 that hides itself or its carriers is never
+                                                 in this list and never named — scoping a
+                                                 picker to one would show exactly the people
+                                                 the flag exists to conceal. -->
+                                            <div class="fp-field" x-show="q.type === 'person'">
+                                                <span class="m-label m-label--sm">Who it offers</span>
+                                                <div class="fp-row">
+                                                    <select class="m-input" style="flex:0 0 220px"
+                                                            x-model="q.people.scope" @change="onScopeChange(q)">
+                                                        <option value="everyone">Anybody in the directory</option>
+                                                        <option value="member">Members</option>
+                                                        <option value="non_member">People who are not members</option>
+                                                        <option value="tag">People with a tag</option>
+                                                    </select>
+                                                    <select class="m-input" style="flex:1 1 auto" x-show="q.people.scope === 'tag'"
+                                                            x-model="q.people.tagId" @change="onScopeChange(q)">
+                                                        <option value="">Choose a tag…</option>
+                                                        <template x-for="t in scopeTags" :key="t.id">
+                                                            <option :value="t.id" x-text="t.name"></option>
+                                                        </template>
+                                                    </select>
+                                                </div>
+                                                <span class="m-input-hint" x-text="scopeLine(q)"></span>
+                                            </div>
+
                                             <!-- A linear scale runs between two ends and
                                                  carries a word for each, so "1 = never,
                                                  5 = every week" is part of the question
@@ -419,6 +449,27 @@
                             <div class="m-label m-label--sm" x-show="row.average !== null && row.average !== undefined"
                                  x-text="'Average ' + row.average"></div>
 
+                            <!-- A person and a file are not values to count.
+                                 They are listed one by one: who was picked, and
+                                 what was sent. An upload opens by being fetched
+                                 as the reader — there is no link to click,
+                                 deliberately (ADR-0046). -->
+                            <div class="fp-quotes" x-show="row.entries && row.entries.length">
+                                <template x-for="(e, ei) in (row.entries || [])" :key="ei">
+                                    <div class="f-quote">
+                                        <p x-show="e && e.personId">
+                                            <span class="material-symbols-outlined">person</span>
+                                            <span x-text="e && e.name"></span>
+                                        </p>
+                                        <p x-show="e && e.storagePath">
+                                            <span class="material-symbols-outlined">description</span>
+                                            <button type="button" class="m-btn m-btn--quiet m-btn--sm"
+                                                    @click="openUpload(e)" x-text="e && e.name"></button>
+                                        </p>
+                                    </div>
+                                </template>
+                            </div>
+
                             <div class="fp-quotes" x-show="row.answers && row.answers.length">
                                 <template x-for="(q, qi) in quotesFor(row)" :key="qi">
                                     <div class="f-quote">
@@ -454,6 +505,9 @@
     <script src="local-cache.js"></script>
     <script src="auth.js"></script>
     <script src="date-utils.js"></script>
+    <!-- Storage, to FETCH an upload as the signed-in reader. Never to mint
+         a link: getDownloadURL bypasses storage.rules for ever (ADR-0046). -->
+    <script src="vendor/firebase/firebase-storage-compat.js"></script>
     <script src="forms-core.js"></script>
     <!-- forms-store.js reaches for the folder graph when it files or
          deletes something, so it loads first. -->

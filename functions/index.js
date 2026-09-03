@@ -2770,7 +2770,35 @@ exports.publicForm = onCall(
       const form = formSnap.exists ? formSnap.data() : null;
 
       if (op === "fetch") {
-        return fp.whatToServe(form, caller, today);
+        const served = fp.whatToServe(form, caller, today);
+        if (!served.ok) return served;
+
+        // A Directory Person picker needs people to offer, and this page has no
+        // Firestore to find them with (ADR-0051). So the list comes through
+        // this door with the questions, already narrowed by each question's
+        // scope — the people a scope excludes are never sent at all, so a
+        // tag's membership cannot be read out of the response.
+        //
+        // Only reached on a form at `member` or above: the model refuses a
+        // picker on a public one (MS-388), and whatToServe has already checked
+        // the caller against the rung above.
+        const wantsPeople = FormsCore.askedQuestions(form)
+            .some((q) => q.type === "person");
+        if (wantsPeople) {
+          const peopleSnap = await db.collection("people")
+              .orderBy("name", "asc").get();
+          const directory = peopleSnap.docs.map((doc) => {
+            const d = doc.data() || {};
+            return {
+              id: doc.id,
+              name: d.name || "Unnamed",
+              isMember: d.isMember === true || d.membershipStage === "member",
+              tagIds: d.tagIds || [],
+            };
+          });
+          served.people = fp.pickerChoices(form, directory);
+        }
+        return served;
       }
 
       // ── submit ───────────────────────────────────────────────────────────

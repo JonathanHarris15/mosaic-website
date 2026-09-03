@@ -143,6 +143,53 @@ function whatToServe(form, caller, today) {
 // ── Taking the answer ────────────────────────────────────────────────────────
 
 /**
+ * Does this person belong in this picker?
+ *
+ * Pure, and applied SERVER-SIDE. The fill-in page has no Firestore at all —
+ * that is ADR-0051, and it is why a stranger answering a public form never
+ * touches the database. So a Directory Person picker cannot read the directory
+ * itself; the list arrives already narrowed, through the same closed door as
+ * the questions.
+ *
+ * Filtering here rather than in the browser is also the stronger version: the
+ * people a scope excludes are never sent at all, so a tag's membership cannot
+ * be read out of a network response by somebody who was only shown a search box.
+ *
+ * @param {!Object} q A `person` question.
+ * @param {!Object} person A directory person: {id, name, isMember, tagIds}.
+ * @return {boolean} True when the picker may offer them.
+ */
+function personInScope(q, person) {
+  const scope = (q.people && q.people.scope) || "everyone";
+  const tagId = q.people && q.people.tagId;
+  if (scope === "member") return person.isMember === true;
+  if (scope === "non_member") return person.isMember !== true;
+  if (scope === "tag") return (person.tagIds || []).indexOf(tagId) !== -1;
+  return true;
+}
+
+/**
+ * The people each picker on this form may offer, keyed by question id.
+ *
+ * @param {?Object} form The stored Form Template.
+ * @param {!Array<!Object>} directory Everybody, as {id, name, isMember, tagIds}.
+ * @return {!Object} Question id → [{id, name}].
+ */
+function pickerChoices(form, directory) {
+  const out = {};
+  FormsCore.askedQuestions(form)
+      .filter((q) => q.type === "person")
+      .forEach((q) => {
+        out[q.id] = (directory || [])
+            .filter((p) => personInScope(q, p))
+            // Only the id and the name leave the server. Nothing else about a
+            // Person is any of a form's business.
+            .map((p) => ({id: p.id, name: p.name}));
+      });
+  return out;
+}
+
+/**
  * Where an uploaded file is kept.
  *
  * Under the form and the response it belongs to, so the rules can answer "may
@@ -342,6 +389,8 @@ function judgeSubmission(form, attempt, today) {
 module.exports = {
   uploadPath,
   judgeUploads,
+  personInScope,
+  pickerChoices,
   RANKS_AT_OR_ABOVE,
   rankSatisfies,
   answerersView,
