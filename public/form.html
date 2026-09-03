@@ -124,7 +124,7 @@
                                 <div class="m-seg">
                                     <template x-for="r in liveRungs" :key="r">
                                         <button type="button" class="m-seg__opt" :aria-pressed="form.rung === r" @click="setRung(r)"
-                                                x-text="r === 'public' ? 'Public' : 'Members'"></button>
+                                                x-text="rungLabel(r)"></button>
                                     </template>
                                 </div>
 

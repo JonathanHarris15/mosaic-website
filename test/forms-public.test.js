@@ -277,3 +277,76 @@ test('a blank required question is reported before a wrong answer is', () => {
     }, TODAY);
     assert.strictEqual(verdict.code, 'incomplete');
 });
+
+// ── The last two rungs (MS-380) ──────────────────────────────────────────────
+//
+// MS-360 offered `public` and `member` and named all four. These two were
+// already enforced — the rank check has covered them since the function was
+// written — so what these tests pin is that turning them on in the builder did
+// not change what the server does. If the enforcement ever moves, this is where
+// it fails.
+
+const rungForm = (rung) => FormsCore.buildFormTemplate({
+    title: 'Rota preferences',
+    published: true,
+    rung: rung,
+    questions: [{ id: 'q1', type: 'short_text', text: 'Which weeks?' }],
+});
+
+const asRank = (rank) => ({ signedIn: !!rank, rank: rank || null });
+
+test('an editors-only form is open to editors and above, and shut below', () => {
+    const form = rungForm('editor');
+    ['editor', 'admin', 'elder', 'super_admin'].forEach(rank => {
+        assert.strictEqual(fp.whatToServe(form, asRank(rank), TODAY).ok, true, rank + ' should be let in');
+    });
+    ['member', 'viewer'].forEach(rank => {
+        assert.strictEqual(fp.whatToServe(form, asRank(rank), TODAY).ok, false, rank + ' should be refused');
+    });
+    assert.strictEqual(fp.whatToServe(form, stranger, TODAY).ok, false);
+});
+
+test('an elders-only form is open to elders and super admins, and nobody else', () => {
+    const form = rungForm('elder');
+    ['elder', 'super_admin'].forEach(rank => {
+        assert.strictEqual(fp.whatToServe(form, asRank(rank), TODAY).ok, true, rank + ' should be let in');
+    });
+    ['admin', 'editor', 'member', 'viewer'].forEach(rank => {
+        assert.strictEqual(fp.whatToServe(form, asRank(rank), TODAY).ok, false, rank + ' should be refused');
+    });
+});
+
+test('being refused a form does not show the form', () => {
+    // The refusal is the whole answer. A question list handed out alongside
+    // "you may not answer this" makes the rung a suggestion.
+    const verdict = fp.whatToServe(rungForm('elder'), asRank('member'), TODAY);
+    assert.strictEqual(verdict.ok, false);
+    assert.ok(!verdict.view, 'a refused caller was handed the form anyway');
+    assert.ok(!JSON.stringify(verdict).includes('Which weeks?'),
+        'the question text leaked into a refusal');
+});
+
+test('an editors-only form cannot be answered by somebody below it either', () => {
+    const verdict = fp.judgeSubmission(rungForm('editor'), Object.assign(
+        { formId: 'f1', answers: { q1: 'Any' } }, asRank('member'),
+    ), TODAY);
+    assert.strictEqual(verdict.ok, false);
+});
+
+test('a secret ballot among elders is possible', () => {
+    // Attribution and One Response Each stay available on every rung above
+    // public, which is what makes an elders' vote a thing this can hold.
+    const settings = FormsCore.settingsFor('elder');
+    assert.strictEqual(settings.attribution.available, true);
+    assert.strictEqual(settings.oneEach.available, true);
+
+    const ballot = FormsCore.buildFormTemplate({ rung: 'elder', attribution: false, oneEach: true });
+    assert.strictEqual(FormsCore.isBallot(ballot), true);
+});
+
+test('every rung the builder offers is one the model recognises', () => {
+    FormsCore.RUNGS_LIVE.forEach(rung => {
+        assert.ok(FormsCore.RUNGS.includes(rung), rung + ' is offered but not in the ladder');
+        assert.ok(FormsCore.rungLabel(rung), rung + ' has no name to draw');
+    });
+});

@@ -197,10 +197,31 @@
     // `public` is the only rung that needs no account — which is why "is
     // sign-in required" is NOT a separate setting: it is read off the rung.
     //
-    // MS-360 offers the first two; `editor` and `elder` arrive with MS-361.
-    // They are named here because the ladder is the model, not the UI.
+    // MS-360 offered the first two and named all four, because the ladder is
+    // the model rather than the UI. MS-380 offers the other two, so the two
+    // lists now match.
+    //
+    // They stay two names on purpose. RUNGS is what a stored record may say and
+    // what the server enforces; RUNGS_LIVE is what the builder offers. They were
+    // different for one ticket and could be again — a rung added to the ladder
+    // ahead of the screens that explain it should not appear in the picker the
+    // same afternoon.
     const RUNGS = ['public', 'member', 'editor', 'elder'];
-    const RUNGS_LIVE = ['public', 'member'];
+    const RUNGS_LIVE = ['public', 'member', 'editor', 'elder'];
+
+    // What a rung is called on screen. Here rather than on the page, because
+    // the picker is not the only place a rung is named and two lists of these
+    // words would drift.
+    const RUNG_LABELS = {
+        public: 'Public',
+        member: 'Members',
+        editor: 'Editors',
+        elder: 'Elders',
+    };
+
+    function rungLabel(rung) {
+        return RUNG_LABELS[rung] || 'Members';
+    }
 
     function isRung(rung) {
         return RUNGS.indexOf(rung) !== -1;
@@ -715,6 +736,7 @@
         QUESTION_TYPES,
         RUNGS,
         RUNGS_LIVE,
+        rungLabel,
         BALLOT_PROMISE,
         ID_BYTES,
         questionType,

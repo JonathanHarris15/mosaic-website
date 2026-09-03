@@ -45,6 +45,10 @@ function formPage() {
         get settings() { return FormsCore.settingsFor(this.form ? this.form.rung : 'member'); },
         get liveRungs() { return FormsCore.RUNGS_LIVE; },
 
+        // Asked of the model, not spelled out here — the picker is not the only
+        // place a rung gets named, and two lists of these words would drift.
+        rungLabel(rung) { return FormsCore.rungLabel(rung); },
+
         get badges() {
             if (!this.form) return [];
             const out = [];
