@@ -184,12 +184,22 @@ function formsPage() {
                     this.currentUser = user;
                     // Two reads, not one. They are separate records on purpose
                     // (ADR-0054) and neither orders the other.
-                    const [forms, folders] = await Promise.all([
-                        FormsStore.listForms(db),
-                        FormsStore.listFolders(db),
-                    ]);
-                    this.forms = forms;
-                    this.folders = folders;
+                    //
+                    // ⚠ Only the FORMS read is allowed to take the page down.
+                    // Folders are how the library is arranged; forms are what it
+                    // is for. A folder read that fails — rules not yet deployed,
+                    // a network blip — must leave a flat library rather than an
+                    // empty one, because the same principle applies as when a
+                    // folder is deleted: a live form whose link people are
+                    // answering has to stay findable.
+                    this.forms = await FormsStore.listForms(db);
+                    try {
+                        this.folders = await FormsStore.listFolders(db);
+                    } catch (e) {
+                        this.folders = [];
+                        this.problem = 'Folders did not load, so everything is listed flat. ' +
+                            'The forms themselves are all here.';
+                    }
                 } catch (e) {
                     this.problem = 'The forms did not load. Check your connection and refresh.';
                 } finally {
