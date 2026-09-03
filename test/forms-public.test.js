@@ -350,3 +350,48 @@ test('every rung the builder offers is one the model recognises', () => {
         assert.ok(FormsCore.rungLabel(rung), rung + ' has no name to draw');
     });
 });
+
+// ── A document template is not answerable through the public door (MS-362) ───
+//
+// A `document`-mode template makes Form Documents and publishes no link. It has
+// no Answering rung at all — the model stores null. So the question is what the
+// public function does if somebody puts one of its ids in the URL anyway.
+//
+// It must refuse. Two independent things make that true (it is never published,
+// and a null rung satisfies nobody), and both are asserted, because a change
+// that removed one silently would leave the other holding the door alone.
+
+const documentTemplate = () => FormsCore.buildFormTemplate({
+    title: 'Elder Interview',
+    mode: 'document',
+    published: true,        // forced back off by the model
+    rung: 'public',         // forced to null by the model
+    questions: [{ id: 'q1', type: 'short_text', text: 'Your name' }],
+});
+
+test('a document template cannot be published, whatever it was asked to be', () => {
+    const form = documentTemplate();
+    assert.strictEqual(form.published, false);
+    assert.strictEqual(form.rung, null);
+});
+
+test('a document template is refused to a stranger at the public door', () => {
+    const verdict = fp.whatToServe(documentTemplate(), stranger, TODAY);
+    assert.strictEqual(verdict.ok, false);
+    assert.ok(!verdict.view, 'the questions were handed out anyway');
+});
+
+test('a document template is refused to a signed-in member too', () => {
+    // Not just unpublished — a null rung satisfies nobody, so even somebody
+    // with an account gets nothing through this path.
+    const verdict = fp.whatToServe(documentTemplate(), member, TODAY);
+    assert.strictEqual(verdict.ok, false);
+});
+
+test('and it cannot be answered through the public door either', () => {
+    const verdict = fp.judgeSubmission(documentTemplate(), {
+        formId: 'f1', answers: { q1: 'Rebecca' }, signedIn: true, rank: 'elder',
+    }, TODAY);
+    assert.strictEqual(verdict.ok, false,
+        'a Form Document template accepted a Response through the public function');
+});
