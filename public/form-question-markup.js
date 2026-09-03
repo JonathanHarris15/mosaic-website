@@ -42,6 +42,8 @@
 //   onFileChosen(q, ev) take the chosen file. The page checks the size BEFORE
 //                      uploading and puts any complaint where uploadFault(q)
 //                      can find it — nobody should wait for a failure.
+//   uploadFault(q)     that complaint, or '' when there is none
+//   clearUpload(q)     forget the file chosen for `q`
 //
 // The chrome AROUND a question — its number, its "Needed" chip, whether it is
 // highlighted as missing — is deliberately NOT here. That genuinely differs:
@@ -157,9 +159,9 @@
             <div class="fa-file__got" x-show="answers[q.id] && answers[q.id].name">
                 <span class="material-symbols-outlined">description</span>
                 <span x-text="answers[q.id] && answers[q.id].name"></span>
-                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="pickPerson && (answers[q.id] = null)">Remove</button>
+                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="clearUpload(q)">Remove</button>
             </div>
-            <span class="m-input-hint fa-file__fault" x-show="uploadFault && uploadFault(q)" x-text="uploadFault && uploadFault(q)"></span>
+            <span class="m-input-hint fa-file__fault" x-show="uploadFault(q)" x-text="uploadFault(q)"></span>
         </div>
 
         <span class="m-input-hint" x-show="q.hint" x-text="q.hint"></span>

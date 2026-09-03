@@ -32,6 +32,9 @@ function formDocumentPage() {
         questions: [],
         answers: {},
         saveStatus: 'saved',
+        personQueries: {},
+        directory: [],
+        fileFaults: {},
         currentUserName: '',
         _saveTimer: null,
 
@@ -62,6 +65,74 @@ function formDocumentPage() {
         // what somebody answered last time; a document has no "last time" —
         // there is one answer and it is the current one.
         saidBefore() { return false; },
+
+        // ── The three that reach outside the form ────────────────────────────
+        //
+        // The shared markup draws these, so this page owes them whether or not
+        // a given template uses them. A missing one is a question that silently
+        // does nothing.
+
+        // A Directory Person picker. Read straight from Firestore here, unlike
+        // the public fill-in page: whoever has a Form Document open is a signed-in
+        // elder, so there is no closed door to go through and no scope to apply
+        // on a server that is not involved.
+        personChoices(q) {
+            const typed = String(this.personQueries[q.id] || '').trim().toLowerCase();
+            if (!typed) return [];
+            const scope = (q.people && q.people.scope) || 'everyone';
+            const tagId = q.people && q.people.tagId;
+            return this.directory.filter(p => {
+                if (!String(p.name || '').toLowerCase().includes(typed)) return false;
+                if (scope === 'member') return p.isMember === true;
+                if (scope === 'non_member') return p.isMember !== true;
+                if (scope === 'tag') return (p.tagIds || []).includes(tagId);
+                return true;
+            }).slice(0, 8);
+        },
+
+        pickPerson(q, person) {
+            this.answers[q.id] = person ? { personId: person.id, name: person.name } : null;
+            this.personQueries[q.id] = '';
+            this.touch();
+        },
+
+        // ⚠ An upload on a Form Document does not work yet, and says so rather
+        // than failing quietly.
+        //
+        // The public fill-in page sends its bytes through the publicForm
+        // function, which writes them past storage.rules with admin credentials
+        // (ADR-0051). This page has no such door: it writes as a signed-in
+        // elder, and the upload path is `write: if false` for every client.
+        // Giving a document its own upload route is a real ticket — either a
+        // second function or a rule that can tell a Form Document from anything
+        // else — and guessing at it here would be the weakest version of both.
+        onFileChosen(q) {
+            this.fileFaults[q.id] = 'Files cannot be attached to a document yet. ' +
+                'Use a form people answer by link, or write the detail into a paragraph question.';
+        },
+
+        uploadFault(q) { return this.fileFaults[q.id] || ''; },
+
+        clearUpload(q) {
+            this.answers[q.id] = null;
+            this.fileFaults[q.id] = '';
+        },
+
+        loadDirectory() {
+            const wantsPeople = this.questions.some(q => q.type === 'person');
+            if (!wantsPeople) return;
+            db.collection('people').orderBy('name', 'asc').get().then(snap => {
+                this.directory = snap.docs.map(doc => {
+                    const d = doc.data() || {};
+                    return {
+                        id: doc.id,
+                        name: d.name || 'Unnamed',
+                        isMember: d.isMember === true || d.membershipStage === 'member',
+                        tagIds: d.tagIds || [],
+                    };
+                });
+            }).catch(() => { this.directory = []; });
+        },
 
         get answeredCount() {
             return this.questions.filter(q => this.asks(q) && this.hasAnswer(q)).length;
@@ -110,6 +181,7 @@ function formDocumentPage() {
                     this.questions = Array.isArray(data.questions) ? data.questions : [];
                     this.answers = Object.assign({}, data.answers || {});
                     this.readyForLists();
+                    this.loadDirectory();
                 } catch (e) {
                     this.problem = 'That did not load. Check your connection and refresh.';
                 } finally {

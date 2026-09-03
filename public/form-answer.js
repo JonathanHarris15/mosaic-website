@@ -260,6 +260,15 @@
 
             uploadFault(q) { return this.fileFaults[q.id] || ''; },
 
+            // Forget a chosen file. Both the bytes waiting to go and what the
+            // control shows, or the page would say a file is attached when
+            // nothing would be sent.
+            clearUpload(q) {
+                delete this.files[q.id];
+                this.answers[q.id] = null;
+                this.fileFaults[q.id] = '';
+            },
+
             // Owed to the shared question markup: was this option what they
             // answered last time? Only a form with One Response Each ever has a
             // last time; everywhere else this is false and nothing is marked.

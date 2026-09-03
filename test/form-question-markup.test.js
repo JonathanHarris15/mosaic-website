@@ -112,3 +112,32 @@ test('mounting into nothing is not an error', () => {
     const fakeDoc = { querySelectorAll: () => ({ forEach: () => {} }) };
     assert.strictEqual(Markup.mount(fakeDoc), 0);
 });
+
+// ── Every page that mounts it owes the same set ──────────────────────────────
+
+test('both pages provide everything the shared markup binds to', () => {
+    // A page that mounts the markup and does not own one of these renders a
+    // question that silently does nothing — no error, no control, no clue.
+    // MS-388 added three types that need four more functions, so this checks
+    // the whole contract rather than the part that existed first.
+    const OWED = ['saidBefore', 'scalePoints', 'personChoices', 'pickPerson',
+        'onFileChosen', 'uploadFault', 'clearUpload'];
+
+    [['form-answer.js', 'the public fill-in page'],
+        ['shepherding-form-document.js', 'the Form Document editor']].forEach(([file, what]) => {
+        const src = read(file);
+        OWED.forEach(fn => {
+            assert.ok(src.includes(fn + '('), what + ' does not provide ' + fn);
+        });
+        assert.ok(/personQueries/.test(src), what + ' does not provide personQueries');
+    });
+});
+
+test('a Form Document says uploads are not supported rather than failing quietly', () => {
+    // The public page sends bytes through the Cloud Function; this page writes
+    // as a signed-in elder, and the upload path is write:false for every
+    // client. Until that has its own ticket, saying so is the honest answer.
+    const src = read('shepherding-form-document.js');
+    assert.match(src, /cannot be attached to a document yet/,
+        'a file chosen on a Form Document would fail with no explanation');
+});
