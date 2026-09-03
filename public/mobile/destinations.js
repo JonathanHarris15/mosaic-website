@@ -46,6 +46,11 @@
         // reachable only by a tile on Home is a page you have to go home to
         // reach. Same gate as the web card (MS-120) — editor and above.
         { key: 'roles-manager', label: 'Roles Manager', icon: 'hand-heart', symbol: 'volunteer_activism', route: 'rolesManager', permissionLevels: ['editor', 'elder', 'admin', 'super_admin'] },
+        // Forms, for the same reason the Roles Manager is here: on a phone the
+        // drawer IS the navigation, and the web's answer — a dashboard card —
+        // does not exist on this surface. Same gate as that card and as the
+        // page's own check, editor and above.
+        { key: 'forms', label: 'Forms', icon: 'clipboard-list', symbol: 'ballot', route: 'forms', permissionLevels: ['editor', 'elder', 'admin', 'super_admin'] },
     ];
 
     // What a permission level is CALLED to the person holding it. Shared for the
@@ -89,6 +94,10 @@
         // authoring home for what a Role IS. A second copy of that screen is a
         // second place for the rules about slots and restrictions to drift.
         rolesManager: 'roles-manager.html',
+        // The Forms library is the desktop page opened in-shell rather than a
+        // native port, so there is one library rather than two to keep in step
+        // — the same trade the Calendar and the Roles Manager already make.
+        forms: 'forms.html',
     };
 
     // True when a destination is visible to this user. No gate means everyone.
