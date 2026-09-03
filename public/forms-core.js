@@ -65,12 +65,12 @@
         { id: 'short_text', label: 'Short answer', group: 'Text', live: true },
         { id: 'paragraph', label: 'Paragraph', group: 'Text', live: true },
         { id: 'choice_one', label: 'Multiple choice', group: 'Choice', live: true },
-        { id: 'choice_many', label: 'Select all that apply', group: 'Choice', live: false },
-        { id: 'dropdown', label: 'Dropdown', group: 'Choice', live: false },
-        { id: 'number', label: 'Number', group: 'Number', live: false },
-        { id: 'scale', label: 'Linear scale', group: 'Number', live: false },
-        { id: 'date', label: 'Date', group: 'When', live: false },
-        { id: 'time', label: 'Time', group: 'When', live: false },
+        { id: 'choice_many', label: 'Select all that apply', group: 'Choice', live: true },
+        { id: 'dropdown', label: 'Dropdown', group: 'Choice', live: true },
+        { id: 'number', label: 'Number', group: 'Number', live: true },
+        { id: 'scale', label: 'Linear scale', group: 'Number', live: true },
+        { id: 'date', label: 'Date', group: 'When', live: true },
+        { id: 'time', label: 'Time', group: 'When', live: true },
         { id: 'image', label: 'Image', group: 'Attach', live: false },
         { id: 'file', label: 'File submission', group: 'Attach', live: false },
         { id: 'person', label: 'Directory Person picker', group: 'From the app', live: false },
@@ -82,6 +82,77 @@
 
     // Which types carry a list of options the author writes.
     const OPTION_TYPES = { choice_one: true, choice_many: true, dropdown: true };
+
+    // Which types are answered with a number, and read back as a spread rather
+    // than as a list of strings.
+    const NUMERIC_TYPES = { number: true, scale: true };
+
+    // Which types are stored in a fixed, sortable text form. That is the whole
+    // reason the format is pinned: "the 3rd" and "the 12th" fall the wrong way
+    // round as ordinary words, and a locale string sorts by whatever the
+    // answerer's phone happened to write.
+    const WHEN_TYPES = { date: true, time: true };
+
+    // ── The linear scale ─────────────────────────────────────────────────────
+    //
+    // A scale runs between two ends and carries a word for each, so "1 = never,
+    // 5 = every week" is part of the question rather than something the author
+    // has to write into the question text and keep in step by hand.
+    //
+    // It starts at 0 or 1 and stops at 10. Both ends are clamped in the model
+    // rather than by the number boxes on the builder, because a scale arrives
+    // from a paste and from whatever a future import does as well as from a
+    // person typing. A 500-point scale is a row of buttons off the side of a
+    // phone; an upside-down one is a question nobody can answer.
+    const SCALE_MAX_CEILING = 10;
+    const DEFAULT_SCALE = { min: 1, max: 5 };
+
+    function buildScale(spec) {
+        const s = spec || {};
+        let min = Number(s.min);
+        let max = Number(s.max);
+        if (!Number.isFinite(min)) min = DEFAULT_SCALE.min;
+        if (!Number.isFinite(max)) max = DEFAULT_SCALE.max;
+        min = Math.round(min);
+        max = Math.round(max);
+        if (min < 0) min = 0;
+        if (min > 1) min = 1;
+        if (max > SCALE_MAX_CEILING) max = SCALE_MAX_CEILING;
+        if (max <= min) max = Math.min(SCALE_MAX_CEILING, min + 1);
+        return {
+            min: min,
+            max: max,
+            minLabel: trimTo(s.minLabel, MAX_OPTION_LENGTH),
+            maxLabel: trimTo(s.maxLabel, MAX_OPTION_LENGTH),
+        };
+    }
+
+    function scalePoints(scale) {
+        const s = scale || DEFAULT_SCALE;
+        const out = [];
+        for (let v = s.min; v <= s.max; v += 1) out.push(v);
+        return out;
+    }
+
+    // ── A date and a time ────────────────────────────────────────────────────
+    //
+    // Checked rather than parsed leniently: 2026-13-01 has the right shape and
+    // is not a date, and a browser that accepts it will happily store it.
+    function isDateStr(value) {
+        const str = String(value == null ? '' : value);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return false;
+        const parts = str.split('-').map(Number);
+        const when = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+        return when.getUTCFullYear() === parts[0]
+            && when.getUTCMonth() === parts[1] - 1
+            && when.getUTCDate() === parts[2];
+    }
+
+    function isTimeStr(value) {
+        const m = /^(\d{2}):(\d{2})$/.exec(String(value == null ? '' : value));
+        if (!m) return false;
+        return Number(m[1]) <= 23 && Number(m[2]) <= 59;
+    }
 
     function questionType(id) {
         return TYPES_BY_ID[id] || null;
@@ -244,6 +315,9 @@
                 .map(o => String(o == null ? '' : o).trim().slice(0, MAX_OPTION_LENGTH))
                 .filter(o => o.length > 0);
         }
+        if (type === 'scale') {
+            q.scale = buildScale(s.scale);
+        }
         return q;
     }
 
@@ -386,6 +460,67 @@
             .map(q => ({ id: q.id, text: q.text }));
     }
 
+    // ── Is this answer the right shape for the question it answers? ──────────
+    //
+    // Separate from missingRequired on purpose. That one is about ABSENCE — a
+    // required question nobody filled in. This one is about an answer that IS
+    // there and is wrong for its type: a scale off the end of its own range, a
+    // date that is not a date, a choice the form never offered.
+    //
+    // ⚠ Like missingRequired, the copy that counts runs on the server. A person
+    // answering a public form has a browser we do not control, and every check
+    // the fill-in page makes is a courtesy to somebody honest — an option that
+    // was never on the form arrives by somebody typing into the request, not by
+    // clicking.
+    //
+    // A question left blank is not a fault here. Only required questions must be
+    // answered, and a partial Response is ordinary rather than broken.
+    function answerFault(q, value) {
+        const type = q.type;
+
+        if (type === 'choice_many') {
+            const list = Array.isArray(value) ? value : [value];
+            const offered = q.options || [];
+            const stray = list.some(v => offered.indexOf(v) === -1);
+            return stray ? 'That is not one of the choices offered.' : '';
+        }
+        if (hasOptions(type)) {
+            if (Array.isArray(value)) return 'Only one choice is allowed here.';
+            return (q.options || []).indexOf(value) === -1
+                ? 'That is not one of the choices offered.'
+                : '';
+        }
+        if (Array.isArray(value)) return 'That answer has the wrong shape.';
+
+        if (type === 'number') {
+            return Number.isFinite(Number(value)) ? '' : 'That needs to be a number.';
+        }
+        if (type === 'scale') {
+            const n = Number(value);
+            const scale = q.scale || DEFAULT_SCALE;
+            if (!Number.isFinite(n) || Math.round(n) !== n) {
+                return 'That needs to be a number on the scale.';
+            }
+            return (n < scale.min || n > scale.max)
+                ? 'That is off the end of the scale.'
+                : '';
+        }
+        if (type === 'date') return isDateStr(value) ? '' : 'That needs to be a date.';
+        if (type === 'time') return isTimeStr(value) ? '' : 'That needs to be a time.';
+        return '';
+    }
+
+    function answerProblems(form, answers) {
+        const given = normaliseAnswers(answers);
+        const problems = [];
+        askedQuestions(form).forEach(q => {
+            if (!(q.id in given)) return;
+            const why = answerFault(q, given[q.id]);
+            if (why) problems.push({ id: q.id, text: q.text, why: why });
+        });
+        return problems;
+    }
+
     // ── Reading anonymous answers back ───────────────────────────────────────
     //
     // A stable shuffle keyed by the form. Two elders looking at the same poll at
@@ -484,6 +619,34 @@
                     // winner fills the track and the rest are read against it.
                     width: Math.round((counts[o] / top) * 100),
                 }));
+            } else if (NUMERIC_TYPES[q.type]) {
+                // A spread and an average, not a bag of strings. A scale shows
+                // EVERY point on it including the ones nobody picked — a gap in
+                // the middle is the interesting part of the answer, and it
+                // disappears if only the values given are drawn. A free number
+                // has no such range, so it shows what came back.
+                const numbers = given.map(v => Number(v)).filter(n => Number.isFinite(n));
+                const values = q.type === 'scale'
+                    ? scalePoints(q.scale)
+                    : numbers.slice().sort((a, b) => a - b).filter((n, i, all) => i === 0 || all[i - 1] !== n);
+
+                const counts = {};
+                values.forEach(v => { counts[v] = 0; });
+                numbers.forEach(n => { if (n in counts) counts[n] += 1; });
+
+                const top = values.reduce((most, v) => Math.max(most, counts[v]), 1);
+                out.distribution = values.map(v => ({
+                    value: v,
+                    count: counts[v],
+                    width: Math.round((counts[v] / top) * 100),
+                }));
+                const total = numbers.reduce((sum, n) => sum + n, 0);
+                out.average = numbers.length
+                    ? Math.round((total / numbers.length) * 100) / 100
+                    : null;
+            } else if (WHEN_TYPES[q.type]) {
+                // Sorted, which is the whole reason the stored format is fixed.
+                out.answers = given.map(v => String(v)).sort();
             } else {
                 out.answers = given.map(v => String(v));
             }
@@ -524,6 +687,13 @@
         buildResponse,
         buildLedgerEntry,
         missingRequired,
+        answerProblems,
+        isDateStr,
+        isTimeStr,
+        buildScale,
+        scalePoints,
+        DEFAULT_SCALE,
+        SCALE_MAX_CEILING,
         tally,
         stableShuffle,
         anonymousReadOrder,

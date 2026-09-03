@@ -128,10 +128,20 @@ test('unpublished and closed are different answers, and both refuse', () => {
 
 // ── Questions ────────────────────────────────────────────────────────────────
 
-test('all thirteen types are named, and only three are live', () => {
+test('all thirteen types are named, and the rich four are still to come', () => {
+    // MS-360 shipped three live and ten greyed; MS-377 lit six more. What is
+    // left is the four that need something beyond a control on a page — the
+    // directory picker and attachments (MS-363), and payment (MS-364). The
+    // count stays 13 either way: the picker was built for thirteen from the
+    // start so that growing into it is not a redesign.
     assert.strictEqual(FormsCore.QUESTION_TYPES.length, 13);
     const live = FormsCore.QUESTION_TYPES.filter(t => t.live).map(t => t.id);
-    assert.deepStrictEqual(live, ['short_text', 'paragraph', 'choice_one']);
+    assert.deepStrictEqual(live, [
+        'short_text', 'paragraph', 'choice_one', 'choice_many',
+        'dropdown', 'number', 'scale', 'date', 'time',
+    ]);
+    const waiting = FormsCore.QUESTION_TYPES.filter(t => !t.live).map(t => t.id);
+    assert.deepStrictEqual(waiting, ['image', 'file', 'person', 'payment']);
 });
 
 test('a question of a type that is not live yet falls back rather than saving', () => {
@@ -273,4 +283,163 @@ test('an unfiled form says so explicitly rather than leaving the field off', () 
     // is reachable by its public link whether or not anybody filed it.
     const form = FormsCore.buildFormTemplate({ title: 'Elder interview' });
     assert.strictEqual(form.folderId, null);
+});
+
+// ── The rest of the plain question types (MS-377) ─────────────────────────────
+//
+// MS-360 named all thirteen types and marked three of them working. Six more go
+// live here. Two of those need more than a flag: a linear scale carries the ends
+// it runs between, and a date or a time is stored in a form that SORTS, because
+// "the 3rd" and "the 12th" fall the wrong way round as ordinary words.
+
+test('the six plain types are live, and the four rich ones still are not', () => {
+    ['choice_many', 'dropdown', 'number', 'scale', 'date', 'time'].forEach(id => {
+        assert.ok(FormsCore.isLiveType(id), id + ' should be live now');
+    });
+    // MS-363 and MS-364. Still named in the picker, still greyed.
+    ['image', 'file', 'person', 'payment'].forEach(id => {
+        assert.ok(!FormsCore.isLiveType(id), id + ' belongs to a later ticket');
+    });
+});
+
+test('a linear scale carries the ends it runs between, and a word for each', () => {
+    const q = FormsCore.buildQuestion({
+        id: 'q1', type: 'scale', text: 'How often do you come?',
+        scale: { min: 1, max: 5, minLabel: 'Never', maxLabel: 'Every week' },
+    });
+    assert.equal(q.scale.min, 1);
+    assert.equal(q.scale.max, 5);
+    assert.equal(q.scale.minLabel, 'Never');
+    assert.equal(q.scale.maxLabel, 'Every week');
+});
+
+test('a scale nobody configured is still answerable', () => {
+    const q = FormsCore.buildQuestion({ id: 'q1', type: 'scale', text: 'Rate it' });
+    assert.ok(q.scale.max > q.scale.min, 'a scale with no range is a question nobody can answer');
+});
+
+test('a scale cannot be built upside down or unreadably long', () => {
+    const upsideDown = FormsCore.buildQuestion({
+        id: 'q1', type: 'scale', text: 'x', scale: { min: 9, max: 2 },
+    });
+    assert.ok(upsideDown.scale.max > upsideDown.scale.min);
+
+    const huge = FormsCore.buildQuestion({
+        id: 'q2', type: 'scale', text: 'x', scale: { min: 1, max: 500 },
+    });
+    assert.ok(huge.scale.max <= 10, 'a 500-point scale is a row of buttons off the side of a phone');
+});
+
+// ── What counts as an answer, per type ───────────────────────────────────────
+
+const scaleForm = () => ({
+    questions: [FormsCore.buildQuestion({
+        id: 'q1', type: 'scale', text: 'How often?', scale: { min: 1, max: 5 },
+    })],
+});
+
+test('a scale answered at either end is fine', () => {
+    assert.deepEqual(FormsCore.answerProblems(scaleForm(), { q1: 1 }), []);
+    assert.deepEqual(FormsCore.answerProblems(scaleForm(), { q1: 5 }), []);
+});
+
+test('a scale answered outside its ends is refused, and the question is named', () => {
+    const tooHigh = FormsCore.answerProblems(scaleForm(), { q1: 6 });
+    assert.equal(tooHigh.length, 1);
+    assert.equal(tooHigh[0].id, 'q1');
+    assert.ok(tooHigh[0].text, 'a refusal that does not say which question is not usable');
+    assert.equal(FormsCore.answerProblems(scaleForm(), { q1: 0 }).length, 1);
+    assert.equal(FormsCore.answerProblems(scaleForm(), { q1: 'three' }).length, 1);
+});
+
+test('a number question refuses something that is not a number', () => {
+    const form = { questions: [FormsCore.buildQuestion({ id: 'q1', type: 'number', text: 'How many?' })] };
+    assert.deepEqual(FormsCore.answerProblems(form, { q1: '12' }), []);
+    assert.deepEqual(FormsCore.answerProblems(form, { q1: '-3' }), []);
+    assert.equal(FormsCore.answerProblems(form, { q1: 'a few' }).length, 1);
+});
+
+test('a date is a date and a time is a time, or neither is accepted', () => {
+    const form = {
+        questions: [
+            FormsCore.buildQuestion({ id: 'd', type: 'date', text: 'Which day?' }),
+            FormsCore.buildQuestion({ id: 't', type: 'time', text: 'What time?' }),
+        ],
+    };
+    assert.deepEqual(FormsCore.answerProblems(form, { d: '2026-11-03', t: '18:30' }), []);
+    assert.equal(FormsCore.answerProblems(form, { d: '3rd November' }).length, 1);
+    assert.equal(FormsCore.answerProblems(form, { d: '2026-13-01' }).length, 1, 'there is no thirteenth month');
+    assert.equal(FormsCore.answerProblems(form, { t: '6.30pm' }).length, 1);
+    assert.equal(FormsCore.answerProblems(form, { t: '25:00' }).length, 1);
+});
+
+test('a choice answer has to be one of the choices offered', () => {
+    const form = {
+        questions: [
+            FormsCore.buildQuestion({ id: 'one', type: 'dropdown', text: 'Pick', options: ['A', 'B'] }),
+            FormsCore.buildQuestion({ id: 'many', type: 'choice_many', text: 'Pick some', options: ['A', 'B'] }),
+        ],
+    };
+    assert.deepEqual(FormsCore.answerProblems(form, { one: 'A', many: ['A', 'B'] }), []);
+    assert.equal(FormsCore.answerProblems(form, { one: 'C' }).length, 1,
+        'an option the form does not offer is somebody typing into the request');
+    assert.equal(FormsCore.answerProblems(form, { many: ['A', 'C'] }).length, 1);
+});
+
+test('a question left unanswered is not a wrong answer', () => {
+    // Only REQUIRED questions must be answered — a partial Response is ordinary.
+    // Being absent is missingRequired's business, not this one's.
+    assert.deepEqual(FormsCore.answerProblems(scaleForm(), {}), []);
+});
+
+// ── Reading them back ────────────────────────────────────────────────────────
+
+test('a scale is read back as a distribution and an average, not a list of strings', () => {
+    const form = scaleForm();
+    const responses = [
+        { answers: { q1: '5' } }, { answers: { q1: '3' } },
+        { answers: { q1: '5' } }, { answers: { q1: '1' } },
+    ];
+    const row = FormsCore.tally(form, responses)[0];
+    assert.equal(row.answered, 4);
+    assert.equal(row.average, 3.5);
+    assert.deepEqual(row.distribution.map(d => [d.value, d.count]),
+        [[1, 1], [2, 0], [3, 1], [4, 0], [5, 2]],
+        'a scale shows every point on it, including the ones nobody picked');
+});
+
+test('a number is read back as a distribution and an average too', () => {
+    const form = { questions: [FormsCore.buildQuestion({ id: 'q1', type: 'number', text: 'How many?' })] };
+    const row = FormsCore.tally(form, [{ answers: { q1: '2' } }, { answers: { q1: '4' } }])[0];
+    assert.equal(row.average, 3);
+    assert.deepEqual(row.distribution.map(d => d.value), [2, 4],
+        'a free number shows the values given, not every number between them');
+});
+
+test('dates and times come back in order', () => {
+    const form = {
+        questions: [
+            FormsCore.buildQuestion({ id: 'd', type: 'date', text: 'Which day?' }),
+            FormsCore.buildQuestion({ id: 't', type: 'time', text: 'What time?' }),
+        ],
+    };
+    const rows = FormsCore.tally(form, [
+        { answers: { d: '2026-11-12', t: '18:30' } },
+        { answers: { d: '2026-11-03', t: '09:00' } },
+    ]);
+    assert.deepEqual(rows[0].answers, ['2026-11-03', '2026-11-12']);
+    assert.deepEqual(rows[1].answers, ['09:00', '18:30']);
+});
+
+test('select all that apply counts every box a person ticked', () => {
+    const form = {
+        questions: [FormsCore.buildQuestion({
+            id: 'q1', type: 'choice_many', text: 'Which nights?', options: ['Mon', 'Tue', 'Wed'],
+        })],
+    };
+    const row = FormsCore.tally(form, [
+        { answers: { q1: ['Mon', 'Tue'] } },
+        { answers: { q1: ['Mon'] } },
+    ])[0];
+    assert.deepEqual(row.options.map(o => [o.label, o.count]), [['Mon', 2], ['Tue', 1], ['Wed', 0]]);
 });
