@@ -91,6 +91,28 @@
   }
 
   function signIn(email, password) { return auth.signInWithEmailAndPassword(email, password); }
+
+  // Making an account on the phone is the same act as making one on the web
+  // (login.html): Firebase Auth holds the password, and we write the user
+  // document that gives the account its rank. A new account starts as a viewer;
+  // an admin raises it. The password is NOT stored here and must never be —
+  // see MS-241 and account-recovery-core.js.
+  function signUp(email, password) {
+    return auth.createUserWithEmailAndPassword(email, password).then(function (cred) {
+      var user = cred.user;
+      return db.collection("users").doc(user.uid).set({
+        email: user.email,
+        permissionLevel: "viewer",
+        role: "viewer",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      }).then(function () { return cred; });
+    });
+  }
+
+  // The way back into a locked-out account. What we SAY about it is decided by
+  // account-recovery-core.js, and deliberately reads the same whether or not
+  // that address has an account — read the warning there before changing it.
+  function sendPasswordReset(email) { return auth.sendPasswordResetEmail(email); }
   // Signing out forgets who you were, or the next person to use this phone
   // starts their first page holding your rank.
   function signOut() {
@@ -1052,7 +1074,8 @@
     auth: auth, db: db,
     onUser: onUser, loadProfile: loadProfile, warmCache: warmCache,
     forget: forget,
-    signIn: signIn, signOut: signOut,
+    signIn: signIn, signUp: signUp, signOut: signOut,
+    sendPasswordReset: sendPasswordReset,
     DESTINATIONS: DESTINATIONS, canSee: canSee,
     getHymns: getHymns, getPeople: getPeople, getServices: getServices,
     getNextService: getNextService,

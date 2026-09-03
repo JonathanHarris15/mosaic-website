@@ -3422,7 +3422,10 @@ test('the Event screen reads the place through the model, not off the document',
 test('the phone app sends a signed-out person to sign in', () => {
     const app = fs.readFileSync(path.join(PUBLIC, 'mobile', 'app.js'), 'utf8');
 
-    assert.ok(/nav\("login"\)/.test(app), 'nothing ever routes to the login screen');
+    // It REPLACES the entry rather than pushing one — otherwise the sign-in
+    // screen stays in the back stack and one back gesture after signing in puts
+    // you in front of it again. See mobile-login-doors.test.js.
+    assert.ok(/nav\("login"/.test(app), 'nothing ever routes to the login screen');
     // `undefined` is still loading. Redirecting on it bounces a signed-in person
     // off their own home screen while Firebase restores the session.
     assert.ok(/userState\[0\] !== null\) return/.test(app),
