@@ -259,3 +259,18 @@ test('the handle carries no date', () => {
     assert.deepStrictEqual(Object.keys(read[0]).sort(), ['handle', 'response']);
     assert.strictEqual(typeof read[0].handle, 'number');
 });
+
+// ── Where the form is filed (MS-375) ─────────────────────────────────────────
+
+test('a Form Template remembers the folder it is filed in', () => {
+    const form = FormsCore.buildFormTemplate({ title: 'Harvest supper', folderId: 'y2025' });
+    assert.strictEqual(form.folderId, 'y2025');
+});
+
+test('an unfiled form says so explicitly rather than leaving the field off', () => {
+    // Explicit null, so "at the top level" and "written before folders existed"
+    // cannot be told apart by accident. Either way the library shows it — a form
+    // is reachable by its public link whether or not anybody filed it.
+    const form = FormsCore.buildFormTemplate({ title: 'Elder interview' });
+    assert.strictEqual(form.folderId, null);
+});

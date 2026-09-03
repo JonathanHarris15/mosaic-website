@@ -833,6 +833,19 @@ service cloud.firestore {
       allow read, write: if isEditor();
     }
 
+    // Where a form is filed: a name and the folder it sits in, and nothing
+    // else. No answers pass through here, so this is the ordinary editor
+    // ladder rather than the closed door above it (ADR-0051 is about the
+    // ANSWERING path, which still touches nothing in this file).
+    //
+    // A folder holds no list of its children — a form remembers its folder,
+    // not the other way round (ADR-0054). That is why two editors filing at
+    // the same time cannot overwrite each other here: they write different
+    // records, not two versions of one shared tree.
+    match /form_folders/{folderId} {
+      allow read, write: if isEditor();
+    }
+
     // One person's answers. Editors read them on the Responses tab; the
     // function writes them. No client writes — validation (required questions,
     // the rung, whether the form is closed) happens on the server, because a

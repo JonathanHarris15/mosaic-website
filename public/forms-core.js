@@ -264,6 +264,12 @@
             description: trimTo(s.description, MAX_DESCRIPTION_LENGTH),
             afterword: trimTo(s.afterword, MAX_AFTERWORD_LENGTH),
             questions: (Array.isArray(s.questions) ? s.questions : []).map(buildQuestion),
+            // Where it is filed (MS-375). An explicit null means the top level,
+            // which is also where a form with an unknown folder is drawn — the
+            // library lists this collection, so a form can never be filed out of
+            // sight while its public link still works. The folder graph itself
+            // lives in form-folders-core.js.
+            folderId: s.folderId || null,
             rung: rung,
             // Forced values win over whatever was passed. A form saved as
             // `public` while carrying attribution:true would be a record that

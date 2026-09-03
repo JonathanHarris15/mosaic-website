@@ -85,3 +85,26 @@ test('no forms rule grants anything to the public', () => {
     assert.doesNotMatch(formsRegion, /allow (read|write|get|list|create|update|delete)[^;]*: if true/,
         'the public path is a Cloud Function, never a rule — see ADR-0051');
 });
+
+// ── Where a form is filed (MS-375) ───────────────────────────────────────────
+
+const foldersBlock = () => blockFor(/match \/form_folders\/\{folderId\}\s*\{([\s\S]*?)\n    \}/);
+
+test('a Form Folder is editor-and-above, like the forms it holds', () => {
+    const block = code(foldersBlock());
+    assert.match(block, /allow read, write: if isEditor\(\);/,
+        'the folder collection should be plain isEditor()');
+    assert.doesNotMatch(block, /if true/,
+        'folder names would list the whole library to the world');
+    assert.doesNotMatch(block, /request\.auth != null/,
+        'request.auth != null accepts an anonymous token anybody can mint; isSignedIn() is the floor');
+});
+
+test('filing a form is not a second way to reach one', () => {
+    // A folder carries a name and its parent, and no list of what is inside it.
+    // If it ever grew one, this collection would become a weaker second route
+    // to the library's contents — and ADR-0054 is the decision that it is not.
+    const block = code(foldersBlock());
+    assert.doesNotMatch(block, /form_responses|form_ledger/,
+        'the folder rules should say nothing about answers');
+});
