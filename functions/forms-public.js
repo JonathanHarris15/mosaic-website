@@ -172,6 +172,30 @@ function judgeSubmission(form, attempt, today) {
     };
   }
 
+  // An answer that IS there and is the wrong shape for the question it
+  // answers: a scale off the end of its own range, a date that is not a date,
+  // an option the form never offered. Asked AFTER the missing check, so
+  // somebody who left half the form blank is told that first rather than being
+  // corrected on the half they did fill in.
+  //
+  // ⚠ The fill-in page checks none of this, and that is deliberate rather than
+  // an omission: a bad value cannot arrive from the controls it draws, so
+  // anything that reaches here was typed into the request. This is the copy
+  // that counts.
+  const unfit = FormsCore.answerProblems(form, a.answers);
+  if (unfit.length) {
+    return {
+      ok: false,
+      code: "unanswerable",
+      message: unfit.length === 1 ?
+        "One answer does not fit its question." :
+        `${unfit.length} answers do not fit their questions.`,
+      // Same key as the missing list, so the page marks the same questions the
+      // same way rather than growing a second highlighting path.
+      missing: unfit,
+    };
+  }
+
   // One Response Each. Only reachable above `public` — a form anyone can open
   // has nobody to count — and FormsCore forces the setting off below that, so
   // this cannot fire on a public form even if a stored record claimed it.

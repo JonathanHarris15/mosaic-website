@@ -260,6 +260,50 @@
                                 </template>
                             </div>
 
+                            <div x-show="q.type === 'choice_many'" class="fa-opts">
+                                <template x-for="opt in (q.options || [])" :key="opt">
+                                    <label class="m-option" :class="(answers[q.id] || []).includes(opt) ? 'm-option--picked' : ''">
+                                        <input type="checkbox" :value="opt" x-model="answers[q.id]" />
+                                        <span class="m-option__mark fa-box"></span>
+                                        <span x-text="opt"></span>
+                                        <span class="m-option__said" x-show="state === 'answered' && (was[q.id] || []).includes(opt)">Your answer</span>
+                                    </label>
+                                </template>
+                            </div>
+
+                            <!-- A native select, unlike the builder's type picker.
+                                 There the OS popup was wrong because thirteen
+                                 grouped options opened off the top of the window;
+                                 here it is right, because a phone draws its own
+                                 wheel for this and that beats anything we would
+                                 draw for somebody answering one-handed. -->
+                            <select x-show="q.type === 'dropdown'" class="m-input" x-model="answers[q.id]">
+                                <option value="">Choose one…</option>
+                                <template x-for="opt in (q.options || [])" :key="opt">
+                                    <option :value="opt" x-text="opt"></option>
+                                </template>
+                            </select>
+
+                            <input x-show="q.type === 'number'" type="number" class="m-input" inputmode="decimal"
+                                   :placeholder="q.placeholder" x-model="answers[q.id]" />
+
+                            <div x-show="q.type === 'scale'" class="fa-scale">
+                                <span class="fa-scale__end" x-show="q.scale && q.scale.minLabel" x-text="q.scale && q.scale.minLabel"></span>
+                                <div class="fa-scale__points">
+                                    <template x-for="point in scalePoints(q)" :key="point">
+                                        <label class="fa-scale__point" :class="String(answers[q.id]) === String(point) ? 'fa-scale__point--picked' : ''">
+                                            <input type="radio" :name="q.id" :value="point" x-model="answers[q.id]" />
+                                            <span x-text="point"></span>
+                                        </label>
+                                    </template>
+                                </div>
+                                <span class="fa-scale__end" x-show="q.scale && q.scale.maxLabel" x-text="q.scale && q.scale.maxLabel"></span>
+                            </div>
+
+                            <input x-show="q.type === 'date'" type="date" class="m-input" x-model="answers[q.id]" />
+
+                            <input x-show="q.type === 'time'" type="time" class="m-input" x-model="answers[q.id]" />
+
                             <span class="m-input-hint" x-show="q.hint" x-text="q.hint"></span>
                         </div>
                     </div>
@@ -284,6 +328,20 @@
       new primitive this design introduced, went there rather than here.
     -->
     <style>
+        /* The linear scale's row of points. Wraps rather than scrolls: a
+           ten-point scale on a narrow phone becomes two rows, which is
+           readable, where a sideways scroll hides the end somebody is
+           reaching for. */
+        /* Select-all borrows the option row from the component library and
+           only squares its mark, because a round box that takes several
+           ticks reads as a radio that has gone wrong. */
+        .fa-box { border-radius: 5px; }
+        .fa-scale { display: flex; flex-direction: column; gap: 6px; }
+        .fa-scale__end { font-size: 12px; color: var(--on-surface-variant); }
+        .fa-scale__points { display: flex; flex-wrap: wrap; gap: 8px; }
+        .fa-scale__point { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0 10px; border: 1px solid var(--outline-variant); border-radius: var(--radius-md, 10px); background: var(--surface-container-lowest); cursor: pointer; font-weight: 600; }
+        .fa-scale__point input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .fa-scale__point--picked { border-color: var(--primary); background: var(--primary-fixed, var(--surface-container)); color: var(--primary); }
         .fa-brand { display: flex; align-items: center; gap: 10px; padding: 13px var(--space-sm); background: var(--surface-container-lowest); border-bottom: 1px solid var(--outline-variant); }
         .fa-brand__name { font-family: var(--font-display); font-size: 13px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--primary); }
         .fa-brand__where { margin-left: auto; font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant); }

@@ -188,3 +188,92 @@ test('somebody with no linked Person is refused a one-each form rather than let 
     }, TODAY);
     assert.strictEqual(verdict.code, 'no-person');
 });
+
+// ── An answer that is there and does not fit (MS-378) ────────────────────────
+//
+// Six question types went live in MS-377, and each one has a way of being
+// answered wrongly that the fill-in page cannot produce. A scale draws a row of
+// buttons between its own ends; a date box hands back a date. So a value outside
+// those was typed into the request rather than clicked, and the server is the
+// only place that matters.
+
+const richForm = (over) => FormsCore.buildFormTemplate(Object.assign({
+    title: 'Spring sign-up',
+    published: true,
+    rung: 'public',
+    questions: [
+        { id: 'q1', type: 'short_text', text: 'Your name', required: true },
+        {
+            id: 'howoften', type: 'scale', text: 'How often do you come?',
+            scale: { min: 1, max: 5, minLabel: 'Never', maxLabel: 'Every week' },
+        },
+        { id: 'nights', type: 'choice_many', text: 'Which nights?', options: ['Mon', 'Tue'] },
+        { id: 'when', type: 'date', text: 'Which day suits?' },
+        { id: 'start', type: 'time', text: 'What time?' },
+        { id: 'howmany', type: 'number', text: 'How many of you?' },
+    ],
+}, over || {}));
+
+const answered = (over) => Object.assign({ q1: 'Rebecca' }, over || {});
+
+test('an answer that fits every question is written', () => {
+    const verdict = fp.judgeSubmission(richForm(), {
+        formId: 'f1',
+        answers: answered({
+            howoften: 5, nights: ['Mon'], when: '2026-11-03', start: '19:30', howmany: '2',
+        }),
+    }, TODAY);
+    assert.strictEqual(verdict.ok, true);
+});
+
+test('a scale answered off the end of its own range is refused', () => {
+    const verdict = fp.judgeSubmission(richForm(), {
+        formId: 'f1', answers: answered({ howoften: 9 }),
+    }, TODAY);
+    assert.strictEqual(verdict.ok, false);
+    assert.strictEqual(verdict.code, 'unanswerable');
+    assert.strictEqual(verdict.missing.length, 1);
+    assert.strictEqual(verdict.missing[0].id, 'howoften');
+    assert.ok(verdict.missing[0].text, 'the refusal has to name the question');
+});
+
+test('a date that is not a date, and a time that is not a time, are refused', () => {
+    const badDate = fp.judgeSubmission(richForm(), {
+        formId: 'f1', answers: answered({ when: 'next Tuesday' }),
+    }, TODAY);
+    assert.strictEqual(badDate.code, 'unanswerable');
+
+    const badTime = fp.judgeSubmission(richForm(), {
+        formId: 'f1', answers: answered({ start: 'half seven' }),
+    }, TODAY);
+    assert.strictEqual(badTime.code, 'unanswerable');
+});
+
+test('an option the form never offered is refused', () => {
+    const verdict = fp.judgeSubmission(richForm(), {
+        formId: 'f1', answers: answered({ nights: ['Mon', 'Sunday'] }),
+    }, TODAY);
+    assert.strictEqual(verdict.code, 'unanswerable');
+});
+
+test('a number question refuses prose', () => {
+    const verdict = fp.judgeSubmission(richForm(), {
+        formId: 'f1', answers: answered({ howmany: 'a few of us' }),
+    }, TODAY);
+    assert.strictEqual(verdict.code, 'unanswerable');
+});
+
+test('leaving the optional ones blank is not an error', () => {
+    // Only REQUIRED questions must be answered. A partial Response is ordinary.
+    const verdict = fp.judgeSubmission(richForm(), { formId: 'f1', answers: answered() }, TODAY);
+    assert.strictEqual(verdict.ok, true);
+});
+
+test('a blank required question is reported before a wrong answer is', () => {
+    // Somebody who left half the form empty is told that, rather than being
+    // corrected on the half they did fill in.
+    const verdict = fp.judgeSubmission(richForm(), {
+        formId: 'f1', answers: { howoften: 99 },
+    }, TODAY);
+    assert.strictEqual(verdict.code, 'incomplete');
+});

@@ -162,6 +162,22 @@
 
             get missingIds() { return this.missing.map(m => m.id); },
 
+            // A "select all that apply" answer is a list, and it has to already
+            // be one before the first box is ticked — x-model on a checkbox
+            // group pushes into an array and does not make one.
+            readyFor(questions) {
+                (questions || []).forEach(q => {
+                    if (q.type === 'choice_many' && !Array.isArray(this.answers[q.id])) {
+                        this.answers[q.id] = [];
+                    }
+                });
+            },
+
+            // The points a linear scale runs between, for the row of buttons.
+            scalePoints(q) {
+                return window.FormsCore.scalePoints(q && q.scale);
+            },
+
             get missingLine() {
                 if (!this.missing.length) return '';
                 return this.missing.map(m => m.text).join(' · ');
@@ -313,6 +329,7 @@
             settle(data, isFetch) {
                 if (data.ok && isFetch) {
                     this.form = data.view || this.form;
+                    this.readyFor(this.form.questions);
                     this.state = 'open';
                     return;
                 }
@@ -342,6 +359,14 @@
                     case 'incomplete':
                         this.missing = data.missing || [];
                         this.problem = data.message || 'Some questions still need an answer.';
+                        return;
+                    case 'unanswerable':
+                        // An answer that is there and does not fit — the same
+                        // questions get marked, because to the person filling
+                        // it in "you missed this" and "that will not do" are
+                        // the same job: look here again.
+                        this.missing = data.missing || [];
+                        this.problem = data.message || 'Some answers do not fit their questions.';
                         return;
                     case 'already-answered':
                         // Only a ballot reaches this. An attributed one-each

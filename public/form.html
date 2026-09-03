@@ -269,6 +269,27 @@
                                                 </button>
                                             </div>
 
+                                            <!-- A linear scale runs between two ends and
+                                                 carries a word for each, so "1 = never,
+                                                 5 = every week" is part of the question
+                                                 rather than something written into the
+                                                 question text and kept in step by hand.
+                                                 The model clamps both ends; these boxes
+                                                 only ask. -->
+                                            <div class="fp-field" x-show="q.type === 'scale'">
+                                                <span class="m-label m-label--sm">The scale</span>
+                                                <div class="fp-row">
+                                                    <input type="number" class="m-input" style="flex:0 0 90px" min="0" max="1"
+                                                           x-model.number="q.scale.min" @input="onScaleChange(q)" />
+                                                    <span class="m-label m-label--sm" style="flex:0 0 auto">to</span>
+                                                    <input type="number" class="m-input" style="flex:0 0 90px" min="2" max="10"
+                                                           x-model.number="q.scale.max" @input="onScaleChange(q)" />
+                                                    <span class="m-input-hint" style="flex:1 1 auto" x-text="scaleLine(q)"></span>
+                                                </div>
+                                                <input type="text" class="m-input" placeholder="Word for the low end (optional)" maxlength="200" x-model="q.scale.minLabel" @input="touch()" />
+                                                <input type="text" class="m-input" placeholder="Word for the high end (optional)" maxlength="200" x-model="q.scale.maxLabel" @input="touch()" />
+                                            </div>
+
                                             <input type="text" class="m-input" placeholder="Hint under the box (optional)" maxlength="140" x-model="q.hint" @input="touch()" />
                                             <input type="text" class="m-input" placeholder="Placeholder inside the box (optional)" maxlength="80" x-model="q.placeholder" @input="touch()" />
                                         </div>
@@ -337,6 +358,24 @@
                                     </div>
                                 </template>
                             </div>
+
+                            <!-- A number or a scale, read as a spread. The same
+                                 bars the options use, because it is the same
+                                 question — how many said this — and a second
+                                 chart shape would be a second thing to learn.
+                                 A scale draws every point on it including the
+                                 ones nobody picked; the gap is the answer. -->
+                            <div class="f-tally" x-show="row.distribution">
+                                <template x-for="d in (row.distribution || [])" :key="d.value">
+                                    <div class="f-bar">
+                                        <span class="f-barname" x-text="d.value"></span>
+                                        <span class="f-bartrack"><span class="f-barfill" :style="'width:' + d.width + '%'"></span></span>
+                                        <span class="f-barnum" x-text="d.count"></span>
+                                    </div>
+                                </template>
+                            </div>
+                            <div class="m-label m-label--sm" x-show="row.average !== null && row.average !== undefined"
+                                 x-text="'Average ' + row.average"></div>
 
                             <div class="fp-quotes" x-show="row.answers && row.answers.length">
                                 <template x-for="(q, qi) in quotesFor(row)" :key="qi">

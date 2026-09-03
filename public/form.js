@@ -204,7 +204,27 @@ function formPage() {
             if (FormsCore.hasOptions(q.type) && !(q.options || []).length) {
                 q.options = ['', ''];
             }
+            // And switching to a scale needs a scale to switch to. A form
+            // LOADED from Firestore comes through buildFormTemplate and always
+            // has one; a question retyped here is the case this covers.
+            if (q.type === 'scale' && !q.scale) {
+                q.scale = FormsCore.buildScale(null);
+            }
             this.touch();
+        },
+
+        // The ends are clamped in the model, not by these boxes — a scale
+        // arrives from a paste as well as from somebody typing. Running the
+        // typed value back through it means the box shows what will actually be
+        // saved rather than what was asked for.
+        onScaleChange(q) {
+            q.scale = FormsCore.buildScale(q.scale);
+            this.touch();
+        },
+
+        scaleLine(q) {
+            const points = FormsCore.scalePoints(q && q.scale).length;
+            return points + (points === 1 ? ' point' : ' points');
         },
 
         hasOptions(type) { return FormsCore.hasOptions(type); },
