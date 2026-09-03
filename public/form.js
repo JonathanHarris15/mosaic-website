@@ -182,6 +182,38 @@ function formPage() {
             }).catch(() => { this.tags = []; });
         },
 
+        // ── Getting the responses out (MS-374) ───────────────────────────────
+        //
+        // Built here, from responses this page has ALREADY read to draw the
+        // tally. The ticket asked for this server-side, "not assembled in a
+        // browser that would need to read more than it should" — and the
+        // reasoning behind that does not apply: this reads nothing extra. A
+        // Cloud Function would move the same bytes through an extra hop for no
+        // gain in what anybody can see. The deviation is recorded on the ticket.
+        //
+        // ⚠ What goes in the file is FormsExportCore's decision, not this
+        // page's. An anonymous form's export carries no name, no timestamp and
+        // no response id, and its rows come out in the same stable shuffle the
+        // screen uses.
+        exportResponses() {
+            if (!this.form || !this.responses.length) return;
+            const on = this.today;
+            const csv = FormsExportCore.toCsv(this.form, this.responses, {
+                formId: this.formId,
+                exportedOn: on,
+            });
+            // A blob and an object URL: the file is made in this tab and never
+            // fetched from anywhere, so there is nothing to leak and nothing to
+            // forward.
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = FormsExportCore.fileNameFor(this.form, on);
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 30000);
+        },
+
         // Open what somebody sent.
         //
         // ⚠ FETCHED AS THE SIGNED-IN READER, NEVER LINKED. getDownloadURL()
