@@ -185,6 +185,15 @@
                 return n;
             },
 
+            // Owed to the shared question markup: was this option what they
+            // answered last time? Only a form with One Response Each ever has a
+            // last time; everywhere else this is false and nothing is marked.
+            saidBefore(q, opt) {
+                if (this.state !== 'answered') return false;
+                const said = this.was[q.id];
+                return Array.isArray(said) ? said.includes(opt) : said === opt;
+            },
+
             // The points a linear scale runs between, for the row of buttons.
             scalePoints(q) {
                 return window.FormsCore.scalePoints(q && q.scale);
