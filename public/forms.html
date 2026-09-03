@@ -27,7 +27,11 @@
                 <div class="m-header__titles"><h1 class="m-header__title">Forms</h1></div>
             </div>
             <div class="m-header__actions">
-                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="startCreate()" x-show="!creating">
+                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="startFolder()" x-show="!creatingFolder && !creating">
+                    <span class="material-symbols-outlined">create_new_folder</span>
+                    <span class="m-btn__label">New folder</span>
+                </button>
+                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="startCreate()" x-show="!creating && !creatingFolder">
                     <span class="material-symbols-outlined">post_add</span>
                     <span class="m-btn__label">New form</span>
                 </button>
@@ -50,12 +54,25 @@
             <div class="fl-stack">
 
                 <div class="fl-bar">
-                    <!-- Reads "Forms" and nothing else. There is nowhere yet to
-                         go — folders arrive with MS-361, into a page already
-                         shaped for them (ADR-0053). -->
+                    <!-- Every level navigates, and every level takes a drop —
+                         dragging a form onto "Forms" is how it comes back out
+                         of a folder without a dialog. -->
                     <nav class="f-crumbs">
                         <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">folder_open</span>
-                        <span>Forms</span>
+                        <button type="button" class="f-crumb"
+                                :class="dragging ? 'f-crumb--target' : ''"
+                                @click="openFolder(null)"
+                                @dragover.prevent @drop.prevent="dropOn(null)">Forms</button>
+                        <template x-for="crumb in breadcrumb" :key="crumb.id">
+                            <span class="f-crumbs__step">
+                                <span class="material-symbols-outlined f-crumbs__sep">chevron_right</span>
+                                <button type="button" class="f-crumb"
+                                        :class="mayDropOn(crumb.id) ? 'f-crumb--target' : ''"
+                                        @click="openFolder(crumb.id)"
+                                        @dragover.prevent @drop.prevent="dropOn(crumb.id)"
+                                        x-text="crumb.name"></button>
+                            </span>
+                        </template>
                     </nav>
                     <div class="fl-bar__right" x-show="forms.length">
                         <span class="m-search">
@@ -66,6 +83,25 @@
                             <input type="checkbox" x-model="hideClosed" />
                             <span>Hide closed</span>
                         </label>
+                    </div>
+                </div>
+
+                <!-- A folder appears where you are with its name already
+                     editable. No dialog: filing is something you do while
+                     thinking about forms, not a task of its own. -->
+                <div class="m-card-list" x-show="creatingFolder">
+                    <div class="m-row">
+                        <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">folder</span>
+                        <span class="m-row__main">
+                            <input id="new-folder-name" type="text" class="m-input"
+                                   placeholder="Name it — 2026 sign-ups"
+                                   maxlength="60"
+                                   x-model="newFolderName"
+                                   @keydown.enter.prevent="createFolder()"
+                                   @keydown.escape.prevent="cancelFolder()" />
+                        </span>
+                        <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="createFolder()">Create</button>
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelFolder()">Cancel</button>
                     </div>
                 </div>
 
@@ -97,20 +133,76 @@
                     </button>
                 </div>
 
+                <div class="m-card-list" x-show="visibleFolders.length">
+                    <template x-for="(folder, i) in visibleFolders" :key="folder.id">
+                        <div class="m-row m-row--interactive m-row--serif f-drop"
+                             :class="[i === visibleFolders.length - 1 ? 'm-row--last' : '', mayDropOn(folder.id) ? 'f-drop--on' : '']"
+                             draggable="true"
+                             @dragstart="startDrag(folder, 'folder')"
+                             @dragend="endDrag()"
+                             @dragover.prevent
+                             @drop.prevent="dropOn(folder.id)"
+                             @click="renamingId === folder.id || openFolder(folder.id)">
+                            <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">folder</span>
+                            <span class="m-row__main">
+                                <input x-show="renamingId === folder.id" :id="'rename-' + folder.id"
+                                       type="text" class="m-input" maxlength="60" x-model="renameText"
+                                       @click.stop
+                                       @keydown.enter.prevent="commitRename(folder, true)"
+                                       @keydown.escape.prevent="cancelRename()"
+                                       @blur="commitRename(folder, true)" />
+                                <span x-show="renamingId !== folder.id" class="m-row__title" x-text="folder.name"></span>
+                                <span x-show="renamingId !== folder.id" class="m-row__sub" x-text="folderSub(folder)"></span>
+                            </span>
+                            <span class="f-acts" @click.stop>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Rename" @click="startRename(folder)"><span class="material-symbols-outlined">edit</span></button>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Move to…" @click="startMove(folder, 'folder')"><span class="material-symbols-outlined">drive_file_move</span></button>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Delete" @click="startDeleteFolder(folder)"><span class="material-symbols-outlined" style="color:var(--error)">delete</span></button>
+                            </span>
+                            <span class="m-row__chevron"><span class="material-symbols-outlined">chevron_right</span></span>
+                        </div>
+                    </template>
+                </div>
+
                 <div class="m-card-list" x-show="visible.length">
                     <template x-for="(form, i) in visible" :key="form.id">
                         <div class="m-row m-row--interactive m-row--serif"
                              :class="[i === visible.length - 1 ? 'm-row--last' : '', isClosed(form) ? 'f-dim' : '']"
-                             @click="open(form)">
+                             draggable="true"
+                             @dragstart="startDrag(form, 'form')"
+                             @dragend="endDrag()"
+                             @click="renamingId === form.id || open(form)">
                             <span class="material-symbols-outlined">description</span>
                             <span class="m-row__main">
-                                <span class="m-row__title" x-text="form.title"></span>
-                                <span class="m-row__sub" x-text="subFor(form)"></span>
+                                <input x-show="renamingId === form.id" :id="'rename-' + form.id"
+                                       type="text" class="m-input" maxlength="90" x-model="renameText"
+                                       @click.stop
+                                       @keydown.enter.prevent="commitRename(form, false)"
+                                       @keydown.escape.prevent="cancelRename()"
+                                       @blur="commitRename(form, false)" />
+                                <span x-show="renamingId !== form.id" class="m-row__title" x-text="form.title"></span>
+                                <span x-show="renamingId !== form.id" class="m-row__sub" x-text="subFor(form)"></span>
+                                <!-- Where it was found. Only while searching: a
+                                     hit three folders deep is not much use
+                                     without saying where it is. -->
+                                <span x-show="searching && renamingId !== form.id" class="m-row__sub f-where" x-text="pathFor(form)"></span>
+                            </span>
+                            <span class="f-acts" @click.stop>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Rename" @click="startRename(form)"><span class="material-symbols-outlined">edit</span></button>
+                                <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Move to…" @click="startMove(form, 'form')"><span class="material-symbols-outlined">drive_file_move</span></button>
                             </span>
                             <span class="m-badge" :class="stateFor(form).tone" x-text="stateFor(form).text"></span>
                             <span class="m-row__chevron"><span class="material-symbols-outlined">chevron_right</span></span>
                         </div>
                     </template>
+                </div>
+
+                <!-- This folder is empty, which is not the same as having no
+                     forms at all — that one offers to start you off. -->
+                <div class="m-empty" x-show="folderEmpty && !creating && !creatingFolder">
+                    <span class="material-symbols-outlined">folder_open</span>
+                    <p>Nothing filed here yet.</p>
+                    <p>Drag a form onto this folder from anywhere in the library, or make one here.</p>
                 </div>
 
                 <!-- Searched and found nothing, as opposed to having nothing -->
@@ -130,6 +222,54 @@
                 </div>
             </div>
         </template>
+
+        <!-- "Move to…" — the fallback for a device where dragging is awkward,
+             which on a touch screen is every device. Never offers a folder its
+             own subtree, so it cannot propose a move that would then be
+             refused. Built in the same shape as the Document Library's move
+             dialog, because it is the same job on the sibling page. -->
+        <div x-show="moving" x-cloak
+             class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+             @click.self="cancelMove()" @keydown.escape.window="cancelMove()">
+            <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-sm flex flex-col gap-md"
+                 role="dialog" aria-modal="true">
+                <h2 class="font-headline-md text-headline-md text-primary">Move to…</h2>
+                <p class="font-body-md text-on-surface-variant" x-text="moving ? moving.name : ''"></p>
+                <div class="flex flex-col gap-xs max-h-64 overflow-y-auto">
+                    <template x-for="opt in moveOptions" :key="opt.id">
+                        <label class="flex items-center gap-sm px-sm py-xs rounded-lg hover:bg-surface-container cursor-pointer"
+                               :style="`padding-left: ${12 + opt.depth * 20}px`">
+                            <input type="radio" x-model="moveTargetId" :value="opt.id" class="accent-primary" />
+                            <span class="material-symbols-outlined text-[18px] text-secondary" style='font-variation-settings:"FILL" 1'>folder</span>
+                            <span class="font-body-md text-on-surface" x-text="opt.name"></span>
+                        </label>
+                    </template>
+                </div>
+                <div class="flex justify-end gap-sm">
+                    <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelMove()">Cancel</button>
+                    <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="confirmMove()">Move it</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- The one thing on this page that asks first, because it is the one
+             that destroys answers people gave. The count is what makes the
+             question answerable: "delete Sign-ups?" cannot be answered,
+             "delete Sign-ups and the 14 forms in it?" can. -->
+        <div x-show="deleting" x-cloak
+             class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+             @click.self="cancelDelete()" @keydown.escape.window="cancelDelete()">
+            <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg w-full max-w-sm flex flex-col gap-md"
+                 role="dialog" aria-modal="true">
+                <h2 class="font-headline-md text-headline-md text-primary"
+                    x-text="deleting ? ('Delete ' + deleting.name + '?') : ''"></h2>
+                <p class="font-body-md text-on-surface" x-text="deleteLine"></p>
+                <div class="flex justify-end gap-sm">
+                    <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelDelete()">Keep it</button>
+                    <button type="button" class="m-btn m-btn--danger m-btn--sm" @click="confirmDeleteFolder()">Delete it</button>
+                </div>
+            </div>
+        </div>
     </main>
 
     <script src="vendor/firebase/firebase-app-compat.js"></script>
@@ -139,6 +279,7 @@
     <script src="auth.js"></script>
     <script src="date-utils.js"></script>
     <script src="forms-core.js"></script>
+    <script src="form-folders-core.js"></script>
     <script src="forms-store.js"></script>
     <script src="forms.js"></script>
     <script defer src="vendor/alpine-3.15.12.min.js"></script>
@@ -148,6 +289,21 @@
         .fl-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); flex-wrap: wrap; }
         .fl-bar__right { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
         .fl-bar__right .m-search { width: 260px; max-width: 100%; }
+        /* Breadcrumb steps. Each is a button because each navigates, and
+           each takes a drop — dragging onto "Forms" is how something comes back
+           out of a folder without a dialog. */
+        .f-crumbs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
+        .f-crumbs__step { display: inline-flex; align-items: center; gap: 4px; }
+        .f-crumbs__sep { font-size: 18px; color: var(--on-surface-variant); }
+        .f-crumb { border: 1px solid transparent; background: none; padding: 3px 8px; border-radius: var(--radius-sm, 6px); font: inherit; color: inherit; cursor: pointer; }
+        .f-crumb:hover { background: var(--surface-container); }
+        .f-crumb--target { border-color: var(--primary); background: var(--primary-fixed, var(--surface-container)); }
+        /* A row that will accept what is being dragged says so. Bound to the
+           model's own answer, so a row cannot light up for a drop that would
+           then be refused. */
+        .f-drop--on { outline: 2px solid var(--primary); outline-offset: -2px; }
+        .f-acts { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+        .f-where { font-style: italic; }
         .f-dim { opacity: .72; }
         .f-dim .m-row__title, .f-dim .m-row__sub { color: var(--on-surface-variant); }
         .m-row__main { display: block; min-width: 0; }

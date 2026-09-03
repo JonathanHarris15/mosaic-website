@@ -1,16 +1,38 @@
 // The Forms library (MS-360, MS-370).
 //
 // A place you navigate INTO, not a list you pick from beside an editor
-// (ADR-0053). Opening a form goes to its own page. That shape is here now, with
-// the folders deferred to MS-361, because a folder tree cannot live in a 372px
-// rail beside an editor — so the split pane this nearly was would have been
-// thrown away the moment folders arrived.
+// (ADR-0053). Opening a form goes to its own page — which is why the split pane
+// this nearly was would have been thrown away the moment folders arrived.
+//
+// Folders arrived in MS-376. On screen they behave exactly like the Document
+// Library's: created inline with no dialog, dragged to move with a "Move to…"
+// fallback, renamed in place, and a confirmation naming the count before a
+// full one goes. Underneath they are nothing like it (ADR-0054) — a form
+// remembers its folder, a folder does not remember its forms — and the page
+// still lists the whole `forms` collection, so filing changes where a form is
+// drawn and never whether it is.
 
 function formsPage() {
     return {
         loading: true,
         forms: [],
+        folders: [],
+        // Where we are. null is the top level.
+        currentFolderId: null,
         search: '',
+        // Inline editing, the Document Library's way: no dialog, the name is
+        // editable where the row already is.
+        creatingFolder: false,
+        newFolderName: '',
+        renamingId: null,
+        renameText: '',
+        // The "Move to…" fallback, and what is being dragged.
+        moving: null,
+        moveTargetId: '',
+        dragging: null,
+        // The one thing that does get a dialog, because it destroys answers.
+        deleting: null,
+        deletingCount: 0,
         // On by default. A closed form is a record and this page is a working
         // list; three finished sign-ups at the top is three rows of noise every
         // time somebody opens it.
@@ -49,16 +71,65 @@ function formsPage() {
             return bits.join(' · ');
         },
 
+        // What a folder row says under its name. The count reaches every
+        // depth, so a folder holding only sub-folders does not read as empty.
+        folderSub(folder) {
+            const forms = FormFoldersCore.formsUnder(this.folders, this.forms, folder.id).length;
+            const subs = FormFoldersCore.childFolders(this.folders, folder.id).length;
+            const bits = [];
+            if (subs) bits.push(subs === 1 ? '1 folder' : subs + ' folders');
+            bits.push(forms === 1 ? '1 form' : forms + ' forms');
+            return bits.join(' · ');
+        },
+
         stateFor(form) {
             if (this.isClosed(form)) return { text: 'Closed', tone: 'm-badge--neutral' };
             if (!form.published) return { text: 'Draft', tone: 'm-badge--warning' };
             return { text: 'Open', tone: 'm-badge--success' };
         },
 
+        // ── Where we are ─────────────────────────────────────────────────
+
+        get searching() { return this.search.trim().length > 0; },
+
+        get breadcrumb() {
+            return FormFoldersCore.breadcrumbFor(this.folders, this.currentFolderId);
+        },
+
+        // Folders shown in this folder. Hidden while searching: a search is
+        // over every form wherever it is filed, so a folder list beside it
+        // would be answering a different question.
+        get visibleFolders() {
+            if (this.searching) return [];
+            return FormFoldersCore.childFolders(this.folders, this.currentFolderId);
+        },
+
+        openFolder(folderId) {
+            this.currentFolderId = folderId || null;
+            this.search = '';
+            this.cancelRename();
+        },
+
+        // Where a form is filed, for the sub-line while searching — a hit three
+        // folders deep is not much use without saying where it was found.
+        pathFor(form) {
+            const crumbs = FormFoldersCore.breadcrumbFor(this.folders, form.folderId);
+            return crumbs.length ? crumbs.map(c => c.name).join(' / ') : 'Forms';
+        },
+
         get visible() {
             const q = this.search.trim().toLowerCase();
             return this.forms.filter(f => {
                 if (this.hideClosed && this.isClosed(f)) return false;
+                // Searching reaches every folder; browsing shows this one. A
+                // form filed into a folder that has since gone comes back to
+                // the top level rather than disappearing (ADR-0054).
+                if (!q) {
+                    const filed = f.folderId || null;
+                    const known = filed && this.folders.some(x => x.id === filed);
+                    const where = known ? filed : null;
+                    if (where !== this.currentFolderId) return false;
+                }
                 if (!q) return true;
                 // Searching looks at the title AND the questions — you remember
                 // that you asked about childcare long after you have forgotten
@@ -85,7 +156,13 @@ function formsPage() {
         },
 
         get isEmpty() {
-            return !this.loading && this.forms.length === 0;
+            return !this.loading && this.forms.length === 0 && this.folders.length === 0;
+        },
+
+        // This folder, as opposed to the whole library, has nothing in it.
+        get folderEmpty() {
+            return !this.loading && !this.isEmpty && !this.searching
+                && !this.visible.length && !this.visibleFolders.length;
         },
 
         async init() {
@@ -104,7 +181,14 @@ function formsPage() {
                         return;
                     }
                     this.currentUser = user;
-                    this.forms = await FormsStore.listForms(db);
+                    // Two reads, not one. They are separate records on purpose
+                    // (ADR-0054) and neither orders the other.
+                    const [forms, folders] = await Promise.all([
+                        FormsStore.listForms(db),
+                        FormsStore.listFolders(db),
+                    ]);
+                    this.forms = forms;
+                    this.folders = folders;
                 } catch (e) {
                     this.problem = 'The forms did not load. Check your connection and refresh.';
                 } finally {
@@ -138,6 +222,8 @@ function formsPage() {
                     title: title,
                     rung: 'member',
                     attribution: true,
+                    // Made where you are standing, which is what filing means.
+                    folderId: this.currentFolderId,
                 });
                 window.location.href = this.formHref(id);
             } catch (e) {
@@ -152,6 +238,184 @@ function formsPage() {
 
         open(form) {
             window.location.href = this.formHref(form.id);
+        },
+
+        // ── Making a folder ──────────────────────────────────────────────────
+
+        startFolder() {
+            this.creatingFolder = true;
+            this.newFolderName = '';
+            this.$nextTick(() => {
+                const el = document.getElementById('new-folder-name');
+                if (el) { el.focus(); el.select(); }
+            });
+        },
+
+        cancelFolder() {
+            this.creatingFolder = false;
+            this.newFolderName = '';
+        },
+
+        async createFolder() {
+            const name = this.newFolderName.trim();
+            if (!name) { this.cancelFolder(); return; }
+            try {
+                const id = await FormsStore.createFolder(db, firebase, this.currentUser, {
+                    name: name,
+                    parentId: this.currentFolderId,
+                });
+                this.folders.push({
+                    id: id,
+                    name: FormFoldersCore.normaliseFolderName(name),
+                    parentId: this.currentFolderId,
+                });
+                this.cancelFolder();
+            } catch (e) {
+                this.problem = 'That folder was not created. Try again.';
+                this.cancelFolder();
+            }
+        },
+
+        // ── Renaming, in place ───────────────────────────────────────────────
+
+        startRename(item) {
+            this.renamingId = item.id;
+            this.renameText = item.name || item.title || '';
+            this.$nextTick(() => {
+                const el = document.getElementById('rename-' + item.id);
+                if (el) { el.focus(); el.select(); }
+            });
+        },
+
+        cancelRename() {
+            this.renamingId = null;
+            this.renameText = '';
+        },
+
+        async commitRename(item, isFolder) {
+            const name = this.renameText.trim();
+            const id = item.id;
+            this.cancelRename();
+            if (!name) return;
+            try {
+                if (isFolder) {
+                    await FormsStore.renameFolder(db, id, name);
+                    const folder = this.folders.find(f => f.id === id);
+                    if (folder) folder.name = FormFoldersCore.normaliseFolderName(name);
+                } else {
+                    await FormsStore.renameFormTitle(db, firebase, this.currentUser, id, name);
+                    const form = this.forms.find(f => f.id === id);
+                    if (form) form.title = FormsCore.normaliseTitle(name);
+                }
+            } catch (e) {
+                this.problem = 'That rename did not save. Refresh and try again.';
+            }
+        },
+
+        // ── Moving: dragged, or picked from a list ───────────────────────────
+
+        startDrag(item, kind) {
+            this.dragging = { id: item.id, kind: kind };
+        },
+
+        endDrag() {
+            this.dragging = null;
+        },
+
+        // Whether the thing currently in the air may be dropped here. Asked of
+        // the model so the row cannot light up for a drop that would then be
+        // refused.
+        mayDropOn(folderId) {
+            if (!this.dragging) return false;
+            if (this.dragging.kind === 'form') return true;
+            return FormFoldersCore.canMoveFolder(this.folders, this.dragging.id, folderId).ok;
+        },
+
+        async dropOn(folderId) {
+            const held = this.dragging;
+            this.dragging = null;
+            if (!held) return;
+            await this.moveItem(held.id, held.kind, folderId);
+        },
+
+        async moveItem(id, kind, targetId) {
+            const target = targetId === FormFoldersCore.TOP_LEVEL ? null : (targetId || null);
+            try {
+                if (kind === 'folder') {
+                    const verdict = FormFoldersCore.canMoveFolder(this.folders, id, target);
+                    if (!verdict.ok) { this.problem = verdict.why; return; }
+                    await FormsStore.moveFolder(db, id, target);
+                    const folder = this.folders.find(f => f.id === id);
+                    if (folder) folder.parentId = target;
+                } else {
+                    await FormsStore.moveForm(db, firebase, this.currentUser, id, target);
+                    const form = this.forms.find(f => f.id === id);
+                    if (form) form.folderId = target;
+                }
+                this.problem = '';
+            } catch (e) {
+                this.problem = 'That move did not save. Refresh and try again.';
+            }
+        },
+
+        // The fallback, for a device where dragging is awkward — which on a
+        // touch screen is every device.
+        startMove(item, kind) {
+            this.moving = { id: item.id, kind: kind, name: item.name || item.title };
+            this.moveTargetId = FormFoldersCore.TOP_LEVEL;
+        },
+
+        cancelMove() { this.moving = null; },
+
+        get moveOptions() {
+            const exclude = this.moving && this.moving.kind === 'folder' ? this.moving.id : null;
+            return FormFoldersCore.moveTargets(this.folders, exclude);
+        },
+
+        async confirmMove() {
+            const held = this.moving;
+            const target = this.moveTargetId;
+            this.moving = null;
+            if (held) await this.moveItem(held.id, held.kind, target);
+        },
+
+        // ── Deleting a folder ────────────────────────────────────────────────
+        //
+        // The only thing on this page that gets a dialog, because it is the only
+        // one that destroys answers people gave. The count is what makes the
+        // question answerable — "delete Sign-ups?" is unanswerable, "delete
+        // Sign-ups and the 14 forms in it?" is not.
+
+        startDeleteFolder(folder) {
+            this.deleting = folder;
+            this.deletingCount = FormFoldersCore.formsUnder(this.folders, this.forms, folder.id).length;
+        },
+
+        cancelDelete() { this.deleting = null; this.deletingCount = 0; },
+
+        get deleteLine() {
+            const n = this.deletingCount;
+            if (!n) return 'It is empty, so nothing goes with it.';
+            return (n === 1 ? 'One form goes with it' : n + ' forms go with it') +
+                ', and the answers they have gathered. That cannot be undone.';
+        },
+
+        async confirmDeleteFolder() {
+            const folder = this.deleting;
+            this.deleting = null;
+            if (!folder) return;
+            try {
+                const goneIds = [folder.id]
+                    .concat(FormFoldersCore.descendantFolderIds(this.folders, folder.id));
+                const goneForms = FormFoldersCore
+                    .formsUnder(this.folders, this.forms, folder.id).map(f => f.id);
+                await FormsStore.deleteFolderTree(db, this.folders, this.forms, folder.id);
+                this.folders = this.folders.filter(f => !goneIds.includes(f.id));
+                this.forms = this.forms.filter(f => !goneForms.includes(f.id));
+                if (goneIds.includes(this.currentFolderId)) this.currentFolderId = null;
+            } catch (e) {
+                this.problem = 'That folder was not fully deleted. Refresh to see what is left.';
+            }
         },
     };
 }
