@@ -31,6 +31,18 @@
 //                 The fill-in page uses it to mark a previous answer; a Form
 //                 Document has no "last time" and returns false.
 //
+// And four more, owed only by a page that carries the three types which reach
+// outside the form (MS-390). A page with none of those types never calls them:
+//
+//   personQueries      an object keyed by question id, holding what has been
+//                      typed into each picker's search box
+//   personChoices(q)   the people to offer for `q`, already narrowed by its
+//                      scope and by what has been typed
+//   pickPerson(q, p)   record `p` as the answer to `q`
+//   onFileChosen(q, ev) take the chosen file. The page checks the size BEFORE
+//                      uploading and puts any complaint where uploadFault(q)
+//                      can find it — nobody should wait for a failure.
+//
 // The chrome AROUND a question — its number, its "Needed" chip, whether it is
 // highlighted as missing — is deliberately NOT here. That genuinely differs:
 // a fill-in page numbers questions and marks the ones left blank, a document
@@ -100,6 +112,55 @@
         <input x-show="q.type === 'date'" type="date" class="m-input" x-model="answers[q.id]" />
 
         <input x-show="q.type === 'time'" type="time" class="m-input" x-model="answers[q.id]" />
+
+        <!-- A Directory Person picker. Searched rather than scrolled: a
+             congregation is longer than a list anybody reads. What has already
+             been picked shows as the answer, with a way to change it, because a
+             picker that hides its own answer is one people re-pick to check. -->
+        <div x-show="q.type === 'person'" class="fa-person">
+            <div class="fa-person__picked" x-show="answers[q.id] && answers[q.id].personId">
+                <span class="material-symbols-outlined">person</span>
+                <span x-text="answers[q.id] && answers[q.id].name"></span>
+                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="pickPerson(q, null)">Change</button>
+            </div>
+            <template x-if="!(answers[q.id] && answers[q.id].personId)">
+                <div class="fa-person__find">
+                    <span class="m-search">
+                        <span class="material-symbols-outlined">search</span>
+                        <input type="text" placeholder="Search by name" x-model="personQueries[q.id]" />
+                    </span>
+                    <div class="fa-person__list" x-show="(personQueries[q.id] || '').trim()">
+                        <template x-for="p in personChoices(q)" :key="p.id">
+                            <button type="button" class="fa-person__opt" @click="pickPerson(q, p)">
+                                <span class="material-symbols-outlined">person</span>
+                                <span x-text="p.name"></span>
+                            </button>
+                        </template>
+                        <p class="m-input-hint" x-show="!personChoices(q).length">Nobody by that name.</p>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- An image and a file are the same control with two accept rules. The
+             image one asks for the camera on a phone, so taking the photo and
+             sending it is one motion. -->
+        <div x-show="q.type === 'image' || q.type === 'file'" class="fa-file">
+            <label class="fa-file__pick" x-show="!(answers[q.id] && answers[q.id].name)">
+                <span class="material-symbols-outlined" x-text="q.type === 'image' ? 'add_a_photo' : 'upload_file'"></span>
+                <span x-text="q.type === 'image' ? 'Choose a photo' : 'Choose a file'"></span>
+                <input type="file" x-show="false"
+                       :accept="q.type === 'image' ? 'image/*' : undefined"
+                       :capture="q.type === 'image' ? 'environment' : undefined"
+                       @change="onFileChosen(q, $event)" />
+            </label>
+            <div class="fa-file__got" x-show="answers[q.id] && answers[q.id].name">
+                <span class="material-symbols-outlined">description</span>
+                <span x-text="answers[q.id] && answers[q.id].name"></span>
+                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="pickPerson && (answers[q.id] = null)">Remove</button>
+            </div>
+            <span class="m-input-hint fa-file__fault" x-show="uploadFault && uploadFault(q)" x-text="uploadFault && uploadFault(q)"></span>
+        </div>
 
         <span class="m-input-hint" x-show="q.hint" x-text="q.hint"></span>
     `;

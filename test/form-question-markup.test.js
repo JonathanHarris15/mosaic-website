@@ -42,8 +42,9 @@ test('a section heading has no control, because it asks nothing', () => {
 
 test('the types that are not live yet have no control either', () => {
     // They are named in the picker and greyed. A control here would be a
-    // half-built question type that looks finished.
-    ['image', 'file', 'person', 'payment'].forEach(id => {
+    // half-built question type that looks finished. MS-388 lit image, file and
+    // person; payment alone is left, and it is MS-364.
+    ['payment'].forEach(id => {
         assert.ok(!Markup.QUESTION_CONTROLS.includes("q.type === '" + id + "'"),
             id + ' has a control before its ticket has been built');
     });

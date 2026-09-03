@@ -141,10 +141,14 @@ test('thirteen ways of asking, one way of not asking, and four still to come', (
     const live = FormsCore.QUESTION_TYPES.filter(t => t.live).map(t => t.id);
     assert.deepStrictEqual(live, [
         'short_text', 'paragraph', 'choice_one', 'choice_many',
-        'dropdown', 'number', 'scale', 'date', 'time', 'section',
+        'dropdown', 'number', 'scale', 'date', 'time',
+        'image', 'file', 'person', 'section',
     ]);
+    // MS-388 lit the last three that reach outside the form. Only payment is
+    // left, and it is MS-364 — the one that needs an account with Stripe before
+    // a single line of it can be true.
     const waiting = FormsCore.QUESTION_TYPES.filter(t => !t.live).map(t => t.id);
-    assert.deepStrictEqual(waiting, ['image', 'file', 'person', 'payment']);
+    assert.deepStrictEqual(waiting, ['payment']);
 });
 
 test('a question of a type that is not live yet falls back rather than saving', () => {
@@ -295,12 +299,13 @@ test('an unfiled form says so explicitly rather than leaving the field off', () 
 // it runs between, and a date or a time is stored in a form that SORTS, because
 // "the 3rd" and "the 12th" fall the wrong way round as ordinary words.
 
-test('the six plain types are live, and the four rich ones still are not', () => {
+test('the six plain types are live, and payment alone is still to come', () => {
     ['choice_many', 'dropdown', 'number', 'scale', 'date', 'time'].forEach(id => {
         assert.ok(FormsCore.isLiveType(id), id + ' should be live now');
     });
-    // MS-363 and MS-364. Still named in the picker, still greyed.
-    ['image', 'file', 'person', 'payment'].forEach(id => {
+    // Was MS-363 and MS-364; MS-388 lit the first three. Payment alone is
+    // still named in the picker and still greyed.
+    ['payment'].forEach(id => {
         assert.ok(!FormsCore.isLiveType(id), id + ' belongs to a later ticket');
     });
 });
@@ -623,4 +628,186 @@ test('the mode cannot be changed once records exist, and it says why', () => {
 test('being asked to change to the mode it already has is not a change', () => {
     const verdict = FormsCore.mayChangeMode({ mode: 'document' }, { responses: 0, documents: 3 }, 'document');
     assert.strictEqual(verdict.ok, true, 'saving a template should not be refused for not changing anything');
+});
+
+// ── The three that reach outside the form (MS-388) ───────────────────────────
+//
+// A person picker answers with somebody from the directory; an image and a file
+// question take an upload. The rules that come with them live here rather than
+// on a page, because a stored record claiming otherwise is believed downstream.
+
+test('the last three types go live, and now every named type is', () => {
+    ['person', 'image', 'file'].forEach(id => {
+        assert.ok(FormsCore.isLiveType(id), id + ' should be live now');
+    });
+    // Only payment is left, and it is MS-364.
+    const waiting = FormsCore.QUESTION_TYPES.filter(t => !t.live).map(t => t.id);
+    assert.deepStrictEqual(waiting, ['payment']);
+});
+
+// ── A person question and its scope ──────────────────────────────────────────
+
+test('a person question narrows the directory, and defaults to all of it', () => {
+    const anyone = FormsCore.buildQuestion({ id: 'q1', type: 'person', text: 'Who referred you?' });
+    assert.strictEqual(anyone.people.scope, 'everyone');
+
+    const members = FormsCore.buildQuestion({
+        id: 'q1', type: 'person', text: 'Who?', people: { scope: 'member' },
+    });
+    assert.strictEqual(members.people.scope, 'member');
+});
+
+test('a tag scope keeps the tag it was pointed at', () => {
+    const q = FormsCore.buildQuestion({
+        id: 'q1', type: 'person', text: 'Who?', people: { scope: 'tag', tagId: 'tag_7' },
+    });
+    assert.strictEqual(q.people.scope, 'tag');
+    assert.strictEqual(q.people.tagId, 'tag_7');
+});
+
+test('a tag scope with no tag falls back rather than matching nobody', () => {
+    const q = FormsCore.buildQuestion({ id: 'q1', type: 'person', text: 'Who?', people: { scope: 'tag' } });
+    assert.strictEqual(q.people.scope, 'everyone',
+        'a tag scope pointing at no tag would offer an empty picker with no explanation');
+});
+
+test('a scope nobody recognises falls back to everyone', () => {
+    const q = FormsCore.buildQuestion({ id: 'q1', type: 'person', text: 'Who?', people: { scope: 'elders' } });
+    assert.strictEqual(q.people.scope, 'everyone');
+});
+
+test('only a person question carries a scope', () => {
+    const text = FormsCore.buildQuestion({ id: 'q1', type: 'short_text', people: { scope: 'member' } });
+    assert.ok(!('people' in text));
+});
+
+// ── Which tags may be a scope ────────────────────────────────────────────────
+
+test('a tag that hides itself is never offered as a scope', () => {
+    const tags = [
+        { id: 'a', name: 'Worship team' },
+        { id: 'b', name: 'Under care', hiddenFromOthers: true },
+    ];
+    assert.deepEqual(FormsCore.offerableTags(tags).map(t => t.id), ['a']);
+});
+
+test('a tag that hides its carriers is not offered either', () => {
+    // Stricter than the ticket asked, and deliberately. Scoping a picker to a
+    // tag whose carriers are hidden would list exactly the people that flag
+    // exists to conceal, to whoever is filling the form in. Hiding the name and
+    // leaking the membership is the wrong half.
+    const tags = [
+        { id: 'a', name: 'Worship team' },
+        { id: 'b', name: 'Safeguarding', hidePeople: true },
+    ];
+    assert.deepEqual(FormsCore.offerableTags(tags).map(t => t.id), ['a']);
+});
+
+test('a hidden tag is not even named', () => {
+    const tags = [{ id: 'b', name: 'Under care', hiddenFromOthers: true }];
+    assert.strictEqual(JSON.stringify(FormsCore.offerableTags(tags)).includes('Under care'), false);
+});
+
+// ── A picker cannot go on a public form ──────────────────────────────────────
+
+test('a public form may not carry a person question, and the refusal names it', () => {
+    // Reading the directory needs an account (ADR-0031). A picker on a public
+    // form could only ever be an empty list or a leak.
+    const form = {
+        rung: 'public',
+        questions: [
+            { id: 'q1', type: 'short_text', text: 'Your name' },
+            { id: 'q2', type: 'person', text: 'Who referred you?' },
+        ],
+    };
+    const verdict = FormsCore.mayBePublic(form);
+    assert.strictEqual(verdict.ok, false);
+    assert.match(verdict.why, /Who referred you\?/,
+        'the refusal should name the question standing in the way');
+});
+
+test('a form with no picker may be public', () => {
+    const form = { rung: 'public', questions: [{ id: 'q1', type: 'short_text', text: 'Your name' }] };
+    assert.strictEqual(FormsCore.mayBePublic(form).ok, true);
+});
+
+test('a retired picker does not block a form going public', () => {
+    // It is not asked any more, so it cannot fail to be answerable.
+    const form = {
+        rung: 'public',
+        questions: [{ id: 'q2', type: 'person', text: 'Who?', retired: true }],
+    };
+    assert.strictEqual(FormsCore.mayBePublic(form).ok, true);
+});
+
+test('the model refuses to store a public form carrying a picker', () => {
+    // Not just the page. A record that said `public` with a picker on it would
+    // be a form the fill-in page could not draw and the server would serve.
+    const form = FormsCore.buildFormTemplate({
+        rung: 'public',
+        questions: [{ id: 'q2', type: 'person', text: 'Who referred you?' }],
+    });
+    assert.notStrictEqual(form.rung, 'public',
+        'a public form was stored with a directory picker on it');
+});
+
+// ── Uploads ──────────────────────────────────────────────────────────────────
+
+test('an upload has a cap, and it is smaller than an attachment for a reason', () => {
+    assert.ok(FormsCore.MAX_UPLOAD_BYTES > 0);
+    assert.ok(FormsCore.MAX_UPLOAD_BYTES <= 5 * 1024 * 1024,
+        'a callable request is capped near 10MB and base64 inflates by a third');
+});
+
+test('a file over the cap is refused, and the refusal says how big it may be', () => {
+    const ok = FormsCore.uploadFault({ name: 'a.pdf', size: 1024 });
+    assert.strictEqual(ok, '');
+
+    const tooBig = FormsCore.uploadFault({ name: 'a.pdf', size: FormsCore.MAX_UPLOAD_BYTES + 1 });
+    assert.ok(tooBig);
+    assert.match(tooBig, /5 ?MB/i, 'the refusal does not say what the limit is');
+});
+
+test('a file with no name and no size is refused rather than stored as nothing', () => {
+    assert.ok(FormsCore.uploadFault(null));
+    assert.ok(FormsCore.uploadFault({ name: '', size: 0 }));
+});
+
+test('an upload answer is a stored file, and never a URL', () => {
+    const answer = FormsCore.buildUploadAnswer({
+        name: 'waiver.pdf',
+        contentType: 'application/pdf',
+        size: 2048,
+        storagePath: 'form_uploads/f1/r1/waiver.pdf',
+        url: 'https://firebasestorage.example/token',   // must not survive
+        downloadURL: 'https://firebasestorage.example/token',
+    });
+    assert.strictEqual(answer.storagePath, 'form_uploads/f1/r1/waiver.pdf');
+    assert.strictEqual(answer.name, 'waiver.pdf');
+    assert.ok(!('url' in answer), 'a URL was stored on an upload answer');
+    assert.ok(!('downloadURL' in answer), 'a download URL was stored on an upload answer');
+    assert.strictEqual(JSON.stringify(answer).includes('http'), false,
+        'something URL-shaped survived onto an upload answer');
+});
+
+// ── Reading them back ────────────────────────────────────────────────────────
+
+test('the tally does not treat a person or an upload as an option to count', () => {
+    const form = FormsCore.buildFormTemplate({
+        questions: [
+            { id: 'who', type: 'person', text: 'Who referred you?' },
+            { id: 'pic', type: 'image', text: 'A photo' },
+        ],
+        rung: 'member',
+    });
+    const rows = FormsCore.tally(form, [{
+        answers: {
+            who: { personId: 'p1', name: 'Rebecca' },
+            pic: { name: 'a.jpg', storagePath: 'form_uploads/f/r/a.jpg' },
+        },
+    }]);
+    rows.forEach(row => {
+        assert.ok(!row.options, row.type + ' was counted as if it had options');
+        assert.ok(!row.distribution, row.type + ' was counted as if it were a number');
+    });
 });
