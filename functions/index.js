@@ -2690,7 +2690,16 @@ exports.notifyEldersOnPrayerComplete = onDocumentWritten(
  * without an emulator. This reads, asks, and writes.
  */
 exports.publicForm = onCall(
-    {cors: true, region: "us-central1", enforceAppCheck: true},
+    // ⚠ enforceAppCheck MUST MATCH `enabled` IN public/app-check-config.js,
+    // where the reasons are written out in full. Enforced here but not enabled
+    // there refuses everybody; enabled there but not enforced here checks
+    // nothing. test/app-check-agreement.test.js fails if they drift apart.
+    //
+    // Off for now: turning it on in one step, straight to enforce, stopped
+    // anybody answering a form for days, and App Check never gives up waiting
+    // for reCAPTCHA — so an ad blocker becomes a form nobody can fill in.
+    // Monitor first, enforce second. Turn the two back on together.
+    {cors: true, region: "us-central1", enforceAppCheck: false},
     async (request) => {
       const db = admin.firestore();
       const {op, formId, answers} = request.data || {};

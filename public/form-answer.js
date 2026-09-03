@@ -63,7 +63,13 @@
     // accepting them unchecked. That asymmetry is deliberate: the failure of a
     // half-finished setup should be "nothing works yet", never "everything
     // works and nothing is checked".
-    const appCheckKey = (window.MOSAIC_APP_CHECK && window.MOSAIC_APP_CHECK.siteKey) || '';
+    // ⚠ `enabled` HAS TO AGREE WITH enforceAppCheck ON THE SERVER. Enabled here
+    // and not enforced there checks nothing; enforced there and not enabled
+    // here refuses everybody. It is currently off at both ends — the reasons
+    // are written out in app-check-config.js, and a test fails if they drift
+    // apart.
+    const appCheckOn = !!(window.MOSAIC_APP_CHECK && window.MOSAIC_APP_CHECK.enabled);
+    const appCheckKey = (appCheckOn && window.MOSAIC_APP_CHECK.siteKey) || '';
     const appCheckKind = (window.MOSAIC_APP_CHECK && window.MOSAIC_APP_CHECK.provider) || 'enterprise';
 
     // ⚠ ACTIVATION NEEDS <body> TO EXIST, and failing that is not survivable.
@@ -99,10 +105,12 @@
             // with a message somebody can act on.
             console.warn('App Check did not start:', e && e.message);
         }
+    } else if (!appCheckOn) {
+        console.info('App Check is off at both ends on purpose — see app-check-config.js.');
     } else {
         console.warn(
-            'App Check has no site key, so public forms will be refused. ' +
-            'Run: bash scripts/wizard-app-check.sh');
+            'App Check is enabled but has no site key, so public forms will be ' +
+            'refused. Run: bash scripts/wizard-app-check.sh');
     }
 
     const fns = firebase.app().functions('us-central1');

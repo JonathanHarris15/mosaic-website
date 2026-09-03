@@ -26,6 +26,39 @@
     'use strict';
 
     global.MOSAIC_APP_CHECK = {
+        // ⚠ OFF, ON PURPOSE, AND IT MUST MATCH THE SERVER. `enforceAppCheck`
+        // on publicForm in functions/index.js is false to match, and
+        // test/app-check-agreement.test.js fails if the two ever disagree.
+        //
+        // WHY IT IS OFF. This was turned on in one step, straight to enforce,
+        // and it stopped anybody answering a form for days. Two faults, and
+        // the second is the reason it is off rather than fixed:
+        //
+        //   1. Activation ran from <head>, where document.body is null. The
+        //      reCAPTCHA provider throws appending its container — but only
+        //      after recording a promise saying attestation has started, so
+        //      every call then waited for a token that was never coming. That
+        //      one is fixed: the scripts load at the end of <body>.
+        //
+        //   2. Nothing in App Check gives up. When reCAPTCHA cannot finish —
+        //      an ad blocker, a corporate proxy, a privacy extension, a bad
+        //      minute on a phone — getToken() does not fail, it waits. So a
+        //      person who blocks trackers cannot answer a form and is shown
+        //      no reason. That is not a bug to fix in our code; it is what
+        //      turning this on costs, and it has to be measured before it is
+        //      charged to strangers.
+        //
+        // Firebase's own order is monitor first, enforce once the metrics show
+        // real traffic being attested. That step was skipped. Turn `enabled`
+        // back on together with `enforceAppCheck`, not before, and watch the
+        // App Check metrics in the console for a week in between.
+        //
+        // What is lost meanwhile: a script could post rubbish to a form whose
+        // link it has. What is NOT lost: the link is 128 bits of base58 and
+        // cannot be guessed, refusals stay uniform, and the ballot's two lists
+        // still cannot be joined (ADR-0051, ADR-0052).
+        enabled: false,
+
         // Replace with the reCAPTCHA site key from the Firebase console.
         // The wizard writes it here.
         siteKey: '6Leq76UtAAAAADJc3TUWYPjG89v3tfWQT6DMvasB',
