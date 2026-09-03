@@ -16,6 +16,13 @@
     <link rel="stylesheet" href="/fonts.css" />
     <link rel="icon" href="/assets/mosaic-logo.png" />
 
+    <!-- ⚠ EVERY OTHER PAGE IN THIS APP CARRIES THIS AND THIS ONE DID NOT, which
+         is why it flashed. Without the rule x-cloak is an attribute that styles
+         nothing, so the raw markup paints first with EVERY state visible at
+         once, and then Alpine boots and hides them. The flash is not a slow
+         page; it is the page before anything is deciding what to show. -->
+    <style>[x-cloak] { display: none !important; }</style>
+
     <!--
       ⚠ THIS PAGE IS THE ONLY ONE A SIGNED-OUT STRANGER EVER REACHES, AND IT
       LOADS ALMOST NOTHING.
@@ -55,7 +62,22 @@
         <span class="fa-brand__where" x-text="whoami"></span>
     </header>
 
-    <main class="fa-main">
+    <!-- ⚠ NOT ALPINE'S. If the script throws, Alpine never runs, nothing ever
+         removes x-cloak and the body stays hidden for ever — a blank page that
+         cannot even say it is broken. This block is plain HTML and plain JS,
+         and it is the only thing standing between a bad deploy and a stranger
+         staring at nothing. -->
+    <div id="fatal" class="fa-centred fa-said" hidden>
+        <span class="material-symbols-outlined fa-said__icon">error</span>
+        <h1 class="m-headline-lg">This page did not start.</h1>
+        <p class="m-body-md" id="fatal-why"></p>
+        <button type="button" class="m-btn m-btn--primary m-btn--lg fa-wide" onclick="location.reload()">
+            <span class="m-btn__label">Reload</span>
+        </button>
+        <p class="m-body-md fa-quiet">If it keeps happening, tell whoever sent you the link.</p>
+    </div>
+
+    <main class="fa-main" id="answer-main">
 
         <!-- ── Still loading ─────────────────────────────────────────────── -->
         <div x-show="state === 'loading'" class="fa-centred">

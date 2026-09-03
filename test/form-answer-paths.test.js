@@ -112,3 +112,24 @@ test('the App Check provider is named rather than inferred', () => {
     assert.match(cfg, /provider:\s*'(enterprise|v3)'/,
         'the config does not say which kind of reCAPTCHA key it holds');
 });
+
+test('x-cloak is actually defined on the one page that uses it standalone', () => {
+    // ⚠ x-cloak is an attribute that styles NOTHING unless the page says so.
+    // Every other page in this app carries the rule inline; this one did not,
+    // so the raw markup painted with every state visible at once and then
+    // Alpine hid them. The flash was not a slow page — it was the page before
+    // anything was deciding what to show.
+    assert.match(html, /\[x-cloak\]\s*\{\s*display:\s*none/,
+        'the page uses x-cloak but never defines it, so it will flash');
+});
+
+test('a failure before Alpine can still say something', () => {
+    // The worst failure this page has is a blank one: it tells the stranger
+    // nothing and whoever is debugging it less. This block owes nothing to
+    // Alpine and takes x-cloak off the body so it can be seen at all.
+    assert.match(html, /id="fatal"/, 'nothing renders when the script throws');
+    assert.match(js, /addEventListener\('error'/, 'a thrown error goes unreported');
+    assert.match(js, /addEventListener\('unhandledrejection'/, 'a rejected promise goes unreported');
+    assert.match(js, /removeAttribute\('x-cloak'\)/,
+        'the fatal block is hidden by the very x-cloak it needs to escape');
+});

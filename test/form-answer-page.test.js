@@ -26,6 +26,16 @@ function loadPage(reply, locationOver) {
     sandbox.navigator = { share: null };
     sandbox.FormsCore = require('../public/forms-core.js');
 
+    // Enough browser for the module to install its fatal handler. The page owes
+    // a stranger a message when it cannot start, and that is not something to
+    // weaken so a sandbox can load it — so the sandbox grows instead.
+    const listeners = {};
+    sandbox.addEventListener = (name, fn) => { (listeners[name] = listeners[name] || []).push(fn); };
+    sandbox.document = {
+        body: { removeAttribute() {} },
+        getElementById: () => null,
+    };
+
     sandbox.firebase = {
         apps: [],
         initializeApp() { sandbox.firebase.apps.push({}); },

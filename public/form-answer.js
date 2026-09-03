@@ -12,6 +12,28 @@
 (function () {
     'use strict';
 
+    // ⚠ A BLANK PAGE IS THE WORST FAILURE THIS PAGE HAS, because it cannot tell
+    // anybody anything — not the stranger looking at it, and not whoever has to
+    // work out why. Anything thrown before or during boot unhides a plain block
+    // that owes nothing to Alpine, and takes x-cloak off the body so the page
+    // is visible enough to say so.
+    function fatal(why) {
+        try {
+            document.body.removeAttribute('x-cloak');
+            var main = document.getElementById('answer-main');
+            var box = document.getElementById('fatal');
+            var line = document.getElementById('fatal-why');
+            if (line) line.textContent = why || 'Something went wrong before the page could load.';
+            if (box) box.hidden = false;
+            if (main) main.style.display = 'none';
+        } catch (ignored) { /* there is nothing left to try */ }
+    }
+    window.addEventListener('error', function (e) { fatal(e && e.message); });
+    window.addEventListener('unhandledrejection', function (e) {
+        var r = e && e.reason;
+        fatal((r && r.message) || String(r || ''));
+    });
+
     // ⚠ DUPLICATED FROM auth.js ON PURPOSE. This page deliberately does not
     // load auth.js — that module calls firebase.firestore() and brings the
     // whole signed-in UI with it, neither of which belongs on a stranger's
