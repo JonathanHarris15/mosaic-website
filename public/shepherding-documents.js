@@ -61,6 +61,9 @@ document.addEventListener('alpine:init', () => {
 
         showCreateModal: false,
         createDocType: 'note',
+        // The document-mode Form Templates, and which one is picked (MS-385).
+        formTemplates: [],
+        createTemplateId: '',
         createFilterMode: 'preset', // 'preset' | 'custom'
         customFilter: { filterTags: [], filterMode: 'any', statusZoneFilters: [] },
         views: [],
@@ -156,6 +159,10 @@ document.addEventListener('alpine:init', () => {
                 if (!this.isProfileScope) {
                     reads.push(db.collection('shepherding_views').orderBy('title', 'asc').get());
                     reads.push(db.collection('people_tags').orderBy('name', 'asc').get());
+                    // Form Templates, on their own rather than in this list, so
+                    // a library that cannot reach them is still a working
+                    // library — see loadFormTemplates.
+                    this.loadFormTemplates();
                 }
                 const [structSnap, docsSnap, viewsSnap, tagsSnap] = await Promise.all(reads);
 
@@ -305,10 +312,39 @@ document.addEventListener('alpine:init', () => {
                 typeof auth !== 'undefined' ? auth.currentUser : null);
         },
 
+        // The Form Templates that make documents (MS-385). Only
+        // `document`-mode ones: a `responses` template has a link and a
+        // Responses tab and belongs nowhere near this menu.
+        //
+        // Read once when the page loads, and quietly: a library that cannot
+        // reach the templates is still a working library, so a failure here
+        // leaves the menu offering a blank document rather than taking the
+        // page down.
+        async loadFormTemplates() {
+            try {
+                const snap = await db.collection('forms').get();
+                this.formTemplates = snap.docs
+                    .map(d => Object.assign({ id: d.id }, d.data()))
+                    .filter(f => f.mode === 'document')
+                    .sort((a, b) => String(a.title).localeCompare(String(b.title)));
+            } catch (e) {
+                this.formTemplates = [];
+            }
+        },
+
+        get chosenTemplate() {
+            return this.formTemplates.find(t => t.id === this.createTemplateId) || null;
+        },
+
         async createDocument() {
             this.showCreateModal = false;
             const type = this.isProfileScope ? 'note' : this.createDocType;
-            const title = type === 'care-list' ? 'New Care List' : 'New Document';
+            const template = type === 'form' ? this.chosenTemplate : null;
+            // A form document is named for the template it came from, which is
+            // what somebody will look for in a folder later. Renaming it
+            // afterwards is the same inline rename as any other document.
+            const title = type === 'care-list' ? 'New Care List'
+                : (template ? template.title : 'New Document');
             try {
                 const preset = this.createFilterMode === 'preset';
                 const docData = Docs.buildElderDocument({
@@ -319,6 +355,11 @@ document.addEventListener('alpine:init', () => {
                     ownerPersonId: this.ownerPersonId,
                     filterId: preset ? this.selectedViewId : null,
                     filterConfig: preset ? null : this.customFilter, // the builder copies it
+                    templateId: template ? template.id : null,
+                    // ⚠ Copied here and never read from the template again
+                    // (ADR-0055). Editing the template later must not reach
+                    // back into an interview already filled in.
+                    questions: template ? template.questions : null,
                 });
 
                 const docRef = await db.collection('elder_documents').add(docData);
