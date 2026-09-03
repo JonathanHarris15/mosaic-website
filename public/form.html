@@ -70,8 +70,8 @@
                         <button type="button" class="m-btn m-btn--danger-outline m-btn--sm" @click="confirmingDelete = true">
                             <span class="material-symbols-outlined">delete</span><span class="m-btn__label">Delete</span>
                         </button>
-                        <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="form.published && !isClosed" @click="setClosed(true)">Close form</button>
-                        <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="form.closed" @click="setClosed(false)">Reopen</button>
+                        <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="!isDocument && form.published && !isClosed" @click="setClosed(true)">Close form</button>
+                        <button type="button" class="m-btn m-btn--secondary m-btn--sm" x-show="!isDocument && form.closed" @click="setClosed(false)">Reopen</button>
                         <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="save(true)">Save</button>
                     </div>
 
@@ -91,7 +91,18 @@
                     </div>
                 </div>
 
-                <div class="fp-link" x-show="form.published">
+                <!-- What a document template has instead of a link. Said
+                     once, where the link row would be, so the page is never
+                     silently missing the thing you came looking for. -->
+                <div class="m-notice" x-show="isDocument">
+                    <span class="material-symbols-outlined m-notice__icon">edit_document</span>
+                    <div class="m-notice__body">
+                        <span class="m-notice__title">This one is filled in as a document.</span>
+                        <span class="m-notice__text">There is no link to send. It appears under <strong>new document → form document</strong> in the Documents library, and each one filled in is its own record kept there.</span>
+                    </div>
+                </div>
+
+                <div class="fp-link" x-show="!isDocument && form.published">
                     <div class="f-linkrow">
                         <span class="material-symbols-outlined">link</span>
                         <code x-text="shareUrl"></code>
@@ -104,7 +115,7 @@
 
                 <div class="m-tabs">
                     <button type="button" class="m-tabs__tab" :class="tab === 'questions' ? 'm-tabs__tab--current' : ''" @click="tab = 'questions'">Questions</button>
-                    <button type="button" class="m-tabs__tab" :class="tab === 'responses' ? 'm-tabs__tab--current' : ''" @click="tab = 'responses'">
+                    <button type="button" class="m-tabs__tab" x-show="!isDocument" :class="tab === 'responses' ? 'm-tabs__tab--current' : ''" @click="tab = 'responses'">
                         <span x-text="'Responses · ' + responseCount"></span>
                     </button>
                 </div>
@@ -119,6 +130,29 @@
                              all. On a phone it drops below the questions. -->
                         <aside class="fp-aside">
                             <section class="fp-block">
+                                <div class="fp-block__head"><span class="m-label">What this is</span></div>
+                                <div class="m-seg">
+                                    <button type="button" class="m-seg__opt" :aria-pressed="!isDocument"
+                                            :disabled="!modeChange.ok" @click="setMode('responses')">People answer it</button>
+                                    <button type="button" class="m-seg__opt" :aria-pressed="isDocument"
+                                            :disabled="!modeChange.ok" @click="setMode('document')">A document</button>
+                                </div>
+                                <!-- The reason, not just a greyed control. The
+                                     same complaint the rung settings already
+                                     answered: a disabled box with no why is
+                                     something people work around rather than
+                                     understand. -->
+                                <span class="m-input-hint" x-show="!modeChange.ok" x-text="modeChange.why"></span>
+                                <span class="m-input-hint" x-show="modeChange.ok && isDocument">No link to send. It appears under new document → form document in the Documents library.</span>
+                            </section>
+
+                            <!-- A document template has no rung, and the model
+                                 stores null rather than a value nothing honours.
+                                 Hiding the card is the page agreeing with that:
+                                 a control that decides nothing is worse than no
+                                 control, because somebody later writes a
+                                 permission check against it. -->
+                            <section class="fp-block" x-show="!isDocument">
                                 <div class="fp-block__head"><span class="m-label">Who may answer</span></div>
 
                                 <div class="m-seg">
@@ -398,7 +432,7 @@
                 </div>
 
                 <!-- ── Publish ───────────────────────────────────────────── -->
-                <div class="m-actionbar" x-show="!form.published">
+                <div class="m-actionbar" x-show="!isDocument && !form.published">
                     <div class="m-actionbar__said">
                         <span class="m-actionbar__count">Not published — nobody can answer this yet.</span>
                         <span class="m-actionbar__note">Publishing makes a link. The questions stay editable afterwards.</span>

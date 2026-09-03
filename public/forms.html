@@ -118,6 +118,13 @@
                                    @keydown.enter.prevent="createForm()"
                                    @keydown.escape.prevent="cancelCreate()" />
                         </span>
+                        <!-- Asked here because it is near-unchangeable later:
+                             once a form has answers, or a template has documents
+                             made from it, switching kind would orphan them. -->
+                        <span class="m-seg fl-mode">
+                            <button type="button" class="m-seg__opt" :aria-pressed="newMode === 'responses'" @click="newMode = 'responses'">People answer it</button>
+                            <button type="button" class="m-seg__opt" :aria-pressed="newMode === 'document'" @click="newMode = 'document'">A document</button>
+                        </span>
                         <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="createForm()">Create</button>
                         <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="cancelCreate()">Cancel</button>
                     </div>

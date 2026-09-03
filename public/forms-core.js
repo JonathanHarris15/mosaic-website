@@ -183,6 +183,73 @@
         return !!OPTION_TYPES[typeId];
     }
 
+    // ── What a template is FOR ───────────────────────────────────────────────
+    //
+    // Two destinations, chosen when the template is made, and almost everything
+    // else on a template only makes sense for one of them.
+    //
+    //   responses  Publish a link. Many people answer. Each answer is a
+    //              Response — a data point, counted on the Responses tab.
+    //   document   Filled in ONCE, and the filled-in thing IS the record: a
+    //              Form Document sitting in the elder Document Library. The
+    //              Elder Interview is the case.
+    //
+    // `responses` is the default and must stay the default, because every
+    // template stored before this existed has no mode and has to keep meaning
+    // what it meant.
+    const MODES = ['responses', 'document'];
+    const DEFAULT_MODE = 'responses';
+
+    function isMode(mode) {
+        return MODES.indexOf(mode) !== -1;
+    }
+
+    function isDocumentMode(form) {
+        return !!form && form.mode === 'document';
+    }
+
+    // ⚠ A document-mode template has NO Answering rung, and null is the honest
+    // way to store that. A Form Document lives in `elder_documents`, which is
+    // elder-only, so a rung here would govern nothing — and a field that looks
+    // like it decides something while deciding nothing is the kind of thing
+    // somebody later writes a permission check against.
+    function hasRung(form) {
+        return !isDocumentMode(form) && isRung(form && form.rung);
+    }
+
+    // May this template's mode be changed?
+    //
+    // Only while nothing has been made from it. A template that switched mode
+    // would leave records nothing knows how to open — Responses belonging to a
+    // template that no longer publishes, or Form Documents made from one that
+    // now does. The count is in the sentence because it is what makes the
+    // refusal answerable.
+    function mayChangeMode(form, counts, wanted) {
+        const c = counts || {};
+        const to = wanted || null;
+        if (to && form && to === form.mode) return { ok: true, why: '' };
+
+        const responses = Number(c.responses) || 0;
+        const documents = Number(c.documents) || 0;
+        if (responses > 0) {
+            return {
+                ok: false,
+                why: responses === 1 ?
+                    'One answer has already come in, so this cannot change what kind of form it is.' :
+                    responses + ' answers have already come in, so this cannot change what kind of form it is.',
+            };
+        }
+        if (documents > 0) {
+            return {
+                ok: false,
+                why: documents === 1 ?
+                    'A document has already been made from this, so this cannot change what kind of form it is.' :
+                    documents + ' documents have already been made from this, so this cannot change what kind of form it is.',
+            };
+        }
+        return { ok: true, why: '' };
+    }
+
     // ── Who may answer ───────────────────────────────────────────────────────
     //
     // The Event visibility ladder, reused rather than a second one invented.
@@ -263,6 +330,10 @@
     // that has to say so on the form itself.
     function isBallot(form) {
         const f = form || {};
+        // A secret ballot is a promise about MANY answers. A document is filled
+        // in once by somebody who then owns it, so the promise has no meaning
+        // and must not be made.
+        if (isDocumentMode(f)) return false;
         return needsAccount(f.rung) && f.attribution === false && f.oneEach === true;
     }
 
@@ -373,6 +444,12 @@
 
     function buildFormTemplate(spec) {
         const s = spec || {};
+        const mode = isMode(s.mode) ? s.mode : DEFAULT_MODE;
+        const asDocument = mode === 'document';
+
+        // A document-mode template has no rung, so `settingsFor` is asked about
+        // the one it would have had. Attribution and One Response Each are
+        // meaningless on a thing filled in once, and are forced off below.
         const rung = isRung(s.rung) ? s.rung : 'member';
         const allowed = settingsFor(rung);
 
@@ -387,16 +464,22 @@
             // sight while its public link still works. The folder graph itself
             // lives in form-folders-core.js.
             folderId: s.folderId || null,
-            rung: rung,
+            mode: mode,
+            // Null on a document template rather than a plausible-looking value
+            // nothing honours — see hasRung.
+            rung: asDocument ? null : rung,
             // Forced values win over whatever was passed. A form saved as
             // `public` while carrying attribution:true would be a record that
             // contradicts its own rung, and something downstream would believe
             // it.
-            attribution: allowed.attribution.available ? s.attribution === true : false,
-            oneEach: allowed.oneEach.available ? s.oneEach === true : false,
-            published: s.published === true,
-            closed: s.closed === true,
-            closingDate: normaliseDateStr(s.closingDate),
+            attribution: asDocument ? false : (allowed.attribution.available ? s.attribution === true : false),
+            oneEach: asDocument ? false : (allowed.oneEach.available ? s.oneEach === true : false),
+            // Publishing makes a link, closing shuts one. A document template
+            // has no link, so it has neither — it appears in the documents
+            // page's new-document menu instead.
+            published: asDocument ? false : s.published === true,
+            closed: asDocument ? false : s.closed === true,
+            closingDate: asDocument ? null : normaliseDateStr(s.closingDate),
             createdAt: 'createdAt' in s ? s.createdAt : null,
             createdBy: 'createdBy' in s ? s.createdBy : null,
             createdByName: 'createdByName' in s ? s.createdByName : null,
@@ -726,6 +809,12 @@
         MAX_PLACEHOLDER_LENGTH,
         DEFAULT_TITLE,
         QUESTION_TYPES,
+        MODES,
+        DEFAULT_MODE,
+        isMode,
+        isDocumentMode,
+        hasRung,
+        mayChangeMode,
         RUNGS,
         RUNGS_LIVE,
         rungLabel,
