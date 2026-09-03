@@ -321,6 +321,12 @@
             .fl-bar__right { width: 100%; }
             .fl-bar__right .m-search { width: 100%; }
         }
+        /* The new-form row carries a name box, a two-way choice and two
+           buttons. That is more than fits on a narrow screen, and an m-row does
+           not wrap on its own — so it wraps here rather than pushing the
+           buttons off the side where nobody can press Create. */
+        .m-card-list .m-row { flex-wrap: wrap; }
+        .m-seg.fl-mode { flex-wrap: wrap; }
         .f-dim { opacity: .72; }
         .f-dim .m-row__title, .f-dim .m-row__sub { color: var(--on-surface-variant); }
         .m-row__main { display: block; min-width: 0; }
