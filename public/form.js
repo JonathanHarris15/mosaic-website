@@ -229,6 +229,11 @@ function formPage() {
 
         hasOptions(type) { return FormsCore.hasOptions(type); },
 
+        // Does this entry collect an answer? Everything does except a section
+        // heading. Asked of the model rather than compared against 'section'
+        // here, so a second non-asking type later needs no edit on this page.
+        asks(q) { return FormsCore.asksSomething(q && q.type); },
+
         // The type picker's own vocabulary. Derived from FormsCore rather than
         // listed here, so the day a type goes live the picker follows without
         // anybody remembering to edit a second list.

@@ -173,6 +173,18 @@
                 });
             },
 
+            // Questions are numbered by how many questions came before them, not
+            // by position — a heading in the middle must not make question 4
+            // into question 5.
+            numberFor(index) {
+                const qs = this.form.questions || [];
+                let n = 0;
+                for (let i = 0; i <= index && i < qs.length; i += 1) {
+                    if (qs[i] && qs[i].type !== 'section') n += 1;
+                }
+                return n;
+            },
+
             // The points a linear scale runs between, for the row of buttons.
             scalePoints(q) {
                 return window.FormsCore.scalePoints(q && q.scale);
@@ -184,7 +196,10 @@
             },
 
             get countLine() {
-                const qs = this.form.questions || [];
+                // Headings are not questions and must not be counted as any —
+                // "9 questions" on a form with four and five headings is a
+                // promise the form does not keep.
+                const qs = (this.form.questions || []).filter(q => q.type !== 'section');
                 const need = qs.filter(q => q.required).length;
                 const n = qs.length + (qs.length === 1 ? ' question' : ' questions');
                 // ⚠ No time estimate. The design offered "About 2 minutes"; a

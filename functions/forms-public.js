@@ -214,7 +214,9 @@ function judgeSubmission(form, attempt, today) {
 
   const response = FormsCore.buildResponse({
     formId: a.formId || null,
-    answers: a.answers,
+    // Only answers to questions that ask something. A section heading collects
+    // nothing, so anything sent against one is dropped rather than stored.
+    answers: FormsCore.answersOnly(form, a.answers),
     attribution: form.attribution === true,
     personId: a.personId || null,
     personName: a.personName || null,

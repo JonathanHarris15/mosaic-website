@@ -234,13 +234,16 @@
 
             <div class="fa-questions">
                 <template x-for="(q, i) in form.questions" :key="q.id">
-                    <div class="fa-q" :class="missingIds.includes(q.id) ? 'fa-q--wanted' : ''">
-                        <span class="fa-q__num" x-text="i + 1"></span>
+                    <div class="fa-q" :class="[missingIds.includes(q.id) ? 'fa-q--wanted' : '', q.type === 'section' ? 'fa-q--head' : ''].join(' ')">
+                        <!-- A heading is not question 4 of 9. It carries no
+                             number, no Needed, and nothing to type into — it is
+                             there to say where one part of the form ends. -->
+                        <span class="fa-q__num" x-show="q.type !== 'section'" x-text="numberFor(i)"></span>
                         <div class="fa-q__body">
                             <div>
-                                <div class="fa-q__text" x-text="q.text"></div>
+                                <div class="fa-q__text" :class="q.type === 'section' ? 'fa-head__text' : ''" x-text="q.text"></div>
                                 <span class="fa-q__need" x-show="q.required"><span class="fa-q__dot"></span>Needed</span>
-                                <span class="fa-q__opt" x-show="!q.required">Optional</span>
+                                <span class="fa-q__opt" x-show="!q.required && q.type !== 'section'">Optional</span>
                             </div>
 
                             <input x-show="q.type === 'short_text'" type="text" class="m-input"
@@ -336,6 +339,11 @@
            only squares its mark, because a round box that takes several
            ticks reads as a radio that has gone wrong. */
         .fa-box { border-radius: 5px; }
+        /* A heading sits flush left where the numbers are, and separates rather
+           than asks — hence the rule above it and no card of its own. */
+        .fa-q--head { border-top: 1px solid var(--outline-variant); padding-top: 18px; margin-top: 6px; }
+        .fa-q--head:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+        .fa-head__text { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--primary); }
         .fa-scale { display: flex; flex-direction: column; gap: 6px; }
         .fa-scale__end { font-size: 12px; color: var(--on-surface-variant); }
         .fa-scale__points { display: flex; flex-wrap: wrap; gap: 8px; }

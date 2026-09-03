@@ -83,6 +83,12 @@
         { id: 'file', label: 'File submission', group: 'Attach', live: false },
         { id: 'person', label: 'Directory Person picker', group: 'From the app', live: false },
         { id: 'payment', label: 'Stripe payment', group: 'From the app', live: false },
+        // The odd one out, and the reason `asks` exists at all. When a form is
+        // acting as a structured document rather than a survey, some of what is
+        // on it is not asking anything — it is a heading, marking where one part
+        // ends and the next begins. It is NOT a grouping structure: it sits in
+        // the same ordered list as everything above and reorders with them.
+        { id: 'section', label: 'Section heading', group: 'Layout', live: true, asks: false },
     ];
 
     const TYPES_BY_ID = {};
@@ -169,6 +175,16 @@
     function isLiveType(id) {
         const t = TYPES_BY_ID[id];
         return !!(t && t.live);
+    }
+
+    // Does this type collect an answer? Everything does except the section
+    // heading, and every place that treats a question as a question — the
+    // tally, the required check, what is stored in a Response — asks this
+    // rather than naming the heading, so a second non-asking type later is one
+    // line in the list above.
+    function asksSomething(id) {
+        const t = TYPES_BY_ID[id];
+        return !!t && t.asks !== false;
     }
 
     function hasOptions(typeId) {
@@ -310,8 +326,14 @@
             type: type,
             text: trimTo(s.text, MAX_QUESTION_LENGTH),
             hint: trimTo(s.hint, MAX_HINT_LENGTH),
-            placeholder: trimTo(s.placeholder, MAX_PLACEHOLDER_LENGTH),
-            required: s.required === true,
+            // There is no box under a heading, so there is nothing to put
+            // inside one. The hint survives: it is the line under the heading.
+            placeholder: asksSomething(type) ? trimTo(s.placeholder, MAX_PLACEHOLDER_LENGTH) : '',
+            // A heading takes no answer, so it can never be the thing
+            // stopping a form being submitted. Forced here rather than hidden on
+            // the page, because a stored record that claimed it would be
+            // believed by everything downstream.
+            required: asksSomething(type) && s.required === true,
             // A question that has gathered answers is RETIRED, never deleted —
             // the tally it already holds would otherwise lose its label. A
             // retired question is not shown to answerers and is still shown on
@@ -518,10 +540,27 @@
         return '';
     }
 
+    // What a Response actually keeps. Anything sent against a question that
+    // asks nothing is dropped rather than refused: a heading produces no key in
+    // a Response, and a value arriving for one is junk rather than an attack.
+    function answersOnly(form, answers) {
+        const given = normaliseAnswers(answers);
+        const asking = {};
+        ((form && form.questions) || []).forEach(q => {
+            if (q && asksSomething(q.type)) asking[q.id] = true;
+        });
+        const out = {};
+        Object.keys(given).forEach(qid => {
+            if (asking[qid]) out[qid] = given[qid];
+        });
+        return out;
+    }
+
     function answerProblems(form, answers) {
         const given = normaliseAnswers(answers);
         const problems = [];
         askedQuestions(form).forEach(q => {
+            if (!asksSomething(q.type)) return;
             if (!(q.id in given)) return;
             const why = answerFault(q, given[q.id]);
             if (why) problems.push({ id: q.id, text: q.text, why: why });
@@ -592,7 +631,9 @@
     // get the "right" one is the join ADR-0052 forbids.
     function tally(form, responses) {
         const rows = responses || [];
-        return ((form && form.questions) || []).map(q => {
+        // A heading is not a row here. Left in, every form with one would report
+        // a question nobody answered.
+        return ((form && form.questions) || []).filter(q => asksSomething(q.type)).map(q => {
             const given = rows
                 .map(r => (r.answers || {})[q.id])
                 .filter(v => v != null && v !== '');
@@ -696,6 +737,8 @@
         buildLedgerEntry,
         missingRequired,
         answerProblems,
+        answersOnly,
+        asksSomething,
         isDateStr,
         isTimeStr,
         buildScale,

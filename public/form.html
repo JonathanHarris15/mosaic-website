@@ -216,7 +216,9 @@
                                                 <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Done" @click="openQuestion = null"><span class="material-symbols-outlined">expand_less</span></button>
                                             </div>
 
-                                            <input type="text" class="m-input" placeholder="Ask the question" x-model="q.text" @input="touch()" />
+                                            <input type="text" class="m-input"
+                                                   :placeholder="asks(q) ? 'Ask the question' : 'Name this part of the form'"
+                                                   x-model="q.text" @input="touch()" />
 
                                             <div class="fp-row">
                                                 <!-- Not a <select>. Its popup is drawn by the OS:
@@ -252,7 +254,11 @@
                                                         </template>
                                                     </div>
                                                 </div>
-                                                <label class="m-check"><input type="checkbox" x-model="q.required" @change="touch()" /><span>Needed</span></label>
+                                                <!-- A heading collects nothing, so it can never be
+                                                     the thing stopping a form being submitted. The
+                                                     model forces this off too; hiding it here is so
+                                                     nobody is offered a switch that does nothing. -->
+                                                <label class="m-check" x-show="asks(q)"><input type="checkbox" x-model="q.required" @change="touch()" /><span>Needed</span></label>
                                             </div>
 
                                             <div class="fp-field" x-show="hasOptions(q.type)">
@@ -290,8 +296,10 @@
                                                 <input type="text" class="m-input" placeholder="Word for the high end (optional)" maxlength="200" x-model="q.scale.maxLabel" @input="touch()" />
                                             </div>
 
-                                            <input type="text" class="m-input" placeholder="Hint under the box (optional)" maxlength="140" x-model="q.hint" @input="touch()" />
-                                            <input type="text" class="m-input" placeholder="Placeholder inside the box (optional)" maxlength="80" x-model="q.placeholder" @input="touch()" />
+                                            <input type="text" class="m-input"
+                                                   :placeholder="asks(q) ? 'Hint under the box (optional)' : 'Line under the heading (optional)'"
+                                                   maxlength="140" x-model="q.hint" @input="touch()" />
+                                            <input type="text" class="m-input" x-show="asks(q)" placeholder="Placeholder inside the box (optional)" maxlength="80" x-model="q.placeholder" @input="touch()" />
                                         </div>
                                     </div>
                                 </template>

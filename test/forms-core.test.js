@@ -128,17 +128,20 @@ test('unpublished and closed are different answers, and both refuse', () => {
 
 // ── Questions ────────────────────────────────────────────────────────────────
 
-test('all thirteen types are named, and the rich four are still to come', () => {
-    // MS-360 shipped three live and ten greyed; MS-377 lit six more. What is
-    // left is the four that need something beyond a control on a page — the
-    // directory picker and attachments (MS-363), and payment (MS-364). The
-    // count stays 13 either way: the picker was built for thirteen from the
-    // start so that growing into it is not a redesign.
-    assert.strictEqual(FormsCore.QUESTION_TYPES.length, 13);
+test('thirteen ways of asking, one way of not asking, and four still to come', () => {
+    // MS-360 shipped three live and ten greyed; MS-377 lit six more, and what
+    // is left greyed is the four that need something beyond a control on a page
+    // — the directory picker and attachments (MS-363), and payment (MS-364).
+    //
+    // The fourteenth is the section heading (MS-379), and it is not a way of
+    // asking at all: it is the one entry that collects nothing. The picker was
+    // built for thirteen so that growing into them was not a redesign; adding a
+    // heading to the same list, in its own group, is the same bet paying off.
+    assert.strictEqual(FormsCore.QUESTION_TYPES.length, 14);
     const live = FormsCore.QUESTION_TYPES.filter(t => t.live).map(t => t.id);
     assert.deepStrictEqual(live, [
         'short_text', 'paragraph', 'choice_one', 'choice_many',
-        'dropdown', 'number', 'scale', 'date', 'time',
+        'dropdown', 'number', 'scale', 'date', 'time', 'section',
     ]);
     const waiting = FormsCore.QUESTION_TYPES.filter(t => !t.live).map(t => t.id);
     assert.deepStrictEqual(waiting, ['image', 'file', 'person', 'payment']);
@@ -442,4 +445,82 @@ test('select all that apply counts every box a person ticked', () => {
         { answers: { q1: ['Mon'] } },
     ])[0];
     assert.deepEqual(row.options.map(o => [o.label, o.count]), [['Mon', 2], ['Tue', 1], ['Wed', 0]]);
+});
+
+// ── The section heading (MS-379) ─────────────────────────────────────────────
+//
+// When a form is acting as a structured document rather than a survey, some of
+// what is on it is not asking anything — it is a heading, marking where one part
+// ends and the next begins. So a section is not a grouping structure and does
+// not reshape a Form Template. It is one more entry in the same ordered list,
+// and the only one that asks nothing.
+
+test('a section heading is a question type, and the only one that asks nothing', () => {
+    assert.ok(FormsCore.isLiveType('section'));
+    assert.strictEqual(FormsCore.asksSomething('section'), false);
+    ['short_text', 'paragraph', 'choice_one', 'choice_many', 'dropdown',
+        'number', 'scale', 'date', 'time'].forEach(id => {
+        assert.strictEqual(FormsCore.asksSomething(id), true, id + ' asks something');
+    });
+});
+
+test('a heading can never be marked required', () => {
+    // Forced in the model rather than hidden on the page. "Needed" on something
+    // that takes no answer is a form nobody can submit.
+    const q = FormsCore.buildQuestion({ id: 'h', type: 'section', text: 'About you', required: true });
+    assert.strictEqual(q.required, false);
+});
+
+test('a heading carries its text and a line under it, and nothing to type into', () => {
+    const q = FormsCore.buildQuestion({
+        id: 'h', type: 'section', text: 'About you',
+        hint: 'A few details so we can get in touch.', placeholder: 'ignored',
+    });
+    assert.strictEqual(q.text, 'About you');
+    assert.strictEqual(q.hint, 'A few details so we can get in touch.');
+    assert.ok(!q.placeholder, 'there is no box, so there is nothing to put inside one');
+});
+
+test('a heading produces no key in a Response', () => {
+    const form = FormsCore.buildFormTemplate({
+        questions: [
+            { id: 'h', type: 'section', text: 'About you' },
+            { id: 'q1', type: 'short_text', text: 'Your name' },
+        ],
+    });
+    const kept = FormsCore.answersOnly(form, { h: 'somebody typed this', q1: 'Rebecca' });
+    assert.deepEqual(kept, { q1: 'Rebecca' });
+});
+
+test('a heading never appears in the tally', () => {
+    // Otherwise every form with a heading reports a question nobody answered.
+    const form = FormsCore.buildFormTemplate({
+        questions: [
+            { id: 'h', type: 'section', text: 'About you' },
+            { id: 'q1', type: 'short_text', text: 'Your name' },
+        ],
+    });
+    const rows = FormsCore.tally(form, [{ answers: { q1: 'Rebecca' } }]);
+    assert.deepEqual(rows.map(r => r.id), ['q1']);
+});
+
+test('a heading is not a question that was left blank', () => {
+    const form = FormsCore.buildFormTemplate({
+        questions: [{ id: 'h', type: 'section', text: 'About you' }],
+    });
+    assert.deepEqual(FormsCore.missingRequired(form, {}), []);
+    assert.deepEqual(FormsCore.answerProblems(form, { h: 'junk' }), []);
+});
+
+test('a heading is still shown to whoever is filling the form in', () => {
+    // It is not a question, but it IS on the page — askedQuestions is what the
+    // fill-in page renders, and a heading that dropped out of it would leave
+    // the form reading as one wall again.
+    const form = FormsCore.buildFormTemplate({
+        questions: [
+            { id: 'h', type: 'section', text: 'About you' },
+            { id: 'q1', type: 'short_text', text: 'Your name' },
+        ],
+    });
+    assert.deepEqual(FormsCore.askedQuestions(form).map(q => q.id), ['h', 'q1']);
 });

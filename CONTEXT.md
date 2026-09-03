@@ -815,10 +815,25 @@ _Avoid_: opt-in, subscription, notification settings
 ## Forms and Registrations — MS-173
 
 ### Form Template
-The definition of a form: a title and an ordered set of sections and questions, each question carrying a response type and optionally **required**. Built and owned by **editors and above**, in the [[Forms library]]. A template is never the thing somebody fills in — it is what the filled-in thing is made from.
+The definition of a form: a title and **one ordered list of questions**, each carrying a response type and optionally **required**. Built and owned by **editors and above**, in the [[Forms library]]. A template is never the thing somebody fills in — it is what the filled-in thing is made from.
+- ⚠ **A [[Section heading]] is one of those questions, not a structure around them.** This entry used to read "an ordered set of sections and questions", which suggested a grouping layer that has never existed and is not wanted. There is one list.
 - **The title is capped at 90 characters.** Whoever opens the link reads it first, and it has to survive a phone. The cap is in the model, not in the text box.
 - **Questions stay editable after publishing**, because a sign-up whose wording cannot be fixed is worse than one that changes under you. But editing a form that already has [[Response]]s **says so before it saves**, and a question carrying answers is never deleted — it is retired, so the tally it already gathered survives. There is no template versioning: an edit does not migrate answers already given.
 _Avoid_: form (unqualified — the template is what is built, a [[Form Document]] and a [[Response]] are what it makes), survey, questionnaire
+
+### Section heading
+A [[Form Template]] entry that **asks nothing**. It carries text and renders as a heading on the fill-in page, marking where one part of a form ends and the next begins — which is what a form needs when it is acting as a structured document rather than a survey.
+
+It is a **question type**, sitting in the same ordered list as every other question and reordering with them. It is deliberately **not** a grouping structure: nothing nests inside it, and adding one does not reshape a template.
+
+Three things follow from asking nothing, and all three are enforced in the model rather than only hidden on the page:
+- It can **never be marked required** — "Needed" on something that takes no answer is a form nobody can submit.
+- It **produces no key in a [[Response]]**. Anything sent against one is dropped.
+- It **never appears in the tally**. Left in, every form with a heading would report a question nobody answered.
+
+It is also not numbered on the fill-in page, and does not count towards "9 questions" — a count that included headings would be a promise the form does not keep.
+
+_Avoid_: section (unqualified — it names a structure this does not have), group, page break
 
 ### Forms library
 The page the [[Form Template]]s live on, and **a place you navigate into rather than a list you pick from** ([ADR 0053](docs/adr/0053-the-forms-library-is-a-place-you-navigate-not-a-pane-you-pick-from.md)). A full-width list; opening a form goes to the form's own page carrying its questions, its settings and its responses. Modelled on the [[Document Library]], which is the closest sibling this feature has — not on the [[Roles Manager]]'s split pane, which cannot hold a folder tree beside an editor and would have to be thrown away the moment folders arrive.
