@@ -304,6 +304,16 @@
         .f-drop--on { outline: 2px solid var(--primary); outline-offset: -2px; }
         .f-acts { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
         .f-where { font-style: italic; }
+        @media (max-width: 560px) {
+            /* The chevron is decoration on a phone — the whole row is already
+               the tap target — and the width it costs is better spent on the
+               action buttons, which on a touch screen are the ONLY way to file
+               something. Dragging is not available there. */
+            .m-card-list .m-row__chevron { display: none; }
+            .fl-bar { align-items: flex-start; }
+            .fl-bar__right { width: 100%; }
+            .fl-bar__right .m-search { width: 100%; }
+        }
         .f-dim { opacity: .72; }
         .f-dim .m-row__title, .f-dim .m-row__sub { color: var(--on-surface-variant); }
         .m-row__main { display: block; min-width: 0; }
