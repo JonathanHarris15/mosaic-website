@@ -155,15 +155,20 @@ document.addEventListener('alpine:init', () => {
                     db.collection('elder_documents').orderBy('createdAt', 'desc').get(),
                 ];
                 // The care-list picker (views/tags) only exists on the global
-                // Library; a profile tab creates plain notes, so skip those reads.
+                // Library — a Care List is a list over the whole directory and
+                // has no meaning scoped to one person, so a profile tab does
+                // not offer one and does not pay for the reads.
                 if (!this.isProfileScope) {
                     reads.push(db.collection('shepherding_views').orderBy('title', 'asc').get());
                     reads.push(db.collection('people_tags').orderBy('name', 'asc').get());
-                    // Form Templates, on their own rather than in this list, so
-                    // a library that cannot reach them is still a working
-                    // library — see loadFormTemplates.
-                    this.loadFormTemplates();
                 }
+                // Form Templates BOTH places (MS-405). A Form Document is an
+                // interview about somebody, and the profile tab is where an
+                // elder is already standing when they want one. On its own
+                // rather than in the list above, so a library that cannot reach
+                // the templates is still a working library — see
+                // loadFormTemplates.
+                this.loadFormTemplates();
                 const [structSnap, docsSnap, viewsSnap, tagsSnap] = await Promise.all(reads);
 
                 if (structSnap.exists) {
@@ -291,9 +296,18 @@ document.addEventListener('alpine:init', () => {
 
         // ── Create ────────────────────────────────────────────────────────────
 
+        // What a New Document can be, here. A Care List is a list over the
+        // whole directory, so it is not one of the answers on somebody's own
+        // profile; a Form Document is, and that is the point of MS-405.
+        get creatableTypes() {
+            return this.isProfileScope ? ['note', 'form'] : ['note', 'care-list', 'form'];
+        },
+
+        docTypeLabel(type) {
+            return { note: 'Note', 'care-list': 'Care List', form: 'Form' }[type] || 'Note';
+        },
+
         openCreateModal() {
-            // A profile tab makes plain notes only — skip the care-list picker.
-            if (this.isProfileScope) { this.createDocument(); return; }
             this.createDocType = 'note';
             this.createFilterMode = 'preset';
             this.customFilter = { filterTags: [], filterMode: 'any', statusZoneFilters: [] };
@@ -338,7 +352,10 @@ document.addEventListener('alpine:init', () => {
 
         async createDocument() {
             this.showCreateModal = false;
-            const type = this.isProfileScope ? 'note' : this.createDocType;
+            // A type this surface does not offer is not a type it writes, even
+            // if something set it — the profile tab has no Care List.
+            const type = this.creatableTypes.includes(this.createDocType)
+                ? this.createDocType : 'note';
             const template = type === 'form' ? this.chosenTemplate : null;
             // A form document is named for the template it came from, which is
             // what somebody will look for in a folder later. Renaming it

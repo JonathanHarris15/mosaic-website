@@ -205,22 +205,17 @@
             
             <div class="flex flex-col gap-sm">
                 <label class="font-label-md text-label-md text-on-surface-variant">Document Type</label>
-                <div class="grid grid-cols-3 gap-sm">
-                    <button @click="createDocType = 'note'"
-                            :class="createDocType === 'note' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface'"
-                            class="px-md py-sm rounded-lg font-label-md text-sm transition-colors border border-outline-variant/30">
-                        Note
-                    </button>
-                    <button @click="createDocType = 'care-list'"
-                            :class="createDocType === 'care-list' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface'"
-                            class="px-md py-sm rounded-lg font-label-md text-sm transition-colors border border-outline-variant/30">
-                        Care List
-                    </button>
-                    <button @click="createDocType = 'form'"
-                            :class="createDocType === 'form' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface'"
-                            class="px-md py-sm rounded-lg font-label-md text-sm transition-colors border border-outline-variant/30">
-                        Form
-                    </button>
+                <!-- Which types there are is the component's answer, not this
+                     page's (MS-405): a profile tab offers Note and Form and no
+                     Care List, and two hand-written lists would have drifted. -->
+                <div class="grid gap-sm" :style="'grid-template-columns: repeat(' + creatableTypes.length + ', minmax(0, 1fr))'">
+                    <template x-for="t in creatableTypes" :key="t">
+                        <button @click="createDocType = t"
+                                :class="createDocType === t ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface'"
+                                class="px-md py-sm rounded-lg font-label-md text-sm transition-colors border border-outline-variant/30"
+                                x-text="docTypeLabel(t)">
+                        </button>
+                    </template>
                 </div>
             </div>
 

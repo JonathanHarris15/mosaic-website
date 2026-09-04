@@ -882,6 +882,8 @@ What a `document`-mode [[Form Template]] produces: a form somebody fills in **on
 
 ⚠ **A Form Document is elder-only today**, because it lives among the [[Elder Document]]s and that collection is elder-only. Its template's [[Answering rung]] therefore governs nothing, which is why a `document` template does not have one. A non-elder Form Document is a real future ticket, not an oversight — ADR-0055 names the two routes.
 
+**It is started from either place a document lives** — the [[Document Library]]'s *new document → form document*, or the **Documents tab of a [[Shepherding Profile]]**, which is where an elder is already standing when the interview is about the person in front of them (MS-405). The profile tab offers a Note and a Form Document and no [[Care List]]: a Care List is a list over the whole directory and means nothing scoped to one person. Both draw from one list of what may be made, so the two menus cannot drift apart.
+
 ⚠ **On a phone you can open one but not yet make one.** The native Documents screen opens a Form Document in the shell; the new-document flow there offers only a note and a care list, because it does not read the template list. Making one is done from the Documents page on the web or in the shell.
 
 _Avoid_: form response (that is a [[Response]]), filled form, submission
