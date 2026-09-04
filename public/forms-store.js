@@ -40,9 +40,30 @@
     }
 
     // ── Reading ──────────────────────────────────────────────────────────────
+    //
+    // ⚠ EVERY QUERY HERE HAS TO SAY WHETHER THE READER IS AN ELDER (MS-404).
+    // A form an elder has shut to elders is closed in `firestore.rules`, and a
+    // rule that narrows per document does NOT narrow a query — Firestore
+    // refuses the whole query unless it can see that every row it could return
+    // is allowed. So a reader below elder has to ask for `elderOnly == false`
+    // by name; asking for everything would not return "the ones they may see",
+    // it would return a permission error and an empty library.
+    //
+    // That is also why buildFormTemplate writes the flag on every save, false
+    // included, and why a backfill stamped the forms that pre-date it: this
+    // query cannot match a document where the field is simply absent.
+    function formsFor(db, asElder) {
+        const forms = db.collection(FORMS);
+        return asElder ? forms : forms.where('elderOnly', '==', false);
+    }
 
-    async function listForms(db) {
-        const snap = await db.collection(FORMS).orderBy('updatedAt', 'desc').get();
+    function answersFor(db, formId, asElder) {
+        const answers = db.collection(RESPONSES).where('formId', '==', formId);
+        return asElder ? answers : answers.where('elderOnly', '==', false);
+    }
+
+    async function listForms(db, asElder) {
+        const snap = await formsFor(db, asElder).orderBy('updatedAt', 'desc').get();
         return snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
     }
 
@@ -51,16 +72,16 @@
         return doc.exists ? Object.assign({ id: doc.id }, doc.data()) : null;
     }
 
-    async function loadResponses(db, formId) {
+    async function loadResponses(db, formId, asElder) {
         // No orderBy. On an anonymous form the read order IS the disclosure —
         // FormsCore.anonymousReadOrder shuffles what comes back, and sorting by
         // arrival here would defeat it before the page ever saw the rows.
-        const snap = await db.collection(RESPONSES).where('formId', '==', formId).get();
+        const snap = await answersFor(db, formId, asElder).get();
         return snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
     }
 
-    async function countResponses(db, formId) {
-        const snap = await db.collection(RESPONSES).where('formId', '==', formId).get();
+    async function countResponses(db, formId, asElder) {
+        const snap = await answersFor(db, formId, asElder).get();
         return snap.size;
     }
 
@@ -114,8 +135,8 @@
     // The ledger is NOT cleaned up here, because no client may touch it. A
     // stale ledger row is harmless — it says somebody answered a form that no
     // longer exists, joins to nothing, and is unreadable by anybody anyway.
-    async function deleteForm(db, formId) {
-        const answers = await db.collection(RESPONSES).where('formId', '==', formId).get();
+    async function deleteForm(db, formId, asElder) {
+        const answers = await answersFor(db, formId, asElder).get();
         const batch = db.batch();
         answers.forEach(doc => batch.delete(doc.ref));
         batch.delete(db.collection(FORMS).doc(formId));

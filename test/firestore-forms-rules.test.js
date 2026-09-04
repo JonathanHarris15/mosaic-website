@@ -48,21 +48,64 @@ const code = block => block
 
 test('a Form Template is editor-and-above, and nothing below', () => {
     const block = code(formsBlock());
-    assert.match(block, /allow read, write: if isEditor\(\);/,
-        'the forms collection should be plain isEditor()');
+    assert.match(block, /allow read: if isEditor\(\)/,
+        'the floor for reading a form is isEditor()');
     assert.doesNotMatch(block, /if true/,
         'a form is readable by the world — this is how the directory leaked');
     assert.doesNotMatch(block, /request\.auth != null/,
         'request.auth != null accepts an anonymous token anybody can mint; isSignedIn() is the floor');
 });
 
+// ── Shut to elders (MS-404) ──────────────────────────────────────────────────
+//
+// A second, narrower thing than the Answering rung: the rung says who may
+// ANSWER, this says who may SEE the form at all. Only an elder may set it, and
+// — the half that is easy to leave out — only an elder may clear it, or an
+// editor could unset somebody else's and read the lot.
+
+test('a form shut to elders is closed to every editor who is not one', () => {
+    const block = code(formsBlock());
+    assert.match(block, /allow read: if isEditor\(\) && \(isElder\(\) \|\| !shutToElders\(resource\.data\)\)/,
+        'an ordinary editor can still read an elder-only form');
+    assert.match(block, /allow delete: if isEditor\(\) && \(isElder\(\) \|\| !shutToElders\(resource\.data\)\)/,
+        'an ordinary editor can still delete an elder-only form');
+});
+
+test('an editor can neither set the flag nor clear one somebody else set', () => {
+    const block = code(formsBlock());
+    const update = block.split('allow update:')[1] || '';
+    assert.ok(update.includes('shutToElders(resource.data)'),
+        'an editor could edit a form that is already elder-only');
+    assert.ok(update.includes('shutToElders(request.resource.data)'),
+        'an editor could shut a form to elders — and then not be able to open it');
+    const create = block.split('allow create:')[1].split('allow update:')[0];
+    assert.ok(create.includes('request.resource.data'),
+        'an editor could create a form already shut to elders');
+});
+
+test('a missing flag is an ordinary form, because that is what every form was', () => {
+    // The whole collection pre-dates the flag. A rule that read an absent field
+    // as "shut" would have closed the library on the day it deployed.
+    assert.match(rules, /function shutToElders\(data\) \{[^}]*'elderOnly' in data[^}]*\}/,
+        'shutToElders should ask whether the field is there before believing it');
+});
+
 test('a Response is read by editors and written by nobody with a browser', () => {
     const block = code(responsesBlock());
-    assert.match(block, /allow read: if isEditor\(\);/);
+    assert.match(block, /allow read: if isEditor\(\)/);
     assert.match(block, /allow write: if false;/,
         'responses are written server-side, because validation cannot live in a browser we do not control');
     assert.doesNotMatch(block, /if true/);
     assert.doesNotMatch(block, /request\.auth != null/);
+});
+
+test('the answers to an elder-only form are shut too, off a stamp on the answer itself', () => {
+    // A rule cannot afford to read the form once per answer (ADR-0018 §5, the
+    // same reason Event visibility is stamped onto every occurrence), so the
+    // flag rides on the answer and the function writes it there.
+    const block = code(responsesBlock());
+    assert.match(block, /allow read: if isEditor\(\) && \(isElder\(\) \|\| !shutToElders\(resource\.data\)\)/,
+        'an ordinary editor can still read the answers to an elder-only form');
 });
 
 test('the ballot ledger is readable by nobody at all — not even an elder', () => {

@@ -169,6 +169,17 @@ function whatToServe(form, caller, today) {
     return {ok: false, code: "not-found", message: "There is no form here."};
   }
 
+  // ⚠ SHUT TO ELDERS IS ASKED SEPARATELY FROM THE RUNG (MS-404), even though
+  // the model forces the rung to `elder` whenever the flag is on. Two facts
+  // that always agree still drift the day one of them is written by hand — a
+  // record edited in a console, an import, a migration — and the one that must
+  // not be the weaker of the two is this one. It answers "not found", not
+  // "not open to you": a form nobody below an elder may see is a form they
+  // should not learn the existence of.
+  if (FormsCore.isElderOnly(form) && !rankSatisfies("elder", c.rank)) {
+    return {ok: false, code: "not-found", message: "There is no form here."};
+  }
+
   // The rung is asked BEFORE the closing date, so a member-only form does not
   // tell a stranger when it closed. What it is called and when it shut are
   // still things about a form they were never allowed to see.
@@ -269,12 +280,20 @@ function pickerChoices(form, directory) {
  * @param {string} responseId The response the file belongs to.
  * @param {string} questionId The question it answers.
  * @param {string} name The name it arrived with, for its extension only.
+ * @param {boolean=} elderOnly Whether the form is shut to elders (MS-404).
  * @return {string} The storage path.
  */
-function uploadPath(formId, responseId, questionId, name) {
+function uploadPath(formId, responseId, questionId, name, elderOnly) {
   const dot = String(name || "").lastIndexOf(".");
   const ext = dot > 0 ? String(name).slice(dot).toLowerCase().replace(/[^.a-z0-9]/g, "") : "";
-  return `form_uploads/${formId}/${responseId}/${questionId}${ext}`;
+  // ⚠ A SEPARATE PREFIX, NOT A FLAG (MS-404). Whoever may read an answer may
+  // read what came with it, and shutting a form to elders has to shut its
+  // files too — but storage.rules cannot see the `elderOnly` on the answer,
+  // and asking it to reach into Firestore per file would put a lookup on every
+  // read of every attachment. So the fact is written into the path, where the
+  // rule can see it, exactly the way the answer carries its own stamp.
+  const home = elderOnly === true ? "form_uploads_elder" : "form_uploads";
+  return `${home}/${formId}/${responseId}/${questionId}${ext}`;
 }
 
 /**

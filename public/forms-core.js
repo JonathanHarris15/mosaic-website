@@ -484,6 +484,54 @@
         return rung !== 'public';
     }
 
+    // ── Shut to everyone below an elder (MS-404) ─────────────────────────────
+    //
+    // Separate from the [[Answering rung]], and it has to be. The rung says who
+    // may ANSWER. `elder` there still leaves the template, its questions and
+    // every answer open to any editor, because the Forms library and the
+    // Responses tab are the editor ladder — which is not what an elder means
+    // when they say only elders should see this.
+    //
+    // So this is a second, narrower thing: who may SEE the form at all. Only an
+    // elder or a super admin may switch it on, and only they may then open it,
+    // edit it, delete it or read what it collected.
+    //
+    // ⚠ IT FORCES THE ANSWERING RUNG TO `elder` TOO. A form nobody below an
+    // elder may open, answerable by members, is a record that contradicts
+    // itself — and the difference would not be theoretical, because the link
+    // still works whatever the library shows.
+    //
+    // ⚠ AND IT IS STAMPED ON EVERY RESPONSE. A rule cannot afford to look the
+    // form up per answer (ADR-0018 §5, the same reason Event visibility is
+    // stamped onto each occurrence), so the flag rides on the answer as well.
+    // That is also why every form and every answer carries it explicitly, false
+    // included: a query that has to say `elderOnly == false` cannot match a
+    // document where the field is simply absent.
+    const ELDER_RANKS = ['elder', 'super_admin'];
+
+    function mayShutToElders(rank) {
+        return ELDER_RANKS.indexOf(String(rank || '')) !== -1;
+    }
+
+    function isElderOnly(form) {
+        return !!(form && form.elderOnly === true);
+    }
+
+    // What the switch says on the builder, and why it is not offered.
+    function elderOnlyFor(rank) {
+        if (mayShutToElders(rank)) {
+            return {
+                available: true,
+                why: 'Only elders and super admins can open this form, change it, or read what it collects.',
+            };
+        }
+        return {
+            available: false,
+            value: false,
+            why: 'Not yours to change: shutting a form to elders is an elder decision, and an editor who could set it could unset it again.',
+        };
+    }
+
     // ── The two settings, and what each rung allows ──────────────────────────
     //
     // Attribution and One Response Each are independent of each other and both
@@ -657,6 +705,13 @@
         if (rung === 'public' && !mayBePublic({ questions: s.questions || [] }).ok) {
             rung = 'member';
         }
+        // A form only elders may open must not be answerable by anybody else.
+        // Forced here rather than only in the builder, for the same reason the
+        // picker forces `public` back: this is the authority, the screen is a
+        // courtesy.
+        const elderOnly = s.elderOnly === true;
+        if (elderOnly && !asDocument) rung = 'elder';
+
         const allowed = settingsFor(rung);
 
         const record = {
@@ -671,6 +726,13 @@
             // lives in form-folders-core.js.
             folderId: s.folderId || null,
             mode: mode,
+            // Always written, false included — a library query that has to say
+            // `elderOnly == false` cannot match a form where the field is
+            // absent. A document-mode template is NOT forced true: the
+            // documents it makes are elder-only already because they live among
+            // the Elder Documents, and forcing it would quietly take every
+            // existing document template away from the editors using them.
+            elderOnly: elderOnly,
             // Null on a document template rather than a plausible-looking value
             // nothing honours — see hasRung.
             rung: asDocument ? null : rung,
@@ -1055,6 +1117,9 @@
         isRung,
         needsAccount,
         settingsFor,
+        mayShutToElders,
+        isElderOnly,
+        elderOnlyFor,
         isBallot,
         formIdFromBytes,
         looksLikeFormId,

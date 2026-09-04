@@ -96,6 +96,14 @@ service firebase.storage {
         && levelOf(myUserDoc()) in ['editor', 'admin', 'elder', 'super_admin'];
     }
 
+    // ⚠ AN ADMIN IS NOT AN ELDER. The tier list reads editor → elder → admin,
+    // which suggests an admin sees everything an elder does; isElder() in
+    // firestore.rules has never said so, and this restates that one rather than
+    // the tier list. Shepherding data is closed to admins on purpose.
+    function isElderAccount() {
+      return isSignedIn() && levelOf(myUserDoc()) in ['elder', 'super_admin'];
+    }
+
     // Event Attachments (MS-287): a file attached to one Event occurrence — a
     // flyer, a sign-up sheet, a floor plan, whatever file type the church
     // needs.
@@ -168,6 +176,24 @@ service firebase.storage {
     // the two drift.
     match /form_uploads/{formId}/{responseId}/{fileName} {
       allow read: if isEditorAccount();
+      allow write: if false;
+      allow delete: if false;
+    }
+
+    // The same files, for a form an elder has shut to elders (MS-404).
+    //
+    // ⚠ WHY A SECOND PATH RATHER THAN A FLAG. Whoever may read an answer may
+    // read what came with it, and firestore.rules shuts an elder-only form's
+    // answers to every editor who is not an elder. This engine cannot see that
+    // stamp, and reaching into Firestore per file would put a lookup on every
+    // read of every attachment. So the function writes the fact into the path,
+    // the way the answer carries it in a field, and the rule reads it here.
+    //
+    // A file written to the wrong prefix is a file behind the wrong door, so
+    // the prefix is chosen in ONE place — fp.uploadPath — and the record keeps
+    // the path it actually wrote.
+    match /form_uploads_elder/{formId}/{responseId}/{fileName} {
+      allow read: if isElderAccount();
       allow write: if false;
       allow delete: if false;
     }

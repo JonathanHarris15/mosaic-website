@@ -62,7 +62,7 @@ test('the read rule matches the Firestore rule it restates', () => {
     // Two engines, one sentence: whoever may read a Response may read what came
     // with it. `isEditorAccount()` here is `isEditor()` there, and this fails if
     // somebody tightens one and forgets the other.
-    assert.match(firestoreRules, /match \/form_responses\/\{responseId\} \{\s*\n\s*allow read: if isEditor\(\);/,
+    assert.match(firestoreRules, /match \/form_responses\/\{responseId\} \{\s*\n\s*allow read: if isEditor\(\)/,
         'the Firestore rule on form_responses has changed shape');
     assert.match(rules, /function isEditorAccount\(\)[\s\S]*?'editor', 'admin', 'elder', 'super_admin'/,
         'isEditorAccount no longer lists the same ranks as isEditor');
@@ -123,4 +123,37 @@ test('a response stores where its file is, never how to fetch it', () => {
     });
     assert.strictEqual(JSON.stringify(answer).includes('http'), false,
         'something URL-shaped survived onto a stored upload');
+});
+
+// ── A form shut to elders takes its files with it (MS-404) ───────────────────
+//
+// The sentence above is the whole reason this exists. Firestore shuts an
+// elder-only form's ANSWERS to every editor who is not an elder; leaving the
+// bytes on the editor path would have left the waiver readable by exactly the
+// people the form was shut to. This engine cannot see the stamp on the answer,
+// so the fact is written into the path instead.
+
+test('an elder-only upload lives on its own path, behind an elder-only rule', () => {
+    const elderBlock = /match \/form_uploads_elder\/[\s\S]{0,200}?allow read: if ([A-Za-z]+)\(\);/;
+    const found = rules.match(elderBlock);
+    assert.ok(found, 'there is no rule for form_uploads_elder at all');
+    assert.equal(found[1], 'isElderAccount', 'an elder-only upload is readable by ' + found[1]);
+    assert.match(rules.slice(found.index), /allow write: if false;/);
+});
+
+test('isElderAccount restates isElder, not the tier list', () => {
+    // The tier list reads editor → elder → admin, which suggests an admin sees
+    // everything an elder does. isElder() has never said so, and shepherding
+    // data is closed to admins on purpose.
+    assert.match(rules, /function isElderAccount\(\)[\s\S]*?'elder', 'super_admin'/,
+        'isElderAccount no longer lists the same ranks as isElder');
+    assert.match(firestoreRules, /function isElder\(\)[\s\S]*?'elder', 'super_admin'/);
+});
+
+test('the prefix is chosen in one place, so a file cannot land behind the wrong door', () => {
+    const fp = fs.readFileSync(path.join(__dirname, '..', 'functions', 'forms-public.js'), 'utf8');
+    const hits = (fp.match(/form_uploads_elder/g) || []).length;
+    assert.equal(hits, 1, 'the elder prefix is spelled out in more than one place');
+    assert.match(fp, /function uploadPath\([^)]*elderOnly/,
+        'uploadPath does not know whether the form is shut to elders');
 });

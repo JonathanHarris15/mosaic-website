@@ -563,3 +563,37 @@ test('a very long name is cut rather than refused, because refusing loses what t
     assert.equal(r.ok, true);
     assert.equal(r.person.name.length, 120);
 });
+
+// ── Serving a form shut to elders (MS-404) ───────────────────────────────────
+
+const ELDER_ONLY_FORM = {
+    published: true, rung: 'elder', elderOnly: true, questions: [],
+};
+
+test('a form shut to elders is not there at all for anybody else', () => {
+    // "Not there", not "not open to you". A form nobody below an elder may see
+    // is a form they should not learn the existence of.
+    ['editor', 'admin', 'member', null].forEach(rank => {
+        const served = fp.whatToServe(ELDER_ONLY_FORM, { signedIn: !!rank, rank: rank }, '2026-09-04');
+        assert.equal(served.ok, false, String(rank) + ' was served an elder-only form');
+        assert.equal(served.code, 'not-found', 'it told ' + String(rank) + ' the form exists');
+    });
+});
+
+test('an elder is served it', () => {
+    ['elder', 'super_admin'].forEach(rank => {
+        const served = fp.whatToServe(ELDER_ONLY_FORM, { signedIn: true, rank: rank }, '2026-09-04');
+        assert.equal(served.ok, true, rank + ' could not open an elder-only form');
+    });
+});
+
+test('the flag is asked separately from the rung, so the two cannot drift apart', () => {
+    // The model forces the rung to `elder` whenever the flag is on. Two facts
+    // that always agree still drift the day one is written by hand — a console
+    // edit, an import, a migration — and this is the one that must not be the
+    // weaker of the two.
+    const drifted = { published: true, rung: 'member', elderOnly: true, questions: [] };
+    const served = fp.whatToServe(drifted, { signedIn: true, rank: 'member' }, '2026-09-04');
+    assert.equal(served.ok, false);
+    assert.equal(served.code, 'not-found');
+});

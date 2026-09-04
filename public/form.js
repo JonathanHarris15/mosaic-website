@@ -38,6 +38,15 @@ function formPage() {
             return ['editor', 'admin', 'elder', 'super_admin'].includes(level);
         },
 
+        // ⚠ NOT A PERMISSION — A QUERY SHAPE (MS-404). A reader below elder has
+        // to ask for `elderOnly == false` by name, because a rule that narrows
+        // per document does not narrow a query: Firestore refuses the whole
+        // query unless it can see every row it could return is allowed. The
+        // rules are still what decides; this only shapes what is asked for.
+        get isElder() {
+            return FormsCore.mayShutToElders(this.currentPermissionLevel);
+        },
+
         get today() {
             return (window.DateUtils && DateUtils.todayStr()) || new Date().toISOString().slice(0, 10);
         },
@@ -52,6 +61,12 @@ function formPage() {
         // one, deciding who may follow one — and a document template has none.
         get isDocument() { return FormsCore.isDocumentMode(this.form); },
         get liveRungs() { return FormsCore.RUNGS_LIVE; },
+
+        // Shutting a form to elders (MS-404). Offered to an elder or a super
+        // admin and nobody else — an editor who could set it could clear it
+        // again, which is the same as not having it. The rules are what
+        // actually refuse; this decides whether the switch is drawn.
+        get elderOnlySetting() { return FormsCore.elderOnlyFor(this.currentPermissionLevel); },
 
         // Asked of the model, not spelled out here — the picker is not the only
         // place a rung gets named, and two lists of these words would drift.
@@ -158,7 +173,7 @@ function formPage() {
                     this.form.createdAt = form.createdAt || null;
                     this.form.createdBy = form.createdBy || null;
                     this.form.createdByName = form.createdByName || null;
-                    this.responses = await FormsStore.loadResponses(db, this.formId);
+                    this.responses = await FormsStore.loadResponses(db, this.formId, this.isElder);
                     this.loadTags();
                 } catch (e) {
                     this.problem = 'This form did not load. Check your connection and refresh.';
@@ -430,6 +445,16 @@ function formPage() {
         // FormsCore refuses to build a record whose settings its own rung
         // forbids. Doing it here too means the screen agrees with the record
         // rather than showing a tick that will not survive the save.
+        // Shutting it moves the answering rung with it, and says so rather than
+        // letting a member wonder why the link stopped working. Opening it
+        // again leaves the rung where it is: it is a real answer to "who may
+        // answer" and nobody asked to change it back.
+        setElderOnly(on) {
+            this.form.elderOnly = on === true;
+            if (this.form.elderOnly && !this.isDocument) this.setRung('elder');
+            else this.touch();
+        },
+
         setRung(rung) {
             // Refused here as well as in the model, so the reason reaches the
             // person who tried rather than the rung quietly snapping back.
@@ -473,7 +498,7 @@ function formPage() {
 
         async doDelete() {
             try {
-                await FormsStore.deleteForm(db, this.formId);
+                await FormsStore.deleteForm(db, this.formId, this.isElder);
                 window.location.href = this.libraryHref;
             } catch (e) {
                 this.problem = 'That did not delete. Try again.';

@@ -58,6 +58,15 @@ function formsPage() {
             return ['editor', 'admin', 'elder', 'super_admin'].includes(level);
         },
 
+        // ⚠ NOT A PERMISSION — A QUERY SHAPE (MS-404). A reader below elder has
+        // to ask for `elderOnly == false` by name, because a rule that narrows
+        // per document does not narrow a query: Firestore refuses the whole
+        // query unless it can see every row it could return is allowed. The
+        // rules are still what decides; this only shapes what is asked for.
+        get isElder() {
+            return FormsCore.mayShutToElders(this.currentPermissionLevel);
+        },
+
         get today() {
             return (window.DateUtils && DateUtils.todayStr()) || new Date().toISOString().slice(0, 10);
         },
@@ -219,7 +228,7 @@ function formsPage() {
                     // empty one, because the same principle applies as when a
                     // folder is deleted: a live form whose link people are
                     // answering has to stay findable.
-                    this.forms = await FormsStore.listForms(db);
+                    this.forms = await FormsStore.listForms(db, this.isElder);
                     try {
                         this.folders = await FormsStore.listFolders(db);
                     } catch (e) {

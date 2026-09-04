@@ -146,6 +146,31 @@
                                 <span class="m-input-hint" x-show="modeChange.ok && isDocument">No link to send. It appears under new document → form document in the Documents library.</span>
                             </section>
 
+                            <!-- Shut to elders (MS-404). A card of its own,
+                                 above the rung, because it answers a different
+                                 question: the rung says who may ANSWER, this
+                                 says who may SEE it at all — in the library, in
+                                 here, and on the Responses tab. It is drawn for
+                                 an elder and a super admin and for nobody else,
+                                 and it applies to a document template too. -->
+                            <section class="fp-block" x-show="elderOnlySetting.available">
+                                <div class="fp-block__head"><span class="m-label">Who may see it</span></div>
+                                <div class="fp-switch">
+                                    <label class="m-check">
+                                        <input type="checkbox" :checked="form.elderOnly" @change="setElderOnly($event.target.checked)" />
+                                        <span>Elders only</span>
+                                    </label>
+                                </div>
+                                <span class="m-input-hint" x-text="elderOnlySetting.why"></span>
+                                <div class="m-notice m-notice--info" x-show="form.elderOnly && !isDocument">
+                                    <span class="material-symbols-outlined m-notice__icon">shield_person</span>
+                                    <div class="m-notice__body">
+                                        <span class="m-notice__title">Answering moves to Elders too.</span>
+                                        <span class="m-notice__text">A form only elders can open cannot be answerable by anybody else — the link still works whatever the library shows.</span>
+                                    </div>
+                                </div>
+                            </section>
+
                             <!-- A document template has no rung, and the model
                                  stores null rather than a value nothing honours.
                                  Hiding the card is the page agreeing with that:

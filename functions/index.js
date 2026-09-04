@@ -2923,7 +2923,9 @@ exports.publicForm = onCall(
       const writtenPaths = [];
       for (const qid of Object.keys(files || {})) {
         const file = files[qid];
-        const path = fp.uploadPath(formId, responseRef.id, qid, file.name);
+        const path = fp.uploadPath(
+            formId, responseRef.id, qid, file.name,
+            FormsCore.isElderOnly(form));
         const buffer = Buffer.from(file.dataBase64, "base64");
         await admin.storage().bucket().file(path).save(buffer, {
           contentType: file.contentType || "application/octet-stream",
@@ -2947,6 +2949,13 @@ exports.publicForm = onCall(
         // The files join the answers here rather than in the model, because
         // only this side knows where the bytes actually landed.
         answers: Object.assign({}, verdict.response.answers, storedFiles),
+        // ⚠ THE FORM'S "elders only" RIDES ON THE ANSWER (MS-404). A security
+        // rule cannot afford to read the form once per answer — the same
+        // reason Event visibility is stamped onto every occurrence (ADR-0018
+        // §5) — so firestore.rules reads the flag straight off the row. Always
+        // written, false included: a query that has to say `elderOnly == false`
+        // cannot match a document where the field is absent.
+        elderOnly: FormsCore.isElderOnly(form),
         submittedAt: admin.firestore.FieldValue.serverTimestamp(),
       }));
 
