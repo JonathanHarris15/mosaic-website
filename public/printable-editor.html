@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Printable editor · Mosaic</title>
+    <link rel="stylesheet" href="mosaic.css" />
+    <link rel="stylesheet" href="fonts.css" />
+    <link rel="stylesheet" href="vendor/codemirror/codemirror.min.css" />
+    <link rel="stylesheet" href="vendor/codemirror/theme/material-darker.min.css" />
+    <style>[x-cloak] { display: none !important; }</style>
+</head>
+
+<body class="pe-body" x-data="printableEditor()" x-init="init()" x-cloak>
+
+    <header class="m-header m-header--tool pe-header">
+        <div class="m-header__inner">
+            <div class="m-header__lead">
+                <a href="printables.html" class="m-back">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    <span class="m-back__label">Printables</span>
+                </a>
+                <div class="m-header__titles">
+                    <h1 class="m-header__title m-header__title--serif pe-title" x-show="!renaming" @click="canEdit && startRename()" :title="canEdit ? 'Rename' : ''"
+                        x-text="project ? project.name : 'Printable'"></h1>
+                    <input x-show="renaming" id="pe-rename" type="text" class="pe-title-input" maxlength="90" x-model="renameText"
+                           @keydown.enter.prevent="commitRename()" @keydown.escape.prevent="renaming = false" @blur="commitRename()" />
+                    <span class="m-header__sub" x-show="template" x-text="template ? template.label : ''"></span>
+                </div>
+            </div>
+            <div class="m-header__actions">
+                <span class="m-badge m-header__chip"
+                      :class="saveStatus === 'saved' ? 'm-badge--success' : saveStatus === 'saving' ? 'm-badge--neutral' : 'm-badge--warning'">
+                    <span class="m-chip-dot" :class="saveStatus === 'saving' ? 'm-chip-dot--pulse' : ''"></span>
+                    <span x-text="saveStatus === 'saved' ? 'Saved' : saveStatus === 'saving' ? 'Saving…' : 'Unsaved changes'"></span>
+                </span>
+                <button type="button" class="m-btn m-btn--secondary m-btn--sm" @click="undo()" title="Undo (Ctrl+Z)">
+                    <span class="material-symbols-outlined">undo</span><span class="m-btn__label">Undo</span>
+                </button>
+                <button type="button" class="m-btn m-btn--secondary m-btn--sm" @click="redo()" title="Redo (Ctrl+Shift+Z)">
+                    <span class="material-symbols-outlined">redo</span><span class="m-btn__label">Redo</span>
+                </button>
+                <button type="button" class="m-btn m-btn--secondary m-btn--sm" :aria-pressed="codeOpen" @click="toggleCode()" title="Code view: the page's HTML and CSS">
+                    <span class="material-symbols-outlined">code</span><span class="m-btn__label">Code</span>
+                </button>
+                <div class="pe-filemenu">
+                    <button type="button" class="m-btn m-btn--secondary m-btn--sm" @click="fileMenu = !fileMenu" title="File">
+                        <span class="material-symbols-outlined">menu</span><span class="m-btn__label">File</span>
+                    </button>
+                    <div class="pe-menu" x-show="fileMenu" x-cloak @click.outside="fileMenu = false">
+                        <button type="button" @click="printPrintable()"><span class="material-symbols-outlined">print</span>Print… <kbd>Ctrl+P</kbd></button>
+                        <button type="button" @click="startSaveTemplate()"><span class="material-symbols-outlined">bookmark_add</span>Save this page as a template</button>
+                        <button type="button" @click="fileMenu = false; fitToView()"><span class="material-symbols-outlined">fit_screen</span>Fit page to view <kbd>Ctrl+0</kbd></button>
+                        <a :href="'printable-view.html?id=' + encodeURIComponent(id)" target="_blank"><span class="material-symbols-outlined">visibility</span>Open the view-only page</a>
+                    </div>
+                </div>
+                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="save(true)" :disabled="saving" title="Save now (Ctrl+S)">
+                    <span class="material-symbols-outlined">save</span>
+                    <span class="m-btn__label" x-text="saving ? 'Saving…' : 'Save'"></span>
+                </button>
+            </div>
+            <div class="m-header__rule"></div>
+            <div class="m-header__auth" id="auth-container"></div>
+        </div>
+    </header>
+
+    <div class="m-loading pe-loading" x-show="loading"><span class="m-spinner m-spinner--lg"></span></div>
+
+    <div class="pe-notices" x-show="problem || notice">
+        <div class="m-notice m-notice--error" x-show="problem">
+            <span class="material-symbols-outlined m-notice__icon">error</span>
+            <div class="m-notice__body"><span class="m-notice__text" x-text="problem"></span></div>
+            <div class="m-notice__acts"><button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="problem = ''">Dismiss</button></div>
+        </div>
+        <div class="m-notice m-notice--info" x-show="notice">
+            <span class="material-symbols-outlined m-notice__icon">info</span>
+            <div class="m-notice__body"><span class="m-notice__text" x-text="notice"></span></div>
+        </div>
+    </div>
+
+    <main class="pe-main" x-show="!loading && project">
+
+        <!-- ═══ Left: elements and their properties ═══ -->
+        <aside class="pe-panel pe-panel--left">
+            <div class="pe-tools">
+                <button type="button" class="pe-tool" @click="addElement('box')" title="Add a box (a div)">
+                    <span class="material-symbols-outlined">crop_square</span><span>Box</span>
+                </button>
+                <button type="button" class="pe-tool" @click="addElement('text')" title="Add text">
+                    <span class="material-symbols-outlined">title</span><span>Text</span>
+                </button>
+                <button type="button" class="pe-tool" @click="addElement('image')" title="Add an image">
+                    <span class="material-symbols-outlined">image</span><span>Image</span>
+                </button>
+            </div>
+
+            <section class="pe-section pe-section--tree">
+                <h2 class="pe-h">Elements</h2>
+                <div id="pe-tree" class="pe-tree"></div>
+            </section>
+
+            <section class="pe-section pe-section--props">
+                <!-- The page -->
+                <template x-if="pageSelected && currentPage">
+                    <div>
+                        <h2 class="pe-h">Page</h2>
+                        <label class="pe-f"><span>Name</span><input class="pe-in" x-model="pageProps.name" @input="applyPageProps(false)" @change="applyPageProps(true)" placeholder="Cover, Back…" maxlength="40" /></label>
+                        <div class="pe-f"><span>Margins</span>
+                            <span class="pe-seg">
+                                <button type="button" :aria-pressed="pageProps.marginMode === 'all'" @click="pageProps.marginMode = 'all'; applyPageProps(true)" title="All four the same"><span class="material-symbols-outlined">select_all</span></button>
+                                <button type="button" :aria-pressed="pageProps.marginMode === 'pairs'" @click="pageProps.marginMode = 'pairs'; applyPageProps(true)" title="Top and bottom, left and right"><span class="material-symbols-outlined">view_agenda</span></button>
+                                <button type="button" :aria-pressed="pageProps.marginMode === 'four'" @click="pageProps.marginMode = 'four'; applyPageProps(true)" title="Each side on its own"><span class="material-symbols-outlined">grid_view</span></button>
+                            </span>
+                        </div>
+                        <div class="pe-grid2" x-show="pageProps.marginMode === 'all'">
+                            <label class="pe-f"><span>All sides</span><span class="pe-unit"><input class="pe-in" type="number" min="0" x-model="pageProps.all" @input="applyPageProps(false)" @change="applyPageProps(true)" /><em>px</em></span><small x-text="marginIn(pageProps.all)"></small></label>
+                        </div>
+                        <div class="pe-grid2" x-show="pageProps.marginMode === 'pairs'">
+                            <label class="pe-f"><span>Top &amp; bottom</span><span class="pe-unit"><input class="pe-in" type="number" min="0" x-model="pageProps.tb" @input="applyPageProps(false)" @change="applyPageProps(true)" /><em>px</em></span></label>
+                            <label class="pe-f"><span>Left &amp; right</span><span class="pe-unit"><input class="pe-in" type="number" min="0" x-model="pageProps.lr" @input="applyPageProps(false)" @change="applyPageProps(true)" /><em>px</em></span></label>
+                        </div>
+                        <div class="pe-grid2" x-show="pageProps.marginMode === 'four'">
+                            <label class="pe-f"><span>Top</span><span class="pe-unit"><input class="pe-in" type="number" min="0" x-model="pageProps.top" @input="applyPageProps(false)" @change="applyPageProps(true)" /><em>px</em></span></label>
+                            <label class="pe-f"><span>Right</span><span class="pe-unit"><input class="pe-in" type="number" min="0" x-model="pageProps.right" @input="applyPageProps(false)" @change="applyPageProps(true)" /><em>px</em></span></label>
+                            <label class="pe-f"><span>Bottom</span><span class="pe-unit"><input class="pe-in" type="number" min="0" x-model="pageProps.bottom" @input="applyPageProps(false)" @change="applyPageProps(true)" /><em>px</em></span></label>
+                            <label class="pe-f"><span>Left</span><span class="pe-unit"><input class="pe-in" type="number" min="0" x-model="pageProps.left" @input="applyPageProps(false)" @change="applyPageProps(true)" /><em>px</em></span></label>
+                        </div>
+                        <label class="pe-f"><span>Background</span><span class="pe-color"><input type="color" :value="swatch(pageProps.bg)" @input="pageProps.bg = $event.target.value; applyPageProps(false)" @change="applyPageProps(true)" /><input class="pe-in" x-model="pageProps.bg" @input="applyPageProps(false)" @change="applyPageProps(true)" /></span></label>
+                        <p class="pe-hint">Size: <span x-text="template ? template.widthPx + ' × ' + template.heightPx + ' px' : ''"></span> · <span x-text="template ? template.widthIn + ' × ' + template.heightIn + ' in' : ''"></span>. Paper and density are fixed when a printable is made.</p>
+                        <p class="pe-hint">Click an element on the page or in the tree to edit it. Right-click for more.</p>
+                    </div>
+                </template>
+
+                <!-- An element -->
+                <template x-if="selectedNode">
+                    <div>
+                        <h2 class="pe-h" x-text="selectedKind === 'image' ? 'Image' : selectedKind === 'text' ? 'Text' : 'Box'"></h2>
+                        <label class="pe-f"><span>Name</span><input id="pe-prop-name" class="pe-in" x-model="props.name" @change="applyProps(true)" placeholder="Header, Person card…" maxlength="40" /></label>
+
+                        <template x-if="selectedKind === 'text'">
+                            <div>
+                                <label class="pe-f"><span>Text</span><textarea class="pe-in pe-ta" x-model="props.text" @input="applyProps(false)" @change="applyProps(true)" rows="3"></textarea></label>
+                                <label class="pe-f"><span>Kind</span><select class="pe-in" x-model="props.tag" @change="applyProps(true)">
+                                    <option value="p">Paragraph</option><option value="h1">Heading 1</option><option value="h2">Heading 2</option><option value="h3">Heading 3</option><option value="h4">Heading 4</option><option value="span">Inline</option>
+                                </select></label>
+                            </div>
+                        </template>
+                        <template x-if="selectedKind === 'image'">
+                            <div>
+                                <label class="pe-f"><span>Picture</span><input class="pe-in" x-model="props.src" @change="applyProps(true)" placeholder="https://… or upload" /></label>
+                                <div class="pe-f"><span></span><label class="m-btn m-btn--secondary m-btn--sm pe-upload"><span class="material-symbols-outlined">upload</span><span class="m-btn__label">Upload a picture</span><input type="file" accept="image/*" @change="uploadImage($event)" /></label></div>
+                                <label class="pe-f"><span>Fit</span><select class="pe-in" x-model="props['object-fit']" @change="applyProps(true)">
+                                    <option value="">Stretch</option><option value="cover">Cover (crop to fill)</option><option value="contain">Contain (whole picture)</option>
+                                </select></label>
+                                <label class="pe-f"><span>Alt text</span><input class="pe-in" x-model="props.alt" @change="applyProps(true)" /></label>
+                            </div>
+                        </template>
+                        <template x-if="selectedKind === 'box'">
+                            <label class="pe-f"><span>Kind</span><select class="pe-in" x-model="props.tag" @change="applyProps(true)">
+                                <option value="div">Box</option><option value="section">Section</option><option value="header">Header</option><option value="footer">Footer</option>
+                            </select></label>
+                        </template>
+
+                        <details open class="pe-group">
+                            <summary>Size &amp; position</summary>
+                            <div class="pe-grid2">
+                                <label class="pe-f"><span>Width</span><input class="pe-in" x-model="props.width" @input="applyProps(false)" @change="applyProps(true)" placeholder="auto, 300px, 50%" /></label>
+                                <label class="pe-f"><span>Height</span><input class="pe-in" x-model="props.height" @input="applyProps(false)" @change="applyProps(true)" placeholder="auto" /></label>
+                                <label class="pe-f"><span>Min height</span><input class="pe-in" x-model="props['min-height']" @input="applyProps(false)" @change="applyProps(true)" /></label>
+                                <label class="pe-f"><span>Max width</span><input class="pe-in" x-model="props['max-width']" @input="applyProps(false)" @change="applyProps(true)" /></label>
+                            </div>
+                            <label class="pe-f"><span>Position</span><select class="pe-in" x-model="props.position" @change="applyProps(true)">
+                                <option value="">In the flow</option><option value="relative">In the flow (nudged)</option><option value="absolute">Absolute (drag it on the page)</option>
+                            </select></label>
+                            <div class="pe-grid2" x-show="props.position === 'absolute' || props.position === 'relative'">
+                                <label class="pe-f"><span>X (left)</span><input class="pe-in" x-model="props.left" @input="applyProps(false)" @change="applyProps(true)" placeholder="0px" /></label>
+                                <label class="pe-f"><span>Y (top)</span><input class="pe-in" x-model="props.top" @input="applyProps(false)" @change="applyProps(true)" placeholder="0px" /></label>
+                            </div>
+                            <label class="pe-f" x-show="selectedKind !== 'image'"><span>Overflow</span><select class="pe-in" x-model="props.overflow" @change="applyProps(true)">
+                                <option value="">Visible</option><option value="hidden">Hidden (clip)</option>
+                            </select></label>
+                        </details>
+
+                        <details open class="pe-group" x-show="selectedKind === 'box'">
+                            <summary>Layout of children</summary>
+                            <label class="pe-f"><span>Arrange</span><select class="pe-in" x-model="props.display" @change="applyProps(true)">
+                                <option value="">Stacked (block)</option><option value="flex">Flex</option><option value="grid">Grid</option><option value="inline-block">Inline block</option>
+                            </select></label>
+                            <div x-show="props.display === 'flex'">
+                                <label class="pe-f"><span>Direction</span><select class="pe-in" x-model="props['flex-direction']" @change="applyProps(true)">
+                                    <option value="">Row (across)</option><option value="column">Column (down)</option><option value="row-reverse">Row, reversed</option><option value="column-reverse">Column, reversed</option>
+                                </select></label>
+                                <label class="pe-f"><span>Wrap</span><select class="pe-in" x-model="props['flex-wrap']" @change="applyProps(true)"><option value="">No</option><option value="wrap">Wrap</option></select></label>
+                            </div>
+                            <label class="pe-f" x-show="props.display === 'grid'"><span>Columns</span><input class="pe-in" x-model="props['grid-template-columns']" @change="applyProps(true)" placeholder="1fr 1fr 1fr" /></label>
+                            <div x-show="props.display === 'flex' || props.display === 'grid'">
+                                <label class="pe-f"><span>Gap</span><input class="pe-in" x-model="props.gap" @input="applyProps(false)" @change="applyProps(true)" placeholder="12px" /></label>
+                                <label class="pe-f"><span>Justify</span><select class="pe-in" x-model="props['justify-content']" @change="applyProps(true)">
+                                    <option value="">Start</option><option value="center">Centre</option><option value="flex-end">End</option><option value="space-between">Space between</option><option value="space-around">Space around</option><option value="space-evenly">Space evenly</option>
+                                </select></label>
+                                <label class="pe-f"><span>Align</span><select class="pe-in" x-model="props['align-items']" @change="applyProps(true)">
+                                    <option value="">Stretch</option><option value="flex-start">Start</option><option value="center">Centre</option><option value="flex-end">End</option><option value="baseline">Baseline</option>
+                                </select></label>
+                            </div>
+                        </details>
+
+                        <details open class="pe-group">
+                            <summary>Spacing</summary>
+                            <label class="pe-f"><span>Padding</span><input class="pe-in" x-model="props.padding" @input="applyProps(false)" @change="applyProps(true)" placeholder="12px or 8px 16px" /></label>
+                            <label class="pe-f"><span>Margin</span><input class="pe-in" x-model="props.margin" @input="applyProps(false)" @change="applyProps(true)" placeholder="0" /></label>
+                            <label class="pe-f"><span>Flex</span><input class="pe-in" x-model="props.flex" @change="applyProps(true)" placeholder="1 (grow to fill)" /></label>
+                        </details>
+
+                        <details open class="pe-group">
+                            <summary>Border &amp; background</summary>
+                            <label class="pe-f"><span>Background</span><span class="pe-color"><input type="color" :value="swatch(props['background-color'])" @input="setProp('background-color', $event.target.value, false)" @change="applyProps(true)" /><input class="pe-in" x-model="props['background-color']" @input="applyProps(false)" @change="applyProps(true)" placeholder="none" /></span></label>
+                            <div class="pe-grid2">
+                                <label class="pe-f"><span>Border</span><input class="pe-in" x-model="props['border-width']" @input="applyProps(false)" @change="applyProps(true)" placeholder="1px" /></label>
+                                <label class="pe-f"><span>Style</span><select class="pe-in" x-model="props['border-style']" @change="applyProps(true)"><option value="">None</option><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option><option value="double">Double</option></select></label>
+                            </div>
+                            <label class="pe-f"><span>Border colour</span><span class="pe-color"><input type="color" :value="swatch(props['border-color'])" @input="setProp('border-color', $event.target.value, false)" @change="applyProps(true)" /><input class="pe-in" x-model="props['border-color']" @input="applyProps(false)" @change="applyProps(true)" /></span></label>
+                            <div class="pe-grid2">
+                                <label class="pe-f"><span>Corners</span><input class="pe-in" x-model="props['border-radius']" @input="applyProps(false)" @change="applyProps(true)" placeholder="0" /></label>
+                                <label class="pe-f"><span>Opacity</span><input class="pe-in" x-model="props.opacity" @input="applyProps(false)" @change="applyProps(true)" placeholder="1" /></label>
+                            </div>
+                        </details>
+
+                        <details open class="pe-group" x-show="selectedKind !== 'image'">
+                            <summary>Text</summary>
+                            <label class="pe-f"><span>Font</span><select class="pe-in" x-model="props['font-family']" @change="applyProps(true)">
+                                <option value="">Inherit</option>
+                                <template x-for="f in fonts" :key="f.value"><option :value="f.value" x-text="f.label"></option></template>
+                            </select></label>
+                            <div class="pe-grid2">
+                                <label class="pe-f"><span>Size</span><input class="pe-in" x-model="props['font-size']" @input="applyProps(false)" @change="applyProps(true)" placeholder="16px" /></label>
+                                <label class="pe-f"><span>Weight</span><select class="pe-in" x-model="props['font-weight']" @change="applyProps(true)"><option value="">Normal</option><option value="300">Light</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option></select></label>
+                                <label class="pe-f"><span>Line height</span><input class="pe-in" x-model="props['line-height']" @input="applyProps(false)" @change="applyProps(true)" placeholder="1.3" /></label>
+                                <label class="pe-f"><span>Style</span><select class="pe-in" x-model="props['font-style']" @change="applyProps(true)"><option value="">Upright</option><option value="italic">Italic</option></select></label>
+                            </div>
+                            <label class="pe-f"><span>Colour</span><span class="pe-color"><input type="color" :value="swatch(props.color)" @input="setProp('color', $event.target.value, false)" @change="applyProps(true)" /><input class="pe-in" x-model="props.color" @input="applyProps(false)" @change="applyProps(true)" placeholder="inherit" /></span></label>
+                            <div class="pe-f"><span>Align</span>
+                                <span class="pe-seg">
+                                    <button type="button" :aria-pressed="!props['text-align']" @click="setProp('text-align', '')" title="Left"><span class="material-symbols-outlined">format_align_left</span></button>
+                                    <button type="button" :aria-pressed="props['text-align'] === 'center'" @click="setProp('text-align', 'center')" title="Centre"><span class="material-symbols-outlined">format_align_center</span></button>
+                                    <button type="button" :aria-pressed="props['text-align'] === 'right'" @click="setProp('text-align', 'right')" title="Right"><span class="material-symbols-outlined">format_align_right</span></button>
+                                    <button type="button" :aria-pressed="props['text-align'] === 'justify'" @click="setProp('text-align', 'justify')" title="Justify"><span class="material-symbols-outlined">format_align_justify</span></button>
+                                </span>
+                            </div>
+                            <div class="pe-grid2">
+                                <label class="pe-f"><span>Spacing</span><input class="pe-in" x-model="props['letter-spacing']" @input="applyProps(false)" @change="applyProps(true)" placeholder="0" /></label>
+                                <label class="pe-f"><span>Case</span><select class="pe-in" x-model="props['text-transform']" @change="applyProps(true)"><option value="">As typed</option><option value="uppercase">UPPER</option><option value="capitalize">Title</option><option value="lowercase">lower</option></select></label>
+                            </div>
+                        </details>
+
+                        <details class="pe-group">
+                            <summary>Custom CSS</summary>
+                            <textarea class="pe-in pe-ta pe-mono" x-model="customCss" @change="applyProps(true)" rows="4" placeholder="letter-spacing: 0.1em;&#10;box-shadow: 0 2px 8px #0002;"></textarea>
+                            <p class="pe-hint">Anything the controls above do not offer. One declaration per line.</p>
+                        </details>
+
+                        <div class="pe-row-acts">
+                            <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="duplicateSelected()" title="Duplicate (Ctrl+D)"><span class="material-symbols-outlined">content_copy</span><span class="m-btn__label">Duplicate</span></button>
+                            <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="wrapSelected()" title="Put a box around it"><span class="material-symbols-outlined">select_all</span><span class="m-btn__label">Wrap</span></button>
+                            <button type="button" class="m-btn m-btn--danger-outline m-btn--sm" @click="deleteSelected()" title="Delete"><span class="material-symbols-outlined">delete</span><span class="m-btn__label">Delete</span></button>
+                        </div>
+                    </div>
+                </template>
+            </section>
+        </aside>
+
+        <!-- ═══ Centre: the canvas ═══ -->
+        <section class="pe-stage">
+            <div id="pe-viewport" class="pe-viewport">
+                <div id="pe-world" class="pe-world"></div>
+
+                <!-- Selection and hover, drawn in screen space so their lines stay one pixel at any zoom. -->
+                <div class="pe-overlay pe-overlay--hover" x-show="hoverBox" :style="hoverBox ? `left:${hoverBox.x}px;top:${hoverBox.y}px;width:${hoverBox.w}px;height:${hoverBox.h}px` : ''"></div>
+                <div class="pe-overlay pe-overlay--sel" x-show="selBox" :style="selBox ? `left:${selBox.x}px;top:${selBox.y}px;width:${selBox.w}px;height:${selBox.h}px` : ''">
+                    <span class="pe-overlay__label" x-text="selBox ? selBox.label : ''"></span>
+                    <span class="pe-overlay__handle" x-show="selectedNode" @mousedown="startResize($event)" title="Drag to resize"></span>
+                </div>
+
+                <!-- Right-click menu -->
+                <div class="pe-menu pe-menu--ctx" x-show="menu.open" x-cloak :style="`left:${menu.x}px;top:${menu.y}px`" @click.outside="menu.open = false">
+                    <template x-if="menu.nodeId">
+                        <div>
+                            <button type="button" @click="menuAct('iterate')"><span class="material-symbols-outlined">repeat</span><span x-text="selectedNode && selectedNode.repeat ? 'Change what this element iterates over' : 'Make this element iterated'"></span></button>
+                            <button type="button" @click="menuAct('rename')"><span class="material-symbols-outlined">edit</span>Rename</button>
+                            <button type="button" @click="menuAct('duplicate')"><span class="material-symbols-outlined">content_copy</span>Duplicate <kbd>Ctrl+D</kbd></button>
+                            <button type="button" @click="menuAct('wrap')"><span class="material-symbols-outlined">select_all</span>Wrap in a box</button>
+                            <button type="button" @click="menuAct('back')"><span class="material-symbols-outlined">arrow_upward</span>Move earlier</button>
+                            <button type="button" @click="menuAct('forward')"><span class="material-symbols-outlined">arrow_downward</span>Move later</button>
+                            <button type="button" class="is-danger" @click="menuAct('delete')"><span class="material-symbols-outlined">delete</span>Delete <kbd>Del</kbd></button>
+                        </div>
+                    </template>
+                    <template x-if="!menu.nodeId">
+                        <div>
+                            <button type="button" @click="menuAct('add-page')"><span class="material-symbols-outlined">add</span>Add a page after this one</button>
+                            <button type="button" @click="menuAct('dup-page')"><span class="material-symbols-outlined">content_copy</span>Duplicate this page</button>
+                            <button type="button" class="is-danger" @click="menuAct('del-page')"><span class="material-symbols-outlined">delete</span>Delete this page</button>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="pe-zoom">
+                    <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" @click="zoomOut()" title="Zoom out (Ctrl+−)"><span class="material-symbols-outlined">remove</span></button>
+                    <button type="button" class="pe-zoom__label" @click="fitToView()" title="Fit page to view (Ctrl+0)" x-text="zoomLabel"></button>
+                    <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" @click="zoomIn()" title="Zoom in (Ctrl+=)"><span class="material-symbols-outlined">add</span></button>
+                </div>
+            </div>
+
+            <!-- Code view (MS-395) -->
+            <div class="pe-code" x-show="codeOpen" x-cloak>
+                <div class="pe-code__bar">
+                    <span class="pe-seg pe-seg--text">
+                        <button type="button" :aria-pressed="codeTab === 'html'" @click="codeTab = 'html'; $nextTick(() => mountCode && syncCode(true))">HTML</button>
+                        <button type="button" :aria-pressed="codeTab === 'css'" @click="codeTab = 'css'; $nextTick(() => syncCode(true))">CSS</button>
+                    </span>
+                    <span class="pe-code__which" x-text="currentPage ? ('Page ' + (pages.indexOf(currentPage) + 1)) : ''"></span>
+                    <span class="pe-code__problem" x-show="codeProblem" x-text="codeProblem"></span>
+                    <span class="pe-code__acts">
+                        <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="discardCode()" x-show="codeDirty"><span class="m-btn__label">Discard</span></button>
+                        <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="applyCode()" :disabled="!codeDirty"><span class="material-symbols-outlined">check</span><span class="m-btn__label">Apply to the page</span></button>
+                    </span>
+                </div>
+                <div class="pe-code__panes">
+                    <div id="pe-cm-html" class="pe-code__pane" x-show="codeTab === 'html'"></div>
+                    <div id="pe-cm-css" class="pe-code__pane" x-show="codeTab === 'css'"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ Right: the data drawer (MS-396) ═══ -->
+        <aside class="pe-panel pe-panel--right" id="pe-drawer"></aside>
+    </main>
+
+    <!-- The picker: the first thing a new printable asks. -->
+    <div class="pe-scrim" x-show="picker.open" x-cloak>
+        <div class="pe-dialog pe-dialog--picker" role="dialog" aria-modal="true">
+            <h2 class="m-headline-lg">Which paper is this on?</h2>
+            <p class="pe-hint">Every measurement in the printable is written in pixels at this density, so the paper and the density are fixed once it starts. Margins and everything else can change later.</p>
+            <span class="pe-seg pe-seg--text pe-picker__tabs">
+                <button type="button" :aria-pressed="picker.tab === 'paper'" @click="picker.tab = 'paper'">A paper size</button>
+                <button type="button" :aria-pressed="picker.tab === 'custom'" @click="picker.tab = 'custom'" x-text="'A saved page template' + (picker.customs.length ? ' (' + picker.customs.length + ')' : '')"></button>
+            </span>
+
+            <div x-show="picker.tab === 'paper'">
+                <div class="pe-picker__papers">
+                    <template x-for="p in papers" :key="p.key">
+                        <button type="button" class="pe-paper" :aria-pressed="picker.paper === p.key" @click="picker.paper = p.key">
+                            <span class="pe-paper__sheet" :style="pickerCardStyle(paperFor(p.key))"></span>
+                            <span class="pe-paper__name" x-text="p.label"></span>
+                            <span class="pe-paper__size" x-text="paperFor(p.key).widthIn + ' × ' + paperFor(p.key).heightIn + ' in'"></span>
+                        </button>
+                    </template>
+                </div>
+                <div class="pe-picker__row">
+                    <div class="pe-f"><span>Orientation</span>
+                        <span class="pe-seg pe-seg--text">
+                            <button type="button" :aria-pressed="picker.orientation === 'portrait'" @click="picker.orientation = 'portrait'">Portrait</button>
+                            <button type="button" :aria-pressed="picker.orientation === 'landscape'" @click="picker.orientation = 'landscape'">Landscape</button>
+                        </span>
+                    </div>
+                    <div class="pe-f"><span>Pixel density</span>
+                        <span class="pe-seg pe-seg--text">
+                            <template x-for="d in densities" :key="d"><button type="button" :aria-pressed="picker.dpi === d" @click="picker.dpi = d" x-text="d + ' dpi'"></button></template>
+                        </span>
+                    </div>
+                </div>
+                <p class="pe-hint">This page will be <strong x-text="paperPreview.widthPx + ' × ' + paperPreview.heightPx"></strong> pixels. 96 is what a browser calls an inch; 150 is comfortable for print; 300 is press quality.</p>
+            </div>
+
+            <div x-show="picker.tab === 'custom'">
+                <p class="pe-hint" x-show="!picker.customs.length">Nothing saved yet. Build a page, then File → Save this page as a template, and it will be here for the next printable.</p>
+                <div class="pe-picker__customs">
+                    <template x-for="c in picker.customs" :key="c.id">
+                        <div class="pe-custom" :aria-pressed="picker.customId === c.id" @click="picker.customId = c.id">
+                            <span class="pe-paper__sheet" :style="pickerCardStyle(c.template)"></span>
+                            <span class="pe-custom__body">
+                                <span class="pe-paper__name" x-text="c.name"></span>
+                                <span class="pe-paper__size" x-text="c.template.label + ' · ' + ((c.page && c.page.nodes) || []).length + ' elements'"></span>
+                                <span class="pe-paper__size" x-text="c.createdByName ? 'Saved by ' + c.createdByName : ''"></span>
+                            </span>
+                            <button type="button" class="m-icon-btn m-icon-btn--sm m-icon-btn--ghost" title="Delete this template" @click.stop="deleteCustom(c)"><span class="material-symbols-outlined">delete</span></button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div class="pe-dialog__acts">
+                <a href="printables.html" class="m-btn m-btn--quiet m-btn--sm">Back to the library</a>
+                <button type="button" class="m-btn m-btn--primary" :disabled="picker.busy || (picker.tab === 'custom' && !picker.customId)" @click="startFromPicker()">
+                    <span class="m-btn__label" x-text="picker.busy ? 'Starting…' : 'Start laying out'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save page as template -->
+    <div class="pe-scrim" x-show="savingTemplate" x-cloak @click.self="savingTemplate = false" @keydown.escape.window="savingTemplate = false">
+        <div class="pe-dialog" role="dialog" aria-modal="true">
+            <h2 class="m-headline-lg">Save this page as a template</h2>
+            <p class="pe-hint">Its paper, margins, stylesheet and elements are kept, so the next printable can start from it.</p>
+            <input id="pe-template-name" type="text" class="m-input" maxlength="90" x-model="templateName" @keydown.enter.prevent="confirmSaveTemplate()" />
+            <div class="pe-dialog__acts">
+                <button type="button" class="m-btn m-btn--quiet m-btn--sm" @click="savingTemplate = false">Cancel</button>
+                <button type="button" class="m-btn m-btn--primary m-btn--sm" @click="confirmSaveTemplate()">Save template</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- The print layer: filled on print, empty otherwise. -->
+    <div id="pe-print" class="pe-print"></div>
+
+    <script src="vendor/firebase/firebase-app-compat.js"></script>
+    <script src="vendor/firebase/firebase-auth-compat.js"></script>
+    <script src="vendor/firebase/firebase-firestore-compat.js"></script>
+    <script src="vendor/firebase/firebase-storage-compat.js"></script>
+    <script src="vendor/codemirror/codemirror.min.js"></script>
+    <script src="vendor/codemirror/mode/xml/xml.min.js"></script>
+    <script src="vendor/codemirror/mode/javascript/javascript.min.js"></script>
+    <script src="vendor/codemirror/mode/css/css.min.js"></script>
+    <script src="vendor/codemirror/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script src="vendor/codemirror/addon/edit/closebrackets.min.js"></script>
+    <script src="vendor/codemirror/addon/edit/matchbrackets.min.js"></script>
+    <script src="local-cache.js"></script>
+    <script src="auth.js"></script>
+    <script src="filing-core.js"></script>
+    <script src="printable-core.js"></script>
+    <script src="printable-dom.js"></script>
+    <script src="printable-store.js"></script>
+    <script src="printable-editor.js"></script>
+    <script defer src="vendor/alpine-3.15.12.min.js"></script>
+
+    <style>
+        /* ── The frame ─────────────────────────────────────────────────── */
+        html, body.pe-body { height: 100%; margin: 0; overflow: hidden; background: var(--surface); color: var(--on-surface); }
+        .pe-body { display: flex; flex-direction: column; font-family: var(--font-sans); }
+        .pe-header { flex: 0 0 auto; }
+        .pe-title { cursor: text; }
+        .pe-title-input { font: inherit; font-family: var(--font-serif); font-size: 22px; padding: 2px 8px; border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: var(--surface-container-lowest); min-width: 320px; }
+        .pe-loading { flex: 1; }
+        .pe-notices { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 90; width: min(640px, 90vw); display: flex; flex-direction: column; gap: 8px; }
+        .pe-main { flex: 1; display: flex; min-height: 0; }
+        .pe-panel { flex: 0 0 300px; width: 300px; background: var(--surface-container-lowest); border-right: 1px solid var(--outline-variant); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+        .pe-panel--right { border-right: 0; border-left: 1px solid var(--outline-variant); flex-basis: 320px; width: 320px; }
+        .pe-panel--right:empty { display: none; }
+        .pe-stage { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+
+        /* ── Left panel ────────────────────────────────────────────────── */
+        .pe-tools { display: flex; gap: 6px; padding: 10px; border-bottom: 1px solid var(--outline-variant); }
+        .pe-tool { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border: 1px solid var(--outline-variant); border-radius: var(--radius); background: var(--surface-container-lowest); color: var(--primary); font: 600 11px var(--font-sans); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+        .pe-tool:hover { background: var(--surface-container); }
+        .pe-tool .material-symbols-outlined { font-size: 22px; }
+        .pe-section { padding: 10px 12px; }
+        .pe-section--tree { flex: 0 1 38%; min-height: 120px; overflow: auto; border-bottom: 1px solid var(--outline-variant); }
+        .pe-section--props { flex: 1 1 auto; overflow: auto; }
+        .pe-h { margin: 0 0 8px; font: 600 11px var(--font-sans); letter-spacing: .14em; text-transform: uppercase; color: var(--on-surface-variant); }
+        .pe-hint { margin: 6px 0; font-size: 12px; line-height: 1.4; color: var(--on-surface-variant); }
+        .pe-f { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 6px; margin: 0 0 6px; font-size: 12px; color: var(--on-surface-variant); }
+        .pe-f > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pe-f small { grid-column: 2; font-size: 11px; }
+        .pe-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; }
+        .pe-grid2 .pe-f { grid-template-columns: 1fr; gap: 2px; }
+        .pe-in { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: var(--surface-container-lowest); color: var(--on-surface); font: 13px var(--font-sans); box-sizing: border-box; min-width: 0; }
+        .pe-in:focus { outline: none; border-color: var(--tertiary); box-shadow: 0 0 0 2px var(--m-focus-ring, rgba(0,0,0,.08)); }
+        select.pe-in { padding-right: 4px; }
+        .pe-ta { height: auto; padding: 6px 8px; resize: vertical; line-height: 1.35; }
+        .pe-mono { font-family: Consolas, Menlo, monospace; font-size: 12px; }
+        .pe-unit { display: inline-flex; align-items: center; gap: 4px; }
+        .pe-unit em { font-style: normal; font-size: 11px; color: var(--on-surface-variant); }
+        .pe-color { display: flex; align-items: center; gap: 4px; }
+        .pe-color input[type="color"] { width: 28px; height: 28px; padding: 0; border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: none; cursor: pointer; flex: 0 0 auto; }
+        .pe-seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--surface-container); border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); }
+        .pe-seg button { border: 0; background: transparent; border-radius: 4px; padding: 2px 6px; color: var(--on-surface-variant); cursor: pointer; display: inline-flex; align-items: center; font: 600 11px var(--font-sans); letter-spacing: .08em; text-transform: uppercase; }
+        .pe-seg button .material-symbols-outlined { font-size: 18px; }
+        .pe-seg button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
+        .pe-seg--text button { padding: 5px 10px; }
+        .pe-group { border-top: 1px solid var(--outline-variant); padding: 6px 0 2px; }
+        .pe-group > summary { cursor: pointer; font: 600 11px var(--font-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--primary); padding: 4px 0 8px; list-style: none; display: flex; align-items: center; gap: 6px; }
+        .pe-group > summary::before { content: 'expand_more'; font-family: 'Material Symbols Outlined'; font-size: 18px; transition: transform var(--duration) var(--ease-standard); }
+        .pe-group:not([open]) > summary::before { transform: rotate(-90deg); }
+        .pe-upload { position: relative; overflow: hidden; cursor: pointer; }
+        .pe-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+        .pe-row-acts { display: flex; gap: 4px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--outline-variant); margin-top: 8px; }
+
+        /* ── The tree ──────────────────────────────────────────────────── */
+        .pe-tree { font-size: 13px; }
+        .pe-tree__page { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: var(--radius-sm); cursor: pointer; font-weight: 600; color: var(--primary); margin-top: 6px; }
+        .pe-tree__page:first-child { margin-top: 0; }
+        .pe-tree__page .material-symbols-outlined { font-size: 18px; }
+        .pe-tree__page:hover, .pe-tree__row:hover { background: var(--surface-container); }
+        .pe-tree__page.is-selected, .pe-tree__row.is-selected { background: var(--primary-fixed, var(--surface-container-high)); }
+        .pe-tree__page.is-drop { outline: 2px dashed var(--tertiary); outline-offset: -2px; }
+        .pe-tree__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pe-tree__acts { display: none; gap: 0; }
+        .pe-tree__page:hover .pe-tree__acts, .pe-tree__page.is-selected .pe-tree__acts { display: inline-flex; }
+        .pe-tree__acts button { border: 0; background: none; padding: 0 2px; cursor: pointer; color: var(--on-surface-variant); display: inline-flex; }
+        .pe-tree__acts button:hover { color: var(--primary); }
+        .pe-tree__acts .material-symbols-outlined { font-size: 16px; }
+        .pe-tree__row { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: var(--radius-sm); cursor: pointer; position: relative; }
+        .pe-tree__row .material-symbols-outlined { font-size: 16px; color: var(--on-surface-variant); flex: 0 0 auto; }
+        .pe-tree__hint { color: var(--on-surface-variant); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
+        .pe-tree__bound { color: var(--tertiary) !important; }
+        .pe-tree__row.is-drop-before::before, .pe-tree__row.is-drop-after::after { content: ''; position: absolute; left: 8px; right: 8px; height: 2px; background: var(--tertiary); }
+        .pe-tree__row.is-drop-before::before { top: -1px; }
+        .pe-tree__row.is-drop-after::after { bottom: -1px; }
+        .pe-tree__row.is-drop-inside { outline: 2px solid var(--tertiary); outline-offset: -2px; }
+
+        /* ── The canvas ────────────────────────────────────────────────── */
+        .pe-viewport { flex: 1; position: relative; overflow: hidden; background-color: var(--surface-container); background-image: radial-gradient(var(--outline-variant) 1px, transparent 1px); background-size: 24px 24px; cursor: default; user-select: none; }
+        .pe-viewport.pe-space { cursor: grab; }
+        .pe-viewport.pe-panning { cursor: grabbing; }
+        .pe-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+        .pe-page-holder { position: absolute; }
+        .pe-page-holder > .pr-page { box-shadow: 0 18px 48px rgba(14,28,54,.18), 0 0 0 1px rgba(14,28,54,.08); }
+        .pe-page-label { position: absolute; left: 0; color: var(--on-surface-variant); font-family: var(--font-sans); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; pointer-events: none; }
+        .pe-margin-guide { position: absolute; pointer-events: none; border: 1px dashed rgba(38, 90, 160, .45); }
+        .pe-add-page { position: absolute; height: 48px; border: 2px dashed var(--outline-variant); border-radius: var(--radius); background: transparent; color: var(--on-surface-variant); font: 600 20px var(--font-sans); display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
+        .pe-add-page:hover { border-color: var(--primary); color: var(--primary); background: rgba(255,255,255,.4); }
+        .pe-add-page .material-symbols-outlined { font-size: 28px; }
+        .pr-page { font-family: 'EB Garamond', Georgia, serif; color: #000; }
+        .pr-page * { box-sizing: border-box; }
+        .pr-page img { display: block; }
+        .pe-img-empty { background: repeating-linear-gradient(45deg, #e8e4dc, #e8e4dc 8px, #f3f0ea 8px, #f3f0ea 16px); outline: 1px dashed #b9b2a4; outline-offset: -1px; min-width: 24px; min-height: 24px; }
+        .pe-text-empty { min-height: 1em; min-width: 2em; outline: 1px dotted #b9b2a4; }
+        .pe-editing { outline: 2px solid var(--tertiary); cursor: text; user-select: text; }
+        .pe-overlay { position: absolute; pointer-events: none; box-sizing: border-box; z-index: 5; }
+        .pe-overlay--hover { outline: 1px solid var(--tertiary); opacity: .7; }
+        .pe-overlay--sel { outline: 2px solid var(--tertiary); }
+        .pe-overlay__label { position: absolute; left: -2px; top: -20px; background: var(--tertiary); color: #fff; font: 600 10px var(--font-sans); letter-spacing: .08em; text-transform: uppercase; padding: 2px 6px; border-radius: 4px 4px 0 0; white-space: nowrap; }
+        .pe-overlay__handle { position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; background: #fff; border: 2px solid var(--tertiary); border-radius: 2px; pointer-events: auto; cursor: nwse-resize; }
+        .pe-zoom { position: absolute; right: 16px; bottom: 16px; display: flex; align-items: center; gap: 2px; padding: 4px; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius); box-shadow: var(--shadow-sm); z-index: 6; }
+        .pe-zoom__label { border: 0; background: none; font: 600 12px var(--font-sans); color: var(--on-surface); min-width: 48px; cursor: pointer; }
+
+        /* ── Menus ─────────────────────────────────────────────────────── */
+        .pe-filemenu { position: relative; }
+        .pe-menu { position: absolute; z-index: 60; min-width: 240px; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius); box-shadow: var(--shadow-lg, 0 12px 32px rgba(0,0,0,.18)); padding: 4px; }
+        .pe-filemenu .pe-menu { right: 0; top: calc(100% + 6px); }
+        .pe-menu--ctx { z-index: 40; }
+        .pe-menu button, .pe-menu a { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; padding: 7px 10px; text-align: left; font: 13px var(--font-sans); color: var(--on-surface); border-radius: var(--radius-sm); cursor: pointer; text-decoration: none; }
+        .pe-menu button:hover, .pe-menu a:hover { background: var(--surface-container); }
+        .pe-menu .material-symbols-outlined { font-size: 18px; color: var(--on-surface-variant); }
+        .pe-menu kbd { margin-left: auto; font: 11px var(--font-sans); color: var(--on-surface-variant); }
+        .pe-menu .is-danger { color: var(--error); }
+
+        /* ── Code view ─────────────────────────────────────────────────── */
+        .pe-code { flex: 0 0 300px; display: flex; flex-direction: column; border-top: 1px solid var(--outline-variant); background: #212121; }
+        .pe-code__bar { display: flex; align-items: center; gap: 12px; padding: 6px 10px; background: var(--surface-container-lowest); border-bottom: 1px solid var(--outline-variant); }
+        .pe-code__which { font: 600 11px var(--font-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--on-surface-variant); }
+        .pe-code__problem { color: var(--error); font-size: 12px; flex: 1; }
+        .pe-code__acts { margin-left: auto; display: flex; gap: 6px; }
+        .pe-code__panes { flex: 1; min-height: 0; position: relative; }
+        .pe-code__pane { position: absolute; inset: 0; }
+        .pe-code__pane .CodeMirror { height: 100%; font-size: 13px; }
+
+        /* ── Dialogs ───────────────────────────────────────────────────── */
+        .pe-scrim { position: fixed; inset: 0; background: rgba(4,22,46,.45); display: flex; align-items: center; justify-content: center; z-index: 80; padding: 16px; }
+        .pe-dialog { background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl, 16px); padding: 24px; width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 12px; max-height: 92vh; overflow: auto; }
+        .pe-dialog--picker { max-width: 760px; }
+        .pe-dialog__acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+        .pe-picker__tabs { align-self: flex-start; }
+        .pe-picker__papers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 8px 0; }
+        .pe-paper { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 8px; border: 1px solid var(--outline-variant); border-radius: var(--radius); background: var(--surface-container-lowest); cursor: pointer; }
+        .pe-paper[aria-pressed="true"], .pe-custom[aria-pressed="true"] { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary); }
+        .pe-paper__sheet { display: block; background: #fff; border: 1px solid var(--outline); box-shadow: 0 2px 6px rgba(0,0,0,.12); margin-bottom: 4px; }
+        .pe-paper__name { font: 600 13px var(--font-sans); color: var(--on-surface); }
+        .pe-paper__size { font-size: 11px; color: var(--on-surface-variant); }
+        .pe-picker__row { display: flex; gap: 24px; flex-wrap: wrap; margin: 8px 0; }
+        .pe-picker__row .pe-f { grid-template-columns: auto auto; }
+        .pe-picker__customs { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow: auto; }
+        .pe-custom { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--outline-variant); border-radius: var(--radius); cursor: pointer; }
+        .pe-custom__body { flex: 1; display: flex; flex-direction: column; }
+
+        /* ── Print ─────────────────────────────────────────────────────── */
+        .pe-print { display: none; }
+        @media print {
+            html, body.pe-body { height: auto; overflow: visible; background: #fff; }
+            body.pe-printing > *:not(.pe-print) { display: none !important; }
+            .pe-print { display: block; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    </style>
+</body>
+</html>
